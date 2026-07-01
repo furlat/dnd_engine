@@ -1,17 +1,7 @@
-"""
-Session-based player authority system.
-
-This module provides clean abstractions for managing players and game sessions,
-replacing the scattered sim.* state variables with a unified system.
-
-Key concepts:
-- PlayerSession: A connected client (human, claude, or AI) that controls entities
-- GameSession: The active game with all players and entity ownership mappings
-- SessionManager: Singleton managing all active sessions and games
-"""
+"""Session-based player authority and active-game ownership."""
 
 from enum import Enum
-from typing import Dict, Set, Optional, List
+from typing import Any, Dict, Set, Optional, List
 from uuid import UUID, uuid4
 from dataclasses import dataclass, field
 import time
@@ -22,37 +12,48 @@ from dnd.encounter import Encounter, TurnState
 
 class PlayerType(str, Enum):
     """Type of player controlling entities."""
-    HUMAN = "human"      # User via CLI
-    CLAUDE = "claude"    # Claude via agent CLI
-    AI = "ai"            # Built-in AI (MeleeAIController etc)
+
+    HUMAN = "human"
+    CODEX = "codex"
+    AI = "ai"
 
 
 class ConnectionStatus(str, Enum):
     """Connection state of a player session."""
-    CONNECTED = "connected"       # Active, responding to pings
-    DISCONNECTED = "disconnected" # Timed out or explicitly disconnected
-    WAITING = "waiting"           # Turn started, waiting for action
+
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    WAITING = "waiting"
 
 
 @dataclass
 class PlayerSession:
-    """
-    A connected player that can control entities.
+    """Represent a connected player that can control entities.
 
     Attributes:
-        session_id: Unique identifier for this session
-        player_type: HUMAN, CLAUDE, or AI
-        name: Display name for this player
-        connection_status: Current connection state
-        last_activity: Timestamp of last activity (for timeout detection)
-        controlled_entities: Set of entity UUIDs this player can control
+        session_id: Unique identifier for this connected player session.
+        player_type: Controller source for this session.
+        name: Display name for this player.
+        connection_status: Current connection state.
+        last_activity: Timestamp of last activity for timeout detection.
+        controlled_entities: Entity UUIDs this player can control.
     """
-    session_id: UUID
-    player_type: PlayerType
-    name: str
-    connection_status: ConnectionStatus = ConnectionStatus.CONNECTED
-    last_activity: float = field(default_factory=time.time)
-    controlled_entities: Set[UUID] = field(default_factory=set)
+
+    session_id: UUID = field(metadata={"description": "Unique identifier for this connected player session."})
+    player_type: PlayerType = field(metadata={"description": "Controller source for this session."})
+    name: str = field(metadata={"description": "Display name for this player."})
+    connection_status: ConnectionStatus = field(
+        default=ConnectionStatus.CONNECTED,
+        metadata={"description": "Current connection state."},
+    )
+    last_activity: float = field(
+        default_factory=time.time,
+        metadata={"description": "Timestamp of last activity for timeout detection."},
+    )
+    controlled_entities: Set[UUID] = field(
+        default_factory=set,
+        metadata={"description": "Entity UUIDs this player can control."},
+    )
 
     def ping(self) -> None:
         """Update last activity timestamp."""
@@ -86,8 +87,7 @@ class PlayerSession:
 
 @dataclass
 class GameSession:
-    """
-    An active game with players and entity ownership.
+    """Represent an active game with players and entity ownership.
 
     This is the single source of truth for:
     - Which players are in the game
@@ -95,15 +95,25 @@ class GameSession:
     - Whose turn it is (derived from encounter, not duplicated)
 
     Attributes:
-        game_id: Unique identifier for this game
-        encounter: The active encounter (turn-based combat)
-        players: Dict mapping session_id -> PlayerSession
-        entity_to_player: Dict mapping entity_uuid -> session_id (owner)
+        game_id: Unique identifier for this game session.
+        encounter: Active turn-based encounter, if one is attached.
+        players: Player sessions keyed by session UUID.
+        entity_to_player: Owning session UUID keyed by controlled entity UUID.
     """
-    game_id: UUID
-    encounter: Optional[Encounter] = None
-    players: Dict[UUID, PlayerSession] = field(default_factory=dict)
-    entity_to_player: Dict[UUID, UUID] = field(default_factory=dict)
+
+    game_id: UUID = field(metadata={"description": "Unique identifier for this game session."})
+    encounter: Optional[Encounter] = field(
+        default=None,
+        metadata={"description": "Active turn-based encounter, if one is attached."},
+    )
+    players: Dict[UUID, PlayerSession] = field(
+        default_factory=dict,
+        metadata={"description": "Player sessions keyed by session UUID."},
+    )
+    entity_to_player: Dict[UUID, UUID] = field(
+        default_factory=dict,
+        metadata={"description": "Owning session UUID keyed by controlled entity UUID."},
+    )
 
     @property
     def active_entity_uuid(self) -> Optional[UUID]:
@@ -132,7 +142,6 @@ class GameSession:
         """Remove a player from the game."""
         if session_id in self.players:
             session = self.players[session_id]
-            # Remove entity ownership mappings
             for entity_uuid in session.controlled_entities:
                 if entity_uuid in self.entity_to_player:
                     del self.entity_to_player[entity_uuid]
@@ -147,12 +156,10 @@ class GameSession:
         if session_id not in self.players:
             return False
 
-        # Remove from previous owner if any
         old_owner = self.entity_to_player.get(entity_uuid)
         if old_owner and old_owner in self.players:
             self.players[old_owner].controlled_entities.discard(entity_uuid)
 
-        # Assign to new owner
         self.entity_to_player[entity_uuid] = session_id
         self.players[session_id].controlled_entities.add(entity_uuid)
         return True
@@ -209,7 +216,7 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[UUID, PlayerSession] = {}
         self.games: Dict[UUID, GameSession] = {}
-        self.active_game: Optional[GameSession] = None  # For single-game mode
+        self.active_game: Optional[GameSession] = None
 
     @classmethod
     def get(cls) -> 'SessionManager':
@@ -232,7 +239,7 @@ class SessionManager:
         Create a new player session.
 
         Args:
-            player_type: HUMAN, CLAUDE, or AI
+            player_type: HUMAN, CODEX, or AI
             name: Display name (defaults to player_type if not provided)
 
         Returns:
@@ -253,7 +260,6 @@ class SessionManager:
     def remove_session(self, session_id: UUID) -> None:
         """Remove a session and clean up game associations."""
         if session_id in self.sessions:
-            # Remove from any games
             for game in self.games.values():
                 game.remove_player(session_id)
             del self.sessions[session_id]
@@ -284,6 +290,58 @@ class SessionManager:
         """Get the active game (single-game mode)."""
         return self.active_game
 
+    def _action_error_detail(
+        self,
+        code: str,
+        message: str,
+        session_id: UUID,
+        entity_uuid: UUID,
+        session: Optional[PlayerSession] = None,
+        game: Optional[GameSession] = None,
+    ) -> dict[str, Any]:
+        """Build structured correction context for action-authority failures."""
+        active_game = game or self.active_game
+        active_entity_uuid = active_game.active_entity_uuid if active_game else None
+        owner_session_id = active_game.entity_to_player.get(entity_uuid) if active_game else None
+        return {
+            "code": code,
+            "message": message,
+            "session_id": str(session_id),
+            "entity_uuid": str(entity_uuid),
+            "known_session_ids": [str(known_session_id) for known_session_id in self.sessions],
+            "known_sessions": [known_session.to_dict() for known_session in self.sessions.values()],
+            "active_game_id": str(active_game.game_id) if active_game else None,
+            "active_entity_uuid": str(active_entity_uuid) if active_entity_uuid else None,
+            "encounter_state": active_game.encounter.state.value if active_game and active_game.encounter else None,
+            "turn_state": active_game.encounter.turn_state.value if active_game and active_game.encounter else None,
+            "controlled_entities": [str(controlled) for controlled in session.controlled_entities] if session else [],
+            "connection_status": session.connection_status.value if session else None,
+            "entity_owner_session_id": str(owner_session_id) if owner_session_id else None,
+        }
+
+    def _action_http_exception(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        session_id: UUID,
+        entity_uuid: UUID,
+        session: Optional[PlayerSession] = None,
+        game: Optional[GameSession] = None,
+    ) -> HTTPException:
+        """Create a structured action-authority HTTP exception."""
+        return HTTPException(
+            status_code=status_code,
+            detail=self._action_error_detail(
+                code=code,
+                message=message,
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            ),
+        )
+
     def validate_action(
         self,
         session_id: UUID,
@@ -310,34 +368,74 @@ class SessionManager:
         Raises:
             HTTPException with appropriate status code if invalid
         """
-        # Get session
         session = self.get_session(session_id)
         if not session:
-            raise HTTPException(status_code=401, detail="Invalid session")
+            raise self._action_http_exception(
+                status_code=401,
+                code="invalid_session",
+                message="Invalid session",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                game=game,
+            )
 
-        # Check connection status
         if session.connection_status == ConnectionStatus.DISCONNECTED:
-            raise HTTPException(status_code=401, detail="Session disconnected")
+            raise self._action_http_exception(
+                status_code=401,
+                code="session_disconnected",
+                message="Session disconnected",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
 
-        # Update activity timestamp
         session.ping()
 
-        # Get game
         game = game or self.active_game
         if not game:
-            raise HTTPException(status_code=400, detail="No active game")
+            raise self._action_http_exception(
+                status_code=400,
+                code="no_active_game",
+                message="No active game",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
 
-        # Check entity ownership
         if not session.owns_entity(entity_uuid):
-            raise HTTPException(status_code=403, detail="You don't control this entity")
+            raise self._action_http_exception(
+                status_code=403,
+                code="entity_not_controlled",
+                message="You don't control this entity",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
 
-        # Check it's their turn
         if not game.is_entity_turn(entity_uuid):
-            raise HTTPException(status_code=403, detail="Not this entity's turn")
+            raise self._action_http_exception(
+                status_code=403,
+                code="not_entity_turn",
+                message="Not this entity's turn",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
 
-        # Check turn state
         if game.encounter and game.encounter.turn_state != TurnState.IN_PROGRESS:
-            raise HTTPException(status_code=400, detail="Turn not in progress")
+            raise self._action_http_exception(
+                status_code=400,
+                code="turn_not_in_progress",
+                message="Turn not in progress",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
 
         return session, game
 
@@ -349,7 +447,6 @@ class SessionManager:
         """
         removed = []
         for session_id, session in list(self.sessions.items()):
-            # Don't timeout AI sessions
             if session.player_type == PlayerType.AI:
                 continue
             if session.is_timed_out(timeout_seconds):
@@ -358,7 +455,6 @@ class SessionManager:
         return removed
 
 
-# Convenience function for getting the singleton
 def get_session_manager() -> SessionManager:
     """Get the SessionManager singleton."""
     return SessionManager.get()

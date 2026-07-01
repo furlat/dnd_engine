@@ -17,7 +17,6 @@ from dnd.items.test_items import (
 from dnd.tiles import create_spike_zone
 from dnd.core.base_tiles import difficult_terrain_factory
 
-
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
 ARENA_ORIGIN = (0, 0)

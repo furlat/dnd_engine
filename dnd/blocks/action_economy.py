@@ -1,16 +1,19 @@
+"""Action economy resources, turn costs, and spell slot values."""
+
 from typing import Optional, List, Tuple, Dict
 from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.base_actions import CostType
+from dnd.core.base_actions import CostType, spell_slot_cost_type
 
 from dnd.core.base_block import BaseBlock
 
 
 class RechargeType(str, Enum):
     """When a resource recharges to its maximum value."""
+
     SHORT_REST = "short_rest"
     LONG_REST = "long_rest"
     TURN_START = "turn_start"
@@ -18,26 +21,30 @@ class RechargeType(str, Enum):
 
 
 class Resource(BaseModel):
-    """
-    A limited-use resource (e.g., Second Wind, spell slots).
+    """Limited-use named resource such as Second Wind or Rage.
 
     Attributes:
-        name: Resource identifier
-        current: Current uses remaining
-        maximum: Maximum uses
-        recharge_type: When the resource recharges
+        name: Resource identifier.
+        current: Current uses remaining.
+        maximum: Maximum uses.
+        recharge_type: When the resource recharges.
     """
-    name: str
-    current: int
-    maximum: int
-    recharge_type: RechargeType
+
+    name: str = Field(description="Resource identifier.")
+    current: int = Field(description="Current uses remaining.")
+    maximum: int = Field(description="Maximum uses after recharge.")
+    recharge_type: RechargeType = Field(description="Rest or turn timing that restores this resource.")
 
     def can_afford(self, amount: int = 1) -> bool:
-        """Check if resource has enough uses."""
+        """Return whether the resource has enough uses."""
         return self.current >= amount
 
     def consume(self, amount: int = 1) -> bool:
-        """Consume uses. Returns True if successful, False if not enough."""
+        """Consume uses if available.
+
+        Returns:
+            True if the resource had enough uses and was consumed.
+        """
         if not self.can_afford(amount):
             return False
         self.current -= amount
@@ -47,10 +54,10 @@ class Resource(BaseModel):
         """Restore resource to maximum."""
         self.current = self.maximum
 
+
 class ActionEconomyConfig(BaseModel):
-    """
-    Configuration for the ActionEconomy block.
-    """
+    """Configuration for turn resources, named resources, and spell slots."""
+
     actions: int = Field(default=1, description="Number of standard actions available")
     actions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the actions")
     bonus_actions: int = Field(default=1, description="Number of bonus actions available")
@@ -59,93 +66,96 @@ class ActionEconomyConfig(BaseModel):
     reactions_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the reactions")
     movement: int = Field(default=30, description="Amount of movement available")
     movement_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the movement")
-    # Spell slots (default 0 for non-casters)
     spell_slots: Dict[int, int] = Field(
         default_factory=dict,
         description="Spell slot counts by level (1-9). E.g., {1: 4, 2: 3} for 4 L1 slots and 3 L2 slots"
     )
-    
+
 
 class ActionEconomy(BaseBlock):
-    """
-    Represents the action economy of an entity in the game system.
+    """Turn resources, named resources, movement, and spell slots for an entity.
 
-    This class extends BaseBlock to represent the various actions available to an entity
-    during their turn.
-
-    Attributes:
-        name (str): The name of this action economy block. Defaults to "ActionEconomy".
-        actions (ModifiableValue): Number of standard actions available, typically 1.
-        bonus_actions (ModifiableValue): Number of bonus actions available, typically 1.
-        reactions (ModifiableValue): Number of reactions available, typically 1.
-        movement (ModifiableValue): Amount of movement available, typically 30 feet.
-        spell_slot_1-9 (ModifiableValue): Spell slots by level (base=0 for non-casters).
+    Spell slots are stored as `ModifiableValue`s here, with base value 0 for
+    non-casters. Spending a slot adds a negative cost modifier; long rest clears
+    those spell-slot cost modifiers.
     """
-    name: str = Field(default="ActionEconomy")
+
+    name: str = Field(default="ActionEconomy", description="Display name for this action economy block.")
     actions: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
             base_value=1,
             value_name="Actions"
-        )
+        ),
+        description="Standard action count available this turn.",
     )
     bonus_actions: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
             base_value=1,
             value_name="Bonus Actions"
-        )
+        ),
+        description="Bonus action count available this turn.",
     )
     reactions: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
             base_value=1,
             value_name="Reactions"
-        )
+        ),
+        description="Reaction count available before recharge.",
     )
     movement: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
             base_value=30,
             value_name="Movement"
-        )
+        ),
+        description="Movement budget in feet.",
     )
-    # Spell slots (base=0 for non-casters, modified by class features)
     spell_slot_1: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 1")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 1"),
+        description="Available level 1 spell slots.",
     )
     spell_slot_2: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 2")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 2"),
+        description="Available level 2 spell slots.",
     )
     spell_slot_3: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 3")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 3"),
+        description="Available level 3 spell slots.",
     )
     spell_slot_4: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 4")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 4"),
+        description="Available level 4 spell slots.",
     )
     spell_slot_5: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 5")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 5"),
+        description="Available level 5 spell slots.",
     )
     spell_slot_6: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 6")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 6"),
+        description="Available level 6 spell slots.",
     )
     spell_slot_7: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 7")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 7"),
+        description="Available level 7 spell slots.",
     )
     spell_slot_8: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 8")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 8"),
+        description="Available level 8 spell slots.",
     )
     spell_slot_9: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 9")
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 9"),
+        description="Available level 9 spell slots.",
     )
-    resources: Dict[str, Resource] = Field(default_factory=dict)
-
-    # =========================================================================
-    # Resource Management Methods
-    # =========================================================================
+    resources: Dict[str, Resource] = Field(
+        default_factory=dict,
+        description="Named limited-use resources keyed by resource name.",
+    )
 
     def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None:
-        """Add a new resource (e.g., 'second_wind' with max 1)."""
+        """Add a named resource at full uses."""
         self.resources[name] = Resource(
             name=name,
             current=maximum,
@@ -183,13 +193,13 @@ class ActionEconomy(BaseBlock):
     def on_short_rest(self) -> None:
         """Recharge resources that recharge on short rest."""
         for resource in self.resources.values():
-            if resource.recharge_type in (RechargeType.SHORT_REST, RechargeType.LONG_REST):
+            if resource.recharge_type == RechargeType.SHORT_REST:
                 resource.recharge()
 
     def on_long_rest(self) -> None:
-        """Recharge resources that recharge on long rest."""
+        """Recharge resources that recharge on short or long rest."""
         for resource in self.resources.values():
-            if resource.recharge_type == RechargeType.LONG_REST:
+            if resource.recharge_type in (RechargeType.SHORT_REST, RechargeType.LONG_REST):
                 resource.recharge()
 
     def on_turn_start(self) -> None:
@@ -197,10 +207,6 @@ class ActionEconomy(BaseBlock):
         for resource in self.resources.values():
             if resource.recharge_type == RechargeType.TURN_START:
                 resource.recharge()
-
-    # =========================================================================
-    # Turn-Based Action Economy Methods
-    # =========================================================================
 
     def _get_spell_slot_value(self, level: int) -> ModifiableValue:
         """Get the ModifiableValue for a spell slot level."""
@@ -268,17 +274,18 @@ class ActionEconomy(BaseBlock):
         Called on long rest.
         """
         for level in range(1, 10):
-            cost_type: CostType = f"spell_slot_{level}"  # type: ignore
+            cost_type = spell_slot_cost_type(level)
             value = self._get_spell_slot_value(level)
             for modifier in self.get_cost_modifiers(cost_type):
                 value.self_static.remove_value_modifier(modifier.uuid)
 
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None) -> None:
-        """Consume an action resource."""
+        """Consume a turn resource, named action bucket, or spell slot.
+
+        Uses the full `normalized_score` rather than only static modifiers so
+        contextual bonuses and constraints affect affordability consistently.
+        """
         value = self._get_value_for_cost_type(cost_type)
-        # Use normalized_score (aggregates all channels) not self_static.normalized_score
-        # This is consistent with how movement is checked in Move._apply() line 401
-        # Important for features that add movement via self_contextual (e.g., FastMovement)
         if value.normalized_score - amount < 0:
             raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
 
@@ -294,7 +301,7 @@ class ActionEconomy(BaseBlock):
     def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None,
                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                config: Optional[ActionEconomyConfig] = None) -> 'ActionEconomy':
-        """Create a new ActionEconomy instance."""
+        """Create an action economy block from optional configuration."""
         if config is None:
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
@@ -315,7 +322,6 @@ class ActionEconomy(BaseBlock):
             for modifier in config.movement_modifiers:
                 movement.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            # Create spell slot ModifiableValues
             spell_slot_1 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(1, 0), value_name="Spell Slot 1")
             spell_slot_2 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(2, 0), value_name="Spell Slot 2")
             spell_slot_3 = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.spell_slots.get(3, 0), value_name="Spell Slot 3")

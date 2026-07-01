@@ -1,8 +1,7 @@
 from uuid import UUID, uuid4
-from pydantic import Field, computed_field, BaseModel, field_serializer
+from pydantic import Field, computed_field, BaseModel, field_serializer, model_validator
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
-from pydantic import  model_validator
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
@@ -12,57 +11,97 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 
 
 class HazardFilter(str, Enum):
-    """Who a hazardous condition affects. Used by pathfinding to determine safe routes."""
-    ALL = "all"                # Hazardous to everyone (Grease, Web, Spike Trap)
-    ENEMIES = "enemies"        # Hazardous to enemies of source (Spirit Guardians)
-    NON_SOURCE = "non_source"  # Hazardous to everyone except source (Spike Growth)
+    """Pathfinding hazard targeting policy for condition-bearing blocks."""
+
+    ALL = "all"
+    ENEMIES = "enemies"
+    NON_SOURCE = "non_source"
 
 
 class ConditionTag(str, Enum):
-    """Tags describing condition properties. Replaces individual boolean flags."""
-    MAGICAL = "magical"    # Created by spell/magical effect (Globe of Invulnerability, Dispel Magic)
-    CURSE = "curse"        # Curse effect (Remove Curse, Bestow Curse)
-    DISEASE = "disease"    # Disease effect (Lesser/Greater Restoration)
-    POISON = "poison"      # Poison effect (Protection from Poison)
+    """Tags used by spell and restoration effects to classify conditions."""
+
+    MAGICAL = "magical"
+    CURSE = "curse"
+    DISEASE = "disease"
+    POISON = "poison"
+    EXHAUSTION = "exhaustion"
+    PETRIFICATION = "petrification"
+    ABILITY_SCORE_REDUCTION = "ability_score_reduction"
+    HIT_POINT_MAXIMUM_REDUCTION = "hit_point_maximum_reduction"
+
 
 class ConditionCategory(str, Enum):
-    CONDITION = "condition"      # Real D&D conditions: Blinded, Prone, Paralyzed, etc.
-    STATUS = "status"            # Turn-scoped action effects: Dashing, Dodging, Disengaging, Concentrating
-    INTERNAL = "internal"        # Engine bookkeeping: HasAttacked, HasTakenDamage, ExtraAttacksGranted, ActionSurging
+    """Broad condition category used by logs, reducers, and cleanup policy."""
 
-class DurationType(str,Enum):
+    CONDITION = "condition"
+    STATUS = "status"
+    INTERNAL = "internal"
+
+
+class DurationType(str, Enum):
+    """Supported duration progression modes for conditions."""
+
     ROUNDS = "rounds"
     PERMANENT = "permanent"
     UNTIL_LONG_REST = "until_long_rest"
     ON_CONDITION = "on_condition"
 
+
 class Duration(BaseObject):
-    duration : Optional[Union[int,ContextAwareCondition]] = Field(default=None,description="The duration of the condition")
-    duration_type: DurationType = Field(default=DurationType.PERMANENT,description="The type of duration")
-    source_entity_uuid: UUID = Field(default_factory=uuid4,description="The UUID of the source entity")
-    target_entity_uuid: UUID = Field(default_factory=uuid4,description="The UUID of the target entity")
-    context: Optional[Dict[str,Any]] = Field(default=None,description="The context of the condition")
-    long_rested: bool = Field(default=False,description="Whether the condition has been long rested")
-    owned_by_condition: Optional[UUID] = Field(default=None,description="The UUID of the condition that owns this duration")
-    
+    """Duration state owned by a condition."""
+
+    duration: Optional[Union[int, ContextAwareCondition]] = Field(
+        default=None,
+        description="Round count, contextual expiration callable, or None."
+    )
+    duration_type: DurationType = Field(
+        default=DurationType.PERMANENT,
+        description="Duration progression mode."
+    )
+    source_entity_uuid: UUID = Field(default_factory=uuid4, description="Source entity UUID for contextual duration checks.")
+    target_entity_uuid: UUID = Field(default_factory=uuid4, description="Target entity UUID for contextual duration checks.")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Runtime context for contextual duration checks.")
+    long_rested: bool = Field(default=False, description="Whether a long rest has occurred for UNTIL_LONG_REST duration.")
+    owned_by_condition: Optional[UUID] = Field(default=None, description="UUID of the condition that owns this duration.")
 
     @field_serializer('duration')
     def serialize_duration(self, value: Optional[Union[int, ContextAwareCondition]], _info: Any) -> Optional[Union[int, str]]:
+        """Serialize callable durations without exposing callables.
+
+        Args:
+            value: Stored duration value.
+            _info: Pydantic serializer metadata.
+
+        Returns:
+            Integer duration, `"conditional"` for callables, or `None`.
+        """
         if value is None:
             return None
         if callable(value):
             return "conditional"
         return value
 
-    def set_owned_by_condition(self,condition_uuid: UUID) -> None:
-        """ Set the condition that owns this duration """
+    def set_owned_by_condition(self, condition_uuid: UUID) -> None:
+        """Record the owning condition UUID.
+
+        Args:
+            condition_uuid: UUID of the owning condition.
+        """
         self.owned_by_condition = condition_uuid
 
     @model_validator(mode="after")
     def check_duration_type_consistency(self) -> Self:
-        """ ROUNDS --> int , PERMANENT --> None , UNTIL_DEATH --> None , ON_CONDITION --> ContextAwareCondition """
+        """Validate that duration value matches duration type.
+
+        Returns:
+            This duration after validation.
+
+        Raises:
+            ValueError: If `duration` does not match `duration_type`.
+        """
         if self.duration_type == DurationType.ROUNDS:
-            if not isinstance(self.duration,int):
+            if not isinstance(self.duration, int):
                 raise ValueError(f"Duration must be an int when duration_type is ROUNDS instead of {type(self.duration)}")
         elif self.duration_type == DurationType.PERMANENT:
             if self.duration is not None:
@@ -74,17 +113,17 @@ class Duration(BaseObject):
             if not callable(self.duration):
                 raise ValueError(f"Duration must be a ContextAwareCondition (callable) when duration_type is ON_CONDITION instead of {type(self.duration)}")
         return self
-    
+
     @computed_field
     @property
     def is_expired(self) -> bool:
-        """ Check if the duration is expired """
+        """Whether this duration is currently expired."""
         if self.duration_type == DurationType.ROUNDS:
-            assert isinstance(self.duration,int)
-            return self.duration <= 0  # Expired when duration reaches 0 or below
+            assert isinstance(self.duration, int)
+            return self.duration <= 0
         elif self.duration_type == DurationType.ON_CONDITION:
             assert callable(self.duration)
-            duration = self.duration(self.source_entity_uuid,self.target_entity_uuid,self.context)
+            duration = self.duration(self.source_entity_uuid, self.target_entity_uuid, self.context)
             if duration is None:
                 return False
             return duration
@@ -92,48 +131,49 @@ class Duration(BaseObject):
             return self.long_rested
         else:
             return False
-    
+
     def progress(self) -> bool:
-        """ Progress the duration by one round """
+        """Progress a round-based duration by one tick.
+
+        Returns:
+            True if the duration is expired after progression.
+        """
         if self.duration_type == DurationType.ROUNDS:
-            assert isinstance(self.duration,int)
+            assert isinstance(self.duration, int)
             self.duration -= 1
             if self.is_expired:
                 return True
             return False
         else:
             return False
-    
+
     def long_rest(self) -> None:
-        """ Set the long rested flag to True """
+        """Mark UNTIL_LONG_REST duration as rested."""
         self.long_rested = True
 
 
 class ConditionApplicationEvent(Event):
-    """An event that represents the application of a condition"""
-    name: str = Field(default="Condition Application",description="A condition application event")
-    condition: 'BaseCondition' = Field(description="The condition that is being applied")
-    event_type: EventType = Field(default=EventType.CONDITION_APPLICATION,description="The type of event")
-    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
-    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
+    """Event payload for a condition application lifecycle."""
 
-    # For frontend reducer — resulting stats after condition applied
-    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition applied")
-    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition applied")
+    name: str = Field(default="Condition Application", description="Condition application event name.")
+    condition: 'BaseCondition' = Field(description="Condition being applied.")
+    event_type: EventType = Field(default=EventType.CONDITION_APPLICATION, description="Condition application event type.")
+    source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
+    target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
+    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition application for frontend reducers.")
+    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition application for frontend reducers.")
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition application."""
         cond = self.condition
         condition_name = cond.name or "Unknown"
 
-        # Suppress combat logs for internal marker conditions
         if cond.condition_category == ConditionCategory.INTERNAL:
             return None
 
         target_name = self.target_entity_name or "Unknown"
         source_name = self.source_entity_name or "Unknown"
 
-        # Build condition-specific compact text
         if condition_name == "Hidden":
             stealth_dc = getattr(cond, 'stealth_result', 0)
             compact = f"{{cyan:{target_name}}} gains **Hidden** (Stealth DC {stealth_dc})"
@@ -142,7 +182,6 @@ class ConditionApplicationEvent(Event):
         else:
             compact = f"{{cyan:{target_name}}} gains **{condition_name}**"
 
-        # Verbose adds source info when source != target
         verbose = compact
         if self.source_entity_uuid != self.target_entity_uuid and source_name != target_name:
             verbose = compact + f" from {{yellow:{source_name}}}"
@@ -161,24 +200,23 @@ class ConditionApplicationEvent(Event):
 
 
 class ConditionRemovalEvent(Event):
-    """An event that represents the removal of a condition"""
-    name: str = Field(default="Condition Removal", description="A condition removal event")
-    condition: 'BaseCondition' = Field(description="The condition that is being removed")
-    expired: bool = Field(default=False, description="Whether the condition was removed due to expiration")
-    event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="The type of event")
-    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
-    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
+    """Event payload for a condition removal lifecycle."""
 
-    # For frontend reducer — resulting stats after condition removed
-    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removed")
-    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removed")
+    name: str = Field(default="Condition Removal", description="Condition removal event name.")
+    condition: 'BaseCondition' = Field(description="Condition being removed.")
+    expired: bool = Field(default=False, description="Whether expiration caused this removal.")
+    event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="Condition removal event type.")
+    source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
+    target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
+
+    resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
+    resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition removal."""
         cond = self.condition
         condition_name = cond.name or "Unknown"
 
-        # Suppress combat logs for internal marker conditions
         if cond.condition_category == ConditionCategory.INTERNAL:
             return None
 
@@ -206,30 +244,55 @@ class ConditionRemovalEvent(Event):
 
 
 class BaseCondition(BaseObject):
-    """ Noticed that removal and application saving throws are not implemented yet at the level of Entity class"""
-    condition_category: ConditionCategory = Field(default=ConditionCategory.CONDITION)
-    duration: Duration = Field(default_factory=Duration)
-    application_saving_throw: Optional[SavingThrowEvent] = None
-    removal_saving_throw: Optional[SavingThrowEvent] = None
-    applied:bool = Field(default=False)
+    """Base state package for modifiers, handlers, subconditions, and cleanup."""
+
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Broad category used by logs and condition consumers."
+    )
+    duration: Duration = Field(default_factory=Duration, description="Duration state owned by this condition.")
+    application_saving_throw: Optional[SavingThrowEvent] = Field(
+        default=None,
+        description="Optional saving throw requested before entity-level application."
+    )
+    removal_saving_throw: Optional[SavingThrowEvent] = Field(
+        default=None,
+        description="Optional saving throw requested before entity-level duration removal."
+    )
+    applied: bool = Field(default=False, description="Whether this condition has applied its own state.")
     source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity (populated by Entity.add_condition)")
     target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity (populated by Entity.add_condition)")
-    modifers_uuids: Dict[UUID,List[UUID]] = Field(default_factory=dict,description="keys are ModifiableValues UUID and values are list of modifiers UUIDs applied to those blocks")
-    parent_condition: Optional[UUID] = Field(default=None,description="the UUID of the parent condition, if it exists")
-    sub_conditions: List[UUID] = Field(default_factory=list,description="list of condition UUIDs that are sub conditions of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the sub conditions will triget sub events ")
-    event_handlers_uuids: List[UUID] = Field(default_factory=list,description="list of event handler UUIDs that are event handlers of this condition, they will be removed when this condition is removed, they must be applied in the _apply if an ApplyConditionEvent object is given as input to _apply the event handlers will trigger event handlers ")
-    spatial_handler_uuids: List[UUID] = Field(default_factory=list, description="list of spatial handler UUIDs that are spatial handlers of this condition, they will be removed when this condition is removed via remove_spatial_handlers()")
+    modifers_uuids: Dict[UUID, List[UUID]] = Field(
+        default_factory=dict,
+        description="Owned modifier UUIDs grouped by ModifiableValue UUID."
+    )
+    parent_condition: Optional[UUID] = Field(
+        default=None,
+        description="Same-block parent condition UUID, if this is a subcondition."
+    )
+    sub_conditions: List[UUID] = Field(
+        default_factory=list,
+        description="Same-block child condition UUIDs removed with this condition."
+    )
+    event_handlers_uuids: List[UUID] = Field(
+        default_factory=list,
+        description="Owned trigger-handler UUIDs removed with this condition."
+    )
+    spatial_handler_uuids: List[UUID] = Field(
+        default_factory=list,
+        description="Owned spatial-handler UUIDs removed with this condition."
+    )
     linked_conditions: List[Tuple[UUID, UUID]] = Field(
         default_factory=list,
-        description="(target_block_uuid, condition_uuid) pairs for conditions placed on OTHER BaseBlocks (entities, tiles, items). Removed when this condition is removed."
+        description="Cross-block child condition pairs as (target_block_uuid, condition_uuid)."
     )
     parent_link: Optional[Tuple[UUID, UUID]] = Field(
         default=None,
-        description="(parent_block_uuid, parent_condition_uuid) — reverse link set by add_linked_condition()"
+        description="Reverse cross-block parent link as (parent_block_uuid, parent_condition_uuid)."
     )
     child_removal_policy: Literal["none", "any", "last"] = Field(
         default="none",
-        description="'none'=no notification, 'any'=remove parent when any child removed, 'last'=remove parent when last child removed"
+        description="Reverse cleanup policy: none, any child removed, or last child removed."
     )
     hazard_filter: Optional[HazardFilter] = Field(
         default=None,
@@ -241,40 +304,85 @@ class BaseCondition(BaseObject):
     )
     tags: Set[ConditionTag] = Field(
         default_factory=set,
-        description="Condition tags (MAGICAL, CURSE, DISEASE, POISON). Replaces individual boolean flags."
+        description="Condition tags such as MAGICAL, CURSE, DISEASE, POISON, EXHAUSTION, PETRIFICATION, ability-score reduction, and hit-point-maximum reduction."
     )
 
     @property
     def magical_origin(self) -> bool:
-        """Backward-compat property: True if ConditionTag.MAGICAL in tags."""
+        """Whether this condition has a magical origin tag."""
         return ConditionTag.MAGICAL in self.tags
-    
+
     @model_validator(mode="after")
     def check_duration_consistency(self) -> Self:
-        """ ensure the the duration ownership is consistent """
+        """Stamp this condition as the owner of its duration.
+
+        Returns:
+            This condition after duration ownership is set.
+        """
         self.duration.set_owned_by_condition(self.uuid)
         return self
-    
-    def set_context(self,context: Dict[str,Any]) -> None:
-        """ Set the context for the duration """
+
+    def set_context(self, context: Dict[str, Any]) -> None:
+        """Set runtime context on the condition and duration.
+
+        Args:
+            context: Runtime context dictionary.
+        """
         self.context = context
         self.duration.context = context
-    
+
     def clear_context(self) -> None:
-        """ Clear the context for the duration """
+        """Clear runtime context from the condition and duration."""
         self.context = None
         self.duration.context = None
-    def set_source_entity(self,source_entity_uuid: UUID) -> None:
-        """ Set the source entity for the duration """
+
+    def supports_level_reduction(self) -> bool:
+        """Return whether this condition can be replaced by a lower level."""
+        return False
+
+    def get_reduced_level_condition(self, amount: int = 1) -> Optional["BaseCondition"]:
+        """Return the replacement condition after reducing a level.
+
+        Args:
+            amount: Number of levels to reduce.
+
+        Returns:
+            Replacement condition, or `None` when reduction removes the
+            condition entirely. Conditions that do not support level reduction
+            should leave `supports_level_reduction()` as `False`.
+        """
+        return None
+
+    def set_source_entity(self, source_entity_uuid: UUID) -> None:
+        """Set source entity UUID on the condition and duration.
+
+        Args:
+            source_entity_uuid: Source entity UUID.
+        """
         self.source_entity_uuid = source_entity_uuid
         self.duration.source_entity_uuid = source_entity_uuid
-    def set_target_entity(self,target_entity_uuid: UUID) -> None:
-        """ Set the target entity for the duration """
+
+    def set_target_entity(self, target_entity_uuid: UUID) -> None:
+        """Set target entity UUID on the condition and duration.
+
+        Args:
+            target_entity_uuid: Target entity UUID.
+        """
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
     def declare_event(self, parent_event: Optional[Event] = None) -> Event:
-        """ Declare the event """
+        """Create the condition application declaration event.
+
+        Args:
+            parent_event: Optional parent event for event-tree nesting.
+
+        Returns:
+            Declaration-phase application event.
+
+        Raises:
+            ValueError: If the condition has no name.
+        """
         if not self.name:
             raise ValueError("Condition name is not set")
         return ConditionApplicationEvent(
@@ -289,7 +397,15 @@ class BaseCondition(BaseObject):
         )
 
     def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
-        """Declare the removal event"""
+        """Create the condition removal declaration event.
+
+        Args:
+            expired: Whether removal is caused by expiration.
+            parent_event: Optional parent event for event-tree nesting.
+
+        Returns:
+            Declaration-phase removal event.
+        """
         return ConditionRemovalEvent(
             name=self.name if self.name else "Condition Removal",
             condition=self,
@@ -302,30 +418,33 @@ class BaseCondition(BaseObject):
             target_entity_name=self.target_entity_name
         )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],List[UUID],Optional[Event]]:
-        """Apply the condition and return the modifiers associated with the condition.
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply subclass state and return owned runtime artifacts.
 
-        Full implementation is in the subclass. The event is used as parent if
-        subconditions are triggered (e.g. sub conditions application).
+        Subclasses override this to add modifiers, handlers, spatial handlers,
+        same-block subconditions, or linked conditions. The base implementation
+        creates execution and effect events and returns no owned artifacts.
+
+        Args:
+            declaration_event: Declaration event created for this application.
 
         Returns:
-            Tuple of:
-            - List[Tuple[UUID, UUID]]: (modifiable_value_uuid, modifier_uuid) pairs
-            - List[UUID]: event_handler_uuids (trigger-based handlers)
-            - List[UUID]: subcondition_uuids
-            - List[UUID]: spatial_handler_uuids (position-indexed handlers)
-            - Optional[Event]: completion event
+            Tuple of modifier pairs, trigger-handler UUIDs, same-block
+            subcondition UUIDs, spatial-handler UUIDs, and the effect event.
         """
-        # event is declared in the main apply method
+        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition": self})
+        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        return [], [], [], [], event
 
-        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition":self}) # execution is defined, last chance to modify it
-        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self}) # effect is defined reactions to the effect applications
-        #completions happen in main apply method such that
-
-        return [],[],[],[], event
-    
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Remove the condition full implementation is in the subclass if needed"""
+        """Run subclass removal behavior.
+
+        Args:
+            event: Removal declaration event to phase through removal work.
+
+        Returns:
+            Last removal event after subclass work, or None if no event was given.
+        """
         if event:
             event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
             event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
@@ -336,36 +455,51 @@ class BaseCondition(BaseObject):
 
         Override in conditions that modify AC or max_hp so the frontend reducer
         can update entity stats without waiting for the next /state resync.
-        Called after remove_condition_modifiers() in cleanup_own_state().
+        Called after `remove_condition_modifiers()` in `cleanup_own_state()`.
+
+        Returns:
+            Field updates for the removal completion event.
         """
         return {}
 
     def _expire(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Custom extra Expire called during removal from natural expiration"""
+        """Run subclass expiration behavior.
+
+        Args:
+            event: Removal declaration event to phase through expiration work.
+
+        Returns:
+            Last expiration event after subclass work, or None if no event was given.
+        """
         if event:
             event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
             event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
 
-    def apply(self, parent_event: Optional[Event] = None,declaration_event: Optional[Event] = None) -> Optional[Event]:
-        """ Apply the condition """
+    def apply(self, parent_event: Optional[Event] = None, declaration_event: Optional[Event] = None) -> Optional[Event]:
+        """Apply condition state and complete the application event.
+
+        Args:
+            parent_event: Optional parent event for event-tree nesting.
+            declaration_event: Existing declaration event from a caller that
+                already performed declaration-time checks.
+
+        Returns:
+            Completed application event, cancellation event, or None if the
+            condition is already applied, expired, or declaration-canceled.
+        """
         if self.applied or self.duration.is_expired:
             return None
-        #first create the declaration event
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
 
-        if declaration_event.canceled: #check if event was canceled at declaration
+        if declaration_event.canceled:
             return None
 
-        #
-        #then apply the condition
         modifers_uuids, event_handlers_uuids, sub_conditions_uuids, spatial_handler_uuids, effect_event = self._apply(declaration_event)
 
-        # Check if _apply returned an effect event (marker conditions are valid even without modifiers)
         if not effect_event:
             return declaration_event.cancel(status_message=f"Condition {self.name} was not applied - _apply() returned no effect event")
-
 
         for block_uuid, modifiers_uuids in modifers_uuids:
             if block_uuid not in self.modifers_uuids:
@@ -385,9 +519,14 @@ class BaseCondition(BaseObject):
         self.applied = True
         completed_event = effect_event.phase_to(EventPhase.COMPLETION)
         return completed_event
-    
+
     def remove_condition_modifiers(self) -> bool:
-        """ Remove the condition modifiers (does NOT set self.applied = False) """
+        """Remove owned modifiers without changing applied state.
+
+        Returns:
+            True if modifiers were removed or no modifiers were owned, False if
+            the condition was not applied.
+        """
         if not self.applied:
             return False
 
@@ -398,7 +537,7 @@ class BaseCondition(BaseObject):
             for modifier_uuid in modifiers_uuids:
                 value.remove_modifier(modifier_uuid)
         return True
-    
+
     def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:
         """Track a condition this condition placed on another BaseBlock.
 
@@ -409,35 +548,48 @@ class BaseCondition(BaseObject):
         when the child is removed, it can notify this parent based on child_removal_policy.
 
         Args:
-            target_block_uuid: The UUID of the BaseBlock that has the condition
-            condition_uuid: The UUID of the condition on that block
+            target_block_uuid: UUID of the BaseBlock that has the condition.
+            condition_uuid: UUID of the condition on that block.
         """
         self.linked_conditions.append((target_block_uuid, condition_uuid))
-        # Set reverse link on child
         child = BaseCondition.get(condition_uuid)
         if child is not None and isinstance(child, BaseCondition) and self.target_entity_uuid is not None:
             child.parent_link = (self.target_entity_uuid, self.uuid)
 
-    def remove_condition_from_parent(self,skip_parent_removal: bool = False) -> bool:
-        
-        #remove the condition from the parent
+    def remove_condition_from_parent(self, skip_parent_removal: bool = False) -> bool:
+        """Detach this condition from its same-block parent condition.
+
+        Args:
+            skip_parent_removal: Whether to leave the parent child list intact.
+
+        Returns:
+            True after the parent link is handled.
+
+        Raises:
+            ValueError: If the parent condition UUID is set but cannot be found.
+        """
         if self.parent_condition and not skip_parent_removal:
             parent_condition = BaseCondition.get(self.parent_condition)
             if parent_condition is None:
                 raise ValueError(f"Trying to remove condition with UUID {self.uuid} from parent with UUID {self.parent_condition} not found, parent removal should remove children")
-            elif isinstance(parent_condition,BaseCondition):
+            elif isinstance(parent_condition, BaseCondition):
                 parent_condition.sub_conditions.remove(self.uuid)
-               
+
         return True
-    
+
     def remove_event_handlers(self) -> bool:
-        """ Remove the event handlers from the EventQueue"""
+        """Remove owned trigger-based event handlers from the EventQueue.
+
+        Returns:
+            True if handlers were removed or absent, False if the condition was
+            not applied.
+        """
         if not self.applied:
             return False
         for event_handler_uuid in self.event_handlers_uuids:
             event_handler = EventHandler.get(event_handler_uuid)
             if event_handler is None:
-                continue  # event handler not found, it was already removed
+                continue
             elif isinstance(event_handler, EventHandler):
                 event_handler.remove()
         self.event_handlers_uuids.clear()
@@ -458,45 +610,40 @@ class BaseCondition(BaseObject):
         return True
 
     def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Clean up ONLY this condition's modifiers, handlers, and events.
+        """Clean this condition's own modifiers, handlers, and removal event.
 
-        Cross-object cleanup (sub_conditions, linked_conditions)
-        is handled by BaseBlock._remove_condition_tree().
-
-        NOTE: _remove() hook is PRESERVED for custom cleanup logic.
+        Cross-object cleanup for same-block subconditions and linked conditions
+        is handled by `BaseBlock._remove_condition_tree()`. Subclass `_expire()`
+        and `_remove()` hooks are preserved for custom cleanup behavior.
 
         Args:
-            expire: Whether this is an expiration removal
-            parent_event: Parent event for event chain tracking
+            expire: Whether this is an expiration removal.
+            parent_event: Optional parent event for event-tree nesting.
 
         Returns:
-            True if cleanup succeeded, False if canceled
+            True if cleanup succeeded, False if cleanup was canceled or the
+            condition was not applied.
         """
         if not self.applied:
             return False
 
-        # Declare the removal event
         event = self._declare_removal_event(expired=expire, parent_event=parent_event)
         if event.canceled:
             return False
 
-        # Handle expiration hook if needed
         if expire:
             expired_event = self._expire(event)
             if expired_event and expired_event.canceled:
                 return False
 
-        # Custom removal logic - PRESERVED HOOK
         removed_event = self._remove(event)
         if removed_event and removed_event.canceled:
             return False
 
-        # Clean up own modifiers and handlers ONLY
         self.remove_condition_modifiers()
         self.remove_event_handlers()
         self.remove_spatial_handlers()
 
-        # Unlink from parent (but don't remove parent)
         if self.parent_condition:
             parent = BaseCondition.get(self.parent_condition)
             if parent is not None and isinstance(parent, BaseCondition):
@@ -505,21 +652,23 @@ class BaseCondition(BaseObject):
 
         self.applied = False
 
-        # Complete event — inject post-removal stats (AC, max_hp) if condition overrides hook
         post_stats = self._post_removal_stats()
         event.phase_to(EventPhase.COMPLETION, **post_stats)
         return True
 
     def progress(self) -> bool:
-        """Progress the duration, return True if expired.
+        """Progress condition duration without removing the condition.
 
-        NOTE: Does NOT remove the condition - caller must handle removal.
-        This avoids circular imports by letting Entity handle tree traversal.
+        Removal is the caller's responsibility so block/entity cleanup can own
+        tree traversal.
+
+        Returns:
+            True if the duration is expired after progression.
         """
         return self.duration.progress()
-    
+
     def long_rest(self) -> None:
-        """ Set the long rested flag to True """
+        """Mark this condition's duration as long-rested."""
         self.duration.long_rest()
 
 
@@ -529,9 +678,9 @@ class SpellProtection(BaseModel):
     Tracks positions that are protected from spells at or below a certain level,
     when the spell source is outside the protection zone.
     """
-    uuid: UUID
-    positions: Set[Tuple[int, int]]
-    max_blocked_level: int
+    uuid: UUID = Field(description="Protection UUID used for unregistering.")
+    positions: Set[Tuple[int, int]] = Field(description="Grid positions protected by this spell effect.")
+    max_blocked_level: int = Field(description="Highest spell level blocked by this protection.")
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -548,15 +697,34 @@ class SpellProtectionRegistry:
 
     @classmethod
     def register(cls, protection: SpellProtection) -> None:
+        """Register a spell protection zone.
+
+        Args:
+            protection: Protection zone to register.
+        """
         cls._protections.append(protection)
 
     @classmethod
     def unregister(cls, protection_uuid: UUID) -> None:
+        """Remove a spell protection zone by UUID.
+
+        Args:
+            protection_uuid: UUID of the protection zone to remove.
+        """
         cls._protections = [p for p in cls._protections if p.uuid != protection_uuid]
 
     @classmethod
     def is_protected(cls, position: Tuple[int, int], source_position: Tuple[int, int], spell_level: int) -> bool:
-        """Check if position is protected from a spell at given level cast from source_position."""
+        """Check whether a position is protected from a spell.
+
+        Args:
+            position: Target position to check.
+            source_position: Position the spell is cast from.
+            spell_level: Base spell level being cast.
+
+        Returns:
+            True if the target position is protected from this spell.
+        """
         for p in cls._protections:
             if position in p.positions and source_position not in p.positions and spell_level <= p.max_blocked_level:
                 return True
@@ -564,7 +732,15 @@ class SpellProtectionRegistry:
 
     @classmethod
     def get_excluded_positions(cls, source_position: Tuple[int, int], spell_level: int) -> Set[Tuple[int, int]]:
-        """Get all positions protected from a spell at given level cast from source_position."""
+        """Return protected positions excluded for a spell cast.
+
+        Args:
+            source_position: Position the spell is cast from.
+            spell_level: Base spell level being cast.
+
+        Returns:
+            Positions protected from this spell.
+        """
         excluded: Set[Tuple[int, int]] = set()
         for p in cls._protections:
             if source_position not in p.positions and spell_level <= p.max_blocked_level:
@@ -573,4 +749,5 @@ class SpellProtectionRegistry:
 
     @classmethod
     def reset(cls) -> None:
+        """Clear all registered spell protection zones."""
         cls._protections.clear()

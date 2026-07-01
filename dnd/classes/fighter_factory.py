@@ -21,7 +21,6 @@ from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.base_conditions import BaseCondition
 
-# Import items
 from dnd.items import (
     create_longsword,
     create_greatsword,
@@ -37,7 +36,6 @@ from dnd.items import (
 from dnd.items.armors import create_cloth_shoes, create_iron_helmet, create_leather_armor, create_leather_boots
 from dnd.items.test_items import create_potion_of_haste, create_healing_potion
 
-# Import fighter features
 from dnd.classes.fighter import (
     FightingStyleArchery,
     FightingStyleDefense,
@@ -54,10 +52,6 @@ from dnd.classes.fighter import (
     Survivor,
 )
 
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
 
 def get_proficiency_bonus(level: int) -> int:
     """Returns proficiency bonus for character level."""
@@ -94,11 +88,6 @@ def get_indomitable_uses(level: int) -> int:
         return 2
     return 3
 
-
-# =============================================================================
-# FIGHTING STYLE TYPES AND MAPPING
-# =============================================================================
-
 FightingStyleChoice = Literal[
     "archery", "defense", "dueling",
     "great_weapon", "protection", "two_weapon"
@@ -112,11 +101,6 @@ FIGHTING_STYLE_MAP: Dict[FightingStyleChoice, Type[BaseCondition]] = {
     "protection": FightingStyleProtection,
     "two_weapon": FightingStyleTwoWeaponFighting,
 }
-
-
-# =============================================================================
-# EQUIPMENT PRESETS
-# =============================================================================
 
 EquipmentPreset = Literal["sword_shield", "greatsword", "dual_wield", "archery"]
 
@@ -144,68 +128,135 @@ EQUIPMENT_PRESETS = {
 }
 
 
-# =============================================================================
-# FIGHTER CONFIG
-# =============================================================================
-
 class FighterConfig(BaseModel):
-    """
-    Configuration for creating a Fighter at a specific level.
+    """Configuration for creating a Fighter at a specific level.
 
-    BG3-style: base stats + level 1 bonuses + ASI choices at feat levels.
+    Attributes:
+        level: Fighter level used to gate features, resources, and required ASI choices.
+        name: Display name for the created fighter entity.
+        position: Initial grid position for the created fighter entity.
+        faction: Faction identifier. None = enemy to everyone.
+        base_strength: Base Strength score before level-one bonuses and ASI choices.
+        base_dexterity: Base Dexterity score before level-one bonuses and ASI choices.
+        base_constitution: Base Constitution score before level-one bonuses and ASI choices.
+        base_intelligence: Base Intelligence score before level-one bonuses and ASI choices.
+        base_wisdom: Base Wisdom score before level-one bonuses and ASI choices.
+        base_charisma: Base Charisma score before level-one bonuses and ASI choices.
+        bonus_plus_2: Ability that receives the level-one +2 bonus.
+        bonus_plus_1: Ability that receives the level-one +1 bonus.
+        fighting_style: Primary Fighter fighting style applied at level one.
+        second_fighting_style: Champion level-ten fighting style; must differ from the primary style.
+        asi_4: Ability score improvements selected at Fighter level four.
+        asi_6: Ability score improvements selected at Fighter level six.
+        asi_8: Ability score improvements selected at Fighter level eight.
+        asi_12: Ability score improvements selected at Fighter level twelve.
+        asi_14: Ability score improvements selected at Fighter level fourteen.
+        asi_16: Ability score improvements selected at Fighter level sixteen.
+        asi_19: Ability score improvements selected at Fighter level nineteen.
+        equipment_preset: Starter equipment preset equipped by the Fighter factory.
     """
 
-    # Core
-    level: int = Field(ge=1, le=20, default=1)
-    name: str = "Fighter"
-    position: Tuple[int, int] = (0, 0)
+    level: int = Field(
+        ge=1,
+        le=20,
+        default=1,
+        description="Fighter level used to gate features, resources, and required ASI choices.",
+    )
+    name: str = Field(default="Fighter", description="Display name for the created fighter entity.")
+    position: Tuple[int, int] = Field(
+        default=(0, 0),
+        description="Initial grid position for the created fighter entity.",
+    )
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
-    # ==========================================================================
-    # ABILITY SCORES (BG3 Style)
-    # ==========================================================================
+    base_strength: int = Field(
+        default=15,
+        ge=8,
+        le=15,
+        description="Base Strength score before level-one bonuses and ASI choices.",
+    )
+    base_dexterity: int = Field(
+        default=14,
+        ge=8,
+        le=15,
+        description="Base Dexterity score before level-one bonuses and ASI choices.",
+    )
+    base_constitution: int = Field(
+        default=13,
+        ge=8,
+        le=15,
+        description="Base Constitution score before level-one bonuses and ASI choices.",
+    )
+    base_intelligence: int = Field(
+        default=10,
+        ge=8,
+        le=15,
+        description="Base Intelligence score before level-one bonuses and ASI choices.",
+    )
+    base_wisdom: int = Field(
+        default=12,
+        ge=8,
+        le=15,
+        description="Base Wisdom score before level-one bonuses and ASI choices.",
+    )
+    base_charisma: int = Field(
+        default=8,
+        ge=8,
+        le=15,
+        description="Base Charisma score before level-one bonuses and ASI choices.",
+    )
 
-    # Base scores (like standard array or point buy result)
-    base_strength: int = Field(default=15, ge=8, le=15)
-    base_dexterity: int = Field(default=14, ge=8, le=15)
-    base_constitution: int = Field(default=13, ge=8, le=15)
-    base_intelligence: int = Field(default=10, ge=8, le=15)
-    base_wisdom: int = Field(default=12, ge=8, le=15)
-    base_charisma: int = Field(default=8, ge=8, le=15)
+    bonus_plus_2: AbilityName = Field(
+        default="strength",
+        description="Ability that receives the level-one +2 bonus.",
+    )
+    bonus_plus_1: AbilityName = Field(
+        default="constitution",
+        description="Ability that receives the level-one +1 bonus.",
+    )
 
-    # Level 1 "racial" bonuses: +2 to one, +1 to another
-    bonus_plus_2: AbilityName = "strength"
-    bonus_plus_1: AbilityName = "constitution"
+    fighting_style: FightingStyleChoice = Field(
+        default="defense",
+        description="Primary Fighter fighting style applied at level one.",
+    )
+    second_fighting_style: Optional[FightingStyleChoice] = Field(
+        default=None,
+        description="Champion level-ten fighting style; must differ from the primary style.",
+    )
 
-    # ==========================================================================
-    # CHOICES AT SPECIFIC LEVELS
-    # ==========================================================================
+    asi_4: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level four.",
+    )
+    asi_6: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level six.",
+    )
+    asi_8: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level eight.",
+    )
+    asi_12: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level twelve.",
+    )
+    asi_14: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level fourteen.",
+    )
+    asi_16: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level sixteen.",
+    )
+    asi_19: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Fighter level nineteen.",
+    )
 
-    # Level 1: Fighting Style (required)
-    fighting_style: FightingStyleChoice = "defense"
-
-    # Level 10: Second Fighting Style (Champion) - None if not L10+ yet
-    second_fighting_style: Optional[FightingStyleChoice] = None
-
-    # ASI choices at levels 4, 6, 8, 12, 14, 16, 19
-    # Each entry is (+2 to one stat) OR (+1 to two stats)
-    # Format: [("strength", 2)] or [("strength", 1), ("constitution", 1)]
-    asi_4: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_6: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_8: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_12: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_14: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_16: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_19: Optional[List[Tuple[AbilityName, int]]] = None
-
-    # ==========================================================================
-    # EQUIPMENT
-    # ==========================================================================
-    equipment_preset: EquipmentPreset = "sword_shield"
-
-    # ==========================================================================
-    # VALIDATORS
-    # ==========================================================================
+    equipment_preset: EquipmentPreset = Field(
+        default="sword_shield",
+        description="Starter equipment preset equipped by the Fighter factory.",
+    )
 
     @field_validator("bonus_plus_1")
     @classmethod
@@ -254,10 +305,6 @@ class FighterConfig(BaseModel):
         return self
 
 
-# =============================================================================
-# ABILITY SCORE CALCULATION
-# =============================================================================
-
 def calculate_final_ability_scores(config: FighterConfig) -> Dict[AbilityName, int]:
     """
     Calculate final scores: base + L1 bonuses + all ASIs.
@@ -275,11 +322,9 @@ def calculate_final_ability_scores(config: FighterConfig) -> Dict[AbilityName, i
         "charisma": config.base_charisma,
     }
 
-    # Apply L1 bonuses
     scores[config.bonus_plus_2] += 2
     scores[config.bonus_plus_1] += 1
 
-    # Apply ASIs for reached levels
     asi_map = {
         4: config.asi_4,
         6: config.asi_6,
@@ -294,19 +339,13 @@ def calculate_final_ability_scores(config: FighterConfig) -> Dict[AbilityName, i
             for ability, bonus in asi:
                 scores[ability] += bonus
 
-    # Cap at 20
     return {k: min(v, 20) for k, v in scores.items()}
 
-
-# =============================================================================
-# EQUIPMENT APPLICATION
-# =============================================================================
 
 def apply_equipment(entity: Entity, preset: EquipmentPreset):
     """Apply equipment based on preset."""
     preset_config = EQUIPMENT_PRESETS[preset]
 
-    # Armor
     armor_name = preset_config.get("armor")
     if armor_name == "chain_mail":
         armor = create_chain_mail(entity.uuid)
@@ -315,7 +354,6 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
         armor = create_studded_leather(entity.uuid)
         entity.equipment.equip(armor)
 
-    # Melee main
     melee_main = preset_config.get("melee_main")
     if melee_main == "longsword":
         weapon = create_longsword(entity.uuid)
@@ -327,7 +365,6 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
         weapon = create_shortsword(entity.uuid)
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
-    # Melee off
     melee_off = preset_config.get("melee_off")
     if melee_off == "shield":
         shield = create_shield(entity.uuid)
@@ -336,16 +373,11 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
         weapon = create_shortsword(entity.uuid)
         entity.equipment.equip(weapon, WeaponSlot.MELEE_OFF)
 
-    # Ranged main
     ranged_main = preset_config.get("ranged_main")
     if ranged_main == "longbow":
         weapon = create_longbow(entity.uuid)
         entity.equipment.equip(weapon, WeaponSlot.RANGED_MAIN)
 
-
-# =============================================================================
-# FIGHTING STYLE APPLICATION
-# =============================================================================
 
 def apply_fighting_style(entity: Entity, style: FightingStyleChoice):
     """Apply a fighting style condition to the entity."""
@@ -356,25 +388,18 @@ def apply_fighting_style(entity: Entity, style: FightingStyleChoice):
     ))
 
 
-# =============================================================================
-# FEATURE APPLICATION
-# =============================================================================
-
 def apply_fighter_features(entity: Entity, config: FighterConfig):
     """Apply all Fighter features appropriate for the level."""
     level = config.level
 
-    # L1: Fighting Style
     apply_fighting_style(entity, config.fighting_style)
 
-    # L1: Second Wind (healing scales with level)
     entity.add_condition(SecondWindFeature(
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
         fighter_level=level
     ))
 
-    # L2+: Action Surge
     if level >= 2:
         entity.add_condition(ActionSurgeFeature(
             source_entity_uuid=entity.uuid,
@@ -382,15 +407,12 @@ def apply_fighter_features(entity: Entity, config: FighterConfig):
             num_uses=get_action_surge_uses(level)
         ))
 
-    # L3-14: Improved Critical (Champion)
-    # Note: At L15, Superior Critical replaces this
     if 3 <= level < 15:
         entity.add_condition(ImprovedCritical(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L5+: Extra Attack
     if level >= 5:
         entity.add_condition(ExtraAttackFeature(
             source_entity_uuid=entity.uuid,
@@ -398,7 +420,6 @@ def apply_fighter_features(entity: Entity, config: FighterConfig):
             extra_attacks=get_extra_attacks(level)
         ))
 
-    # L9+: Indomitable
     if level >= 9:
         entity.add_condition(Indomitable(
             source_entity_uuid=entity.uuid,
@@ -406,28 +427,21 @@ def apply_fighter_features(entity: Entity, config: FighterConfig):
             num_uses=get_indomitable_uses(level)
         ))
 
-    # L10+: Second Fighting Style (Champion)
     if level >= 10 and config.second_fighting_style:
         apply_fighting_style(entity, config.second_fighting_style)
 
-    # L15+: Superior Critical (replaces Improved Critical)
     if level >= 15:
         entity.add_condition(SuperiorCritical(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L18+: Survivor (Champion)
     if level >= 18:
         entity.add_condition(Survivor(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-
-# =============================================================================
-# FACTORY FUNCTION
-# =============================================================================
 
 def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> Entity:
     """
@@ -444,13 +458,10 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
     if source_id is None:
         source_id = uuid4()
 
-    # 1. Calculate final ability scores
     final_scores = calculate_final_ability_scores(config)
 
-    # 2. Calculate proficiency bonus
     prof_bonus = get_proficiency_bonus(config.level)
 
-    # 3. Create ability scores config
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=final_scores["strength"]),
         dexterity=AbilityConfig(ability_score=final_scores["dexterity"]),
@@ -460,11 +471,6 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         charisma=AbilityConfig(ability_score=final_scores["charisma"])
     )
 
-    # 4. Calculate HP
-    # Fighter hit dice: d10
-    # Level 1: 10 + CON mod
-    # Level 2+: (10 + CON_mod) + (level-1) * (6 + CON_mod)
-    # We use average mode which handles first level maximum automatically
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=10,
@@ -474,7 +480,6 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         )]
     )
 
-    # 5. Create entity config
     equipment_config = EquipmentConfig()
     action_economy_config = ActionEconomyConfig()
     saving_throws_config = SavingThrowSetConfig(
@@ -501,7 +506,6 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         ),
     )
 
-    # 6. Create entity
     entity = Entity.create(
         name=config.name,
         source_entity_uuid=source_id,
@@ -509,17 +513,13 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         config=entity_config
     )
 
-    # 7. Setup standard actions (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # 8. Apply equipment
     apply_equipment(entity, config.equipment_preset)
     entity.equipment.equip(create_leather_boots(entity.uuid, visual_variant_id="b0000009"))
 
-    # 9. Apply all fighter features
     apply_fighter_features(entity, config)
 
-    # 10. Add starter inventory items
     haste_potion = create_potion_of_haste(entity.uuid)
     entity.loot_item(haste_potion)
     entity.loot_item(create_healing_potion(entity.uuid))
@@ -527,8 +527,6 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
     entity.loot_item(create_cloth_shoes(entity.uuid))
     entity.loot_item(create_iron_helmet(entity.uuid, visual_variant_id="h0000008"))
 
-    # Spare weapons — items NOT duplicating equipped gear
-    # Check what's equipped to avoid exact duplicates
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     spare_weapons = [
         ("Handaxe", create_handaxe),
@@ -540,22 +538,15 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         if weapon_name not in equipped_names:
             entity.loot_item(factory_fn(entity.uuid))
 
-    # Spare armor — only if different from equipped
     if "Leather Armor" not in equipped_names and "Studded Leather" not in equipped_names:
         entity.loot_item(create_leather_armor(entity.uuid))
     if "Chain Mail" not in equipped_names:
         entity.loot_item(create_chain_mail(entity.uuid))
 
-    # Spare shield
     if "Shield" not in equipped_names:
         entity.loot_item(create_shield(entity.uuid))
 
     return entity
-
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     "FighterConfig",

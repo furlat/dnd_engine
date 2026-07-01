@@ -5,7 +5,6 @@ from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from typing import Literal as TypeLiteral
 
-
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import AbilityName
 SavingThrowName = TypeLiteral[
@@ -22,9 +21,6 @@ saving_throw_name_to_ability = {
     "charisma_saving_throw": "charisma"
 }
 
-# Define saving throws as a proper string literal type
-
-# Update the mapping dictionary
 SAVING_THROW_TO_ABILITY: Dict[SavingThrowName, AbilityName] = {
     'strength_saving_throw': 'strength',
     'dexterity_saving_throw': 'dexterity',
@@ -83,8 +79,8 @@ class SavingThrow(BaseBlock):
             Clear the source, target, and context for all the values contained in this Block instance.
 
     Class Methods:
-        create(cls, source_entity_uuid: UUID, name: saving_throws, source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+        create(cls, source_entity_uuid: UUID, name: saving_throws, source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                proficiency: bool = False) -> 'SavingThrow':
             Create a new SavingThrow instance with the given parameters.
 
@@ -130,7 +126,7 @@ class SavingThrow(BaseBlock):
     def _get_proficiency_converter(self) -> Callable[[int], int]:
         """
         Returns a lambda function that converts the proficiency bonus based on proficiency status.
-        
+
         For saving throws, this is a simple binary multiplier:
         - If proficient: returns lambda x: x (multiplier of 1)
         - If not proficient: returns lambda x: 0 (multiplier of 0)
@@ -142,8 +138,8 @@ class SavingThrow(BaseBlock):
         return lambda x: x if self.proficiency else 0
 
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None,
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 config: Optional[SavingThrowConfig] = None) -> 'SavingThrow':
         """
         Create a new SavingThrow instance with the given parameters.
@@ -160,16 +156,16 @@ class SavingThrow(BaseBlock):
             SavingThrow: A new instance of the SavingThrow class.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus, value_name=name+" Saving Throw Bonus")
             for modifier in config.bonus_modifiers:
                 bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        proficiency=config.proficiency, bonus=bonus)
-        
+
 class SavingThrowSetConfig(BaseModel):
     """
     Configuration for a set of saving throws in the D&D 5e game system.
@@ -236,7 +232,7 @@ class SavingThrowSet(BaseBlock):
     intelligence_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="intelligence_saving_throw"), description="Intelligence saving throw: Used to resist mental attacks and illusions")
     wisdom_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="wisdom_saving_throw"), description="Wisdom saving throw: Used to resist mental influence or charm effects")
     charisma_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="charisma_saving_throw"), description="Charisma saving throw: Used to resist effects that would subsume your personality or possess you")
-    
+
     @computed_field
     @property
     def proficiencies(self) -> List[SavingThrow]:
@@ -248,7 +244,7 @@ class SavingThrowSet(BaseBlock):
         """
         blocks = self.get_blocks()
         return [saving_throw for saving_throw in blocks if isinstance(saving_throw, SavingThrow) and saving_throw.proficiency]
-    
+
     def get_saving_throw(self, ability_name: AbilityName) -> SavingThrow:
         """
         Get a SavingThrow instance by its corresponding ability name.
@@ -266,32 +262,31 @@ class SavingThrowSet(BaseBlock):
         if not hasattr(self, saving_throw_name):
             raise ValueError(f"No saving throw found for ability {ability_name}")
         return getattr(self, saving_throw_name)
-    
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "SavingThrowSet", source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: str = "SavingThrowSet", source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                config: Optional[SavingThrowSetConfig] = None) -> 'SavingThrowSet':
         """
         Create a new SavingThrowSet instance with the given parameters.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            strength_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="strength_saving_throw", source_entity_name=source_entity_name, 
+            strength_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="strength_saving_throw", source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.strength_saving_throw)
-            dexterity_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="dexterity_saving_throw", source_entity_name=source_entity_name, 
+            dexterity_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="dexterity_saving_throw", source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.dexterity_saving_throw)
-            constitution_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="constitution_saving_throw", source_entity_name=source_entity_name, 
+            constitution_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="constitution_saving_throw", source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.constitution_saving_throw)
-            intelligence_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="intelligence_saving_throw", source_entity_name=source_entity_name, 
+            intelligence_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="intelligence_saving_throw", source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intelligence_saving_throw)
-            wisdom_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="wisdom_saving_throw", source_entity_name=source_entity_name, 
+            wisdom_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="wisdom_saving_throw", source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.wisdom_saving_throw)
-            charisma_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="charisma_saving_throw", source_entity_name=source_entity_name, 
-                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.charisma_saving_throw)  
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                       strength_saving_throw=strength_saving_throw, dexterity_saving_throw=dexterity_saving_throw, constitution_saving_throw=constitution_saving_throw, 
+            charisma_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="charisma_saving_throw", source_entity_name=source_entity_name,
+                                                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.charisma_saving_throw)
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
+                       strength_saving_throw=strength_saving_throw, dexterity_saving_throw=dexterity_saving_throw, constitution_saving_throw=constitution_saving_throw,
                        intelligence_saving_throw=intelligence_saving_throw, wisdom_saving_throw=wisdom_saving_throw, charisma_saving_throw=charisma_saving_throw)
-   

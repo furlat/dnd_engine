@@ -1,14 +1,4 @@
-"""
-Geometry primitives for grid-based calculations.
-
-All functions take positions as Tuple[int, int] and return Set[Tuple[int, int]].
-These are pure functions with no dependencies on Entity, GridMap, or game state.
-
-Usage:
-    from dnd.core.geometry import circle_positions, line_positions, cone_positions
-
-    positions = circle_positions(center=(5, 5), radius=4)
-"""
+"""Pure grid-geometry helpers for shape and ray calculations."""
 import math
 from typing import Set, Tuple, List, Optional
 
@@ -18,20 +8,15 @@ def circle_positions(
     radius: int,
     include_center: bool = True
 ) -> Set[Tuple[int, int]]:
-    """
-    Get all positions within a filled circle.
+    """Return all grid positions inside a filled circle.
 
     Args:
-        center: Center point (x, y)
-        radius: Radius in tiles (not feet)
-        include_center: If True, include center position
+        center: Center point as `(x, y)`.
+        radius: Radius in tiles.
+        include_center: Whether to include the center tile.
 
     Returns:
-        Set of (x, y) positions within the circle
-
-    Algorithm:
-        For each tile in bounding box [-r, +r]:
-            if dx² + dy² ≤ r²: include tile
+        Positions whose squared distance is within the radius.
     """
     positions: Set[Tuple[int, int]] = set()
     cx, cy = center
@@ -51,11 +36,14 @@ def bresenham_line(
     start: Tuple[int, int],
     end: Tuple[int, int]
 ) -> List[Tuple[int, int]]:
-    """
-    Bresenham's line algorithm - get all tiles on line from start to end.
+    """Return Bresenham line cells from start to end.
+
+    Args:
+        start: Inclusive start position.
+        end: Inclusive end position.
 
     Returns:
-        List of positions from start to end (inclusive), ordered.
+        Ordered list of positions from start to end.
     """
     x0, y0 = start
     x1, y1 = end
@@ -136,22 +124,16 @@ def line_positions(
     length: int,
     width: int = 1
 ) -> Set[Tuple[int, int]]:
-    """
-    Get positions in a line from start toward direction.
+    """Return positions in a widened line from start toward direction.
 
     Args:
-        start: Starting position (x, y)
-        direction: Target direction point (determines angle)
-        length: Length in tiles
-        width: Width in tiles (1 = single tile, 3 = tile + 1 on each side)
+        start: Starting position.
+        direction: Target point that determines the line angle.
+        length: Length in tiles.
+        width: Width in tiles.
 
     Returns:
-        Set of positions along the line
-
-    Algorithm:
-        1. Compute endpoint using normalized direction × length
-        2. Get centerline via Bresenham
-        3. For width > 1, expand perpendicular at each centerline point
+        Set of positions along the centerline and width expansion.
     """
     sx, sy = start
     dx = direction[0] - sx
@@ -161,20 +143,17 @@ def line_positions(
     if dist == 0:
         return {start}
 
-    # Normalize and compute endpoint
     ndx, ndy = dx / dist, dy / dist
     end_x = int(round(sx + ndx * length))
     end_y = int(round(sy + ndy * length))
 
-    # Get centerline
     centerline = bresenham_line(start, (end_x, end_y))
 
     if width <= 1:
         return set(centerline)
 
-    # Expand perpendicular for width
     positions: Set[Tuple[int, int]] = set()
-    px, py = -ndy, ndx  # Perpendicular vector
+    px, py = -ndy, ndx
     half_width = width // 2
 
     for cx, cy in centerline:
@@ -192,25 +171,16 @@ def cone_positions(
     length: int,
     angle_degrees: int = 53
 ) -> Set[Tuple[int, int]]:
-    """
-    Get positions in a cone from apex toward direction.
+    """Return positions in a cone from apex toward direction.
 
     Args:
-        apex: Cone apex position (x, y)
-        direction: Direction target (determines cone orientation)
-        length: Cone length in tiles
-        angle_degrees: Cone angle in degrees (D&D 5e standard is 53°)
+        apex: Cone apex position.
+        direction: Target point that determines cone orientation.
+        length: Cone length in tiles.
+        angle_degrees: Cone angle in degrees.
 
     Returns:
-        Set of positions within the cone
-
-    Algorithm:
-        For each tile in bounding box:
-            1. Check distance ≤ length
-            2. Compute angle to tile: atan2(ty, tx)
-            3. Compute angle difference from base direction
-            4. Normalize angle diff to [0, π] (handle wraparound)
-            5. Include if angle_diff ≤ half_angle
+        Set of positions within the angular and distance bounds.
     """
     ax, ay = apex
     dx = direction[0] - ax
@@ -226,18 +196,15 @@ def cone_positions(
     for tx in range(-length, length + 1):
         for ty in range(-length, length + 1):
             if tx == 0 and ty == 0:
-                continue  # Apex not included
+                continue
 
-            # Distance check
             dist = math.sqrt(tx * tx + ty * ty)
             if dist > length:
                 continue
 
-            # Angle check
             tile_angle = math.atan2(ty, tx)
             angle_diff = abs(tile_angle - base_angle)
 
-            # Normalize to [0, π] for wraparound at ±π
             if angle_diff > math.pi:
                 angle_diff = 2 * math.pi - angle_diff
 
@@ -253,21 +220,16 @@ def rectangle_positions(
     direction: Optional[Tuple[int, int]] = None,
     centered: bool = True
 ) -> Set[Tuple[int, int]]:
-    """
-    Get positions in a rectangle/square.
+    """Return positions in a centered or directional square.
 
     Args:
-        origin: Origin point (center if centered, edge if not)
-        size: Size in tiles (e.g., 3 = 3×3 square)
-        direction: For non-centered, direction to extend toward
-        centered: If True, center on origin. If False, extend from origin.
+        origin: Center or edge origin.
+        size: Square size in tiles.
+        direction: Direction to extend toward when not centered.
+        centered: Whether to center the square on origin.
 
     Returns:
-        Set of positions in the rectangle
-
-    Algorithm:
-        Centered: simple box from origin-half to origin+half
-        Non-centered: extend in primary direction (horizontal or vertical)
+        Set of positions in the square.
     """
     ox, oy = origin
     half = size // 2
@@ -279,20 +241,17 @@ def rectangle_positions(
                 positions.add((ox + dx, oy + dy))
     else:
         if direction is None:
-            direction = (ox + 1, oy)  # Default: east
+            direction = (ox + 1, oy)
 
         dx = direction[0] - ox
         dy = direction[1] - oy
 
-        # Determine primary direction
         if abs(dx) >= abs(dy):
-            # Horizontal primary
             dir_x = 1 if dx >= 0 else -1
             for i in range(size):
                 for j in range(-half, half + 1):
                     positions.add((ox + dir_x * i, oy + j))
         else:
-            # Vertical primary
             dir_y = 1 if dy >= 0 else -1
             for i in range(size):
                 for j in range(-half, half + 1):

@@ -7,7 +7,7 @@ import random
 from typing import Any, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
@@ -26,44 +26,38 @@ from dnd.core.gridmap import get_map
 
 
 class CharmPerson(SpellAction):
-    """Charm Person - 1st level Enchantment
+    """Charm one or more humanoids after Wisdom saves.
 
-    You attempt to charm a humanoid you can see within range. It must make a
-    Wisdom saving throw, and does so with advantage if you or your companions
-    are fighting it. If it fails, it is charmed by you until the spell ends
-    or until you or your companions do anything harmful to it. The charmed
-    creature regards you as a friendly acquaintance.
-
-    Duration: 1 hour (not tracked in combat - essentially permanent)
-    Not concentration.
-
-    At Higher Levels: You can target one additional creature for each slot
-    level above 1st. The creatures must be within 30 feet of each other.
+    Upcasting increases the target count, and targets that are fighting the
+    caster receive advantage on the save.
     """
-    name: str = Field(default="Charm Person")
-    description: str = Field(default="WIS save or charmed. Advantage if fighting.")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target for upcast
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
-
-    # Target filtering - humanoids only
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")  # Typically enemies
-
-    # Multi-target configuration
-    allow_same_target: bool = Field(default=False)  # Different creatures only
-    max_targets: int = Field(default=1)  # Base = 1, +1 per upcast level
+    name: str = Field(default="Charm Person", description="Spell name.")
+    description: str = Field(
+        default="WIS save or charmed. Advantage if fighting.",
+        description="Rules-facing charm summary.",
+    )
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    include_self: bool = Field(default=False, description="Whether action discovery includes the caster.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    max_targets: int = Field(default=1, description="Base target count before upcasting.")
 
     def get_num_targets(self) -> int:
-        """1 target base + 1 per upcast level."""
+        """Return the number of allowed targets after upcasting."""
         return 1 + max(0, self.cast_at_level - self.spell_level)
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the action discovery multi-target count."""
         return self.get_num_targets()
 
     def get_all_targets(self) -> List[UUID]:
-        """Return all targets up to max for cast level."""
+        """Return unique selected targets trimmed to the slot limit."""
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -73,22 +67,13 @@ class CharmPerson(SpellAction):
         return targets[:self.get_num_targets()]
 
     def _is_target_fighting_caster(self, target: Entity, caster: Entity) -> bool:
-        """Check if target is fighting (in combat with) the caster.
-
-        Returns True if target has attacked the caster this combat,
-        or if they're enemies and in close proximity.
-        """
-        # For now, use a simple check: if they're enemies and visible
-        # A more sophisticated check would track combat actions
+        """Return whether the target currently treats the caster as an enemy."""
         if caster.is_enemy(target):
-            # If the caster is in target's visible enemies, they're "fighting"
             return caster.uuid in target.get_visible_enemies()
         return False
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, LOS, and creature type (humanoid only)."""
-
-        # Validate line of sight
+        """Validate line of sight, range, target type, and target spacing."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -99,20 +84,17 @@ class CharmPerson(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Charm Person only affects humanoids
         if target_entity.creature_type != CreatureType.HUMANOID:
             return declaration_event.cancel(
                 status_message=f"Charm Person only affects humanoids, not {target_entity.creature_type.value}"
             )
 
-        # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
-        # For multi-target: validate all targets are within 30ft of each other
         all_targets = self.get_all_targets()
         if len(all_targets) > 1:
             for i, t1 in enumerate(all_targets):
@@ -126,25 +108,20 @@ class CharmPerson(SpellAction):
                                 status_message=f"Targets must be within 30ft of each other ({e1.name} and {e2.name} are {dist}ft apart)"
                             )
 
-        # Call parent validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Charm Person - WIS save (with advantage if fighting) or charmed."""
+        """Resolve the Wisdom save and apply Charmed on failure."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
-
-        # 2. Check if target gets advantage (fighting the caster)
         is_fighting = self._is_target_fighting_caster(target, caster)
 
-        # 3. Add advantage modifier if fighting
         advantage_mod_uuid: Optional[UUID] = None
         if is_fighting:
             adv_mod = AdvantageModifier(
@@ -155,7 +132,6 @@ class CharmPerson(SpellAction):
             )
             advantage_mod_uuid = target.saving_throws.get_saving_throw("wisdom").bonus.self_static.add_advantage_modifier(adv_mod)
 
-        # 4. Request WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -164,11 +140,9 @@ class CharmPerson(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # 5. Remove advantage modifier
         if advantage_mod_uuid:
             target.saving_throws.get_saving_throw("wisdom").bonus.self_static.remove_modifier(advantage_mod_uuid)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
 
         fighting_text = " (advantage: fighting)" if is_fighting else ""
@@ -183,14 +157,12 @@ class CharmPerson(SpellAction):
             status_message=f"WIS save: {save_roll.total} vs DC {dc}{fighting_text} - {'Success' if success else 'Failure'}"
         )
 
-        # 6. On successful save: spell has no effect
         if success:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} - {target.name} resists the charm"
             )
 
-        # 7. On failed save: apply Charmed condition
         charmed = Charmed(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -205,29 +177,18 @@ class CharmPerson(SpellAction):
 
 
 class HoldPersonEffect(BaseCondition):
-    """
-    The spell effect condition applied to the target of Hold Person.
-
-    This condition:
-    - Has Paralyzed as a sub-condition (same entity, auto-cleanup)
-    - Can be targeted by Dispel Magic
-    - Allows spell-specific immunity (immune to "Hold Person" but not all paralysis)
-    - Is linked to caster's Concentrating via linked_conditions
-
-    When this condition is removed (by breaking concentration, dispel, or repeat save),
-    the Paralyzed sub-condition is automatically removed.
-    """
-    name: str = "Hold Person"
-    description: str = "Magically held in place"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-
-    # Track the caster for repeat saves
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    """Apply Hold Person's spell-specific parent condition."""
+    name: str = Field(default="Hold Person", description="Condition name.")
+    description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the repeat-save DC.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC to end the condition.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-
-
+        """Apply Paralyzed as a sub-condition and register repeat saves."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
@@ -247,11 +208,10 @@ class HoldPersonEffect(BaseCondition):
             status_message=f"Applying Paralyzed sub-condition to {target.name}"
         )
 
-        # Apply Paralyzed as a sub-condition (same entity = existing mechanism)
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,  # Links child to parent
+            parent_condition=self.uuid,
             tags={ConditionTag.MAGICAL}
         )
         sub_condition_event = target.add_condition(paralyzed, parent_event=execution_event)
@@ -259,7 +219,6 @@ class HoldPersonEffect(BaseCondition):
         if sub_condition_event is not None and sub_condition_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(paralyzed.uuid)
 
-        # Register handler for repeat saves at end of target's turn
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -274,9 +233,7 @@ class HoldPersonEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """Create handler for repeat WIS saves at end of target's turn."""
-
-        # Capture values for closure - these are validated before handler creation
+        """Create the end-of-turn Wisdom save handler."""
         assert self.target_entity_uuid is not None
         assert self.caster_uuid is not None
 
@@ -286,10 +243,9 @@ class HoldPersonEffect(BaseCondition):
         dc: int = self.spell_dc
 
         def repeat_save_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-            """At end of target's turn, allow repeat WIS save."""
-            _ = source_entity_uuid  # Unused but required by signature
+            """Resolve the repeat Wisdom save for this condition instance."""
+            _ = source_entity_uuid
 
-            # Only trigger for target's turn end
             if event.source_entity_uuid != target_uuid:
                 return None
 
@@ -297,19 +253,15 @@ class HoldPersonEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected by this Hold Person
             hold_person = target.active_conditions.get("Hold Person")
             if not hold_person or hold_person.uuid != effect_uuid:
                 return None
 
-            # Make repeat WIS save
             caster = Entity.get(caster_uuid)
             if not caster:
-                # Caster gone, end the spell by removing the effect
                 target.remove_condition("Hold Person", parent_event=event)
                 return None
 
-            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
@@ -319,7 +271,6 @@ class HoldPersonEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove the effect from the target — reverse link auto-removes Concentrating from caster
                 target.remove_condition("Hold Person", parent_event=event)
 
             return None
@@ -338,42 +289,33 @@ class HoldPersonEffect(BaseCondition):
 
 
 class HoldPerson(SpellAction):
-    """Hold Person - 2nd level Enchantment (Concentration)
-
-    Choose a humanoid that you can see within range. The target must succeed
-    on a Wisdom saving throw or be paralyzed for the duration. At the end of
-    each of its turns, the target can make another Wisdom saving throw.
-    On a success, the spell ends on the target.
-
-    At Higher Levels: Target one additional humanoid per slot level above 2nd.
-    (Note: Multi-target not yet implemented)
-    """
-    name: str = Field(default="Hold Person")
-    description: str = Field(default="Target must succeed on WIS save or be paralyzed")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="enchantment")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    """Paralyze a humanoid after a failed Wisdom save."""
+    name: str = Field(default="Hold Person", description="Spell name.")
+    description: str = Field(
+        default="Target must succeed on WIS save or be paralyzed",
+        description="Rules-facing hold summary.",
+    )
+    spell_level: int = Field(default=2, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single humanoid target.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
     )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, line of sight, and creature type (humanoid only)."""
-
-        # Validate line of sight
+        """Validate line of sight, range, and humanoid targeting."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
 
-        # Validate range
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Hold Person only affects humanoids
         if target_entity.creature_type != CreatureType.HUMANOID:
             return declaration_event.cancel(
                 status_message=f"Hold Person only affects humanoids, not {target_entity.creature_type.value}"
@@ -391,32 +333,14 @@ class HoldPerson(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Hold Person - WIS save or Paralyzed.
-
-        IMPORTANT: Concentration begins when the spell is cast, BEFORE the save.
-        This ensures casting a concentration spell always breaks existing concentration,
-        even if the target succeeds on their save.
-
-        Structure:
-        - Caster: Concentrating(spell_name="Hold Person")
-                      │
-                      └── linked_conditions ──► Target: HoldPersonEffect
-                                                              │
-                                                              └── sub_conditions ──► Paralyzed
-        """
-
+        """Resolve the save and link a failed hold effect to concentration."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
-
-        # 2. Apply Concentrating condition FIRST (breaks existing concentration)
-        # This happens regardless of whether the target saves
-        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
         concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
@@ -426,7 +350,6 @@ class HoldPerson(SpellAction):
             status_message=f"Requesting WIS save DC {dc}"
         )
 
-        # 3. Request WIS save (child of effect event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -440,14 +363,12 @@ class HoldPerson(SpellAction):
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 4. On successful save: spell has no effect (but concentration is active)
         if success:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} - target saved (still concentrating)"
             )
 
-        # 5. On failed save: apply HoldPersonEffect (which applies Paralyzed as sub-condition)
         hold_effect = HoldPersonEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -456,8 +377,6 @@ class HoldPerson(SpellAction):
         )
         target.add_condition(hold_effect, parent_event=effect_event)
 
-        # 6. Link Concentrating → HoldPersonEffect via linked_conditions
-        # Only link if the condition was actually applied (immunity can block it)
         if hold_effect.applied:
             concentration.add_linked_condition(target.uuid, hold_effect.uuid)
 
@@ -468,20 +387,18 @@ class HoldPerson(SpellAction):
 
 
 class HoldMonsterEffect(BaseCondition):
-    """
-    The spell effect condition applied to the target of Hold Monster.
-
-    Identical to HoldPersonEffect but with different name for spell-specific immunity.
-    """
-    name: str = "Hold Monster"
-    description: str = "Magically held in place"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    """Apply Hold Monster's spell-specific parent condition."""
+    name: str = Field(default="Hold Monster", description="Condition name.")
+    description: str = Field(default="Magically held in place", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the repeat-save DC.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC to end the condition.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply Paralyzed sub-condition and register repeat save handler."""
+        """Apply Paralyzed as a sub-condition and register repeat saves."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
@@ -498,7 +415,6 @@ class HoldMonsterEffect(BaseCondition):
             status_message=f"Applying Paralyzed sub-condition to {target.name}"
         )
 
-        # Apply Paralyzed as sub-condition
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -509,7 +425,6 @@ class HoldMonsterEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(paralyzed.uuid)
 
-        # Register repeat save handler
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -522,7 +437,7 @@ class HoldMonsterEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """Create handler for repeat WIS saves at end of target's turn."""
+        """Create the end-of-turn Wisdom save handler."""
         assert self.target_entity_uuid is not None
         assert self.caster_uuid is not None
 
@@ -539,7 +454,6 @@ class HoldMonsterEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected
             hold_monster = target.active_conditions.get("Hold Monster")
             if not hold_monster or hold_monster.uuid != effect_uuid:
                 return None
@@ -549,7 +463,6 @@ class HoldMonsterEffect(BaseCondition):
                 target.remove_condition("Hold Monster", parent_event=event)
                 return None
 
-            # Repeat WIS save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
@@ -559,7 +472,6 @@ class HoldMonsterEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove the effect from the target — reverse link auto-removes Concentrating from caster
                 target.remove_condition("Hold Monster", parent_event=event)
             return None
 
@@ -574,39 +486,35 @@ class HoldMonsterEffect(BaseCondition):
 
 
 class HoldMonster(SpellAction):
-    """Hold Monster - 5th level Enchantment (Concentration)
-
-    Choose a creature that you can see within range. The target must succeed
-    on a WIS save or be paralyzed. Has no effect on undead.
-    Repeat save at end of each turn.
-
-    At Higher Levels: +1 target per slot level above 5th.
-    """
-    name: str = Field(default="Hold Monster")
-    description: str = Field(default="Target must succeed on WIS save or be paralyzed (not undead)")
-    spell_level: int = Field(default=5)
-    spell_school: str = Field(default="enchantment")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target for upcast
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=90))
-
-    # Targeting
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
-
-    # Multi-target configuration
-    allow_same_target: bool = Field(default=False)  # Different creatures only
-    max_targets: int = Field(default=1)  # Base = 1, increases with upcast
+    """Paralyze one or more non-undead creatures after Wisdom saves."""
+    name: str = Field(default="Hold Monster", description="Spell name.")
+    description: str = Field(
+        default="Target must succeed on WIS save or be paralyzed (not undead)",
+        description="Rules-facing hold summary.",
+    )
+    spell_level: int = Field(default=5, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=90),
+        description="Maximum range for each target.",
+    )
+    include_self: bool = Field(default=False, description="Whether action discovery includes the caster.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    max_targets: int = Field(default=1, description="Base target count before upcasting.")
 
     def get_max_targets_for_level(self) -> int:
-        """1 target at level 5, +1 per level above 5th."""
+        """Return the target count allowed by the slot level."""
         return 1 + max(0, self.cast_at_level - self.spell_level)
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the action discovery multi-target count."""
         return self.get_max_targets_for_level()
 
     def get_all_targets(self) -> List[UUID]:
-        """Return targets up to max for cast level."""
+        """Return unique selected targets trimmed to the slot limit."""
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -616,8 +524,7 @@ class HoldMonster(SpellAction):
         return targets[:self.get_max_targets_for_level()]
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, LOS, and creature type (not undead)."""
-
+        """Validate line of sight, range, and undead exclusion."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -628,13 +535,11 @@ class HoldMonster(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Check creature type - NOT undead
         if target_entity.creature_type == CreatureType.UNDEAD:
             return declaration_event.cancel(
                 status_message=f"Hold Monster has no effect on undead"
             )
 
-        # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
@@ -644,8 +549,7 @@ class HoldMonster(SpellAction):
         return los_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Hold Monster - WIS save or Paralyzed."""
-
+        """Resolve the save and link a failed hold effect to concentration."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -654,10 +558,8 @@ class HoldMonster(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
         concentration_condition = self.ensure_concentration(execution_event)
 
-        # Request WIS save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -680,7 +582,6 @@ class HoldMonster(SpellAction):
                 status_message=f"{self.name} - {target.name} saved"
             )
 
-        # On failed save: apply HoldMonsterEffect
         hold_effect = HoldMonsterEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -689,7 +590,6 @@ class HoldMonster(SpellAction):
         )
         target.add_condition(hold_effect, parent_event=effect_event)
 
-        # Link to concentration (only if condition was actually applied — immunity can block)
         if hold_effect.applied:
             concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
 
@@ -700,35 +600,26 @@ class HoldMonster(SpellAction):
 
 
 class PowerWordKill(SpellAction):
-    """Power Word Kill - 9th level Enchantment
-
-    You utter a word of power that can compel one creature you can see within
-    range to die instantly. If the creature you choose has 100 hit points or
-    fewer, it dies. Otherwise, the spell has no effect.
-
-    No saving throw - just HP threshold check.
-    """
-    name: str = Field(default="Power Word Kill")
-    description: str = Field(default="If target has ≤100 HP, it dies instantly. No save.")
-    spell_level: int = Field(default=9)
-    spell_school: str = Field(default="enchantment")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-
-    # Target filtering
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
-
-    # HP threshold
-    hp_threshold: int = Field(default=100)
-
-    # VFX metadata
+    """Kill a target whose current hit points are at or below the threshold."""
+    name: str = Field(default="Power Word Kill", description="Spell name.")
+    description: str = Field(
+        default="If target has <=100 HP, it dies instantly. No save.",
+        description="Rules-facing threshold summary.",
+    )
+    spell_level: int = Field(default=9, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
+    )
+    include_self: bool = Field(default=False, description="Whether action discovery includes the caster.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    hp_threshold: int = Field(default=100, description="Maximum current HP affected by the spell.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and LOS."""
-
-        # Validate line of sight
+        """Validate line of sight and range."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -739,7 +630,6 @@ class PowerWordKill(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
@@ -752,14 +642,13 @@ class PowerWordKill(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Power Word Kill - instant death if HP ≤ 100."""
+        """Apply instant death when the target is below the HP threshold."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Get current HP
         current_hp = target.get_hp()
 
         effect_event = execution_event.phase_to(
@@ -769,20 +658,21 @@ class PowerWordKill(SpellAction):
         )
 
         if current_hp <= self.hp_threshold:
-            # Instant death - deal massive damage to ensure death
-            # Using 99999 to guarantee death even with resistances
-            target.receive_damage(
-                amount=99999,
-                damage_type=DamageType.FORCE,  # Force damage can't be resisted
+            instant_death_event = target.receive_instant_death(
                 source_entity_uuid=caster.uuid,
+                source_description=self.name,
                 parent_event=effect_event.uuid
             )
+            if instant_death_event.canceled:
+                return effect_event.phase_to(
+                    new_phase=EventPhase.COMPLETION,
+                    status_message=f"{target.name} is protected from {self.name}"
+                )
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{target.name} is slain by Power Word Kill!"
             )
         else:
-            # Spell has no effect
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Power Word Kill has no effect - {target.name} has {current_hp} HP (threshold: {self.hp_threshold})"
@@ -790,37 +680,34 @@ class PowerWordKill(SpellAction):
 
 
 class TestBless(SpellAction):
-    """TestBless - Test spell for MULTI_ENTITY with different targets required + allies filter.
-
-    Targets up to 3 creatures (self or allies). Each gets a simple buff marker.
-    This is a test spell to verify MULTI_ENTITY functionality with:
-    - allow_same_target=False (must target different creatures)
-    - valid_target_filter="self_or_allies" (can only target self and allies)
-    """
-    name: str = Field(default="Test Bless")
-    description: str = Field(default="Bless up to 3 allies (each target only once)")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target!
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    """Test spell for multi-target self-or-ally targeting rules."""
+    name: str = Field(default="Test Bless", description="Spell name.")
+    description: str = Field(
+        default="Bless up to 3 allies (each target only once)",
+        description="Test-facing multi-target summary.",
     )
-
-    # Multi-entity configuration
-    allow_same_target: bool = Field(default=False)  # Must target different creatures
-    valid_target_filter: str = Field(default="self_or_allies")  # Self or allies only
-    max_targets: int = Field(default=3)
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Action discovery target filter.")
+    max_targets: int = Field(default=3, description="Maximum number of targets.")
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the fixed maximum number of targets."""
         return self.max_targets
 
     def get_all_targets(self) -> List[UUID]:
-        """Override: Return primary + extra targets (no repeats allowed)."""
+        """Return unique selected targets trimmed to max_targets."""
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
         for extra in self.extra_target_entity_uuids:
-            if extra not in targets:  # Enforce uniqueness
+            if extra not in targets:
                 targets.append(extra)
         return targets[:self.max_targets]
 
@@ -830,11 +717,9 @@ class TestBless(SpellAction):
         if not source_entity:
             return declaration_event.cancel(status_message="Source entity not found")
 
-        # Validate all unique targets are in range and LOS (except self)
         all_targets = self.get_all_targets()
 
         for target_uuid in all_targets:
-            # Skip LOS check for self
             if target_uuid == self.source_entity_uuid:
                 continue
 
@@ -842,36 +727,26 @@ class TestBless(SpellAction):
             if not target_entity:
                 return declaration_event.cancel(status_message=f"Target entity not found")
 
-            # Check LOS
             if target_uuid not in source_entity.senses.entities.keys():
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
-        # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Apply buff to current target (self.target_entity_uuid).
-
-        Called once per target by the convolution loop in BaseAction.apply().
-        In a real implementation, this would apply an actual Bless condition.
-        """
+        """Complete the current target branch of the test spell."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not target:
             return execution_event.cancel(status_message="Target not found")
-
-        # In a real implementation, we'd add a BlessCondition here.
-        # For testing purposes, we just log the blessing.
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -880,16 +755,16 @@ class TestBless(SpellAction):
 
 
 class SleepEffect(BaseCondition):
-    """Effect from Sleep spell.
-
-    Target is Unconscious and wakes on taking damage.
-    Uses Unconscious as sub-condition for incapacitation effects.
-    """
-    name: str = "Sleep"
-    description: str = "Magically asleep"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Apply Sleep's Unconscious sub-condition and wake-on-damage handler."""
+    name: str = Field(default="Sleep", description="Condition name.")
+    description: str = Field(default="Magically asleep", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Unconscious and register wake-on-damage cleanup."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -900,7 +775,6 @@ class SleepEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply Unconscious as sub-condition (handles incapacitation, auto-fail saves, etc.)
         unconscious = Unconscious(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -911,7 +785,6 @@ class SleepEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(unconscious.uuid)
 
-        # Register handler to wake on damage
         handler = self._create_wake_on_damage_handler()
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
@@ -923,7 +796,7 @@ class SleepEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_wake_on_damage_handler(self) -> EventHandler:
-        """Wake target when they take damage."""
+        """Create the damage-triggered wake handler."""
         assert self.target_entity_uuid is not None
 
         target_uuid = self.target_entity_uuid
@@ -937,12 +810,10 @@ class SleepEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected by THIS sleep effect
             sleep_effect = target.active_conditions.get("Sleep")
             if not sleep_effect or sleep_effect.uuid != effect_uuid:
                 return None
 
-            # Wake up - remove Sleep condition (removes Unconscious sub-condition automatically)
             target.remove_condition("Sleep", parent_event=event)
             return None
 
@@ -957,32 +828,31 @@ class SleepEffect(BaseCondition):
 
 
 class Sleep(SpellAction):
-    """Sleep - 1st level Enchantment
-
-    Roll 5d8 HP pool. Creatures in 20ft sphere fall Unconscious
-    in order of lowest HP until pool exhausted.
-
-    Immune: Undead, creatures immune to being charmed
-    Duration: 1 minute (or until damage/action to wake)
-    Upcast: +2d8 per slot level above 1st.
-    """
-    name: str = Field(default="Sleep")
-    description: str = Field(default="Roll 5d8 HP pool. Affects creatures in order of lowest HP.")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=90))
-
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-
-    # Target filtering - but we override get_all_targets for HP-pool logic
-    include_self: bool = Field(default=False)  # Caster can be affected
-    valid_target_filter: str = Field(default="all")  # Affects everyone
-
-    # HP pool tracking (set during get_all_targets)
-    hp_pool_rolled: int = Field(default=0)
-    hp_pool_remaining: int = Field(default=0)
+    """Select creatures in an HP pool and apply magical sleep."""
+    name: str = Field(default="Sleep", description="Spell name.")
+    description: str = Field(
+        default="Roll 5d8 HP pool. Affects creatures in order of lowest HP.",
+        description="Rules-facing HP-pool summary.",
+    )
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Position-centered area target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=90),
+        description="Maximum range for the area origin.",
+    )
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used for target selection.")
+    include_self: bool = Field(default=False, description="Whether the caster can be selected by the HP pool.")
+    valid_target_filter: str = Field(default="all", description="Action discovery target filter.")
+    hp_pool_rolled: int = Field(
+        default=0,
+        description="Total hit point pool rolled for this Sleep spell instance.",
+    )
+    hp_pool_remaining: int = Field(
+        default=0,
+        description="Hit point pool remaining after this Sleep instance selects targets.",
+    )
+    _selected_hp_pool_targets: Optional[List[UUID]] = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -994,20 +864,16 @@ class Sleep(SpellAction):
             )
 
     def get_hp_pool_dice(self) -> Tuple[int, int]:
-        """Returns (dice_count, dice_value). 5d8 base + 2d8 per upcast."""
+        """Return the HP-pool dice count and die size."""
         base_dice = 5
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 2
         return (base_dice + upcast_bonus, 8)
 
     def get_all_targets(self) -> List[UUID]:
-        """Override: Select targets by HP pool instead of all AoE targets.
+        """Select targets by current HP and cache the selection."""
+        if self._selected_hp_pool_targets is not None:
+            return list(self._selected_hp_pool_targets)
 
-        1. Get AoE candidates using parent logic
-        2. Filter by immunity (undead, charm-immune)
-        3. Sort by current HP (ascending)
-        4. Select targets until HP pool exhausted
-        """
-        # 1. Get AoE candidates
         if not (self.aoe_shape and self.end_position):
             return []
 
@@ -1017,10 +883,8 @@ class Sleep(SpellAction):
 
         self.aoe_shape.compute_objective(caster.position)
 
-        # 2. Filter candidates: alive, not immune
         candidates: List[Tuple[int, UUID]] = []
         for uid in self.aoe_shape.affected_entity_uuids:
-            # Skip caster if include_self is False
             if not self.include_self and uid == self.source_entity_uuid:
                 continue
 
@@ -1028,42 +892,39 @@ class Sleep(SpellAction):
             if not entity or not entity.has_hp:
                 continue
 
-            # Sleep immunity: undead
+            if "Unconscious" in entity.active_conditions:
+                continue
+
             if entity.creature_type == CreatureType.UNDEAD:
                 continue
 
-            # Skip charm-immune creatures (Sleep targets creatures that can be charmed)
             if entity.check_condition_immunity("Charmed"):
                 continue
 
             candidates.append((entity.get_hp(), uid))
 
-        # 3. Sort by HP ascending (lowest first)
-        # Tie-breaker: UUID for deterministic ordering
         candidates.sort(key=lambda x: (x[0], str(x[1])))
 
-        # 4. Roll HP pool if not already rolled
         if self.hp_pool_rolled == 0:
             dice_count, dice_value = self.get_hp_pool_dice()
-            # Simple roll without full Dice machinery for efficiency
             roll_results = [random.randint(1, dice_value) for _ in range(dice_count)]
             total = sum(roll_results)
             self.hp_pool_rolled = total
             self.hp_pool_remaining = total
 
-        # 5. Select targets until pool exhausted
         targets: List[UUID] = []
-        remaining = self.hp_pool_remaining
+        remaining = self.hp_pool_remaining if self.hp_pool_remaining > 0 else self.hp_pool_rolled
         for hp, uid in candidates:
             if hp <= remaining:
                 targets.append(uid)
                 remaining -= hp
 
         self.hp_pool_remaining = remaining
-        return targets
+        self._selected_hp_pool_targets = targets
+        return list(targets)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate target position is in LOS and range."""
+        """Validate the area origin has line of sight and range."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
@@ -1072,20 +933,17 @@ class Sleep(SpellAction):
         if not target_pos:
             return declaration_event.cancel(status_message="No target position specified")
 
-        # Check LOS to target position
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        # Check range
         distance = caster.senses.get_feet_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1103,7 +961,6 @@ class Sleep(SpellAction):
             status_message=f"Sleep affecting {target.name} ({target.get_hp()} HP)"
         )
 
-        # Apply SleepEffect condition (has Unconscious as sub-condition + wake handler)
         sleep_effect = SleepEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid
@@ -1117,20 +974,18 @@ class Sleep(SpellAction):
 
 
 class PowerWordStunEffect(BaseCondition):
-    """
-    Effect from Power Word Stun spell.
-
-    Target is Stunned. At end of each turn, CON save to end.
-    Uses Stunned as sub-condition.
-    """
-    name: str = "Power Word Stun"
-    description: str = "Stunned by power word"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    """Apply Power Word Stun's condition tree and repeat save."""
+    name: str = Field(default="Power Word Stun", description="Condition name.")
+    description: str = Field(default="Stunned by power word", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the repeat-save DC.")
+    spell_dc: int = Field(default=10, description="Constitution save DC to end the condition.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Stunned as a sub-condition and register repeat saves."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -1141,7 +996,6 @@ class PowerWordStunEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply Stunned as sub-condition
         stunned = Stunned(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -1152,7 +1006,6 @@ class PowerWordStunEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(stunned.uuid)
 
-        # Register repeat save handler
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -1165,7 +1018,7 @@ class PowerWordStunEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """CON save at end of turn to end stun."""
+        """Create the end-of-turn Constitution save handler."""
         assert self.target_entity_uuid is not None
         assert self.caster_uuid is not None
 
@@ -1182,18 +1035,15 @@ class PowerWordStunEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected
             pw_stun = target.active_conditions.get("Power Word Stun")
             if not pw_stun or pw_stun.uuid != effect_uuid:
                 return None
 
             caster = Entity.get(caster_uuid)
             if not caster:
-                # Caster gone, end the effect
                 target.remove_condition("Power Word Stun", parent_event=event)
                 return None
 
-            # Repeat CON save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
@@ -1217,30 +1067,23 @@ class PowerWordStunEffect(BaseCondition):
 
 
 class PowerWordStun(SpellAction):
-    """Power Word Stun - 8th level Enchantment
-
-    You speak a word of power that can overwhelm the mind of one creature you
-    can see within range, leaving it dumbfounded. If the target has 150 hit
-    points or fewer, it is stunned. Otherwise, the spell has no effect.
-
-    The stunned target must make a CON save at the end of each of its turns.
-    On a successful save, this stunning effect ends.
-
-    No saving throw to resist initially - just HP threshold check.
-    """
-    name: str = Field(default="Power Word Stun")
-    description: str = Field(default="If target has ≤150 HP, it is stunned. CON save each turn to end.")
-    spell_level: int = Field(default=8)
-    spell_school: str = Field(default="enchantment")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-
-    # HP threshold
-    hp_threshold: int = Field(default=150)
+    """Stun a target whose current hit points are at or below the threshold."""
+    name: str = Field(default="Power Word Stun", description="Spell name.")
+    description: str = Field(
+        default="If target has <=150 HP, it is stunned. CON save each turn to end.",
+        description="Rules-facing threshold summary.",
+    )
+    spell_level: int = Field(default=8, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
+    )
+    hp_threshold: int = Field(default=150, description="Maximum current HP affected by the spell.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and LOS."""
-
+        """Validate line of sight and range."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -1251,7 +1094,6 @@ class PowerWordStun(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
@@ -1264,14 +1106,13 @@ class PowerWordStun(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Power Word Stun - stun if HP ≤ 150."""
+        """Apply Stunned when the target is below the HP threshold."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Get current HP
         current_hp = target.get_hp()
 
         effect_event = execution_event.phase_to(
@@ -1281,7 +1122,6 @@ class PowerWordStun(SpellAction):
         )
 
         if current_hp <= self.hp_threshold:
-            # Stun the target
             dc = caster.spell_save_dc()
 
             stun_effect = PowerWordStunEffect(
@@ -1297,16 +1137,11 @@ class PowerWordStun(SpellAction):
                 status_message=f"{target.name} is stunned by Power Word Stun!"
             )
         else:
-            # Spell has no effect
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Power Word Stun has no effect - {target.name} has {current_hp} HP (threshold: {self.hp_threshold})"
             )
 
-
-# =============================================================================
-# BANE / BLESS CONDITIONS AND SPELLS
-# =============================================================================
 
 def _bane_processor(
     event: D20RollResultEvent,
@@ -1341,10 +1176,16 @@ def _bless_processor(
 
 
 class BaneEffect(BaseCondition):
-    """Bane spell effect — subtract 1d4 from attack rolls and saving throws."""
-    name: str = "Bane"
-    description: str = "Subtract 1d4 from attack rolls and saving throws"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Register Bane's d20 roll-result handler."""
+    name: str = Field(default="Bane", description="Condition name.")
+    description: str = Field(
+        default="Subtract 1d4 from attack rolls and saving throws",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1353,6 +1194,7 @@ class BaneEffect(BaseCondition):
         List[UUID],
         Optional[Event],
     ]:
+        """Register the attack/save d20 subtraction handler."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1387,10 +1229,16 @@ class BaneEffect(BaseCondition):
 
 
 class BlessEffect(BaseCondition):
-    """Bless spell effect — add 1d4 to attack rolls and saving throws."""
-    name: str = "Bless"
-    description: str = "Add 1d4 to attack rolls and saving throws"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Register Bless's d20 roll-result handler."""
+    name: str = Field(default="Bless", description="Condition name.")
+    description: str = Field(
+        default="Add 1d4 to attack rolls and saving throws",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1399,6 +1247,7 @@ class BlessEffect(BaseCondition):
         List[UUID],
         Optional[Event],
     ]:
+        """Register the attack/save d20 addition handler."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1433,30 +1282,29 @@ class BlessEffect(BaseCondition):
 
 
 class Bane(SpellAction):
-    """Bane — 1st-level Enchantment (Concentration)
-
-    Up to 3 creatures must succeed on a CHA saving throw or subtract 1d4
-    from attack rolls and saving throws. At Higher Levels: +1 target per
-    slot level above 1st.
-    """
-    name: str = Field(default="Bane")
-    description: str = Field(default="Up to 3 enemies: CHA save or -1d4 on attacks and saves")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    """Apply Bane to failed Charisma saves across multiple targets."""
+    name: str = Field(default="Bane", description="Spell name.")
+    description: str = Field(
+        default="Up to 3 enemies: CHA save or -1d4 on attacks and saves",
+        description="Rules-facing d20 penalty summary.",
     )
-
-    # Multi-target configuration
-    allow_same_target: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the number of targets allowed by the slot level."""
         return 3 + self.get_upcast_bonus()
 
     def get_all_targets(self) -> List[UUID]:
+        """Return unique selected targets trimmed to the slot limit."""
         max_targets = 3 + self.get_upcast_bonus()
         targets: List[UUID] = []
         if self.target_entity_uuid:
@@ -1467,6 +1315,7 @@ class Bane(SpellAction):
         return targets[:max_targets]
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Resolve the Charisma save and apply Bane on failure."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -1475,10 +1324,8 @@ class Bane(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
         concentration = self.ensure_concentration(execution_event)
 
-        # CHA saving throw
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="charisma",
@@ -1503,7 +1350,6 @@ class Bane(SpellAction):
                 status_message=f"Bane - {target.name} resists",
             )
 
-        # Apply BaneEffect
         bane_effect = BaneEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1519,29 +1365,29 @@ class Bane(SpellAction):
 
 
 class Bless(SpellAction):
-    """Bless — 1st-level Enchantment (Concentration)
-
-    Up to 3 creatures gain +1d4 to attack rolls and saving throws.
-    No save required. At Higher Levels: +1 target per slot level above 1st.
-    """
-    name: str = Field(default="Bless")
-    description: str = Field(default="Up to 3 allies: +1d4 on attacks and saves")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    """Apply Bless across multiple allies without a saving throw."""
+    name: str = Field(default="Bless", description="Spell name.")
+    description: str = Field(
+        default="Up to 3 allies: +1d4 on attacks and saves",
+        description="Rules-facing d20 bonus summary.",
     )
-
-    # Multi-target configuration
-    allow_same_target: bool = Field(default=False)
-    valid_target_filter: str = Field(default="self_or_allies")
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Action discovery target filter.")
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the number of targets allowed by the slot level."""
         return 3 + self.get_upcast_bonus()
 
     def get_all_targets(self) -> List[UUID]:
+        """Return unique selected targets trimmed to the slot limit."""
         max_targets = 3 + self.get_upcast_bonus()
         targets: List[UUID] = []
         if self.target_entity_uuid:
@@ -1552,16 +1398,15 @@ class Bless(SpellAction):
         return targets[:max_targets]
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Bless to the current target in the convolution loop."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # ensure_concentration() is safe for convolution loop (reuses same Concentrating)
         concentration = self.ensure_concentration(execution_event)
 
-        # No save — auto-apply BlessEffect
         bless_effect = BlessEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1582,19 +1427,19 @@ class Bless(SpellAction):
         )
 
 
-# =============================================================================
-# Command (Level 1, Enchantment, NOT concentration)
-# =============================================================================
-
 class CommandGrovelEffect(BaseCondition):
-    """Command: Grovel — target falls prone and ends its turn."""
-    name: str = "Command: Grovel"
-    description: str = "Commanded to grovel — falls prone"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Apply Command: Grovel's Prone sub-condition."""
+    name: str = Field(default="Command: Grovel", description="Condition name.")
+    description: str = Field(default="Commanded to grovel - falls prone", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Apply Prone as a sub-condition."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1604,7 +1449,6 @@ class CommandGrovelEffect(BaseCondition):
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply Prone as sub-condition
         prone = Prone(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -1622,14 +1466,21 @@ class CommandGrovelEffect(BaseCondition):
 
 
 class CommandHaltEffect(BaseCondition):
-    """Command: Halt — target does nothing on next turn (Incapacitated for 1 round)."""
-    name: str = "Command: Halt"
-    description: str = "Commanded to halt — can take no actions"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Apply Command: Halt's Incapacitated sub-condition."""
+    name: str = Field(default="Command: Halt", description="Condition name.")
+    description: str = Field(
+        default="Commanded to halt - can take no actions",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Apply Incapacitated as a sub-condition."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1639,7 +1490,6 @@ class CommandHaltEffect(BaseCondition):
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply Incapacitated as sub-condition (1 round)
         incap = Incapacitated(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -1657,15 +1507,22 @@ class CommandHaltEffect(BaseCondition):
 
 
 class CommandFleeEffect(BaseCondition):
-    """Command: Flee — target moves away from caster on its next turn."""
-    name: str = "Command: Flee"
-    description: str = "Commanded to flee — must move away from caster"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    caster_uuid: Optional[UUID] = None
+    """Register Command: Flee's turn-start movement handler."""
+    name: str = Field(default="Command: Flee", description="Condition name.")
+    description: str = Field(
+        default="Commanded to flee - must move away from caster",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster the target must flee from.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Register the flee handler on the target."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -1673,7 +1530,6 @@ class CommandFleeEffect(BaseCondition):
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        # Register handler: on target's turn start, force Dash away
         handler = self._create_flee_handler()
         target.add_event_handler(handler)
 
@@ -1684,7 +1540,7 @@ class CommandFleeEffect(BaseCondition):
         return [], [handler.uuid], [], [], effect_event
 
     def _create_flee_handler(self) -> EventHandler:
-        """On target's turn start, use its movement to move away from caster."""
+        """Create the turn-start flee handler."""
         assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         caster_uuid = self.caster_uuid or self.source_entity_uuid
@@ -1698,7 +1554,6 @@ class CommandFleeEffect(BaseCondition):
             if not target:
                 return None
 
-            # Verify condition is still active
             if "Command: Flee" not in target.active_conditions:
                 return None
             active = target.active_conditions.get("Command: Flee")
@@ -1710,7 +1565,6 @@ class CommandFleeEffect(BaseCondition):
                 target.remove_condition("Command: Flee", parent_event=event)
                 return None
 
-            # Find farthest reachable position from caster using Dash speed
             caster_pos = caster.position
             best_pos = target.position
             best_dist = abs(best_pos[0] - caster_pos[0]) + abs(best_pos[1] - caster_pos[1])
@@ -1721,7 +1575,6 @@ class CommandFleeEffect(BaseCondition):
                     best_dist = dist
                     best_pos = pos
 
-            # Move to the farthest position
             if best_pos != target.position:
                 grid = get_map()
                 path = target.senses.paths.get(best_pos, [])
@@ -1729,7 +1582,6 @@ class CommandFleeEffect(BaseCondition):
                     for step in path:
                         grid.move_entity(target.uuid, step)
 
-            # Remove the condition after executing flee
             target.remove_condition("Command: Flee", parent_event=event)
             return None
 
@@ -1746,29 +1598,25 @@ class CommandFleeEffect(BaseCondition):
 
 
 class Command(SpellAction):
-    """Command - 1st level Enchantment
-
-    You speak a one-word command to a creature you can see within range.
-    The target must succeed on a Wisdom saving throw or follow the command
-    on its next turn. The spell has no effect if the target is undead.
-
-    Command words: Grovel, Flee, Halt
-
-    At Higher Levels: +1 target per slot level above 1st.
-    """
-    name: str = Field(default="Command")
-    description: str = Field(default="WIS save or follow a one-word command (Grovel/Flee/Halt)")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="enchantment")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    valid_target_filter: str = Field(default="enemies")
-
-    # Command word: "grovel", "flee", or "halt"
-    command_word: str = Field(default="grovel")
+    """Force a creature to follow a one-word command after a failed save."""
+    name: str = Field(default="Command", description="Spell name.")
+    description: str = Field(
+        default="WIS save or follow a one-word command (Grovel/Flee/Halt)",
+        description="Rules-facing command summary.",
+    )
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="enchantment", description="Spell school.")
+    concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
+    )
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    command_word: str = Field(default="grovel", description="Command word: grovel, flee, or halt.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate line of sight and undead immunity."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -1783,14 +1631,13 @@ class Command(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Per-target: WIS save or follow command."""
+        """Resolve the save and apply the selected command effect."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Undead immunity
         if target.creature_type == CreatureType.UNDEAD:
             return execution_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -1821,7 +1668,6 @@ class Command(SpellAction):
                 status_message=f"{target.name} resists Command"
             )
 
-        # Apply command effect based on command_word
         word = self.command_word.lower()
         if word == "grovel":
             effect = CommandGrovelEffect(

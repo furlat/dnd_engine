@@ -21,7 +21,6 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 
-# Import items
 from dnd.items import (
     create_greataxe,
     create_handaxe,
@@ -32,55 +31,32 @@ from dnd.items import (
 )
 from dnd.items.test_items import create_potion_of_haste, create_healing_potion
 
-# Import rage/frenzy features (from rage.py)
 from dnd.classes.rage import (
     RageFeature,
     FrenzyFeature,
 )
 
-# Import other barbarian features
 from dnd.classes.barbarian import (
-    # Level 2
     RecklessAttackFeature,
     DangerSense,
-    # Level 5
     FastMovement,
-    # Level 6 (Berserker)
     MindlessRage,
-    # Level 7
     FeralInstinct,
-    # Level 9/13/17
     BrutalCritical,
-    # Level 10 (Berserker)
     IntimidatingPresenceFeature,
-    # Level 11
     RelentlessRage,
-    # Level 14 (Berserker)
     Retaliation,
-    # Level 15
     PersistentRage,
-    # Level 18
     IndomitableMight,
-    # Level 20
     PrimalChampion,
 )
 
-# Reuse Fighter's ExtraAttackFeature for Extra Attack
 from dnd.classes.fighter import ExtraAttackFeature
 
 
-# =============================================================================
-# PRIMAL PATH
-# =============================================================================
-
 class PrimalPathChoice(str, Enum):
     BERSERKER = "berserker"
-    # TOTEM_WARRIOR = "totem_warrior"  # Future
 
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
 
 def get_proficiency_bonus(level: int) -> int:
     """Returns proficiency bonus for character level."""
@@ -107,7 +83,7 @@ def get_rage_uses(level: int) -> int:
         return 5
     if level < 20:
         return 6
-    return 999  # Unlimited at L20
+    return 999
 
 
 def get_rage_damage(level: int) -> int:
@@ -147,11 +123,6 @@ def get_extra_attacks(level: int) -> int:
         return 0
     return 1
 
-
-# =============================================================================
-# EQUIPMENT PRESETS
-# =============================================================================
-
 EquipmentPreset = Literal["greataxe", "dual_axes", "sword_shield"]
 
 EQUIPMENT_PRESETS = {
@@ -170,63 +141,120 @@ EQUIPMENT_PRESETS = {
 }
 
 
-# =============================================================================
-# BARBARIAN CONFIG
-# =============================================================================
-
 class BarbarianConfig(BaseModel):
-    """
-    Configuration for creating a Barbarian at a specific level.
+    """Configuration for creating a Barbarian at a specific level.
 
-    BG3-style: base stats + level 1 bonuses + ASI choices at feat levels.
+    Attributes:
+        level: Barbarian level used to gate features, resources, subclass choice, and required ASIs.
+        name: Display name for the created barbarian entity.
+        position: Initial grid position for the created barbarian entity.
+        faction: Faction identifier. None = enemy to everyone.
+        base_strength: Base Strength score before level-one bonuses and ASI choices.
+        base_dexterity: Base Dexterity score before level-one bonuses and ASI choices.
+        base_constitution: Base Constitution score before level-one bonuses and ASI choices.
+        base_intelligence: Base Intelligence score before level-one bonuses and ASI choices.
+        base_wisdom: Base Wisdom score before level-one bonuses and ASI choices.
+        base_charisma: Base Charisma score before level-one bonuses and ASI choices.
+        bonus_plus_2: Ability that receives the level-one +2 bonus.
+        bonus_plus_1: Ability that receives the level-one +1 bonus.
+        primal_path: Barbarian primal path, required by the factory at level three and above.
+        asi_4: Ability score improvements selected at Barbarian level four.
+        asi_8: Ability score improvements selected at Barbarian level eight.
+        asi_12: Ability score improvements selected at Barbarian level twelve.
+        asi_16: Ability score improvements selected at Barbarian level sixteen.
+        asi_19: Ability score improvements selected at Barbarian level nineteen.
+        equipment_preset: Starter equipment preset equipped by the Barbarian factory.
     """
 
-    # Core
-    level: int = Field(ge=1, le=20, default=1)
-    name: str = "Barbarian"
-    position: Tuple[int, int] = (0, 0)
+    level: int = Field(
+        ge=1,
+        le=20,
+        default=1,
+        description="Barbarian level used to gate features, resources, subclass choice, and required ASIs.",
+    )
+    name: str = Field(default="Barbarian", description="Display name for the created barbarian entity.")
+    position: Tuple[int, int] = Field(
+        default=(0, 0),
+        description="Initial grid position for the created barbarian entity.",
+    )
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
-    # ==========================================================================
-    # ABILITY SCORES (BG3 Style)
-    # ==========================================================================
+    base_strength: int = Field(
+        default=15,
+        ge=8,
+        le=15,
+        description="Base Strength score before level-one bonuses and ASI choices.",
+    )
+    base_dexterity: int = Field(
+        default=13,
+        ge=8,
+        le=15,
+        description="Base Dexterity score before level-one bonuses and ASI choices.",
+    )
+    base_constitution: int = Field(
+        default=14,
+        ge=8,
+        le=15,
+        description="Base Constitution score before level-one bonuses and ASI choices.",
+    )
+    base_intelligence: int = Field(
+        default=8,
+        ge=8,
+        le=15,
+        description="Base Intelligence score before level-one bonuses and ASI choices.",
+    )
+    base_wisdom: int = Field(
+        default=12,
+        ge=8,
+        le=15,
+        description="Base Wisdom score before level-one bonuses and ASI choices.",
+    )
+    base_charisma: int = Field(
+        default=10,
+        ge=8,
+        le=15,
+        description="Base Charisma score before level-one bonuses and ASI choices.",
+    )
 
-    # Base scores (like standard array or point buy result)
-    base_strength: int = Field(default=15, ge=8, le=15)
-    base_dexterity: int = Field(default=13, ge=8, le=15)
-    base_constitution: int = Field(default=14, ge=8, le=15)
-    base_intelligence: int = Field(default=8, ge=8, le=15)
-    base_wisdom: int = Field(default=12, ge=8, le=15)
-    base_charisma: int = Field(default=10, ge=8, le=15)
+    bonus_plus_2: AbilityName = Field(
+        default="strength",
+        description="Ability that receives the level-one +2 bonus.",
+    )
+    bonus_plus_1: AbilityName = Field(
+        default="constitution",
+        description="Ability that receives the level-one +1 bonus.",
+    )
 
-    # Level 1 "racial" bonuses: +2 to one, +1 to another
-    bonus_plus_2: AbilityName = "strength"
-    bonus_plus_1: AbilityName = "constitution"
+    primal_path: Optional[PrimalPathChoice] = Field(
+        default=None,
+        description="Barbarian primal path, required by the factory at level three and above.",
+    )
 
-    # ==========================================================================
-    # PRIMAL PATH (Level 3+)
-    # ==========================================================================
-    primal_path: Optional[PrimalPathChoice] = None
+    asi_4: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Barbarian level four.",
+    )
+    asi_8: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Barbarian level eight.",
+    )
+    asi_12: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Barbarian level twelve.",
+    )
+    asi_16: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Barbarian level sixteen.",
+    )
+    asi_19: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Barbarian level nineteen.",
+    )
 
-    # ==========================================================================
-    # ASI CHOICES AT LEVELS 4, 8, 12, 16, 19
-    # ==========================================================================
-    # Each entry is (+2 to one stat) OR (+1 to two stats)
-    # Format: [("strength", 2)] or [("strength", 1), ("constitution", 1)]
-    asi_4: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_8: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_12: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_16: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_19: Optional[List[Tuple[AbilityName, int]]] = None
-
-    # ==========================================================================
-    # EQUIPMENT
-    # ==========================================================================
-    equipment_preset: EquipmentPreset = "greataxe"
-
-    # ==========================================================================
-    # VALIDATORS
-    # ==========================================================================
+    equipment_preset: EquipmentPreset = Field(
+        default="greataxe",
+        description="Starter equipment preset equipped by the Barbarian factory.",
+    )
 
     @field_validator("bonus_plus_1")
     @classmethod
@@ -272,10 +300,6 @@ class BarbarianConfig(BaseModel):
         return self
 
 
-# =============================================================================
-# ABILITY SCORE CALCULATION
-# =============================================================================
-
 def calculate_final_ability_scores(config: BarbarianConfig) -> Dict[AbilityName, int]:
     """
     Calculate final scores: base + L1 bonuses + all ASIs.
@@ -293,11 +317,9 @@ def calculate_final_ability_scores(config: BarbarianConfig) -> Dict[AbilityName,
         "charisma": config.base_charisma,
     }
 
-    # Apply L1 bonuses
     scores[config.bonus_plus_2] += 2
     scores[config.bonus_plus_1] += 1
 
-    # Apply ASIs for reached levels
     asi_map = {
         4: config.asi_4,
         8: config.asi_8,
@@ -310,21 +332,13 @@ def calculate_final_ability_scores(config: BarbarianConfig) -> Dict[AbilityName,
             for ability, bonus in asi:
                 scores[ability] += bonus
 
-    # Cap at 20 (unless Primal Champion at L20 raises it)
-    # Primal Champion adds +4 to STR and CON later, and raises max to 24
-    # So we don't cap at 20 here - the condition handles the boost
     return {k: min(v, 20) for k, v in scores.items()}
 
-
-# =============================================================================
-# EQUIPMENT APPLICATION
-# =============================================================================
 
 def apply_equipment(entity: Entity, preset: EquipmentPreset):
     """Apply equipment based on preset. Barbarians typically don't wear armor."""
     preset_config = EQUIPMENT_PRESETS[preset]
 
-    # Melee main
     melee_main = preset_config.get("melee_main")
     if melee_main == "greataxe":
         weapon = create_greataxe(entity.uuid)
@@ -336,7 +350,6 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
         weapon = create_longsword(entity.uuid)
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
-    # Melee off
     melee_off = preset_config.get("melee_off")
     if melee_off == "handaxe":
         weapon = create_handaxe(entity.uuid)
@@ -346,16 +359,11 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
         entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
 
-# =============================================================================
-# FEATURE APPLICATION
-# =============================================================================
-
 def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
     """Apply all Barbarian features appropriate for the level."""
     level = config.level
     rage_damage = get_rage_damage(level)
 
-    # L1: Rage (with level-scaled uses and damage)
     entity.add_condition(RageFeature(
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
@@ -363,51 +371,43 @@ def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
         rage_damage=rage_damage
     ))
 
-    # L2+: Reckless Attack
     if level >= 2:
         entity.add_condition(RecklessAttackFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L2+: Danger Sense
     if level >= 2:
         entity.add_condition(DangerSense(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L3+: Primal Path features
     if level >= 3 and config.primal_path == PrimalPathChoice.BERSERKER:
-        # L3: Frenzy
         entity.add_condition(FrenzyFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             rage_damage=rage_damage
         ))
 
-        # L6: Mindless Rage
         if level >= 6:
             entity.add_condition(MindlessRage(
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid
             ))
 
-        # L10: Intimidating Presence
         if level >= 10:
             entity.add_condition(IntimidatingPresenceFeature(
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid
             ))
 
-        # L14: Retaliation
         if level >= 14:
             entity.add_condition(Retaliation(
                 source_entity_uuid=entity.uuid,
                 target_entity_uuid=entity.uuid
             ))
 
-    # L5+: Extra Attack (using Fighter's implementation)
     if level >= 5:
         entity.add_condition(ExtraAttackFeature(
             source_entity_uuid=entity.uuid,
@@ -415,21 +415,18 @@ def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
             extra_attacks=get_extra_attacks(level)
         ))
 
-    # L5+: Fast Movement
     if level >= 5:
         entity.add_condition(FastMovement(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L7+: Feral Instinct
     if level >= 7:
         entity.add_condition(FeralInstinct(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L9/13/17: Brutal Critical
     brutal_dice = get_brutal_critical_dice(level)
     if brutal_dice > 0:
         entity.add_condition(BrutalCritical(
@@ -438,38 +435,30 @@ def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
             extra_dice=brutal_dice
         ))
 
-    # L11+: Relentless Rage
     if level >= 11:
         entity.add_condition(RelentlessRage(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L15+: Persistent Rage
     if level >= 15:
         entity.add_condition(PersistentRage(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L18+: Indomitable Might
     if level >= 18:
         entity.add_condition(IndomitableMight(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-    # L20: Primal Champion
     if level >= 20:
         entity.add_condition(PrimalChampion(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
         ))
 
-
-# =============================================================================
-# FACTORY FUNCTION
-# =============================================================================
 
 def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) -> Entity:
     """
@@ -486,13 +475,10 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
     if source_id is None:
         source_id = uuid4()
 
-    # 1. Calculate final ability scores
     final_scores = calculate_final_ability_scores(config)
 
-    # 2. Calculate proficiency bonus
     prof_bonus = get_proficiency_bonus(config.level)
 
-    # 3. Create ability scores config
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=final_scores["strength"]),
         dexterity=AbilityConfig(ability_score=final_scores["dexterity"]),
@@ -502,11 +488,6 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         charisma=AbilityConfig(ability_score=final_scores["charisma"])
     )
 
-    # 4. Calculate HP
-    # Barbarian hit dice: d12
-    # Level 1: 12 + CON mod
-    # Level 2+: (12 + CON_mod) + (level-1) * (7 + CON_mod) [average]
-    # We use average mode which handles first level maximum automatically
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=12,
@@ -516,7 +497,6 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         )]
     )
 
-    # 5. Create entity config
     equipment_config = EquipmentConfig(unarmored_ac_type=UnarmoredAc.BARBARIAN)
     action_economy_config = ActionEconomyConfig()
     saving_throws_config = SavingThrowSetConfig(
@@ -543,7 +523,6 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         ),
     )
 
-    # 6. Create entity
     path_name = f" ({config.primal_path.value.title()})" if config.primal_path else ""
     entity = Entity.create(
         name=config.name,
@@ -552,22 +531,17 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         config=entity_config
     )
 
-    # 7. Setup standard actions (Move, Dash, Dodge, etc.)
     setup_standard_actions(entity)
 
-    # 8. Apply equipment (no armor for Unarmored Defense)
     apply_equipment(entity, config.equipment_preset)
 
-    # 9. Apply all barbarian features
     apply_barbarian_features(entity, config)
 
-    # 10. Add starter inventory items
     haste_potion = create_potion_of_haste(entity.uuid)
     entity.loot_item(haste_potion)
     entity.loot_item(create_healing_potion(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
 
-    # Spare weapons — avoid duplicating equipped gear
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     spare_weapons = [
         ("Handaxe", create_handaxe),
@@ -579,16 +553,10 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         if weapon_name not in equipped_names:
             entity.loot_item(factory_fn(entity.uuid))
 
-    # Spare shield
     if "Shield" not in equipped_names:
         entity.loot_item(create_shield(entity.uuid))
 
     return entity
-
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     "BarbarianConfig",

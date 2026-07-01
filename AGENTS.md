@@ -835,7 +835,7 @@ encounter.roll_initiative()
 encounter.start_encounter()
 ```
 
-**Controllers**: `HumanController`/`ClaudeController` (exit turn loop for API control), `MeleeAIController` (auto-attacks), `PassController` (ends turn immediately)
+**Controllers**: `HumanController`/`CodexController` (exit turn loop for API control), `MeleeAIController` (auto-attacks), `PassController` (ends turn immediately)
 
 #### Step 4: Run Turns
 

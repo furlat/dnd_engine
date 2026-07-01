@@ -7,7 +7,6 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import AbilityName, SkillName
 
-# Update the SKILL_TO_ABILITY mapping
 SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
     'acrobatics': 'dexterity',
     'animal_handling': 'wisdom',
@@ -29,9 +28,6 @@ SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
     'survival': 'wisdom'
 }
 
-# Define skills as a proper string literal type
-
-
 skills_requiring_sight : List[SkillName] = ['perception','investigation', 'sleight_of_hand','stealth']
 skills_requiring_hearing : List[SkillName] = ['perception','insight']
 skills_requiring_speak : List[SkillName] = ['deception','intimidation','persuasion','performance']
@@ -52,8 +48,6 @@ class SkillConfig(BaseModel):
     skill_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional numerical modifiers to the skill bonus, separate from the base score.")
     expertise: bool = Field(default=False, description="Whether the character has expertise in this skill, which doubles the proficiency bonus.")
     proficiency: bool = Field(default=False, description="Whether the character is proficient in this skill, adding their proficiency bonus to checks.")
-
-
 
 
 class Skill(BaseBlock):
@@ -99,8 +93,8 @@ class Skill(BaseBlock):
             Clear the source, target, and context for all the values contained in this Block instance.
 
     Class Methods:
-        create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+        create(cls, source_entity_uuid: UUID, name: skills, source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                expertise: bool = False, proficiency: bool = False) -> 'Skill':
             Create a new Skill instance with the given parameters.
 
@@ -174,10 +168,10 @@ class Skill(BaseBlock):
             int: The total score for this skill.
         """
         return self._get_proficiency_converter()(profiency_bonus)+self.skill_bonus.score
-    
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: SkillName, source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: SkillName, source_entity_name: Optional[str] = None,
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 config: Optional[SkillConfig] = None) -> 'Skill':
         """
         Create a new Skill instance with the given parameters.
@@ -195,7 +189,7 @@ class Skill(BaseBlock):
             Skill: The newly created Skill instance.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             skill_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.skill_bonus, value_name=name+" Skill Bonus")
@@ -203,8 +197,8 @@ class Skill(BaseBlock):
                 for modifier in config.skill_bonus_modifiers:
                     skill_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        skill_bonus=skill_bonus, expertise=config.expertise, proficiency=config.proficiency)
 
 class SkillSetConfig(BaseModel):
@@ -231,11 +225,6 @@ class SkillSetConfig(BaseModel):
     sleight_of_hand: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Dexterity (Sleight of Hand): Performing acts of legerdemain, manual trickery, or subtle manipulations")
     stealth: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Dexterity (Stealth): Concealing yourself, moving silently, and avoiding detection")
     survival: SkillConfig = Field(default_factory=lambda: SkillConfig(skill_bonus=0, skill_bonus_modifiers=[], expertise=False, proficiency=False), description="Wisdom (Survival): Following tracks, hunting wild game, guiding through wilderness, identifying natural hazards, and predicting weather")
-    
-    
-
-
-
 
 
 class SkillSet(BaseBlock):
@@ -338,59 +327,57 @@ class SkillSet(BaseBlock):
     def get_skill(self, skill_name: SkillName) -> Skill:
         """ Get the attribute corresponding to the skill name"""
         return getattr(self, skill_name)
-    
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
+               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                config: Optional[SkillSetConfig] = None) -> 'SkillSet':
         """
         Create a new SkillSet instance with the given parameters.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            acrobatics = Skill.create(source_entity_uuid=source_entity_uuid, name="acrobatics", source_entity_name=source_entity_name, 
+            acrobatics = Skill.create(source_entity_uuid=source_entity_uuid, name="acrobatics", source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.acrobatics)
-            animal_handling = Skill.create(source_entity_uuid=source_entity_uuid, name="animal_handling", source_entity_name=source_entity_name, 
+            animal_handling = Skill.create(source_entity_uuid=source_entity_uuid, name="animal_handling", source_entity_name=source_entity_name,
                                            target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.animal_handling)
-            arcana = Skill.create(source_entity_uuid=source_entity_uuid, name="arcana", source_entity_name=source_entity_name, 
+            arcana = Skill.create(source_entity_uuid=source_entity_uuid, name="arcana", source_entity_name=source_entity_name,
                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.arcana)
-            athletics = Skill.create(source_entity_uuid=source_entity_uuid, name="athletics", source_entity_name=source_entity_name, 
+            athletics = Skill.create(source_entity_uuid=source_entity_uuid, name="athletics", source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.athletics)
-            deception = Skill.create(source_entity_uuid=source_entity_uuid, name="deception", source_entity_name=source_entity_name, 
+            deception = Skill.create(source_entity_uuid=source_entity_uuid, name="deception", source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.deception)
-            history = Skill.create(source_entity_uuid=source_entity_uuid, name="history", source_entity_name=source_entity_name, 
+            history = Skill.create(source_entity_uuid=source_entity_uuid, name="history", source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.history)
-            insight = Skill.create(source_entity_uuid=source_entity_uuid, name="insight", source_entity_name=source_entity_name, 
+            insight = Skill.create(source_entity_uuid=source_entity_uuid, name="insight", source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.insight)
-            intimidation = Skill.create(source_entity_uuid=source_entity_uuid, name="intimidation", source_entity_name=source_entity_name, 
+            intimidation = Skill.create(source_entity_uuid=source_entity_uuid, name="intimidation", source_entity_name=source_entity_name,
                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intimidation)
-            investigation = Skill.create(source_entity_uuid=source_entity_uuid, name="investigation", source_entity_name=source_entity_name, 
+            investigation = Skill.create(source_entity_uuid=source_entity_uuid, name="investigation", source_entity_name=source_entity_name,
                                          target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.investigation)
-            medicine = Skill.create(source_entity_uuid=source_entity_uuid, name="medicine", source_entity_name=source_entity_name, 
+            medicine = Skill.create(source_entity_uuid=source_entity_uuid, name="medicine", source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.medicine)
-            nature = Skill.create(source_entity_uuid=source_entity_uuid, name="nature", source_entity_name=source_entity_name, 
+            nature = Skill.create(source_entity_uuid=source_entity_uuid, name="nature", source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.nature)
-            perception = Skill.create(source_entity_uuid=source_entity_uuid, name="perception", source_entity_name=source_entity_name, 
+            perception = Skill.create(source_entity_uuid=source_entity_uuid, name="perception", source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.perception)
-            performance = Skill.create(source_entity_uuid=source_entity_uuid, name="performance", source_entity_name=source_entity_name, 
+            performance = Skill.create(source_entity_uuid=source_entity_uuid, name="performance", source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.performance)
-            persuasion = Skill.create(source_entity_uuid=source_entity_uuid, name="persuasion", source_entity_name=source_entity_name, 
+            persuasion = Skill.create(source_entity_uuid=source_entity_uuid, name="persuasion", source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.persuasion)
-            religion = Skill.create(source_entity_uuid=source_entity_uuid, name="religion", source_entity_name=source_entity_name, 
+            religion = Skill.create(source_entity_uuid=source_entity_uuid, name="religion", source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.religion)
-            sleight_of_hand = Skill.create(source_entity_uuid=source_entity_uuid, name="sleight_of_hand", source_entity_name=source_entity_name, 
+            sleight_of_hand = Skill.create(source_entity_uuid=source_entity_uuid, name="sleight_of_hand", source_entity_name=source_entity_name,
                                           target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.sleight_of_hand)
-            stealth = Skill.create(source_entity_uuid=source_entity_uuid, name="stealth", source_entity_name=source_entity_name, 
+            stealth = Skill.create(source_entity_uuid=source_entity_uuid, name="stealth", source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.stealth)
-            survival = Skill.create(source_entity_uuid=source_entity_uuid, name="survival", source_entity_name=source_entity_name, 
+            survival = Skill.create(source_entity_uuid=source_entity_uuid, name="survival", source_entity_name=source_entity_name,
                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.survival)
-            
-            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                       acrobatics=acrobatics, animal_handling=animal_handling, arcana=arcana, athletics=athletics, deception=deception, history=history, 
-                       insight=insight, intimidation=intimidation, investigation=investigation, medicine=medicine, nature=nature, perception=perception, 
+
+            return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
+                       acrobatics=acrobatics, animal_handling=animal_handling, arcana=arcana, athletics=athletics, deception=deception, history=history,
+                       insight=insight, intimidation=intimidation, investigation=investigation, medicine=medicine, nature=nature, perception=perception,
                        performance=performance, persuasion=persuasion, religion=religion, sleight_of_hand=sleight_of_hand, stealth=stealth, survival=survival)
-    
-    

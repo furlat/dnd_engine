@@ -45,7 +45,7 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
     Returns:
         Tuple of (list of Tile objects, the shared EventHandler)
     """
-    # Create Floor tiles (not "Spikes" — tile name stays generic)
+
     tiles = []
     for pos in positions:
         tile = Tile.create(
@@ -56,7 +56,6 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
         )
         tiles.append(tile)
 
-    # Create ONE handler for ALL positions
     zone_uuid = uuid4()
 
     def damage_processor(event: Event, _: UUID) -> Event | None:
@@ -68,20 +67,17 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
         if not entity:
             return None
 
-        # Roll 2d4 piercing damage
         damage = sum(random.randint(1, 4) for _ in range(2))
 
-        # Pass the spatial event's parent (StepMovement) so TakeDamage links to it
         entity.receive_damage(damage, DamageType.PIERCING, zone_uuid, parent_event=event.parent_event)
 
-        # Reveal hidden trap after damage — clear stealth DC so everyone can see it
         grid = get_map()
         tile = grid.get_tile(event.position[0], event.position[1])
         if tile is not None:
             cond = tile.active_conditions.get("Spike Trap")
             if cond is not None and cond.condition_stealth_dc is not None:
                 cond.condition_stealth_dc = None
-                # Fire SPATIAL_TILE_CHANGED so safe paths recompute (trap now visible)
+
                 hint = SensesUpdateHint(requires_paths=True)
                 reveal_event = SpatialChangeEvent.tile_changed(
                     event.position, walkable=True, visible=True,
@@ -102,7 +98,6 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
         event_processor=damage_processor
     )
 
-    # Register ONE handler for ALL positions
     EventQueue.add_spatial_handler(
         handler=handler,
         positions=positions,
@@ -110,7 +105,6 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
         event_phase=EventPhase.EFFECT
     )
 
-    # Apply SpikeTrapCondition marker to each tile
     for tile in tiles:
         cond = SpikeTrapCondition(
             source_entity_uuid=tile.uuid,
@@ -119,7 +113,6 @@ def create_spike_zone(positions: Set[Tuple[int, int]],
         )
         tile.add_condition(cond)
 
-    # Fire SPATIAL_TILE_CHANGED so entities recompute safe paths
     if tiles:
         hint = SensesUpdateHint(requires_paths=True)
         event = SpatialChangeEvent.tile_changed(
@@ -139,7 +132,6 @@ def deactivate_spike_zone(tiles: List[Tile], handler: EventHandler) -> None:
         if "Spike Trap" in tile.active_conditions:
             tile.remove_condition("Spike Trap")
 
-    # Fire SPATIAL_TILE_CHANGED so entities recompute safe paths
     if tiles:
         hint = SensesUpdateHint(requires_paths=True)
         event = SpatialChangeEvent.tile_changed(
@@ -150,7 +142,6 @@ def deactivate_spike_zone(tiles: List[Tile], handler: EventHandler) -> None:
         EventQueue.register(event)
 
 
-# Keep old factory for backward compatibility but mark as deprecated
 def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
     """
     DEPRECATED: Use create_spike_zone() instead for better performance.
@@ -181,7 +172,6 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
         sprite_name="spikes.png"
     )
 
-    # Create the entry damage handler
     def damage_processor(event: Event, _: UUID) -> Event | None:
         """Deal 2d4 piercing damage when entity enters."""
         if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
@@ -191,10 +181,8 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
         if not entity:
             return None
 
-        # Roll 2d4 piercing damage
         damage = sum(random.randint(1, 4) for _ in range(2))
 
-        # Pass the spatial event's parent (StepMovement) so TakeDamage links to it
         entity.receive_damage(damage, DamageType.PIERCING, tile.uuid, parent_event=event.parent_event)
 
         return None
@@ -209,10 +197,8 @@ def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
         event_processor=damage_processor
     )
 
-    # Store handler on tile for inspection/cleanup
     tile.event_handlers[handler.uuid] = handler
 
-    # Register with spatial index for this position only
     EventQueue.add_spatial_handler(
         handler=handler,
         positions={position},

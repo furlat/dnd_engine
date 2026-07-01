@@ -13,7 +13,7 @@ from pydantic import Field
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
-from dnd.core.events import Event, EventPhase, EventQueue, WeaponSlot, SkillName, RangeType, Range, Damage
+from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent, WeaponSlot, SkillName, RangeType, Range, Damage
 from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.gridmap import get_map
@@ -32,16 +32,22 @@ from dnd.spells.illusion import Invisibility
 from dnd.spells.transmutation import SpikeGrowth, HasteEffect
 
 
-# =============================================================================
-# Door Actions
-# =============================================================================
-
 class OpenDoorAction(BaseAction):
     """Opens a closed door."""
-    name: str = Field(default="Open Door")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Open Door", description="Action name for opening a door.")
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Door actions target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for opening a door.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the door item this action opens.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -71,10 +77,20 @@ class OpenDoorAction(BaseAction):
 
 class CloseDoorAction(BaseAction):
     """Closes an open door."""
-    name: str = Field(default="Close Door")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Close Door", description="Action name for closing a door.")
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Door actions target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for closing a door.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the door item this action closes.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -84,7 +100,6 @@ class CloseDoorAction(BaseAction):
             return declaration_event.cancel(status_message="Door not found")
         if not door.is_open:
             return declaration_event.cancel(status_message="Door already closed")
-        # Can't close door if someone is standing on it
         grid = get_map()
         door_pos = grid.get_object_position(door.uuid)
         if door_pos and grid.get_entities_at(door_pos):
@@ -109,20 +124,21 @@ class CloseDoorAction(BaseAction):
 
 class TestDoorA(UsableItem):
     """Door using get_use_actions override — item decides which action to surface."""
-    name: str = Field(default="Door")
-    is_pickable: bool = Field(default=False)
-    map_char: str = Field(default="\u03c0")
-    blocks_movement: bool = Field(default=True)
-    blocks_vision_field: bool = Field(default=True)
-    is_open: bool = Field(default=False)
+
+    name: str = Field(default="Door", description="Display name for the test door.")
+    is_pickable: bool = Field(default=False, description="Doors are fixed environment objects.")
+    map_char: str = Field(default="\u03c0", description="Map glyph for the test door.")
+    blocks_movement: bool = Field(default=True, description="Closed doors block movement.")
+    blocks_vision_field: bool = Field(default=True, description="Closed doors block line of sight.")
+    is_open: bool = Field(default=False, description="Whether the door is currently open.")
 
     def get_spatial_open_state(self) -> Optional[bool]:
+        """Return the door-open state used by spatial event metadata."""
         return self.is_open
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
-        """State check HERE: return different action class based on door state."""
+        """Return open or close actions according to the door state."""
         if self.is_open:
-            # Can't close if someone is standing in the doorway
             grid = get_map()
             door_pos = grid.get_object_position(self.uuid)
             if door_pos and grid.get_entities_at(door_pos):
@@ -139,16 +155,22 @@ class TestDoorA(UsableItem):
         )]
 
 
-# =============================================================================
-# Door Approach B — Single toggle action, default use_action_templates
-# =============================================================================
-
 class InteractDoorAction(BaseAction):
-    """Toggles door open/closed based on current state."""
-    name: str = Field(default="Interact Door")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+    """Toggle a door open or closed through the default item-action pattern."""
+
+    name: str = Field(default="Interact Door", description="Action name for toggling a door.")
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Door toggles target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for toggling a door.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the door item this action toggles.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -156,7 +178,6 @@ class InteractDoorAction(BaseAction):
         door = BaseBlock.get(self.source_item_uuid)
         if not isinstance(door, TestDoorB):
             return declaration_event.cancel(status_message="Door not found")
-        # Can't close door if someone is standing on it
         if door.is_open:
             grid = get_map()
             door_pos = grid.get_object_position(door.uuid)
@@ -182,34 +203,45 @@ class InteractDoorAction(BaseAction):
 
 
 class TestDoorB(UsableItem):
-    """Door using default use_action_templates — no override needed."""
-    name: str = Field(default="Door")
-    is_pickable: bool = Field(default=False)
-    map_char: str = Field(default="\u03c0")
-    blocks_movement: bool = Field(default=True)
-    blocks_vision_field: bool = Field(default=True)
-    is_open: bool = Field(default=False)
-    # No get_use_actions override — uses default with use_action_templates.
-    # Created with: TestDoorB(..., use_action_templates=[InteractDoorAction(..., template=True)])
+    """Door fixture that uses inherited `use_action_templates` discovery."""
+
+    name: str = Field(default="Door", description="Display name for the templated door.")
+    is_pickable: bool = Field(default=False, description="Templated doors are fixed environment objects.")
+    map_char: str = Field(default="\u03c0", description="Map glyph for the templated door.")
+    blocks_movement: bool = Field(default=True, description="Closed templated doors block movement.")
+    blocks_vision_field: bool = Field(default=True, description="Closed templated doors block line of sight.")
+    is_open: bool = Field(default=False, description="Whether the templated door is currently open.")
 
     def get_spatial_open_state(self) -> Optional[bool]:
+        """Return the door-open state used by spatial event metadata."""
         return self.is_open
 
 
-# =============================================================================
-# Lever — One-shot deactivation (default pattern + charges)
-# =============================================================================
-
 class PullLeverAction(BaseAction):
-    """Pulls a lever to remove a spatial handler (deactivate a trap).
-    Also removes SpikeTrapCondition markers from linked tiles."""
-    name: str = Field(default="Pull Lever")
-    description: str = Field(default="Deactivates a trap")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
-    trap_handler_uuid: Optional[UUID] = Field(default=None)
-    trap_tile_uuids: List[UUID] = Field(default_factory=list, description="UUIDs of tiles with SpikeTrapCondition markers")
+    """Deactivate a linked trap and remove trap marker conditions from tiles."""
+
+    name: str = Field(default="Pull Lever", description="Action name for pulling a trap lever.")
+    description: str = Field(default="Deactivates a trap", description="Action description shown for trap levers.")
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Trap levers target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for pulling a trap lever.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the lever item this action pulls.",
+    )
+    trap_handler_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Spatial handler UUID removed when this lever is pulled.",
+    )
+    trap_tile_uuids: List[UUID] = Field(
+        default_factory=list,
+        description="Tile UUIDs that should lose Spike Trap markers when deactivated.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if not self.trap_handler_uuid:
@@ -219,7 +251,6 @@ class PullLeverAction(BaseAction):
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         if self.trap_handler_uuid:
             EventQueue.remove_spatial_handler(self.trap_handler_uuid)
-        # Remove SpikeTrapCondition markers from linked tiles
         for tile_uuid in self.trap_tile_uuids:
             tile = BaseBlock.get(tile_uuid)
             if tile is not None and "Spike Trap" in tile.active_conditions:
@@ -229,22 +260,29 @@ class PullLeverAction(BaseAction):
 
 
 class TrapLever(UsableItem):
-    """A lever that deactivates a trap. Uses default use_action_templates with charges=1."""
-    name: str = Field(default="Trap Lever")
-    is_pickable: bool = Field(default=False)
-    map_char: str = Field(default="\u03bb")
+    """Fixed lever fixture that usually has one charge and one use template."""
 
+    name: str = Field(default="Trap Lever", description="Display name for the trap lever.")
+    is_pickable: bool = Field(default=False, description="Trap levers are fixed environment objects.")
+    map_char: str = Field(default="\u03bb", description="Map glyph for the trap lever.")
 
-# =============================================================================
-# Storage Chest — Inventory transfer (default pattern)
-# =============================================================================
 
 class LootAllAction(BaseAction):
     """Transfer all items from a container to the entity's inventory."""
-    name: str = Field(default="Loot All")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Loot All", description="Action name for looting a chest.")
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Chest looting targets the source user and resolves through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for looting a chest.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the chest item this action loots.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -278,12 +316,15 @@ class LootAllAction(BaseAction):
 
 class StorageChest(UsableItem):
     """A chest that can be looted. Optionally breakable."""
-    name: str = Field(default="Chest")
-    is_pickable: bool = Field(default=False)
-    map_char: str = Field(default="\u03a9")
-    is_targetable: bool = Field(default=False)
+
+    name: str = Field(default="Chest", description="Display name for the storage chest.")
+    is_pickable: bool = Field(default=False, description="Chests are fixed environment objects by default.")
+    map_char: str = Field(default="\u03a9", description="Map glyph for the storage chest.")
+    is_targetable: bool = Field(default=False, description="Whether attacks can target this chest.")
     chest_inventory: Inventory = Field(
-        default_factory=lambda: Inventory(source_entity_uuid=uuid4(), name="Chest Storage"))
+        default_factory=lambda: Inventory(source_entity_uuid=uuid4(), name="Chest Storage"),
+        description="Inventory block containing nested chest contents.",
+    )
 
     def _on_destroy(self) -> None:
         """Spill all contents onto the ground at chest's position."""
@@ -302,16 +343,13 @@ class StorageChest(UsableItem):
                 grid.place_object(item.uuid, pos)
 
 
-# =============================================================================
-# Campfire — Multi-action item (default pattern)
-# =============================================================================
-
 class RestAction(BaseAction):
     """Rest at a campfire to heal."""
-    name: str = Field(default="Rest")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Rest", description="Action name for taking a campfire rest.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Campfire rest targets the acting entity.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire rest.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for rest.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -337,10 +375,11 @@ class RestAction(BaseAction):
 
 class CookAction(BaseAction):
     """Cook at a campfire for temporary HP."""
-    name: str = Field(default="Cook")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Cook", description="Action name for cooking at a campfire.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Campfire cooking targets the acting entity.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for campfire cooking.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the campfire item used for cooking.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -359,28 +398,22 @@ class CookAction(BaseAction):
             EventPhase.COMPLETION, status_message="Cooked at campfire")
 
 
-# =============================================================================
-# SpellScroll — Reuses actual SpellAction classes
-# =============================================================================
-
 class SpellScroll(UsableItem):
-    """A scroll/wand containing spell(s). Configurable charges and consumability.
+    """Reusable fixture for scrolls, wands, and spell-casting objects.
 
-    For scrolls: charges=1, is_consumable=True (destroyed after use).
-    For wands: charges=N, is_consumable=False (stays at 0 charges).
-    For unlimited: charges=-1 (environment objects).
-
-    Scrolls stack up to 20 by default (same spell + level = same stack_id).
-    Wands don't stack (stack_id=None).
+    Scroll-style items are usually consumable single-charge stacks. Wand-style
+    items use finite charges without being consumed, while environment spell
+    objects use unlimited charges.
     """
-    name: str = Field(default="Spell Scroll")
-    is_pickable: bool = Field(default=True)
-    map_char: str = Field(default="\u03c3")
-    is_consumable: bool = Field(default=True)
-    charges: int = Field(default=1)
-    max_charges: int = Field(default=1)
-    max_stack: int = Field(default=20)
-    scroll_cast_level: int = Field(default=1)
+
+    name: str = Field(default="Spell Scroll", description="Display name for the scroll or wand.")
+    is_pickable: bool = Field(default=True, description="Whether the spell item can be picked up.")
+    map_char: str = Field(default="\u03c3", description="Map glyph for spell-scroll fixtures.")
+    is_consumable: bool = Field(default=True, description="Whether the item is destroyed after its last charge is used.")
+    charges: int = Field(default=1, description="Current item charges; -1 means unlimited uses.")
+    max_charges: int = Field(default=1, description="Maximum finite charges the item can hold.")
+    max_stack: int = Field(default=20, description="Maximum count for stackable scroll fixtures.")
+    scroll_cast_level: int = Field(default=1, description="Minimum spell slot level used when creating scroll spell variants.")
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Create spell variants at scroll's cast level with no spell slot cost."""
@@ -388,16 +421,14 @@ class SpellScroll(UsableItem):
             return []
         result = []
         for template in self.use_action_templates:
-            # Check if item has enough charges for this action's charge_cost
             template_charge_cost = template.charge_cost
             if self.charges != -1 and self.charges < template_charge_cost:
                 continue
 
             if isinstance(template, SpellAction):
-                # SpellAction — create variant with action-only cost, no spell slot
                 cast_level = template.spell_level
                 if cast_level == 0:
-                    cast_level = 0  # Cantrip
+                    cast_level = 0
                 else:
                     cast_level = max(cast_level, self.scroll_cast_level)
                 scroll_costs = [Cost(
@@ -414,7 +445,6 @@ class SpellScroll(UsableItem):
                 )
                 result.append(variant)
             else:
-                # Non-spell action — default copy pattern
                 action = template.model_copy(deep=True, update={
                     'uuid': uuid4(),
                     'source_entity_uuid': user_entity_uuid,
@@ -487,24 +517,24 @@ def create_wand_of_fire(owner_uuid: UUID, charges: int = 7) -> SpellScroll:
     )
 
 
-# =============================================================================
-# Acid Flask (throwable consumable AoE)
-# =============================================================================
-
 class AcidFlaskSpell(SpellAction):
-    """Acid Flask — throwable AoE that deals 2d4 acid damage in a 2x2 area.
-    DEX save DC 11 for half damage. Used as an item, not a real spell."""
-    name: str = Field(default="Acid Flask")
-    description: str = Field(default="Throw a flask of acid (2x2 area, 2d4 acid, DEX DC 11 half)")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=40)
+    """Item-backed thrown acid effect modeled through the spell action pipeline."""
+
+    name: str = Field(default="Acid Flask", description="Action name for throwing an acid flask.")
+    description: str = Field(
+        default="Throw a flask of acid (2x2 area, 2d4 acid, DEX DC 11 half)",
+        description="Action description shown for acid flask use.",
     )
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    spell_level: int = Field(default=0, description="Acid flask is item-backed and does not consume spell slots.")
+    spell_school: str = Field(default="evocation", description="School label used by the spell action model.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Acid flask targets a visible area.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=40),
+        description="Throw range for the acid flask.",
+    )
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape generated for flask splash damage.")
+    include_self: bool = Field(default=False, description="Whether the caster can be included in the splash.")
+    valid_target_filter: str = Field(default="all", description="Target filter used by area target collection.")
     _fixed_dc: int = 11
 
     def model_post_init(self, __context: Any) -> None:
@@ -550,7 +580,6 @@ class AcidFlaskSpell(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Fixed DC 11 (item-based, not caster spell DC)
         dc = self._fixed_dc
 
         save_request = caster.create_saving_throw_request(
@@ -574,7 +603,6 @@ class AcidFlaskSpell(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 2d4 acid damage, no scaling, no bonus
         no_bonus = ModifiableValue.create(
             source_entity_uuid=caster.uuid, base_value=0, value_name="Acid Flask Damage"
         )
@@ -623,10 +651,6 @@ def create_acid_flask(owner_uuid: UUID) -> SpellScroll:
     )
 
 
-# =============================================================================
-# Scroll of Invisibility
-# =============================================================================
-
 def create_scroll_of_invisibility(owner_uuid: UUID, cast_level: int = 2) -> SpellScroll:
     """Create a Scroll of Invisibility (consumable, no spell slot cost)."""
     spell = Invisibility(source_entity_uuid=uuid4(), caster_level=3, template=True)
@@ -638,10 +662,6 @@ def create_scroll_of_invisibility(owner_uuid: UUID, cast_level: int = 2) -> Spel
         stack_id=f"scroll_invisibility_l{cast_level}",
     )
 
-
-# =============================================================================
-# Environment Spell Objects
-# =============================================================================
 
 def create_arcane_machine_gun(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -> SpellScroll:
     """Environment object: unlimited Magic Missile (MULTI_ENTITY)."""
@@ -671,18 +691,27 @@ def create_fireball_cannon(owner_uuid: UUID, position: Tuple[int, int] = (0, 0),
     return item
 
 
-# =============================================================================
-# HealingPotion — SELF consumable
-# =============================================================================
-
 class DrinkPotionAction(BaseAction):
     """Drink a potion to heal."""
-    name: str = Field(default="Drink Potion")
-    description: str = Field(default="Drinks a healing potion")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
-    heal_amount: int = Field(default=7)
+
+    name: str = Field(default="Drink Potion", description="Action name for drinking this potion.")
+    description: str = Field(
+        default="Drinks a healing potion",
+        description="Action description shown for potion use.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Healing potions target the user.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for the test potion.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the potion item this action consumes.",
+    )
+    heal_amount: int = Field(default=7, description="Hit points restored by this potion action.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -707,16 +736,18 @@ class DrinkPotionAction(BaseAction):
 
 class HealingPotion(UsableItem):
     """Potion of Healing. Single use, consumable. Stacks up to 10."""
-    name: str = Field(default="Potion of Healing")
-    is_pickable: bool = Field(default=True)
-    map_char: str = Field(default="\u03b8")
-    is_consumable: bool = Field(default=True)
-    charges: int = Field(default=1)
-    max_charges: int = Field(default=1)
-    max_stack: int = Field(default=10)
+
+    name: str = Field(default="Potion of Healing", description="Display name for the healing potion.")
+    is_pickable: bool = Field(default=True, description="Healing potions can be picked up.")
+    map_char: str = Field(default="\u03b8", description="Map glyph for the healing potion.")
+    is_consumable: bool = Field(default=True, description="Healing potions are destroyed when their final charge is used.")
+    charges: int = Field(default=1, description="Current charges for the top potion in the stack.")
+    max_charges: int = Field(default=1, description="Maximum charges for each potion in the stack.")
+    max_stack: int = Field(default=10, description="Maximum number of healing potions in one stack.")
 
 
 def create_healing_potion(owner_uuid: UUID, heal_amount: int = 7) -> HealingPotion:
+    """Create a stackable healing potion with one drink action."""
     action = DrinkPotionAction(
         source_entity_uuid=uuid4(), source_item_uuid=uuid4(),
         heal_amount=heal_amount, template=True,
@@ -725,20 +756,22 @@ def create_healing_potion(owner_uuid: UUID, heal_amount: int = 7) -> HealingPoti
         stack_id=f"healing_potion_{heal_amount}")
 
 
-# =============================================================================
-# Weapon Coat of Flame — Adds 1d6 fire damage to a specific weapon
-# Three variations: permanent, concentration, timed
-# =============================================================================
-
 class WeaponCoatCondition(BaseCondition):
-    """Adds 1d6 elemental damage to a specific weapon's extra_damage lists.
+    """Add 1d6 elemental damage to one equipped weapon.
 
-    Applied on the ENTITY. Tracks which weapon it coated and the damage type,
-    cleans up on removal. Supports any DamageType (fire, lightning, etc.).
+    The condition lives on the entity, records the coated weapon UUID, and
+    removes the matching extra damage packet when the condition is removed.
     """
-    name: str = "Weapon Coat"
-    coated_weapon_uuid: Optional[UUID] = Field(default=None)
-    coat_damage_type: DamageType = Field(default=DamageType.FIRE)
+
+    name: str = Field(default="Weapon Coat", description="Condition name for the active weapon coat.")
+    coated_weapon_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Weapon UUID that received the extra damage packet.",
+    )
+    coat_damage_type: DamageType = Field(
+        default=DamageType.FIRE,
+        description="Damage type added by the coat.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -752,7 +785,6 @@ class WeaponCoatCondition(BaseCondition):
         if not weapon or not isinstance(weapon, Weapon):
             return [], [], [], [], declaration_event.cancel(status_message="Weapon not found")
 
-        # Add 1d6 elemental damage to weapon's extra damage lists
         bonus_mv = ModifiableValue.create(
             source_entity_uuid=self.target_entity_uuid,
             base_value=0, value_name=f"{self.name} Bonus"
@@ -780,21 +812,20 @@ class WeaponCoatCondition(BaseCondition):
                         break
         return super()._remove(event)
 
-
-# Backward-compatible alias
 FlamingCoatCondition = WeaponCoatCondition
 
 
 class ApplyCoatAction(BaseAction):
     """Apply weapon coat to a specific weapon slot. Pre-validates weapon exists."""
-    name: str = Field(default="Coat Main Hand")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
-    weapon_slot: str = Field(default="MELEE_MAIN")
-    coat_duration: Optional[int] = Field(default=None, description="Duration in rounds (None=permanent)")
-    use_concentration: bool = Field(default=False)
-    coat_damage_type: DamageType = Field(default=DamageType.FIRE)
+
+    name: str = Field(default="Coat Main Hand", description="Action name for applying a weapon coat.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Weapon coats target the acting entity.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for coat application.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the coat item being consumed.")
+    weapon_slot: str = Field(default="MELEE_MAIN", description="Equipment weapon slot to coat.")
+    coat_duration: Optional[int] = Field(default=None, description="Duration in rounds; `None` creates a permanent coat.")
+    use_concentration: bool = Field(default=False, description="Whether applying the coat also creates concentration.")
+    coat_damage_type: DamageType = Field(default=DamageType.FIRE, description="Damage type added to the coated weapon.")
 
     def pre_validate(self) -> bool:
         """Only show action if a weapon is equipped in the target slot."""
@@ -824,7 +855,6 @@ class ApplyCoatAction(BaseAction):
         if not weapon or not isinstance(weapon, Weapon):
             return execution_event.cancel(status_message="No weapon in slot")
 
-        # Build duration
         if self.coat_duration is not None:
             duration = Duration(
                 duration=self.coat_duration, duration_type=DurationType.ROUNDS,
@@ -838,7 +868,6 @@ class ApplyCoatAction(BaseAction):
                 target_entity_uuid=self.source_entity_uuid,
             )
 
-        # Derive condition name from damage type (e.g., "Flaming Coat", "Lightning Coat")
         damage_name_map = {
             DamageType.FIRE: "Flaming Coat",
             DamageType.LIGHTNING: "Lightning Coat",
@@ -858,7 +887,6 @@ class ApplyCoatAction(BaseAction):
         )
         entity.add_condition(coat)
 
-        # If concentration variant, apply Concentrating and link
         if self.use_concentration:
             concentration = Concentrating(
                 source_entity_uuid=self.source_entity_uuid,
@@ -874,12 +902,13 @@ class ApplyCoatAction(BaseAction):
 
 class WeaponCoat(UsableItem):
     """Weapon Coat. Single use, consumable. Stacks up to 10 by damage type."""
-    name: str = Field(default="Weapon Coat of Flame")
-    is_pickable: bool = Field(default=True)
-    is_consumable: bool = Field(default=True)
-    charges: int = Field(default=1)
-    max_charges: int = Field(default=1)
-    max_stack: int = Field(default=10)
+
+    name: str = Field(default="Weapon Coat of Flame", description="Display name for the weapon coat item.")
+    is_pickable: bool = Field(default=True, description="Weapon coats can be picked up.")
+    is_consumable: bool = Field(default=True, description="Weapon coats are consumed when applied.")
+    charges: int = Field(default=1, description="Current charges for the top coat in the stack.")
+    max_charges: int = Field(default=1, description="Maximum charges for each coat item.")
+    max_stack: int = Field(default=10, description="Maximum number of coats in one stack.")
 
 
 def create_weapon_coat(owner_uuid: UUID) -> WeaponCoat:
@@ -936,17 +965,14 @@ def create_timed_weapon_coat(owner_uuid: UUID, rounds: int = 3) -> WeaponCoat:
     return WeaponCoat(source_entity_uuid=owner_uuid, use_action_templates=[coat_main])
 
 
-# =============================================================================
-# Arcane Device — Environment object with skill prerequisite
-# =============================================================================
-
 class ActivateDeviceAction(BaseAction):
     """Activate an arcane device. Requires Arcana proficiency (static pre_validate check)."""
-    name: str = Field(default="Activate Device")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
-    heal_amount: int = Field(default=5)
+
+    name: str = Field(default="Activate Device", description="Action name for using an arcane device.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Arcane devices target the acting entity.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for device activation.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the arcane device item being used.")
+    heal_amount: int = Field(default=5, description="Hit points restored by the arcane device.")
 
     def pre_validate(self) -> bool:
         """Static prerequisite: entity must have proficiency in arcana."""
@@ -979,8 +1005,9 @@ class ActivateDeviceAction(BaseAction):
 
 class ArcaneDevice(UsableItem):
     """Environment object requiring Arcana proficiency to use."""
-    name: str = Field(default="Arcane Device")
-    is_pickable: bool = Field(default=False)
+
+    name: str = Field(default="Arcane Device", description="Display name for the arcane device.")
+    is_pickable: bool = Field(default=False, description="Arcane devices are fixed environment objects.")
 
 
 def create_arcane_device(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -> ArcaneDevice:
@@ -996,17 +1023,17 @@ def create_arcane_device(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -
     return device
 
 
-# =============================================================================
-# Potion of Greater Invisibility — Applies BG3-style Greater Invisibility
-# =============================================================================
-
 class DrinkGreaterInvisibilityPotionAction(BaseAction):
     """Drink a potion to become invisible (BG3-style Greater Invisibility)."""
-    name: str = Field(default="Drink Greater Invisibility Potion")
-    description: str = Field(default="Drink to become invisible (Stealth check to maintain on attack/cast)")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Drink Greater Invisibility Potion", description="Action name for drinking this potion.")
+    description: str = Field(
+        default="Drink to become invisible (Stealth check to maintain on attack/cast)",
+        description="Action description shown for greater invisibility potions.",
+    )
+    target_type: TargetType = Field(default=TargetType.SELF, description="Greater invisibility potions target the user.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for drinking the potion.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the potion item being consumed.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1019,7 +1046,6 @@ class DrinkGreaterInvisibilityPotionAction(BaseAction):
         if not entity or not isinstance(entity, Entity):
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply Greater Invisibility effect (no concentration — it's a potion)
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid
@@ -1034,13 +1060,14 @@ class DrinkGreaterInvisibilityPotionAction(BaseAction):
 
 class PotionOfGreaterInvisibility(UsableItem):
     """Potion of Greater Invisibility. Single use, consumable."""
-    name: str = Field(default="Potion of Greater Invisibility")
-    is_pickable: bool = Field(default=True)
-    map_char: str = Field(default="\u03b8")
-    is_consumable: bool = Field(default=True)
-    charges: int = Field(default=1)
-    max_charges: int = Field(default=1)
-    max_stack: int = Field(default=5)
+
+    name: str = Field(default="Potion of Greater Invisibility", description="Display name for the potion.")
+    is_pickable: bool = Field(default=True, description="Greater invisibility potions can be picked up.")
+    map_char: str = Field(default="\u03b8", description="Map glyph for the potion.")
+    is_consumable: bool = Field(default=True, description="The potion is consumed when used.")
+    charges: int = Field(default=1, description="Current charges for the top potion in the stack.")
+    max_charges: int = Field(default=1, description="Maximum charges for each potion.")
+    max_stack: int = Field(default=5, description="Maximum number of potions in one stack.")
 
 
 def create_potion_of_greater_invisibility(owner_uuid: UUID) -> PotionOfGreaterInvisibility:
@@ -1054,17 +1081,26 @@ def create_potion_of_greater_invisibility(owner_uuid: UUID) -> PotionOfGreaterIn
     )
 
 
-# =============================================================================
-# Torch — Light Source Item
-# =============================================================================
-
 class IgniteTorchAction(BaseAction):
     """Ignite a torch — creates a light source that follows the carrier."""
-    name: str = Field(default="Ignite Torch")
-    description: str = Field(default="Light the torch")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Ignite Torch", description="Action name for lighting a torch.")
+    description: str = Field(
+        default="Light the torch",
+        description="Action description shown for torch ignition.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Torch actions target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for igniting a torch.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the torch item this action ignites.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -1091,11 +1127,24 @@ class IgniteTorchAction(BaseAction):
 
 class ExtinguishTorchAction(BaseAction):
     """Extinguish a lit torch — removes the light source."""
-    name: str = Field(default="Extinguish Torch")
-    description: str = Field(default="Put out the torch")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Extinguish Torch", description="Action name for putting out a torch.")
+    description: str = Field(
+        default="Put out the torch",
+        description="Action description shown for torch extinguishing.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Torch actions target the source user and resolve through source_item_uuid.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for extinguishing a torch.",
+    )
+    source_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the torch item this action extinguishes.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -1127,19 +1176,24 @@ class Torch(UsableItem):
     When ignited, creates a light source anchored to the carrying entity.
     Light follows the entity as they move.
     """
-    name: str = Field(default="Torch")
-    description: str = Field(default="A torch that provides very bright light in 10ft, bright light in 10ft, and dim light in 20ft")
-    is_equippable: bool = Field(default=False)
-    is_pickable: bool = Field(default=True)
-    map_char: str = Field(default="\u2666")
 
-    very_bright_radius_feet: int = Field(default=10)
-    bright_radius_feet: int = Field(default=20)
-    dim_radius_feet: int = Field(default=20)
-    is_lit: bool = Field(default=False)
+    name: str = Field(default="Torch", description="Display name for the torch.")
+    description: str = Field(
+        default="A torch that provides very bright light in 10ft, bright light in 10ft, and dim light in 20ft",
+        description="Item description shown for the torch.",
+    )
+    is_equippable: bool = Field(default=False, description="Torches are usable but not equippable in this test fixture.")
+    is_pickable: bool = Field(default=True, description="Torches can be picked up.")
+    map_char: str = Field(default="\u2666", description="Map glyph for the torch.")
+
+    very_bright_radius_feet: int = Field(default=10, description="Very-bright light radius emitted while lit.")
+    bright_radius_feet: int = Field(default=20, description="Bright light radius emitted while lit.")
+    dim_radius_feet: int = Field(default=20, description="Dim light radius emitted while lit.")
+    is_lit: bool = Field(default=False, description="Whether the torch currently has an attached light source.")
     _light_source_uuid: Optional[UUID] = None
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        """Return the ignite or extinguish action according to lit state."""
         if not self.is_lit:
             return [IgniteTorchAction(
                 source_entity_uuid=user_entity_uuid,
@@ -1168,6 +1222,16 @@ class Torch(UsableItem):
                 anchor_uuid=carrier_entity_uuid,
                 parent_event=parent_event,
             )
+            flame_event = ExposedFlameEvent(
+                source_entity_uuid=carrier_entity_uuid,
+                target_entity_uuid=self.uuid,
+                item_uuid=self.uuid,
+                position=entity.position,
+                parent_event=parent_event,
+                phase=EventPhase.DECLARATION,
+            )
+            flame_event = flame_event.phase_to(EventPhase.EFFECT)
+            flame_event.phase_to(EventPhase.COMPLETION)
 
     def extinguish(self, parent_event: Optional[UUID] = None) -> None:
         """Put out the torch — removes the light source."""
@@ -1178,6 +1242,24 @@ class Torch(UsableItem):
             grid = get_map()
             grid.remove_light_source(self._light_source_uuid, parent_event=parent_event)
             self._light_source_uuid = None
+
+    def is_exposed_flame(self) -> bool:
+        """Return whether the torch is currently burning."""
+        return self.is_lit
+
+    def douse_exposed_flame(self, parent_event: Optional[UUID] = None) -> bool:
+        """Extinguish this torch as an exposed flame.
+
+        Args:
+            parent_event: Optional parent event UUID for light-removal lineage.
+
+        Returns:
+            True if the torch was lit and is now doused.
+        """
+        if not self.is_lit:
+            return False
+        self.extinguish(parent_event=parent_event)
+        return True
 
     def _on_destroy(self) -> None:
         """Extinguish before destruction."""
@@ -1194,16 +1276,13 @@ def create_torch(owner_uuid: UUID) -> Torch:
     return Torch(source_entity_uuid=owner_uuid)
 
 
-# =============================================================================
-# Wall Torch — Fixed wall-mounted light source with on/off actions
-# =============================================================================
-
 class IgniteWallTorchAction(BaseAction):
     """Light a wall torch."""
-    name: str = Field(default="Light Wall Torch")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Light Wall Torch", description="Action name for lighting a wall torch.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Wall torch actions target the user.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for lighting a wall torch.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the wall torch item being lit.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -1226,10 +1305,11 @@ class IgniteWallTorchAction(BaseAction):
 
 class ExtinguishWallTorchAction(BaseAction):
     """Put out a wall torch."""
-    name: str = Field(default="Extinguish Wall Torch")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Extinguish Wall Torch", description="Action name for putting out a wall torch.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Wall torch actions target the user.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for extinguishing a wall torch.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the wall torch item being extinguished.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         if self.source_item_uuid is None:
@@ -1252,19 +1332,21 @@ class ExtinguishWallTorchAction(BaseAction):
 
 class WallTorch(UsableItem):
     """A fixed wall-mounted torch. Cannot be picked up or moved."""
-    name: str = Field(default="Wall Torch")
-    is_pickable: bool = Field(default=False)
-    is_equippable: bool = Field(default=False)
-    map_char: str = Field(default="\u2666")
 
-    very_bright_radius_feet: int = Field(default=5)
-    bright_radius_feet: int = Field(default=10)
-    dim_radius_feet: int = Field(default=10)
-    is_lit: bool = Field(default=False)
+    name: str = Field(default="Wall Torch", description="Display name for the wall torch.")
+    is_pickable: bool = Field(default=False, description="Wall torches are fixed environment objects.")
+    is_equippable: bool = Field(default=False, description="Wall torches cannot be equipped.")
+    map_char: str = Field(default="\u2666", description="Map glyph for the wall torch.")
+
+    very_bright_radius_feet: int = Field(default=5, description="Very-bright light radius emitted while lit.")
+    bright_radius_feet: int = Field(default=10, description="Bright light radius emitted while lit.")
+    dim_radius_feet: int = Field(default=10, description="Dim light radius emitted while lit.")
+    is_lit: bool = Field(default=False, description="Whether the wall torch currently has an attached light source.")
     _light_source_uuid: Optional[UUID] = None
     _wall_torch_position: Optional[Tuple[int, int]] = None
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        """Return the light or extinguish action according to lit state."""
         if not self.is_lit:
             return [IgniteWallTorchAction(
                 source_entity_uuid=user_entity_uuid,
@@ -1290,6 +1372,16 @@ class WallTorch(UsableItem):
                 dim_radius_feet=self.dim_radius_feet,
                 parent_event=parent_event,
             )
+            flame_event = ExposedFlameEvent(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.uuid,
+                item_uuid=self.uuid,
+                position=self._wall_torch_position,
+                parent_event=parent_event,
+                phase=EventPhase.DECLARATION,
+            )
+            flame_event = flame_event.phase_to(EventPhase.EFFECT)
+            flame_event.phase_to(EventPhase.COMPLETION)
 
     def put_out(self, parent_event: Optional[UUID] = None) -> None:
         """Extinguish the wall torch — removes the light source."""
@@ -1300,6 +1392,24 @@ class WallTorch(UsableItem):
             grid = get_map()
             grid.remove_light_source(self._light_source_uuid, parent_event=parent_event)
             self._light_source_uuid = None
+
+    def is_exposed_flame(self) -> bool:
+        """Return whether the wall torch is currently burning."""
+        return self.is_lit
+
+    def douse_exposed_flame(self, parent_event: Optional[UUID] = None) -> bool:
+        """Extinguish this wall torch as an exposed flame.
+
+        Args:
+            parent_event: Optional parent event UUID for light-removal lineage.
+
+        Returns:
+            True if the wall torch was lit and is now doused.
+        """
+        if not self.is_lit:
+            return False
+        self.put_out(parent_event=parent_event)
+        return True
 
 
 def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = True) -> WallTorch:
@@ -1313,17 +1423,17 @@ def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = T
     return torch
 
 
-# =============================================================================
-# Potion of Haste — Applies Haste effect (no concentration, no lethargy)
-# =============================================================================
-
 class DrinkHastePotionAction(BaseAction):
     """Drink a potion to gain Haste (no concentration, no lethargy)."""
-    name: str = Field(default="Drink Haste Potion")
-    description: str = Field(default="Drink to gain doubled speed, +2 AC, DEX advantage, +1 action for 10 rounds")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    costs: List[Cost] = Field(default_factory=list)
-    source_item_uuid: Optional[UUID] = Field(default=None)
+
+    name: str = Field(default="Drink Haste Potion", description="Action name for drinking this potion.")
+    description: str = Field(
+        default="Drink to gain doubled speed, +2 AC, DEX advantage, +1 action for 10 rounds",
+        description="Action description shown for haste potions.",
+    )
+    target_type: TargetType = Field(default=TargetType.SELF, description="Haste potions target the user.")
+    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for drinking the potion.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the potion item being consumed.")
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1336,7 +1446,6 @@ class DrinkHastePotionAction(BaseAction):
         if not entity or not isinstance(entity, Entity):
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply HasteEffect directly — no Concentrating, no lethargy
         haste = HasteEffect(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
@@ -1354,13 +1463,14 @@ class DrinkHastePotionAction(BaseAction):
 
 class PotionOfHaste(UsableItem):
     """Potion of Haste. Single use, consumable."""
-    name: str = Field(default="Potion of Haste")
-    is_pickable: bool = Field(default=True)
-    map_char: str = Field(default="\u03b8")
-    is_consumable: bool = Field(default=True)
-    charges: int = Field(default=1)
-    max_charges: int = Field(default=1)
-    max_stack: int = Field(default=5)
+
+    name: str = Field(default="Potion of Haste", description="Display name for the potion.")
+    is_pickable: bool = Field(default=True, description="Haste potions can be picked up.")
+    map_char: str = Field(default="\u03b8", description="Map glyph for the potion.")
+    is_consumable: bool = Field(default=True, description="The potion is consumed when used.")
+    charges: int = Field(default=1, description="Current charges for the top potion in the stack.")
+    max_charges: int = Field(default=1, description="Maximum charges for each potion.")
+    max_stack: int = Field(default=5, description="Maximum number of potions in one stack.")
 
 
 def create_potion_of_haste(owner_uuid: UUID) -> PotionOfHaste:

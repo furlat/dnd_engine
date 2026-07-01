@@ -1,24 +1,4 @@
-"""
-Area of Effect (AoE) shape classes.
-
-These are thin wrappers around geometry.py functions that add:
-1. Wall blocking via GridMap FOV calculations
-2. Entity detection via GridMap entity tracking
-3. Subjective (from caster's perspective) and objective (from shape origin) computation
-
-Usage:
-    from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
-
-    # Create shape targeting a position
-    shape = Sphere(source_entity_uuid=caster.uuid, target=(5, 5), radius_feet=20)
-
-    # Compute affected positions and entities
-    shape.compute_objective(caster_pos=(0, 0))
-
-    # Check results
-    print(shape.affected_positions)
-    print(shape.affected_entity_uuids)
-"""
+"""Area-of-effect shape models for targeting and spell execution."""
 from __future__ import annotations
 
 from typing import Optional, Set, Tuple
@@ -38,27 +18,19 @@ from dnd.blocks.sensory import Senses
 
 
 class AoEShape(BaseObject):
-    """
-    Base class for AoE shapes - thin wrapper around geometry functions.
+    """Base model for geometric AoE shapes.
 
-    Shapes compute affected positions by:
-    1. Getting geometric positions from geometry.py functions
-    2. Filtering by line-of-sight from origin (using GridMap.compute_fov)
-    3. Finding entities at affected positions
-
-    Two computation modes:
-    - `compute_subjective()`: Uses caster's existing senses (fast, for previews)
-    - `compute_objective()`: Computes fresh FOV from shape origin (accurate, for actual effects)
+    `compute_subjective()` uses caster senses for previews. `compute_objective()`
+    recomputes propagation from the shape origin for execution. Both methods
+    store affected positions and entity UUIDs on the shape instance.
     """
 
-    use_register: bool = Field(default=False)
-    target: Tuple[int, int] = Field(default=(0, 0))
-    origin_override: Optional[Tuple[int, int]] = Field(default=None)
-
-    # Computed results (populated by compute_* methods)
-    computed_origin: Optional[Tuple[int, int]] = Field(default=None)
-    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set)
-    affected_entity_uuids: Set[UUID] = Field(default_factory=set)
+    use_register: bool = Field(default=False, description="AoE preview objects are not registered by default.")
+    target: Tuple[int, int] = Field(default=(0, 0), description="Target or direction point for the shape.")
+    origin_override: Optional[Tuple[int, int]] = Field(default=None, description="Explicit origin used instead of the shape default.")
+    computed_origin: Optional[Tuple[int, int]] = Field(default=None, description="Origin used by the last computation.")
+    affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Positions affected by the last computation.")
+    affected_entity_uuids: Set[UUID] = Field(default_factory=set, description="Entity UUIDs affected by the last computation.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         """Return default origin for this shape type. Override in subclasses."""
@@ -73,7 +45,7 @@ class AoEShape(BaseObject):
         raise NotImplementedError
 
     def get_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
-        """Get the effective origin for this shape."""
+        """Return the explicit or default origin for this shape."""
         return self.origin_override or self._default_origin(caster_pos)
 
     def compute_subjective(
@@ -84,45 +56,37 @@ class AoEShape(BaseObject):
         barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
     ) -> "AoEShape":
-        """
-        Compute affected positions using caster's existing senses.
+        """Compute affected positions using caster-visible state.
 
         For shapes where origin != caster position (e.g., Fireball exploding
         at target location), we compute FOV from the origin and intersect
         with caster's FOV. This ensures preview matches actual execution.
 
-        AoE propagation uses physical barriers only (walls, closed doors) —
+        AoE propagation uses physical barriers only (walls, closed doors);
         magical darkness does NOT block AoE spread per D&D 5e rules.
 
         Args:
-            caster_pos: Caster's current position
-            senses: Caster's Senses block with pre-computed visibility
+            caster_pos: Caster's current position.
+            senses: Caster's Senses block with pre-computed visibility.
             fov_cache: Optional cache for FOV computations keyed by (origin, radius).
-                       When provided, avoids redundant compute_fov calls for the same
-                       origin+radius across multiple spell positions/templates.
+                When provided, avoids redundant propagation FOV calls.
             barrier_positions: Optional pre-computed set of positions that block AoE
-                       propagation. When provided, enables fast-path: if geometric
-                       shape has no barriers, skip shadowcast entirely.
+                propagation.
+            caster_uuid: Optional caster UUID that is always known to the caster.
 
         Returns:
-            Self for chaining
+            Self for chaining.
         """
         self.computed_origin = self.get_origin(caster_pos)
 
-        # Get positions visible to caster
         caster_fov = {pos for pos, vis in senses.visible.items() if vis}
 
-        # If origin differs from caster, also compute origin's FOV
-        # This handles cases like Fireball where explosion spreads from target
         if self.computed_origin != caster_pos:
-            # Compute geometric shape early for barrier fast-path check
             geometric = self._get_positions_in_shape(self.computed_origin)
 
-            # Fast-path: no barriers in blast → geometric IS the reachable area
             if barrier_positions is not None and not (geometric & barrier_positions):
                 origin_fov = geometric
             else:
-                # Slow path: compute propagation FOV (walls present)
                 cache_key = (self.computed_origin, self._get_max_radius_tiles())
                 if fov_cache is not None and cache_key in fov_cache:
                     origin_fov = fov_cache[cache_key]
@@ -136,19 +100,13 @@ class AoEShape(BaseObject):
                     if fov_cache is not None:
                         fov_cache[cache_key] = origin_fov
 
-            # Preview shows intersection: what caster sees AND what origin can hit
             perceived_fov = caster_fov & origin_fov
             self.affected_positions = geometric & perceived_fov
         else:
             perceived_fov = caster_fov
-            # Get geometric positions in shape
             geometric = self._get_positions_in_shape(self.computed_origin)
-            # Intersection: only positions both in shape AND in perceived FOV
             self.affected_positions = geometric & perceived_fov
 
-        # Find entities at affected positions (filtered by caster's perception)
-        # Both branches use senses.entities to prevent leaking hidden entity info.
-        # The caster's own UUID is always included (they know where they are).
         if self.computed_origin != caster_pos:
             grid = get_map()
             self.affected_entity_uuids = set()
@@ -157,7 +115,6 @@ class AoEShape(BaseObject):
                     if entity_uuid in senses.entities or entity_uuid == caster_uuid:
                         self.affected_entity_uuids.add(entity_uuid)
         else:
-            # Use caster's perception (fast path)
             self.affected_entity_uuids = {
                 entity_uuid
                 for entity_uuid, pos in senses.entities.items()
@@ -167,33 +124,29 @@ class AoEShape(BaseObject):
         return self
 
     def compute_objective(self, caster_pos: Tuple[int, int]) -> "AoEShape":
-        """
-        Compute affected positions with fresh FOV from shape origin.
+        """Compute affected positions from actual propagation state.
 
         This is more accurate (uses actual FOV from origin) but slower.
         Use for actual spell effects.
 
-        AoE propagation uses physical barriers only (walls, closed doors) —
+        AoE propagation uses physical barriers only (walls, closed doors);
         magical darkness does NOT block AoE spread per D&D 5e rules.
 
         Args:
-            caster_pos: Caster's current position (for determining origin)
+            caster_pos: Caster's current position for determining origin.
 
         Returns:
-            Self for chaining
+            Self for chaining.
         """
         grid = get_map()
         self.computed_origin = self.get_origin(caster_pos)
 
-        # Get geometric positions in shape
         geometric = self._get_positions_in_shape(self.computed_origin)
 
-        # Fast-path: no barriers in blast → skip shadowcast
         barriers = grid.get_barrier_positions()
         if not (geometric & barriers):
             self.affected_positions = geometric
         else:
-            # Compute propagation FOV (physical barriers only, no magical darkness)
             fov_from_origin = set(
                 grid.compute_propagation_fov(
                     self.computed_origin, self._get_max_radius_tiles()
@@ -201,7 +154,6 @@ class AoEShape(BaseObject):
             )
             self.affected_positions = geometric & fov_from_origin
 
-        # Find all entities at affected positions
         self.affected_entity_uuids = set()
         for pos in self.affected_positions:
             for uuid in grid.get_entities_at(pos):
@@ -211,14 +163,13 @@ class AoEShape(BaseObject):
 
 
 class Sphere(AoEShape):
-    """
-    Circular area centered on target position.
+    """Circular area centered on target position.
 
     D&D 5e: "A sphere's point of origin is included in the sphere's area of effect."
     """
 
-    name: str = "Sphere"
-    radius_feet: int = Field(default=20)
+    name: str = Field(default="Sphere", description="AoE shape name.")
+    radius_feet: int = Field(default=20, description="Sphere radius in feet.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         return self.target
@@ -231,8 +182,7 @@ class Sphere(AoEShape):
 
 
 class Cone(AoEShape):
-    """
-    Cone emanating from caster toward target.
+    """Cone emanating from caster toward target.
 
     D&D 5e: "A cone extends in a direction you choose from its point of origin.
     A cone's width at a given point along its length is equal to that point's
@@ -240,9 +190,9 @@ class Cone(AoEShape):
     maximum length."
     """
 
-    name: str = "Cone"
-    length_feet: int = Field(default=15)
-    angle_degrees: int = Field(default=53)  # D&D 5e standard for "width = length"
+    name: str = Field(default="Cone", description="AoE shape name.")
+    length_feet: int = Field(default=15, description="Cone maximum length in feet.")
+    angle_degrees: int = Field(default=53, description="Cone angle in degrees.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         return caster_pos
@@ -257,16 +207,15 @@ class Cone(AoEShape):
 
 
 class Line(AoEShape):
-    """
-    Line from caster toward target.
+    """Line from caster toward target.
 
     D&D 5e: "A line extends from its point of origin in a straight path up to
     its length and covers an area defined by its width."
     """
 
-    name: str = "Line"
-    length_feet: int = Field(default=100)
-    width_feet: int = Field(default=5)
+    name: str = Field(default="Line", description="AoE shape name.")
+    length_feet: int = Field(default=100, description="Line length in feet.")
+    width_feet: int = Field(default=5, description="Line width in feet.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         return caster_pos
@@ -280,8 +229,7 @@ class Line(AoEShape):
 
 
 class Cube(AoEShape):
-    """
-    Square/cube area.
+    """Square/cube area.
 
     D&D 5e: "You select a cube's point of origin, which lies anywhere on a face
     of the cubic effect. The cube's size is expressed as the length of each side."
@@ -290,9 +238,9 @@ class Cube(AoEShape):
     from caster toward target (for effects like Thunderwave).
     """
 
-    name: str = "Cube"
-    size_feet: int = Field(default=15)
-    centered: bool = Field(default=False)
+    name: str = Field(default="Cube", description="AoE shape name.")
+    size_feet: int = Field(default=15, description="Cube side length in feet.")
+    centered: bool = Field(default=False, description="Whether the cube is centered on target.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         return self.target if self.centered else caster_pos
@@ -316,9 +264,9 @@ class Cylinder(AoEShape):
     A cylinder hits everything in its geometric circle, even behind corners.
     """
 
-    name: str = "Cylinder"
-    radius_feet: int = Field(default=20)
-    height_feet: int = Field(default=40)
+    name: str = Field(default="Cylinder", description="AoE shape name.")
+    radius_feet: int = Field(default=20, description="Cylinder radius in feet.")
+    height_feet: int = Field(default=40, description="Cylinder height in feet.")
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         return self.target
@@ -328,6 +276,23 @@ class Cylinder(AoEShape):
 
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         return circle_positions(origin, self.radius_feet // 5, include_center=True)
+
+    def compute_subjective(
+        self,
+        caster_pos: Tuple[int, int],
+        senses: "Senses",
+        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
+        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
+        caster_uuid: Optional[UUID] = None,
+    ) -> "AoEShape":
+        """Compute cylinder previews using full footprint and perceived entities."""
+        return self.compute_for_targeting(
+            caster_pos,
+            senses,
+            fov_cache=fov_cache,
+            barrier_positions=barrier_positions,
+            caster_uuid=caster_uuid,
+        )
 
     def compute_for_targeting(
         self,
@@ -345,7 +310,6 @@ class Cylinder(AoEShape):
         geometric = self._get_positions_in_shape(self.computed_origin)
         self.affected_positions = geometric
 
-        # Still filter entities by caster's perception (can't knowingly target invisible)
         self.affected_entity_uuids = set()
         grid = get_map()
         for pos in self.affected_positions:
@@ -364,7 +328,6 @@ class Cylinder(AoEShape):
         geometric = self._get_positions_in_shape(self.computed_origin)
         self.affected_positions = geometric
 
-        # All entities in the geometric area are affected
         grid = get_map()
         self.affected_entity_uuids = set()
         for pos in self.affected_positions:

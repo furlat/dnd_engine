@@ -9,7 +9,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem, UsableItem
@@ -23,7 +23,6 @@ from dnd.entity import Entity
 from dnd.items import ARMORS, SHIELDS, WEAPONS
 from dnd.items.test_items import (
     CookAction,
-    PullLeverAction,
     RestAction,
     StorageChest,
     TestDoorA,
@@ -77,7 +76,6 @@ from server.api_models import (
 )
 from server.event_stream import event_stream
 from server.session import SessionManager
-
 
 _BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
     "use_register",
@@ -356,7 +354,7 @@ def _apply_directional_tile_patch(grid: Any, patch: MapEditorTilePatch) -> None:
 def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject:
     """Place a catalog object or loot item on the grid."""
     catalog_id = _normalize_id(request.catalog_id)
-    position = tuple(request.position)
+    position = request.position
     owner = uuid4()
     grid = get_map()
 
@@ -435,7 +433,7 @@ def delete_catalog_object(request: MapEditorObjectDeleteRequest) -> MapEditorMap
     if request.object_uuid:
         object_ids.append(UUID(request.object_uuid))
     elif request.position is not None:
-        object_ids.extend(grid.get_objects_at(tuple(request.position)))
+        object_ids.extend(grid.get_objects_at(request.position))
     else:
         raise ValueError("object_uuid or position is required")
 
@@ -729,7 +727,7 @@ def _entry(
     category: str,
     source_module: str,
     *,
-    stability: str = "stable",
+    stability: Literal["stable", "candidate", "demo"] = "stable",
     placement: str = "single_tile",
     map_char: Optional[str] = None,
     visual_item_name: Optional[str] = None,

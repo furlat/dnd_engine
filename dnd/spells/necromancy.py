@@ -5,12 +5,14 @@ Contains: Blight, BlindnessDeafness, FalseLife, ChillTouch, NecroticBless, Eyebi
 from typing import Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionTag, DurationType, Duration
+from dnd.core.base_tiles import MovementMode
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, AbilityName, SkillName
+from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, AbilityName, SkillName, ForcedMovementEvent
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import (
     DamageType, AdvantageModifier, AdvantageStatus, CreatureType,
     NumericalModifier, ContextualAdvantageModifier
@@ -19,40 +21,41 @@ from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity, determine_attack_outcome
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.spells.spell_utils import validate_line_of_sight
-from dnd.core.base_actions import Cost, BaseAction, ActionCategory
+from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
 from dnd.conditions import Blinded, Deafened, Unconscious, Frightened, Concentrating, ConcentrationActionMarker
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 from dnd.blocks.skills import SKILL_TO_ABILITY
 
 
 class FalseLife(SpellAction):
-    """False Life - 1st level Necromancy
+    """Grant temporary hit points through a self-targeted necromancy spell.
 
-    Bolstering yourself with a necromantic facsimile of life, you gain
-    1d4 + 4 temporary hit points for the duration.
-
-    At Higher Levels: You gain 5 additional temporary hit points for
-    each slot level above 1st.
-
-    Duration: 1 hour (not tracked - temp HP persist until depleted or replaced)
-    Not concentration.
+    False Life grants 1d4 + 4 temporary hit points, plus 5 additional
+    temporary hit points for each slot level above 1st. The engine applies the
+    temporary hit points immediately and leaves duration expiry to the HP pool.
     """
-    name: str = Field(default="False Life")
-    description: str = Field(default="Gain 1d4+4 temporary hit points (+5 per upcast level)")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF, normal=0))
+    name: str = Field(default="False Life", description="Spell name.")
+    description: str = Field(
+        default="Gain 1d4+4 temporary hit points (+5 per upcast level)",
+        description="Rules-facing summary of the temporary hit point effect.",
+    )
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Self-targeting spell.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.SELF, normal=0),
+        description="Self range used by action discovery and validation.",
+    )
 
     def get_temp_hp_bonus(self) -> int:
-        """4 base + 5 per upcast level above 1st."""
+        """Return the flat temporary hit point bonus before the d4 roll."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 5
         return 4 + upcast_bonus
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Self-targeting spell, minimal validation needed."""
+        """Validate that the caster exists before the self spell executes."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
@@ -63,13 +66,11 @@ class FalseLife(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Apply False Life - gain temporary hit points."""
-
+        """Roll and apply False Life's temporary hit points."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        # Roll 1d4 + bonus
         bonus_value = ModifiableValue.create(
             source_entity_uuid=caster.uuid,
             base_value=self.get_temp_hp_bonus(),
@@ -79,7 +80,7 @@ class FalseLife(SpellAction):
             count=1,
             value=4,
             bonus=bonus_value,
-            roll_type=RollType.CHECK  # Using CHECK as generic roll type
+            roll_type=RollType.CHECK
         )
         temp_hp_roll = dice.roll
 
@@ -89,8 +90,6 @@ class FalseLife(SpellAction):
             status_message=f"Rolled 1d4+{self.get_temp_hp_bonus()} = {temp_hp_roll.total} temporary HP"
         )
 
-        # Apply temporary hit points
-        # Note: temp HP don't stack - if higher than current, replaces them
         caster.health.add_temporary_hit_points(temp_hp_roll.total, caster.uuid)
 
         return effect_event.phase_to(
@@ -101,15 +100,12 @@ class FalseLife(SpellAction):
 
 
 class NoHealing(BaseCondition):
-    """Prevents target from regaining hit points.
-
-    Sets Health.healing_blocked = True on apply, False on remove.
-    Used by Chill Touch and similar effects.
-    """
-    name: str = "No Healing"
-    description: str = "Cannot regain hit points"
+    """Block healing on the target while the condition is active."""
+    name: str = Field(default="No Healing", description="Condition name.")
+    description: str = Field(default="Cannot regain hit points", description="Rules-facing condition summary.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Set the target health block to reject healing."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -117,7 +113,6 @@ class NoHealing(BaseCondition):
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        # Set healing_blocked flag on Health block
         target.health.healing_blocked = True
 
         effect_event = declaration_event.phase_to(
@@ -128,30 +123,34 @@ class NoHealing(BaseCondition):
         return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Reset healing_blocked when condition is removed."""
+        """Reset the target health block when the condition is removed."""
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target:
                 target.health.healing_blocked = False
 
-        # Call parent _remove for event handling
         return super()._remove(event)
 
 
 class ChillTouchEffect(BaseCondition):
-    """Tracks Chill Touch effect on caster.
+    """Track Chill Touch's duration and target-linked healing block.
 
-    Duration: 1 round (expires at start of caster's next turn).
-
-    This follows the SRD: "until the start of your next turn" = CASTER's turn.
-    Uses linked_conditions to manage NoHealing on the target.
-    If target is undead, also adds disadvantage on attacks vs caster.
+    The tracking condition lives on the caster so the "until the start of your
+    next turn" duration advances with the caster. It links to the No Healing
+    condition applied to the target and optionally adds the undead attack
+    penalty.
     """
-    name: str = "Chill Touch Effect"
-    description: str = "Tracking condition for Chill Touch debuffs"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    affected_target_uuid: Optional[UUID] = None  # The target of the spell
-    target_is_undead: bool = False
+    name: str = Field(default="Chill Touch Effect", description="Condition name.")
+    description: str = Field(
+        default="Tracking condition for Chill Touch debuffs",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    affected_target_uuid: Optional[UUID] = Field(default=None, description="Target affected by Chill Touch.")
+    target_is_undead: bool = Field(default=False, description="Whether the affected target is undead.")
 
     @staticmethod
     def undead_attack_disadvantage(
@@ -160,8 +159,8 @@ class ChillTouchEffect(BaseCondition):
         target_entity_uuid: Optional[UUID] = None,
         context: Optional[Dict[str, Any]] = None
     ) -> Optional[AdvantageModifier]:
-        """Returns disadvantage when undead attacks the caster."""
-        _ = context  # Unused
+        """Return disadvantage when the undead target attacks the caster."""
+        _ = context
         if target_entity_uuid and target_entity_uuid == caster_uuid:
             return AdvantageModifier(
                 name="Chill Touch (Undead)",
@@ -172,6 +171,7 @@ class ChillTouchEffect(BaseCondition):
         return None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply the caster-side tracker and undead attack penalty if needed."""
         if not self.affected_target_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
 
@@ -179,15 +179,13 @@ class ChillTouchEffect(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Caster UUID not set")
 
         target = Entity.get(self.affected_target_uuid)
-        caster = Entity.get(self.target_entity_uuid)  # Condition is on caster
+        caster = Entity.get(self.target_entity_uuid)
         if not target or not caster:
             return [], [], [], [], declaration_event.cancel(status_message="Target or caster not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # If target is undead, add disadvantage on attacks vs caster
         if self.target_is_undead:
-            # Use contextual modifier that checks if attack target is the caster
             callable_func = partial(self.undead_attack_disadvantage, caster.uuid)
             disadv_mod = ContextualAdvantageModifier(
                 name="Chill Touch (Undead)",
@@ -201,11 +199,9 @@ class ChillTouchEffect(BaseCondition):
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"Applied Chill Touch effect tracker"
+            status_message="Applied Chill Touch effect tracker"
         )
 
-        # Need at least one modifier for applied=True
-        # If not undead, add a dummy modifier
         if not outs:
             dummy_mod = NumericalModifier(
                 name="Chill Touch Tracker",
@@ -220,40 +216,38 @@ class ChillTouchEffect(BaseCondition):
 
 
 class ChillTouch(SpellAction):
-    """Chill Touch - Necromancy cantrip
+    """Make a ranged spell attack that deals necrotic damage and blocks healing.
 
-    You create a ghostly, skeletal hand in the space of a creature within range.
-    Make a ranged spell attack against the creature to assail it with the chill
-    of the grave. On a hit, the target takes 1d8 necrotic damage, and it can't
-    regain hit points until the start of your next turn. Until then, the hand
-    clings to the target.
-
-    If you hit an undead target, it also has disadvantage on attack rolls against
-    you until the start of your next turn.
-
-    Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th level.
+    Damage scales to 2d8 at 5th level, 3d8 at 11th level, and 4d8 at 17th
+    level. Undead targets also gain disadvantage on attacks against the caster.
     """
-    name: str = Field(default="Chill Touch")
-    description: str = Field(default="1d8 necrotic, target can't heal. Undead: disadvantage vs caster.")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120))
-    projectile_type: Optional[str] = Field(default="orb")
+    name: str = Field(default="Chill Touch", description="Spell name.")
+    description: str = Field(
+        default="1d8 necrotic, target can't heal. Undead: disadvantage vs caster.",
+        description="Rules-facing summary of the attack and debuffs.",
+    )
+    spell_level: int = Field(default=0, description="Cantrip spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Maximum range for the spell attack.",
+    )
+    projectile_type: Optional[str] = Field(default="orb", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
-        """1d8 base, scaling at 5/11/17."""
+        """Return the number of d8 damage dice for the caster level."""
         if caster_level >= 17:
             return 4
-        elif caster_level >= 11:
+        if caster_level >= 11:
             return 3
-        elif caster_level >= 5:
+        if caster_level >= 5:
             return 2
         return 1
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight."""
+        """Validate range and line of sight for the spell attack."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -264,7 +258,6 @@ class ChillTouch(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Check range
         distance = source.senses.get_feet_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
@@ -277,26 +270,22 @@ class ChillTouch(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Chill Touch - spell attack for necrotic damage + debuffs."""
+        """Execute the spell attack, damage roll, and hit debuffs."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Get attack and AC bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         outcome = determine_attack_outcome(dice_roll, target_ac)
 
-        # 4. Clean up
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -309,14 +298,12 @@ class ChillTouch(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss, complete without damage
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 6. On hit: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -334,7 +321,6 @@ class ChillTouch(SpellAction):
         damage_dice = necrotic_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of effect event)
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.NECROTIC,
@@ -342,13 +328,11 @@ class ChillTouch(SpellAction):
             parent_event=effect_event.uuid
         )
 
-        # 7. Apply debuffs using effect condition on caster
         is_undead = target.creature_type == CreatureType.UNDEAD
 
-        # Apply effect condition to caster (tracks duration)
         effect_condition = ChillTouchEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,  # Lives on caster
+            target_entity_uuid=caster.uuid,
             affected_target_uuid=target.uuid,
             target_is_undead=is_undead,
             duration=Duration(
@@ -360,7 +344,6 @@ class ChillTouch(SpellAction):
         )
         caster.add_condition(effect_condition, parent_event=effect_event)
 
-        # Apply No Healing to target
         no_healing = NoHealing(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -368,7 +351,6 @@ class ChillTouch(SpellAction):
         )
         target.add_condition(no_healing, parent_event=effect_event)
 
-        # Link via linked_conditions for cleanup
         effect_condition.add_linked_condition(target.uuid, no_healing.uuid)
 
         undead_text = " (undead: disadvantage vs caster)" if is_undead else ""
@@ -381,44 +363,36 @@ class ChillTouch(SpellAction):
 
 
 class Blight(SpellAction):
-    """Blight - 4th level Necromancy
+    """Drain vitality from a creature with a Constitution saving throw.
 
-    Necromantic energy washes over a creature of your choice that you can see
-    within range, draining moisture and vitality from it. The target must make
-    a Constitution saving throw. The target takes 8d8 necrotic damage on a
-    failed save, or half as much damage on a successful one.
-
-    This spell has no effect on undead or constructs.
-    A plant creature or a magical plant has disadvantage on the saving throw
-    and the spell deals maximum damage to it.
-
-    At Higher Levels: +1d8 damage per slot level above 4th.
+    Undead and constructs are rejected during validation. Plant creatures have
+    disadvantage on the saving throw and take maximum damage.
     """
-    name: str = Field(default="Blight")
-    description: str = Field(default="8d8 necrotic, CON save half. No effect on undead/constructs. Plants: disadvantage + max damage.")
-    spell_level: int = Field(default=4)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
-    projectile_type: Optional[str] = Field(default="ray")
+    name: str = Field(default="Blight", description="Spell name.")
+    description: str = Field(
+        default="8d8 necrotic, CON save half. No effect on undead/constructs. Plants: disadvantage + max damage.",
+        description="Rules-facing summary of damage and special target handling.",
+    )
+    spell_level: int = Field(default=4, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for the spell target.",
+    )
+    projectile_type: Optional[str] = Field(default="ray", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
-
-    # Target filtering
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
-
-    # Damage configuration
-    base_damage_dice: int = Field(default=8)  # 8d8 at level 4
+    include_self: bool = Field(default=False, description="Whether action discovery includes the caster.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    base_damage_dice: int = Field(default=8, description="Base number of d8 damage dice.")
 
     def get_damage_dice_count(self) -> int:
-        """8d8 base + 1d8 per level above 4th."""
+        """Return the number of d8 damage dice after upcasting."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range, LOS, and creature type (not undead/construct)."""
-
-        # Validate line of sight
+        """Validate line of sight, range, and invalid creature types."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -429,7 +403,6 @@ class Blight(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Blight has no effect on undead or constructs
         if target_entity.creature_type == CreatureType.UNDEAD:
             return declaration_event.cancel(
                 status_message="Blight has no effect on undead"
@@ -439,7 +412,6 @@ class Blight(SpellAction):
                 status_message="Blight has no effect on constructs"
             )
 
-        # Validate range
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
@@ -452,21 +424,16 @@ class Blight(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Blight - CON save or necrotic damage."""
-
+        """Resolve the saving throw and apply necrotic damage."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Check if target is a plant
         is_plant = target.creature_type == CreatureType.PLANT
-
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Add disadvantage for plants (temporary modifier)
         mod_uuid: Optional[UUID] = None
         if is_plant:
             disadv_mod = AdvantageModifier(
@@ -477,7 +444,6 @@ class Blight(SpellAction):
             )
             mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
 
-        # 3. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -486,11 +452,9 @@ class Blight(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # 4. Remove disadvantage modifier
         if is_plant and mod_uuid:
             target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -504,16 +468,13 @@ class Blight(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 5. Calculate damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
         damage_bonus_value = damage_bonus.normalized_score
 
         if is_plant:
-            # Plants take maximum damage
             final_damage = num_dice * 8 + damage_bonus_value
         else:
-            # Roll damage normally
             necrotic_damage = Damage(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -525,10 +486,8 @@ class Blight(SpellAction):
             damage_dice = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT)
             damage_roll = damage_dice.roll
 
-            # Half damage on successful save
             final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 6. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -547,21 +506,19 @@ class Blight(SpellAction):
 
 
 class BlindnessDeafnessEffect(BaseCondition):
-    """Effect from Blindness/Deafness spell.
-
-    Target is either Blinded or Deafened.
-    Repeat CON save at end of each turn to end the effect.
-    NOT concentration.
-    """
-    name: str = "Blindness/Deafness"
-    description: str = "Blinded or Deafened by magic"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
-    effect_type: str = "blinded"  # "blinded" or "deafened"
+    """Apply Blindness/Deafness and manage its repeat save handler."""
+    name: str = Field(default="Blindness/Deafness", description="Condition name.")
+    description: str = Field(default="Blinded or Deafened by magic", description="Rules-facing condition summary.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the save DC.")
+    spell_dc: int = Field(default=10, description="Constitution save DC to end the effect.")
+    effect_type: str = Field(default="blinded", description="Effect choice: blinded or deafened.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply the chosen sub-condition and register repeat saves."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
@@ -572,7 +529,6 @@ class BlindnessDeafnessEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply the chosen effect as sub-condition
         if self.effect_type == "blinded":
             effect = Blinded(
                 source_entity_uuid=self.source_entity_uuid,
@@ -592,7 +548,6 @@ class BlindnessDeafnessEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(effect.uuid)
 
-        # Register repeat save handler
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -605,7 +560,7 @@ class BlindnessDeafnessEffect(BaseCondition):
         return [], handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """CON save at end of turn to end the effect."""
+        """Create the end-of-turn Constitution save handler."""
         assert self.target_entity_uuid is not None
         assert self.caster_uuid is not None
 
@@ -622,18 +577,15 @@ class BlindnessDeafnessEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected
             bd_effect = target.active_conditions.get("Blindness/Deafness")
             if not bd_effect or bd_effect.uuid != effect_uuid:
                 return None
 
             caster = Entity.get(caster_uuid)
             if not caster:
-                # Caster gone, end the effect
                 target.remove_condition("Blindness/Deafness", parent_event=event)
                 return None
 
-            # Repeat CON save (child of triggering turn end event)
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
@@ -657,40 +609,37 @@ class BlindnessDeafnessEffect(BaseCondition):
 
 
 class BlindnessDeafness(SpellAction):
-    """Blindness/Deafness - 2nd level Necromancy
+    """Blind or deafen one or more targets after Constitution saves.
 
-    You can blind or deafen a foe. Choose one creature that you can see within
-    range to make a CON save. If it fails, the target is either blinded or
-    deafened (your choice) for the duration. At the end of each of its turns,
-    the target can make a CON save. On a success, the spell ends.
-
-    At Higher Levels: Target one additional creature for each slot level above 2nd.
-
-    NOT concentration.
+    The spell is not concentration. Upcasting targets one additional creature
+    for each slot level above 2nd.
     """
-    name: str = Field(default="Blindness/Deafness")
-    description: str = Field(default="CON save or Blinded/Deafened. Repeat save each turn.")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
-
-    # Multi-entity configuration
-    allow_same_target: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
-
-    # Effect choice: "blinded" or "deafened"
-    effect_type: str = Field(default="blinded")
+    name: str = Field(default="Blindness/Deafness", description="Spell name.")
+    description: str = Field(
+        default="CON save or Blinded/Deafened. Repeat save each turn.",
+        description="Rules-facing summary of the chosen effect and repeat save.",
+    )
+    spell_level: int = Field(default=2, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    effect_type: str = Field(default="blinded", description="Effect choice: blinded or deafened.")
 
     def get_num_projectiles(self) -> int:
-        """1 target base + 1 per upcast level."""
+        """Return the number of targets allowed by the slot level."""
         return 1 + self.get_upcast_bonus()
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the action discovery multi-target count."""
         return self.get_num_projectiles()
 
     def get_all_targets(self) -> List[UUID]:
-        """Return all targets."""
+        """Return the selected targets trimmed to the spell's target count."""
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -698,12 +647,11 @@ class BlindnessDeafness(SpellAction):
         return targets[:self.get_num_projectiles()]
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and LOS for all targets."""
+        """Validate effect choice, range, and line of sight for all targets."""
         source = Entity.get(self.source_entity_uuid)
         if not source:
             return declaration_event.cancel(status_message="Caster not found")
 
-        # Validate effect_type
         if self.effect_type not in ["blinded", "deafened"]:
             return declaration_event.cancel(status_message="Effect type must be 'blinded' or 'deafened'")
 
@@ -719,23 +667,20 @@ class BlindnessDeafness(SpellAction):
             if not target:
                 return declaration_event.cancel(status_message="Target not found")
 
-            # Check LOS
             if target_uuid not in source.senses.entities.keys():
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
-            # Check range
             distance = source.senses.get_feet_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
-        # Call parent validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Apply blindness/deafness to current target."""
+        """Resolve the save and apply the chosen effect on failure."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -744,7 +689,6 @@ class BlindnessDeafness(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -772,7 +716,6 @@ class BlindnessDeafness(SpellAction):
                 status_message=f"{target.name} resists Blindness/Deafness"
             )
 
-        # Apply effect
         bd_effect = BlindnessDeafnessEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -788,35 +731,36 @@ class BlindnessDeafness(SpellAction):
         )
 
 
-# =============================================================================
-# NECROTIC BLESS (Homebrew)
-# =============================================================================
-
 class NecroticBless(SpellAction):
-    """Necrotic Bless — 2nd-level Necromancy (Concentration, Homebrew)
+    """Apply Bless to undead targets or Bane to living targets.
 
-    Target up to 4 creatures. Undead targets gain BlessEffect (no save).
-    Non-undead targets must succeed on a CHA save or suffer BaneEffect.
+    This homebrew spell targets up to four creatures. Undead targets receive
+    BlessEffect without a save. Other targets must pass a Charisma save or
+    receive BaneEffect.
     """
-    name: str = Field(default="Necrotic Bless")
-    description: str = Field(default="4 targets: undead get +1d4, others CHA save or -1d4")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="necromancy")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+    name: str = Field(default="Necrotic Bless", description="Spell name.")
+    description: str = Field(
+        default="4 targets: undead get +1d4, others CHA save or -1d4",
+        description="Rules-facing summary of the undead and non-undead effects.",
     )
-
-    # Multi-target configuration
-    allow_same_target: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
-    include_self: bool = Field(default=True)
+    spell_level: int = Field(default=2, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Maximum range for each target.",
+    )
+    allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
+    valid_target_filter: str = Field(default="all", description="Action discovery target filter.")
+    include_self: bool = Field(default=True, description="Whether action discovery includes the caster.")
 
     def get_multi_target_count(self) -> Optional[int]:
+        """Return the fixed maximum number of targets."""
         return 4
 
     def get_all_targets(self) -> List[UUID]:
+        """Return unique selected targets trimmed to four creatures."""
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -826,6 +770,7 @@ class NecroticBless(SpellAction):
         return targets[:4]
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Resolve one target during multi-target convolution."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -834,13 +779,11 @@ class NecroticBless(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Create or reuse Concentrating (safe for convolution)
         concentration = self.ensure_concentration(execution_event)
 
         is_undead = target.creature_type == CreatureType.UNDEAD
 
         if is_undead:
-            # Undead: auto-apply BlessEffect (no save)
             bless_effect = BlessEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -860,7 +803,6 @@ class NecroticBless(SpellAction):
                 status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
             )
         else:
-            # Non-undead: CHA save or BaneEffect
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="charisma",
@@ -900,29 +842,28 @@ class NecroticBless(SpellAction):
             )
 
 
-# =============================================================================
-# EYEBITE CONDITIONS
-# =============================================================================
-
 class SickenedCondition(BaseCondition):
-    """Sickened by Eyebite - disadvantage on attacks and ability checks.
-
-    Repeat CON save at end of turn to end the effect.
-    """
-    name: str = "Sickened"
-    description: str = "Disadvantage on attacks and ability checks"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    """Apply Eyebite's sickened option and its repeat Wisdom save."""
+    name: str = Field(default="Sickened", description="Condition name.")
+    description: str = Field(
+        default="Disadvantage on attacks and ability checks",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster the target must flee from.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC to end the condition.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply attack and ability-check disadvantage to the target."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Disadvantage on attacks
         mod_uuid = target.equipment.attack_bonus.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name="Sickened (attacks)",
@@ -933,7 +874,6 @@ class SickenedCondition(BaseCondition):
         )
         outs.append((target.equipment.attack_bonus.uuid, mod_uuid))
 
-        # Disadvantage on all 6 ability checks
         for ability_name_str in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
             ability_name_typed = type_cast(AbilityName, ability_name_str)
             ability = target.ability_scores.get_ability(ability_name_typed)
@@ -947,7 +887,6 @@ class SickenedCondition(BaseCondition):
             )
             outs.append((ability.ability_score.uuid, ab_mod_uuid))
 
-        # Repeat CON save handler
         handler = self._create_repeat_save_handler()
         target.add_event_handler(handler)
         handler_uuids = [handler.uuid]
@@ -959,7 +898,7 @@ class SickenedCondition(BaseCondition):
         return outs, handler_uuids, [], [], effect_event
 
     def _create_repeat_save_handler(self) -> EventHandler:
-        """CON save at end of turn to end Sickened."""
+        """Create the end-of-turn Wisdom save handler."""
         assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         caster_uuid = self.caster_uuid or self.source_entity_uuid
@@ -981,7 +920,8 @@ class SickenedCondition(BaseCondition):
                 return None
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution", dc=dc,
+                ability_name="wisdom",
+                dc=dc,
                 parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
@@ -1002,19 +942,25 @@ class SickenedCondition(BaseCondition):
 
 
 class EyebiteAsleepEffect(BaseCondition):
-    """Eyebite Asleep - applies Unconscious, wakes on damage."""
-    name: str = "Eyebite Asleep"
-    description: str = "Magically asleep - wakes on damage"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    """Apply Eyebite's asleep option and remove it when damage is taken."""
+    name: str = Field(default="Eyebite Asleep", description="Condition name.")
+    description: str = Field(
+        default="Magically asleep - wakes on damage",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Unconscious and register the wake-on-damage handler."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply Unconscious as sub-condition
         unconscious = Unconscious(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -1024,7 +970,6 @@ class EyebiteAsleepEffect(BaseCondition):
         target.add_condition(unconscious, parent_event=declaration_event)
         sub_conditions_uuids.append(unconscious.uuid)
 
-        # Wake on damage handler
         handler = self._create_wake_handler()
         target.add_event_handler(handler)
         handler_uuids = [handler.uuid]
@@ -1036,7 +981,7 @@ class EyebiteAsleepEffect(BaseCondition):
         return [], handler_uuids, sub_conditions_uuids, [], effect_event
 
     def _create_wake_handler(self) -> EventHandler:
-        """Wake up when taking damage."""
+        """Create the damage-triggered wake handler."""
         assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         effect_uuid = self.uuid
@@ -1066,21 +1011,27 @@ class EyebiteAsleepEffect(BaseCondition):
 
 
 class EyebitePanickedEffect(BaseCondition):
-    """Eyebite Panicked - applies Frightened, repeat WIS save at turn end."""
-    name: str = "Eyebite Panicked"
-    description: str = "Panicked - Frightened, repeat WIS save"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    """Apply Eyebite's panicked option and forced flee behavior."""
+    name: str = Field(default="Eyebite Panicked", description="Condition name.")
+    description: str = Field(
+        default="Panicked - Frightened, must Dash away from caster",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the repeat-save DC.")
+    spell_dc: int = Field(default=10, description="Initial Eyebite save DC retained with the effect.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Frightened and register the forced flee handler."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply Frightened as sub-condition
         frightened = Frightened(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -1090,8 +1041,7 @@ class EyebitePanickedEffect(BaseCondition):
         target.add_condition(frightened, parent_event=declaration_event)
         sub_conditions_uuids.append(frightened.uuid)
 
-        # Repeat WIS save handler
-        handler = self._create_repeat_save_handler()
+        handler = self._create_flee_handler()
         target.add_event_handler(handler)
         handler_uuids = [handler.uuid]
 
@@ -1101,13 +1051,144 @@ class EyebitePanickedEffect(BaseCondition):
         )
         return [], handler_uuids, sub_conditions_uuids, [], effect_event
 
-    def _create_repeat_save_handler(self) -> EventHandler:
-        """WIS save at end of turn to end Panicked."""
+    @staticmethod
+    def _distance_feet(first: Tuple[int, int], second: Tuple[int, int]) -> int:
+        """Return the engine's Euclidean-grid distance in feet."""
+        return int(((first[0] - second[0]) ** 2 + (first[1] - second[1]) ** 2) ** 0.5) * 5
+
+    @staticmethod
+    def _direction(start: Tuple[int, int], end: Tuple[int, int]) -> Tuple[int, int]:
+        """Return the unit direction from start to end."""
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        if dx != 0:
+            dx = 1 if dx > 0 else -1
+        if dy != 0:
+            dy = 1 if dy > 0 else -1
+        return dx, dy
+
+    @staticmethod
+    def _path_cost_feet(target: Entity, path: List[Tuple[int, int]]) -> int:
+        """Return the movement cost of a path in feet."""
+        grid = get_map()
+        cost_units = 0.0
+        for step in path[1:]:
+            tile = grid.get_tile(*step)
+            step_cost = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
+            if target.ignore_difficult_terrain:
+                step_cost = min(step_cost, 1.0)
+            cost_units += step_cost
+        return int(cost_units * 5)
+
+    @staticmethod
+    def _path_is_hazardous(target: Entity, path: List[Tuple[int, int]]) -> bool:
+        """Return whether a path crosses a hazardous position for the target."""
+        grid = get_map()
+        return any(
+            grid.is_position_hazardous_for(step[0], step[1], target.uuid)
+            for step in path[1:]
+        )
+
+    def _should_end(self, target: Entity, caster: Entity) -> bool:
+        """Return whether Panicked ends by distance and loss of sight."""
+        target.update_entity_senses(max_distance=80)
+        distance = self._distance_feet(target.position, caster.position)
+        return distance >= 60 and caster.uuid not in target.senses.entities
+
+    def _choose_flee_path(self, target: Entity, caster: Entity, movement_budget: int) -> List[Tuple[int, int]]:
+        """Choose the safest farthest path away from the caster within budget."""
+        target.update_entity_senses(max_distance=80)
+        start_distance = self._distance_feet(target.position, caster.position)
+        best_path: List[Tuple[int, int]] = []
+        best_score: Optional[Tuple[int, int, int]] = None
+
+        for position, normal_path in target.senses.paths.items():
+            if position == target.position:
+                continue
+
+            path_options: List[Tuple[int, int, List[Tuple[int, int]]]] = []
+            normal_cost = self._path_cost_feet(target, normal_path)
+            if normal_cost <= movement_budget:
+                normal_hazard_rank = 0 if self._path_is_hazardous(target, normal_path) else 1
+                path_options.append((normal_hazard_rank, normal_cost, list(normal_path)))
+
+            safe_path = target.senses.safe_paths.get(position)
+            if safe_path:
+                safe_cost = self._path_cost_feet(target, safe_path)
+                if safe_cost <= movement_budget:
+                    path_options.append((1, safe_cost, list(safe_path)))
+
+            for safety_rank, cost, path in path_options:
+                distance = self._distance_feet(position, caster.position)
+                if distance <= start_distance:
+                    continue
+                score = (safety_rank, distance, -cost)
+                if best_score is None or score > best_score:
+                    best_score = score
+                    best_path = path
+
+        return best_path
+
+    def _move_along_flee_path(self, target: Entity, caster: Entity, path: List[Tuple[int, int]], parent_event: Event) -> None:
+        """Move the target along the selected flee path using forced-movement events."""
+        if len(path) <= 1:
+            return
+
+        grid = get_map()
+        planned_cost = self._path_cost_feet(target, path)
+        final_position = path[-1]
+        direction = self._direction(target.position, final_position)
+        forced_event = ForcedMovementEvent(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            source_entity_name=caster.name,
+            target_entity_name=target.name,
+            start_position=target.position,
+            end_position=final_position,
+            direction=direction,
+            intended_distance=planned_cost,
+            actual_distance=planned_cost,
+            blocked_by_obstacle=False,
+            cause="eyebite_panicked",
+            phase=EventPhase.DECLARATION,
+            parent_event=parent_event.uuid,
+        )
+
+        forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+        forced_event = forced_event.phase_to(EventPhase.EFFECT)
+        if forced_event.canceled:
+            return
+
+        moved_cost = 0
+        blocked = False
+        blocked_by: Optional[str] = None
+        current_position = target.position
+
+        for next_position in path[1:]:
+            if not grid.can_transition(current_position, next_position, target.uuid):
+                blocked = True
+                blocked_by = grid.identify_blocker_at(next_position, target.uuid)
+                break
+            step_cost = self._path_cost_feet(target, [current_position, next_position])
+            Entity.update_entity_position(target, next_position, parent_event=forced_event.uuid)
+            moved_cost += step_cost
+            current_position = next_position
+
+        forced_event.phase_to(
+            EventPhase.COMPLETION,
+            end_position=target.position,
+            actual_distance=moved_cost,
+            blocked_by_obstacle=blocked,
+            blocked_by=blocked_by,
+            status_message=f"Eyebite Panicked movement ended at {target.position}",
+        )
+
+    def _create_flee_handler(self) -> EventHandler:
+        """Create the turn-start forced flee handler."""
         assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         caster_uuid = self.caster_uuid or self.source_entity_uuid
         effect_uuid = self.uuid
-        dc = self.spell_dc
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.source_entity_uuid != target_uuid:
@@ -1122,21 +1203,28 @@ class EyebitePanickedEffect(BaseCondition):
             if not caster:
                 target.remove_condition("Eyebite Panicked", parent_event=event)
                 return None
-            save_request = caster.create_saving_throw_request(
-                target_entity_uuid=target.uuid,
-                ability_name="wisdom", dc=dc,
-                parent_event=event.uuid
-            )
-            _, _, success = target.saving_throw(save_request)
-            if success:
+
+            if self._should_end(target, caster):
+                target.remove_condition("Eyebite Panicked", parent_event=event)
+                return None
+
+            dash_event = Dash(source_entity_uuid=target.uuid, template=False).apply(parent_event=event)
+            if dash_event is None or dash_event.canceled:
+                return None
+
+            movement_budget = target.action_economy.get_base_value("movement") * 2
+            flee_path = self._choose_flee_path(target, caster, movement_budget)
+            self._move_along_flee_path(target, caster, flee_path, event)
+
+            if self._should_end(target, caster):
                 target.remove_condition("Eyebite Panicked", parent_event=event)
             return None
 
         return EventHandler(
-            name=f"Eyebite Panicked: Repeat Save ({target_uuid})",
+            name=f"Eyebite Panicked: Flee ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[Trigger(
-                event_type=EventType.TURN_END,
+                event_type=EventType.TURN_START,
                 event_phase=EventPhase.EFFECT,
                 event_source_entity_uuid=target_uuid
             )],
@@ -1144,25 +1232,54 @@ class EyebitePanickedEffect(BaseCondition):
         )
 
 
-# =============================================================================
-# EYEBITE GRANTED ACTION + SPELL
-# =============================================================================
+class EyebiteCastingState(ConcentrationActionMarker):
+    """Track Eyebite's granted action and successful saves for one casting."""
+    name: str = Field(default="Eyebite Casting", description="Condition name.")
+    description: str = Field(
+        default="Tracking Eyebite action and targets that saved",
+        description="Rules-facing summary of the casting state.",
+    )
+    successful_save_target_uuids: Set[UUID] = Field(
+        default_factory=set,
+        description="Creature UUIDs that succeeded on a save against this Eyebite casting.",
+    )
+
 
 class EyebiteStrike(BaseAction):
-    """Action granted by Eyebite to target a creature each turn."""
-    name: str = Field(default="Eyebite Strike")
-    description: str = Field(default="Choose a creature: Asleep, Panicked, or Sickened (WIS save)")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
+    """Resolve the action granted while concentrating on Eyebite."""
+    name: str = Field(default="Eyebite Strike", description="Action name.")
+    description: str = Field(
+        default="Choose a creature: Asleep, Panicked, or Sickened (WIS save)",
+        description="Rules-facing action summary.",
+    )
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Eyebite Strike", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
-    spell_dc: int = Field(default=10)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    effect_choice: str = Field(default="sickened")  # "asleep", "panicked", "sickened"
-    valid_target_filter: str = Field(default="enemies")
+    ], description="Action economy cost paid by repeat uses.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC for the selected target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the repeat target.",
+    )
+    effect_choice: str = Field(default="sickened", description="Effect choice: asleep, panicked, or sickened.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    casting_state_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Eyebite casting-state condition that tracks successful saves.",
+    )
+
+    def _get_casting_state(self, caster: Entity) -> Optional[EyebiteCastingState]:
+        """Return the active Eyebite casting state for this strike."""
+        if self.casting_state_condition_uuid is not None:
+            condition = caster.active_conditions_by_uuid.get(self.casting_state_condition_uuid)
+            if isinstance(condition, EyebiteCastingState):
+                return condition
+        fallback = caster.active_conditions.get("Eyebite Casting")
+        return fallback if isinstance(fallback, EyebiteCastingState) else None
 
     def _create_event(self) -> Event:
+        """Create the declaration event for an Eyebite repeat strike."""
         return Event(
             name=self.name,
             source_entity_uuid=self.source_entity_uuid,
@@ -1172,6 +1289,7 @@ class EyebiteStrike(BaseAction):
         )
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
+        """Validate active Eyebite concentration and target range."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
@@ -1187,10 +1305,16 @@ class EyebiteStrike(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="No target specified")
 
-        # Check range (60ft)
         distance = caster.senses.get_feet_distance(target.position)
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+
+        if target.uuid not in caster.senses.entities:
+            return declaration_event.cancel(status_message="Target not visible")
+
+        casting_state = self._get_casting_state(caster)
+        if casting_state and target.uuid in casting_state.successful_save_target_uuids:
+            return declaration_event.cancel(status_message="Target already succeeded against this Eyebite")
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -1198,15 +1322,16 @@ class EyebiteStrike(BaseAction):
         )
 
     def _apply(self, execution_event: Event) -> Optional[Event]:
+        """Resolve the Wisdom save and apply the chosen Eyebite effect."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # WIS save
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom", dc=self.spell_dc,
+            ability_name="wisdom",
+            dc=self.spell_dc,
             parent_event=execution_event.uuid
         )
         _, _, success = target.saving_throw(save_request)
@@ -1217,15 +1342,16 @@ class EyebiteStrike(BaseAction):
         )
 
         if success:
+            casting_state = self._get_casting_state(caster)
+            if casting_state:
+                casting_state.successful_save_target_uuids.add(target.uuid)
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{target.name} resists Eyebite ({self.effect_choice})"
             )
 
-        # Get concentration for linking
         conc = caster.active_conditions.get("Concentrating")
 
-        # Apply chosen effect
         if self.effect_choice == "asleep":
             effect = EyebiteAsleepEffect(
                 source_entity_uuid=caster.uuid,
@@ -1248,7 +1374,7 @@ class EyebiteStrike(BaseAction):
                 conc.add_linked_condition(target.uuid, effect_p.uuid)
             result_text = "Panicked"
 
-        else:  # sickened
+        else:
             effect_s = SickenedCondition(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -1265,30 +1391,36 @@ class EyebiteStrike(BaseAction):
             status_message=f"Eyebite: {target.name} is {result_text}"
         )
 
+    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+        """Apply the action cost for the repeat strike."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
 
 class Eyebite(SpellAction):
-    """Eyebite - 6th level Necromancy (Concentration)
+    """Grant a repeatable gaze action while concentration lasts.
 
-    For the spell's duration, your eyes become pools of inky darkness.
-    One creature within 60 feet must succeed on a WIS save or be affected
-    by one of: Asleep, Panicked, or Sickened. Each turn you can use an
-    action to target another creature.
-
-    Duration: Concentration, up to 1 minute
+    The first target can be resolved immediately when the spell is cast. The
+    caster also receives Eyebite Strike for later turns, and the marker
+    condition links that action to concentration cleanup.
     """
-    name: str = Field(default="Eyebite")
-    description: str = Field(default="WIS save or Asleep/Panicked/Sickened, repeatable each turn")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="necromancy")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
-    projectile_type: Optional[str] = Field(default="ray")
-
-    # Which effect to apply on first use
-    effect_choice: str = Field(default="sickened")
+    name: str = Field(default="Eyebite", description="Spell name.")
+    description: str = Field(
+        default="WIS save or Asleep/Panicked/Sickened, repeatable each turn",
+        description="Rules-facing summary of the gaze options.",
+    )
+    spell_level: int = Field(default=6, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Self action that grants a targeting action.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.SELF),
+        description="Self range for casting the ongoing gaze effect.",
+    )
+    projectile_type: Optional[str] = Field(default="ray", description="VFX projectile metadata.")
+    effect_choice: str = Field(default="sickened", description="Initial and repeat strike effect choice.")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Register the granted action and optionally resolve the first strike."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
@@ -1300,34 +1432,33 @@ class Eyebite(SpellAction):
             status_message=f"{caster.name} casts Eyebite"
         )
 
-        # Register Eyebite Strike action
-        strike = EyebiteStrike(
-            source_entity_uuid=caster.uuid,
-            spell_dc=dc,
-            effect_choice=self.effect_choice,
-            template=True
-        )
-        caster.register_action(strike)
-
-        # Apply Concentrating + marker condition for action cleanup
         concentration = self.ensure_concentration(effect_event)
-        marker = ConcentrationActionMarker(
+        marker = EyebiteCastingState(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            action_name=strike.name
+            action_name="Eyebite Strike",
         )
         caster.add_condition(marker, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, marker.uuid)
 
-        # Fire the first strike immediately (Eyebite targets on cast)
+        strike = EyebiteStrike(
+            source_entity_uuid=caster.uuid,
+            spell_dc=dc,
+            effect_choice=self.effect_choice,
+            casting_state_condition_uuid=marker.uuid,
+            template=True
+        )
+        caster.register_action(strike)
+
         if self.target_entity_uuid and self.target_entity_uuid != caster.uuid:
             first_strike = EyebiteStrike(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=self.target_entity_uuid,
                 spell_dc=dc,
                 effect_choice=self.effect_choice,
+                casting_state_condition_uuid=marker.uuid,
                 template=False,
-                costs=[],  # No additional cost — already paid by casting Eyebite
+                costs=[],
             )
             first_strike.apply()
 
@@ -1338,39 +1469,33 @@ class Eyebite(SpellAction):
 
 
 class FingerOfDeath(SpellAction):
-    """Finger of Death - 7th level Necromancy
+    """Resolve Finger of Death's Constitution save and necrotic damage.
 
-    You send negative energy coursing through a creature that you can see
-    within range, causing it searing pain. The target must make a Constitution
-    saving throw. It takes 7d8 + 30 necrotic damage on a failed save, or half
-    as much damage on a successful one.
-
-    At Higher Levels: +1d8 damage per slot level above 7th (not standard but supported).
+    The engine supports one additional d8 per slot level above 7th.
     """
-    name: str = Field(default="Finger of Death")
-    description: str = Field(default="7d8+30 necrotic, CON save half")
-    spell_level: int = Field(default=7)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    projectile_type: Optional[str] = Field(default="ray")
+    name: str = Field(default="Finger of Death", description="Spell name.")
+    description: str = Field(default="7d8+30 necrotic, CON save half", description="Rules-facing damage summary.")
+    spell_level: int = Field(default=7, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
+    )
+    projectile_type: Optional[str] = Field(default="ray", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
-
-    # Target filtering
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
-
-    # Damage configuration
-    base_damage_dice: int = Field(default=7)  # 7d8 at level 7
-    flat_damage: int = Field(default=30)  # +30 flat damage
+    include_self: bool = Field(default=False, description="Whether action discovery includes the caster.")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    base_damage_dice: int = Field(default=7, description="Base number of d8 damage dice.")
+    flat_damage: int = Field(default=30, description="Flat necrotic damage added after the dice roll.")
 
     def get_damage_dice_count(self) -> int:
-        """7d8 base + 1d8 per level above 7th."""
+        """Return the number of d8 damage dice after upcasting."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight."""
+        """Validate line of sight and range for the target."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -1393,17 +1518,15 @@ class FingerOfDeath(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Execute Finger of Death — CON save or 7d8+30 necrotic."""
+        """Resolve the save and apply necrotic damage."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1412,7 +1535,6 @@ class FingerOfDeath(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1426,7 +1548,6 @@ class FingerOfDeath(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Calculate damage: Nd8 + 30
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1438,10 +1559,8 @@ class FingerOfDeath(SpellAction):
         damage_roll = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         raw_damage = damage_roll.total + self.flat_damage
 
-        # Half damage on successful save
         final_damage = raw_damage // 2 if success else raw_damage
 
-        # 4. Apply damage
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1460,34 +1579,27 @@ class FingerOfDeath(SpellAction):
         )
 
 
-# =============================================================================
-# Inflict Wounds (L1) - Melee spell attack, 3d10 necrotic
-# =============================================================================
-
 class InflictWounds(SpellAction):
-    """Inflict Wounds — 1st-level necromancy.
-
-    Make a melee spell attack against a creature you can reach.
-    On a hit, the target takes 3d10 necrotic damage.
-    At Higher Levels: +1d10 per slot level above 1st.
-    """
-    name: str = Field(default="Inflict Wounds")
-    description: str = Field(default="Melee spell attack, 3d10 necrotic")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    """Make a melee spell attack for necrotic damage."""
+    name: str = Field(default="Inflict Wounds", description="Spell name.")
+    description: str = Field(default="Melee spell attack, 3d10 necrotic", description="Rules-facing damage summary.")
+    spell_level: int = Field(default=1, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5),
+        description="Reach range for the melee spell attack.",
     )
-    valid_target_filter: str = Field(default="enemies")
-    projectile_type: Optional[str] = Field(default="touch")
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _get_damage_dice_count(self) -> int:
-        """3d10 at L1, +1d10 per level above 1st."""
-        return 2 + self.cast_at_level  # 3 at L1, 4 at L2, etc.
+        """Return the number of d10 damage dice after upcasting."""
+        return 2 + self.cast_at_level
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate line of sight and melee reach."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
@@ -1509,23 +1621,21 @@ class InflictWounds(SpellAction):
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Resolve the spell attack and apply necrotic damage on hit."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Cross-propagate
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # Clean up cross-propagation
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -1538,14 +1648,12 @@ class InflictWounds(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # Miss
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # Hit: roll damage
         num_dice = self._get_damage_dice_count()
         is_crit = outcome == AttackOutcome.CRIT
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
@@ -1578,30 +1686,26 @@ class InflictWounds(SpellAction):
         )
 
 
-# =============================================================================
-# Harm (L6) - CON save, 14d6 necrotic, half on save, min 1 HP
-# =============================================================================
-
 class Harm(SpellAction):
-    """Harm — 6th-level necromancy.
-
-    You unleash a virulent disease on a creature you can see. The target
-    must make a CON save. On fail: 14d6 necrotic damage. On save: half.
-    The damage can't reduce the target below 1 HP.
-    """
-    name: str = Field(default="Harm")
-    description: str = Field(default="CON save, 14d6 necrotic, half on save, min 1 HP")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+    """Resolve Harm's Constitution save and minimum-HP damage cap."""
+    name: str = Field(default="Harm", description="Spell name.")
+    description: str = Field(
+        default="CON save, 14d6 necrotic, half on save, min 1 HP",
+        description="Rules-facing damage summary.",
     )
-    valid_target_filter: str = Field(default="enemies")
-    projectile_type: Optional[str] = Field(default="touch")
+    spell_level: int = Field(default=6, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Maximum range for the target.",
+    )
+    valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
+    projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Resolve the save, roll damage, and preserve at least 1 HP."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
@@ -1609,7 +1713,6 @@ class Harm(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # CON save
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1618,7 +1721,6 @@ class Harm(SpellAction):
         )
         _, _, success = target.saving_throw(save_request)
 
-        # Roll damage: 14d6 necrotic
         necrotic_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1635,7 +1737,6 @@ class Harm(SpellAction):
         raw_damage = damage_roll.total
         final_damage = raw_damage // 2 if success else raw_damage
 
-        # Cap: can't reduce below 1 HP
         current_hp = target.get_hp()
         if final_damage >= current_hp:
             final_damage = max(0, current_hp - 1)
@@ -1662,28 +1763,30 @@ class Harm(SpellAction):
             status_message=f"Harm deals {final_damage} necrotic to {target.name}{save_text} (min 1 HP)"
         )
 
-
-# =============================================================================
-# Bestow Curse (Level 3, Concentration, Necromancy)
-# =============================================================================
-
-
-# Reverse map: ability -> list of skills
 _ABILITY_TO_SKILLS: Dict[AbilityName, List[SkillName]] = {}
 for _skill, _ability in SKILL_TO_ABILITY.items():
     _ABILITY_TO_SKILLS.setdefault(_ability, []).append(_skill)
 
 
 class AbilityCurseEffect(BaseCondition):
-    """Bestow Curse option 1: disadvantage on ability checks and saves with one ability."""
-    name: str = "Bestow Curse"
-    description: str = "Cursed — disadvantage on checks and saves with one ability"
-    condition_category: ConditionCategory = ConditionCategory.CONDITION
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE})
-
-    cursed_ability: AbilityName = "strength"
+    """Apply disadvantage to one ability's saving throw and linked skills."""
+    name: str = Field(default="Bestow Curse", description="Condition name.")
+    description: str = Field(
+        default="Cursed - disadvantage on checks and saves with one ability",
+        description="Rules-facing condition summary.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Condition category used by condition filtering.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    cursed_ability: AbilityName = Field(default="strength", description="Ability affected by the curse.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply the ability-save and linked-skill disadvantage modifiers."""
         assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
@@ -1691,7 +1794,6 @@ class AbilityCurseEffect(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Disadvantage on saving throw for the cursed ability
         save = target.saving_throws.get_saving_throw(self.cursed_ability)
         mod_uuid = save.bonus.self_static.add_advantage_modifier(
             AdvantageModifier(
@@ -1703,7 +1805,6 @@ class AbilityCurseEffect(BaseCondition):
         )
         outs.append((save.bonus.uuid, mod_uuid))
 
-        # Disadvantage on all skill checks linked to the cursed ability
         for skill_name in _ABILITY_TO_SKILLS.get(self.cursed_ability, []):
             skill = target.skill_set.get_skill(skill_name)
             mod_uuid = skill.skill_bonus.self_static.add_advantage_modifier(
@@ -1725,15 +1826,24 @@ class AbilityCurseEffect(BaseCondition):
 
 
 class AttackCurseEffect(BaseCondition):
-    """Bestow Curse option 2: disadvantage on attacks against the caster."""
-    name: str = "Bestow Curse"
-    description: str = "Cursed — disadvantage on attacks against the caster"
-    condition_category: ConditionCategory = ConditionCategory.CONDITION
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE})
-
-    caster_uuid: Optional[UUID] = None
+    """Apply disadvantage when the cursed target attacks the caster."""
+    name: str = Field(default="Bestow Curse", description="Condition name.")
+    description: str = Field(
+        default="Cursed - disadvantage on attacks against the caster",
+        description="Rules-facing condition summary.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Condition category used by condition filtering.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster protected by the attack curse.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply the contextual attack disadvantage modifier."""
         assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
@@ -1748,6 +1858,7 @@ class AttackCurseEffect(BaseCondition):
             context: Optional[Dict[str, Any]]
         ) -> Optional[AdvantageModifier]:
             """Disadvantage when attacking the caster."""
+            _ = context
             if target_entity_uuid == caster_uuid:
                 return AdvantageModifier(
                     name="Bestow Curse (attack)",
@@ -1776,19 +1887,27 @@ class AttackCurseEffect(BaseCondition):
 
 
 class InactionCurseEffect(BaseCondition):
-    """Bestow Curse option 3: WIS save at turn start or lose action."""
-    name: str = "Bestow Curse"
-    description: str = "Cursed — WIS save at turn start or waste action"
-    condition_category: ConditionCategory = ConditionCategory.CONDITION
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE})
-
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
-    # Track the constraint so TURN_END handler can remove it
-    _action_constraint_uuid: Optional[UUID] = None
-    _action_value_uuid: Optional[UUID] = None
+    """Apply turn-start action denial with turn-end cleanup."""
+    name: str = Field(default="Bestow Curse", description="Condition name.")
+    description: str = Field(
+        default="Cursed - WIS save at turn start or waste action",
+        description="Rules-facing condition summary.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Condition category used by condition filtering.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the turn-start save DC.")
+    spell_dc: int = Field(default=10, description="Wisdom save DC for the turn-start check.")
+    _action_constraint_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _action_value_uuid: Optional[UUID] = PrivateAttr(default=None)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Register the turn-start and turn-end handlers."""
         assert self.target_entity_uuid is not None
         target = Entity.get(self.target_entity_uuid)
         if not target or not isinstance(target, Entity):
@@ -1796,12 +1915,10 @@ class InactionCurseEffect(BaseCondition):
 
         handler_uuids: List[UUID] = []
 
-        # TURN_START handler: WIS save or lose action
         turn_start_handler = self._create_turn_start_handler()
         target.add_event_handler(turn_start_handler)
         handler_uuids.append(turn_start_handler.uuid)
 
-        # TURN_END handler: remove action constraint if applied
         turn_end_handler = self._create_turn_end_handler()
         target.add_event_handler(turn_end_handler)
         handler_uuids.append(turn_end_handler.uuid)
@@ -1814,6 +1931,7 @@ class InactionCurseEffect(BaseCondition):
         return [], handler_uuids, [], [], effect_event
 
     def _create_turn_start_handler(self) -> EventHandler:
+        """Create the handler that can spend the target's action."""
         assert self.target_entity_uuid is not None
         target_uuid: UUID = self.target_entity_uuid
         caster_uuid = self.caster_uuid
@@ -1829,7 +1947,6 @@ class InactionCurseEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still cursed
             curse = target.active_conditions.get("Bestow Curse")
             if not curse or curse.uuid != curse_condition.uuid:
                 return None
@@ -1838,7 +1955,6 @@ class InactionCurseEffect(BaseCondition):
             if not caster:
                 return None
 
-            # WIS save
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
@@ -1848,7 +1964,6 @@ class InactionCurseEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if not success:
-                # Lose action: add max_constraint=0 on actions
                 constraint_uuid = target.action_economy.actions.self_static.add_max_constraint(
                     constraint=NumericalModifier(
                         name="Bestow Curse (inaction)",
@@ -1875,6 +1990,7 @@ class InactionCurseEffect(BaseCondition):
         )
 
     def _create_turn_end_handler(self) -> EventHandler:
+        """Create the handler that clears one-turn action denial."""
         assert self.target_entity_uuid is not None
         target_uuid: UUID = self.target_entity_uuid
         curse_condition = self
@@ -1884,7 +2000,6 @@ class InactionCurseEffect(BaseCondition):
             if event.source_entity_uuid != target_uuid:
                 return None
 
-            # Remove constraint if it was applied this turn
             if curse_condition._action_constraint_uuid and curse_condition._action_value_uuid:
                 value = ModifiableValue.get(curse_condition._action_value_uuid)
                 if value and isinstance(value, ModifiableValue):
@@ -1907,7 +2022,7 @@ class InactionCurseEffect(BaseCondition):
         )
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up any lingering action constraint on removal."""
+        """Clean up a lingering action constraint when the curse is removed."""
         if self._action_constraint_uuid and self._action_value_uuid:
             value = ModifiableValue.get(self._action_value_uuid)
             if value and isinstance(value, ModifiableValue):
@@ -1918,15 +2033,24 @@ class InactionCurseEffect(BaseCondition):
 
 
 class DamageCurseEffect(BaseCondition):
-    """Bestow Curse option 4: caster's attacks deal +1d8 necrotic to cursed target."""
-    name: str = "Bestow Curse"
-    description: str = "Cursed — caster deals extra 1d8 necrotic on hit"
-    condition_category: ConditionCategory = ConditionCategory.CONDITION
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE})
-
-    caster_uuid: Optional[UUID] = None
+    """Add necrotic damage to the caster's attacks against the cursed target."""
+    name: str = Field(default="Bestow Curse", description="Condition name.")
+    description: str = Field(
+        default="Cursed - caster deals extra 1d8 necrotic on hit",
+        description="Rules-facing condition summary.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Condition category used by condition filtering.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE},
+        description="Condition tags used by cleanup and spell interactions.",
+    )
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster whose attacks gain bonus damage.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Register the attack-damage handler on the caster."""
         if not self.caster_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No caster UUID")
 
@@ -1948,6 +2072,7 @@ class DamageCurseEffect(BaseCondition):
         return [], handler_uuids, [], [], effect_event
 
     def _create_damage_handler(self) -> EventHandler:
+        """Create the handler that adds necrotic damage after a hit."""
         assert self.caster_uuid is not None
         assert self.target_entity_uuid is not None
         caster_uuid: UUID = self.caster_uuid
@@ -1956,18 +2081,15 @@ class DamageCurseEffect(BaseCondition):
 
         def damage_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
             _ = source_entity_uuid
-            # Only caster's attacks against cursed target
             if event.source_entity_uuid != caster_uuid:
                 return None
             if event.target_entity_uuid != cursed_uuid:
                 return None
 
-            # Check attack hit
             attack_outcome = getattr(event, 'attack_outcome', None)
             if not attack_outcome or attack_outcome == AttackOutcome.MISS:
                 return None
 
-            # Verify curse still active
             target = Entity.get(cursed_uuid)
             if not target:
                 return None
@@ -1975,7 +2097,6 @@ class DamageCurseEffect(BaseCondition):
             if not curse or curse.uuid != curse_condition.uuid:
                 return None
 
-            # Roll 1d8 necrotic
             dice = Dice(
                 count=1,
                 value=8,
@@ -2011,28 +2132,31 @@ class DamageCurseEffect(BaseCondition):
 
 
 class BestowCurse(SpellAction):
-    """Bestow Curse - 3rd level Necromancy (Concentration)
+    """Apply one of four curse effects after a failed Wisdom save.
 
-    Touch a creature. WIS save or be cursed. Four curse options:
-    1. Disadvantage on ability checks and saves with one ability
-    2. Disadvantage on attacks against the caster
-    3. WIS save at turn start or lose action
-    4. Caster's attacks deal +1d8 necrotic on hit
+    The supported options are ability disadvantage, attack disadvantage against
+    the caster, turn-start action denial, and bonus necrotic damage from the
+    caster's attacks.
     """
-    name: str = Field(default="Bestow Curse")
-    description: str = Field(default="Touch: WIS save or be cursed (concentration)")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="necromancy")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+    name: str = Field(default="Bestow Curse", description="Spell name.")
+    description: str = Field(
+        default="Touch: WIS save or be cursed (concentration)",
+        description="Rules-facing curse summary.",
     )
-    projectile_type: Optional[str] = Field(default="touch")
-    curse_option: int = Field(default=1, description="Curse type 1-4")
-    cursed_ability: AbilityName = Field(default="strength", description="For option 1: which ability")
+    spell_level: int = Field(default=3, description="Base spell level.")
+    spell_school: str = Field(default="necromancy", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Single creature target.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5),
+        description="Reach range for the touch spell.",
+    )
+    projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
+    curse_option: int = Field(default=1, description="Selected curse option from 1 through 4.")
+    cursed_ability: AbilityName = Field(default="strength", description="Ability affected when option 1 is used.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate target visibility, touch range, and curse option."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
@@ -2054,6 +2178,7 @@ class BestowCurse(SpellAction):
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Resolve the save and attach the selected curse to concentration."""
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
@@ -2061,7 +2186,6 @@ class BestowCurse(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Start concentration first (breaks existing)
         concentration = self.ensure_concentration(execution_event)
 
         effect_event = execution_event.phase_to(
@@ -2071,7 +2195,6 @@ class BestowCurse(SpellAction):
             status_message=f"Requesting WIS save DC {dc}"
         )
 
-        # WIS save
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="wisdom",
@@ -2091,7 +2214,6 @@ class BestowCurse(SpellAction):
                 status_message=f"Bestow Curse — {target.name} saved"
             )
 
-        # Create curse condition based on option
         curse: BaseCondition
         if self.curse_option == 1:
             curse = AbilityCurseEffect(

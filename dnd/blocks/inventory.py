@@ -6,16 +6,22 @@ from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.core.gridmap import get_map
 
 
 class Inventory(BaseBlock):
     """Container for items held by an entity.
 
-    Supports weight capacity, slot limits, and item transfer.
+    Inventory is a low-level storage block. It can enforce optional weight and
+    slot limits, merge compatible stacks, surface usable item actions, and move
+    items to another inventory.
     """
 
-    name: str = Field(default="Inventory")
-    items: Dict[UUID, BaseItem] = Field(default_factory=dict)
+    name: str = Field(default="Inventory", description="Display name for this inventory.")
+    items: Dict[UUID, BaseItem] = Field(
+        default_factory=dict,
+        description="Stored item stacks keyed by item UUID.",
+    )
     weight_capacity: Optional[float] = Field(default=None, description="Max carry weight in lbs (None = unlimited)")
     max_slots: Optional[int] = Field(default=None, description="Max number of item stacks (None = unlimited)")
 
@@ -29,16 +35,72 @@ class Inventory(BaseBlock):
         """Number of item stacks in inventory."""
         return len(self.items)
 
+    def _find_compatible_stack(self, item: BaseItem) -> Optional[BaseItem]:
+        """Return the first compatible stack with room for more items."""
+        if item.stack_id is None:
+            return None
+        for existing in self.items.values():
+            if (
+                existing.uuid != item.uuid
+                and existing.stack_id == item.stack_id
+                and existing.stack_count < existing.max_stack
+            ):
+                return existing
+        return None
+
+    def _stack_remainder_count(self, item: BaseItem) -> int:
+        """Return count that would remain after merging into one stack."""
+        existing = self._find_compatible_stack(item)
+        if existing is None:
+            return item.stack_count
+        return max(0, item.stack_count - (existing.max_stack - existing.stack_count))
+
+    @staticmethod
+    def _clear_consumed_item_location(item: BaseItem) -> None:
+        """Clear location fields from an item stack consumed by merging.
+
+        Args:
+            item: Consumed item stack whose count has reached zero.
+        """
+        item.owner_uuid = None
+        item.stored_in_uuid = None
+        item.tile_uuid = None
+        item.is_equipped = False
+        item.equipped_slot = None
+
+    def _detach_item_from_previous_location(self, item: BaseItem) -> None:
+        """Remove an item from its previous floor or container location.
+
+        Args:
+            item: Item being accepted into this inventory.
+        """
+        if item.stored_in_uuid is not None and item.stored_in_uuid != self.uuid:
+            previous_container = BaseBlock.get(item.stored_in_uuid)
+            if previous_container is not None:
+                previous_container.remove_contained_item(item.uuid)
+        gridmap = get_map()
+        if gridmap.get_object_position(item.uuid) is not None:
+            gridmap.remove_object(item.uuid)
+        item.tile_uuid = None
+
+    def _stamp_item_location(self, item: BaseItem) -> None:
+        """Stamp an item stack as stored in this inventory.
+
+        Args:
+            item: Item stack that survived insertion into this inventory.
+        """
+        item.owner_uuid = self.source_entity_uuid
+        item.stored_in_uuid = self.uuid
+
     def can_add(self, item: BaseItem) -> bool:
         """Check if item can be added (slot and weight limits).
 
-        Stack-aware: if item can merge into an existing stack, bypasses slot limit.
+        A compatible existing stack bypasses the slot check because no new item
+        entry is required when the incoming stack fully merges.
         """
-        if item.stack_id is not None:
-            for existing in self.items.values():
-                if existing.stack_id == item.stack_id and existing.stack_count < existing.max_stack:
-                    return True  # Can merge without needing a free slot
-        if self.max_slots is not None and self.item_count >= self.max_slots:
+        remainder_count = self._stack_remainder_count(item)
+        needs_new_stack = remainder_count > 0
+        if self.max_slots is not None and needs_new_stack and self.item_count >= self.max_slots:
             return False
         if self.weight_capacity is not None:
             if self.total_weight + item.weight * item.stack_count > self.weight_capacity:
@@ -46,28 +108,28 @@ class Inventory(BaseBlock):
         return True
 
     def add_item(self, item: BaseItem) -> bool:
-        """Add item to inventory. Tries stack merge before insert.
+        """Add an item stack atomically.
 
         Returns False if capacity exceeded. If fully merged, the consumed item
         is unregistered from BaseBlock._registry.
         """
-        # Try to merge into existing stack
-        if item.stack_id is not None:
-            for existing in self.items.values():
-                if existing.stack_id == item.stack_id and existing.stack_count < existing.max_stack:
-                    space = existing.max_stack - existing.stack_count
-                    transfer = min(space, item.stack_count)
-                    existing.stack_count += transfer
-                    item.stack_count -= transfer
-                    if item.stack_count == 0:
-                        # Fully merged — unregister consumed item
-                        BaseBlock._registry.pop(item.uuid, None)
-                        return True
-                    break  # Partial merge — fall through to insert remainder
-        # No merge or partial: insert as new entry
         if not self.can_add(item):
             return False
+
+        self._detach_item_from_previous_location(item)
+        existing = self._find_compatible_stack(item)
+        if existing is not None:
+            space = existing.max_stack - existing.stack_count
+            transfer = min(space, item.stack_count)
+            existing.stack_count += transfer
+            item.stack_count -= transfer
+            if item.stack_count == 0:
+                self._clear_consumed_item_location(item)
+                BaseBlock._registry.pop(item.uuid, None)
+                return True
+
         self.items[item.uuid] = item
+        self._stamp_item_location(item)
         return True
 
     def remove_item(self, item_uuid: UUID) -> Optional[BaseItem]:
@@ -91,7 +153,7 @@ class Inventory(BaseBlock):
         self.items.pop(item_uuid, None)
 
     def get_all_use_actions(self, owner_uuid: UUID) -> list:
-        """Aggregate use actions from all UsableItems in inventory (Step d)."""
+        """Aggregate use actions from all usable items in this inventory."""
         actions = []
         for item in self.items.values():
             if isinstance(item, UsableItem):
@@ -99,16 +161,28 @@ class Inventory(BaseBlock):
         return actions
 
     def transfer_to(self, item_uuid: UUID, target: 'Inventory') -> bool:
-        """Transfer item to another inventory. Returns False on failure (rollback).
+        """Transfer an item stack to another inventory.
 
-        Updates owner_uuid and stored_in_uuid to reflect the new container.
+        If the item fully merges into a target stack, the incoming object is
+        consumed and its location fields remain clear.
+
+        Args:
+            item_uuid: UUID of the item stack in this inventory.
+            target: Inventory receiving the item stack.
+
+        Returns:
+            True when the transfer or merge succeeds; otherwise False after
+            rolling the source inventory back.
         """
         item = self.remove_item(item_uuid)
         if item is None:
             return False
         if not target.add_item(item):
-            self.add_item(item)  # rollback
+            self.add_item(item)
             return False
-        item.owner_uuid = target.source_entity_uuid
-        item.stored_in_uuid = target.uuid
+        if target.has_item(item.uuid):
+            item.owner_uuid = target.source_entity_uuid
+            item.stored_in_uuid = target.uuid
+        else:
+            self._clear_consumed_item_location(item)
         return True

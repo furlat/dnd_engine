@@ -1,41 +1,14 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, ClassVar, Dict, Any
+from typing import Any, ClassVar, Dict, List, Optional
 from uuid import UUID, uuid4
 
 
 class BaseObject(BaseModel):
-    """
-    Base class for all objects in the system.
+    """Base identity model for UUID-addressable engine objects.
 
-    This class serves as the foundation for various types of objects that can be used in the game system. It includes basic information about the object, such as its name, source,
-    in the game system. It includes basic information about the modifier, such as its name, source,
-    and target.
-
-    Attributes:
-        name (Optional[str]): The name of the object. Can be None if not specified.
-        uuid (UUID): Unique identifier for the object. Automatically generated if not provided.
-        source_entity_uuid (UUID): UUID of the entity that is the source of this object.
-        source_entity_name (Optional[str]): Name of the entity that is the source of this object. Can be None.
-        target_entity_uuid (UUID): UUID of the entity that this object targets. Required.
-        target_entity_name (Optional[str]): Name of the entity that this object targets. Can be None.
-        use_register (bool): Whether to register this object in the class registry. Defaults to True.
-
-    Class Attributes:
-        _registry (ClassVar[Dict[UUID, 'BaseObject']]): A class-level registry to store all instances.
-
-    Methods:
-        get(cls, uuid: UUID) -> Optional['BaseObject']:
-            Retrieve a BaseObject instance from the registry by its UUID.
-        register(cls, object: 'BaseObject') -> None:
-            Register a BaseObject instance in the class registry.
-        unregister(cls, uuid: UUID) -> None:
-            Remove a BaseObject instance from the class registry.
-        add_to_register(self) -> None:
-            Add this object to the class registry if it wasn't registered before.
-        remove_from_register(self) -> None:
-            Remove this object from the class registry.
-        remove_objects(cls, uuids: List[UUID], permanent_delete: bool = False) -> None:
-            Remove multiple objects from the registry with optional permanent deletion.
+    Subclasses use a class-level registry to make live objects recoverable by
+    UUID. Registry participation is opt-out with `use_register=False`, which is
+    useful for transient metadata objects and dry-run declarations.
     """
 
     _registry: ClassVar[Dict[UUID, 'BaseObject']] = {}
@@ -50,7 +23,7 @@ class BaseObject(BaseModel):
         description="Unique identifier for the object. Automatically generated if not provided."
     )
     source_entity_uuid: UUID = Field(
-       ...,
+        ...,
         description="UUID of the entity that is the source of this object."
     )
     source_entity_name: Optional[str] = Field(
@@ -59,13 +32,13 @@ class BaseObject(BaseModel):
     )
     target_entity_uuid: Optional[UUID] = Field(
         default=None,
-        description="UUID of the entity that this object targets. Required."
+        description="UUID of the entity this object targets, if any."
     )
     target_entity_name: Optional[str] = Field(
         default=None,
         description="Name of the entity that this object targets. Can be None."
     )
-    context: Optional[Dict[str,Any]] = Field(
+    context: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Additional context information for this object."
     )
@@ -75,56 +48,54 @@ class BaseObject(BaseModel):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Register the object by UUID when registry participation is enabled."""
         if self.use_register:
             self.__class__._registry[self.uuid] = self
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['BaseObject']:
-        """
-        Retrieve a BaseObject instance from the registry by its UUID.
+        """Retrieve an object from this class registry by UUID.
 
         Args:
-            uuid (UUID): The UUID of the modifier to retrieve.
+            uuid: UUID of the object to retrieve.
 
         Returns:
-            Optional[BaseObject]: The BaseObject instance if found, None otherwise.
+            The registered object when found, otherwise `None`.
 
         Raises:
-            ValueError: If the retrieved object is not a BaseModifier instance.
+            ValueError: If the UUID resolves to an object of another type.
         """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
+        obj = cls._registry.get(uuid)
+        if obj is None:
             return None
-        if not isinstance(modifier, cls):
-            raise ValueError(f"Object with UUID {uuid} is not a {cls.__name__}, but {type(modifier).__name__}")
-        return modifier
+        if not isinstance(obj, cls):
+            raise ValueError(f"Object with UUID {uuid} is not a {cls.__name__}, but {type(obj).__name__}")
+        return obj
 
     @classmethod
-    def register(cls, object: 'BaseObject') -> None:
-        """
-        Register a BaseModifier instance in the class registry.
+    def register(cls, obj: 'BaseObject') -> None:
+        """Register an object in this class registry.
 
-        Args:               
-            object (BaseObject): The object instance to register.
+        Args:
+            obj: Object instance to register.
         """
-        cls._registry[object.uuid] = object
+        cls._registry[obj.uuid] = obj
 
     @classmethod
     def unregister(cls, uuid: UUID) -> None:
-        """
-        Remove a BaseObject instance from the class registry.
+        """Remove an object from this class registry.
 
         Args:
-            uuid (UUID): The UUID of the object to unregister.
+            uuid: UUID of the object to unregister.
         """
         cls._registry.pop(uuid, None)
 
     def add_to_register(self) -> None:
-        """
-        Add this object to the class registry if it wasn't registered before.
-        
+        """Add this object to its class registry.
+
         Raises:
-            ValueError: If the object is already registered or use_register is True.
+            ValueError: If the object is already configured to use the registry
+                or an object with the same UUID is already registered.
         """
         if self.use_register:
             raise ValueError("Object is already set to use registry")
@@ -134,22 +105,20 @@ class BaseObject(BaseModel):
         self.__class__._registry[self.uuid] = self
 
     def remove_from_register(self) -> None:
-        """
-        Remove this object from the class registry and set use_register to False.
-        """
+        """Remove this object from the class registry and disable registration."""
         if self.uuid in self.__class__._registry:
             self.__class__._registry.pop(self.uuid)
         self.use_register = False
 
     @classmethod
     def remove_objects(cls, uuids: List[UUID], permanent_delete: bool = False) -> None:
-        """
-        Remove multiple objects from the registry with optional permanent deletion.
-        If not permanently deleted, the objects will have their use_register set to False.
+        """Remove multiple objects from this class registry.
 
         Args:
-            uuids (List[UUID]): List of UUIDs of objects to remove.
-            permanent_delete (bool): Whether to permanently delete the objects. Defaults to False.
+            uuids: UUIDs of objects to remove.
+            permanent_delete: If true, remove registry entries and delete the
+                local references held by this method. If false, call
+                `remove_from_register()` on each object.
         """
         for uuid in uuids:
             obj = cls._registry.get(uuid)
@@ -160,69 +129,63 @@ class BaseObject(BaseModel):
                 else:
                     obj.remove_from_register()
 
-    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
-        """
-        Set the source entity for this value and its components.
+    def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> None:
+        """Set the source entity identity for this object.
+
+        Args:
+            source_entity_uuid: UUID of the source entity.
+            source_entity_name: Optional display name of the source entity.
         """
         self.source_entity_uuid = source_entity_uuid
         self.source_entity_name = source_entity_name
-    
+
     def validate_source_id(self, source_id: UUID) -> None:
-        """
-        Validate that the given source_id matches the source_entity_uuid of this value.
+        """Validate that a UUID matches this object's source entity UUID.
 
         Args:
-            source_id (UUID): The source ID to validate.
+            source_id: Source UUID to validate.
 
         Raises:
-            ValueError: If the source IDs do not match.
+            ValueError: If the UUIDs do not match.
         """
         if self.source_entity_uuid != source_id:
             raise ValueError("Source entity UUIDs do not match")
-    
+
     def validate_target_id(self, target_id: UUID) -> None:
-        """
-        Validate that the given target_id matches the target_entity_uuid of this value.
+        """Validate that a UUID matches this object's target entity UUID.
 
         Args:
-            target_id (UUID): The target ID to validate.
+            target_id: Target UUID to validate.
 
         Raises:
-            ValueError: If the target IDs do not match.
+            ValueError: If the UUIDs do not match.
         """
         if self.target_entity_uuid != target_id:
             raise ValueError("Target entity UUIDs do not match")
-    
-    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None:
-        """
-        Set the target entity for this contextual value.
+
+    def set_target_entity(self, target_entity_uuid: UUID, target_entity_name: Optional[str] = None) -> None:
+        """Set the target entity identity for this object.
 
         Args:
-            target_entity_uuid (UUID): The UUID of the target entity.
-            target_entity_name (Optional[str]): The name of the target entity, if available.
+            target_entity_uuid: UUID of the target entity.
+            target_entity_name: Optional display name of the target entity.
         """
         self.target_entity_uuid = target_entity_uuid
         self.target_entity_name = target_entity_name
-    
+
     def clear_target_entity(self) -> None:
-        """
-        Clear the target entity information for this contextual value.
-        """
+        """Clear target entity identity from this object."""
         self.target_entity_uuid = None
         self.target_entity_name = None
-    
-    def set_context(self, context: Dict[str,Any]) -> None:
-        """
-        Set the context for this contextual value.
+
+    def set_context(self, context: Dict[str, Any]) -> None:
+        """Set runtime context for this object.
 
         Args:
-            context (Dict[str,Any]): The context dictionary to set.
+            context: Context dictionary to attach.
         """
         self.context = context
-    
-    def clear_context(self) -> None:
-        """
-        Clear the context for this contextual value.
-        """
-        self.context = None
 
+    def clear_context(self) -> None:
+        """Clear runtime context from this object."""
+        self.context = None

@@ -1,4 +1,4 @@
-from typing import  Optional,  List, Literal,Tuple
+from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field,field_validator
 from dnd.core.values import ModifiableValue
@@ -7,83 +7,76 @@ from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus,
 from random import randint
 from functools import cached_property
 
-
-
 from dnd.core.base_block import BaseBlock
 
 
-
 class HitDiceConfig(BaseModel):
-    """
-    Configuration for the HitDice block.
-    """
-    hit_dice_value: Literal[4,6,8,10,12] = 6
-    hit_dice_value_modifiers: List[Tuple[str, int]] = Field(default=[], description="Any additional static modifiers applied to the hit dice value")
-    hit_dice_count: int = 1
-    hit_dice_count_modifiers: List[Tuple[str, int]] = Field(default=[], description="Any additional static modifiers applied to the hit dice count")
-    mode: Literal["average", "maximums","roll"] = "average"
-    ignore_first_level: bool = Field(default=False)
+    """Configuration used to materialize a hit-dice block."""
+
+    hit_dice_value: Literal[4,6,8,10,12] = Field(
+        default=6,
+        description="Die size used by each hit die, such as 8 for d8.",
+    )
+    hit_dice_value_modifiers: List[Tuple[str, int]] = Field(
+        default=[],
+        description="Static modifiers applied to the hit-dice die size.",
+    )
+    hit_dice_count: int = Field(default=1, description="Number of hit dice in this block.")
+    hit_dice_count_modifiers: List[Tuple[str, int]] = Field(
+        default=[],
+        description="Static modifiers applied to the number of hit dice.",
+    )
+    mode: Literal["average", "maximums","roll"] = Field(
+        default="average",
+        description="Policy used to convert hit dice into maximum hit points.",
+    )
+    ignore_first_level: bool = Field(
+        default=False,
+        description="Whether first-level maximum-hit-die treatment is skipped.",
+    )
+    spent_hit_dice: int = Field(default=0, ge=0, description="Hit dice already spent for short-rest healing.")
+
+
+class HitDiceHealingResult(BaseModel):
+    """Result of spending one hit die for short-rest healing."""
+
+    hit_dice_index: int = Field(description="Index of the hit-dice block spent.")
+    die_value: int = Field(description="Die size rolled, such as 8 for d8.")
+    roll: int = Field(description="Natural die result.")
+    constitution_modifier: int = Field(description="Constitution modifier added to the roll.")
+    total_healing: int = Field(description="Healing requested before HP cap and blockers.")
+    actual_healing: int = Field(default=0, description="HP restored after cap and blockers.")
 
 class HitDice(BaseBlock):
-    """
-    Represents the hit dice of an entity in the game system.
-
-    This class extends BaseBlock to represent the hit dice used for determining hit points and healing.
+    """Hit-dice block used for maximum HP and short-rest healing.
 
     Attributes:
-        name (str): The name of this hit dice block. Defaults to "HitDice".
-        hit_dice_value (ModifiableValue): The value of each hit die (e.g., d6, d8, d10, etc.).
-        hit_dice_count (ModifiableValue): The number of hit dice available.
-        mode (Literal["average", "maximums", "roll"]): The mode for calculating hit points.
-        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
-        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
-        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
-        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
-        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
-        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
-
-    Inherits all attributes and methods from BaseBlock.
-
-    Additional Methods:
-        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
-            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
-        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
-            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
-
-    Class Methods:
-        create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None, 
-               target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
-               hit_dice_value: Literal[4,6,8,10,12] = 6, hit_dice_count: int = 1, 
-               mode: Literal["average", "maximums","roll"] = "average") -> 'HitDice':
-            Create a new HitDice instance with the given parameters.
-
-    Computed Fields:
-        hit_points (int): The calculated hit points based on the hit dice and mode.
-        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
-        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
-        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
-        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
-
-    Validators:
-        check_hit_dice_value: Ensures that the hit dice value is one of the allowed values.
-        check_hit_dice_count: Ensures that the hit dice count is greater than 0.
+        name: Block name used in health block indexes.
+        hit_dice_value: Modifiable die size, such as d8 or d10.
+        hit_dice_count: Modifiable count of dice in this block.
+        mode: Policy used to convert hit dice into maximum hit points.
+        ignore_first_level: Whether first-level maximum-hit-die treatment is skipped.
+        spent_hit_dice: Number of dice already spent on short-rest healing.
     """
 
-    name: str = Field(default="HitDice")
-    hit_dice_value: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=6, value_name="Hit Dice Value"))
-    hit_dice_count: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=1, value_name="Hit Dice Count"))
-    mode: Literal["average", "maximums","roll"] = Field(default="average")
-    ignore_first_level: bool = Field(default=False)
+    name: str = Field(default="HitDice", description="Block name used in health block indexes.")
+    hit_dice_value: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=6, value_name="Hit Dice Value"),
+        description="Modifiable die size used by each hit die.",
+    )
+    hit_dice_count: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=1, value_name="Hit Dice Count"),
+        description="Modifiable number of hit dice in this block.",
+    )
+    mode: Literal["average", "maximums","roll"] = Field(
+        default="average",
+        description="Policy used to convert hit dice into maximum hit points.",
+    )
+    ignore_first_level: bool = Field(
+        default=False,
+        description="Whether first-level maximum-hit-die treatment is skipped.",
+    )
+    spent_hit_dice: int = Field(default=0, ge=0, description="Number of dice from this block spent on short-rest healing.")
 
     @computed_field
     @cached_property
@@ -107,7 +100,50 @@ class HitDice(BaseBlock):
             return sum(randint(1, self.hit_dice_value.score) for _ in range(self.hit_dice_count.score))
         else:
             raise ValueError(f"Invalid mode: {self.mode}")
-        
+
+    @computed_field
+    @property
+    def available_hit_dice(self) -> int:
+        """Return unspent hit dice in this block."""
+        return max(0, self.hit_dice_count.normalized_score - self.spent_hit_dice)
+
+    def spend(self, count: int = 1) -> None:
+        """Spend hit dice from this block.
+
+        Args:
+            count: Number of hit dice to spend.
+
+        Raises:
+            ValueError: If count is invalid or exceeds available dice.
+        """
+        if count < 1:
+            raise ValueError("count must be at least 1")
+        if count > self.available_hit_dice:
+            raise ValueError(f"Not enough hit dice available to spend {count}")
+        self.spent_hit_dice += count
+
+    def recover(self, count: int = 1) -> int:
+        """Recover spent hit dice.
+
+        Args:
+            count: Maximum number of spent hit dice to recover.
+
+        Returns:
+            Number of hit dice actually recovered.
+
+        Raises:
+            ValueError: If count is invalid.
+        """
+        if count < 1:
+            raise ValueError("count must be at least 1")
+        recovered = min(count, self.spent_hit_dice)
+        self.spent_hit_dice -= recovered
+        return recovered
+
+    def roll_spent_die(self) -> int:
+        """Roll this block's hit die for short-rest healing."""
+        return randint(1, self.hit_dice_value.normalized_score)
+
     @field_validator("hit_dice_value")
     def check_hit_dice_value(cls, v: ModifiableValue) -> ModifiableValue:
         """
@@ -144,29 +180,26 @@ class HitDice(BaseBlock):
         if v.score < 1:
             raise ValueError(f"Hit dice count must be greater than 0 instead of {v.score}")
         return v
-    
+
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None,
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 config: Optional[HitDiceConfig] = None) -> 'HitDice':
-        """
-        Create a new HitDice instance with the given parameters.
+        """Create a hit-dice block from optional configuration.
 
         Args:
-            source_entity_uuid (UUID): The UUID of the source entity.
-            name (str, optional): The name of the hit dice block. Defaults to "HitDice".
-            source_entity_name (Optional[str], optional): The name of the source entity. Defaults to None.
-            target_entity_uuid (Optional[UUID], optional): The UUID of the target entity. Defaults to None.
-            target_entity_name (Optional[str], optional): The name of the target entity. Defaults to None.
-            hit_dice_value (Literal[4,6,8,10,12], optional): The value of each hit die. Defaults to 6.
-            hit_dice_count (int, optional): The number of hit dice. Defaults to 1.
-            mode (Literal["average", "maximums","roll"], optional): The mode for calculating hit points. Defaults to "average".
+            source_entity_uuid: Entity UUID that owns this hit-dice block.
+            name: Block name used in health indexes.
+            source_entity_name: Optional source entity display name.
+            target_entity_uuid: Optional target entity UUID.
+            target_entity_name: Optional target entity display name.
+            config: Optional hit-dice configuration to materialize.
 
         Returns:
-            HitDice: A new instance of the HitDice class.
+            HitDice block with modifiable die size and count values.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             modifiable_hit_dice_value = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_value, value_name="Hit Dice Value")
@@ -175,111 +208,50 @@ class HitDice(BaseBlock):
             modifiable_hit_dice_count = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_count, value_name="Hit Dice Count")
             for modifier in config.hit_dice_count_modifiers:
                 modifiable_hit_dice_count.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
-                       hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=config.mode, ignore_first_level=config.ignore_first_level)
-
-# damage_types = Literal["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
-# damage_types_list = ["piercing", "bludgeoning", "slashing", "fire", "cold", "poison", "psychic", "radiant", "necrotic", "thunder", "acid", "lightning", "force", "thunder", "radiant", "necrotic", "psychic", "force"]
-
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
+                       hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=config.mode, ignore_first_level=config.ignore_first_level, spent_hit_dice=config.spent_hit_dice)
 class HealthConfig(BaseModel):
-    """
-    Configuration for the Health block.
-    """
-    hit_dices: List[HitDiceConfig] = Field(default_factory=list, description="Hit dice configuration")
-    max_hit_points_bonus: int = Field(default=0, description="Max Hit Points Bonus, e.g. something like a default Aid spell, not really used in dnd but kept for consistency")
-    max_hit_points_bonus_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the max hit points bonus,  e.g. Aid spell but here it would not have a duration")
-    temporary_hit_points: int = Field(default=0, description="Temporary Hit Points, e.g. something like a default False Life spell")
-    temporary_hit_points_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the temporary hit points, e.g. False Life spell but here it would not have a duration")
-    damage_reduction: int = Field(default=0, description="Damage Reduction, e.g. flat Damage Reduction")
-    damage_reduction_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the damage reduction")
-    vulnerabilities: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is vulnerable to")
-    resistances: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is resistant to")
-    immunities: List[DamageType] = Field(default_factory=list, description="Types of damage the entity is immune to")
+    """Configuration used to materialize a health block."""
+
+    hit_dices: List[HitDiceConfig] = Field(default_factory=list, description="Hit-dice blocks used for HP and short rests.")
+    max_hit_points_bonus: int = Field(default=0, description="Static bonus added to maximum hit points.")
+    max_hit_points_bonus_modifiers: List[Tuple[str, int]] = Field(
+        default_factory=list,
+        description="Named static modifiers applied to the maximum-hit-point bonus.",
+    )
+    temporary_hit_points: int = Field(default=0, description="Initial temporary hit points.")
+    temporary_hit_points_modifiers: List[Tuple[str, int]] = Field(
+        default_factory=list,
+        description="Named static modifiers applied to temporary hit points.",
+    )
+    damage_reduction: int = Field(default=0, description="Flat damage reduction applied after type multipliers.")
+    damage_reduction_modifiers: List[Tuple[str, int]] = Field(
+        default_factory=list,
+        description="Named static modifiers applied to flat damage reduction.",
+    )
+    vulnerabilities: List[DamageType] = Field(default_factory=list, description="Damage types that double incoming damage.")
+    resistances: List[DamageType] = Field(default_factory=list, description="Damage types that halve incoming damage.")
+    immunities: List[DamageType] = Field(default_factory=list, description="Damage types that reduce incoming damage to zero.")
 
 class Health(BaseBlock):
-    """
-    Represents the health status of an entity in the game system.
-
-    This class extends BaseBlock to represent various aspects of an entity's health, including
-    hit points, temporary hit points, and damage resistances.
+    """Entity health state and damage/healing primitives.
 
     Attributes:
-        name (str): The name of this health block. Defaults to "Health".
-        hit_dices (List[HitDice]): The hit dice used for determining hit points and healing.
-        max_hit_points_bonus (ModifiableValue): Any additional bonus to maximum hit points.
-        temporary_hit_points (ModifiableValue): Temporary hit points that can absorb damage.
-        damage_taken (int): The amount of damage the entity has taken.
-        damage_reduction (ModifiableValue): Any damage reduction applied to incoming damage.
-        vulnerabilities (List[damage_types]): Types of damage the entity is vulnerable to.
-        resistances (List[damage_types]): Types of damage the entity is resistant to.
-        immunities (List[damage_types]): Types of damage the entity is immune to.
-        uuid (UUID): Unique identifier for the block. (Inherited from BaseBlock)
-        source_entity_uuid (UUID): UUID of the entity that is the source of this block. (Inherited from BaseBlock)
-        source_entity_name (Optional[str]): Name of the entity that is the source of this block. (Inherited from BaseBlock)
-        target_entity_uuid (Optional[UUID]): UUID of the entity that this block targets, if any. (Inherited from BaseBlock)
-        target_entity_name (Optional[str]): Name of the entity that this block targets, if any. (Inherited from BaseBlock)
-        context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
-
-    Inherits all attributes and methods from BaseBlock.
-
-    Additional Methods:
-        add_damage(damage: int) -> None:
-            Add damage to the entity's current damage taken.
-        remove_damage(damage: int) -> None:
-            Remove damage from the entity's current damage taken.
-        damage_multiplier(damage_type: damage_types) -> float:
-            Calculate the damage multiplier based on vulnerabilities and resistances.
-        take_damage(damage: int, damage_type: damage_types, source_entity_uuid: UUID) -> None:
-            Apply damage to the entity, considering resistances and temporary hit points.
-        heal(heal: int) -> None:
-            Heal the entity by removing damage.
-        add_temporary_hit_points(temporary_hit_points: int, source_entity_uuid: UUID) -> None:
-            Add temporary hit points to the entity.
-        remove_temporary_hit_points(temporary_hit_points: int, source_entity_uuid: UUID) -> None:
-            Remove temporary hit points from the entity.
-        get_max_hit_dices_points(constitution_modifier: int) -> int:
-            Calculate the maximum hit points based on hit dice and constitution modifier.
-        get_total_hit_points(constitution_modifier: int) -> int:
-            Calculate the total current hit points, including temporary hit points.
-        add_vulnerability(vulnerability: damage_types) -> None:
-            Add a damage type to the entity's vulnerabilities.
-        remove_vulnerability(vulnerability: damage_types) -> None:
-            Remove a damage type from the entity's vulnerabilities.
-        add_resistance(resistance: damage_types) -> None:
-            Add a damage type to the entity's resistances.
-        remove_resistance(resistance: damage_types) -> None:
-            Remove a damage type from the entity's resistances.
-        add_immunity(immunity: damage_types) -> None:
-            Add a damage type to the entity's immunities.
-        remove_immunity(immunity: damage_types) -> None:
-            Remove a damage type from the entity's immunities.
-        get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
-            Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
-        get_blocks() -> List['BaseBlock']: (Inherited from BaseBlock)
-            Searches through attributes and returns all BaseBlock instances that are attributes of this class.
-        set_target_entity(target_entity_uuid: UUID, target_entity_name: Optional[str]=None) -> None: (Inherited from BaseBlock)
-            Set the target entity for all the values contained in this Block instance.
-        clear_target_entity() -> None: (Inherited from BaseBlock)
-            Clear the target entity for all the values contained in this Block instance.
-        set_context(context: Dict[str, Any]) -> None: (Inherited from BaseBlock)
-            Set the context for all the values contained in this Block instance.
-        clear_context() -> None: (Inherited from BaseBlock)
-            Clear the context for all the values contained in this Block instance.
-        clear() -> None: (Inherited from BaseBlock)
-            Clear the source, target, and context for all the values contained in this Block instance.
-
-    Computed Fields:
-        hit_dices_total_hit_points (int): The total hit points from all hit dice.
-        total_hit_dices_number (int): The total number of hit dice.
-        values_dict_uuid_name (Dict[UUID, str]): A dictionary mapping value UUIDs to their names. (Inherited from BaseBlock)
-        values_dict_name_uuid (Dict[str, UUID]): A dictionary mapping value names to their UUIDs. (Inherited from BaseBlock)
-        blocks_dict_uuid_name (Dict[UUID, str]): A dictionary mapping block UUIDs to their names. (Inherited from BaseBlock)
-        blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
+        name: Block name used in entity composition indexes.
+        hit_dices: Hit-dice blocks used for maximum HP and short rests.
+        max_hit_points_bonus: Modifiable bonus added to maximum HP.
+        temporary_hit_points: Modifiable temporary HP pool.
+        damage_taken: Normal HP damage currently marked on the entity.
+        damage_reduction: Flat reduction and type multiplier channel.
+        healing_blocked: Whether healing effects currently restore no HP.
     """
 
-    name: str = Field(default="Health")
-    hit_dices: List[HitDice] = Field(default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")])
+    name: str = Field(default="Health", description="Block name used in entity composition indexes.")
+    hit_dices: List[HitDice] = Field(
+        default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")],
+        description="Hit-dice blocks used for maximum HP and short rests.",
+    )
     max_hit_points_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Max Hit Points Bonus"), description="Max Hit Points Bonus, e.g. Aid spell")
     temporary_hit_points: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Temporary Hit Points"), description="Temporary Hit Points, e.g. False Life spell")
     damage_taken: int = Field(default=0,ge=0, description="The amount of damage taken")
@@ -288,7 +260,7 @@ class Health(BaseBlock):
 
     def get_resistance(self,damage_type: DamageType) -> ResistanceStatus:
         return self.damage_reduction.resistance[damage_type]
-    
+
     @computed_field
     @property
     def hit_dices_total_hit_points(self) -> int:
@@ -309,7 +281,92 @@ class Health(BaseBlock):
             int: The sum of hit dice counts from all hit dice.
         """
         return sum(hit_dice.hit_dice_count.score for hit_dice in self.hit_dices)
-    
+
+    @computed_field
+    @property
+    def spent_hit_dices_number(self) -> int:
+        """Return the total number of spent hit dice."""
+        return sum(hit_dice.spent_hit_dice for hit_dice in self.hit_dices)
+
+    @computed_field
+    @property
+    def available_hit_dices_number(self) -> int:
+        """Return the total number of available hit dice."""
+        return sum(hit_dice.available_hit_dice for hit_dice in self.hit_dices)
+
+    def get_hit_dice(self, hit_dice_index: int = 0) -> HitDice:
+        """Return a hit-dice block by index.
+
+        Args:
+            hit_dice_index: Index of the hit-dice block.
+
+        Returns:
+            Hit-dice block at the requested index.
+
+        Raises:
+            ValueError: If the index is out of range.
+        """
+        if hit_dice_index < 0 or hit_dice_index >= len(self.hit_dices):
+            raise ValueError(f"Hit dice index {hit_dice_index} out of range")
+        return self.hit_dices[hit_dice_index]
+
+    def spend_hit_die(
+        self,
+        constitution_modifier: int,
+        hit_dice_index: int = 0,
+    ) -> HitDiceHealingResult:
+        """Spend and roll one hit die for short-rest healing.
+
+        Args:
+            constitution_modifier: Constitution modifier added to the roll.
+            hit_dice_index: Index of the hit-dice block to spend.
+
+        Returns:
+            Hit-dice healing roll result before HP caps and blockers.
+        """
+        hit_die = self.get_hit_dice(hit_dice_index)
+        hit_die.spend()
+        roll = hit_die.roll_spent_die()
+        return HitDiceHealingResult(
+            hit_dice_index=hit_dice_index,
+            die_value=hit_die.hit_dice_value.normalized_score,
+            roll=roll,
+            constitution_modifier=constitution_modifier,
+            total_healing=max(0, roll + constitution_modifier),
+        )
+
+    def recover_hit_dice(self, count: int) -> int:
+        """Recover spent hit dice in block order.
+
+        Args:
+            count: Maximum number of spent hit dice to recover.
+
+        Returns:
+            Number of hit dice actually recovered.
+
+        Raises:
+            ValueError: If count is negative.
+        """
+        if count < 0:
+            raise ValueError("count must be non-negative")
+        remaining = count
+        recovered = 0
+        for hit_die in self.hit_dices:
+            if remaining <= 0:
+                break
+            if hit_die.spent_hit_dice > 0:
+                recovered_now = hit_die.recover(remaining)
+                recovered += recovered_now
+                remaining -= recovered_now
+        return recovered
+
+    def recover_long_rest_hit_dice(self) -> int:
+        """Recover the SRD long-rest amount of spent hit dice."""
+        total_hit_dice = self.total_hit_dices_number
+        if total_hit_dice <= 0:
+            return 0
+        return self.recover_hit_dice(max(1, total_hit_dice // 2))
+
     def add_damage(self, damage: int) -> None:
         """
         Add damage to the entity's current damage taken.
@@ -327,7 +384,7 @@ class Health(BaseBlock):
             damage (int): The amount of damage to remove.
         """
         self.damage_taken = max(0, self.damage_taken - damage)
-    
+
     def damage_multiplier(self, damage_type: DamageType) -> float:
         """
         Calculate the damage multiplier based on vulnerabilities and resistances.
@@ -347,7 +404,53 @@ class Health(BaseBlock):
             return 2
         else:
             return 1
-    
+
+    def _apply_damage_after_multiplier(self, damage_after_multiplier: int, source_entity_uuid: UUID) -> int:
+        """Apply already-multiplied damage to temporary HP and HP.
+
+        Args:
+            damage_after_multiplier: Damage after type multipliers and flat
+                damage reduction.
+            source_entity_uuid: UUID of the entity dealing damage.
+
+        Returns:
+            Actual hit point damage after temporary hit points absorb damage.
+        """
+        current_temporary_hit_points = self.temporary_hit_points.score
+        if current_temporary_hit_points < 0:
+            raise ValueError(f"Temporary Hit Points must be greater than 0 instead of {current_temporary_hit_points}")
+        residual_damage = damage_after_multiplier - current_temporary_hit_points
+        damage_to_temporaty_hp = current_temporary_hit_points if residual_damage > 0 else damage_after_multiplier
+        self.remove_temporary_hit_points(damage_to_temporaty_hp, source_entity_uuid)
+        if residual_damage > 0:
+            self.add_damage(residual_damage)
+            return residual_damage
+        return 0
+
+    def take_damage_components(self, components: List[Tuple[int, DamageType]], source_entity_uuid: UUID) -> int:
+        """Apply mixed typed damage components as one damage event.
+
+        Args:
+            components: Damage amounts paired with their damage types.
+            source_entity_uuid: UUID of the entity dealing damage.
+
+        Returns:
+            Actual hit point damage after per-type multipliers, flat damage
+            reduction, and temporary hit points.
+
+        Raises:
+            ValueError: If a damage amount is negative or a type is invalid.
+        """
+        total_after_multiplier = 0
+        for damage, damage_type in components:
+            if damage < 0:
+                raise ValueError(f"Damage must be greater than 0 instead of {damage}")
+            if not isinstance(damage_type, DamageType):
+                raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
+            total_after_multiplier += max(0, int(damage * self.damage_multiplier(damage_type)))
+        damage_after_multiplier = max(0, total_after_multiplier - self.damage_reduction.score)
+        return self._apply_damage_after_multiplier(damage_after_multiplier, source_entity_uuid)
+
     def take_damage(self, damage: int, damage_type: DamageType, source_entity_uuid: UUID) -> int:
         """
         Apply damage to the entity, considering resistances and temporary hit points.
@@ -364,20 +467,10 @@ class Health(BaseBlock):
             raise ValueError(f"Damage must be greater than 0 instead of {damage}")
         if not isinstance(damage_type, DamageType):
             raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
-        damage_after_absorption = damage 
+        damage_after_absorption = damage
         damage_after_multiplier = max(0,int(damage_after_absorption * self.damage_multiplier(damage_type)) - self.damage_reduction.score)
-        current_temporary_hit_points = self.temporary_hit_points.score
-        if current_temporary_hit_points < 0:
-            raise ValueError(f"Temporary Hit Points must be greater than 0 instead of {current_temporary_hit_points}")
-        residual_damage = damage_after_multiplier - current_temporary_hit_points
-        damage_to_temporaty_hp = current_temporary_hit_points if residual_damage > 0 else damage_after_multiplier
-        self.remove_temporary_hit_points(damage_to_temporaty_hp, source_entity_uuid)
-        if residual_damage > 0:
-            self.add_damage(residual_damage)
-            return residual_damage
-        else:
-            return 0
-    
+        return self._apply_damage_after_multiplier(damage_after_multiplier, source_entity_uuid)
+
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).
 
@@ -393,22 +486,40 @@ class Health(BaseBlock):
         Args:
             heal (int): The amount of healing to apply.
         """
-        # Check for healing block (e.g., Chill Touch)
         if self.is_healing_blocked():
             return
 
         if self.temporary_hit_points.score > 0:
-            #check if we have temporary hit points that absorbed the damage taken, 
-            # sicne we can not heal them we can only heal the portion that went through them
-
             damage_taken_after_temporary_hp = self.damage_taken - self.temporary_hit_points.score
             damage_absorbed_by_temporary_hp = min(self.damage_taken,self.temporary_hit_points.score)
             if damage_taken_after_temporary_hp > 0:
-                #if some damage went through the temporary hit points we can heal them but keep the absorbed portion of damage
                 self.damage_taken = max(0, damage_taken_after_temporary_hp - heal) + damage_absorbed_by_temporary_hp
         else:
-            #if we have no temporary hit points we can heal the damage taken
             self.damage_taken = max(0, self.damage_taken - heal)
+
+    def clear_temporary_hit_points(self) -> int:
+        """Remove all current temporary hit points.
+
+        Returns:
+            Temporary hit points removed.
+        """
+        removed = self.temporary_hit_points.normalized_score
+        self.temporary_hit_points.remove_all_modifiers()
+        return removed
+
+    def on_long_rest(self) -> int:
+        """Apply health recovery from a completed long rest.
+
+        Returns:
+            Normal hit point damage healed by the rest.
+        """
+        self.clear_temporary_hit_points()
+        self.recover_long_rest_hit_dice()
+        if self.is_healing_blocked():
+            return 0
+        healed = self.damage_taken
+        self.damage_taken = 0
+        return healed
 
     def add_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
         """
@@ -420,10 +531,10 @@ class Health(BaseBlock):
         """
         modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
         if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
-           
+
             self.temporary_hit_points.remove_all_modifiers()
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
-    
+
     def remove_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
         """
         Remove temporary hit points from the entity.
@@ -436,7 +547,7 @@ class Health(BaseBlock):
         if modifier.value + self.temporary_hit_points.score <= 0:
             self.temporary_hit_points.remove_all_modifiers()
         else:
-            
+
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
 
     def get_max_hit_dices_points(self, constitution_modifier: int) -> int:
@@ -450,7 +561,7 @@ class Health(BaseBlock):
             int: The maximum hit points.
         """
         return self.hit_dices_total_hit_points + constitution_modifier * self.total_hit_dices_number
-    
+
     def get_total_hit_points(self, constitution_modifier: int) -> int:
         """
         Calculate the total current hit points, including temporary hit points.
@@ -464,14 +575,14 @@ class Health(BaseBlock):
         return self.get_max_hit_dices_points(constitution_modifier) + self.max_hit_points_bonus.score + self.temporary_hit_points.score - self.damage_taken
 
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: str = "Health", source_entity_name: Optional[str] = None, 
-                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None, 
+    def create(cls, source_entity_uuid: UUID, name: str = "Health", source_entity_name: Optional[str] = None,
+                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 config: Optional[HealthConfig] = None) -> 'Health':
         """
         Create a new Health instance with the given parameters.
         """
         if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
             hit_dices = [HitDice.create(source_entity_uuid=source_entity_uuid, config=hit_dice) for hit_dice in config.hit_dices]
@@ -490,6 +601,6 @@ class Health(BaseBlock):
                 damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.RESISTANCE, damage_type=resistance, name=f"Resistance to {resistance}"))
             for immunity in config.immunities:
                 damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, 
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, 
+            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
+                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction)

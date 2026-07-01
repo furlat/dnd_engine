@@ -5,18 +5,55 @@ from uuid import UUID
 from dnd.blocks.equipment import BodyArmor, Boots, Helmet, Shield, ArmorType
 from dnd.core.events import BodyPart, EquipmentSlot
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
+from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualNumericalModifier, NumericalModifier
 from dnd.entity import Entity
+
+
+def heavy_armor_strength_penalty(
+    source_entity_uuid: UUID,
+    target_entity_uuid: Optional[UUID] = None,
+    context: Optional[dict] = None,
+) -> Optional[NumericalModifier]:
+    """Return the heavy-armor movement penalty when Strength is too low.
+
+    Args:
+        source_entity_uuid: Entity wearing the armor.
+        target_entity_uuid: Unused contextual target UUID.
+        context: Unused contextual data.
+
+    Returns:
+        A `NumericalModifier` for -10 feet of speed when the wearer does not
+        meet the armor Strength requirement; otherwise `None`.
+    """
+    _ = target_entity_uuid, context
+    entity = Entity.get(source_entity_uuid)
+    if entity is None:
+        return None
+    body_armor = entity.equipment.body_armor
+    if body_armor is None or body_armor.strength_requirement is None:
+        return None
+    strength_score = entity.ability_scores.strength.ability_score.score
+    if strength_score >= body_armor.strength_requirement:
+        return None
+    return NumericalModifier(
+        name=f"{body_armor.name} Strength Requirement",
+        value=-10,
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=source_entity_uuid,
+    )
 
 
 class StealthDisadvantageBodyArmor(BodyArmor):
     """BodyArmor subclass that applies stealth disadvantage on equip.
 
-    Uses _on_equip/_on_unequip hooks with proper Entity access.
-    All armors with stealth_disadvantage=True should use this class.
+    Armors with `stealth_disadvantage=True` use this hook-bearing subclass so
+    equip and unequip can add and remove the stealth and heavy-armor movement
+    modifiers through the owning entity.
     """
     _stealth_mod_uuid: Optional[UUID] = None
     _stealth_mod_value_uuid: Optional[UUID] = None
+    _movement_mod_uuid: Optional[UUID] = None
+    _movement_mod_value_uuid: Optional[UUID] = None
 
     def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         entity = Entity.get(entity_uuid)
@@ -29,6 +66,15 @@ class StealthDisadvantageBodyArmor(BodyArmor):
                 )
             )
             self._stealth_mod_value_uuid = entity.skill_set.stealth.skill_bonus.uuid
+            if self.strength_requirement is not None:
+                modifier = ContextualNumericalModifier(
+                    name=f"{self.name} Strength Requirement",
+                    source_entity_uuid=entity_uuid,
+                    target_entity_uuid=entity_uuid,
+                    callable=heavy_armor_strength_penalty,
+                )
+                self._movement_mod_uuid = entity.action_economy.movement.self_contextual.add_value_modifier(modifier)
+                self._movement_mod_value_uuid = entity.action_economy.movement.uuid
 
     def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         if self._stealth_mod_uuid:
@@ -37,14 +83,23 @@ class StealthDisadvantageBodyArmor(BodyArmor):
                 entity.skill_set.stealth.skill_bonus.self_static.remove_modifier(self._stealth_mod_uuid)
             self._stealth_mod_uuid = None
             self._stealth_mod_value_uuid = None
+        if self._movement_mod_uuid:
+            entity = Entity.get(entity_uuid)
+            if entity and isinstance(entity, Entity):
+                entity.action_economy.movement.self_contextual.remove_value_modifier(self._movement_mod_uuid)
+            self._movement_mod_uuid = None
+            self._movement_mod_value_uuid = None
 
-
-# =============================================================================
-# LIGHT ARMOR
-# =============================================================================
 
 def create_padded_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Padded - AC 11 + DEX, stealth disadvantage"""
+    """Create padded armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Light armor with AC 11 plus Dexterity and Stealth disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Padded Armor",
@@ -58,7 +113,14 @@ def create_padded_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
 
 
 def create_leather_armor(source_id: UUID) -> BodyArmor:
-    """Leather - AC 11 + DEX"""
+    """Create leather armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Light armor with AC 11 plus Dexterity.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Leather Armor",
@@ -71,7 +133,14 @@ def create_leather_armor(source_id: UUID) -> BodyArmor:
 
 
 def create_studded_leather(source_id: UUID) -> BodyArmor:
-    """Studded leather - AC 12 + DEX"""
+    """Create studded leather armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Light armor with AC 12 plus Dexterity.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Studded Leather",
@@ -83,12 +152,15 @@ def create_studded_leather(source_id: UUID) -> BodyArmor:
     )
 
 
-# =============================================================================
-# MEDIUM ARMOR
-# =============================================================================
-
 def create_hide_armor(source_id: UUID) -> BodyArmor:
-    """Hide - AC 12 + DEX (max 2)"""
+    """Create hide armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Medium armor with AC 12 plus Dexterity, capped at +2.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Hide Armor",
@@ -101,7 +173,14 @@ def create_hide_armor(source_id: UUID) -> BodyArmor:
 
 
 def create_chain_shirt(source_id: UUID) -> BodyArmor:
-    """Chain shirt - AC 13 + DEX (max 2)"""
+    """Create a chain shirt.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Medium armor with AC 13 plus Dexterity, capped at +2.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Chain Shirt",
@@ -114,7 +193,15 @@ def create_chain_shirt(source_id: UUID) -> BodyArmor:
 
 
 def create_scale_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Scale mail - AC 14 + DEX (max 2), stealth disadvantage"""
+    """Create scale mail.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Medium armor with AC 14 plus Dexterity capped at +2, and Stealth
+        disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Scale Mail",
@@ -128,7 +215,14 @@ def create_scale_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
 
 
 def create_breastplate(source_id: UUID) -> BodyArmor:
-    """Breastplate - AC 14 + DEX (max 2)"""
+    """Create a breastplate.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Medium armor with AC 14 plus Dexterity, capped at +2.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Breastplate",
@@ -141,7 +235,15 @@ def create_breastplate(source_id: UUID) -> BodyArmor:
 
 
 def create_half_plate(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Half plate - AC 15 + DEX (max 2), stealth disadvantage"""
+    """Create half plate.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Medium armor with AC 15 plus Dexterity capped at +2, and Stealth
+        disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Half Plate",
@@ -154,12 +256,15 @@ def create_half_plate(source_id: UUID) -> StealthDisadvantageBodyArmor:
     )
 
 
-# =============================================================================
-# HEAVY ARMOR
-# =============================================================================
-
 def create_ring_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Ring mail - AC 14, stealth disadvantage"""
+    """Create ring mail.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Heavy armor with AC 14 and Stealth disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Ring Mail",
@@ -173,7 +278,15 @@ def create_ring_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
 
 
 def create_chain_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Chain mail - AC 16, STR 13 required, stealth disadvantage"""
+    """Create chain mail.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Heavy armor with AC 16, Strength 13 requirement, and Stealth
+        disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Chain Mail",
@@ -188,7 +301,15 @@ def create_chain_mail(source_id: UUID) -> StealthDisadvantageBodyArmor:
 
 
 def create_splint_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Splint - AC 17, STR 15 required, stealth disadvantage"""
+    """Create splint armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Heavy armor with AC 17, Strength 15 requirement, and Stealth
+        disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Splint Armor",
@@ -203,7 +324,15 @@ def create_splint_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
 
 
 def create_plate_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
-    """Plate - AC 18, STR 15 required, stealth disadvantage"""
+    """Create plate armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Heavy armor with AC 18, Strength 15 requirement, and Stealth
+        disadvantage.
+    """
     return StealthDisadvantageBodyArmor(
         source_entity_uuid=source_id,
         name="Plate Armor",
@@ -217,12 +346,15 @@ def create_plate_armor(source_id: UUID) -> StealthDisadvantageBodyArmor:
     )
 
 
-# =============================================================================
-# CLOTH (No Armor)
-# =============================================================================
-
 def create_cloth_armor(source_id: UUID) -> BodyArmor:
-    """Cloth - No AC bonus, counts as unarmored for class features."""
+    """Create cloth armor.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+
+    Returns:
+        Cloth body armor that counts as unarmored for class features.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Cloth Armor",
@@ -235,7 +367,15 @@ def create_cloth_armor(source_id: UUID) -> BodyArmor:
 
 
 def create_robes(source_id: UUID, visual_variant_id: Optional[str] = None) -> BodyArmor:
-    """Robes - cloth body outfit, counts as unarmored for class features."""
+    """Create robes.
+
+    Args:
+        source_id: Entity UUID that owns the armor item.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Cloth body outfit that counts as unarmored for class features.
+    """
     return BodyArmor(
         source_entity_uuid=source_id,
         name="Robes",
@@ -250,7 +390,15 @@ def create_robes(source_id: UUID, visual_variant_id: Optional[str] = None) -> Bo
 
 
 def create_cloth_shoes(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
-    """Cloth shoes - visual footwear with no armor bonus."""
+    """Create cloth shoes.
+
+    Args:
+        source_id: Entity UUID that owns the boots.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Cloth footwear with no armor bonus.
+    """
     return Boots(
         source_entity_uuid=source_id,
         name="Cloth Shoes",
@@ -265,7 +413,15 @@ def create_cloth_shoes(source_id: UUID, visual_variant_id: Optional[str] = None)
 
 
 def create_leather_boots(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
-    """Leather boots - visual footwear with no armor bonus."""
+    """Create leather boots.
+
+    Args:
+        source_id: Entity UUID that owns the boots.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Leather footwear with no armor bonus.
+    """
     return Boots(
         source_entity_uuid=source_id,
         name="Leather Boots",
@@ -280,7 +436,15 @@ def create_leather_boots(source_id: UUID, visual_variant_id: Optional[str] = Non
 
 
 def create_iron_helmet(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
-    """Iron helmet - visual headgear with no AC bonus."""
+    """Create an iron helmet.
+
+    Args:
+        source_id: Entity UUID that owns the helmet.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Heavy headgear with no armor bonus.
+    """
     return Helmet(
         source_entity_uuid=source_id,
         name="Iron Helmet",
@@ -295,7 +459,15 @@ def create_iron_helmet(source_id: UUID, visual_variant_id: Optional[str] = None)
 
 
 def create_wizard_hat(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
-    """Wizard's hat - visual headgear with no AC bonus."""
+    """Create a wizard hat.
+
+    Args:
+        source_id: Entity UUID that owns the hat.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Cloth headgear with no armor bonus.
+    """
     return Helmet(
         source_entity_uuid=source_id,
         name="Wizard's Hat",
@@ -310,7 +482,15 @@ def create_wizard_hat(source_id: UUID, visual_variant_id: Optional[str] = None) 
 
 
 def create_crown(source_id: UUID, visual_variant_id: Optional[str] = None) -> Helmet:
-    """Crown - decorative headgear with no AC bonus."""
+    """Create a crown.
+
+    Args:
+        source_id: Entity UUID that owns the crown.
+        visual_variant_id: Optional visual variant identifier.
+
+    Returns:
+        Decorative headgear with no armor bonus.
+    """
     return Helmet(
         source_entity_uuid=source_id,
         name="Crown",
@@ -324,12 +504,15 @@ def create_crown(source_id: UUID, visual_variant_id: Optional[str] = None) -> He
     )
 
 
-# =============================================================================
-# SHIELDS
-# =============================================================================
-
 def create_shield(source_id: UUID) -> Shield:
-    """Shield - +2 AC"""
+    """Create a standard shield.
+
+    Args:
+        source_id: Entity UUID that owns the shield.
+
+    Returns:
+        Shield with +2 AC.
+    """
     return Shield(
         source_entity_uuid=source_id,
         name="Shield",
@@ -339,7 +522,14 @@ def create_shield(source_id: UUID) -> Shield:
 
 
 def create_wooden_shield(source_id: UUID) -> Shield:
-    """Wooden Shield - +2 AC (same as standard shield, distinct name)"""
+    """Create a wooden shield.
+
+    Args:
+        source_id: Entity UUID that owns the shield.
+
+    Returns:
+        Shield with +2 AC and a distinct display name.
+    """
     return Shield(
         source_entity_uuid=source_id,
         name="Wooden Shield",

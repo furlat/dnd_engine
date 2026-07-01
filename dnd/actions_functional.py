@@ -1,104 +1,112 @@
-"""
-Functional API for action setup and execution.
+"""Functional API for action setup, discovery, and execution.
 
-This module provides functions to setup, query, and execute actions for entities.
-It serves as the main API for action management, keeping Entity free from
-circular import dependencies with the actions module.
-
-Usage:
-    from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_action
-
-    # After creating an entity
-    entity = Entity.create(...)
-    setup_standard_actions(entity)
-
-    # Query available actions
-    available = get_available_actions(entity)
-
-    # Execute an action
-    event = execute_action(entity, "Attack_MELEE_MAIN", target)
+The functional layer keeps action construction and execution routes out of
+`Entity` while preserving a direct API for callers that do not want to work
+with registered templates manually.
 """
 
-from typing import Any, Callable, Dict, Optional, List, Tuple
-from uuid import UUID
+from typing import Any, Callable, Dict, Optional, List, Tuple, cast
+from uuid import UUID, uuid4
 
 from dnd.core.base_actions import (
-    BaseAction, TargetType, AvailableTarget, AvailableActionInfo, AvailableActionsResult
+    BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
+    AvailableActionsResult, SPELL_SLOT_TEMPLATE_SEPARATOR,
 )
 from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
-from dnd.actions import Move, Dash, Dodge, Disengage, DropConcentration, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
 from dnd.spells import ALL_SPELLS
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 
+STANDARD_ENTITY_HANDLER_NAMES = {
+    "HasAttacked Tracker",
+    "HasTakenDamage Tracker",
+    "Death Condition Handler",
+    "Prone Auto-Stand",
+}
+
+
+def _standard_weapon_handler_names(entity_uuid: UUID) -> set[str]:
+    """Return direct weapon-template handler names for an entity."""
+    return {
+        f"WeaponEquipHandler_{entity_uuid}",
+        f"WeaponUnequipHandler_{entity_uuid}",
+    }
+
+
+def _remove_standard_action_handlers(entity: Entity) -> None:
+    """Remove handlers installed by prior standard-action setup runs.
+
+    Args:
+        entity: Entity whose standard handlers should be replaced.
+    """
+    for handler_name in STANDARD_ENTITY_HANDLER_NAMES:
+        for handler in list(entity.get_event_handlers_by_name(handler_name)):
+            entity.remove_event_handler(handler)
+
+    weapon_handler_names = _standard_weapon_handler_names(entity.uuid)
+    source_handlers = list(EventQueue._event_handlers_by_source_entity_uuid.get(entity.uuid, []))
+    for handler in source_handlers:
+        if handler.name in weapon_handler_names:
+            if handler.uuid in entity.event_handlers:
+                entity.remove_event_handler(handler)
+            else:
+                EventQueue.remove_event_handler(handler)
+
 
 def setup_standard_actions(entity: Entity) -> None:
     """Register standard D&D 5e actions for an entity.
 
-    This sets up the base actions available to all entities:
-    - Move (position targeting)
-    - Dash, Dodge, Disengage, StandUp (self targeting)
-    - Attack templates for equipped weapons (entity targeting)
-
-    Also registers event handlers to auto-update attack templates
-    when weapons are equipped/unequipped.
+    Registers movement, self-targeting combat options, object interactions,
+    weapon attack templates, and the handlers that keep those templates and
+    combat-state markers current. Prone auto-stand is registered here; voluntary
+    Stand Up and Drop Prone are not standard templates in this engine.
 
     Args:
-        entity: The entity to set up actions for
+        entity: Entity that receives standard action templates and handlers.
     """
-    # Clear existing templates
     entity.registered_actions = []
+    _remove_standard_action_handlers(entity)
 
-    # Register movement and self-targeting actions
     entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Jump(source_entity_uuid=entity.uuid, template=True))  # LOS-based movement
+    entity.register_action(Swim(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(Jump(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Hide(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(DropConcentration(source_entity_uuid=entity.uuid, template=True))
-    # Note: StandUp is no longer registered - Prone auto-stands at turn start (BG3 style)
+    entity.register_action(ShakeAwake(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Shove(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(PickUp(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(AttackObject(source_entity_uuid=entity.uuid, template=True))
-    # Note: DropProne is not registered - Prone is applied by spells/effects, not as a voluntary action
 
-    # Register attack templates for currently equipped weapons
     update_weapon_templates(entity)
 
-    # Register event handlers for weapon equip/unequip to auto-update templates
     _setup_weapon_event_handlers(entity)
 
-    # Register global combat state handlers (HasAttacked, HasTakenDamage)
-    # These track combat state for features like Extra Attack and Rage Maintenance
     entity.add_event_handler(create_has_attacked_handler(entity.uuid))
     entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
-
-    # Register death handler (applies Dead condition when DEATH event fires)
     entity.add_event_handler(create_death_handler(entity.uuid))
-
-    # Register Prone auto-stand handler (BG3 style - always present, fires at turn start)
     entity.add_event_handler(_create_prone_auto_stand_handler(entity.uuid))
 
 
 def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
-    """Create handler to auto-stand at turn start (BG3 style).
+    """Create the turn-start handler that removes Prone by spending movement.
 
-    This handler is always registered (via setup_standard_actions) and checks
-    at turn start if the entity has Prone. If so, it consumes half movement
-    and removes the Prone condition.
+    The handler listens at TURN_START/EFFECT so zone effects that apply Prone
+    earlier in the same turn can be observed before auto-stand runs.
 
     Args:
-        entity_uuid: The entity this handler is for
+        entity_uuid: Entity that owns the handler.
 
     Returns:
-        EventHandler that processes TURN_START at EFFECT phase
+        Event handler that processes the entity's own turn start.
     """
     def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-        # Only process this entity's turn start
         if event.source_entity_uuid != entity_uuid:
             return None
 
@@ -106,11 +114,9 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
         if not entity:
             return None
 
-        # Check if prone
         if "Prone" not in entity.active_conditions:
             return None
 
-        # Deduct half movement and remove Prone
         base_movement = entity.action_economy.get_base_value("movement")
         half_movement = base_movement // 2
         entity.action_economy.consume("movement", half_movement)
@@ -122,7 +128,7 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
         source_entity_uuid=entity_uuid,
         trigger_conditions=[Trigger(
             event_type=EventType.TURN_START,
-            event_phase=EventPhase.EFFECT,  # After zone effects (Grease at EXECUTION) apply prone
+            event_phase=EventPhase.EFFECT,
             event_source_entity_uuid=entity_uuid
         )],
         event_processor=processor
@@ -133,12 +139,12 @@ def _setup_weapon_event_handlers(entity: Entity) -> None:
     """Set up event handlers to auto-update attack templates on weapon changes.
 
     Args:
-        entity: The entity to set up handlers for
+        entity: Entity whose equipped weapons drive attack templates.
     """
     entity_uuid = entity.uuid
 
     def _on_weapon_equip(event: Event, _source: UUID) -> Optional[Event]:
-        """Handler for weapon equip events - updates attack templates."""
+        """Refresh the attack template for an equipped weapon slot."""
         if event.source_entity_uuid == entity_uuid:
             if isinstance(event, WeaponEquipEvent) and isinstance(event.slot, WeaponSlot):
                 ent = Entity.get(entity_uuid)
@@ -147,7 +153,7 @@ def _setup_weapon_event_handlers(entity: Entity) -> None:
         return event
 
     def _on_weapon_unequip(event: Event, _source: UUID) -> Optional[Event]:
-        """Handler for weapon unequip events - updates attack templates."""
+        """Refresh the attack template for an unequipped weapon slot."""
         if event.source_entity_uuid == entity_uuid:
             if isinstance(event, WeaponUnequipEvent) and isinstance(event.slot, WeaponSlot):
                 ent = Entity.get(entity_uuid)
@@ -174,17 +180,13 @@ def _setup_weapon_event_handlers(entity: Entity) -> None:
 def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
     """Update the attack template for a single weapon slot.
 
-    Called when a weapon is equipped or unequipped.
-
     Args:
-        entity: The entity whose template to update
-        slot: The weapon slot to update
+        entity: Entity whose template should be refreshed.
+        slot: Weapon slot to inspect.
     """
-    # Remove existing template for this slot if any
     template_name = f"Attack_{slot.value}"
     entity.unregister_action(template_name)
 
-    # Register new template if weapon equipped
     weapon = entity.equipment._get_weapon_by_slot(slot)
     if weapon is not None and isinstance(weapon, Weapon):
         entity.register_action(Attack(
@@ -199,7 +201,7 @@ def update_weapon_templates(entity: Entity) -> None:
     """Update attack templates for all weapon slots.
 
     Args:
-        entity: The entity whose templates to update
+        entity: Entity whose weapon attack templates should be refreshed.
     """
     for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
                  WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
@@ -212,52 +214,120 @@ def get_available_actions(entity: Entity) -> AvailableActionsResult:
     Wrapper around Entity.get_available_actions() for functional API consistency.
 
     Args:
-        entity: The entity to query actions for
+        entity: Entity to query.
 
     Returns:
-        AvailableActionsResult with grouped actions and valid targets
+        Grouped actions and valid targets.
     """
     return entity.get_available_actions()
+
+
+def _parse_spell_variant_template_name(template_name: str) -> Tuple[str, Optional[int]]:
+    """Split a generated spell-variant execution name.
+
+    Args:
+        template_name: Action name from discovery.
+
+    Returns:
+        Base template name and optional cast level.
+    """
+    if SPELL_SLOT_TEMPLATE_SEPARATOR not in template_name:
+        return template_name, None
+    base_name, _, slot_level_text = template_name.rpartition(SPELL_SLOT_TEMPLATE_SEPARATOR)
+    if not base_name:
+        return template_name, None
+    try:
+        slot_level = int(slot_level_text)
+    except ValueError:
+        return template_name, None
+    if slot_level < 1 or slot_level > 9:
+        return template_name, None
+    return base_name, slot_level
+
+
+def _resolve_executable_template(entity: Entity, template_name: str) -> BaseAction:
+    """Resolve a registered template or generated spell variant.
+
+    Args:
+        entity: Acting entity.
+        template_name: Action name from discovery.
+
+    Returns:
+        Registered template or generated non-template spell variant.
+
+    Raises:
+        ValueError: If no matching template can be resolved.
+    """
+    base_name, cast_at_level = _parse_spell_variant_template_name(template_name)
+    template = entity.get_action_template(base_name)
+    if template is None:
+        raise ValueError(f"No template named {template_name}")
+
+    if cast_at_level is None:
+        return template
+
+    create_variant = getattr(template, "_create_variant", None)
+    if not template.is_spell or not callable(create_variant):
+        raise ValueError(f"Action {template_name} is not a spell variant")
+    variant_factory = cast(Callable[..., BaseAction], create_variant)
+    return variant_factory(cast_at_level=cast_at_level)
+
+
+def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
+    """Bind target fields onto a template or generated variant.
+
+    Args:
+        action: Registered template or non-template generated variant.
+        **overrides: Target fields to set on the executable copy.
+
+    Returns:
+        Executable action instance.
+    """
+    if action.template:
+        return action.instantiate(**overrides)
+
+    update_dict: dict = {
+        "uuid": uuid4(),
+        "template": False,
+        "use_register": False,
+    }
+    update_dict.update(overrides)
+    return action.model_copy(deep=True, update=update_dict)
 
 
 def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
                     prefer_safe: bool = True) -> Optional[Event]:
     """Execute an action from template + target.
 
-    This is the main execution API that creates an instance and applies it.
+    Creates a one-shot instance from the selected template, binds the target
+    fields required by that template's effective target type, and applies it.
 
     Args:
-        entity: The entity executing the action
-        template_name: Name of the action template to execute
-        target: The target for the action
-        prefer_safe: For Move actions, use safe path avoiding hazards when available
+        entity: Acting entity.
+        template_name: Registered template name.
+        target: Selected target from discovery.
+        prefer_safe: Whether movement actions prefer a discovered safe path.
 
     Returns:
-        The resulting event, or None if the action failed
+        Resulting event, or `None` if execution failed.
 
     Raises:
-        ValueError: If the template is not found or target is invalid
+        ValueError: If the template is not found or the target is invalid.
     """
-    template = entity.get_action_template(template_name)
-    if template is None:
-        raise ValueError(f"No template named {template_name}")
+    template = _resolve_executable_template(entity, template_name)
 
-    # Create instance with appropriate target
-    # prefer_safe is only relevant for position-based movement actions (Move)
-    # but passing it generically is harmless — instantiate ignores unknown fields
-    # via model_copy(update=...). We only pass it for POSITION types.
     eff_tt = template.effective_target_type
     if eff_tt == TargetType.ENTITY:
         if target.target_uuid is None:
             raise ValueError("ENTITY action requires target_uuid")
-        instance = template.instantiate(target_entity_uuid=target.target_uuid)
+        instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
 
     elif eff_tt == TargetType.MULTI_ENTITY:
         if target.target_uuid is None:
             raise ValueError("MULTI_ENTITY action requires target_uuid")
-        # Extra targets come from target.extra_target_uuids if provided
         extra = target.extra_target_uuids or []
-        instance = template.instantiate(
+        instance = _bind_executable_action(
+            template,
             target_entity_uuid=target.target_uuid,
             extra_target_entity_uuids=extra
         )
@@ -265,20 +335,20 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
     elif eff_tt == TargetType.POSITION_AOE:
         if target.position is None:
             raise ValueError("POSITION_AOE action requires position")
-        instance = template.instantiate(end_position=target.position)
+        instance = _bind_executable_action(template, end_position=target.position)
 
     elif eff_tt in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")
-        instance = template.instantiate(end_position=target.position, prefer_safe=prefer_safe)
+        instance = _bind_executable_action(template, end_position=target.position, prefer_safe=prefer_safe)
 
     elif eff_tt == TargetType.OBJECT:
         if target.target_uuid is None:
             raise ValueError("OBJECT action requires target_uuid")
-        instance = template.instantiate(target_entity_uuid=target.target_uuid)
+        instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
 
-    else:  # SELF
-        instance = template.instantiate()
+    else:
+        instance = _bind_executable_action(template)
 
     return instance.apply()
 
@@ -293,25 +363,26 @@ def execute_by_index(
 ) -> Optional[Event]:
     """Execute action by template name and target index.
 
-    This enables "attack 0", "move 3" style commands.
+    Enables controller commands such as "attack 0" and "move 3". Item-use
+    templates are routed to `execute_use_action()`.
 
     Args:
-        entity: The entity executing the action
-        template_name: Name of the action template to execute
-        target_index: Index of the target in the valid_targets list
-        extra_target_uuids: Additional target UUIDs for multi-target spells (Magic Missile)
-        available: Pre-computed available actions (avoids recomputation if caller already has them)
+        entity: Acting entity.
+        template_name: Template name from discovery.
+        target_index: Index inside the selected action's `valid_targets`.
+        extra_target_uuids: Additional UUID strings for multi-entity actions.
+        available: Optional precomputed discovery result.
+        prefer_safe: Whether movement actions prefer a discovered safe path.
 
     Returns:
-        The resulting event, or None if the action failed
+        Resulting event, or `None` if execution failed.
 
     Raises:
-        ValueError: If action or target index not found
+        ValueError: If the action or target index is unavailable.
     """
     if available is None:
         available = get_available_actions(entity)
 
-    # Find the action info
     action_info: Optional[AvailableActionInfo] = None
     for info in available.all_actions:
         if info.template_name == template_name:
@@ -321,9 +392,7 @@ def execute_by_index(
     if action_info is None:
         raise ValueError(f"Action {template_name} not available")
 
-    # Route item use actions to execute_use_action
     if action_info.is_item_use and action_info.source_item_uuid:
-        # Strip __item_<uuid> suffix to get the action's real name
         action_name = template_name.split("__item_")[0] if "__item_" in template_name else template_name
         if action_info.target_type == TargetType.SELF:
             return execute_use_action(entity, action_info.source_item_uuid, action_name)
@@ -336,7 +405,6 @@ def execute_by_index(
             raise ValueError(f"Target index {target_index} not valid for {template_name}")
         return execute_use_action(entity, action_info.source_item_uuid, action_name, target)
 
-    # Find the target by index
     target = None
     for t in action_info.valid_targets:
         if t.index == target_index:
@@ -346,25 +414,19 @@ def execute_by_index(
     if target is None:
         raise ValueError(f"Target index {target_index} not valid for {template_name}")
 
-    # For multi-entity actions, attach extra targets to the target object
     if extra_target_uuids:
-        # Convert string UUIDs to UUID objects
         target.extra_target_uuids = [UUID(uid) for uid in extra_target_uuids]
 
     return execute_action(entity, template_name, target, prefer_safe=prefer_safe)
 
 
-# =============================================================================
-# Spell Registration Utilities
-# =============================================================================
-
 def register_spell(entity: Entity, spell_class: type, caster_level: int = 1) -> None:
     """Register a spell template on an entity.
 
     Args:
-        entity: The entity to register the spell on
-        spell_class: The spell class (e.g., FireBolt, MagicMissile)
-        caster_level: The caster's level (for cantrip scaling)
+        entity: Entity receiving the spell template.
+        spell_class: Spell action class to instantiate as a template.
+        caster_level: Caster level used for scaling spell templates.
     """
     spell = spell_class(
         source_entity_uuid=entity.uuid,
@@ -378,12 +440,12 @@ def register_spells_by_name(entity: Entity, spell_names: list, caster_level: int
     """Register multiple spells by name from ALL_SPELLS dict.
 
     Args:
-        entity: The entity to register spells on
-        spell_names: List of spell names (e.g., ["Fire Bolt", "Magic Missile"])
-        caster_level: The caster's level (for cantrip scaling)
+        entity: Entity receiving spell templates.
+        spell_names: Spell names present in `ALL_SPELLS`.
+        caster_level: Caster level used for scaling spell templates.
 
     Raises:
-        ValueError: If a spell name is not found in ALL_SPELLS
+        ValueError: If a spell name is unknown.
     """
 
     for name in spell_names:
@@ -392,24 +454,20 @@ def register_spells_by_name(entity: Entity, spell_names: list, caster_level: int
         register_spell(entity, ALL_SPELLS[name], caster_level)
 
 
-# =============================================================================
-# Drop Item (API-only, not registered as template)
-# =============================================================================
-
 def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:
     """Drop an item from entity's inventory onto the ground.
 
     Creates a bound Drop action for the specific item and executes it.
-    Same pattern as future Use actions — item bound at creation time.
+    Same pattern as future Use actions: item bound at creation time.
 
     Args:
-        entity: The entity dropping the item
-        item_uuid: UUID of the item to drop (must be in entity's inventory)
+        entity: Entity dropping the item.
+        item_uuid: UUID of the item to drop from inventory.
         position: Grid position to drop at (must be within distance 1).
-                  Defaults to entity's position.
+            Defaults to the entity's current position.
 
     Returns:
-        The resulting event, or None if the action failed
+        Resulting event, or `None` if execution failed.
     """
     drop_pos = position if position is not None else entity.position
     action = Drop(
@@ -421,10 +479,6 @@ def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, 
     return action.apply()
 
 
-# =============================================================================
-# Use Item Actions (environment objects / inventory usables)
-# =============================================================================
-
 def execute_use_action(
     entity: Entity,
     item_uuid: UUID,
@@ -434,19 +488,21 @@ def execute_use_action(
     """Execute a use action from a UsableItem.
 
     Args:
-        entity: The entity using the item
-        item_uuid: UUID of the UsableItem
-        action_name: Name of the action to execute
-        target: Optional target for non-SELF actions
+        entity: Entity using the item.
+        item_uuid: UUID of the usable item.
+        action_name: Use action name, with or without the discovery suffix.
+        target: Optional target for non-self use actions.
 
     Returns:
-        The resulting event, or None if the action failed
+        Resulting event, or `None` if execution failed.
+
+    Raises:
+        ValueError: If the item is not usable or the named use action is absent.
     """
     item = BaseBlock.get(item_uuid)
     if not isinstance(item, UsableItem):
         raise ValueError("Item does not support use actions")
 
-    # Strip __item_<uuid> suffix if present (template names have this for uniqueness)
     clean_name = action_name.split("__item_")[0] if "__item_" in action_name else action_name
 
     templates = item.get_use_actions(entity.uuid)
@@ -454,8 +510,10 @@ def execute_use_action(
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
 
-    # If the action is already a non-template instance (e.g. Torch actions created
-    # fresh per get_use_actions() call), use it directly instead of trying to instantiate
+    charge_cost = template.charge_cost
+    if item.charges != -1 and item.charges < charge_cost:
+        raise ValueError(f"Use action '{action_name}' requires {charge_cost} charges")
+
     if not template.template:
         instance = template
         if template.target_type == TargetType.ENTITY and target and target.target_uuid:
@@ -465,7 +523,6 @@ def execute_use_action(
         elif template.target_type == TargetType.MULTI_ENTITY and target and target.target_uuid:
             instance.target_entity_uuid = target.target_uuid
             instance.extra_target_entity_uuids = target.extra_target_uuids or []
-    # Instantiate based on target type
     elif template.target_type == TargetType.SELF:
         instance = template.instantiate()
     elif template.target_type == TargetType.ENTITY:
@@ -493,17 +550,11 @@ def execute_use_action(
 
     result = instance.apply()
 
-    # Consume charge on successful execution
     if result and not result.canceled:
-        charge_cost = template.charge_cost
         item.consume_charge(charge_cost)
 
     return result
 
-
-# =============================================================================
-# Action Override Helpers (for metamagic, item effects, class abilities)
-# =============================================================================
 
 def apply_action_overrides(
     entity: Entity,
@@ -512,7 +563,13 @@ def apply_action_overrides(
 ) -> List[UUID]:
     """Set temporary override fields on matching action templates.
 
-    Returns list of modified template UUIDs for cleanup tracking.
+    Args:
+        entity: Entity whose registered templates are inspected.
+        filter_fn: Predicate selecting templates to mutate.
+        overrides: Field/value pairs to assign on selected templates.
+
+    Returns:
+        UUIDs of modified templates for later cleanup.
     """
     modified: List[UUID] = []
     for template in entity.registered_actions:
@@ -524,7 +581,12 @@ def apply_action_overrides(
 
 
 def clear_action_overrides(entity: Entity, template_uuids: List[UUID]) -> None:
-    """Clear all temporary override fields from specified templates."""
+    """Clear temporary override fields from selected templates.
+
+    Args:
+        entity: Entity whose registered templates are inspected.
+        template_uuids: Template UUIDs returned by `apply_action_overrides()`.
+    """
     defaults: Dict[str, Any] = {
         "alt_cost_type": None,
         "alt_extra_costs": [],
@@ -534,10 +596,11 @@ def clear_action_overrides(entity: Entity, template_uuids: List[UUID]) -> None:
         "alt_skip_slot": False,
     }
     for uid in template_uuids:
-        # Find template by UUID in registered_actions
         for template in entity.registered_actions:
             if template.uuid == uid:
                 for field, default in defaults.items():
+                    if field not in template.__class__.model_fields:
+                        continue
                     if isinstance(default, list):
                         setattr(template, field, list(default))
                     else:

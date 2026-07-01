@@ -1,7 +1,5 @@
-"""Divination spells - revealing information and granting special senses.
+"""Divination spells that reveal information or grant special senses."""
 
-Contains: SeeInvisibility, TrueSeeing, Guidance
-"""
 import random
 from typing import Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
@@ -16,18 +14,23 @@ from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
 
 
-# =============================================================================
-# See Invisibility (Level 2, Divination, NOT concentration)
-# =============================================================================
-
 class SeeInvisibilityEffect(BaseCondition):
     """Grants the ability to see invisible creatures and objects."""
-    name: str = "See Invisibility"
-    description: str = "You can see invisible creatures and objects"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    name: str = Field(default="See Invisibility", description="Condition name.")
+    description: str = Field(default="You can see invisible creatures and objects", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
     _granted_sense_type: Optional[SensesType] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Add see-invisible sensing to the target.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Empty modifier and handler lists plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], None
         target = Entity.get(self.target_entity_uuid)
@@ -46,6 +49,7 @@ class SeeInvisibilityEffect(BaseCondition):
         return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Remove the granted see-invisible sense mode."""
         if self._granted_sense_type is not None and self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target:
@@ -58,20 +62,25 @@ class SeeInvisibilityEffect(BaseCondition):
 
 
 class SeeInvisibility(SpellAction):
-    """See Invisibility - 2nd level Divination (NOT concentration)
+    """Second-level divination spell that grants see-invisible sense."""
 
-    For the duration, you see invisible creatures and objects as if they
-    were visible. Duration: 10 rounds.
-    """
-    name: str = Field(default="See Invisibility")
-    description: str = Field(default="See invisible creatures and objects")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="divination")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    name: str = Field(default="See Invisibility", description="Spell name.")
+    description: str = Field(default="See invisible creatures and objects", description="Spell description.")
+    spell_level: int = Field(default=2, description="Spell slot level.")
+    spell_school: str = Field(default="divination", description="Spell school.")
+    concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply See Invisibility to the caster.
+
+        Args:
+            execution_event: Spell execution event.
+
+        Returns:
+            Completed spell event, or a canceled event if the caster is missing.
+        """
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
@@ -95,19 +104,24 @@ class SeeInvisibility(SpellAction):
         )
 
 
-# =============================================================================
-# True Seeing (Level 6, Divination, NOT concentration)
-# =============================================================================
-
 class TrueSeeingEffect(BaseCondition):
     """Grants 120ft truesight."""
-    name: str = "True Seeing"
-    description: str = "You have truesight out to 120 feet"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    name: str = Field(default="True Seeing", description="Condition name.")
+    description: str = Field(default="You have truesight out to 120 feet", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
     _granted_sense_type: Optional[SensesType] = None
     _granted_range: int = 120
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Add truesight sensing to the target.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Empty modifier and handler lists plus the effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], None
         target = Entity.get(self.target_entity_uuid)
@@ -126,6 +140,7 @@ class TrueSeeingEffect(BaseCondition):
         return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Remove the granted truesight sense mode."""
         if self._granted_sense_type is not None and self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target:
@@ -139,21 +154,26 @@ class TrueSeeingEffect(BaseCondition):
 
 
 class TrueSeeing(SpellAction):
-    """True Seeing - 6th level Divination (NOT concentration)
+    """Sixth-level divination spell that grants 120-foot truesight."""
 
-    You touch a willing creature and grant it truesight out to 120 feet.
-    Duration: 10 rounds.
-    """
-    name: str = Field(default="True Seeing")
-    description: str = Field(default="Grant truesight 120ft")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="divination")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
-    valid_target_filter: str = Field(default="self_or_allies")
+    name: str = Field(default="True Seeing", description="Spell name.")
+    description: str = Field(default="Grant truesight 120ft", description="Spell description.")
+    spell_level: int = Field(default=6, description="Spell slot level.")
+    spell_school: str = Field(default="divination", description="Spell school.")
+    concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+        """Validate touch range and visibility for True Seeing.
+
+        Args:
+            declaration_event: Spell declaration event.
+
+        Returns:
+            Execution-ready, canceled, or parent-validated spell event.
+        """
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -171,6 +191,15 @@ class TrueSeeing(SpellAction):
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply the True Seeing condition to the target.
+
+        Args:
+            execution_event: Spell execution event.
+
+        Returns:
+            Completed spell event, or a canceled event if caster or target is
+            missing.
+        """
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -196,15 +225,19 @@ class TrueSeeing(SpellAction):
         )
 
 
-# =============================================================================
-# Guidance (Cantrip, Divination, Concentration)
-# =============================================================================
-
 def _guidance_processor(
     event: D20RollResultEvent,
     source_entity_uuid: UUID,
 ) -> Optional[D20RollResultEvent]:
-    """Add 1d4 to skill check roll. One-use: disables handler after firing."""
+    """Add 1d4 to one skill check and consume Guidance.
+
+    Args:
+        event: D20 roll-result event being modified.
+        source_entity_uuid: Guided entity UUID.
+
+    Returns:
+        Modified event when Guidance applies, otherwise `None`.
+    """
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -214,7 +247,6 @@ def _guidance_processor(
     new_roll = effective.model_copy(update={"total": new_total})
     event.replace_roll(new_roll, "Guidance", f"+{d4_value} (1d4)")
 
-    # One-use: remove the condition after firing
     target = Entity.get(source_entity_uuid)
     if target and "Guidance" in target.active_conditions:
         target.remove_condition("Guidance", parent_event=event)
@@ -223,13 +255,13 @@ def _guidance_processor(
 
 
 class GuidanceEffect(BaseCondition):
-    """Guidance spell effect — add 1d4 to one ability check (skill check only).
+    """Guidance spell effect that adds 1d4 to one skill check.
 
     One-use: the handler removes itself after firing once.
     """
-    name: str = "Guidance"
-    description: str = "Add 1d4 to one ability check"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Guidance", description="Condition name.")
+    description: str = Field(default="Add 1d4 to one ability check", description="Condition description.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -238,6 +270,15 @@ class GuidanceEffect(BaseCondition):
         List[UUID],
         Optional[Event],
     ]:
+        """Register the one-use d20 result handler.
+
+        Args:
+            declaration_event: Condition application declaration event.
+
+        Returns:
+            Handler UUID ownership plus the effect event, or a canceled event
+            when the target cannot be found.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
 
@@ -274,16 +315,24 @@ class Guidance(SpellAction):
 
     Duration: Concentration, up to 1 minute (10 rounds).
     """
-    name: str = Field(default="Guidance")
-    description: str = Field(default="Touch: +1d4 to one ability check (concentration)")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="divination")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
-    valid_target_filter: str = Field(default="self_or_allies")
+    name: str = Field(default="Guidance", description="Spell name.")
+    description: str = Field(default="Touch: +1d4 to one ability check (concentration)", description="Spell description.")
+    spell_level: int = Field(default=0, description="Cantrip spell level.")
+    spell_school: str = Field(default="divination", description="Spell school.")
+    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        """Apply Guidance and link it to concentration.
+
+        Args:
+            execution_event: Spell execution event.
+
+        Returns:
+            Completed spell event, or a canceled event if the caster is missing.
+        """
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 

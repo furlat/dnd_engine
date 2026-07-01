@@ -1,12 +1,7 @@
-"""
-Encounter - Turn-based combat management.
+"""Turn-based encounter management.
 
-The Encounter class orchestrates combat:
-- Tracks combatants and their controllers
-- Manages initiative order
-- Handles turn/round lifecycle
-- Fires appropriate events
-- Integrates with action economy and conditions
+An encounter owns initiative order, round and turn boundaries, controller
+coordination, combat-log capture, and end-of-combat detection.
 """
 
 from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
@@ -31,7 +26,7 @@ from dnd.core.events import (
     TurnStartEvent, TurnEndEvent,
     DeathEvent,
 )
-from dnd.core.combat_log import CombatLogEntry
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
@@ -40,7 +35,6 @@ from dnd.actions_functional import execute_by_index
 
 def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> None:
     """Recursively scan combat log tree for Hidden/Invisible condition removals."""
-    from dnd.core.combat_log import CombatLogEntryType
     for log in logs:
         if log.entry_type == CombatLogEntryType.CONDITION_REMOVED:
             cond_name = log.data.get("condition_name", "")
@@ -52,11 +46,11 @@ def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> No
 
 
 def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -> Set[str]:
-    """Find entities revealed during event chain, checking post-event state.
+    """Return entities revealed during an event chain.
 
-    Walks the combat log sub_entries tree looking for CONDITION_REMOVED entries
-    where Hidden or Invisible was removed. For each, checks the entity's current
-    state to verify they're truly perceivable (not still hidden by another condition).
+    The scan checks condition-removal combat-log entries and then verifies the
+    current entity state, so an entity is only marked revealed when it is no
+    longer hidden or invisible after the event chain resolves.
     """
     revealed: Set[str] = set()
     _scan_logs_for_reveals(child_logs, revealed)
@@ -64,33 +58,21 @@ def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -
 
 
 def _compute_perceivers(event: Event) -> Set[str]:
-    """Completely generic: event positions + entity UUIDs -> GridMap subscribers.
-
-    Each event type provides its spatial footprint via get_affected_positions().
-    This function:
-    1. Gets positions from event (polymorphic)
-    2. Adds entity-UUID positions (always available from BaseObject)
-    3. Looks up GridMap subscribers at all positions (O(1) per position)
-    4. Adds participants as self-perceivers
-    """
+    """Return observer UUIDs that should receive an event log."""
     grid = get_map()
 
-    # 1. Collect all relevant positions from event
     positions: Set[Tuple[int, int]] = event.get_affected_positions()
 
-    # 2. Also resolve entity UUIDs to current positions (GridMap access is here)
     for uuid in (event.source_entity_uuid, event.target_entity_uuid):
         if uuid:
             pos = grid.get_entity_position(uuid)
             if pos:
                 positions.add(pos)
 
-    # 3. Look up subscribers at all positions -> perceivers
     perceivers: Set[str] = set()
     for pos in positions:
         perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
 
-    # 4. Participants always perceive their own events
     for uuid in (event.source_entity_uuid, event.target_entity_uuid):
         if uuid:
             perceivers.add(str(uuid))
@@ -114,39 +96,66 @@ class TurnState(str, Enum):
 
 
 class AdvanceResult(BaseObject):
-    """Result of advancing through turns via advance_until_player()."""
+    """Result of advancing automated turns until external input is needed.
 
-    status: str = Field(description="Result status: waiting_for_human, waiting_for_claude, encounter_ended, error")
-    entity_uuid: Optional[UUID] = Field(default=None, description="UUID of entity waiting for input")
-    entity_name: Optional[str] = Field(default=None, description="Name of entity waiting for input")
-    round_number: int = Field(default=0, description="Current round number")
-    turn_index: int = Field(default=0, description="Current turn index")
-    log_start_index: int = Field(default=0, description="Combat log index before AI turns (for fetching new entries)")
+    Attributes:
+        status: Result status for the advancement attempt.
+        entity_uuid: UUID of the entity waiting for input, when applicable.
+        entity_name: Name of the entity waiting for input, when applicable.
+        round_number: Current encounter round number.
+        turn_index: Current initiative-order index.
+        log_start_index: Combat-log index before automated turns ran.
+    """
+
+    status: str = Field(description="Result status for the advancement attempt.")
+    entity_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the entity waiting for input, when applicable.",
+    )
+    entity_name: Optional[str] = Field(
+        default=None,
+        description="Name of the entity waiting for input, when applicable.",
+    )
+    round_number: int = Field(default=0, description="Current encounter round number.")
+    turn_index: int = Field(default=0, description="Current initiative-order index.")
+    log_start_index: int = Field(
+        default=0,
+        description="Combat-log index before automated turns ran.",
+    )
 
 
 class CombatantState(BaseObject):
+    """Per-entity state within an encounter.
+
+    Attributes:
+        entity_uuid: UUID of the entity in the encounter.
+        controller_uuid: UUID of the controller assigned to the entity.
+        initiative_roll: Natural d20 result used for initiative.
+        initiative_bonus: Modifier added to the initiative roll.
+        initiative_total: Final initiative total.
+        has_acted_this_round: Whether the entity has taken this round's turn.
+        turn_count: Number of turns this entity has taken in the encounter.
+        surprised: Whether the entity is surprised during round one.
+        delaying: Whether the entity is currently delaying.
+        is_dead: Whether the combatant is dead at the encounter layer.
     """
-    Per-entity state within an encounter.
 
-    Tracks initiative, controller assignment, and turn-specific state.
-    """
-
-    entity_uuid: UUID = Field(description="UUID of the entity")
-    controller_uuid: UUID = Field(description="UUID of the controller for this entity")
-
-    # Initiative
-    initiative_roll: int = Field(default=0, description="The d20 roll for initiative")
-    initiative_bonus: int = Field(default=0, description="Modifier added to initiative")
-    initiative_total: int = Field(default=0, description="Final initiative value")
-
-    # Turn tracking
-    has_acted_this_round: bool = Field(default=False, description="Whether entity has taken their turn this round")
-    turn_count: int = Field(default=0, description="Number of turns this entity has taken")
-
-    # Special states
-    surprised: bool = Field(default=False, description="Cannot act in first round if surprised")
-    delaying: bool = Field(default=False, description="Holding action to act later")
-    is_dead: bool = Field(default=False, description="Whether this combatant is dead")
+    entity_uuid: UUID = Field(description="UUID of the entity in the encounter.")
+    controller_uuid: UUID = Field(description="UUID of the controller assigned to the entity.")
+    initiative_roll: int = Field(default=0, description="Natural d20 result used for initiative.")
+    initiative_bonus: int = Field(default=0, description="Modifier added to the initiative roll.")
+    initiative_total: int = Field(default=0, description="Final initiative total.")
+    has_acted_this_round: bool = Field(
+        default=False,
+        description="Whether the entity has taken this round's turn.",
+    )
+    turn_count: int = Field(
+        default=0,
+        description="Number of turns this entity has taken in the encounter.",
+    )
+    surprised: bool = Field(default=False, description="Whether the entity is surprised during round one.")
+    delaying: bool = Field(default=False, description="Whether the entity is currently delaying.")
+    is_dead: bool = Field(default=False, description="Whether the combatant is dead at the encounter layer.")
 
     @property
     def entity(self) -> Optional[Entity]:
@@ -166,49 +175,60 @@ class CombatantState(BaseObject):
         entity = self.entity
         if entity is None:
             return False
-        return entity.has_hp
+        return entity.is_encounter_alive
 
 
 class Encounter(BaseObject):
-    """
-    Manages a tactical combat encounter.
+    """Manage tactical combat turn flow and combat-log capture.
 
-    Responsibilities:
-    - Track combatants and initiative order
-    - Manage turn/round progression
-    - Fire lifecycle events
-    - Coordinate with entity action economy and conditions
+    Attributes:
+        name: Display name of the encounter.
+        combatants: Combatant state mapped by entity UUID.
+        initiative_order: Entity UUIDs sorted in initiative order.
+        current_turn_index: Index into the initiative order.
+        round_number: Current one-indexed round number while active.
+        state: Current encounter lifecycle state.
+        turn_state: Current turn lifecycle state.
+        started_at: Wall-clock timestamp when the encounter started.
+        ended_at: Wall-clock timestamp when the encounter ended.
+        combat_log: Unified combat-log entries captured for the encounter.
     """
 
-    # Class-level registry
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
     _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
 
-    name: str = Field(default="Encounter", description="Name of this encounter")
-
-    # Combatants
+    name: str = Field(default="Encounter", description="Display name of the encounter.")
     combatants: Dict[UUID, CombatantState] = Field(
         default_factory=dict,
-        description="Entity UUID -> CombatantState"
+        description="Combatant state mapped by entity UUID.",
     )
-
-    # Turn order
     initiative_order: List[UUID] = Field(
         default_factory=list,
-        description="Entity UUIDs sorted by initiative (highest first)"
+        description="Entity UUIDs sorted in initiative order.",
     )
-    current_turn_index: int = Field(default=0, description="Index into initiative_order")
-    round_number: int = Field(default=0, description="Current round (1-indexed when active)")
-
-    # State
-    state: EncounterState = Field(default=EncounterState.NOT_STARTED)
-    turn_state: TurnState = Field(default=TurnState.NOT_STARTED)
-    started_at: Optional[datetime] = Field(default=None)
-    ended_at: Optional[datetime] = Field(default=None)
-
-    # Combat log - unified log for all players
-    combat_log: List[CombatLogEntry] = Field(default_factory=list)
+    current_turn_index: int = Field(default=0, description="Index into the initiative order.")
+    round_number: int = Field(default=0, description="Current one-indexed round number while active.")
+    state: EncounterState = Field(
+        default=EncounterState.NOT_STARTED,
+        description="Current encounter lifecycle state.",
+    )
+    turn_state: TurnState = Field(
+        default=TurnState.NOT_STARTED,
+        description="Current turn lifecycle state.",
+    )
+    started_at: Optional[datetime] = Field(
+        default=None,
+        description="Wall-clock timestamp when the encounter started.",
+    )
+    ended_at: Optional[datetime] = Field(
+        default=None,
+        description="Wall-clock timestamp when the encounter ended.",
+    )
+    combat_log: List[CombatLogEntry] = Field(
+        default_factory=list,
+        description="Unified combat-log entries captured for the encounter.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -226,7 +246,7 @@ class Encounter(BaseObject):
 
     @classmethod
     def clear_registry(cls) -> None:
-        """Clear the encounter registry (for testing)."""
+        """Clear the encounter registry."""
         cls._encounter_registry.clear()
         cls._active_encounter = None
 
@@ -248,10 +268,6 @@ class Encounter(BaseObject):
         if callback in cls._combat_log_listeners:
             cls._combat_log_listeners.remove(callback)
 
-    # =========================================================================
-    # Combatant Management
-    # =========================================================================
-
     def add_combatant(
         self,
         entity: Entity,
@@ -272,7 +288,6 @@ class Encounter(BaseObject):
         if entity.uuid in self.combatants:
             raise ValueError(f"Entity {entity.uuid} already in encounter")
 
-        # Initiative bonus from entity.initiative (includes DEX mod + feats)
         init_bonus = entity.initiative.normalized_score
 
         combatant = CombatantState(
@@ -298,14 +313,12 @@ class Encounter(BaseObject):
         """
         combatant = self.combatants.pop(entity_uuid, None)
         if combatant and entity_uuid in self.initiative_order:
-            # Adjust current_turn_index if needed
             removed_index = self.initiative_order.index(entity_uuid)
             self.initiative_order.remove(entity_uuid)
 
             if removed_index < self.current_turn_index:
                 self.current_turn_index -= 1
             elif removed_index == self.current_turn_index:
-                # Current entity removed, index now points to next
                 if self.current_turn_index >= len(self.initiative_order):
                     self.current_turn_index = 0
 
@@ -320,10 +333,6 @@ class Encounter(BaseObject):
         combatant = self.combatants.get(entity_uuid)
         return combatant.controller if combatant else None
 
-    # =========================================================================
-    # Initiative
-    # =========================================================================
-
     def roll_initiative(self) -> None:
         """
         Roll initiative for all combatants and establish turn order.
@@ -332,20 +341,16 @@ class Encounter(BaseObject):
         1. Higher DEX modifier
         2. Random (the earlier roll wins)
         """
-        # Roll for each combatant
         for combatant in self.combatants.values():
             entity = combatant.entity
             if not entity:
                 continue
-            # Use entity.initiative as the bonus (includes DEX mod + feats)
             dice = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK)
             roll = dice.roll
-            # roll.results is Union[List[int], int] - for 1d20 it's an int
             roll_result = roll.results if isinstance(roll.results, int) else roll.results[0]
             combatant.initiative_roll = roll_result
             combatant.initiative_total = roll.total
 
-        # Sort by initiative (highest first), then by DEX mod for ties
         sorted_combatants = sorted(
             self.combatants.values(),
             key=lambda c: (c.initiative_total, c.initiative_bonus),
@@ -369,10 +374,6 @@ class Encounter(BaseObject):
             result.append((name, combatant.initiative_total, combatant.initiative_roll))
         return result
 
-    # =========================================================================
-    # Current Turn/Entity
-    # =========================================================================
-
     def get_current_entity(self) -> Optional[Entity]:
         """Get the entity whose turn it is."""
         if not self.initiative_order or self.state != EncounterState.ACTIVE:
@@ -392,10 +393,6 @@ class Encounter(BaseObject):
         combatant = self.get_current_combatant()
         return combatant.controller if combatant else None
 
-    # =========================================================================
-    # Encounter Lifecycle
-    # =========================================================================
-
     def start_encounter(self) -> EncounterStartEvent:
         """
         Start the encounter.
@@ -409,7 +406,6 @@ class Encounter(BaseObject):
         if not self.combatants:
             raise ValueError("Cannot start encounter with no combatants")
 
-        # Roll initiative if not done
         if not self.initiative_order:
             self.roll_initiative()
 
@@ -417,22 +413,16 @@ class Encounter(BaseObject):
         self.started_at = datetime.now()
         self.round_number = 1
 
-        # Set as active encounter for combat log updates from damage events
         Encounter._active_encounter = self
 
-        # Register combat log callback for auto-capturing top-level events
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
-
-        # Register perceiver computer for temporal visibility on combat logs
         EventQueue.set_perceiver_computer(_compute_perceivers)
-
-        # Register revealed-entity computer for mid-event-chain reveals
         EventQueue.set_revealed_computer(_compute_revealed_entities)
 
-        # Notify controllers
+        self._apply_surprise_reaction_lockouts()
+
         self._notify_controllers_encounter_start()
 
-        # Fire event
         event = EncounterStartEvent(
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
@@ -441,7 +431,6 @@ class Encounter(BaseObject):
             phase=EventPhase.COMPLETION
         )
 
-        # Start round 1
         self._fire_round_start()
 
         return event
@@ -459,26 +448,21 @@ class Encounter(BaseObject):
         if self.state == EncounterState.ENDED:
             raise ValueError("Encounter already ended")
 
-        # End current turn if in progress
         if self.turn_state == TurnState.IN_PROGRESS:
             self.end_turn()
 
         self.state = EncounterState.ENDED
         self.ended_at = datetime.now()
 
-        # Clear active encounter if we are the active one
         if Encounter._active_encounter is self:
             Encounter._active_encounter = None
 
-        # Unregister combat log callback, perceiver computer, and revealed computer
         EventQueue.set_combat_log_callback(None)
         EventQueue.set_perceiver_computer(None)
         EventQueue.set_revealed_computer(None)
 
-        # Notify controllers
         self._notify_controllers_encounter_end()
 
-        # Fire event
         event = EncounterEndEvent(
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
@@ -488,10 +472,6 @@ class Encounter(BaseObject):
         )
 
         return event
-
-    # =========================================================================
-    # Round Lifecycle
-    # =========================================================================
 
     def _fire_round_start(self) -> RoundStartEvent:
         """Fire round start event."""
@@ -516,11 +496,9 @@ class Encounter(BaseObject):
     def _environment_step(self) -> None:
         """Advance tile and floor-item condition durations. Called at end of each round."""
         grid = get_map()
-        # Tile conditions
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
                 tile.advance_duration(cond_name)
-        # Floor item conditions (items on the grid, not in inventories)
         for item_block in grid.get_objects_with_conditions():
             for cond_name in list(item_block.active_conditions.keys()):
                 item_block.advance_duration(cond_name)
@@ -533,15 +511,57 @@ class Encounter(BaseObject):
         self.round_number += 1
         self.current_turn_index = 0
 
-        # Reset has_acted_this_round for all combatants
         for combatant in self.combatants.values():
             combatant.has_acted_this_round = False
 
         self._fire_round_start()
 
-    # =========================================================================
-    # Turn Lifecycle
-    # =========================================================================
+    def _apply_surprise_reaction_lockouts(self) -> None:
+        """Spend initial reactions for surprised combatants until their first turn ends."""
+        for combatant in self.combatants.values():
+            if not combatant.surprised:
+                continue
+            entity = combatant.entity
+            if entity is None:
+                continue
+            available_reactions = entity.action_economy.reactions.normalized_score
+            if available_reactions > 0:
+                entity.action_economy.consume("reactions", available_reactions, "Surprised")
+
+    def _skip_surprised_turn(
+        self,
+        entity: Entity,
+        combatant: CombatantState,
+        controller: Optional[Controller],
+    ) -> Optional[TurnStartEvent]:
+        """Run turn boundary hooks for a surprised combatant without allowing actions."""
+        self.turn_state = TurnState.IN_PROGRESS
+
+        entity.on_turn_start(
+            encounter_uuid=self.uuid,
+            round_number=self.round_number,
+            turn_index=self.current_turn_index,
+        )
+        entity.senses.collision_blocked.clear()
+        entity.senses.directional_collision_blocked.clear()
+        entity.update_entity_senses(max_distance=20)
+
+        if controller:
+            controller.on_turn_start(entity, self._build_turn_context(entity))
+
+        entity.on_turn_end(
+            encounter_uuid=self.uuid,
+            round_number=self.round_number,
+            turn_index=self.current_turn_index,
+        )
+
+        if controller:
+            controller.on_turn_end(entity, self._build_turn_context(entity))
+
+        combatant.has_acted_this_round = True
+        combatant.turn_count += 1
+        self.turn_state = TurnState.ENDED
+        return self._skip_to_next_turn()
 
     def start_turn(self) -> Optional[TurnStartEvent]:
         """
@@ -567,38 +587,26 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        # Skip surprised entities in round 1
         if combatant.surprised and self.round_number == 1:
-            combatant.has_acted_this_round = True
-            return self._skip_to_next_turn()
+            return self._skip_surprised_turn(entity, combatant, controller)
 
-        # Skip dead combatants
         if combatant.is_dead or not combatant.is_alive:
             combatant.has_acted_this_round = True
             return self._skip_to_next_turn()
 
         self.turn_state = TurnState.IN_PROGRESS
 
-        # Entity handles turn-start logic:
-        # - Fires TurnStartEvent through DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
-        # - Handlers (like Survivor) trigger at EXECUTION phase
-        # - Advances condition durations
-        # - Resets action economy and recharges TURN_START resources
         event = entity.on_turn_start(
             encounter_uuid=self.uuid,
             round_number=self.round_number,
             turn_index=self.current_turn_index
         )
 
-        # NOTE: Combat log auto-captured via callback in phase_to()
-
-        # Clear stale collision data from previous turn (invisible entity may have moved)
         entity.senses.collision_blocked.clear()
+        entity.senses.directional_collision_blocked.clear()
 
-        # Update senses (use larger range to cover typical combat arenas)
         entity.update_entity_senses(max_distance=20)
 
-        # Notify controller
         if controller:
             context = self._build_turn_context(entity)
             controller.on_turn_start(entity, context)
@@ -627,22 +635,16 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        # Entity handles turn-end logic with proper phase progression
-        # Handlers (like rage maintenance) trigger at EXECUTION phase
         event = entity.on_turn_end(
             encounter_uuid=self.uuid,
             round_number=self.round_number,
             turn_index=self.current_turn_index
         )
 
-        # NOTE: Combat log auto-captured via callback in phase_to()
-
-        # Notify controller
         if controller:
             context = self._build_turn_context(entity)
             controller.on_turn_end(entity, context)
 
-        # Mark turn complete
         combatant.has_acted_this_round = True
         combatant.turn_count += 1
         self.turn_state = TurnState.ENDED
@@ -659,14 +661,11 @@ class Encounter(BaseObject):
         if self.state != EncounterState.ACTIVE:
             return None
 
-        # End current turn if in progress
         if self.turn_state == TurnState.IN_PROGRESS:
             self.end_turn()
 
-        # Move to next entity
         self.current_turn_index += 1
 
-        # Check if round is over
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
 
@@ -682,10 +681,6 @@ class Encounter(BaseObject):
 
         return self.start_turn()
 
-    # =========================================================================
-    # Action Economy Queries
-    # =========================================================================
-
     def can_continue_turn(self) -> bool:
         """
         Check if the current entity can still act.
@@ -698,12 +693,11 @@ class Encounter(BaseObject):
 
         ae = entity.action_economy
 
-        # Check if any resource is available
         has_action = ae.can_afford("actions", 1)
         has_bonus = ae.can_afford("bonus_actions", 1)
-        has_movement = ae.can_afford("movement", 5)  # At least 5ft
+        has_five_feet_movement = ae.can_afford("movement", 5)
 
-        return has_action or has_bonus or has_movement
+        return has_action or has_bonus or has_five_feet_movement
 
     def get_remaining_action_economy(self) -> Dict[str, int]:
         """
@@ -739,10 +733,6 @@ class Encounter(BaseObject):
             visible_allies=entity.get_visible_allies(),
         )
 
-    # =========================================================================
-    # Condition Management
-    # =========================================================================
-
     def _advance_entity_conditions(self, entity: Entity) -> List[str]:
         """
         Advance duration for all conditions on entity.
@@ -752,7 +742,6 @@ class Encounter(BaseObject):
         "until the start of your next turn" per SRD.
         """
         removed = []
-        # Copy keys since we might modify during iteration
         condition_names = list(entity.active_conditions.keys())
 
         for condition_name in condition_names:
@@ -761,10 +750,6 @@ class Encounter(BaseObject):
                 removed.append(condition_name)
 
         return removed
-
-    # =========================================================================
-    # Combat Log Management
-    # =========================================================================
 
     def _on_event_combat_log(self, event: Event) -> None:
         """Callback for auto-capturing event combat logs.
@@ -815,10 +800,6 @@ class Encounter(BaseObject):
         """Clear the combat log (call when starting new game)."""
         self.combat_log = []
 
-    # =========================================================================
-    # Death Handling
-    # =========================================================================
-
     def check_deaths(self) -> List[DeathEvent]:
         """
         Check all combatants for death and handle any that died.
@@ -836,25 +817,23 @@ class Encounter(BaseObject):
 
         for combatant in self.combatants.values():
             if combatant.is_dead:
-                continue  # Already marked dead at encounter level
+                continue
 
             entity = combatant.entity
             if entity is None:
                 continue
 
             if not entity.has_hp:
+                if entity.uses_death_saves and "Dead" not in entity.active_conditions:
+                    if "Unconscious" not in entity.active_conditions:
+                        entity.enter_dying_state()
+                    continue
                 any_new_deaths = True
-                # Handle death - _handle_death checks if already handled by receive_damage
                 event = self._handle_death(combatant)
                 if event:
                     death_events.append(event)
 
-        # Check if encounter should end (only one side remaining)
-        # Note: Check even if death_events is empty - receive_damage may have
-        # already handled the death (applied Dead condition, fired DeathEvent)
         if any_new_deaths:
-            # Note: Senses are updated reactively via DEATH events
-            # Each observer's SpatialSensesCallback handles path recalculation
             self._check_encounter_end()
 
         return death_events
@@ -880,16 +859,9 @@ class Encounter(BaseObject):
 
         combatant.is_dead = True
 
-        # Check if already handled by receive_damage
         if "Dead" in entity.active_conditions:
-            return None  # Death already processed, avoid duplicate
+            return None
 
-        # Note: Dead entities are filtered from attack targets via
-        # get_visible_enemies(include_dead=False) which checks HP.
-        # They remain visible for looting, resurrection, corpse-explosion, etc.
-
-        # Fire DeathEvent through all phases - death_handler applies Dead condition at EXECUTION
-        # and marks entity as non-blocking in GridMap
         event = DeathEvent(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
@@ -899,10 +871,8 @@ class Encounter(BaseObject):
             encounter_uuid=self.uuid,
             phase=EventPhase.DECLARATION
         )
-        # Progress through phases - death_handler fires at EXECUTION
         event = event.phase_to(EventPhase.EXECUTION)
         event = event.phase_to(EventPhase.EFFECT)
-        # phase_to(COMPLETION) auto-generates combat_log and calls callback
         event = event.phase_to(EventPhase.COMPLETION)
 
         return event
@@ -917,21 +887,17 @@ class Encounter(BaseObject):
         Returns:
             True if encounter ended
         """
-        # Collect alive count per faction
-        # Entities with faction=None are treated as their own "faction" (uuid-based)
         factions_alive: Dict[str, int] = {}
         for combatant in self.combatants.values():
             entity = combatant.entity
             if entity is None:
                 continue
-            # Use faction if set, else use entity uuid (each factionless entity is own faction)
             faction_key = entity.faction if entity.faction else str(entity.uuid)
             if faction_key not in factions_alive:
                 factions_alive[faction_key] = 0
             if combatant.is_alive:
                 factions_alive[faction_key] += 1
 
-        # End if only one faction (or none) has survivors
         factions_with_alive = [f for f, c in factions_alive.items() if c > 0]
 
         if len(factions_with_alive) <= 1:
@@ -948,13 +914,8 @@ class Encounter(BaseObject):
         """Get list of combatants that are dead."""
         return [c for c in self.combatants.values() if c.is_dead]
 
-    # =========================================================================
-    # Controller Notifications
-    # =========================================================================
-
     def _notify_controllers_encounter_start(self) -> None:
         """Notify all controllers that encounter is starting."""
-        # Group entities by controller
         controller_entities: Dict[UUID, List[Entity]] = {}
         for combatant in self.combatants.values():
             controller_uuid = combatant.controller_uuid
@@ -964,7 +925,6 @@ class Encounter(BaseObject):
             if entity:
                 controller_entities[controller_uuid].append(entity)
 
-        # Notify each controller
         for controller_uuid, entities in controller_entities.items():
             controller = Controller.get(controller_uuid)
             if controller:
@@ -972,7 +932,6 @@ class Encounter(BaseObject):
 
     def _notify_controllers_encounter_end(self) -> None:
         """Notify all controllers that encounter is ending."""
-        # Group entities by controller
         controller_entities: Dict[UUID, List[Entity]] = {}
         for combatant in self.combatants.values():
             controller_uuid = combatant.controller_uuid
@@ -982,15 +941,10 @@ class Encounter(BaseObject):
             if entity:
                 controller_entities[controller_uuid].append(entity)
 
-        # Notify each controller
         for controller_uuid, entities in controller_entities.items():
             controller = Controller.get(controller_uuid)
             if controller:
                 controller.on_encounter_end(entities)
-
-    # =========================================================================
-    # Turn Execution Loop (for external callers)
-    # =========================================================================
 
     def run_turn(self) -> Optional[TurnEndEvent]:
         """
@@ -1008,11 +962,9 @@ class Encounter(BaseObject):
         if self.state != EncounterState.ACTIVE:
             raise ValueError(f"Cannot run turn in state {self.state}")
 
-        # Start turn if not started
         if self.turn_state != TurnState.IN_PROGRESS:
             turn_start = self.start_turn()
             if turn_start is None:
-                # Couldn't start (e.g., no valid entity)
                 return None
 
         entity = self.get_current_entity()
@@ -1021,7 +973,6 @@ class Encounter(BaseObject):
         if not entity or not controller:
             return self.end_turn()
 
-        # Main turn loop
         while self.can_continue_turn():
             context = self._build_turn_context(entity)
 
@@ -1031,25 +982,17 @@ class Encounter(BaseObject):
             action = controller.get_next_action(entity, context)
 
             if action is None:
-                # Controller signals end turn
                 break
 
-            # Execute the action
-            # NOTE: Combat log auto-captured via callback in phase_to()
             _event = action.apply()
 
-            # Check for deaths after action
-            # NOTE: Death events auto-captured via callback in phase_to()
             deaths = self.check_deaths()
 
             if deaths and self.state != EncounterState.ACTIVE:
-                # Someone died and encounter ended
                 return None
 
-        # End turn and advance to next combatant
         end_event = self.end_turn()
 
-        # Advance turn index for next run_turn() call
         self.current_turn_index += 1
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
@@ -1057,17 +1000,13 @@ class Encounter(BaseObject):
 
         return end_event
 
-    # =========================================================================
-    # Advance Until Player Turn
-    # =========================================================================
-
     def advance_until_player(self) -> AdvanceResult:
         """
-        Run AI turns until human/claude turn or encounter ends.
+        Run AI turns until human/codex turn or encounter ends.
 
         This method runs through the turn order, executing AI turns
         automatically and stopping when it reaches a player-controlled
-        entity (human or claude) or when the encounter ends.
+        entity (human or codex) or when the encounter ends.
 
         Combat log entries are auto-captured during AI turns via run_turn().
 
@@ -1081,7 +1020,6 @@ class Encounter(BaseObject):
             combatant = self.get_current_combatant()
             controller = self.get_current_controller()
 
-            # Skip dead combatants - advance turn index without calling run_turn()
             if combatant and (combatant.is_dead or not combatant.is_alive):
                 combatant.has_acted_this_round = True
                 self.current_turn_index += 1
@@ -1096,14 +1034,12 @@ class Encounter(BaseObject):
                     log_start_index=log_start
                 )
 
-            # Human or Claude: stop and wait for API
-            if controller.controller_type in ("human", "claude"):
-                # Start the turn if not already started
+            if controller.controller_type in ("human", "codex"):
                 if self.turn_state != TurnState.IN_PROGRESS:
                     self.start_turn()
 
                 entity = self.get_current_entity()
-                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_claude"
+                status = "waiting_for_human" if controller.controller_type == "human" else "waiting_for_codex"
 
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,
@@ -1115,7 +1051,6 @@ class Encounter(BaseObject):
                     log_start_index=log_start
                 )
 
-            # AI: run turn (auto-captures combat log)
             self.run_turn()
 
         return AdvanceResult(
@@ -1125,10 +1060,6 @@ class Encounter(BaseObject):
             turn_index=self.current_turn_index,
             log_start_index=log_start
         )
-
-    # =========================================================================
-    # HTTP Action Execution (for API-controlled players)
-    # =========================================================================
 
     def execute_action(
         self,
@@ -1158,13 +1089,8 @@ class Encounter(BaseObject):
         if not entity:
             raise ValueError(f"Entity {entity_uuid} not found")
 
-        # Execute via functional API (handles template lookup + instantiation)
         event = execute_by_index(entity, template_name, target_index or 0)
 
-        # NOTE: Combat log auto-captured via callback in phase_to()
-
-        # Check deaths
-        # NOTE: Death events auto-captured via callback in phase_to()
         _ = self.check_deaths()
 
         return event

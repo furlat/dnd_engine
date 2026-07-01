@@ -7,7 +7,7 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           MassCureWounds, HealSpell, MassHeal
 """
 import random
-from typing import Any, Optional, List, Set, Tuple
+from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -18,7 +18,7 @@ from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, Dura
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome, RollType
 from typing import cast as type_cast
-from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, SpatialChangeEvent, WeaponSlot, AbilityName
+from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, WeaponSlot, AbilityName, WindExposureEvent
 from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
 from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
@@ -60,26 +60,25 @@ class FireBolt(SpellAction):
     Make a ranged spell attack. On hit, target takes 1d10 fire damage.
     Damage scales with caster level: 2d10 at 5th, 3d10 at 11th, 4d10 at 17th.
     """
-    name: str = Field(default="Fire Bolt")
-    description: str = Field(default="Hurl a mote of fire at a target")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Fire Bolt", description="Display name for the fire bolt spell.")
+    description: str = Field(default="Hurl a mote of fire at a target", description="Rules-facing summary for the fire bolt spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast fire bolt; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify fire bolt.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for fire bolt.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Range contract used when validating targets for fire bolt.",
     )
-    projectile_type: Optional[str] = Field(default="bolt")
+    projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for fire bolt.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
-        # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
 
-        # Validate range
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -104,24 +103,19 @@ class FireBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers (same as Attack)
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 4. Clean up cross-propagation
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
-        # Update event with attack info
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             attack_bonus=attack_bonus,
@@ -131,18 +125,15 @@ class FireBolt(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss, complete without damage
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 6. On hit: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
-        # Create damage object (un-doubled; get_dice handles crit doubling)
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
         damage_bonus = caster.get_spell_damage_bonus()
         fire_damage = Damage(
@@ -154,11 +145,9 @@ class FireBolt(SpellAction):
             damage_type=DamageType.FIRE
         )
 
-        # Roll damage
         damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.FIRE,
@@ -184,9 +173,13 @@ class RayOfFrostEffect(BaseCondition):
     The modifier is tracked via modifiers_uuids, so it gets cleaned up automatically
     when this condition expires at caster's turn start.
     """
-    name: str = "Ray of Frost Effect"
-    description: str = "Tracking condition for Ray of Frost speed reduction"
-    affected_target_uuid: Optional[UUID] = None  # The target whose speed is reduced
+    name: str = Field(default="Ray of Frost Effect", description="Display name for the ray of frost effect condition.")
+    description: str = Field(default="Tracking condition for Ray of Frost speed reduction", description="Rules-facing summary for the ray of frost effect condition.")
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags that classify the ray of frost slow for cleanup and filtering.",
+    )
+    affected_target_uuid: Optional[UUID] = Field(default=None, description="Target entity UUID whose state is modified by ray of frost effect.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -196,11 +189,11 @@ class RayOfFrostEffect(BaseCondition):
         target = Entity.get(self.affected_target_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+        if target.ignore_magical_speed_reduction:
+            return [], [], [], [], declaration_event.cancel(status_message=f"{target.name} ignores magical speed reduction")
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Apply -10 speed modifier to TARGET's movement
-        # This modifier is tracked by this condition and cleaned up when it expires
         speed_reduction = NumericalModifier(
             name="Ray of Frost",
             value=-10,
@@ -227,15 +220,16 @@ class RayOfFrost(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
-    name: str = Field(default="Ray of Frost")
-    description: str = Field(default="Ranged spell attack, 1d8 cold, target speed -10ft")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Ray of Frost", description="Display name for the ray of frost spell.")
+    description: str = Field(default="Ranged spell attack, 1d8 cold, target speed -10ft", description="Rules-facing summary for the ray of frost spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast ray of frost; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify ray of frost.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for ray of frost.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for ray of frost.",
     )
-    projectile_type: Optional[str] = Field(default="ray")
+    projectile_type: Optional[str] = Field(default="ray", description="Projectile visualization hint for ray of frost.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.COLD, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
@@ -269,20 +263,16 @@ class RayOfFrost(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 4. Clean up
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -295,14 +285,12 @@ class RayOfFrost(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss, complete without damage
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 6. On hit: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -320,7 +308,6 @@ class RayOfFrost(SpellAction):
         damage_dice = cold_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.COLD,
@@ -328,14 +315,10 @@ class RayOfFrost(SpellAction):
             parent_event=effect_event.uuid
         )
 
-        # 7. Apply speed reduction
-        # The effect condition goes on CASTER with duration=1 round
-        # This ensures it expires at the start of CASTER's next turn (SRD correct)
-        # The condition tracks the speed modifier on the TARGET via modifiers_uuids
         effect_condition = RayOfFrostEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,  # Lives on caster
-            affected_target_uuid=target.uuid,  # But affects target's speed
+            target_entity_uuid=caster.uuid,
+            affected_target_uuid=target.uuid,
             tags={ConditionTag.MAGICAL},
             duration=Duration(
                 duration=1,
@@ -361,26 +344,25 @@ class SacredFlame(SpellAction):
     DEX save or take 1d8 radiant damage. No benefit from cover.
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
-    name: str = Field(default="Sacred Flame")
-    description: str = Field(default="Target must succeed on DEX save or take radiant damage")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Sacred Flame", description="Display name for the sacred flame spell.")
+    description: str = Field(default="Target must succeed on DEX save or take radiant damage", description="Rules-facing summary for the sacred flame spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast sacred flame; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify sacred flame.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for sacred flame.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for sacred flame.",
     )
-    projectile_type: Optional[str] = Field(default="radiance")
+    projectile_type: Optional[str] = Field(default="radiance", description="Projectile visualization hint for sacred flame.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
-        # Validate line of sight
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
         if los_event is None or los_event.canceled:
             return los_event
 
-        # Validate range
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
@@ -405,10 +387,8 @@ class SacredFlame(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
@@ -417,7 +397,6 @@ class SacredFlame(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -431,7 +410,6 @@ class SacredFlame(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. On successful save: no damage
         if success:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -439,7 +417,6 @@ class SacredFlame(SpellAction):
                 status_message=f"{self.name} - target saved"
             )
 
-        # 4. On failed save: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
 
         damage_bonus = caster.get_spell_damage_bonus()
@@ -452,11 +429,9 @@ class SacredFlame(SpellAction):
             damage_type=DamageType.RADIANT
         )
 
-        # Roll damage (no crit for save spells)
         damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of effect event)
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.RADIANT,
@@ -483,19 +458,19 @@ class MagicMissile(SpellAction):
     Darts can be split among multiple targets or all sent to a single target.
     Uses MULTI_ENTITY target type with allow_same_target=True.
     """
-    name: str = Field(default="Magic Missile")
-    description: str = Field(default="Three darts of force that automatically hit")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)  # Multi-target!
+    name: str = Field(default="Magic Missile", description="Display name for the magic missile spell.")
+    description: str = Field(default="Three darts of force that automatically hit", description="Rules-facing summary for the magic missile spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast magic missile; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify magic missile.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for magic missile.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Range contract used when validating targets for magic missile.",
     )
 
-    # Multi-entity configuration
-    allow_same_target: bool = Field(default=True)  # Can send multiple darts to same target
-    valid_target_filter: str = Field(default="enemies")  # Only enemies
-    projectile_type: Optional[str] = Field(default="dart")
+    allow_same_target: bool = Field(default=True, description="Whether magic missile may select the same entity more than once.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for magic missile.")
+    projectile_type: Optional[str] = Field(default="dart", description="Projectile visualization hint for magic missile.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     def get_num_projectiles(self) -> int:
@@ -515,7 +490,6 @@ class MagicMissile(SpellAction):
             targets.append(self.target_entity_uuid)
         targets.extend(self.extra_target_entity_uuids)
 
-        # If fewer targets than darts, fill with primary
         num_darts = self.get_num_projectiles()
         while len(targets) < num_darts and self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -529,9 +503,8 @@ class MagicMissile(SpellAction):
         if not source_entity:
             return declaration_event.cancel(status_message="Source entity not found")
 
-        # Validate all targets are in range and LOS
         all_targets = self.get_all_targets()
-        validated_targets = set()  # Only validate each unique target once
+        validated_targets = set()
 
         for target_uuid in all_targets:
             if target_uuid in validated_targets:
@@ -542,20 +515,17 @@ class MagicMissile(SpellAction):
             if not target_entity:
                 return declaration_event.cancel(status_message=f"Target entity not found")
 
-            # Check LOS
             if target_uuid not in source_entity.senses.entities.keys():
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
-        # Call parent validation for MULTI_ENTITY checks (same-target, target filter)
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -571,7 +541,6 @@ class MagicMissile(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # Each dart deals 1d4+1 force damage
         dart_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -579,17 +548,15 @@ class MagicMissile(SpellAction):
             dice_numbers=1,
             damage_bonus=ModifiableValue.create(
                 source_entity_uuid=caster.uuid,
-                base_value=1,  # +1 per dart is intrinsic
+                base_value=1,
                 value_name="Magic Missile Dart"
             ),
             damage_type=DamageType.FORCE
         )
 
-        # Roll damage (auto-hit, so use HIT outcome)
         damage_dice = dart_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of execution event since no effect phase for auto-hit)
         actual_damage = target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.FORCE,
@@ -616,19 +583,19 @@ class ScorchingRay(SpellAction):
 
     At Higher Levels: Create one additional ray for each slot level above 2nd.
     """
-    name: str = Field(default="Scorching Ray")
-    description: str = Field(default="3 rays, each 2d6 fire, ranged spell attack per ray")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    name: str = Field(default="Scorching Ray", description="Display name for the scorching ray spell.")
+    description: str = Field(default="3 rays, each 2d6 fire, ranged spell attack per ray", description="Rules-facing summary for the scorching ray spell.")
+    spell_level: int = Field(default=2, description="Spell slot level required to cast scorching ray; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify scorching ray.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for scorching ray.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Range contract used when validating targets for scorching ray.",
     )
 
-    # Multi-entity configuration
-    allow_same_target: bool = Field(default=True)  # Can send multiple rays to same target
-    valid_target_filter: str = Field(default="enemies")
-    projectile_type: Optional[str] = Field(default="ray")
+    allow_same_target: bool = Field(default=True, description="Whether scorching ray may select the same entity more than once.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for scorching ray.")
+    projectile_type: Optional[str] = Field(default="ray", description="Projectile visualization hint for scorching ray.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     def get_num_projectiles(self) -> int:
@@ -645,7 +612,6 @@ class ScorchingRay(SpellAction):
             targets.append(self.target_entity_uuid)
         targets.extend(self.extra_target_entity_uuids)
 
-        # If fewer targets than rays, fill with primary
         num_rays = self.get_num_projectiles()
         while len(targets) < num_rays and self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
@@ -671,20 +637,17 @@ class ScorchingRay(SpellAction):
             if not target_entity:
                 return declaration_event.cancel(status_message="Target entity not found")
 
-            # Check LOS
             if target_uuid not in source_entity.senses.entities.keys():
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            # Check range
             distance = source_entity.senses.get_feet_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
                 )
 
-        # Call parent validation for MULTI_ENTITY checks
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -697,20 +660,16 @@ class ScorchingRay(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 4. Clean up
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -723,7 +682,6 @@ class ScorchingRay(SpellAction):
             status_message=f"Ray attack: {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
@@ -732,7 +690,6 @@ class ScorchingRay(SpellAction):
                 status_message=f"Ray misses {target.name}"
             )
 
-        # 6. On hit: roll 2d6 fire damage
         is_crit = outcome == AttackOutcome.CRIT
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
 
@@ -749,7 +706,6 @@ class ScorchingRay(SpellAction):
         damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of effect event)
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.FIRE,
@@ -779,24 +735,21 @@ class Fireball(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 3rd.
     """
-    name: str = Field(default="Fireball")
-    description: str = Field(default="20ft radius explosion dealing 8d6 fire damage (DEX save half)")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
-    projectile_type: Optional[str] = Field(default="orb")
+    name: str = Field(default="Fireball", description="Display name for the fireball spell.")
+    description: str = Field(default="20ft radius explosion dealing 8d6 fire damage (DEX save half)", description="Rules-facing summary for the fireball spell.")
+    spell_level: int = Field(default=3, description="Spell slot level required to cast fireball; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify fireball.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for fireball.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for fireball.")
+    projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for fireball.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
-    # AoE configuration - set via __init__ or field default
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by fireball to compute affected targets.")
 
-    # Target filtering - DEFAULT: hits everyone including caster and allies
-    include_self: bool = Field(default=True)  # Caster can be hit
-    valid_target_filter: str = Field(default="all")  # Hits everyone in area
+    include_self: bool = Field(default=True, description="Whether fireball can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for fireball.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=8)  # 8d6 at level 3
+    base_damage_dice: int = Field(default=8, description="Base number of damage dice rolled by fireball.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -823,20 +776,17 @@ class Fireball(SpellAction):
         if not target_pos:
             return declaration_event.cancel(status_message="No target position specified")
 
-        # Check LOS to target position (caster must see the center point)
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        # Check range
         distance = caster.senses.get_feet_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -849,10 +799,8 @@ class Fireball(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
@@ -861,7 +809,6 @@ class Fireball(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -875,7 +822,6 @@ class Fireball(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -891,10 +837,8 @@ class Fireball(SpellAction):
         damage_dice = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -908,7 +852,7 @@ class Fireball(SpellAction):
             new_phase=EventPhase.COMPLETION,
             damages=[fire_damage],
             damage_rolls=[damage_roll],
-            total_damage=final_damage,  # Required for convolution aggregation
+            total_damage=final_damage,
             status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}"
         )
 
@@ -923,23 +867,20 @@ class BurningHands(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 1st.
     """
-    name: str = Field(default="Burning Hands")
-    description: str = Field(default="15ft cone of fire dealing 3d6 fire damage (DEX save half)")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Burning Hands", description="Display name for the burning hands spell.")
+    description: str = Field(default="15ft cone of fire dealing 3d6 fire damage (DEX save half)", description="Rules-facing summary for the burning hands spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast burning hands; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify burning hands.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for burning hands.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for burning hands.")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by burning hands to compute affected targets.")
 
-    # Target filtering - hits everyone by default
-    include_self: bool = Field(default=False)  # Caster at apex NOT hit
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=False, description="Whether burning hands can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for burning hands.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=3)  # 3d6 at level 1
+    base_damage_dice: int = Field(default=3, description="Base number of damage dice rolled by burning hands.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -962,11 +903,9 @@ class BurningHands(SpellAction):
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
 
-        # For SELF range, end_position is direction indicator, not target
         if not self.end_position:
             return declaration_event.cancel(status_message="No direction specified for cone")
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -979,10 +918,8 @@ class BurningHands(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
@@ -991,7 +928,6 @@ class BurningHands(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1005,7 +941,6 @@ class BurningHands(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1021,10 +956,8 @@ class BurningHands(SpellAction):
         damage_dice = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1053,23 +986,20 @@ class LightningBolt(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 3rd.
     """
-    name: str = Field(default="Lightning Bolt")
-    description: str = Field(default="100ft×5ft line dealing 8d6 lightning damage (DEX save half)")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Lightning Bolt", description="Display name for the lightning bolt spell.")
+    description: str = Field(default="100ft×5ft line dealing 8d6 lightning damage (DEX save half)", description="Rules-facing summary for the lightning bolt spell.")
+    spell_level: int = Field(default=3, description="Spell slot level required to cast lightning bolt; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify lightning bolt.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for lightning bolt.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for lightning bolt.")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by lightning bolt to compute affected targets.")
 
-    # Target filtering
-    include_self: bool = Field(default=False)  # Caster at origin NOT hit
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=False, description="Whether lightning bolt can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for lightning bolt.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=8)  # 8d6 at level 3
+    base_damage_dice: int = Field(default=8, description="Base number of damage dice rolled by lightning bolt.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1096,7 +1026,6 @@ class LightningBolt(SpellAction):
         if not self.end_position:
             return declaration_event.cancel(status_message="No direction specified for line")
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1109,10 +1038,8 @@ class LightningBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request DEX save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
@@ -1121,7 +1048,6 @@ class LightningBolt(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1135,7 +1061,6 @@ class LightningBolt(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1151,10 +1076,8 @@ class LightningBolt(SpellAction):
         damage_dice = lightning_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1183,24 +1106,21 @@ class Thunderwave(SpellAction):
 
     At Higher Levels: +1d8 damage per slot level above 1st.
     """
-    name: str = Field(default="Thunderwave")
-    description: str = Field(default="15ft cube dealing 2d8 thunder + 10ft push on fail (CON save)")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Thunderwave", description="Display name for the thunderwave spell.")
+    description: str = Field(default="15ft cube dealing 2d8 thunder + 10ft push on fail (CON save)", description="Rules-facing summary for the thunderwave spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast thunderwave; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify thunderwave.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.THUNDER, description="Primary damage type for VFX")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for thunderwave.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for thunderwave.")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by thunderwave to compute affected targets.")
 
-    # Target filtering
-    include_self: bool = Field(default=False)  # Caster at origin NOT hit
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=False, description="Whether thunderwave can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for thunderwave.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=2)  # 2d8 at level 1
-    push_distance_feet: int = Field(default=10)  # Push 10ft on failed save
+    base_damage_dice: int = Field(default=2, description="Base number of damage dice rolled by thunderwave.")
+    push_distance_feet: int = Field(default=10, description="Distance in feet that thunderwave attempts to push failed-save targets.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1222,19 +1142,17 @@ class Thunderwave(SpellAction):
         dx = target_pos[0] - caster_pos[0]
         dy = target_pos[1] - caster_pos[1]
 
-        # Normalize to unit direction
         if dx != 0:
             dx = 1 if dx > 0 else -1
         if dy != 0:
             dy = 1 if dy > 0 else -1
 
-        # If directly on caster (shouldn't happen with include_self=False), push in spell direction
         if dx == 0 and dy == 0:
             if self.end_position:
                 dx = 1 if self.end_position[0] > caster_pos[0] else (-1 if self.end_position[0] < caster_pos[0] else 0)
                 dy = 1 if self.end_position[1] > caster_pos[1] else (-1 if self.end_position[1] < caster_pos[1] else 0)
             if dx == 0 and dy == 0:
-                dx = 1  # Default to east
+                dx = 1
 
         return (dx, dy)
 
@@ -1260,13 +1178,11 @@ class Thunderwave(SpellAction):
         for _ in range(distance_tiles):
             next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])
 
-            # Check if the forced movement can cross into the next tile.
             if not grid.can_transition(current_pos, next_pos, target_uuid):
                 was_blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
 
-            # Check if occupied by another entity
             entities_at_pos = grid.get_entities_at(next_pos)
             other_entities = [e for e in entities_at_pos if e != target_uuid]
             if other_entities:
@@ -1293,7 +1209,6 @@ class Thunderwave(SpellAction):
         if not self.end_position:
             return declaration_event.cancel(status_message="No direction specified for cube")
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1306,10 +1221,8 @@ class Thunderwave(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1318,7 +1231,6 @@ class Thunderwave(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1332,7 +1244,6 @@ class Thunderwave(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1348,10 +1259,8 @@ class Thunderwave(SpellAction):
         damage_dice = thunder_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save, no push
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1360,7 +1269,6 @@ class Thunderwave(SpellAction):
                 parent_event=effect_event.uuid
             )
 
-        # 6. Push on failed save only
         push_applied = False
         push_distance_actual = 0
         if not success:
@@ -1371,7 +1279,7 @@ class Thunderwave(SpellAction):
             )
 
             if end_pos != start_pos:
-                # Fire forced movement event (child of effect event)
+
                 forced_event = ForcedMovementEvent(
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
@@ -1388,11 +1296,9 @@ class Thunderwave(SpellAction):
                     phase=EventPhase.DECLARATION,
                     parent_event=effect_event.uuid
                 )
-                # Move to completion
+
                 forced_event.phase_to(EventPhase.COMPLETION)
 
-                # Apply movement via Entity helper
-                # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
                 Entity.update_entity_position(target, end_pos, parent_event=effect_event.uuid)
                 push_applied = True
 
@@ -1417,24 +1323,21 @@ class Shatter(SpellAction):
 
     At Higher Levels: +1d8 damage per slot level above 2nd.
     """
-    name: str = Field(default="Shatter")
-    description: str = Field(default="10ft radius sphere dealing 3d8 thunder damage (CON save half)")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    projectile_type: Optional[str] = Field(default="orb")
+    name: str = Field(default="Shatter", description="Display name for the shatter spell.")
+    description: str = Field(default="10ft radius sphere dealing 3d8 thunder damage (CON save half)", description="Rules-facing summary for the shatter spell.")
+    spell_level: int = Field(default=2, description="Spell slot level required to cast shatter; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify shatter.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for shatter.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for shatter.")
+    projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for shatter.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.THUNDER, description="Primary damage type for VFX")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by shatter to compute affected targets.")
 
-    # Target filtering
-    include_self: bool = Field(default=True)  # Caster can be hit if in radius
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=True, description="Whether shatter can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for shatter.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=3)  # 3d8 at level 2
+    base_damage_dice: int = Field(default=3, description="Base number of damage dice rolled by shatter.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1461,20 +1364,17 @@ class Shatter(SpellAction):
         if not target_pos:
             return declaration_event.cancel(status_message="No target position specified")
 
-        # Check LOS to target position (caster must see the center point)
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        # Check range
         distance = caster.senses.get_feet_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1487,10 +1387,8 @@ class Shatter(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1499,7 +1397,6 @@ class Shatter(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1513,7 +1410,6 @@ class Shatter(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1529,10 +1425,8 @@ class Shatter(SpellAction):
         damage_dice = thunder_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1561,24 +1455,21 @@ class CircleOfDeath(SpellAction):
 
     At Higher Levels: +2d6 damage per slot level above 6th.
     """
-    name: str = Field(default="Circle of Death")
-    description: str = Field(default="60ft radius sphere dealing 8d6 necrotic damage (CON save half)")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="necromancy")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
-    projectile_type: Optional[str] = Field(default="orb")
+    name: str = Field(default="Circle of Death", description="Display name for the circle of death spell.")
+    description: str = Field(default="60ft radius sphere dealing 8d6 necrotic damage (CON save half)", description="Rules-facing summary for the circle of death spell.")
+    spell_level: int = Field(default=6, description="Spell slot level required to cast circle of death; cantrips use 0.")
+    spell_school: str = Field(default="necromancy", description="D&D school of magic used to classify circle of death.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for circle of death.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for circle of death.")
+    projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for circle of death.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by circle of death to compute affected targets.")
 
-    # Target filtering - caster CAN be hit
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=True, description="Whether circle of death can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for circle of death.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=8)  # 8d6 at level 6
+    base_damage_dice: int = Field(default=8, description="Base number of damage dice rolled by circle of death.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1592,7 +1483,7 @@ class CircleOfDeath(SpellAction):
     def get_damage_dice_count(self) -> int:
         """8d6 base + 2d6 per level above 6th."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
-        return self.base_damage_dice + (upcast_bonus * 2)  # +2d6 per level
+        return self.base_damage_dice + (upcast_bonus * 2)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
@@ -1605,20 +1496,17 @@ class CircleOfDeath(SpellAction):
         if not target_pos:
             return declaration_event.cancel(status_message="No target position specified")
 
-        # Check LOS to target position
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        # Check range
         distance = caster.senses.get_feet_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
             )
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1631,10 +1519,8 @@ class CircleOfDeath(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1643,7 +1529,6 @@ class CircleOfDeath(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1657,7 +1542,6 @@ class CircleOfDeath(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1673,10 +1557,8 @@ class CircleOfDeath(SpellAction):
         damage_dice = necrotic_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1704,23 +1586,20 @@ class ConeOfCold(SpellAction):
 
     At Higher Levels: +1d8 damage per slot level above 5th.
     """
-    name: str = Field(default="Cone of Cold")
-    description: str = Field(default="60ft cone dealing 8d8 cold damage (CON save half)")
-    spell_level: int = Field(default=5)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Cone of Cold", description="Display name for the cone of cold spell.")
+    description: str = Field(default="60ft cone dealing 8d8 cold damage (CON save half)", description="Rules-facing summary for the cone of cold spell.")
+    spell_level: int = Field(default=5, description="Spell slot level required to cast cone of cold; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify cone of cold.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.COLD, description="Primary damage type for VFX")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for cone of cold.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for cone of cold.")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by cone of cold to compute affected targets.")
 
-    # Target filtering - caster at apex NOT hit
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=False, description="Whether cone of cold can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for cone of cold.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=8)  # 8d8 at level 5
+    base_damage_dice: int = Field(default=8, description="Base number of damage dice rolled by cone of cold.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1746,7 +1625,6 @@ class ConeOfCold(SpellAction):
         if not self.end_position:
             return declaration_event.cancel(status_message="No direction specified for cone")
 
-        # Let parent handle POSITION_AOE multi-target validation
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -1759,10 +1637,8 @@ class ConeOfCold(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate spell DC
         dc = caster.spell_save_dc()
 
-        # 2. Request CON save (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -1771,7 +1647,6 @@ class ConeOfCold(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Get save bonus for combat log
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
         effect_event = execution_event.phase_to(
@@ -1785,7 +1660,6 @@ class ConeOfCold(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
-        # 3. Roll damage
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -1801,10 +1675,8 @@ class ConeOfCold(SpellAction):
         damage_dice = cold_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # 4. Half damage on successful save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # 5. Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -1830,11 +1702,11 @@ class SunburstBlindedEffect(BaseCondition):
     - Has Blinded as sub-condition
     - Repeat CON save at end of each turn to end blindness
     """
-    name: str = "Sunburst Blindness"
-    description: str = "Blinded by brilliant sunlight"
+    name: str = Field(default="Sunburst Blindness", description="Display name for the sunburst blinded effect condition.")
+    description: str = Field(default="Blinded by brilliant sunlight", description="Rules-facing summary for the sunburst blinded effect condition.")
 
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by sunburst blinded effect.")
+    spell_dc: int = Field(default=10, description="Spell save DC used by sunburst blinded effect saving throws.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -1848,7 +1720,6 @@ class SunburstBlindedEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        # Apply Blinded as sub-condition
         blinded = Blinded(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -1859,7 +1730,6 @@ class SunburstBlindedEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(blinded.uuid)
 
-        # Register repeat save handler
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
             target.add_event_handler(handler)
@@ -1882,7 +1752,7 @@ class SunburstBlindedEffect(BaseCondition):
         dc = self.spell_dc
 
         def repeat_save_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-    
+
             if event.source_entity_uuid != target_uuid:
                 return None
 
@@ -1890,18 +1760,16 @@ class SunburstBlindedEffect(BaseCondition):
             if not target:
                 return None
 
-            # Check if still affected
             sunburst_blind = target.active_conditions.get("Sunburst Blindness")
             if not sunburst_blind or sunburst_blind.uuid != effect_uuid:
                 return None
 
             caster = Entity.get(caster_uuid)
             if not caster:
-                # Caster gone, end the effect
+
                 target.remove_condition("Sunburst Blindness", parent_event=event)
                 return None
 
-            # Repeat CON save
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution",
@@ -1911,7 +1779,7 @@ class SunburstBlindedEffect(BaseCondition):
             _, _, success = target.saving_throw(save_request)
 
             if success:
-                # Remove this condition (Blinded auto-removes as sub-condition)
+
                 target.remove_condition("Sunburst Blindness", parent_event=event)
             return None
 
@@ -1935,23 +1803,20 @@ class Sunburst(SpellAction):
     Undead and oozes have disadvantage on the save.
     Repeat CON save at end of each turn to end blindness.
     """
-    name: str = Field(default="Sunburst")
-    description: str = Field(default="60ft sphere, 12d6 radiant, CON save or blinded")
-    spell_level: int = Field(default=8)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Sunburst", description="Display name for the sunburst spell.")
+    description: str = Field(default="60ft sphere, 12d6 radiant, CON save or blinded", description="Rules-facing summary for the sunburst spell.")
+    spell_level: int = Field(default=8, description="Spell slot level required to cast sunburst; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify sunburst.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for sunburst.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for sunburst.")
 
-    # AoE configuration
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by sunburst to compute affected targets.")
 
-    # Target filtering
-    include_self: bool = Field(default=True)  # Caster can be hit
-    valid_target_filter: str = Field(default="all")  # Hits everyone
+    include_self: bool = Field(default=True, description="Whether sunburst can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for sunburst.")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=12)  # 12d6
+    base_damage_dice: int = Field(default=12, description="Base number of damage dice rolled by sunburst.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1994,10 +1859,8 @@ class Sunburst(SpellAction):
 
         dc = caster.spell_save_dc()
 
-        # Check for disadvantage (undead or ooze)
         has_disadvantage = target.creature_type in [CreatureType.UNDEAD, CreatureType.OOZE]
 
-        # Add temporary disadvantage modifier if applicable
         mod_uuid: Optional[UUID] = None
         if has_disadvantage:
             disadv_mod = AdvantageModifier(
@@ -2008,7 +1871,6 @@ class Sunburst(SpellAction):
             )
             mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
 
-        # CON save request (child of execution event)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="constitution",
@@ -2017,7 +1879,6 @@ class Sunburst(SpellAction):
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        # Remove temporary disadvantage modifier
         if has_disadvantage and mod_uuid:
             target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
 
@@ -2034,7 +1895,6 @@ class Sunburst(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc}"
         )
 
-        # Roll damage
         damage_bonus = caster.get_spell_damage_bonus()
         radiant_damage = Damage(
             source_entity_uuid=caster.uuid,
@@ -2048,10 +1908,8 @@ class Sunburst(SpellAction):
         damage_dice = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
 
-        # Half damage on save
         final_damage = damage_roll.total // 2 if success else damage_roll.total
 
-        # Apply damage (child of effect event)
         if final_damage > 0:
             target.receive_damage(
                 amount=final_damage,
@@ -2060,7 +1918,6 @@ class Sunburst(SpellAction):
                 parent_event=effect_event.uuid
             )
 
-        # On FAILED save: apply blindness with repeat saves
         if not success:
             blind_effect = SunburstBlindedEffect(
                 source_entity_uuid=caster.uuid,
@@ -2098,11 +1955,9 @@ def _is_wearing_metal_armor(entity) -> bool:
     if body_armor is None:
         return False
 
-    # Heavy armor is always metal
     if body_armor.type == ArmorType.HEAVY:
         return True
 
-    # Check medium armor names for metal types
     if body_armor.type == ArmorType.MEDIUM:
         armor_name = body_armor.name.lower()
         metal_keywords = ["chain", "scale", "half plate"]
@@ -2122,15 +1977,16 @@ class ShockingGrasp(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
-    name: str = Field(default="Shocking Grasp")
-    description: str = Field(default="Melee spell attack, 1d8 lightning, advantage vs metal armor, no reactions")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Shocking Grasp", description="Display name for the shocking grasp spell.")
+    description: str = Field(default="Melee spell attack, 1d8 lightning, advantage vs metal armor, no reactions", description="Rules-facing summary for the shocking grasp spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast shocking grasp; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify shocking grasp.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for shocking grasp.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5),
+        description="Range contract used when validating targets for shocking grasp.",
     )
-    projectile_type: Optional[str] = Field(default="touch")
+    projectile_type: Optional[str] = Field(default="touch", description="Projectile visualization hint for shocking grasp.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
@@ -2146,7 +2002,6 @@ class ShockingGrasp(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        # Melee range check (5 feet)
         distance = source_entity.senses.get_feet_distance(target_entity.position)
         if distance > 5:
             return declaration_event.cancel(
@@ -2167,11 +2022,9 @@ class ShockingGrasp(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Check for metal armor advantage
         has_metal_armor = _is_wearing_metal_armor(target)
         metal_adv_uuid: Optional[UUID] = None
         if has_metal_armor:
@@ -2183,16 +2036,13 @@ class ShockingGrasp(SpellAction):
             )
             metal_adv_uuid = attack_bonus.self_static.add_advantage_modifier(metal_adv)
 
-        # 3. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 4. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 5. Clean up
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
         if metal_adv_uuid:
@@ -2208,14 +2058,12 @@ class ShockingGrasp(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}{metal_text}: {outcome.value}"
         )
 
-        # 6. On miss
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 7. On hit: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -2233,7 +2081,6 @@ class ShockingGrasp(SpellAction):
         damage_dice = lightning_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of effect event)
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.LIGHTNING,
@@ -2241,7 +2088,6 @@ class ShockingGrasp(SpellAction):
             parent_event=effect_event.uuid
         )
 
-        # 8. Apply No Reactions condition (1 round duration - until start of target's next turn)
         no_reactions = NoReactions(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -2273,11 +2119,10 @@ class GuidingBoltMarked(BaseCondition):
     Uses to_target_static to grant attackers advantage.
     Has an EventHandler to remove after first attack against target.
     """
-    name: str = "Guiding Bolt"
-    description: str = "Next attack against this creature has advantage"
+    name: str = Field(default="Guiding Bolt", description="Display name for the guiding bolt marked condition.")
+    description: str = Field(default="Next attack against this creature has advantage", description="Rules-facing summary for the guiding bolt marked condition.")
 
-    # Track caster for duration
-    caster_uuid: Optional[UUID] = None
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by guiding bolt marked.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -2290,7 +2135,6 @@ class GuidingBoltMarked(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        # Add advantage to attacks against this target (to_target_static)
         adv_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(
             AdvantageModifier(
                 name="Guiding Bolt",
@@ -2301,7 +2145,6 @@ class GuidingBoltMarked(BaseCondition):
         )
         outs.append((target.equipment.ac_bonus.uuid, adv_uuid))
 
-        # Register handler to remove on first attack against target
         handler = self._create_remove_on_attack_handler()
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
@@ -2322,7 +2165,7 @@ class GuidingBoltMarked(BaseCondition):
         effect_uuid = self.uuid
 
         def remove_on_attack_processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            # Only trigger for attacks against this target
+
             if event.target_entity_uuid != target_uuid:
                 return None
 
@@ -2330,12 +2173,10 @@ class GuidingBoltMarked(BaseCondition):
             if not target:
                 return None
 
-            # Check if still marked by this specific Guiding Bolt
             guiding_mark = target.active_conditions.get("Guiding Bolt")
             if not guiding_mark or guiding_mark.uuid != effect_uuid:
                 return None
 
-            # Remove the condition (advantage was already applied via to_target_static)
             target.remove_condition("Guiding Bolt", parent_event=event)
             return None
 
@@ -2345,7 +2186,7 @@ class GuidingBoltMarked(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.ATTACK,
-                    event_phase=EventPhase.EFFECT  # After hit/miss determined, before damage
+                    event_phase=EventPhase.EFFECT
                 )
             ],
             event_processor=remove_on_attack_processor
@@ -2362,19 +2203,19 @@ class GuidingBolt(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 1st.
     """
-    name: str = Field(default="Guiding Bolt")
-    description: str = Field(default="Ranged spell attack, 4d6 radiant, next attack has advantage")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Guiding Bolt", description="Display name for the guiding bolt spell.")
+    description: str = Field(default="Ranged spell attack, 4d6 radiant, next attack has advantage", description="Rules-facing summary for the guiding bolt spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast guiding bolt; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify guiding bolt.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for guiding bolt.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Range contract used when validating targets for guiding bolt.",
     )
-    projectile_type: Optional[str] = Field(default="bolt")
+    projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for guiding bolt.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
 
-    # Damage configuration
-    base_damage_dice: int = Field(default=4)  # 4d6 at level 1
+    base_damage_dice: int = Field(default=4, description="Base number of damage dice rolled by guiding bolt.")
 
     def get_damage_dice_count(self) -> int:
         """4d6 base + 1d6 per level above 1st."""
@@ -2414,20 +2255,16 @@ class GuidingBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 4. Clean up
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -2440,14 +2277,12 @@ class GuidingBolt(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 6. On hit: roll damage
         num_dice = self.get_damage_dice_count()
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -2465,7 +2300,6 @@ class GuidingBolt(SpellAction):
         damage_dice = radiant_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        # Apply damage (child of effect event)
         target.receive_damage(
             amount=damage_roll.total,
             damage_type=DamageType.RADIANT,
@@ -2473,18 +2307,15 @@ class GuidingBolt(SpellAction):
             parent_event=effect_event.uuid
         )
 
-        # 7. Apply Guiding Bolt mark (advantage on next attack)
-        # Duration: Until next attack against target OR "until the end of your next turn"
-        # We use 2 rounds to cover "end of your next turn" - the handler removes on first attack
         guiding_mark = GuidingBoltMarked(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             caster_uuid=caster.uuid,
             duration=Duration(
-                duration=2,  # End of caster's next turn
+                duration=2,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid  # Expires relative to caster
+                target_entity_uuid=caster.uuid
             )
         )
         target.add_condition(guiding_mark, parent_event=effect_event)
@@ -2504,15 +2335,16 @@ class EldritchBlast(SpellAction):
     Make a ranged spell attack. On hit, target takes 1d10 force damage.
     Damage scales with caster level: 2d10 at 5th, 3d10 at 11th, 4d10 at 17th.
     """
-    name: str = Field(default="Eldritch Blast")
-    description: str = Field(default="A beam of crackling force energy")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Eldritch Blast", description="Display name for the eldritch blast spell.")
+    description: str = Field(default="A beam of crackling force energy", description="Rules-facing summary for the eldritch blast spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast eldritch blast; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify eldritch blast.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for eldritch blast.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
+        description="Range contract used when validating targets for eldritch blast.",
     )
-    projectile_type: Optional[str] = Field(default="beam")
+    projectile_type: Optional[str] = Field(default="beam", description="Projectile visualization hint for eldritch blast.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
@@ -2544,20 +2376,16 @@ class EldritchBlast(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Calculate bonuses
         attack_bonus = caster.spell_attack_bonus(target.uuid)
         target_ac = target.ac_bonus(caster.uuid)
 
-        # 2. Cross-propagate modifiers
         attack_bonus.set_from_target(target_ac)
         target_ac.set_from_target(attack_bonus)
 
-        # 3. Roll attack
         dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
         crit_threshold = caster.get_spell_crit_threshold()
         outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
 
-        # 4. Clean up cross-propagation
         attack_bonus.reset_from_target()
         target_ac.reset_from_target()
 
@@ -2570,14 +2398,12 @@ class EldritchBlast(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
-        # 5. On miss, complete without damage
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} missed"
             )
 
-        # 6. On hit: roll damage
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -2609,36 +2435,31 @@ class EldritchBlast(SpellAction):
             status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )
 
-
-# =============================================================================
-# Gust of Wind (Level 2, Evocation, Concentration)
-# =============================================================================
-
 from dnd.tile_conditions import ZoneControlCondition
 
 
 class GustOfWindZone(ZoneControlCondition):
     """Zone for Gust of Wind - 60ft line of wind that pushes creatures."""
-    name: str = "Gust of Wind Zone"
-    description: str = "Strong wind pushes creatures and costs extra movement"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    name: str = Field(default="Gust of Wind Zone", description="Display name for the gust of wind zone zone condition.")
+    description: str = Field(default="Strong wind pushes creatures and costs extra movement", description="Rules-facing summary for the gust of wind zone zone condition.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the gust of wind zone for cleanup and filtering.")
 
-    zone_shape: str = Field(default="line")
-    zone_radius_feet: int = Field(default=60)
-    adds_difficult_terrain: bool = Field(default=True)
+    zone_shape: str = Field(default="line", description="Domain value for zone_shape on gust of wind zone.")
+    zone_radius_feet: int = Field(default=60, description="Zone radius in feet used by gust of wind zone.")
+    adds_difficult_terrain: bool = Field(default=True, description="Whether gust of wind zone makes affected tiles difficult terrain.")
 
-    marker_name: Optional[str] = Field(default="Gust of Wind")
-    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+    marker_name: Optional[str] = Field(default="Gust of Wind", description="Visible tile marker name created by gust of wind zone.")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for gust of wind zone hazard markers.")
 
-    spell_dc: int = Field(default=10)
-    caster_position: Tuple[int, int] = Field(default=(0, 0))
+    spell_dc: int = Field(default=10, description="Spell save DC used by gust of wind zone saving throws.")
+    caster_position: Tuple[int, int] = Field(default=(0, 0), description="Domain value for caster_position on gust of wind zone.")
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute line from caster in the chosen direction."""
         if not self.zone_direction:
             return {self.zone_center}
         dx, dy = self.zone_direction
-        length_tiles = self.zone_radius_feet // 5  # 60ft / 5 = 12 tiles
+        length_tiles = self.zone_radius_feet // 5
         target = (self.zone_center[0] + dx * length_tiles,
                   self.zone_center[1] + dy * length_tiles)
 
@@ -2710,6 +2531,56 @@ class GustOfWindZone(ZoneControlCondition):
             event_processor=processor
         )
 
+    def _emit_wind_exposure(self, parent_event: Optional[Event] = None) -> None:
+        """Emit strong wind exposure over the current Gust line."""
+        if not self.affected_positions:
+            return
+        wind_event = WindExposureEvent(
+            source_entity_uuid=self.source_entity_uuid,
+            positions=set(self.affected_positions),
+            wind_speed_mph=20,
+            source_description="Gust of Wind",
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.DECLARATION,
+        )
+        wind_event = wind_event.phase_to(EventPhase.EFFECT)
+        wind_event.phase_to(EventPhase.COMPLETION)
+
+    def _create_wind_exposure_turn_handler(self) -> EventHandler:
+        """Create a caster-turn handler that re-emits the persistent wind."""
+        source_uuid = self.source_entity_uuid
+        zone_condition = self
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type != EventType.TURN_START:
+                return None
+            if event.source_entity_uuid != source_uuid:
+                return None
+            zone_condition._emit_wind_exposure(event)
+            return None
+
+        return EventHandler(
+            name="Gust of Wind Exposure",
+            source_entity_uuid=source_uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.TURN_START,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=source_uuid,
+            )],
+            event_processor=processor,
+        )
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        """Apply Gust zone state and emit its strong-wind exposure."""
+        terrain_modifiers, handler_uuids, sub_condition_uuids, spatial_handler_uuids, effect_event = super()._apply(declaration_event)
+
+        wind_handler = self._create_wind_exposure_turn_handler()
+        EventQueue.add_event_handler(wind_handler)
+        handler_uuids.append(wind_handler.uuid)
+        self._emit_wind_exposure(effect_event)
+
+        return terrain_modifiers, handler_uuids, sub_condition_uuids, spatial_handler_uuids, effect_event
+
 
 def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
                       source_uuid: UUID, parent_event: Event) -> None:
@@ -2724,7 +2595,6 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     if success:
         return
 
-    # Push 3 tiles (15ft) away from caster
     entity_pos = entity.senses.position
     dx = entity_pos[0] - caster_pos[0]
     dy = entity_pos[1] - caster_pos[1]
@@ -2732,7 +2602,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     push_dx = round(dx / length) if dx != 0 else 0
     push_dy = round(dy / length) if dy != 0 else 0
     if push_dx == 0 and push_dy == 0:
-        push_dx = 1  # Default push direction
+        push_dx = 1
 
     grid = get_map()
     current_pos = entity_pos
@@ -2769,17 +2639,17 @@ class GustOfWind(SpellAction):
     A line of strong wind 60ft long and 10ft wide blasts from you.
     STR save or pushed 15ft away. Difficult terrain toward caster.
     """
-    name: str = Field(default="Gust of Wind")
-    description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    name: str = Field(default="Gust of Wind", description="Display name for the gust of wind spell.")
+    description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain", description="Rules-facing summary for the gust of wind spell.")
+    spell_level: int = Field(default=2, description="Spell slot level required to cast gust of wind; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify gust of wind.")
+    concentration: bool = Field(default=True, description="Whether gust of wind creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for gust of wind.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by gust of wind to compute affected targets.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for gust of wind.")
 
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    include_self: bool = Field(default=False, description="Whether gust of wind can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for gust of wind.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -2837,7 +2707,6 @@ class GustOfWind(SpellAction):
         dc = caster.spell_save_dc()
         target_pos = self.end_position or (caster.senses.position[0] + 1, caster.senses.position[1])
 
-        # Compute direction for zone
         dx = target_pos[0] - caster.senses.position[0]
         dy = target_pos[1] - caster.senses.position[1]
         length = max(abs(dx), abs(dy), 1)
@@ -2857,21 +2726,17 @@ class GustOfWind(SpellAction):
         concentration.add_linked_condition(caster.uuid, zone.uuid)
 
 
-# =============================================================================
-# Ice Storm (Level 4, Evocation, NOT concentration)
-# =============================================================================
-
 class IceStormTerrain(ZoneControlCondition):
     """Temporary difficult terrain from Ice Storm. Lasts 1 round."""
-    name: str = "Ice Storm Terrain"
-    description: str = "Ground covered in ice - difficult terrain"
+    name: str = Field(default="Ice Storm Terrain", description="Display name for the ice storm terrain zone condition.")
+    description: str = Field(default="Ground covered in ice - difficult terrain", description="Rules-facing summary for the ice storm terrain zone condition.")
 
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=20)
-    adds_difficult_terrain: bool = Field(default=True)
+    zone_shape: str = Field(default="sphere", description="Domain value for zone_shape on ice storm terrain.")
+    zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by ice storm terrain.")
+    adds_difficult_terrain: bool = Field(default=True, description="Whether ice storm terrain makes affected tiles difficult terrain.")
 
-    marker_name: Optional[str] = Field(default="Ice Storm")
-    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+    marker_name: Optional[str] = Field(default="Ice Storm", description="Visible tile marker name created by ice storm terrain.")
+    marker_hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for ice storm terrain hazard markers.")
 
 
 class IceStorm(SpellAction):
@@ -2882,22 +2747,22 @@ class IceStorm(SpellAction):
 
     At Higher Levels: +1d8 bludgeoning per level above 4th.
     """
-    name: str = Field(default="Ice Storm")
-    description: str = Field(default="20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round")
-    spell_level: int = Field(default=4)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    projectile_type: Optional[str] = Field(default="rain")
+    name: str = Field(default="Ice Storm", description="Display name for the ice storm spell.")
+    description: str = Field(default="20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round", description="Rules-facing summary for the ice storm spell.")
+    spell_level: int = Field(default=4, description="Spell slot level required to cast ice storm; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify ice storm.")
+    concentration: bool = Field(default=False, description="Whether ice storm creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for ice storm.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for ice storm.")
+    projectile_type: Optional[str] = Field(default="rain", description="Projectile visualization hint for ice storm.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.BLUDGEONING, description="Primary damage type for VFX")
 
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="all")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by ice storm to compute affected targets.")
+    include_self: bool = Field(default=True, description="Whether ice storm can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for ice storm.")
 
-    base_bludg_dice: int = Field(default=2)
-    cold_dice: int = Field(default=4)
+    base_bludg_dice: int = Field(default=2, description="Domain value for base_bludg_dice on ice storm.")
+    cold_dice: int = Field(default=4, description="Domain value for cold_dice on ice storm.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -2946,7 +2811,6 @@ class IceStorm(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
 
-        # 2d8 bludgeoning (+ upcast) + 4d6 cold
         bludg_count = self.base_bludg_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -3008,24 +2872,20 @@ class IceStorm(SpellAction):
         caster.add_condition(terrain)
 
 
-# =============================================================================
-# Sunbeam (Level 6, Evocation, Concentration)
-# =============================================================================
-
 class SunbeamStrike(BaseAction):
     """Action granted by Sunbeam to fire a beam of radiant light each turn."""
-    name: str = Field(default="Sunbeam Strike")
-    description: str = Field(default="Fire a beam of brilliant light - 60ft line")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY)
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    name: str = Field(default="Sunbeam Strike", description="Display name for the sunbeam strike action.")
+    description: str = Field(default="Fire a beam of brilliant light - 60ft line", description="Rules-facing summary for the sunbeam strike action.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for sunbeam strike.")
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Domain value for action_category on sunbeam strike.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by sunbeam strike to compute affected targets.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Sunbeam Strike", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
-    spell_dc: int = Field(default=10)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    ], description="Action economy costs paid to execute sunbeam strike.")
+    spell_dc: int = Field(default=10, description="Spell save DC used by sunbeam strike saving throws.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for sunbeam strike.")
+    include_self: bool = Field(default=False, description="Whether sunbeam strike can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for sunbeam strike.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -3097,7 +2957,6 @@ class SunbeamStrike(BaseAction):
         final_damage = damage_roll.total // 2 if success else damage_roll.total
         target.receive_damage(final_damage, DamageType.RADIANT, caster.uuid, parent_event=effect_event.uuid)
 
-        # Blinded on failed save (1 round)
         if not success:
             blinded = Blinded(
                 source_entity_uuid=caster.uuid,
@@ -3125,14 +2984,14 @@ class Sunbeam(SpellAction):
     CON save or 6d8 radiant + Blinded (half on save, no blind).
     You can create a new beam each turn as an action.
     """
-    name: str = Field(default="Sunbeam")
-    description: str = Field(default="60ft line beam, 6d8 radiant + Blinded (CON half), repeatable")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="evocation")
+    name: str = Field(default="Sunbeam", description="Display name for the sunbeam spell.")
+    description: str = Field(default="60ft line beam, 6d8 radiant + Blinded (CON half), repeatable", description="Rules-facing summary for the sunbeam spell.")
+    spell_level: int = Field(default=6, description="Spell slot level required to cast sunbeam; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify sunbeam.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.SELF)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    concentration: bool = Field(default=True, description="Whether sunbeam creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode used by action discovery and validation for sunbeam.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for sunbeam.")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3146,7 +3005,6 @@ class Sunbeam(SpellAction):
             status_message=f"{caster.name} casts Sunbeam"
         )
 
-        # Register Sunbeam Strike action
         strike = SunbeamStrike(
             source_entity_uuid=caster.uuid,
             spell_dc=dc,
@@ -3154,7 +3012,6 @@ class Sunbeam(SpellAction):
         )
         caster.register_action(strike)
 
-        # Apply Concentrating + marker condition for action cleanup
         concentration = self.ensure_concentration(effect_event)
         marker = ConcentrationActionMarker(
             source_entity_uuid=caster.uuid,
@@ -3164,14 +3021,13 @@ class Sunbeam(SpellAction):
         caster.add_condition(marker, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, marker.uuid)
 
-        # Fire the first beam immediately on cast (D&D 5e: beam flashes on cast)
         if self.end_position:
             first_strike = SunbeamStrike(
                 source_entity_uuid=caster.uuid,
                 end_position=self.end_position,
                 spell_dc=dc,
                 template=False,
-                costs=[],  # No additional cost — already paid by casting Sunbeam
+                costs=[],
             )
             first_strike.apply()
 
@@ -3180,10 +3036,6 @@ class Sunbeam(SpellAction):
             status_message=f"{caster.name} channels Sunbeam - can fire a beam each turn"
         )
 
-
-# =============================================================================
-# CHAIN LIGHTNING
-# =============================================================================
 
 class ChainLightning(SpellAction):
     """Chain Lightning - 6th level Evocation
@@ -3195,14 +3047,14 @@ class ChainLightning(SpellAction):
 
     At Higher Levels: +1 additional secondary target per slot level above 6th.
     """
-    name: str = Field(default="Chain Lightning")
-    description: str = Field(default="10d8 lightning to primary + up to 3 secondaries (DEX half)")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
-    valid_target_filter: str = Field(default="enemies")
-    projectile_type: Optional[str] = Field(default="bolt")
+    name: str = Field(default="Chain Lightning", description="Display name for the chain lightning spell.")
+    description: str = Field(default="10d8 lightning to primary + up to 3 secondaries (DEX half)", description="Rules-facing summary for the chain lightning spell.")
+    spell_level: int = Field(default=6, description="Spell slot level required to cast chain lightning; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify chain lightning.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for chain lightning.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for chain lightning.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for chain lightning.")
+    projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for chain lightning.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
@@ -3227,12 +3079,10 @@ class ChainLightning(SpellAction):
             status_message=f"{caster.name} casts Chain Lightning"
         )
 
-        # Build chain: primary + secondaries within 30ft of any chain member
         chain_targets = [target]
         chain_positions: Set[Tuple[int, int]] = {target.position}
         chain_uuids = {target.uuid}
 
-        # Find all visible enemies as entities
         visible_enemy_dict = caster.get_visible_enemies()
         visible_enemies: List[Entity] = []
         for e_uuid in visible_enemy_dict:
@@ -3247,7 +3097,7 @@ class ChainLightning(SpellAction):
             for enemy in visible_enemies:
                 if enemy.uuid in chain_uuids or not enemy.has_hp:
                     continue
-                # Distance to nearest chain member
+
                 for chain_pos in chain_positions:
                     dist = enemy.senses.get_feet_distance(chain_pos)
                     if dist <= 30 and dist < best_distance:
@@ -3260,7 +3110,6 @@ class ChainLightning(SpellAction):
             chain_positions.add(best_candidate.position)
             chain_uuids.add(best_candidate.uuid)
 
-        # Apply damage to each target
         total_damage = 0
         all_damages: List[Damage] = []
         all_rolls = []
@@ -3292,16 +3141,12 @@ class ChainLightning(SpellAction):
         )
 
 
-# =============================================================================
-# PRISMATIC SPRAY
-# =============================================================================
-
 class PrismaticRestrained(BaseCondition):
     """Prismatic Spray Indigo effect - Restrained with repeat CON save at turn end."""
-    name: str = "Prismatic Restrained"
-    description: str = "Restrained by prismatic energy, CON save to end"
-    caster_uuid: Optional[UUID] = None
-    spell_dc: int = 10
+    name: str = Field(default="Prismatic Restrained", description="Display name for the prismatic restrained condition.")
+    description: str = Field(default="Restrained by prismatic energy, CON save to end", description="Rules-facing summary for the prismatic restrained condition.")
+    caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by prismatic restrained.")
+    spell_dc: int = Field(default=10, description="Spell save DC used by prismatic restrained saving throws.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -3310,7 +3155,6 @@ class PrismaticRestrained(BaseCondition):
 
         sub_conditions_uuids: List[UUID] = []
 
-        # Apply Restrained as sub-condition
         restrained = Restrained(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
@@ -3320,7 +3164,6 @@ class PrismaticRestrained(BaseCondition):
         target.add_condition(restrained, parent_event=declaration_event)
         sub_conditions_uuids.append(restrained.uuid)
 
-        # Register repeat CON save handler
         handler = self._create_repeat_save_handler()
         target.add_event_handler(handler)
         handler_uuids = [handler.uuid]
@@ -3386,15 +3229,15 @@ class PrismaticSpray(SpellAction):
 
     Duration: Instantaneous
     """
-    name: str = Field(default="Prismatic Spray")
-    description: str = Field(default="60ft cone, random color effect per target")
-    spell_level: int = Field(default=7)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="all")
+    name: str = Field(default="Prismatic Spray", description="Display name for the prismatic spray spell.")
+    description: str = Field(default="60ft cone, random color effect per target", description="Rules-facing summary for the prismatic spray spell.")
+    spell_level: int = Field(default=7, description="Spell slot level required to cast prismatic spray; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify prismatic spray.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for prismatic spray.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for prismatic spray.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by prismatic spray to compute affected targets.")
+    include_self: bool = Field(default=False, description="Whether prismatic spray can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for prismatic spray.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -3419,13 +3262,13 @@ class PrismaticSpray(SpellAction):
         dc: int, parent_event: Event
     ) -> None:
         """Apply a single color effect to a target."""
-        # Colors 1-5: damage types with DEX save for half (except 4 = CON)
+
         color_damage: dict[int, DamageType] = {
-            1: DamageType.FIRE,       # Red
-            2: DamageType.ACID,       # Orange
-            3: DamageType.LIGHTNING,  # Yellow
-            4: DamageType.POISON,     # Green
-            5: DamageType.COLD,       # Blue
+            1: DamageType.FIRE,
+            2: DamageType.ACID,
+            3: DamageType.LIGHTNING,
+            4: DamageType.POISON,
+            5: DamageType.COLD,
         }
 
         if color in color_damage:
@@ -3447,7 +3290,7 @@ class PrismaticSpray(SpellAction):
             target.receive_damage(final_damage, color_damage[color], caster.uuid, parent_event=parent_event.uuid)
 
         elif color == 6:
-            # Indigo: CON save or Restrained with repeat save
+
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="constitution", dc=dc,
@@ -3465,7 +3308,7 @@ class PrismaticSpray(SpellAction):
                 target.add_condition(prismatic_restrained, parent_event=parent_event)
 
         elif color == 7:
-            # Violet: WIS save or Blinded
+
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom", dc=dc,
@@ -3496,10 +3339,9 @@ class PrismaticSpray(SpellAction):
             status_message=f"Prismatic ray strikes {target.name}"
         )
 
-        # Roll color (d8)
         color_roll = random.randint(1, 8)
         if color_roll == 8:
-            # Roll twice, apply both effects
+
             color1 = random.randint(1, 7)
             color2 = random.randint(1, 7)
             while color2 == color1:
@@ -3535,21 +3377,20 @@ class TrueStrike(SpellAction):
     Register two variants per caster: TrueStrike(Melee) and TrueStrike(Ranged)
     using weapon_slot field. Each variant uses the weapon's range for targeting.
     """
-    name: str = Field(default="True Strike")
-    description: str = Field(default="Weapon attack using spellcasting ability, +radiant damage at higher levels")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="True Strike", description="Display name for the true strike spell.")
+    description: str = Field(default="Weapon attack using spellcasting ability, +radiant damage at higher levels", description="Rules-facing summary for the true strike spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast true strike; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify true strike.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for true strike.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5),
+        description="Range contract used when validating targets for true strike.",
     )
 
-    # Which weapon slot this variant uses
-    weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN)
+    weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN, description="Domain value for weapon_slot on true strike.")
 
-    # Target filtering
-    include_self: bool = Field(default=False)
-    valid_target_filter: str = Field(default="enemies")
+    include_self: bool = Field(default=False, description="Whether true strike can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for true strike.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate: weapon exists in slot, target in LOS."""
@@ -3580,7 +3421,6 @@ class TrueStrike(SpellAction):
 
         ability_name: AbilityName = type_cast(AbilityName, caster.spellcasting.spellcasting_ability or "intelligence")
 
-        # Temporarily add cantrip radiant bonus dice to equipment
         extra_dice = self._get_cantrip_dice_count(self.caster_level) - 1
         if extra_dice > 0:
             eq = caster.equipment
@@ -3595,12 +3435,12 @@ class TrueStrike(SpellAction):
                 target_entity_uuid=target.uuid,
                 weapon_slot=self.weapon_slot,
                 override_ability=ability_name,
-                costs=[],  # Already paid by spell action cost
+                costs=[],
                 template=False
             )
             attack_result = attack.apply(parent_event=execution_event)
         finally:
-            # Remove the temporary radiant bonus
+
             if extra_dice > 0:
                 eq = caster.equipment
                 eq.extra_attack_damage_dices.pop()
@@ -3634,10 +3474,6 @@ def register_true_strike(entity: Entity, caster_level: int = 1) -> None:
             entity.register_action(spell)
 
 
-# =============================================================================
-# Flame Strike (Level 5, Evocation, NOT concentration)
-# =============================================================================
-
 class FlameStrike(SpellAction):
     """Flame Strike - 5th level Evocation
 
@@ -3647,22 +3483,22 @@ class FlameStrike(SpellAction):
 
     At Higher Levels: +1d6 fire per level above 5th.
     """
-    name: str = Field(default="Flame Strike")
-    description: str = Field(default="10ft cylinder: 4d6 fire + 4d6 radiant (DEX half)")
-    spell_level: int = Field(default=5)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
-    projectile_type: Optional[str] = Field(default="radiance")
+    name: str = Field(default="Flame Strike", description="Display name for the flame strike spell.")
+    description: str = Field(default="10ft cylinder: 4d6 fire + 4d6 radiant (DEX half)", description="Rules-facing summary for the flame strike spell.")
+    spell_level: int = Field(default=5, description="Spell slot level required to cast flame strike; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify flame strike.")
+    concentration: bool = Field(default=False, description="Whether flame strike creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for flame strike.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for flame strike.")
+    projectile_type: Optional[str] = Field(default="radiance", description="Projectile visualization hint for flame strike.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
-    aoe_shape: Optional[AoEShape] = Field(default=None)
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="all")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by flame strike to compute affected targets.")
+    include_self: bool = Field(default=True, description="Whether flame strike can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for flame strike.")
 
-    base_fire_dice: int = Field(default=4)
-    radiant_dice: int = Field(default=4)
+    base_fire_dice: int = Field(default=4, description="Domain value for base_fire_dice on flame strike.")
+    radiant_dice: int = Field(default=4, description="Domain value for radiant_dice on flame strike.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -3711,7 +3547,6 @@ class FlameStrike(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
 
-        # 4d6 fire (+ upcast) + 4d6 radiant
         fire_count = self.base_fire_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -3750,15 +3585,11 @@ class FlameStrike(SpellAction):
         )
 
 
-# =============================================================================
-# Light (Cantrip, Evocation, Concentration)
-# =============================================================================
-
 class LightEffect(BaseCondition):
     """Light spell effect — emits bright light in 20ft and dim light in additional 20ft."""
-    name: str = "Light"
-    description: str = "Object sheds bright light in a 20-foot radius and dim light for an additional 20 feet"
-    light_source_uuid: Optional[UUID] = None
+    name: str = Field(default="Light", description="Display name for the light effect condition.")
+    description: str = Field(default="Object sheds bright light in a 20-foot radius and dim light for an additional 20 feet", description="Rules-facing summary for the light effect condition.")
+    light_source_uuid: Optional[UUID] = Field(default=None, description="Light source UUID created and cleaned up by light effect.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -3798,14 +3629,14 @@ class Light(SpellAction):
 
     Duration: Concentration, up to 1 hour (10 rounds in combat).
     """
-    name: str = Field(default="Light")
-    description: str = Field(default="Touch: object sheds 20ft bright + 20ft dim light (concentration)")
-    spell_level: int = Field(default=0)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=True)
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
-    valid_target_filter: str = Field(default="self_or_allies")
+    name: str = Field(default="Light", description="Display name for the light spell.")
+    description: str = Field(default="Touch: object sheds 20ft bright + 20ft dim light (concentration)", description="Rules-facing summary for the light spell.")
+    spell_level: int = Field(default=0, description="Spell slot level required to cast light; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify light.")
+    concentration: bool = Field(default=True, description="Whether light creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for light.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Range contract used when validating targets for light.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for light.")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3814,7 +3645,6 @@ class Light(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        # Default to self if no target
         if not target:
             target = caster
 
@@ -3842,19 +3672,15 @@ class Light(SpellAction):
         )
 
 
-# =============================================================================
-# Continual Flame (Level 2, Evocation, NOT concentration)
-# =============================================================================
-
 class ContinualFlameObject(BaseBlock):
     """A heatless flame that emits light. Cannot be extinguished by normal means.
 
     Placed on the grid as an object. Emits bright light in 20ft and dim light
     for an additional 20ft. Permanent until dispelled.
     """
-    name: str = "Continual Flame"
-    flame_light_source_uuid: Optional[UUID] = None
-    flame_position: Optional[Tuple[int, int]] = None
+    name: str = Field(default="Continual Flame", description="Display name for the continual flame object model.")
+    flame_light_source_uuid: Optional[UUID] = Field(default=None, description="Light source UUID emitted by continual flame object.")
+    flame_position: Optional[Tuple[int, int]] = Field(default=None, description="Grid position where continual flame object emits light.")
 
     def setup_light(self, position: Tuple[int, int]) -> None:
         """Create light source at position, anchored to self."""
@@ -3890,13 +3716,13 @@ class ContinualFlame(SpellAction):
     The flame sheds bright light in a 20-foot radius and dim light for an
     additional 20 feet. Permanent until dispelled.
     """
-    name: str = Field(default="Continual Flame")
-    description: str = Field(default="Touch: permanent 20ft bright + 20ft dim light on object")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.POSITION)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+    name: str = Field(default="Continual Flame", description="Display name for the continual flame spell.")
+    description: str = Field(default="Touch: permanent 20ft bright + 20ft dim light on object", description="Rules-facing summary for the continual flame spell.")
+    spell_level: int = Field(default=2, description="Spell slot level required to cast continual flame; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify continual flame.")
+    concentration: bool = Field(default=False, description="Whether continual flame creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for continual flame.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Range contract used when validating targets for continual flame.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3933,11 +3759,6 @@ class ContinualFlame(SpellAction):
         )
 
 
-# =============================================================================
-# Healing Spells
-# =============================================================================
-
-
 def _get_spellcasting_ability_modifier(caster: Entity) -> int:
     """Get the caster's spellcasting ability modifier (e.g. WIS for Cleric)."""
     return caster.ability_scores.get_ability(
@@ -3953,7 +3774,7 @@ def _create_healing(
     return Healing(
         name=spell_name,
         source_entity_uuid=caster.uuid,
-        healing_dice=die_value,  # type: ignore[arg-type]
+        healing_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], die_value),
         dice_numbers=num_dice,
         healing_bonus=ModifiableValue.create(
             source_entity_uuid=caster.uuid,
@@ -3971,16 +3792,17 @@ class CureWounds(SpellAction):
 
     At Higher Levels: +1d8 per slot level above 1st.
     """
-    name: str = Field(default="Cure Wounds")
-    description: str = Field(default="Touch a creature to restore 1d8 + modifier HP")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Cure Wounds", description="Display name for the cure wounds spell.")
+    description: str = Field(default="Touch a creature to restore 1d8 + modifier HP", description="Rules-facing summary for the cure wounds spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast cure wounds; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify cure wounds.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for cure wounds.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.REACH, normal=5)
+        default_factory=lambda: Range(type=RangeType.REACH, normal=5),
+        description="Range contract used when validating targets for cure wounds.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
+    include_self: bool = Field(default=True, description="Whether cure wounds can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for cure wounds.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4036,22 +3858,22 @@ class HealingWord(SpellAction):
     Casting Time: Bonus action. Range: 60ft.
     At Higher Levels: +1d4 per slot level above 1st.
     """
-    name: str = Field(default="Healing Word")
-    description: str = Field(default="Bonus action: heal a creature for 1d4 + modifier HP at 60ft")
-    spell_level: int = Field(default=1)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Healing Word", description="Display name for the healing word spell.")
+    description: str = Field(default="Bonus action: heal a creature for 1d4 + modifier HP at 60ft", description="Rules-facing summary for the healing word spell.")
+    spell_level: int = Field(default=1, description="Spell slot level required to cast healing word; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify healing word.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for healing word.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for healing word.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
+    include_self: bool = Field(default=True, description="Whether healing word can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for healing word.")
 
-    # Bonus action cost
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Healing Word Cost", cost_type="bonus_actions", cost=1,
              evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs paid to execute healing word.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4106,17 +3928,18 @@ class PrayerOfHealing(SpellAction):
 
     At Higher Levels: +1d8 per slot level above 2nd.
     """
-    name: str = Field(default="Prayer of Healing")
-    description: str = Field(default="Heal up to 6 allies for 2d8 + modifier HP")
-    spell_level: int = Field(default=2)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    name: str = Field(default="Prayer of Healing", description="Display name for the prayer of healing spell.")
+    description: str = Field(default="Heal up to 6 allies for 2d8 + modifier HP", description="Rules-facing summary for the prayer of healing spell.")
+    spell_level: int = Field(default=2, description="Spell slot level required to cast prayer of healing; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify prayer of healing.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for prayer of healing.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=30)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
+        description="Range contract used when validating targets for prayer of healing.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
-    allow_same_target: bool = Field(default=False)
+    include_self: bool = Field(default=True, description="Whether prayer of healing can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for prayer of healing.")
+    allow_same_target: bool = Field(default=False, description="Whether prayer of healing may select the same entity more than once.")
 
     def get_multi_target_count(self) -> Optional[int]:
         return 6
@@ -4126,7 +3949,6 @@ class PrayerOfHealing(SpellAction):
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
 
-        # Validate all targets in range and LOS
         all_targets = self.get_all_targets()
         for target_uuid in set(all_targets):
             target = Entity.get(target_uuid)
@@ -4184,23 +4006,23 @@ class MassHealingWord(SpellAction):
     Casting Time: Bonus action. Range: 60ft.
     At Higher Levels: +1d4 per slot level above 3rd.
     """
-    name: str = Field(default="Mass Healing Word")
-    description: str = Field(default="Bonus action: heal up to 6 allies for 1d4 + modifier HP")
-    spell_level: int = Field(default=3)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    name: str = Field(default="Mass Healing Word", description="Display name for the mass healing word spell.")
+    description: str = Field(default="Bonus action: heal up to 6 allies for 1d4 + modifier HP", description="Rules-facing summary for the mass healing word spell.")
+    spell_level: int = Field(default=3, description="Spell slot level required to cast mass healing word; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify mass healing word.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for mass healing word.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for mass healing word.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
-    allow_same_target: bool = Field(default=False)
+    include_self: bool = Field(default=True, description="Whether mass healing word can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass healing word.")
+    allow_same_target: bool = Field(default=False, description="Whether mass healing word may select the same entity more than once.")
 
-    # Bonus action cost
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Mass Healing Word Cost", cost_type="bonus_actions", cost=1,
              evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs paid to execute mass healing word.")
 
     def get_multi_target_count(self) -> Optional[int]:
         return 6
@@ -4235,7 +4057,7 @@ class MassHealingWord(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        num_dice = 1 + max(0, self.cast_at_level - 3)  # 1d4 at L3, 2d4 at L4, etc.
+        num_dice = 1 + max(0, self.cast_at_level - 3)
         healing = _create_healing(caster, num_dice, 4, "Mass Healing Word")
 
         effect_event = execution_event.phase_to(
@@ -4268,20 +4090,20 @@ class MassCureWounds(SpellAction):
 
     At Higher Levels: +1d8 per slot level above 5th.
     """
-    name: str = Field(default="Mass Cure Wounds")
-    description: str = Field(default="AoE heal up to 6 allies in 30ft sphere for 3d8 + modifier HP")
-    spell_level: int = Field(default=5)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE)
-    aoe_shape: Optional[AoEShape] = Field(default=None)
+    name: str = Field(default="Mass Cure Wounds", description="Display name for the mass cure wounds spell.")
+    description: str = Field(default="AoE heal up to 6 allies in 30ft sphere for 3d8 + modifier HP", description="Rules-facing summary for the mass cure wounds spell.")
+    spell_level: int = Field(default=5, description="Spell slot level required to cast mass cure wounds; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify mass cure wounds.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for mass cure wounds.")
+    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by mass cure wounds to compute affected targets.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for mass cure wounds.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
+    include_self: bool = Field(default=True, description="Whether mass cure wounds can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass cure wounds.")
 
-    # Cap at 6 targets
-    max_targets: int = Field(default=6)
+    max_targets: int = Field(default=6, description="Maximum number of targets mass cure wounds can affect.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -4322,7 +4144,7 @@ class MassCureWounds(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        num_dice = self.cast_at_level - 2  # 3d8 at L5, 4d8 at L6, etc.
+        num_dice = self.cast_at_level - 2
         healing = _create_healing(caster, num_dice, 8, "Mass Cure Wounds")
 
         effect_event = execution_event.phase_to(
@@ -4355,16 +4177,17 @@ class HealSpell(SpellAction):
 
     At Higher Levels: +10 HP per slot level above 6th.
     """
-    name: str = Field(default="Heal")
-    description: str = Field(default="Restore 70 HP and remove blindness/deafness")
-    spell_level: int = Field(default=6)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
+    name: str = Field(default="Heal", description="Display name for the heal spell spell.")
+    description: str = Field(default="Restore 70 HP and remove blindness/deafness", description="Rules-facing summary for the heal spell spell.")
+    spell_level: int = Field(default=6, description="Spell slot level required to cast heal spell; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify heal spell.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for heal spell.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for heal spell.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
+    include_self: bool = Field(default=True, description="Whether heal spell can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for heal spell.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4388,7 +4211,6 @@ class HealSpell(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 70 HP base + 10 per upcast level
         heal_amount = 70 + 10 * self.get_upcast_bonus()
         source_desc = f"Heal: {heal_amount} HP"
 
@@ -4405,7 +4227,6 @@ class HealSpell(SpellAction):
             spell_level=self.cast_at_level
         )
 
-        # Remove Blinded and Deafened conditions
         if "Blinded" in target.active_conditions:
             target.remove_condition("Blinded", parent_event=effect_event)
         if "Deafened" in target.active_conditions:
@@ -4426,23 +4247,23 @@ class MassHeal(SpellAction):
     of creatures that you can see within range. Creatures healed are also
     cured of blindness and deafness.
     """
-    name: str = Field(default="Mass Heal")
-    description: str = Field(default="Distribute 700 HP of healing among visible allies, remove blindness/deafness")
-    spell_level: int = Field(default=9)
-    spell_school: str = Field(default="evocation")
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
+    name: str = Field(default="Mass Heal", description="Display name for the mass heal spell.")
+    description: str = Field(default="Distribute 700 HP of healing among visible allies, remove blindness/deafness", description="Rules-facing summary for the mass heal spell.")
+    spell_level: int = Field(default=9, description="Spell slot level required to cast mass heal; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify mass heal.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for mass heal.")
     spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range contract used when validating targets for mass heal.",
     )
-    include_self: bool = Field(default=True)
-    valid_target_filter: str = Field(default="self_or_allies")
-    allow_same_target: bool = Field(default=False)
+    include_self: bool = Field(default=True, description="Whether mass heal can include the caster among valid targets.")
+    valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for mass heal.")
+    allow_same_target: bool = Field(default=False, description="Whether mass heal may select the same entity more than once.")
 
-    # Track remaining pool across convolution loop
-    healing_pool_remaining: int = Field(default=700)
+    healing_pool_remaining: int = Field(default=700, description="Healing pool remaining for mass heal.")
 
     def get_multi_target_count(self) -> Optional[int]:
-        return 20  # Effectively unlimited — "any number of creatures"
+        return 20
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4482,7 +4303,6 @@ class MassHeal(SpellAction):
                 status_message=f"Mass Heal pool exhausted for {target.name}"
             )
 
-        # Heal up to remaining pool, capped at target's missing HP
         missing_hp = target.health.damage_taken
         heal_amount = min(self.healing_pool_remaining, max(missing_hp, 0))
 
@@ -4503,7 +4323,6 @@ class MassHeal(SpellAction):
 
         self.healing_pool_remaining -= actual
 
-        # Remove Blinded and Deafened conditions
         if "Blinded" in target.active_conditions:
             target.remove_condition("Blinded", parent_event=effect_event)
         if "Deafened" in target.active_conditions:
@@ -4516,16 +4335,12 @@ class MassHeal(SpellAction):
         )
 
 
-# =============================================================================
-# Divine Word (L7) - HP-threshold effects, bonus action
-# =============================================================================
-
 class DivineWordEffect(BaseCondition):
     """Divine Word effect — applies tier-based conditions with duration handler for auto-removal."""
-    name: str = "Divine Word"
-    description: str = "Affected by Divine Word"
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    duration_rounds: int = 10  # Default, overridden per tier
+    name: str = Field(default="Divine Word", description="Display name for the divine word effect condition.")
+    description: str = Field(default="Affected by Divine Word", description="Rules-facing summary for the divine word effect condition.")
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the divine word effect for cleanup and filtering.")
+    duration_rounds: int = Field(default=10, description="Number of rounds that nonlethal divine word effect effects persist.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -4546,7 +4361,7 @@ class DivineWordEffect(BaseCondition):
         current_hp = target.get_hp()
 
         if current_hp <= 20:
-            # Instant kill (massive damage)
+
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 status_message=f"Divine Word kills {target.name}"
@@ -4560,7 +4375,7 @@ class DivineWordEffect(BaseCondition):
             return [], [], [], [], effect_event
 
         elif current_hp <= 30:
-            # Blinded + Deafened + Stunned, 1 hour (600 rounds)
+
             self.duration_rounds = 600
             for condition_cls in [Blinded, Deafened, Stunned]:
                 cond = condition_cls(
@@ -4573,7 +4388,7 @@ class DivineWordEffect(BaseCondition):
                     sub_conditions_uuids.append(cond.uuid)
 
         elif current_hp <= 40:
-            # Blinded + Deafened, 10 min (100 rounds)
+
             self.duration_rounds = 100
             for condition_cls in [Blinded, Deafened]:
                 cond = condition_cls(
@@ -4586,7 +4401,7 @@ class DivineWordEffect(BaseCondition):
                     sub_conditions_uuids.append(cond.uuid)
 
         elif current_hp <= 50:
-            # Deafened, 1 min (10 rounds)
+
             self.duration_rounds = 10
             deafened = Deafened(
                 source_entity_uuid=self.source_entity_uuid,
@@ -4598,13 +4413,12 @@ class DivineWordEffect(BaseCondition):
                 sub_conditions_uuids.append(deafened.uuid)
 
         else:
-            # >50 HP: no effect
+
             return [], [], [], [], execution_event.phase_to(
                 EventPhase.EFFECT,
                 status_message=f"Divine Word has no effect on {target.name} (HP > 50)"
             )
 
-        # Duration handler for non-lethal tiers
         duration_handler = self._create_duration_handler()
         target.add_event_handler(duration_handler)
         handler_uuids.append(duration_handler.uuid)
@@ -4620,7 +4434,7 @@ class DivineWordEffect(BaseCondition):
         assert self.target_entity_uuid is not None
         target_uuid = self.target_entity_uuid
         condition_uuid = self.uuid
-        rounds_remaining = [self.duration_rounds]  # Mutable container for closure
+        rounds_remaining = [self.duration_rounds]
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if event.source_entity_uuid != target_uuid:
@@ -4662,21 +4476,21 @@ class DivineWord(SpellAction):
     - 21-30 HP: Blinded, Deafened, and Stunned for 1 hour
     - 20 or fewer HP: Killed outright
     """
-    name: str = Field(default="Divine Word")
-    description: str = Field(default="HP-threshold effects: deafen/blind/stun/kill")
-    spell_level: int = Field(default=7)
-    spell_school: str = Field(default="evocation")
-    concentration: bool = Field(default=False)
-    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY)
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
-    valid_target_filter: str = Field(default="enemies")
+    name: str = Field(default="Divine Word", description="Display name for the divine word spell.")
+    description: str = Field(default="HP-threshold effects: deafen/blind/stun/kill", description="Rules-facing summary for the divine word spell.")
+    spell_level: int = Field(default=7, description="Spell slot level required to cast divine word; cantrips use 0.")
+    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify divine word.")
+    concentration: bool = Field(default=False, description="Whether divine word creates and maintains a concentration condition.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode used by action discovery and validation for divine word.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30), description="Range contract used when validating targets for divine word.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for divine word.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Divine Word Cost", cost_type="bonus_actions", cost=1,
              evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs paid to execute divine word.")
 
     def get_num_projectiles(self) -> int:
-        return 6  # Reasonable cap
+        return 6
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -4692,14 +4506,12 @@ class DivineWord(SpellAction):
             status_message=f"Divine Word targets {target.name} ({current_hp} HP)"
         )
 
-        # Apply the condition (handles all HP tiers internally)
         condition = DivineWordEffect(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
         )
         target.add_condition(condition, parent_event=effect_event)
 
-        # Determine outcome text
         if current_hp <= 20:
             outcome = "killed outright"
         elif current_hp <= 30:

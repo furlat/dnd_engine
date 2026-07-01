@@ -65,5 +65,9 @@ def fire_heal_roll_result(
         EventPhase.EFFECT,
         status_message=f"Healing dice rolled for {spell_name}",
     )
+    heal_roll_event = heal_roll_event.phase_to(
+        EventPhase.COMPLETION,
+        status_message=f"Healing dice finalized for {spell_name}",
+    )
 
     return heal_roll_event.final_roll
