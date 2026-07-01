@@ -3158,10 +3158,10 @@ The section presents controllers as one decision-routing layer over the same
 encounter engine: the encounter owns initiative order, round state, turn state,
 action execution, combat logs, death checks, and handoff; `controller_type`
 selects the decision source; `TurnContext` carries budgets and visible actors;
-human and Codex controllers return waiting states; automated controllers choose
-ordinary `BaseAction` instances; pass-style controllers close the turn
-boundary; `MeleeAIController` chooses attack or movement from normal action
-discovery; and `AIAgentController` delegates one turn to a bound runner.
+human and Codex controllers return waiting states; `ExternalAIController` marks
+out-of-process AI turns that must act through the session API; pass-style
+controllers close the turn boundary; and `AIAgentController` delegates one turn
+to a bound runner.
 
 Chapter 24 now also includes `Controller Authoring Guide` before the code
 surfaces. The guide gives a concrete turn-policy sequence: identify the active
@@ -3729,8 +3729,8 @@ Changes made:
 - Reworded the controller contract table so waiting, automated action choice,
   tactical pursuit, and pass behavior are all named as explicit controller
   outcomes.
-- Reworded the controller source table so `MeleeAIController` chooses attack,
-  movement, or the pass signal.
+- Reworded the controller source table so external AI ownership is described as
+  a session/API boundary, not an in-process melee selector.
 - Renamed the public example heading from `Pass When There Is No Visible Enemy`
   to `Pass With An Empty Target List`.
 - Replaced absence-framed prose such as `no action`, `no visible enemy`,

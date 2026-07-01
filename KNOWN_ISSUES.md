@@ -547,13 +547,13 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Status**: RESOLVED
 
 
-### MeleeAIController chooses Shove before a melee attack
+### Removed MeleeAIController previously chose Shove before a melee attack
 - **Found**: 2026-06-28 during Chapter 18 controller parity expansion
 - **Test file**: `examples/test_engine_book_encounters_apis.py`
-- **Error**: `MeleeAIController.get_next_action()` looped over all entity-targeted actions and instantiated the first affordable valid target. Because `Shove` is also entity-targeted and is registered before weapon attack templates, an adjacent melee AI chose `Shove` instead of `Attack_MELEE_MAIN`, contradicting the controller's documented priority.
-- **Resolution**: `MeleeAIController` now filters its first decision pass to `ActionCategory.ATTACK` actions before instantiating an adjacent target action. Non-attack entity actions no longer satisfy the "attack if we can" priority.
-- **Verification**: EB-18-021 proves adjacent MeleeAI chooses `Attack_MELEE_MAIN`, distant MeleeAI chooses a `Move` that reduces distance, and MeleeAI with no visible enemies passes.
-- **Status**: RESOLVED
+- **Error**: The former `MeleeAIController.get_next_action()` looped over all entity-targeted actions and instantiated the first affordable valid target. Because `Shove` is also entity-targeted and was registered before weapon attack templates, an adjacent melee AI chose `Shove` instead of `Attack_MELEE_MAIN`, contradicting the controller's documented priority.
+- **Resolution**: The in-process melee controller has been removed from the active runtime. Monster turns now use `ExternalAIController`, which waits for the external AI session/subprocess to choose from session-authorized available actions.
+- **Verification**: EB-18-021 now proves the external-AI wait boundary and engine-derived attack affordance; EB-18-034 proves legal movement path rows preserve directional blockers for downstream AI policy.
+- **Status**: SUPERSEDED
 
 
 

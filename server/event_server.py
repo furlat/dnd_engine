@@ -50,7 +50,7 @@ from dnd.items.test_items import (
 )
 from dnd.maps.arena_layout import build_standard_arena_environment
 from dnd.blocks.equipment import WeaponSlot
-from dnd.controller import Controller, HumanController, CodexController, MeleeAIController
+from dnd.controller import Controller, HumanController, CodexController, ExternalAIController
 from dnd.actions_functional import get_available_actions, execute_action, execute_by_index, execute_use_action
 from dnd.actions import MovementEvent, JumpEvent
 from dnd.core.base_actions import TargetType, AvailableTarget, AvailableActionsResult
@@ -68,6 +68,8 @@ from server.api_models import (
     ToggleHandlerRequest,
     APIEquipmentOverview, APIItemSummary, EquipRequest, UnequipRequest, EquipmentMutationResult,
     AdvanceEncounterResult,
+    TakeoverClaimResponse, TakeoverEntityRow, TakeoverHeartbeatResponse, TakeoverListResponse,
+    TakeoverReleaseResponse, TakeoverRequest,
     SpellCatalogResponse,
     MapEditorCatalog, MapEditorCreateMapRequest, MapEditorLightResponse, MapEditorMapSnapshot,
     MapEditorObjectDeleteRequest, MapEditorObjectPlaceRequest, MapEditorTilePatchRequest, MapEditorVisibilityResponse,
@@ -102,8 +104,21 @@ from server.session import (
     SessionManager, GameSession,
     PlayerType, ConnectionStatus, get_session_manager
 )
+from server.ai_process_manager import AIProcessStartError, ExternalAIProcessManager
+from server.ai_takeover_manager import AITakeoverManager, TakeoverClaim, TakeoverError
+from ai.observation import (
+    ObservationAccessError,
+    ObservationFramesResponse,
+    ObservationSnapshot,
+    build_observation_snapshot,
+    clear_observation_projection_cache,
+    get_observation_cursor,
+    iter_observation_frames,
+)
 
 _available_actions_cache: Dict[str, AvailableActionsResult] = {}
+ai_process_manager = ExternalAIProcessManager()
+ai_takeover_manager = AITakeoverManager()
 
 
 class EventMonitor:
@@ -233,6 +248,9 @@ class SimulationState:
 
     def reset(self) -> None:
         """Reset mutable server session state for a fresh game scene."""
+        ai_takeover_manager.clear(self.encounter, self._game_session)
+        ai_process_manager.stop_all()
+        clear_observation_projection_cache()
         self.encounter = None
         self._game_session = None
         self.combat_task = None
@@ -267,8 +285,8 @@ def setup_combat() -> Encounter:
     Entity.update_all_entities_senses()
 
     encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
-    encounter.add_combatant(goblin, MeleeAIController(source_entity_uuid=goblin.uuid))
-    encounter.add_combatant(skeleton, MeleeAIController(source_entity_uuid=skeleton.uuid))
+    encounter.add_combatant(goblin, ExternalAIController(source_entity_uuid=goblin.uuid))
+    encounter.add_combatant(skeleton, ExternalAIController(source_entity_uuid=skeleton.uuid))
 
     return encounter
 
@@ -276,7 +294,8 @@ def setup_combat() -> Encounter:
 def setup_arena_combat(
     player_position: tuple = (2, 7),
     pvp_mode: bool = False,
-    character_class: str = "fighter"
+    character_class: str = "fighter",
+    monster_ai: str = "external",
 ) -> Encounter:
     """Initialize arena combat with one hero against three skeletons.
 
@@ -284,6 +303,7 @@ def setup_arena_combat(
         player_position: Starting position for the hero.
         pvp_mode: Whether skeletons use Codex controllers instead of melee AI.
         character_class: Hero class fixture to create.
+        monster_ai: Monster controller mode for non-PvP arena combat.
 
     Returns:
         Encounter configured with the hero and skeleton combatants.
@@ -363,9 +383,22 @@ def setup_arena_combat(
         if pvp_mode:
             encounter.add_combatant(skeleton, CodexController(source_entity_uuid=skeleton.uuid))
         else:
-            encounter.add_combatant(skeleton, MeleeAIController(source_entity_uuid=skeleton.uuid))
+            encounter.add_combatant(skeleton, ExternalAIController(source_entity_uuid=skeleton.uuid))
 
     return encounter
+
+
+def prioritize_hero_opening_turn(encounter: Encounter) -> None:
+    """Roll initiative but place the player hero first for human arena bootstrap."""
+    encounter.roll_initiative()
+    hero = next((entity for entity in Entity.get_all_entities() if entity.faction == "heroes"), None)
+    if hero is None or hero.uuid not in encounter.initiative_order:
+        return
+    encounter.initiative_order = [
+        hero.uuid,
+        *[entity_uuid for entity_uuid in encounter.initiative_order if entity_uuid != hero.uuid],
+    ]
+    encounter.current_turn_index = 0
 
 
 def setup_aoe_test_arena(
@@ -434,7 +467,7 @@ def setup_aoe_test_arena(
     encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
 
     for goblin in goblins:
-        encounter.add_combatant(goblin, MeleeAIController(source_entity_uuid=goblin.uuid))
+        encounter.add_combatant(goblin, ExternalAIController(source_entity_uuid=goblin.uuid))
 
     return encounter
 
@@ -532,8 +565,11 @@ async def advance_encounter() -> AdvanceEncounterResult:
     if sim.encounter is None:
         return AdvanceEncounterResult(status="no_encounter")
 
+    restore_expired_takeovers()
+
     if sim.encounter.state == EncounterState.NOT_STARTED:
-        sim.encounter.roll_initiative()
+        if not sim.encounter.initiative_order:
+            sim.encounter.roll_initiative()
         sim.encounter.start_encounter()
 
     if sim.encounter.state == EncounterState.ENDED:
@@ -571,6 +607,85 @@ def action_cursor_fields() -> dict:
         "event_cursor_after": EventQueue.event_cursor(),
         "combat_log_cursor_after": len(sim.encounter.combat_log) if sim.encounter else 0,
     }
+
+
+def serialize_takeover_claim(claim: TakeoverClaim) -> TakeoverClaimResponse:
+    """Serialize a takeover claim with current entity/controller context."""
+    rows = []
+    for entity_uuid in claim.entity_uuids:
+        state = claim.entity_states[entity_uuid]
+        entity = Entity.get(entity_uuid)
+        previous_controller = Controller.get(state.previous_controller_uuid)
+        current_controller = sim.encounter.get_controller_for(entity_uuid) if sim.encounter else None
+        rows.append(TakeoverEntityRow(
+            entity_uuid=str(entity_uuid),
+            entity_name=entity.name if entity else "Unknown",
+            faction=entity.faction if entity else None,
+            previous_controller_uuid=str(state.previous_controller_uuid),
+            previous_controller_type=previous_controller.controller_type if previous_controller else None,
+            current_controller_type=current_controller.controller_type if current_controller else None,
+            previous_owner_session_id=(
+                str(state.previous_owner_session_id)
+                if state.previous_owner_session_id else None
+            ),
+        ))
+    return TakeoverClaimResponse(
+        claim_id=str(claim.claim_id),
+        session_id=str(claim.session_id),
+        name=claim.name,
+        faction=claim.faction,
+        created_at=claim.created_at,
+        last_heartbeat_at=claim.last_heartbeat_at,
+        lease_seconds=claim.lease_seconds,
+        expires_at=claim.expires_at,
+        is_expired=claim.is_expired(),
+        claimed_entities=rows,
+    )
+
+
+def restore_expired_takeovers() -> list[TakeoverClaim]:
+    """Restore expired takeover claims and invalidate subjective projection cache."""
+    expired = ai_takeover_manager.restore_expired(sim.encounter, sim.game)
+    if expired:
+        clear_observation_projection_cache()
+    return expired
+
+
+def _takeover_http_exception(error: TakeoverError, **context: Any) -> HTTPException:
+    """Convert a takeover manager error to a structured HTTP exception."""
+    return _api_http_exception(
+        status_code=error.status_code,
+        code=error.code,
+        message=error.message,
+        **context,
+    )
+
+
+def _parse_optional_uuid(value: Optional[str], field_name: str) -> Optional[UUID]:
+    """Parse an optional UUID request field."""
+    if value is None:
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        raise _api_http_exception(
+            status_code=400,
+            code=f"invalid_{field_name}",
+            message=f"Invalid {field_name} UUID format",
+            **{field_name: value},
+        )
+
+
+def _parse_uuid_list(values: Optional[list[str]], field_name: str) -> Optional[list[UUID]]:
+    """Parse an optional list of UUID request fields."""
+    if values is None:
+        return None
+    parsed = []
+    for value in values:
+        parsed_uuid = _parse_optional_uuid(value, field_name)
+        if parsed_uuid is not None:
+            parsed.append(parsed_uuid)
+    return parsed
 
 
 def _api_http_exception(
@@ -862,6 +977,20 @@ def _session_http_exception(
     )
 
 
+def _observation_http_exception(
+    error: ObservationAccessError,
+    session_id: Optional[str] = None,
+) -> HTTPException:
+    """Convert observation access errors into structured session errors."""
+    status_code = 400 if error.code == "invalid_session_uuid" else 404
+    return _session_http_exception(
+        status_code=status_code,
+        code=error.code,
+        message=error.message,
+        session_id=session_id,
+    )
+
+
 def _event_filter_http_exception(
     code: str,
     message: str,
@@ -1019,6 +1148,7 @@ def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity
             message="Invalid entity UUID format",
         )
 
+    restore_expired_takeovers()
     mgr = sim.get_session_manager()
     _, _ = mgr.validate_action(session_id, entity_uuid)
 
@@ -1682,6 +1812,10 @@ async def start_simulation():
         except asyncio.CancelledError:
             pass
 
+    ai_process_manager.stop_all()
+    ai_takeover_manager.clear(sim.encounter, sim.game)
+    clear_observation_projection_cache()
+
     sim.encounter = setup_combat()
     sim.paused = False
     sim.combat_task = asyncio.create_task(run_combat_loop())
@@ -1705,6 +1839,10 @@ async def reset_simulation():
             await sim.combat_task
         except asyncio.CancelledError:
             pass
+
+    ai_process_manager.stop_all()
+    ai_takeover_manager.clear(sim.encounter, sim.game)
+    clear_observation_projection_cache()
 
     sim.encounter = setup_combat()
     sim.paused = True
@@ -2582,6 +2720,231 @@ async def get_entity_available_actions(entity_uuid: str):
     return _serialize_available_actions(entity, actions)
 
 
+@app.post("/ai/takeover", response_model=TakeoverClaimResponse)
+async def create_ai_takeover(request: TakeoverRequest):
+    """Claim combatants for Codex control without spawning a subprocess."""
+    if sim.encounter is None or sim.game is None:
+        raise _api_http_exception(
+            status_code=400,
+            code="no_active_game",
+            message="No active game is available for takeover",
+        )
+
+    session_id = _parse_optional_uuid(request.session_id, "session_id")
+    entity_uuids = _parse_uuid_list(request.entity_uuids, "entity_uuid")
+    try:
+        claim = ai_takeover_manager.claim(
+            encounter=sim.encounter,
+            game=sim.game,
+            session_manager=sim.get_session_manager(),
+            faction=request.faction,
+            entity_uuids=entity_uuids,
+            session_id=session_id,
+            name=request.name,
+            force=request.force,
+            lease_seconds=request.lease_seconds,
+        )
+    except TakeoverError as error:
+        raise _takeover_http_exception(error, faction=request.faction, entity_uuids=request.entity_uuids)
+
+    clear_observation_projection_cache()
+    return serialize_takeover_claim(claim)
+
+
+@app.get("/ai/takeover", response_model=TakeoverListResponse)
+async def list_ai_takeovers():
+    """List active Codex takeover claims."""
+    restore_expired_takeovers()
+    return TakeoverListResponse(
+        claims=[
+            serialize_takeover_claim(claim)
+            for claim in ai_takeover_manager.active_claims()
+        ],
+    )
+
+
+@app.post("/ai/takeover/{claim_id}/heartbeat", response_model=TakeoverHeartbeatResponse)
+async def heartbeat_ai_takeover(claim_id: str):
+    """Refresh a takeover claim lease."""
+    parsed_claim_id = _parse_optional_uuid(claim_id, "claim_id")
+    if parsed_claim_id is None:
+        raise _api_http_exception(status_code=400, code="invalid_claim_id", message="Invalid claim UUID")
+    restore_expired_takeovers()
+    claim = ai_takeover_manager.heartbeat(parsed_claim_id)
+    if claim is None:
+        raise _api_http_exception(
+            status_code=404,
+            code="takeover_not_found",
+            message="Takeover claim not found",
+            claim_id=claim_id,
+        )
+    return TakeoverHeartbeatResponse(status="heartbeat", claim=serialize_takeover_claim(claim))
+
+
+@app.post("/ai/takeover/{claim_id}/release", response_model=TakeoverReleaseResponse)
+async def release_ai_takeover(claim_id: str):
+    """Release a takeover claim and restore previous controllers."""
+    parsed_claim_id = _parse_optional_uuid(claim_id, "claim_id")
+    if parsed_claim_id is None:
+        raise _api_http_exception(status_code=400, code="invalid_claim_id", message="Invalid claim UUID")
+    claim = ai_takeover_manager.release(parsed_claim_id, sim.encounter, sim.game)
+    if claim is None:
+        raise _api_http_exception(
+            status_code=404,
+            code="takeover_not_found",
+            message="Takeover claim not found",
+            claim_id=claim_id,
+        )
+    clear_observation_projection_cache()
+    advance_result = await advance_encounter() if sim.encounter is not None else None
+    return TakeoverReleaseResponse(
+        status="released",
+        claim=serialize_takeover_claim(claim),
+        advance_result=advance_result,
+    )
+
+
+@app.get(
+    "/ai/sessions/{session_id}/observation/snapshot",
+    response_model=ObservationSnapshot,
+)
+async def get_ai_observation_snapshot(session_id: str):
+    """Return a strict session-subjective observation snapshot."""
+    try:
+        return build_observation_snapshot(session_id, session_manager=sim.get_session_manager())
+    except ObservationAccessError as error:
+        raise _observation_http_exception(error, session_id=session_id)
+
+
+@app.get(
+    "/ai/sessions/{session_id}/observation/frames",
+    response_model=ObservationFramesResponse,
+)
+async def get_ai_observation_frames(
+    session_id: str,
+    since: int = 0,
+    limit: int = 50,
+):
+    """Return replayable strict session-subjective observation frames."""
+    try:
+        return iter_observation_frames(
+            session_id,
+            since=since,
+            limit=limit,
+            session_manager=sim.get_session_manager(),
+        )
+    except ObservationAccessError as error:
+        raise _observation_http_exception(error, session_id=session_id)
+
+
+@app.get("/ai/sessions/{session_id}/observation/subscribe")
+async def subscribe_ai_observation(
+    request: Request,
+    session_id: str,
+    since: int = 0,
+):
+    """Subscribe to strict session-subjective observation frames."""
+
+    async def event_generator():
+        cursor = max(0, since)
+        event_stream.ensure_attached()
+        subscription = event_stream.subscribe()
+        try:
+            snapshot = build_observation_snapshot(
+                session_id,
+                session_manager=sim.get_session_manager(),
+            )
+        except ObservationAccessError as error:
+            event_stream.unsubscribe(subscription)
+            yield format_sse(
+                "error",
+                {"code": error.code, "message": error.message},
+            )
+            return
+
+        try:
+            yield format_sse(
+                "sync",
+                {
+                    "observation_cursor": snapshot.observation_cursor,
+                    "source_event_cursor": snapshot.source_event_cursor,
+                    "source_combat_log_cursor": snapshot.source_combat_log_cursor,
+                },
+                f"o={snapshot.observation_cursor}",
+            )
+            cursor = max(cursor, snapshot.observation_cursor)
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    envelope = await asyncio.wait_for(subscription.get(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                if envelope["event"] == "evicted":
+                    yield format_sse(
+                        "evicted",
+                        envelope["data"],
+                        envelope.get("id"),
+                    )
+                    break
+
+                try:
+                    response = iter_observation_frames(
+                        session_id,
+                        since=cursor,
+                        limit=100,
+                        session_manager=sim.get_session_manager(),
+                    )
+                except ObservationAccessError as error:
+                    yield format_sse(
+                        "error",
+                        {"code": error.code, "message": error.message},
+                    )
+                    break
+                for frame in response.frames:
+                    cursor = frame.observation_cursor
+                    yield format_sse(
+                        "observation_frame",
+                        frame,
+                        f"o={frame.observation_cursor}",
+                    )
+        finally:
+            event_stream.unsubscribe(subscription)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/ai/sessions/{session_id}/entities/{entity_uuid}/available-actions")
+async def get_ai_entity_available_actions(
+    session_id: str,
+    entity_uuid: str,
+    basis_cursor: Optional[int] = None,
+):
+    """Return session-authorized available actions for an AI controller."""
+    entity = validate_session_action(session_id, entity_uuid)
+    try:
+        observation_cursor = get_observation_cursor(session_id, session_manager=sim.get_session_manager())
+    except ObservationAccessError as error:
+        raise _observation_http_exception(error, session_id=session_id)
+    actions = get_available_actions(entity)
+    _available_actions_cache[entity_uuid] = actions
+    payload = _serialize_available_actions(entity, actions)
+    payload["basis_cursor"] = basis_cursor
+    payload["computed_at_observation_cursor"] = observation_cursor
+    return payload
+
+
+@app.get("/ai/processes")
+async def get_ai_processes():
+    """Return tracked external AI subprocess state."""
+    return {
+        "processes": ai_process_manager.process_statuses(),
+        "running_session_ids": ai_process_manager.running_session_ids(),
+    }
+
+
 @app.get("/entity/{entity_uuid}/handlers")
 async def get_entity_handlers(entity_uuid: str):
     """Get all event handlers for an entity with their enabled state."""
@@ -3205,7 +3568,7 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
 
     updated_actions = None
-    if not encounter_ended and entity.has_hp:
+    if request.return_available_actions and not encounter_ended and entity.has_hp:
         new_available = get_available_actions(entity)
         _available_actions_cache[request.entity_uuid] = new_available
         updated_actions = _serialize_available_actions(entity, new_available)
@@ -3370,7 +3733,11 @@ async def preview_position_action(request: PositionActionRequest) -> AoEPreviewR
 
 
 @app.post("/simulation/start-human")
-async def start_human_simulation(character_class: str = "fighter"):
+async def start_human_simulation(
+    request: Request,
+    character_class: str = "fighter",
+    monster_ai: str = "external",
+):
     """
     Start a new combat with human control (player vs AI).
 
@@ -3380,7 +3747,16 @@ async def start_human_simulation(character_class: str = "fighter"):
 
     Args:
         character_class: "fighter", "barbarian", or "sorcerer" - the hero's class.
+        monster_ai: "external" for the spawned behavior-tree AI subprocess.
     """
+    if monster_ai != "external":
+        raise _api_http_exception(
+            status_code=400,
+            code="invalid_monster_ai",
+            message="monster_ai must be 'external'",
+            monster_ai=monster_ai,
+            valid_monster_ai=["external"],
+        )
 
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
@@ -3389,7 +3765,16 @@ async def start_human_simulation(character_class: str = "fighter"):
         except asyncio.CancelledError:
             pass
 
-    sim.encounter = setup_arena_combat(pvp_mode=False, character_class=character_class)
+    ai_process_manager.stop_all()
+    ai_takeover_manager.clear(sim.encounter, sim.game)
+    clear_observation_projection_cache()
+
+    sim.encounter = setup_arena_combat(
+        pvp_mode=False,
+        character_class=character_class,
+        monster_ai=monster_ai,
+    )
+    prioritize_hero_opening_turn(sim.encounter)
     sim.paused = False
     sim.encounter.clear_combat_log()
 
@@ -3403,6 +3788,20 @@ async def start_human_simulation(character_class: str = "fighter"):
         if entity.faction == "monsters":
             game.assign_entity(entity.uuid, ai_session.session_id)
 
+    try:
+        ai_process_manager.start_external_melee_agent(
+            ai_session.session_id,
+            str(request.base_url).rstrip("/"),
+        )
+    except AIProcessStartError as exc:
+        raise _api_http_exception(
+            status_code=500,
+            code="ai_process_start_failed",
+            message="Failed to start external AI subprocess",
+            session_id=str(ai_session.session_id),
+            error=str(exc),
+        )
+
     result = await advance_encounter()
 
     hero_uuid = None
@@ -3413,6 +3812,8 @@ async def start_human_simulation(character_class: str = "fighter"):
 
     return {
         "status": "started",
+        "monster_ai": monster_ai,
+        "ai_session_id": str(ai_session.session_id),
         "encounter_uuid": str(sim.encounter.uuid),
         "hero_uuid": hero_uuid,
         "message": "Create a session and join with hero_uuid to control the Hero",
@@ -3439,6 +3840,7 @@ async def start_aoe_test():
             pass
 
     sim.encounter = setup_aoe_test_arena(character_class="sorcerer")
+    prioritize_hero_opening_turn(sim.encounter)
     sim.paused = False
     sim.encounter.clear_combat_log()
 

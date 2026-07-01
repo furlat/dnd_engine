@@ -20,8 +20,8 @@ from dnd.actions import Attack, Move
 from dnd.controller import (
     CodexController,
     Controller,
+    ExternalAIController,
     HumanController,
-    MeleeAIController,
     PassController,
     TurnContext,
 )
@@ -371,65 +371,44 @@ def test_eb_18_020_codex_controller_stops_as_external_input_turn() -> None:
     assert codex_controller.get_next_action(hero, context) is None
 
 
-def test_eb_18_021_melee_ai_attacks_moves_or_passes_from_context() -> None:
-    """EB-18-021: MeleeAI chooses attack, move-closer, or pass decisions."""
+def test_eb_18_021_external_ai_controller_waits_for_session_commands() -> None:
+    """EB-18-021: ExternalAI waits while legal actions stay engine-derived."""
     reset_chapter_18_state()
-    melee_actor = create_melee_only_skeleton(name="Book AI Skeleton", position=(1, 1), faction="monsters")
-    adjacent_target = create_goblin(name="Adjacent Hero", position=(2, 1), faction="heroes")
+    actor = create_melee_only_skeleton(name="Book External Skeleton", position=(1, 1), faction="monsters")
+    target = create_goblin(name="Book Hero", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses()
-    controller = MeleeAIController(source_entity_uuid=melee_actor.uuid)
+    controller = ExternalAIController(source_entity_uuid=actor.uuid)
+    encounter = start_ordered_encounter(
+        target,
+        actor,
+        PassController(source_entity_uuid=target.uuid),
+        controller,
+        actor,
+    )
+    result = encounter.advance_until_player()
     context = TurnContext(
-        source_entity_uuid=melee_actor.uuid,
-        entity_uuid=melee_actor.uuid,
-        visible_enemies=melee_actor.get_visible_enemies(),
+        source_entity_uuid=actor.uuid,
+        entity_uuid=actor.uuid,
+        visible_enemies=actor.get_visible_enemies(),
     )
 
-    attack_action = controller.get_next_action(melee_actor, context)
+    available = actor.get_available_actions()
+    attack_info = next(action for action in available.entity_actions if action.template_name == "Attack_MELEE_MAIN")
 
-    assert isinstance(attack_action, Attack)
-    assert attack_action.name == "Attack_MELEE_MAIN"
-    assert attack_action.target_entity_uuid == adjacent_target.uuid
-    assert attack_action.weapon_slot == WeaponSlot.MELEE_MAIN
-
-    reset_chapter_18_state()
-    melee_actor = create_melee_only_skeleton(name="Book AI Skeleton", position=(1, 1), faction="monsters")
-    distant_target = create_goblin(name="Distant Hero", position=(5, 1), faction="heroes")
-    Entity.update_all_entities_senses()
-    controller = MeleeAIController(source_entity_uuid=melee_actor.uuid)
-    context = TurnContext(
-        source_entity_uuid=melee_actor.uuid,
-        entity_uuid=melee_actor.uuid,
-        visible_enemies=melee_actor.get_visible_enemies(),
-    )
-
-    move_action = controller.get_next_action(melee_actor, context)
-
-    assert isinstance(move_action, Move)
-    assert move_action.end_position is not None
-    assert move_action.end_position != melee_actor.position
-    current_distance = abs(melee_actor.position[0] - distant_target.position[0]) + abs(
-        melee_actor.position[1] - distant_target.position[1]
-    )
-    moved_distance = abs(move_action.end_position[0] - distant_target.position[0]) + abs(
-        move_action.end_position[1] - distant_target.position[1]
-    )
-    assert moved_distance < current_distance
-
-    reset_chapter_18_state()
-    lone_actor = create_melee_only_skeleton(name="Lone AI Skeleton", position=(1, 1), faction="monsters")
-    Entity.update_all_entities_senses()
-    controller = MeleeAIController(source_entity_uuid=lone_actor.uuid)
-    context = TurnContext(
-        source_entity_uuid=lone_actor.uuid,
-        entity_uuid=lone_actor.uuid,
-        visible_enemies=lone_actor.get_visible_enemies(),
-    )
-
-    assert controller.get_next_action(lone_actor, context) is None
+    assert result.status == "waiting_for_ai"
+    assert result.entity_uuid == actor.uuid
+    assert encounter.get_current_entity() is actor
+    assert encounter.turn_state == TurnState.IN_PROGRESS
+    assert controller.controller_type == "external_ai"
+    assert not controller.can_continue_turn(actor, context)
+    assert controller.get_next_action(actor, context) is None
+    assert target.uuid in context.visible_enemies
+    assert attack_info.valid_targets[0].target_uuid == target.uuid
+    assert attack_info.valid_targets[0].index == 0
 
 
-def test_eb_18_034_melee_ai_uses_available_move_paths_across_directional_blockers() -> None:
-    """EB-18-034: MeleeAI moves through legal paths around directional blockers."""
+def test_eb_18_034_available_move_paths_preserve_directional_blockers() -> None:
+    """EB-18-034: Available Move rows carry legal paths around directional blockers."""
     reset_chapter_18_state(width=8, height=5)
     grid = get_map()
     melee_actor = create_melee_only_skeleton(name="Book AI Skeleton", position=(1, 1), faction="monsters")
@@ -441,12 +420,7 @@ def test_eb_18_034_melee_ai_uses_available_move_paths_across_directional_blocker
     assert changed
     assert not grid.can_transition((1, 1), (2, 1))
 
-    context = TurnContext(
-        source_entity_uuid=melee_actor.uuid,
-        entity_uuid=melee_actor.uuid,
-        visible_enemies=melee_actor.get_visible_enemies(),
-    )
-    assert distant_target.uuid in context.visible_enemies
+    assert distant_target.uuid in melee_actor.get_visible_enemies()
 
     move_info = next(
         action_info
@@ -459,26 +433,34 @@ def test_eb_18_034_melee_ai_uses_available_move_paths_across_directional_blocker
         if target.position is not None
     }
 
-    controller = MeleeAIController(source_entity_uuid=melee_actor.uuid)
-    move_action = controller.get_next_action(melee_actor, context)
+    improving_targets = [
+        target
+        for target in legal_move_targets.values()
+        if target.position is not None
+        and abs(target.position[0] - distant_target.position[0])
+        + abs(target.position[1] - distant_target.position[1])
+        < abs(melee_actor.position[0] - distant_target.position[0])
+        + abs(melee_actor.position[1] - distant_target.position[1])
+    ]
+    chosen_target = min(
+        improving_targets,
+        key=lambda target: len(target.path or []),
+    )
 
-    assert isinstance(move_action, Move)
-    assert move_action.end_position is not None
-    assert move_action.end_position in legal_move_targets
-    assert move_action.path == legal_move_targets[move_action.end_position].path
-    assert move_action.path is not None
-    assert move_action.path[0] == melee_actor.position
-    assert move_action.path[-1] == move_action.end_position
-    assert ((1, 1), (2, 1)) not in zip(move_action.path, move_action.path[1:])
+    assert chosen_target.position is not None
+    assert chosen_target.path is not None
+    assert chosen_target.path[0] == melee_actor.position
+    assert chosen_target.path[-1] == chosen_target.position
+    assert ((1, 1), (2, 1)) not in zip(chosen_target.path, chosen_target.path[1:])
 
-    for start, end in zip(move_action.path, move_action.path[1:]):
+    for start, end in zip(chosen_target.path, chosen_target.path[1:]):
         assert grid.can_transition(start, end)
 
     current_distance = abs(melee_actor.position[0] - distant_target.position[0]) + abs(
         melee_actor.position[1] - distant_target.position[1]
     )
-    moved_distance = abs(move_action.end_position[0] - distant_target.position[0]) + abs(
-        move_action.end_position[1] - distant_target.position[1]
+    moved_distance = abs(chosen_target.position[0] - distant_target.position[0]) + abs(
+        chosen_target.position[1] - distant_target.position[1]
     )
     assert moved_distance < current_distance
 
@@ -1742,8 +1724,8 @@ def run_all_tests() -> None:
         test_eb_18_003_run_turn_and_advance_until_player_respect_controller_types,
         test_eb_18_019_surprise_blocks_reactions_until_skipped_turn_ends,
         test_eb_18_020_codex_controller_stops_as_external_input_turn,
-        test_eb_18_021_melee_ai_attacks_moves_or_passes_from_context,
-        test_eb_18_034_melee_ai_uses_available_move_paths_across_directional_blockers,
+        test_eb_18_021_external_ai_controller_waits_for_session_commands,
+        test_eb_18_034_available_move_paths_preserve_directional_blockers,
         test_eb_18_004_execute_action_captures_combat_log_and_listener_payload,
         test_eb_18_005_check_deaths_marks_dead_and_ends_single_faction_encounter,
         test_eb_18_006_serialization_and_spell_catalog_api_do_not_mutate_registry,

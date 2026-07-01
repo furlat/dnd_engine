@@ -1308,6 +1308,8 @@ class ExecuteByIndexRequest(BaseModel):
         target_index: Index from the action's valid target list.
         extra_target_uuids: Additional target UUIDs for multi-entity actions.
         prefer_safe: Whether movement should prefer safe paths when available.
+        return_available_actions: Whether to include recomputed action rows in
+            the response.
     """
 
     session_id: str = Field(description="Session performing the action.")
@@ -1319,6 +1321,10 @@ class ExecuteByIndexRequest(BaseModel):
         description="Additional target UUIDs for multi-entity actions.",
     )
     prefer_safe: bool = Field(default=True, description="Whether movement should prefer safe paths when available.")
+    return_available_actions: bool = Field(
+        default=True,
+        description="Whether the response should include recomputed available actions.",
+    )
 
 
 class ToggleHandlerRequest(BaseModel):
@@ -1396,6 +1402,74 @@ class AdvanceEncounterResult(BaseModel):
     new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for newly generated logs.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after advancement.")
+
+
+class TakeoverRequest(BaseModel):
+    """Request to claim combatants for Codex control.
+
+    Attributes:
+        faction: Faction to claim when explicit entities are not provided.
+        entity_uuids: Explicit entity UUIDs to claim.
+        session_id: Existing Codex session to reuse.
+        name: Display name for a newly created Codex session.
+        force: Whether to replace an overlapping live takeover claim.
+        lease_seconds: Number of seconds before the claim expires without a heartbeat.
+    """
+
+    faction: Optional[str] = Field(default="monsters", description="Faction to claim when explicit entities are not provided.")
+    entity_uuids: Optional[List[str]] = Field(default=None, description="Explicit entity UUIDs to claim.")
+    session_id: Optional[str] = Field(default=None, description="Existing Codex session to reuse.")
+    name: str = Field(default="Codex Monsters", description="Display name for a newly created Codex session.")
+    force: bool = Field(default=False, description="Whether to replace an overlapping live takeover claim.")
+    lease_seconds: float = Field(default=120.0, gt=0, description="Seconds before claim expiry without heartbeat.")
+
+
+class TakeoverEntityRow(BaseModel):
+    """Entity row included in takeover claim responses."""
+
+    entity_uuid: str = Field(description="Claimed entity UUID.")
+    entity_name: str = Field(description="Claimed entity display name.")
+    faction: Optional[str] = Field(default=None, description="Claimed entity faction.")
+    previous_controller_uuid: str = Field(description="Controller UUID to restore on release.")
+    previous_controller_type: Optional[str] = Field(default=None, description="Controller type to restore on release.")
+    current_controller_type: Optional[str] = Field(default=None, description="Controller type currently assigned.")
+    previous_owner_session_id: Optional[str] = Field(default=None, description="Previous owning session UUID.")
+
+
+class TakeoverClaimResponse(BaseModel):
+    """Serialized Codex takeover claim."""
+
+    claim_id: str = Field(description="Takeover claim UUID.")
+    session_id: str = Field(description="Codex session UUID controlling the claim.")
+    name: str = Field(description="Claim display name.")
+    faction: Optional[str] = Field(default=None, description="Faction claimed, when faction-based.")
+    created_at: float = Field(description="Unix timestamp when the claim was created.")
+    last_heartbeat_at: float = Field(description="Unix timestamp of the latest heartbeat.")
+    lease_seconds: float = Field(description="Lease duration in seconds.")
+    expires_at: float = Field(description="Unix timestamp when the claim expires.")
+    is_expired: bool = Field(description="Whether the claim is expired at serialization time.")
+    claimed_entities: List[TakeoverEntityRow] = Field(description="Entities controlled by the claim.")
+
+
+class TakeoverListResponse(BaseModel):
+    """List of active or known takeover claims."""
+
+    claims: List[TakeoverClaimResponse] = Field(description="Takeover claim rows.")
+
+
+class TakeoverHeartbeatResponse(BaseModel):
+    """Response after refreshing a takeover claim."""
+
+    status: str = Field(description="Heartbeat result status.")
+    claim: TakeoverClaimResponse = Field(description="Refreshed claim.")
+
+
+class TakeoverReleaseResponse(BaseModel):
+    """Response after releasing a takeover claim."""
+
+    status: str = Field(description="Release result status.")
+    claim: Optional[TakeoverClaimResponse] = Field(default=None, description="Released claim, if found.")
+    advance_result: Optional[AdvanceEncounterResult] = Field(default=None, description="Advancement result after release.")
 
 
 class EventHistoryResponse(BaseModel):

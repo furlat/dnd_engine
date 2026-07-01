@@ -2,24 +2,18 @@
 
 from uuid import uuid4
 
-from dnd.actions import Attack, Move
 from dnd.controller import (
     AIAgentController,
     CodexController,
+    ExternalAIController,
     HumanController,
-    MeleeAIController,
     PassController,
 )
-from dnd.core.events import WeaponSlot
 from dnd.encounter import TurnState
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin
 from dnd.scenarios.controller_catalogue import (
     RecordingTurnRunner,
     create_controller_pair,
-    create_melee_only_skeleton,
     make_turn_context,
-    manhattan_distance,
     reset_controller_catalogue_state,
     start_ordered_controller_encounter,
 )
@@ -32,7 +26,6 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         HumanController(source_entity_uuid=uuid4()),
         CodexController(source_entity_uuid=uuid4()),
         PassController(source_entity_uuid=uuid4()),
-        MeleeAIController(source_entity_uuid=uuid4()),
         AIAgentController(source_entity_uuid=uuid4()),
     ]
     runner = RecordingTurnRunner()
@@ -41,12 +34,10 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         "human",
         "codex",
         "pass",
-        "melee_ai",
         "ai_agent",
     ]
     assert runner.run_count == 0
     assert callable(create_controller_pair)
-    assert callable(create_melee_only_skeleton)
     assert callable(make_turn_context)
     assert callable(start_ordered_controller_encounter)
 
@@ -56,15 +47,14 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         (
             "catalogue functions: "
             f"pair={callable(create_controller_pair)}, "
-            f"melee_skeleton={callable(create_melee_only_skeleton)}, "
             f"context={callable(make_turn_context)}, "
             f"encounter={callable(start_ordered_controller_encounter)}"
         ),
     ]
     expected_lines = [
-        "controllers: ['human', 'codex', 'pass', 'melee_ai', 'ai_agent']",
+        "controllers: ['human', 'codex', 'pass', 'ai_agent']",
         "runner: type=RecordingTurnRunner, run_count=0",
-        "catalogue functions: pair=True, melee_skeleton=True, context=True, encounter=True",
+        "catalogue functions: pair=True, context=True, encounter=True",
     ]
 
     print("\n".join(readout_lines))
@@ -95,12 +85,14 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
     assert encounter.turn_state == TurnState.IN_PROGRESS
     assert not human_controller.can_continue_turn(hero, human_context)
     assert human_controller.get_next_action(hero, human_context) is None
+    human_current = encounter.get_current_entity()
+    assert human_current is not None
     human_readout = [
         (
             "human wait: "
             f"status={human_result.status}, "
             f"entity={human_result.entity_name}, "
-            f"current={encounter.get_current_entity().name}, "
+            f"current={human_current.name}, "
             f"turn_state={encounter.turn_state.value}, "
             f"can_continue={human_controller.can_continue_turn(hero, human_context)}"
         ),
@@ -127,6 +119,8 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
     assert encounter.turn_state == TurnState.IN_PROGRESS
     assert not codex_controller.can_continue_turn(hero, codex_context)
     assert codex_controller.get_next_action(hero, codex_context) is None
+    codex_current = encounter.get_current_entity()
+    assert codex_current is not None
 
     readout_lines = [
         *human_readout,
@@ -134,7 +128,7 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
             "codex wait: "
             f"status={codex_result.status}, "
             f"entity={codex_result.entity_name}, "
-            f"current={encounter.get_current_entity().name}, "
+            f"current={codex_current.name}, "
             f"turn_state={encounter.turn_state.value}, "
             f"can_continue={codex_controller.can_continue_turn(hero, codex_context)}"
         ),
@@ -145,6 +139,54 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
         "human action: None",
         "codex wait: status=waiting_for_codex, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
         "codex action: None",
+    ]
+
+    print("\n".join(readout_lines))
+
+    assert readout_lines == expected_lines
+    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_external_ai_controller_waits_for_subprocess_input(capsys) -> None:
+    """External AI controllers stop the encounter loop until the subprocess acts."""
+    reset_controller_catalogue_state()
+    hero, monster = create_controller_pair()
+    external_controller = ExternalAIController(source_entity_uuid=monster.uuid)
+    encounter = start_ordered_controller_encounter(
+        hero,
+        monster,
+        PassController(source_entity_uuid=hero.uuid),
+        external_controller,
+        first_actor=monster,
+    )
+
+    result = encounter.advance_until_player()
+    context = make_turn_context(monster)
+
+    assert external_controller.controller_type == "external_ai"
+    assert result.status == "waiting_for_ai"
+    assert result.entity_uuid == monster.uuid
+    assert encounter.get_current_entity() is monster
+    assert encounter.turn_state == TurnState.IN_PROGRESS
+    assert not external_controller.can_continue_turn(monster, context)
+    assert external_controller.get_next_action(monster, context) is None
+    current = encounter.get_current_entity()
+    assert current is not None
+
+    readout_lines = [
+        (
+            "external ai wait: "
+            f"status={result.status}, "
+            f"entity={result.entity_name}, "
+            f"current={current.name}, "
+            f"turn_state={encounter.turn_state.value}, "
+            f"can_continue={external_controller.can_continue_turn(monster, context)}"
+        ),
+        f"external ai action: {external_controller.get_next_action(monster, context)}",
+    ]
+    expected_lines = [
+        "external ai wait: status=waiting_for_ai, entity=Controller Skeleton, current=Controller Skeleton, turn_state=in_progress, can_continue=False",
+        "external ai action: None",
     ]
 
     print("\n".join(readout_lines))
@@ -173,6 +215,8 @@ def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
     assert encounter.combatants[monster.uuid].has_acted_this_round
     assert encounter.get_current_entity() is hero
     assert encounter.turn_state == TurnState.IN_PROGRESS
+    current = encounter.get_current_entity()
+    assert current is not None
 
     readout_lines = [
         (
@@ -182,133 +226,11 @@ def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
             f"monster_turns={encounter.combatants[monster.uuid].turn_count}, "
             f"acted={encounter.combatants[monster.uuid].has_acted_this_round}"
         ),
-        f"current: actor={encounter.get_current_entity().name}, turn_state={encounter.turn_state.value}",
+        f"current: actor={current.name}, turn_state={encounter.turn_state.value}",
     ]
     expected_lines = [
         "pass turn: status=waiting_for_human, next=Controller Hero, monster_turns=1, acted=True",
         "current: actor=Controller Hero, turn_state=in_progress",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
-def test_melee_ai_prefers_a_weapon_attack_when_adjacent(capsys) -> None:
-    """Melee AI chooses a weapon attack before other entity-targeted actions."""
-    reset_controller_catalogue_state()
-    skeleton = create_melee_only_skeleton(
-        name="AI Skeleton",
-        position=(1, 1),
-        faction="monsters",
-    )
-    hero = create_goblin(name="Adjacent Hero", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
-
-    controller = MeleeAIController(source_entity_uuid=skeleton.uuid)
-    context = make_turn_context(skeleton)
-    action = controller.get_next_action(skeleton, context)
-
-    assert isinstance(action, Attack)
-    assert action.name == "Attack_MELEE_MAIN"
-    assert action.weapon_slot == WeaponSlot.MELEE_MAIN
-    assert action.target_entity_uuid == hero.uuid
-
-    readout_lines = [
-        (
-            "attack choice: "
-            f"type={type(action).__name__}, "
-            f"name={action.name}, "
-            f"slot={action.weapon_slot.value}, "
-            f"target={Entity.get(action.target_entity_uuid).name}"
-        ),
-        (
-            "tactical context: "
-            f"visible_enemies={len(context.visible_enemies)}, "
-            f"visible_allies={len(context.visible_allies)}, "
-            f"actor={skeleton.name}"
-        ),
-    ]
-    expected_lines = [
-        "attack choice: type=Attack, name=Attack_MELEE_MAIN, slot=MELEE_MAIN, target=Adjacent Hero",
-        "tactical context: visible_enemies=1, visible_allies=0, actor=AI Skeleton",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
-def test_melee_ai_moves_closer_when_no_attack_is_in_range(capsys) -> None:
-    """Melee AI chooses a legal move target that reduces enemy distance."""
-    reset_controller_catalogue_state()
-    skeleton = create_melee_only_skeleton(
-        name="AI Skeleton",
-        position=(1, 1),
-        faction="monsters",
-    )
-    hero = create_goblin(name="Distant Hero", position=(5, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
-
-    controller = MeleeAIController(source_entity_uuid=skeleton.uuid)
-    action = controller.get_next_action(skeleton, make_turn_context(skeleton))
-    start_distance = manhattan_distance(skeleton.position, hero.position)
-
-    assert isinstance(action, Move)
-    assert action.end_position is not None
-    assert action.path is not None
-    assert action.path[0] == skeleton.position
-    assert action.path[-1] == action.end_position
-    end_distance = manhattan_distance(action.end_position, hero.position)
-    assert end_distance < start_distance
-
-    readout_lines = [
-        (
-            "move choice: "
-            f"type={type(action).__name__}, "
-            f"start={skeleton.position}, "
-            f"end={action.end_position}, "
-            f"path={action.path}"
-        ),
-        f"distance: before={start_distance}, after={end_distance}, improved={end_distance < start_distance}",
-    ]
-    expected_lines = [
-        "move choice: type=Move, start=(1, 1), end=(4, 1), path=[(1, 1), (2, 1), (3, 1), (4, 1)]",
-        "distance: before=4, after=1, improved=True",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
-def test_melee_ai_passes_when_no_enemy_is_visible(capsys) -> None:
-    """Melee AI returns no action when it has no visible enemy to pursue."""
-    reset_controller_catalogue_state()
-    skeleton = create_melee_only_skeleton(
-        name="Lone AI Skeleton",
-        position=(1, 1),
-        faction="monsters",
-    )
-    Entity.update_all_entities_senses(max_distance=20)
-
-    controller = MeleeAIController(source_entity_uuid=skeleton.uuid)
-    context = make_turn_context(skeleton)
-    action = controller.get_next_action(skeleton, context)
-
-    assert context.visible_enemies == {}
-    assert action is None
-
-    readout_lines = [
-        f"target list: visible_enemies={len(context.visible_enemies)}, visible_allies={len(context.visible_allies)}",
-        f"pass signal: action={action}, controller={controller.controller_type}",
-    ]
-    expected_lines = [
-        "target list: visible_enemies=0, visible_allies=0",
-        "pass signal: action=None, controller=melee_ai",
     ]
 
     print("\n".join(readout_lines))
@@ -338,13 +260,17 @@ def test_ai_agent_controller_delegates_once_per_turn(capsys) -> None:
     assert encounter.combatants[monster.uuid].turn_count == 1
     assert encounter.get_current_entity() is hero
     first_turn_count = encounter.combatants[monster.uuid].turn_count
-    first_current_name = encounter.get_current_entity().name
+    first_current = encounter.get_current_entity()
+    assert first_current is not None
+    first_current_name = first_current.name
 
     encounter.run_turn()
     encounter.run_turn()
 
     assert runner.run_count == 2
     assert encounter.combatants[monster.uuid].turn_count == 2
+    second_current = encounter.get_current_entity()
+    assert second_current is not None
 
     readout_lines = [
         (
@@ -358,7 +284,7 @@ def test_ai_agent_controller_delegates_once_per_turn(capsys) -> None:
             "second delegation: "
             f"run_count={runner.run_count}, "
             f"monster_turns={encounter.combatants[monster.uuid].turn_count}, "
-            f"current={encounter.get_current_entity().name}"
+            f"current={second_current.name}"
         ),
     ]
     expected_lines = [
