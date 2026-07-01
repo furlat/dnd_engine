@@ -1,4 +1,9 @@
-from dnd.core.base_actions import BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType, ActionCategory, spell_slot_cost_type
+"""Concrete action implementations for combat, movement, spells, and objects."""
+
+from dnd.core.base_actions import (
+    BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType,
+    ActionCategory, SPELL_SLOT_TEMPLATE_SEPARATOR, spell_slot_cost_type,
+)
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -7,6 +12,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
+from dnd.core.base_tiles import Tile
 from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode
@@ -18,7 +24,7 @@ from dnd.core.combat_log import (
     md_color
 )
 from pydantic import Field, model_validator
-from typing import Any, Optional, List, Set, TypeVar, Tuple, Self, cast
+from typing import Any, Dict, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
@@ -27,25 +33,50 @@ from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concent
 
 
 def entity_resource_cost_evaluator(entity_uuid: UUID, resource_name: str, resource_cost: int) -> bool:
-    """Evaluate resource costs via Entity.action_economy."""
+    """Check whether an entity can afford a named resource cost.
+
+    Args:
+        entity_uuid: Entity that would pay the resource.
+        resource_name: Action economy resource name.
+        resource_cost: Resource amount required.
+
+    Returns:
+        True if the entity exists and can afford the resource.
+    """
     entity = Entity.get(entity_uuid)
     if entity is None or not isinstance(entity, Entity):
         return False
     return entity.action_economy.can_afford_resource(resource_name, resource_cost)
 
 
-#here we create event processors for the validation of the attack
-def entity_action_economy_cost_evaluator(source_entity_uuid: UUID,cost_type: CostType,cost: int) -> bool:
-        """Evaluate the costs of the action"""
-        entity = Entity.get(source_entity_uuid)
-        if entity is None or not isinstance(entity, Entity):
-            return False
-        return entity.action_economy.can_afford(cost_type,cost)
+def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
+    """Check whether an entity can afford an action economy cost.
+
+    Args:
+        source_entity_uuid: Entity that would pay the cost.
+        cost_type: Action economy bucket to inspect.
+        cost: Amount required.
+
+    Returns:
+        True if the entity exists and can afford the cost.
+    """
+    entity = Entity.get(source_entity_uuid)
+    if entity is None or not isinstance(entity, Entity):
+        return False
+    return entity.action_economy.can_afford(cost_type, cost)
 
 PolymorphicActionEvent = TypeVar('PolymorphicActionEvent', bound='ActionEvent')
 
 def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> Optional[PolymorphicActionEvent]:
-    """Validate if the source entity and target entity are in line of sight"""
+    """Validate that the action target is visible to the source entity.
+
+    Args:
+        declaration_event: Declaration event being validated.
+        source_entity_uuid: Acting entity UUID.
+
+    Returns:
+        Updated declaration event, canceled event, or `None` if a subclass does.
+    """
     source_entity = Entity.get(source_entity_uuid)
     if not source_entity:
         return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
@@ -58,7 +89,7 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
         return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
     if not isinstance(target_entity, Entity):
         return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
-    
+
     if target_entity.uuid not in source_entity.senses.entities.keys():
         return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
     return declaration_event.phase_to(
@@ -67,15 +98,22 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
     )
 
 def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> PolymorphicActionEvent:
-    """Apply the costs of the action (turn-based and resource-based)."""
+    """Consume turn-based and named-resource costs after action completion.
+
+    Args:
+        completion_event: Completion event carrying serialized costs.
+        source_entity_uuid: Entity that pays the costs.
+
+    Returns:
+        Completion event advanced after costs, or canceled on failed resource
+        consumption.
+    """
     entity = Entity.get(source_entity_uuid)
     if entity is None or not isinstance(entity, Entity):
         return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
     for cost in completion_event.costs:
-        # Apply turn-based cost
         if cost.cost > 0:
             entity.action_economy.consume(cost.cost_type, cost.cost)
-        # Apply resource cost if present
         if cost.resource_cost > 0 and cost.resource_name:
             if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
                 return completion_event.cancel(
@@ -88,15 +126,17 @@ def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent,
 
 
 class MovementEvent(ActionEvent):
-    """An event that represents a movement"""
-    name: str = Field(default="Movement",description="A movement event")
-    event_type: EventType = Field(default=EventType.MOVEMENT,description="The type of event")
-    costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
-    start_position: Tuple[int,int] = Field(description="The start position of the movement")
-    end_position: Tuple[int,int] = Field(description="The end position of the movement")
-    path: Optional[List[Tuple[int,int]]] = Field(default=None,description="The path of the movement")
+    """Event payload for path-based movement actions."""
+
+    name: str = Field(default="Movement", description="Human-readable movement event label.")
+    event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement event category.")
+    costs: List[BaseCost] = Field(default_factory=list, description="Serialized movement costs.")
+    start_position: Tuple[int, int] = Field(description="Position occupied before movement starts.")
+    end_position: Tuple[int, int] = Field(description="Intended or actual final movement position.")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Grid path used by the movement.")
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return movement positions relevant to spatial handlers."""
         positions = {self.start_position, self.end_position}
         if self.path:
             positions.update(self.path)
@@ -108,40 +148,30 @@ class MovementEvent(ActionEvent):
         Uses self.* fields only - no external lookups. Entity name must be
         populated when the event is created.
         """
-        # Use entity name from self - no external lookups
         source_name = self.source_entity_name or "Unknown"
 
-        # Calculate distance
         path = self.path or []
         distance_feet = (len(path) - 1) * 5 if len(path) > 1 else 0
 
-        # Get movement cost
         movement_cost = 0
         for cost in self.costs:
             if cost.cost_type == "movement":
                 movement_cost = cost.cost
 
-        # Build path string for detail line
         path_str = " -> ".join(f"({p[0]}, {p[1]})" for p in path) if path else ""
 
-        # Build markdown-formatted verbosity levels
         end_pos = f"({self.end_position[0]},{self.end_position[1]})"
         start_pos = f"({self.start_position[0]},{self.start_position[1]})"
 
-        # Compact: "{cyan:Hero} moves {green:15ft} to {yellow:(5,3)}"
         compact_text = f"{md_color(source_name, 'cyan')} moves {md_color(f'{distance_feet}ft', 'green')} to {md_color(end_pos, 'yellow')}"
-
-        # Verbose: same as compact + position change
         verbose_text = f"{md_color(source_name, 'cyan')} moves {start_pos} → {md_color(end_pos, 'green')}"
         if movement_cost > 0:
             verbose_text += f" ({movement_cost}ft)"
 
-        # Detailed: includes path
         detailed_text = verbose_text
         if path_str:
             detailed_text += f"\n  Path: {path_str}"
 
-        # Build structured data
         data = MovementLogData(
             entity_name=source_name,
             entity_uuid=str(self.source_entity_uuid),
@@ -165,66 +195,99 @@ class MovementEvent(ActionEvent):
 
 
 class Move(BaseAction):
-    """An action that represents a movement with a path it will automatically compute the path from the source entity position to the end position
-    the cost is automatically computed from the path length and the use_movement_cost flag is true
-
-    This is a simplified implmenetation that does not move the character through the path, hence not triggering any movement specific.
+    """Path-based movement action that walks cell by cell.
 
     When used as a template (template=True), end_position can be None and should be set via set_target_position()
     before pre_validate() or instantiate().
     """
-    name: str = Field(default="Move", description="A movement action")
-    description: str = Field(default="Move to a position", description="A description of the movement action")
-    target_type: TargetType = Field(default=TargetType.POSITION_PATH, description="Move targets a position via path")
-    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
-    end_position: Optional[Tuple[int, int]] = Field(default=None, description="The end position of the movement")
-    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="The path of the movement")
-    use_movement_cost: bool = Field(default=True, description="Whether to use the movement cost")
-    prefer_safe: bool = Field(default=True, description="If True, uses safe path avoiding hazards when available")
+
+    name: str = Field(default="Move", description="Human-readable movement action name.")
+    description: str = Field(default="Move to a position", description="Movement action description.")
+    target_type: TargetType = Field(default=TargetType.POSITION_PATH, description="Move targets a path-reachable position.")
+    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT, description="Movement action category.")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Requested movement destination.")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Resolved path from source to destination.")
+    use_movement_cost: bool = Field(default=True, description="Whether movement costs are generated from the path.")
+    prefer_safe: bool = Field(default=True, description="Whether a safe path is preferred when available.")
+    movement_mode: MovementMode = Field(default=MovementMode.WALKING, description="Movement mode used for terrain costs and transitions.")
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
-        # Only compute path and costs if we have an end_position (not a template)
         if self.end_position is not None and not self.template:
             self._setup_path()
             self._setup_costs_from_path()
 
-    def _setup_costs_from_path(self):
+    def _setup_costs_from_path(self) -> None:
+        """Rebuild the movement cost from the resolved path and terrain."""
         if self.path is not None and self.use_movement_cost:
-            # Calculate cost from actual terrain, not just path length
             grid = get_map()
             total_cost = 0
 
-            # Check if entity ignores difficult terrain
             source_entity = Entity.get(self.source_entity_uuid)
             ign_terrain = source_entity.ignore_difficult_terrain if source_entity else False
 
-            # Path includes starting position, so iterate from index 1
             for i in range(1, len(self.path)):
                 tile = grid.get_tile(*self.path[i])
-                if tile:
-                    cost = tile.get_movement_cost(MovementMode.WALKING)
-                    if ign_terrain:
-                        cost = min(cost, 1.0)
-                    total_cost += cost
-                else:
-                    total_cost += 1  # Default cost if no tile exists
+                total_cost += self._get_step_cost_units(tile, source_entity, ign_terrain)
 
-            # Each cost unit = 5 feet in D&D 5e
             feet_cost = int(total_cost * 5)
-            self.costs.append(Cost(name="Movement Cost",cost_type="movement",cost=feet_cost,evaluator=entity_action_economy_cost_evaluator))
+            self.costs.append(
+                Cost(
+                    name="Movement Cost",
+                    cost_type="movement",
+                    cost=feet_cost,
+                    evaluator=entity_action_economy_cost_evaluator,
+                )
+            )
 
-    def _setup_path(self):
-        """Check if the costs of the action are valid and sets up the path and the costs"""
+    def _get_step_cost_units(self, tile: Optional[Tile], source_entity: Optional[Entity], ignore_difficult_terrain: bool = False) -> float:
+        """Return movement-cost units for one step in this action's mode.
+
+        Args:
+            tile: Destination tile or block-like terrain object.
+            source_entity: Entity paying the movement cost.
+            ignore_difficult_terrain: Whether difficult-terrain costs are capped.
+
+        Returns:
+            Movement cost in grid cost units before conversion to feet.
+        """
+        if tile:
+            cost = tile.get_movement_cost(self.movement_mode)
+        else:
+            cost = 1.0
+
+        if self.movement_mode == MovementMode.WALKING and ignore_difficult_terrain:
+            cost = min(cost, 1.0)
+
+        if (
+            self.movement_mode == MovementMode.SWIMMING
+            and source_entity is not None
+            and source_entity.swimming_speed <= 0
+            and not source_entity.ignore_underwater_penalties
+        ):
+            cost *= 2
+
+        return cost
+
+    def _setup_path(self) -> None:
+        """Resolve the movement path from current senses data."""
         if self.path is None and self.end_position is not None:
             source_entity = Entity.get(self.source_entity_uuid)
             if source_entity is None or not isinstance(source_entity, Entity):
                 return None
-            # Prefer safe path when available and prefer_safe is True
-            if self.prefer_safe and self.end_position in source_entity.senses.safe_paths:
+            if self.movement_mode == MovementMode.WALKING and self.prefer_safe and self.end_position in source_entity.senses.safe_paths:
                 self.path = source_entity.senses.safe_paths[self.end_position]
-            elif self.end_position in source_entity.senses.paths:
+            elif self.movement_mode == MovementMode.WALKING and self.end_position in source_entity.senses.paths:
                 self.path = source_entity.senses.paths[self.end_position]
+            elif self.movement_mode != MovementMode.WALKING:
+                grid = get_map()
+                _, paths = grid.compute_paths(
+                    source_entity.position,
+                    requesting_entity_uuid=source_entity.uuid,
+                    movement_mode=self.movement_mode,
+                    subjective=True,
+                )
+                self.path = paths.get(self.end_position)
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
         """Set target position and compute path/costs for validation.
@@ -232,14 +295,11 @@ class Move(BaseAction):
         Overrides base implementation to also compute path and costs,
         so that pre_validate() can properly check movement affordability.
         """
-        # Clear previous path/costs if re-targeting
         self.path = None
         self.costs = []
 
-        # Set position via parent
         super().set_target_position(position)
 
-        # Compute path and costs so check_costs() works
         self._setup_path()
         self._setup_costs_from_path()
 
@@ -252,21 +312,17 @@ class Move(BaseAction):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        # Instance config: new UUID, not a template, not registered (ephemeral)
-        # Reset path and costs for recomputation
         update_dict: dict = {
             "uuid": uuid4(),
             "template": False,
-            "use_register": False,  # Instances are ephemeral, don't need registry
-            "path": None,  # Force recompute
-            "costs": [],   # Force recompute
+            "use_register": False,
+            "path": None,
+            "costs": [],
         }
         update_dict.update(overrides)
 
-        # model_copy preserves object types but bypasses __init__()
         instance = self.model_copy(deep=True, update=update_dict)
 
-        # FIX: Explicitly compute path and costs since model_copy() bypasses __init__()
         if instance.end_position is not None:
             instance._setup_path()
             instance._setup_costs_from_path()
@@ -274,30 +330,53 @@ class Move(BaseAction):
         return instance
 
     @staticmethod
-    def validate_path(declaration_event: MovementEvent,source_entity_uuid: UUID) -> MovementEvent:
-        """Validate the path of the movement"""
+    def validate_path(
+        declaration_event: MovementEvent,
+        source_entity_uuid: UUID,
+        movement_mode: MovementMode = MovementMode.WALKING,
+    ) -> MovementEvent:
+        """Validate that a movement event carries a usable path.
+
+        Args:
+            declaration_event: Movement declaration event to validate.
+            source_entity_uuid: Moving entity UUID.
+            movement_mode: Movement mode required for each transition.
+
+        Returns:
+            Posted declaration event or canceled event.
+        """
         source_entity = Entity.get(source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
             return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
         if declaration_event.path is None or len(declaration_event.path) == 0:
-            #get the path from the source entity to the end position
             return declaration_event.cancel(status_message=f"No valid path found for {declaration_event.name}")
-           
+
         else:
-            if declaration_event.path == source_entity.senses.paths[declaration_event.end_position]:
+            if movement_mode == MovementMode.WALKING and declaration_event.path == source_entity.senses.paths[declaration_event.end_position]:
+                return declaration_event.post(
+                    status_message=f"Validated path for {declaration_event.name}"
+                )
+            elif movement_mode == MovementMode.WALKING:
+                for path_position in declaration_event.path:
+                    if path_position not in source_entity.senses.paths:
+                        return declaration_event.cancel(status_message=f"Invalid path for {declaration_event.name} at position {path_position}")
+
                 return declaration_event.post(
                     status_message=f"Validated path for {declaration_event.name}"
                 )
             else:
-                #we must check that all the positions in the path have a valid path
-                for path_position in declaration_event.path:
-                    if path_position not in source_entity.senses.paths:
-                        return declaration_event.cancel(status_message=f"Invalid path for {declaration_event.name} at position {path_position}")
-                    
+                grid = get_map()
+                if declaration_event.path[0] != source_entity.position:
+                    return declaration_event.cancel(status_message=f"Invalid path start for {declaration_event.name}")
+                if declaration_event.path[-1] != declaration_event.end_position:
+                    return declaration_event.cancel(status_message=f"Invalid path end for {declaration_event.name}")
+                for from_pos, to_pos in zip(declaration_event.path, declaration_event.path[1:]):
+                    if not grid.can_transition(from_pos, to_pos, source_entity.uuid, movement_mode, subjective=True):
+                        return declaration_event.cancel(status_message=f"Invalid {movement_mode.value} transition for {declaration_event.name} at position {to_pos}")
                 return declaration_event.post(
                     status_message=f"Validated path for {declaration_event.name}"
                 )
-            
+
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the movement action.
 
@@ -309,35 +388,34 @@ class Move(BaseAction):
             return None
 
         if self.end_position is None:
-            return None  # Can't create movement event without destination
+            return None
 
-        # Store in local variable to help type checker
         end_position: Tuple[int, int] = self.end_position
 
-        # Compute path on the fly if not already set (for templates)
         path = self.path
-        if path is None and end_position in source_entity.senses.paths:
+        if path is None and self.movement_mode == MovementMode.WALKING and end_position in source_entity.senses.paths:
             path = source_entity.senses.paths[end_position]
+        elif path is None and self.movement_mode != MovementMode.WALKING:
+            grid = get_map()
+            _, paths = grid.compute_paths(
+                source_entity.position,
+                requesting_entity_uuid=source_entity.uuid,
+                movement_mode=self.movement_mode,
+                subjective=True,
+            )
+            path = paths.get(end_position)
 
-        # Compute costs from path if using movement cost
-        costs = list(self.costs)  # Copy existing costs
+        costs = list(self.costs)
         if path is not None and self.use_movement_cost:
-            # Check if we already have a movement cost
             has_movement_cost = any(c.cost_type == "movement" for c in costs)
             if not has_movement_cost:
-                # Calculate cost from actual terrain, not just path length
                 grid = get_map()
                 total_cost = 0
 
-                # Path includes starting position, so iterate from index 1
                 for i in range(1, len(path)):
                     tile = grid.get_tile(*path[i])
-                    if tile:
-                        total_cost += tile.get_movement_cost(MovementMode.WALKING)
-                    else:
-                        total_cost += 1  # Default cost if no tile exists
+                    total_cost += self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
 
-                # Each cost unit = 5 feet in D&D 5e
                 feet_cost = int(total_cost * 5)
                 costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
 
@@ -351,12 +429,12 @@ class Move(BaseAction):
             path=path,
             costs=[BaseCost.model_validate(cost) for cost in costs],
             use_register=use_register,
-            source_entity_name=source_entity.name  # Populate for combat log generation
+            source_entity_name=source_entity.name,
         )
-    
+
     def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
-        """Validate the movement action"""
-        validated_event = Move.validate_path(declaration_event,self.source_entity_uuid)
+        """Validate the movement action."""
+        validated_event = Move.validate_path(declaration_event, self.source_entity_uuid, self.movement_mode)
         if not validated_event.canceled:
             return validated_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
@@ -364,7 +442,7 @@ class Move(BaseAction):
             )
         else:
             return validated_event
-        
+
     def _apply(self, execution_event: MovementEvent) -> MovementEvent:
         """Apply the movement action using cell-by-cell movement.
 
@@ -375,7 +453,6 @@ class Move(BaseAction):
         if not source_entity or not isinstance(source_entity, Entity):
             return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
 
-        # First check if we have path
         if self.path is None and execution_event.path is None:
             return execution_event.cancel(status_message=f"No path found for {execution_event.name}")
         elif self.path is None and execution_event.path is not None:
@@ -396,22 +473,20 @@ class Move(BaseAction):
         if effect_event.canceled:
             return effect_event
 
-        # Cell-by-cell movement
         grid = get_map()
         path = self.path or []
         total_path_length = len(path)
-        actual_end_position = source_entity.position  # Track where we actually end up
+        actual_end_position = source_entity.position
+        interrupted_by_condition = False
 
         try:
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
                 to_pos = path[i]
 
-                # Check if next step is still valid (tile walkable, edge-crossable, not blocked by entity)
-                # Handles: tile destroyed, enemy moved into path, object border changed, etc.
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid):
-                    if grid.can_transition(from_pos, to_pos, source_entity.uuid, subjective=True):
-                        cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid)
+                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                    if grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode, subjective=True):
+                        cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, self.movement_mode)
                         directions = []
                         from_tile = grid.get_tile(*from_pos)
                         if from_tile:
@@ -429,27 +504,18 @@ class Move(BaseAction):
                             directional_position=from_pos if directions else None,
                             directional_directions=directions or None,
                             directional_channels=["movement"] if directions and not cell_blocked else None,
-                        )
+                            )
                         grid._fire_spatial_event(collision_event)
                     break
 
-                # Get step cost from terrain
                 tile = grid.get_tile(*to_pos)
-                step_cost_units = tile.get_movement_cost(MovementMode.WALKING) if tile else 1.0
-                if source_entity.ignore_difficult_terrain:
-                    step_cost_units = min(step_cost_units, 1.0)
+                step_cost_units = self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
                 step_cost_feet = int(step_cost_units * 5)
 
-                # Check if entity has enough movement remaining (conditions affect this via modifiers)
                 remaining_movement = source_entity.action_economy.movement.normalized_score
                 if remaining_movement < step_cost_feet:
                     break
 
-                # Fire StepMovementEvent (OA and terrain handlers see this)
-                # use_register=False prevents __init__ from registering (which would
-                # fire handlers with the return value discarded). post(use_register=True)
-                # is the single registration point where handlers fire and cancellation
-                # propagates correctly through the return value.
                 step_event = StepMovementEvent(
                     source_entity_uuid=self.source_entity_uuid,
                     source_entity_name=source_entity.name,
@@ -462,53 +528,40 @@ class Move(BaseAction):
                     parent_event=effect_event.uuid,
                     use_register=False
                 )
-                # post() returns the processed event (which may have been canceled by handlers)
                 processed_step = step_event.post(use_register=True)
 
-                # Check if step was canceled (e.g., by a reaction or trap)
                 if processed_step.canceled:
                     break
 
-                # Re-check transition after step event processing.
-                # Handlers may have changed the map (e.g., an interceptor charged into to_pos,
-                # a door was closed, an object was placed). The pre-step check (line 384) may
-                # now be stale.
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid):
+                if "Dead" in source_entity.active_conditions or "Incapacitated" in source_entity.active_conditions:
+                    interrupted_by_condition = True
                     break
 
-                # Actually move the entity - pass step event UUID so terrain damage links to it
-                # NOTE: We pass the EFFECT phase UUID here, and complete the step AFTER
-                # spatial events fire. This ensures terrain damage (TakeDamageEvent) is
-                # collected as a child of this step when combat_log is generated.
+                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                    break
+
                 Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
                 actual_end_position = to_pos
 
-                # Now progress to COMPLETION - generates combat_log with all children
-                # (including TakeDamageEvents from terrain that just fired)
                 processed_step.phase_to(EventPhase.COMPLETION)
 
-                # Check for death during movement (e.g., from terrain damage like spikes)
-                # receive_damage() applies Dead condition → Incapacitated → movement=0
-                # We need to break BEFORE trying to consume movement
                 if "Dead" in source_entity.active_conditions:
                     break
 
-                # Deduct movement cost for this step
                 source_entity.action_economy.consume("movement", step_cost_feet)
 
         finally:
-            # ALWAYS do full senses update at movement end, regardless of how loop exits:
-            # - Normal completion
-            # - break (step canceled, path invalid, not enough movement, death)
-            # - Exception
-            # Full senses update: runs Dijkstra for fresh paths, resets _paths_dirty flag.
             source_entity.update_entity_senses(max_distance=20)
 
-        # Determine final result
         if source_entity.position == execution_event.start_position:
+            if interrupted_by_condition:
+                return execution_event.phase_to(
+                    new_phase=EventPhase.COMPLETION,
+                    status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
+                    end_position=actual_end_position
+                )
             return effect_event.cancel(status_message=f"Failed to move for {execution_event.name}")
         elif source_entity.position != execution_event.end_position:
-            # Partial movement (stopped early due to death, OA, etc.)
             return execution_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
@@ -519,7 +572,7 @@ class Move(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Applied movement for {execution_event.name}"
         )
-    
+
     def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
         """Apply costs - movement is already consumed per-step in _apply().
 
@@ -531,13 +584,10 @@ class Move(BaseAction):
             return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
 
         for cost in completion_event.costs:
-            # Skip movement cost - already consumed per-step in _apply()
             if cost.cost_type == "movement":
                 continue
-            # Apply other costs (actions, bonus_actions, reactions)
             if cost.cost > 0:
                 entity.action_economy.consume(cost.cost_type, cost.cost)
-            # Apply resource costs
             if cost.resource_cost > 0 and cost.resource_name:
                 if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
                     return completion_event.cancel(
@@ -555,30 +605,39 @@ class Move(BaseAction):
         return cast(MovementEvent, result) if result else None
 
 
+class Swim(Move):
+    """Path-based swimming action that uses swimming terrain costs."""
+
+    name: str = Field(default="Swim", description="Human-readable swimming action name.")
+    description: str = Field(default="Swim to a water position", description="Swimming action description.")
+    movement_mode: MovementMode = Field(default=MovementMode.SWIMMING, description="Movement mode used for terrain costs and transitions.")
+
+
 class AttackEvent(ActionEvent):
-    """An event that represents an attack"""
-    name: str = Field(default="Attack",description="An attack event")
-    costs: List[BaseCost] = Field(default_factory=list,description="A list of costs for the action")
-    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    range: Optional[Range] = Field(default=None,description="The range of the attack")
-    is_long_range: bool = Field(default=False,description="True if attack is at long range (beyond normal, within long)")
-    is_threatened: bool = Field(default=False,description="True if attacker has hostile entity within 5ft")
-    attack_bonus: Optional[ModifiableValue] = Field(default=None,description="The attack bonus of the attack")
-    ac: Optional[ModifiableValue] = Field(default=None,description="The ac of the target")
-    dice_roll: Optional[DiceRoll] = Field(default=None,description="The result of the dice roll")
-    attack_outcome: Optional[AttackOutcome] = Field(default=None,description="The outcome of the attack")
-    damages: Optional[List[Damage]] = Field(default=None,description="The damages of the attack")
-    damage_rolls: Optional[List[DiceRoll]] = Field(default=None,description="The rolls of the damages")
-    event_type: EventType = Field(default=EventType.ATTACK,description="The type of event")
+    """Event payload for one weapon attack lifecycle."""
 
-    # Weapon info for combat log generation (populated during event creation)
-    weapon_name: Optional[str] = Field(default=None, description="Name of the weapon used")
-
-    # Ability override for True Strike (use spellcasting ability instead of STR/DEX)
-    override_ability: Optional[AbilityName] = Field(default=None, description="Override ability for attack/damage rolls")
-
-    # VFX metadata: damage types for this attack (populated at DECLARATION from weapon, updated on hit from actual damages)
-    damage_types: List[DamageType] = Field(default_factory=list, description="Damage types for VFX (populated at declaration from weapon, updated on hit)")
+    name: str = Field(default="Attack", description="Human-readable attack event label.")
+    costs: List[BaseCost] = Field(default_factory=list, description="Costs attached to this attack event.")
+    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
+    range: Optional[Range] = Field(default=None, description="Range band used by the attack.")
+    is_long_range: bool = Field(default=False, description="Whether the target is beyond normal range.")
+    is_threatened: bool = Field(default=False, description="Whether a hostile creature threatens the attacker.")
+    attack_bonus: Optional[ModifiableValue] = Field(default=None, description="Attack-roll bonus used for this attack.")
+    ac: Optional[ModifiableValue] = Field(default=None, description="Target armor class used for this attack.")
+    dice_roll: Optional[DiceRoll] = Field(default=None, description="Attack d20 roll after result handlers.")
+    attack_outcome: Optional[AttackOutcome] = Field(default=None, description="Resolved attack outcome.")
+    damages: Optional[List[Damage]] = Field(default=None, description="Damage packets used on hit.")
+    damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="Damage rolls after result handlers.")
+    event_type: EventType = Field(default=EventType.ATTACK, description="Event category for attacks.")
+    weapon_name: Optional[str] = Field(default=None, description="Display name of the weapon used.")
+    override_ability: Optional[AbilityName] = Field(
+        default=None,
+        description="Ability override for attack and damage rolls.",
+    )
+    damage_types: List[DamageType] = Field(
+        default_factory=list,
+        description="Damage types exposed to visual effects and clients.",
+    )
 
     def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates: Any) -> Self:
         """Override to auto-update damage_types when damages are set."""
@@ -592,16 +651,12 @@ class AttackEvent(ActionEvent):
         Uses self.* fields only - no external lookups. Entity names and weapon name
         must be populated when the event is created.
         """
-        # Use entity names from self - no external lookups
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
         weapon_name = self.weapon_name or "Unarmed"
 
-        # We still need target entity for HP lookup (this is acceptable as it's
-        # current state, not creation-time state)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
-        # Build attack roll display
         attack_roll = DiceRollDisplay(
             dice_str="d20",
             results=[],
@@ -615,7 +670,6 @@ class AttackEvent(ActionEvent):
                 attack_roll.results = list(results)
                 attack_roll.all_d20_rolls = list(results)
 
-                # Determine advantage status and which d20 was used
                 adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
@@ -638,7 +692,6 @@ class AttackEvent(ActionEvent):
             attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
-        # Build attack breakdown from ModifiableValue
         attack_breakdown: List[ModifierBreakdown] = []
         if self.attack_bonus:
             for mod in self.attack_bonus.get_breakdown():
@@ -648,7 +701,6 @@ class AttackEvent(ActionEvent):
                     source=mod.get('source', 'self')
                 ))
 
-        # Build advantage breakdown from cached contextual results
         advantage_breakdown: List[ModifierBreakdown] = []
         if self.attack_bonus:
             for mod in self.attack_bonus.get_full_advantage_breakdown():
@@ -662,14 +714,12 @@ class AttackEvent(ActionEvent):
                         name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
                     ))
 
-        # Get target AC
         target_ac = 0
         if self.ac:
             target_ac = self.ac.normalized_score
         elif target_entity:
             target_ac = target_entity.ac_bonus().normalized_score
 
-        # Build AC breakdown
         ac_breakdown: List[ModifierBreakdown] = []
         if self.ac:
             for mod in self.ac.get_breakdown():
@@ -679,7 +729,6 @@ class AttackEvent(ActionEvent):
                     source=mod.get('source', 'self')
                 ))
 
-        # Determine outcome
         outcome = "unknown"
         is_hit = False
         is_crit = False
@@ -689,7 +738,6 @@ class AttackEvent(ActionEvent):
             is_hit = outcome in ("hit", "crit")
             is_crit = outcome == "crit"
 
-        # Build damage roll displays
         damage_roll_displays: List[DamageRollDisplay] = []
         total_damage = 0
 
@@ -698,7 +746,6 @@ class AttackEvent(ActionEvent):
                 damage = self.damages[i] if i < len(self.damages) else None
                 damage_type = damage.damage_type.value if damage else "unknown"
 
-                # Get dice results
                 dice_results = []
                 if dr.results is not None:
                     if isinstance(dr.results, list):
@@ -706,7 +753,6 @@ class AttackEvent(ActionEvent):
                     elif isinstance(dr.results, int):
                         dice_results = [dr.results]
 
-                # Get damage bonus breakdown
                 damage_bonus_breakdown: List[ModifierBreakdown] = []
                 if damage and damage.damage_bonus:
                     for mod in damage.damage_bonus.get_breakdown():
@@ -716,7 +762,6 @@ class AttackEvent(ActionEvent):
                             source=mod.get('source', 'self')
                         ))
 
-                # Build dice string (e.g., "1d6" or "2d6" for crits)
                 num_dice = len(dice_results)
                 dice_size = damage.damage_dice if damage else 6
                 dice_str = f"{num_dice}d{dice_size}"
@@ -732,13 +777,10 @@ class AttackEvent(ActionEvent):
 
                 total_damage += dr.total
 
-        # Get target HP after attack
         target_hp = target_entity.get_hp() if target_entity else None
 
-        # Check for opportunity attack marker in name
         is_opportunity_attack = "opportunity" in (self.name or "").lower()
 
-        # Build markdown-formatted verbosity levels
         compact_text = format_attack_compact(
             source_name, target_name, outcome, total_damage
         )
@@ -758,7 +800,6 @@ class AttackEvent(ActionEvent):
             is_opportunity_attack
         )
 
-        # Build structured data
         data = AttackLogData(
             attacker_name=source_name,
             attacker_uuid=str(self.source_entity_uuid),
@@ -797,45 +838,51 @@ class AttackEvent(ActionEvent):
 
 
 class Attack(BaseAction):
-    """An action that represents an attack using a weapon
-    validation requires the source entity and target entity to be in range and the target entity to be in the line of sight
-    of the source entity.
+    """Weapon attack action.
 
-    Two-Weapon Fighting: Off-hand attacks (MELEE_OFF, RANGED_OFF) cost a bonus action instead of an action,
-    and don't add ability modifier to damage.
-
-    When used as a template (template=True), target_entity_uuid should be set via set_target_entity()
-    before pre_validate() or instantiate().
+    Validation requires the target to be visible and inside the equipped weapon's
+    range or reach. Off-hand attacks cost a bonus action instead of an action.
+    Templates should receive a target through `set_target_entity()` before
+    `pre_validate()` or `instantiate()`.
     """
-    name: str = Field(default="Attack", description="An attack action")
-    description: str = Field(default="Attack a target", description="A description of the attack action")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Attack targets an entity")
-    weapon_slot: WeaponSlot = Field(description="The slot of the weapon used to attack")
-    action_category: ActionCategory = Field(default=ActionCategory.ATTACK)
-    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="A list of costs for the action")
-    override_ability: Optional[AbilityName] = Field(default=None, description="Override ability for attack/damage rolls (e.g. True Strike uses spellcasting ability)")
+
+    name: str = Field(default="Attack", description="Human-readable attack action name.")
+    description: str = Field(default="Attack a target", description="Attack action description.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Attack targets one entity.")
+    weapon_slot: WeaponSlot = Field(description="Weapon slot used by the attack.")
+    action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack action category.")
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(name="Attack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+        ],
+        description="Action economy costs required by this attack.",
+    )
+    override_ability: Optional[AbilityName] = Field(
+        default=None,
+        description="Ability override for attack and damage rolls.",
+    )
 
     @model_validator(mode="after")
     def adjust_cost_for_off_hand(self) -> Self:
-        """Off-hand attacks cost bonus_action instead of action (Two-Weapon Fighting)."""
+        """Convert off-hand attack cost from action to bonus action."""
         if self.weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
-            # Replace action cost with bonus_action cost
             self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
         return self
-    
-    
+
     @staticmethod
     def validate_range(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
         """Validate if the source entity and target entity are in range.
 
-        For ranged weapons:
-        - Within normal range: attack allowed
-        - Beyond normal but within long range: attack allowed with is_long_range=True (disadvantage)
-        - Beyond long range: attack blocked
+        Ranged attacks inside normal range are allowed without the long-range
+        flag. Ranged attacks between normal and long range are allowed with
+        `is_long_range=True`. Melee attacks require distance within weapon reach.
 
-        For melee weapons:
-        - Within reach: attack allowed
-        - Beyond reach: attack blocked
+        Args:
+            declaration_event: Attack declaration event to validate.
+            source_entity_uuid: Attacking entity UUID.
+
+        Returns:
+            Updated declaration event, canceled event, or `None`.
         """
         source_entity = Entity.get(source_entity_uuid)
         if not source_entity:
@@ -856,19 +903,14 @@ class Attack(BaseAction):
         is_long_range = False
 
         if weapon_range.type == RangeType.RANGE:
-            # Ranged weapon: check normal and long range
             if distance_feet <= weapon_range.normal:
-                # Within normal range - no disadvantage from range
                 pass
             elif weapon_range.long is not None and distance_feet <= weapon_range.long:
-                # Beyond normal but within long range - disadvantage
                 is_long_range = True
             else:
-                # Beyond long range (or no long range defined and beyond normal)
                 return declaration_event.cancel(status_message=f"Target entity not in range for {declaration_event.name}")
 
         elif weapon_range.type == RangeType.REACH:
-            # Melee weapon: must be within reach (usually 5ft)
             if distance_feet > weapon_range.normal:
                 return declaration_event.cancel(status_message=f"Target entity not in reach for {declaration_event.name}")
 
@@ -883,11 +925,15 @@ class Attack(BaseAction):
     def check_ranged_conditions(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
         """Check conditions that affect ranged attacks.
 
-        Sets is_threatened=True if:
-        - Weapon is ranged AND
-        - Attacker has a hostile entity within 5ft (threatened)
+        Sets `is_threatened=True` for ranged attacks made while an enemy
+        threatens the attacker.
 
-        This causes disadvantage on the ranged attack roll.
+        Args:
+            declaration_event: Attack declaration event to inspect.
+            source_entity_uuid: Attacking entity UUID.
+
+        Returns:
+            Updated declaration event, canceled event, or `None`.
         """
         source_entity = Entity.get(source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
@@ -895,7 +941,6 @@ class Attack(BaseAction):
 
         is_threatened = False
 
-        # Only check for ranged weapons
         if declaration_event.range and declaration_event.range.type == RangeType.RANGE:
             is_threatened = source_entity.is_threatened()
 
@@ -904,18 +949,18 @@ class Attack(BaseAction):
             status_message=f"Checked ranged conditions for {declaration_event.name}",
             is_threatened=is_threatened
         )
-    
-    
 
     @staticmethod
-    def attack_consequences(execution_event: AttackEvent,source_entity_uuid: UUID) -> Optional[AttackEvent]:
+    def attack_consequences(execution_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
             """
-            Event-based implementation of an attack.
-            This method creates an attack event and processes it through the event system,
-            allowing reactions to modify or cancel the attack at various stages.
-            
+            Resolve an attack roll, damage rolls, and damage application.
+
+            Args:
+                execution_event: Execution-phase attack event.
+                source_entity_uuid: Attacking entity UUID.
+
             Returns:
-                Optional[AttackEvent]: The completed attack event, or None if the attack was canceled
+                Completed attack event, canceled event, or `None`.
             """
             source_entity = Entity.get(source_entity_uuid)
             target_entity_uuid = execution_event.target_entity_uuid
@@ -939,11 +984,13 @@ class Attack(BaseAction):
             if target_entity.target_entity_uuid != source_entity_uuid:
                 should_clear_target_target = True
                 target_entity.set_target_entity(source_entity_uuid)
-            
-            
-            
-            # Move to EXECUTION phase
-            # Calculate attack bonus and target's AC
+
+            def clear_temporary_targets() -> None:
+                if should_clear_source_target:
+                    source_entity.clear_target_entity()
+                if should_clear_target_target:
+                    target_entity.clear_target_entity()
+
             override_ability = execution_event.override_ability
             attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability)
             ac = target_entity.ac_bonus(source_entity.uuid)
@@ -951,13 +998,19 @@ class Attack(BaseAction):
             attack_bonus.set_from_target(ac)
             attack_bonus.set_event_lineage(execution_event.lineage_uuid)
             ac.set_event_lineage(execution_event.lineage_uuid)
+            weapon = source_entity.equipment._get_weapon_by_slot(weapon_slot)
+            attack_context: Dict[str, Any] = {
+                "weapon_slot": weapon_slot.value,
+                "weapon_name": weapon.name if weapon else "Unarmed",
+                "range_type": execution_event.range.type.value if execution_event.range else None,
+                "is_long_range": execution_event.is_long_range,
+            }
+            attack_bonus.set_context(attack_context)
 
-            # Apply ranged attack disadvantages (long range or threatened)
             ranged_disadvantage_modifiers: List[UUID] = []
             is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
 
             if is_ranged and execution_event.is_long_range:
-                # Disadvantage for attacking beyond normal range
                 modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
                     AdvantageModifier(
                         name="Long Range",
@@ -969,7 +1022,6 @@ class Attack(BaseAction):
                 ranged_disadvantage_modifiers.append(modifier_uuid)
 
             if is_ranged and execution_event.is_threatened:
-                # Disadvantage for ranged attack while hostile within 5ft
                 modifier_uuid = attack_bonus.self_static.add_advantage_modifier(
                     AdvantageModifier(
                         name="Threatened (Ranged)",
@@ -980,23 +1032,27 @@ class Attack(BaseAction):
                 )
                 ranged_disadvantage_modifiers.append(modifier_uuid)
 
-            # Transition to EXECUTION with attack values
             attack_event = execution_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
                 attack_bonus=attack_bonus,
                 ac=ac
             )
-            
-            # If attack was canceled during phase transition, return early
+
             if attack_event.canceled:
+                attack_bonus.clear_context()
+                clear_temporary_targets()
                 return attack_event
-            
-            # Roll attack and post results using the helper methods
-            dice_roll = source_entity.roll_d20(attack_bonus, RollType.ATTACK, parent_event=attack_event.uuid)
+
+            dice_roll = source_entity.roll_d20(
+                attack_bonus,
+                RollType.ATTACK,
+                weapon_slot=weapon_slot,
+                parent_event=attack_event.uuid,
+            )
             crit_threshold = source_entity.get_crit_threshold(weapon_slot)
             attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
-            
+
             attack_event = attack_event.post(
                 dice_roll=dice_roll,
                 attack_outcome=attack_outcome,
@@ -1006,40 +1062,37 @@ class Attack(BaseAction):
             attack_bonus.reset_from_target()
             attack_bonus.clear_event_lineage()
             ac.clear_event_lineage()
-            
-            
-            # If attack was canceled, return early
+            attack_bonus.clear_context()
+
             if attack_event.canceled:
+                clear_temporary_targets()
                 return attack_event
 
-            # On miss: still go through EFFECT phase (so handlers like Guiding Bolt removal fire)
             if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 attack_event = attack_event.phase_to(
                     EventPhase.EFFECT,
                     status_message=f"Attack missed"
                 )
-                return attack_event.phase_to(
+                completion_event = attack_event.phase_to(
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Attack missed"
                 )
+                clear_temporary_targets()
+                return completion_event
 
-            # Move to EFFECT phase for damage
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability)
             attack_event = attack_event.phase_to(
                 EventPhase.EFFECT,
-                is_last=False,  # More EFFECT events coming (post-damage)
+                is_last=False,
                 status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
 
-            # If attack was canceled during phase transition, return early
             if attack_event.canceled:
+                clear_temporary_targets()
                 return attack_event
 
-            # Apply damage if there is an attack outcome
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-                # Step 1: Roll damage dice (creates immutable DiceRoll objects)
-                # Get extra crit dice (for Brutal Critical, etc.)
                 crit_extra_dice = source_entity.get_crit_extra_dice(weapon_slot)
                 original_rolls = []
                 for damage in damages:
@@ -1047,8 +1100,6 @@ class Attack(BaseAction):
                     roll = dice.roll
                     original_rolls.append(roll)
 
-                # Step 2: Create DAMAGE_ROLL_RESULT event
-                # final_rolls starts as copy of original_rolls - handlers will replace entries
                 damage_roll_event = DamageRollResultEvent(
                     source_entity_uuid=source_entity.uuid,
                     target_entity_uuid=target_entity.uuid,
@@ -1056,66 +1107,56 @@ class Attack(BaseAction):
                     attack_outcome=attack_event.attack_outcome,
                     damages=damages,
                     original_rolls=original_rolls,
-                    final_rolls=list(original_rolls),  # Copy - handlers will replace
+                    final_rolls=list(original_rolls),
                     parent_event=attack_event.uuid,
                     phase=EventPhase.DECLARATION
                 )
 
-                # Step 3: Transition to EFFECT phase - handlers intercept here
                 damage_roll_event = damage_roll_event.phase_to(
                     EventPhase.EFFECT,
                     status_message="Damage dice rolled"
                 )
 
-                # Step 4: Apply final_rolls (possibly modified by handlers)
                 damage_rolls = damage_roll_event.final_rolls
 
-                # Phase to COMPLETION so lineage fields are populated
                 damage_roll_event.phase_to(EventPhase.COMPLETION)
                 total_damage = sum(roll.total for roll in damage_rolls)
 
-                # Step 5: Apply damage (fires TakeDamageEvent internally)
-                # Use primary damage type for the event (handlers see total damage)
                 target_entity.receive_damage(
                     amount=total_damage,
                     damage_type=damages[0].damage_type,
                     source_entity_uuid=source_entity.uuid,
                     damage_rolls=damage_rolls,
                     damages=damages,
-                    parent_event=attack_event.uuid
+                    parent_event=attack_event.uuid,
+                    critical_hit=execution_event.attack_outcome == AttackOutcome.CRIT
                 )
 
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,
-                    is_first=False,  # Not the first EFFECT (post-damage)
+                    is_first=False,
                     damage_rolls=damage_rolls,
                     status_message=f"Damages taken: {[damage.total for damage in damage_rolls]}"
                 )
             else:
                 damage_rolls = None
-                
-            if should_clear_source_target:
-                source_entity.clear_target_entity()
-            if should_clear_target_target:
-                target_entity.clear_target_entity()
-            
-            # Move to COMPLETION phase
+
+            clear_temporary_targets()
+
             return attack_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message="Attack completed",
                 damage_rolls=damage_rolls,
             )
 
-    def _create_declaration_event(self,parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """ Create the declaration event for the attack action"""
-        # Populate entity names and weapon name for combat log generation
+    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        """Create the declaration event for the attack action."""
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         source_name = source_entity.name if source_entity else None
         target_name = target_entity.name if target_entity else None
 
-        # Get weapon name and damage types
         weapon_name = None
         weapon_damage_types: List[DamageType] = []
         if source_entity:
@@ -1133,7 +1174,7 @@ class Attack(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name,
             target_entity_name=target_name,
@@ -1141,24 +1182,21 @@ class Attack(BaseAction):
             override_ability=self.override_ability,
             damage_types=weapon_damage_types
         )
-    
+
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        """Validate the attack action"""
-        # 1. Validate range (sets is_long_range for ranged weapons)
+        """Validate range, line of sight, and ranged-attack conditions."""
         range_validated_event = Attack.validate_range(declaration_event, self.source_entity_uuid)
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
         elif range_validated_event.canceled:
             return range_validated_event
 
-        # 2. Validate line of sight
         line_of_sight_validated_event = validate_line_of_sight(range_validated_event, self.source_entity_uuid)
         if line_of_sight_validated_event is None:
             return declaration_event.cancel(status_message=f"Line of sight validation returned None for {self.name}")
         elif line_of_sight_validated_event.canceled:
             return line_of_sight_validated_event
 
-        # 3. Check ranged conditions (sets is_threatened for ranged attacks)
         ranged_conditions_event = Attack.check_ranged_conditions(line_of_sight_validated_event, self.source_entity_uuid)
         if ranged_conditions_event is None:
             return declaration_event.cancel(status_message=f"Ranged conditions check returned None for {self.name}")
@@ -1169,14 +1207,14 @@ class Attack(BaseAction):
             new_phase=EventPhase.EXECUTION,
             status_message=f"Attack validated for {self.name}"
         )
-    
+
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
-        """Apply the attack action"""
-        return Attack.attack_consequences(execution_event,self.source_entity_uuid)
+        """Apply the attack action."""
+        return Attack.attack_consequences(execution_event, self.source_entity_uuid)
 
     def _apply_costs(self, completion_event: AttackEvent) -> Optional[AttackEvent]:
-        """Apply the costs of the action"""
-        return entity_action_economy_cost_applier(completion_event,self.source_entity_uuid)
+        """Apply attack costs after completion."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[AttackEvent]:
         """Override to provide specific return type."""
@@ -1184,26 +1222,22 @@ class Attack(BaseAction):
         return cast(AttackEvent, result) if result else None
 
 
-# =============================================================================
-# Turn-Based Actions: Dash, Dodge, Disengage
-# =============================================================================
-
 class Dash(BaseAction):
-    """
-    Take the Dash action - gain extra movement equal to your speed.
+    """Dash action that grants extra movement for the current turn.
 
     Applies the Dashing condition which adds movement equal to base speed.
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
-    name: str = Field(default="Dash")
-    description: str = Field(default="Gain extra movement equal to your speed")
+
+    name: str = Field(default="Dash", description="Human-readable dash action name.")
+    description: str = Field(default="Gain extra movement equal to your speed", description="Dash action description.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Dash targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Dash Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs required by Dash.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        # Populate entity name for combat log generation
+        """Create the declaration event for Dash."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1213,13 +1247,14 @@ class Dash(BaseAction):
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,  # Self-targeted
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            target_entity_uuid=self.source_entity_uuid,
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
-            source_entity_name=source_name  # Populate for combat log generation
+            source_entity_name=source_name,
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        """Validate that the acting entity exists."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
@@ -1230,11 +1265,11 @@ class Dash(BaseAction):
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Apply Dashing for one round."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Create Dashing condition with 1 round duration
         dashing = Dashing(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
@@ -1251,12 +1286,12 @@ class Dash(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Apply Dash action costs."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
 class Dodge(BaseAction):
-    """
-    Take the Dodge action - focus on avoiding attacks.
+    """Dodge action that applies the Dodging condition for one round.
 
     Applies the Dodging condition which gives:
     - Disadvantage on attack rolls against you (if you can see the attacker)
@@ -1264,15 +1299,16 @@ class Dodge(BaseAction):
 
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
-    name: str = Field(default="Dodge")
-    description: str = Field(default="Attackers have disadvantage, advantage on DEX saves")
+
+    name: str = Field(default="Dodge", description="Human-readable dodge action name.")
+    description: str = Field(default="Attackers have disadvantage, advantage on DEX saves", description="Dodge action description.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Dodge targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Dodge Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs required by Dodge.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        # Populate entity name for combat log generation
+        """Create the declaration event for Dodge."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1283,12 +1319,13 @@ class Dodge(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
-            source_entity_name=source_name  # Populate for combat log generation
+            source_entity_name=source_name,
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        """Validate that the acting entity exists."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
@@ -1299,11 +1336,11 @@ class Dodge(BaseAction):
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Apply Dodging for one round."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Create Dodging condition with 1 round duration
         dodging = Dodging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
@@ -1324,25 +1361,26 @@ class Dodge(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Apply Dodge action costs."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
 class Disengage(BaseAction):
-    """
-    Take the Disengage action - your movement doesn't provoke opportunity attacks.
+    """Disengage action that suppresses opportunity attacks for one round.
 
     Applies the Disengaging condition which prevents opportunity attacks.
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
-    name: str = Field(default="Disengage")
-    description: str = Field(default="Movement doesn't provoke opportunity attacks")
+
+    name: str = Field(default="Disengage", description="Human-readable disengage action name.")
+    description: str = Field(default="Movement doesn't provoke opportunity attacks", description="Disengage action description.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Disengage targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Disengage Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs required by Disengage.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        # Populate entity name for combat log generation
+        """Create the declaration event for Disengage."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1353,12 +1391,13 @@ class Disengage(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
-            source_entity_name=source_name  # Populate for combat log generation
+            source_entity_name=source_name,
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        """Validate that the acting entity exists."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
@@ -1369,11 +1408,11 @@ class Disengage(BaseAction):
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Apply Disengaging for one round."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Create Disengaging condition with 1 round duration
         disengaging = Disengaging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
@@ -1389,6 +1428,7 @@ class Disengage(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Apply Disengage action costs."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
@@ -1399,14 +1439,28 @@ class DropConcentration(BaseAction):
     If target_spell is set, drops only that spell's slot (multi-slot support).
     Otherwise removes the entire Concentrating condition and all linked spell effects.
     """
-    name: str = Field(default="Drop Concentration")
-    description: str = Field(default="End concentration on current spell")
-    target_type: TargetType = Field(default=TargetType.SELF)
-    action_category: ActionCategory = ActionCategory.ABILITY
-    costs: List[Cost] = Field(default_factory=list)
+
+    name: str = Field(default="Drop Concentration", description="Action name for voluntarily ending concentration.")
+    description: str = Field(
+        default="End concentration on current spell",
+        description="Action description shown for voluntary concentration removal.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="DropConcentration targets the concentrating caster.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ABILITY,
+        description="DropConcentration is a utility ability action.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost payload because dropping concentration is free.",
+    )
     target_spell: Optional[str] = Field(default=None, description="Specific spell to drop (multi-slot). None = drop all.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
+        """Create the action declaration event for voluntary concentration drop."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1417,7 +1471,7 @@ class DropConcentration(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name
         )
@@ -1436,19 +1490,18 @@ class DropConcentration(BaseAction):
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Remove the requested concentration slot or the whole condition."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
         if self.target_spell:
-            # Drop a specific spell slot (multi-slot)
             conc = entity.active_conditions.get("Concentrating")
             if conc and isinstance(conc, Concentrating):
                 slot_uuid = conc.get_slot_by_spell_name(self.target_spell)
                 if slot_uuid is not None:
                     conc.drop_slot(slot_uuid, parent_event=execution_event)
         else:
-            # Drop all concentration
             entity.remove_condition("Concentrating", parent_event=execution_event)
 
         return execution_event.phase_to(
@@ -1457,12 +1510,64 @@ class DropConcentration(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return completion_event  # No costs
+        """Return completion unchanged because dropping concentration is free."""
+        return completion_event
 
 
-# =============================================================================
-# Hide Action
-# =============================================================================
+class ShakeAwake(BaseAction):
+    """Wake a magically sleeping creature by spending an action."""
+    name: str = Field(default="Shake Awake", description="Action name for waking a sleeping creature.")
+    description: str = Field(
+        default="Wake an adjacent creature affected by magical sleep",
+        description="Rules-facing action summary.",
+    )
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Creature target to wake.")
+    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Utility action category.")
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(name="Shake Awake Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
+        ],
+        description="Action cost paid to wake the sleeper.",
+    )
+    valid_target_filter: str = Field(default="all", description="Allow any visible creature to be considered.")
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        """Validate that an adjacent other creature is magically asleep."""
+        source = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source or not target:
+            return declaration_event.cancel(status_message="Source or target not found")
+        if source.uuid == target.uuid:
+            return declaration_event.cancel(status_message="Cannot shake yourself awake")
+        if source.senses.get_feet_distance(target.position) > 5:
+            return declaration_event.cancel(status_message="Target is not adjacent")
+        if "Sleep" not in target.active_conditions and "Eyebite Asleep" not in target.active_conditions:
+            return declaration_event.cancel(status_message="Target is not magically asleep")
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}"
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        """Remove the matching magical sleep condition from the target."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not target:
+            return execution_event.cancel(status_message="Target not found")
+        if "Eyebite Asleep" in target.active_conditions:
+            target.remove_condition("Eyebite Asleep", parent_event=execution_event)
+        elif "Sleep" in target.active_conditions:
+            target.remove_condition("Sleep", parent_event=execution_event)
+        else:
+            return execution_event.cancel(status_message="Target is not magically asleep")
+        return execution_event.phase_to(
+            new_phase=EventPhase.COMPLETION,
+            status_message=f"{target.name} wakes up"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Apply the action cost for waking the sleeper."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
 
 class Hide(BaseAction):
     """Take the Hide action - roll Stealth to become Hidden.
@@ -1474,12 +1579,12 @@ class Hide(BaseAction):
     Hidden is removed automatically when the entity attacks, takes damage,
     or becomes incapacitated.
     """
-    name: str = Field(default="Hide")
-    description: str = Field(default="Attempt to hide (Stealth check)")
+    name: str = Field(default="Hide", description="Human-readable hide action name.")
+    description: str = Field(default="Attempt to hide (Stealth check)", description="Player-facing hide action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Hide targets self")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Hide Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs paid when taking the Hide action.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         source_entity = Entity.get(self.source_entity_uuid)
@@ -1492,7 +1597,7 @@ class Hide(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_name
         )
@@ -1502,7 +1607,6 @@ class Hide(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Check tile light level at entity's position
         grid = get_map()
         tile = grid.get_tile(*entity.position)
         if tile:
@@ -1512,13 +1616,11 @@ class Hide(BaseAction):
                     status_message="Cannot hide in very bright light"
                 )
             if light.value <= LightLevel.DIM_LIGHT.value:
-                # Can attempt hide even with enemies watching in dim light or darker
                 return declaration_event.phase_to(
                     new_phase=EventPhase.EXECUTION,
                     status_message=f"Validated {self.name}"
                 )
 
-        # BRIGHT_LIGHT: cannot hide while visible to any enemy (existing logic)
         subscribers = grid.get_subscribers_at(entity.position)
         for sub_uuid in subscribers:
             if sub_uuid == entity.uuid:
@@ -1540,12 +1642,10 @@ class Hide(BaseAction):
         if not entity or not isinstance(entity, Entity):
             return execution_event.cancel(status_message="Entity not found")
 
-        # Roll Stealth check via SkillCheckEvent (generates combat log with roll details)
         skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
         stealth_roll = entity.roll_d20(skill_bonus, RollType.CHECK, skill_name="stealth", parent_event=execution_event.uuid)
         stealth_result = stealth_roll.total
 
-        # Create SkillCheckEvent as child — no DC (Hide sets stealth DC, not pass/fail)
         check_event = SkillCheckEvent(
             name="Stealth Check",
             source_entity_uuid=entity.uuid,
@@ -1557,13 +1657,11 @@ class Hide(BaseAction):
             source_entity_name=entity.name,
             phase=EventPhase.EFFECT,
         )
-        # Phase to COMPLETION to generate combat log
         check_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"Stealth check: {stealth_result}"
         )
 
-        # Apply Hidden condition (no duration — removed by triggers)
         hidden = Hidden(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
@@ -1579,25 +1677,19 @@ class Hide(BaseAction):
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
-
-# =============================================================================
-# Prone Actions: Stand Up, Drop Prone
-# =============================================================================
-
 class StandUp(BaseAction):
     """
     Stand up from prone - costs half your movement speed.
 
     Removes the Prone condition. Can only be used while Prone.
     """
-    name: str = Field(default="Stand Up")
-    description: str = Field(default="Stand up from prone")
+    name: str = Field(default="Stand Up", description="Human-readable stand-up action name.")
+    description: str = Field(default="Stand up from prone", description="Player-facing stand-up action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Stand Up targets self")
-    # Cost is set dynamically based on entity's base movement
 
     def model_post_init(self, __context: Any) -> None:
+        """Set movement cost to half of the acting entity's base movement."""
         super().model_post_init(__context)
-        # Calculate cost based on entity's base movement
         entity = Entity.get(self.source_entity_uuid)
         if entity:
             base_movement = entity.action_economy.get_base_value("movement")
@@ -1609,15 +1701,16 @@ class StandUp(BaseAction):
                 evaluator=entity_action_economy_cost_evaluator
             )]
         else:
+            default_half_movement = 15
             self.costs = [Cost(
                 name="Stand Up Cost",
                 cost_type="movement",
-                cost=15,  # Default half of 30
+                cost=default_half_movement,
                 evaluator=entity_action_economy_cost_evaluator
             )]
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        # Populate entity name for combat log generation
+        """Create the stand-up declaration event."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1628,9 +1721,9 @@ class StandUp(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
-            source_entity_name=source_name  # Populate for combat log generation
+            source_entity_name=source_name
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -1638,7 +1731,6 @@ class StandUp(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Must be Prone to stand up
         if "Prone" not in entity.active_conditions:
             return declaration_event.cancel(status_message="Not prone - cannot stand up")
 
@@ -1652,7 +1744,6 @@ class StandUp(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Remove Prone condition
         entity.remove_condition("Prone", parent_event=execution_event)
 
         return execution_event.phase_to(
@@ -1670,13 +1761,13 @@ class DropProne(BaseAction):
 
     Applies the Prone condition. Can only be used while not Prone.
     """
-    name: str = Field(default="Drop Prone")
-    description: str = Field(default="Drop to the ground")
+    name: str = Field(default="Drop Prone", description="Human-readable drop-prone action name.")
+    description: str = Field(default="Drop to the ground", description="Player-facing drop-prone action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Drop Prone targets self")
-    costs: List[Cost] = Field(default_factory=list)  # Free action
+    costs: List[Cost] = Field(default_factory=list, description="Drop Prone has no action economy cost.")
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        # Populate entity name for combat log generation
+        """Create the drop-prone declaration event."""
         source_entity = Entity.get(self.source_entity_uuid)
         source_name = source_entity.name if source_entity else None
 
@@ -1687,9 +1778,9 @@ class DropProne(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
-            source_entity_name=source_name  # Populate for combat log generation
+            source_entity_name=source_name
         )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
@@ -1697,7 +1788,6 @@ class DropProne(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Must not be Prone already
         if "Prone" in entity.active_conditions:
             return declaration_event.cancel(status_message="Already prone")
 
@@ -1711,12 +1801,10 @@ class DropProne(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply Prone condition (permanent until removed by StandUp)
         prone = Prone(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
         )
-        # Prone is permanent (no duration) - removed by StandUp action
         entity.add_condition(prone, parent_event=execution_event)
 
         return execution_event.phase_to(
@@ -1725,28 +1813,26 @@ class DropProne(BaseAction):
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        # No costs for free action, but still call the applier for consistency
+        """Return a completed no-cost action event."""
         return completion_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message="No costs for Drop Prone"
         )
 
 
-# =============================================================================
-# Jump Action: LOS-Based Position Targeting
-# =============================================================================
-
 class JumpEvent(ActionEvent):
-    """An event that represents a jump movement."""
-    name: str = Field(default="Jump", description="A jump event")
-    event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement type event")
-    costs: List[BaseCost] = Field(default_factory=list, description="Movement cost for the jump")
-    start_position: Tuple[int, int] = Field(description="Starting position")
-    end_position: Tuple[int, int] = Field(description="Landing position")
-    jump_distance: int = Field(default=0, description="Distance jumped in feet")
-    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line path through air")
+    """Event payload for a jump movement."""
+
+    name: str = Field(default="Jump", description="Human-readable jump event label.")
+    event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement event category.")
+    costs: List[BaseCost] = Field(default_factory=list, description="Serialized jump costs.")
+    start_position: Tuple[int, int] = Field(description="Position occupied before the jump starts.")
+    end_position: Tuple[int, int] = Field(description="Intended or actual landing position.")
+    jump_distance: int = Field(default=0, description="Jump distance in feet.")
+    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line airborne cell path.")
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return jump path positions relevant to spatial handlers."""
         positions = {self.start_position, self.end_position}
         if self.path:
             positions.update(self.path)
@@ -1759,13 +1845,9 @@ class JumpEvent(ActionEvent):
         end_pos = f"({self.end_position[0]},{self.end_position[1]})"
         start_pos = f"({self.start_position[0]},{self.start_position[1]})"
 
-        # Compact: "{cyan:Hero} {yellow:jumps} {green:15ft} to {yellow:(5,3)}"
         compact_text = f"{md_color(source_name, 'cyan')} {md_color('jumps', 'yellow')} {md_color(f'{self.jump_distance}ft', 'green')} to {md_color(end_pos, 'yellow')}"
-
-        # Verbose: includes start position
         verbose_text = f"{md_color(source_name, 'cyan')} {md_color('jumps', 'yellow')} {start_pos} → {md_color(end_pos, 'green')} ({self.jump_distance}ft)"
 
-        # Detailed: includes path if available
         detailed_text = verbose_text
         if self.path and len(self.path) > 2:
             path_str = " -> ".join(f"({p[0]},{p[1]})" for p in self.path)
@@ -1794,8 +1876,7 @@ class JumpEvent(ActionEvent):
 
 
 class Jump(BaseAction):
-    """
-    Jump to a visible position within range - uses bonus action, costs movement.
+    """Jump to a visible position using bonus action and movement.
 
     Jump range = 15ft base + STR bonus (5ft per point of STR modifier above 10).
     This is a simplified implementation combining long jump and high jump concepts.
@@ -1809,14 +1890,15 @@ class Jump(BaseAction):
     When used as a template (template=True), end_position should be set via set_target_position()
     before pre_validate() or instantiate().
     """
-    name: str = Field(default="Jump", description="A jump action")
-    description: str = Field(default="Jump to a visible position", description="Description")
-    target_type: TargetType = Field(default=TargetType.POSITION_LOS, description="Jump uses LOS targeting")
-    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
-    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Landing position")
+
+    name: str = Field(default="Jump", description="Human-readable jump action name.")
+    description: str = Field(default="Jump to a visible position", description="Jump action description.")
+    target_type: TargetType = Field(default=TargetType.POSITION_LOS, description="Jump targets visible positions.")
+    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT, description="Movement action category.")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Requested landing position.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs required by Jump.")
 
     def get_range(self) -> Optional[Range]:
         """Calculate jump range: (15 + STR_bonus + additive) * multiplier.
@@ -1867,26 +1949,18 @@ class Jump(BaseAction):
             if pos == entity.senses.position:
                 continue
 
-            # Check distance against jump range
             distance = entity.senses.get_feet_distance(pos)
             if distance > max_range:
                 continue
 
-            # Check movement budget (jump costs movement)
             if distance > movement_available:
                 continue
 
-            # Check walkability (for landing) - this handles non-blocking entities (dead)
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
-            # Jump targets are LOS-based, but the physical path still cannot pass
-            # through propagation-blocking borders.
             if not grid.raycast_clear(entity.position, pos, channel="propagation", observer_uuid=entity.uuid):
                 continue
-
-            # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
-            # so we don't need a separate occupancy check here
 
             valid.append(pos)
 
@@ -1895,7 +1969,6 @@ class Jump(BaseAction):
     def set_target_position(self, position: Tuple[int, int]) -> None:
         """Set target position for jump."""
         super().set_target_position(position)
-        # Recalculate movement cost
         self._setup_movement_cost()
 
     def _setup_movement_cost(self) -> None:
@@ -1907,13 +1980,10 @@ class Jump(BaseAction):
         if entity is None:
             return
 
-        # Calculate distance and add movement cost
         distance = entity.senses.get_feet_distance(self.end_position)
 
-        # Remove existing movement costs
         self.costs = [c for c in self.costs if c.cost_type != "movement"]
 
-        # Add movement cost for the jump distance
         self.costs.append(Cost(
             name="Jump Movement Cost",
             cost_type="movement",
@@ -1930,19 +2000,15 @@ class Jump(BaseAction):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        # Instance config: new UUID, not a template, not registered (ephemeral)
-        # Reset costs to just the bonus action - movement cost added after copy
         update_dict: dict = {
             "uuid": uuid4(),
             "template": False,
-            "use_register": False,  # Instances are ephemeral, don't need registry
+            "use_register": False,
             "costs": [Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
         }
         update_dict.update(overrides)
 
-        # model_copy preserves object types
         instance = self.model_copy(deep=True, update=update_dict)
-        # Recalculate movement cost for the new position
         instance._setup_movement_cost()
         return instance
 
@@ -1985,10 +2051,8 @@ class Jump(BaseAction):
         end_position: Tuple[int, int] = self.end_position
         distance = source_entity.senses.get_feet_distance(end_position)
 
-        # Ensure movement cost is set
         self._setup_movement_cost()
 
-        # Calculate straight-line path for opportunity attacks
         line_path = self._get_line_path(source_entity.position, end_position)
 
         return JumpEvent(
@@ -2000,7 +2064,7 @@ class Jump(BaseAction):
             end_position=end_position,
             jump_distance=int(distance),
             path=line_path,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source_entity.name
         )
@@ -2014,31 +2078,24 @@ class Jump(BaseAction):
         end_pos = declaration_event.end_position
         grid = get_map()
 
-        # Check visibility (LOS)
         if end_pos not in source_entity.senses.visible or not source_entity.senses.visible[end_pos]:
             return declaration_event.cancel(status_message=f"Position {end_pos} not visible")
 
-        # Check range
         action_range = self.get_range()
         max_range = action_range.normal if action_range else 15
         distance = source_entity.senses.get_feet_distance(end_pos)
         if distance > max_range:
             return declaration_event.cancel(status_message=f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)")
 
-        # Check movement available
         movement_available = source_entity.action_economy.movement.normalized_score
         if distance > movement_available:
             return declaration_event.cancel(status_message=f"Not enough movement ({distance}ft > {movement_available}ft)")
 
-        # Check walkability - this handles occupancy (excluding non-blocking entities like dead)
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
 
         if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation", observer_uuid=source_entity.uuid):
             return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
-
-        # Note: is_walkable_for already checks occupancy excluding non-blocking entities,
-        # so we don't need a separate occupancy check here
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -2059,9 +2116,9 @@ class Jump(BaseAction):
         path = execution_event.path or []
         total_path_length = len(path)
         actual_end_position = source_entity.position
+        interrupted_by_condition = False
 
         try:
-            # Move to effect phase
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
                 status_message=f"Jumping to {execution_event.end_position}"
@@ -2069,18 +2126,15 @@ class Jump(BaseAction):
             if effect_event.canceled:
                 return effect_event
 
-            # Cell-by-cell movement through jump path
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
                 to_pos = path[i]
 
-                # Check movement budget (flat 5ft per cell - jumping ignores terrain cost)
                 step_cost_feet = 5
                 remaining_movement = source_entity.action_economy.movement.normalized_score
                 if remaining_movement < step_cost_feet:
                     break
 
-                # Fire StepMovementEvent so OA and reaction handlers can react
                 step_event = StepMovementEvent(
                     source_entity_uuid=self.source_entity_uuid,
                     source_entity_name=source_entity.name,
@@ -2098,21 +2152,27 @@ class Jump(BaseAction):
                 if processed_step.canceled:
                     break
 
-                # Move entity to this cell
+                if "Dead" in source_entity.active_conditions or "Incapacitated" in source_entity.active_conditions:
+                    interrupted_by_condition = True
+                    break
+
                 Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
                 actual_end_position = to_pos
 
                 processed_step.phase_to(EventPhase.COMPLETION)
 
-                # Check for death during jump (e.g., OA killed the jumper)
                 if "Dead" in source_entity.active_conditions:
                     break
 
-                # Consume movement for this step
                 source_entity.action_economy.consume("movement", step_cost_feet)
 
-            # Determine result
             if source_entity.position == execution_event.start_position:
+                if interrupted_by_condition:
+                    return execution_event.phase_to(
+                        new_phase=EventPhase.COMPLETION,
+                        status_message=f"Partial jump, stopped at {source_entity.position}",
+                        end_position=actual_end_position
+                    )
                 return effect_event.cancel(status_message=f"Failed to jump")
             elif source_entity.position != execution_event.end_position:
                 return execution_event.phase_to(
@@ -2126,7 +2186,6 @@ class Jump(BaseAction):
                 status_message=f"Jumped to {execution_event.end_position}"
             )
         finally:
-            # Full senses update: runs Dijkstra for fresh paths, resets _paths_dirty flag.
             source_entity.update_entity_senses(max_distance=20)
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
@@ -2135,8 +2194,10 @@ class Jump(BaseAction):
         if entity is None or not isinstance(entity, Entity):
             return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
 
+        if "Dead" in entity.active_conditions or "Incapacitated" in entity.active_conditions:
+            return completion_event
+
         for cost in completion_event.costs:
-            # Skip movement cost - already consumed per-step in _apply()
             if cost.cost_type == "movement":
                 continue
             if cost.cost > 0:
@@ -2144,12 +2205,8 @@ class Jump(BaseAction):
         return completion_event
 
 
-# =============================================================================
-# Shove Action: BG3-Style Push or Knock Prone
-# =============================================================================
-
 class ShoveEvent(ActionEvent):
-    """An event that represents a shove action.
+    """Event payload for a BG3-style shove action.
 
     Shove is a BG3-style bonus action that pushes adjacent enemies.
     Key mechanics:
@@ -2157,45 +2214,38 @@ class ShoveEvent(ActionEvent):
     - Range: 5ft (adjacent only)
     - Contest: Shover's Athletics CHECK vs target's passive skill DC
     - Allies: Auto-succeed (no check required)
-    - Weight limit: STR score × 12
+    - Weight limit: STR score x 12
     """
-    name: str = Field(default="Shove", description="A shove event")
-    event_type: EventType = Field(default=EventType.BASE_ACTION, description="Event type")
-    costs: List[BaseCost] = Field(default_factory=list, description="Costs for the action")
 
-    # Target info
+    name: str = Field(default="Shove", description="Human-readable shove event label.")
+    event_type: EventType = Field(default=EventType.BASE_ACTION, description="Base action event category.")
+    costs: List[BaseCost] = Field(default_factory=list, description="Serialized shove costs.")
     target_weight: int = Field(default=0, description="Target's weight in pounds")
-    max_shove_weight: int = Field(default=0, description="Max weight shover can push (STR × 12)")
-
-    # Contest info
+    max_shove_weight: int = Field(default=0, description="Maximum weight shover can push in pounds.")
     shover_athletics: Optional[ModifiableValue] = Field(default=None, description="Shover's Athletics bonus")
     target_passive: int = Field(default=10, description="Target's passive Athletics or Acrobatics")
-    target_resistance_skill: str = Field(default="athletics", description="Which skill target used")
+    target_resistance_skill: str = Field(default="athletics", description="Target skill used for passive resistance.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Shover's Athletics check roll")
-    contest_success: Optional[bool] = Field(default=None, description="Whether the contest was won")
-
-    # Push result
-    push_distance: int = Field(default=0, description="How far target was pushed (feet)")
-    push_direction: Tuple[int, int] = Field(default=(0, 0), description="Direction of push (dx, dy)")
-    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target's final position after push")
-    knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead")
-    blocked_by: Optional[str] = Field(default=None, description="What blocked the push (e.g. 'Wall', 'Skeleton 1')")
-    is_ally: bool = Field(default=False, description="Whether target is an ally (auto-succeed)")
+    contest_success: Optional[bool] = Field(default=None, description="Whether the shove contest succeeded.")
+    push_distance: int = Field(default=0, description="Distance actually pushed in feet.")
+    push_direction: Tuple[int, int] = Field(default=(0, 0), description="Push direction as grid delta.")
+    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Target's final position after push.")
+    knocked_prone: bool = Field(default=False, description="Whether target was knocked prone instead of pushed.")
+    blocked_by: Optional[str] = Field(default=None, description="Obstacle or entity that blocked the push.")
+    is_ally: bool = Field(default=False, description="Whether target is an ally and auto-succeeds.")
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return final shove position relevant to spatial handlers."""
         positions = super().get_affected_positions()
         if self.end_position:
             positions.add(self.end_position)
         return positions
 
     def generate_combat_log(self) -> CombatLogEntry:
-        """Generate combat log for shove."""
+        """Generate combat log for a shove event."""
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
 
-        # Build markdown-formatted verbosity levels
-
-        # COMPACT: Just the outcome with arrival position
         if self.contest_success is False:
             compact_text = f"{md_color(source_name, 'cyan')} fails to shove {md_color(target_name, 'yellow')}"
         elif self.knocked_prone:
@@ -2207,7 +2257,6 @@ class ShoveEvent(ActionEvent):
             blocked_suffix = f" (blocked by {self.blocked_by})" if self.blocked_by else " (blocked)"
             compact_text = f"{md_color(source_name, 'cyan')} shoves {md_color(target_name, 'yellow')}{blocked_suffix}"
 
-        # VERBOSE: Add the roll info
         verbose_text = compact_text
         if not self.is_ally and self.dice_roll is not None:
             roll_total = self.dice_roll.total
@@ -2216,7 +2265,6 @@ class ShoveEvent(ActionEvent):
         elif self.is_ally:
             verbose_text += f" ({md_color('ally', 'green')})"
 
-        # DETAILED: Add more context
         detailed_text = verbose_text
         if self.contest_success:
             if self.knocked_prone:
@@ -2251,7 +2299,7 @@ class ShoveEvent(ActionEvent):
 
 
 class Shove(BaseAction):
-    """BG3-style Shove action - push adjacent enemies.
+    """BG3-style shove action that pushes or knocks prone.
 
     Costs a bonus action. Pushes target 5-20ft based on STR, or knocks prone.
 
@@ -2260,32 +2308,42 @@ class Shove(BaseAction):
     - Contest: Shover's Athletics CHECK vs target's passive DC
     - Target DC: 10 + max(Athletics, Acrobatics) bonus + advantage modifier
     - Allies: Auto-succeed (no check required)
-    - Weight limit: Can't shove targets heavier than STR × 12 lbs
+    - Weight limit: Can't shove targets heavier than STR x 12 lbs
     - Distance: 5ft base + 5ft per positive STR modifier (max 20ft)
 
     Forced movement does NOT trigger opportunity attacks.
     """
-    name: str = Field(default="Shove", description="Shove action")
-    description: str = Field(default="Push an adjacent enemy", description="Description")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Shove targets an entity")
-    knock_prone: bool = Field(default=False, description="If True, knock prone instead of push")
-    include_allies: bool = Field(default=True, description="Whether to include allies as valid targets")
+
+    name: str = Field(default="Shove", description="Human-readable shove action name.")
+    description: str = Field(default="Push an adjacent enemy", description="Shove action description.")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Shove targets one entity.")
+    knock_prone: bool = Field(default=False, description="Whether shove knocks prone instead of pushing.")
+    include_allies: bool = Field(default=True, description="Whether allies are valid shove targets.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Shove Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action economy costs required by Shove.")
 
     @staticmethod
     def get_max_shove_weight(entity: Entity) -> int:
-        """Calculate max weight entity can shove (STR × 12)."""
+        """Calculate max weight entity can shove.
+
+        Args:
+            entity: Entity attempting the shove.
+
+        Returns:
+            Maximum shoveable weight in pounds.
+        """
         return entity.ability_scores.strength.ability_score.score * 12
 
     @staticmethod
     def get_push_distance(entity: Entity) -> int:
-        """Calculate push distance based on STR.
+        """Calculate push distance based on Strength.
 
-        Base: 5ft
-        Bonus: +5ft per positive STR modifier point
-        Max: 20ft
+        Args:
+            entity: Entity attempting the shove.
+
+        Returns:
+            Push distance in feet.
         """
         str_mod = entity.ability_scores.strength.modifier
         bonus = max(0, str_mod) * 5
@@ -2293,11 +2351,18 @@ class Shove(BaseAction):
 
     @staticmethod
     def get_push_direction(source_pos: Tuple[int, int], target_pos: Tuple[int, int]) -> Tuple[int, int]:
-        """Calculate push direction as unit vector from source to target."""
+        """Calculate push direction as unit vector from source to target.
+
+        Args:
+            source_pos: Shoving entity position.
+            target_pos: Target entity position.
+
+        Returns:
+            Unit direction as `(dx, dy)`.
+        """
         dx = target_pos[0] - source_pos[0]
         dy = target_pos[1] - source_pos[1]
 
-        # Normalize to unit direction
         if dx != 0:
             dx = 1 if dx > 0 else -1
         if dy != 0:
@@ -2324,15 +2389,15 @@ class Shove(BaseAction):
         Args:
             start: Target's current position
             direction: Push direction as (dx, dy)
-            distance_feet: How far to push in feet
-            target_uuid: UUID of entity being pushed (excluded from occupancy check)
+            distance_feet: How far to push in feet.
+            target_uuid: UUID of entity being pushed, excluded from occupancy checks.
 
         Returns:
-            (final_position, actual_distance_feet, was_blocked, blocked_by)
+            Final position, actual distance, blocked flag, and blocker label.
         """
         grid = get_map()
         current = start
-        cells_to_move = distance_feet // 5  # 5ft per cell
+        cells_to_move = distance_feet // 5
         actual_cells = 0
         blocked = False
         blocked_by: Optional[str] = None
@@ -2340,7 +2405,6 @@ class Shove(BaseAction):
         for _ in range(cells_to_move):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
 
-            # Check if the target can cross into the next cell
             if not grid.can_transition(current, next_pos, target_uuid):
                 blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
@@ -2351,8 +2415,33 @@ class Shove(BaseAction):
 
         return current, actual_cells * 5, blocked, blocked_by
 
+    @staticmethod
+    def calculate_forced_movement_path(
+        start: Tuple[int, int],
+        direction: Tuple[int, int],
+        distance_feet: int
+    ) -> List[Tuple[int, int]]:
+        """Return every traversed cell for a straight forced displacement.
+
+        Args:
+            start: Position before forced movement begins.
+            direction: Unit displacement direction as `(dx, dy)`.
+            distance_feet: Distance to traverse in feet.
+
+        Returns:
+            Ordered destination cells, one per 5-foot transition.
+        """
+        path: List[Tuple[int, int]] = []
+        current = start
+
+        for _ in range(distance_feet // 5):
+            current = (current[0] + direction[0], current[1] + direction[1])
+            path.append(current)
+
+        return path
+
     def pre_validate(self) -> bool:
-        """Quick validation for template filtering."""
+        """Run cheap validation for action discovery."""
         if not super().pre_validate():
             return False
 
@@ -2362,17 +2451,14 @@ class Shove(BaseAction):
         if not source or not target:
             return False
 
-        # Check adjacency (5ft)
         distance = source.senses.get_feet_distance(target.position)
         if distance > 5:
             return False
 
-        # Check weight limit
         max_weight = self.get_max_shove_weight(source)
         if target.weight > max_weight:
             return False
 
-        # Check visibility (LOS)
         if target.uuid not in source.senses.entities:
             return False
 
@@ -2392,7 +2478,7 @@ class Shove(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
             use_register=use_register,
             source_entity_name=source.name,
             target_entity_name=target.name,
@@ -2409,18 +2495,15 @@ class Shove(BaseAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Check adjacency
         distance = source.senses.get_feet_distance(target.position)
         if distance > 5:
             return declaration_event.cancel(status_message=f"Target not adjacent ({distance}ft)")
 
-        # Check weight
         if target.weight > declaration_event.max_shove_weight:
             return declaration_event.cancel(
                 status_message=f"Target too heavy ({target.weight}lbs > {declaration_event.max_shove_weight}lbs)"
             )
 
-        # Check LOS
         if target.uuid not in source.senses.entities:
             return declaration_event.cancel(status_message="Target not visible")
 
@@ -2430,24 +2513,21 @@ class Shove(BaseAction):
         )
 
     def _apply(self, execution_event: ShoveEvent) -> ShoveEvent:
-        """Apply the shove - contest and push/prone."""
+        """Resolve the shove contest and apply push or prone effects."""
         source = Entity.get(self.source_entity_uuid)
         target = Entity.get(execution_event.target_entity_uuid) if execution_event.target_entity_uuid else None
 
         if not source or not target:
             return execution_event.cancel(status_message="Entity not found")
 
-        # ALLIES AUTO-SUCCEED (BG3 Patch 6 behavior)
         if source.is_ally(target):
             contest_success = True
             dice_roll = None
             target_passive = 0
             target_skill = "none"
         else:
-            # CONTESTED CHECK: Active Athletics roll vs Passive DC
             athletics_bonus = source.skill_bonus(target.uuid, "athletics")
 
-            # Target uses best of Athletics or Acrobatics passive
             passive_athletics = target.passive_skill("athletics")
             passive_acrobatics = target.passive_skill("acrobatics")
 
@@ -2458,11 +2538,9 @@ class Shove(BaseAction):
                 target_passive = passive_acrobatics
                 target_skill = "acrobatics"
 
-            # Roll Athletics check
             dice_roll = source.roll_d20(athletics_bonus, RollType.CHECK, parent_event=execution_event.uuid)
             contest_success = dice_roll.total >= target_passive
 
-        # Update event with contest results
         execution_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             shover_athletics=athletics_bonus if not source.is_ally(target) else None,
@@ -2476,16 +2554,13 @@ class Shove(BaseAction):
         if execution_event.canceled:
             return execution_event
 
-        # CONTEST FAILED
         if not contest_success:
             return execution_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message="Shove failed - target resisted"
             )
 
-        # CONTEST SUCCEEDED - PUSH OR PRONE
         if self.knock_prone:
-            # Knock prone instead of push
             prone_condition = Prone(
                 source_entity_uuid=source.uuid,
                 target_entity_uuid=target.uuid
@@ -2498,7 +2573,6 @@ class Shove(BaseAction):
                 status_message=f"{target.name} knocked prone"
             )
 
-        # PUSH
         direction = self.get_push_direction(source.position, target.position)
         distance = self.get_push_distance(source)
         final_pos, actual_dist, blocked, blocked_by = self.calculate_final_position(
@@ -2509,7 +2583,7 @@ class Shove(BaseAction):
         push_distance = actual_dist
 
         if actual_dist > 0:
-            # Create ForcedMovementEvent (does NOT trigger OA) - child of shove effect
+            movement_path = self.calculate_forced_movement_path(target.position, direction, actual_dist)
             forced_event = ForcedMovementEvent(
                 source_entity_uuid=source.uuid,
                 target_entity_uuid=target.uuid,
@@ -2527,12 +2601,40 @@ class Shove(BaseAction):
                 parent_event=execution_event.uuid
             )
 
-            # Move to completion (triggers GridMap spatial events via Entity.update_entity_position)
-            forced_event = forced_event.phase_to(EventPhase.COMPLETION)
+            forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+            forced_event = forced_event.phase_to(EventPhase.EFFECT)
 
-            # Actually move the target - spatial events are children of ForcedMovementEvent
-            # Note: Senses updated reactively via SPATIAL events from GridMap.move_entity()
-            Entity.update_entity_position(target, final_pos, parent_event=forced_event.uuid)
+            moved_cells = 0
+            interrupted_by_condition = False
+
+            if not forced_event.canceled:
+                for next_pos in movement_path:
+                    Entity.update_entity_position(target, next_pos, parent_event=forced_event.uuid)
+                    moved_cells += 1
+
+                    if "Dead" in target.active_conditions or "Incapacitated" in target.active_conditions:
+                        interrupted_by_condition = True
+                        break
+
+            push_distance = moved_cells * 5
+            final_pos = target.position
+
+            if interrupted_by_condition:
+                blocked = False
+                blocked_by = None
+
+            forced_event.phase_to(
+                EventPhase.COMPLETION,
+                end_position=final_pos,
+                actual_distance=push_distance,
+                blocked_by_obstacle=blocked,
+                blocked_by=blocked_by,
+                status_message=(
+                    f"Forced movement interrupted at {final_pos}"
+                    if interrupted_by_condition
+                    else f"Forced movement completed at {final_pos}"
+                )
+            )
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2547,13 +2649,9 @@ class Shove(BaseAction):
         """Apply shove costs (bonus action)."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
-
-# =============================================================================
-# Spell System: SpellAction Base Class
-# =============================================================================
-
 class SpellEvent(ActionEvent):
-    """An event that represents a spell being cast."""
+    """Event payload for spell casting and spell effect logs."""
+
     name: str = Field(default="Spell Cast", description="A spell cast event")
     event_type: EventType = Field(default=EventType.CAST_SPELL, description="The type of event")
     spell_id: Optional[str] = Field(default=None, description="Stable spell catalog id")
@@ -2562,24 +2660,20 @@ class SpellEvent(ActionEvent):
     spell_school: str = Field(default="evocation", description="School of magic")
     verbal: bool = Field(default=True, description="Whether spell has a verbal component")
 
-    # Attack spell fields (optional)
     attack_bonus: Optional[ModifiableValue] = Field(default=None, description="The spell attack bonus")
     ac: Optional[ModifiableValue] = Field(default=None, description="The target's AC")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="The attack roll result")
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="The attack outcome")
 
-    # Save spell fields (optional)
     save_ability: Optional[AbilityName] = Field(default=None, description="Ability for saving throw")
     save_dc: Optional[int] = Field(default=None, description="Save DC")
     save_success: Optional[bool] = Field(default=None, description="Whether the save succeeded")
     save_roll: Optional[DiceRoll] = Field(default=None, description="The save roll result")
     save_bonus: Optional[int] = Field(default=None, description="Target's save bonus")
 
-    # Damage fields
     damages: Optional[List[Damage]] = Field(default=None, description="The damages dealt")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="The damage roll results")
 
-    # VFX metadata (propagated from SpellAction at declaration time)
     aoe_shape_type: Optional[str] = Field(default=None, description="AoE shape: sphere, cone, line, cube, cylinder")
     aoe_radius_ft: Optional[int] = Field(default=None, description="AoE size in feet")
     range_type: Optional[str] = Field(default=None, description="Delivery type: self, touch, ranged")
@@ -2596,32 +2690,25 @@ class SpellEvent(ActionEvent):
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for spell effects.
 
-        Handles:
-        - Multi-target spells via parent's _generate_multi_target_log()
-        - Save-based spells (Fireball, etc.) with save rolls and damage
-        - Attack spells (Fire Bolt) - delegate to generic format for now
+        Returns:
+            Spell-specific combat log entry for multi-target, saving throw,
+            spell attack, auto-hit, or generic cast events.
         """
-        # Multi-target spells use summary log - sub_entries come from child events
         if self.total_targets > 0:
             return self._generate_multi_target_log()
 
-        # Save-based spell (has save_dc and save_success)
         if self.save_dc is not None and self.save_success is not None:
             return self._generate_save_spell_log()
 
-        # Attack spell (has attack_outcome) - Fire Bolt, Guiding Bolt, etc.
         if self.attack_outcome is not None:
             return self._generate_attack_spell_log()
 
-        # Auto-hit spell with damage (Magic Missile darts)
         if self.damage_rolls and self.target_entity_name:
             return self._generate_autohit_spell_log()
 
-        # Fallback to generic action log
         parent_log = super().generate_combat_log()
         if parent_log is not None:
             return parent_log
-        # If parent returns None, create a minimal log
         return CombatLogEntry(
             entry_type=CombatLogEntryType.ACTION,
             source_name=self.source_entity_name or "Unknown",
@@ -2634,16 +2721,15 @@ class SpellEvent(ActionEvent):
         )
 
     def _generate_save_spell_log(self) -> CombatLogEntry:
-        """Generate combat log for save-based spell (single target)."""
+        """Generate a combat log entry for a single-target save spell."""
         target_name = self.target_entity_name or "Unknown"
         caster_name = self.source_entity_name or "Unknown"
         spell_name = self.name or "Spell"
-        ability = (self.save_ability or "dexterity").upper()[:3]  # "DEX", "WIS", etc.
+        ability = (self.save_ability or "dexterity").upper()[:3]
         dc = self.save_dc or 10
         success = self.save_success or False
         total_dmg = self.total_damage or 0
 
-        # Build save roll display
         save_roll_display = DiceRollDisplay(dice_str="d20", results=[], bonus=0, total=0)
         if self.save_roll:
             results = self.save_roll.results
@@ -2659,20 +2745,19 @@ class SpellEvent(ActionEvent):
                 d20_used=results_list[0] if results_list else None
             )
 
-        # Build damage roll displays
         damage_displays: List[DamageRollDisplay] = []
         damage_type = "damage"
         base_damage = 0
         if self.damage_rolls:
             for i, dr in enumerate(self.damage_rolls):
                 dmg_type = self.damages[i].damage_type.value if self.damages and i < len(self.damages) else "damage"
-                damage_type = dmg_type  # Use last damage type
+                damage_type = dmg_type
                 dr_results = dr.results
                 if isinstance(dr_results, list):
                     dice_results = list(dr_results)
                 else:
                     dice_results = [dr_results] if dr_results else []
-                base_damage = dr.total  # Before halving
+                base_damage = dr.total
                 damage_displays.append(DamageRollDisplay(
                     dice_str=f"{len(dice_results)}d{self.damages[i].damage_dice if self.damages and i < len(self.damages) else 6}",
                     dice_results=dice_results,
@@ -2681,12 +2766,10 @@ class SpellEvent(ActionEvent):
                     damage_type=dmg_type
                 ))
 
-        # COMPACT: One-liner outcome
         outcome_str = md_color("SAVE", "green") if success else md_color("FAIL", "red")
         half_note = " (half)" if success and total_dmg > 0 else ""
         compact = f"{md_color(target_name, 'yellow')}: {ability} save {outcome_str}, {md_color(str(total_dmg), 'red')} {damage_type}{half_note}"
 
-        # VERBOSE: Save roll + damage
         verbose_lines = [compact]
         if save_roll_display.total > 0:
             d20_val = save_roll_display.d20_used or (save_roll_display.results[0] if save_roll_display.results else "?")
@@ -2698,10 +2781,8 @@ class SpellEvent(ActionEvent):
             verbose_lines.append(f"  Damage: {dr.dice_str}({dice_str}) = {dr.total} {dr.damage_type}")
         verbose = "\n".join(verbose_lines)
 
-        # DETAILED: Same as verbose for now (could add modifier breakdowns)
         detailed = verbose
 
-        # Build save bonus breakdown and advantage breakdown from target entity
         save_bonus_breakdown: List[ModifierBreakdown] = []
         save_advantage_breakdown: List[ModifierBreakdown] = []
         if self.target_entity_uuid and self.save_ability:
@@ -2727,7 +2808,6 @@ class SpellEvent(ActionEvent):
                             name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
                         ))
 
-        # Build structured data
         data = SpellSaveLogData(
             caster_name=caster_name,
             caster_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
@@ -2747,6 +2827,7 @@ class SpellEvent(ActionEvent):
             damage_type=damage_type
         )
 
+        spell_effect_succeeded = not success
         return CombatLogEntry(
             entry_type=CombatLogEntryType.SPELL_SAVE,
             source_name=caster_name,
@@ -2757,7 +2838,7 @@ class SpellEvent(ActionEvent):
             verbose=verbose,
             detailed=detailed,
             data=data.model_dump(),
-            success=not success  # Spell "succeeds" when target fails save
+            success=spell_effect_succeeded
         )
 
     def _generate_attack_spell_log(self) -> CombatLogEntry:
@@ -2772,7 +2853,6 @@ class SpellEvent(ActionEvent):
 
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
-        # Build attack roll display
         attack_roll = DiceRollDisplay(dice_str="d20", results=[], bonus=0, total=0)
         if self.dice_roll:
             results = self.dice_roll.results
@@ -2800,7 +2880,6 @@ class SpellEvent(ActionEvent):
             attack_roll.bonus = self.dice_roll.bonus
             attack_roll.total = self.dice_roll.total
 
-        # Build attack breakdown from ModifiableValue
         attack_breakdown: List[ModifierBreakdown] = []
         if self.attack_bonus:
             for mod in self.attack_bonus.get_breakdown():
@@ -2810,7 +2889,6 @@ class SpellEvent(ActionEvent):
                     source=mod.get('source', 'self')
                 ))
 
-        # Build advantage breakdown from cached contextual results
         advantage_breakdown: List[ModifierBreakdown] = []
         if self.attack_bonus:
             for mod in self.attack_bonus.get_full_advantage_breakdown():
@@ -2824,14 +2902,12 @@ class SpellEvent(ActionEvent):
                         name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
                     ))
 
-        # Get target AC
         target_ac = 0
         if self.ac:
             target_ac = self.ac.normalized_score
         elif target_entity:
             target_ac = target_entity.ac_bonus().normalized_score
 
-        # Build AC breakdown
         ac_breakdown: List[ModifierBreakdown] = []
         if self.ac:
             for mod in self.ac.get_breakdown():
@@ -2841,7 +2917,6 @@ class SpellEvent(ActionEvent):
                     source=mod.get('source', 'self')
                 ))
 
-        # Determine outcome
         outcome = "unknown"
         is_hit = False
         is_crit = False
@@ -2851,7 +2926,6 @@ class SpellEvent(ActionEvent):
             is_hit = outcome in ("hit", "crit")
             is_crit = outcome == "crit"
 
-        # Build damage roll displays
         damage_roll_displays: List[DamageRollDisplay] = []
         total_damage = 0
         if self.damage_rolls and self.damages:
@@ -2885,7 +2959,6 @@ class SpellEvent(ActionEvent):
                 ))
                 total_damage += dr.total
 
-        # Build formatted text using shared attack formatters
         compact_text = format_attack_compact(
             source_name, target_name, outcome, total_damage
         )
@@ -2901,7 +2974,6 @@ class SpellEvent(ActionEvent):
             damage_roll_displays, total_damage
         )
 
-        # Build structured data (reuse AttackLogData with spell name as weapon)
         target_hp = target_entity.get_hp() if target_entity else None
         data = AttackLogData(
             attacker_name=source_name,
@@ -2936,23 +3008,20 @@ class SpellEvent(ActionEvent):
         )
 
     def _generate_autohit_spell_log(self) -> CombatLogEntry:
-        """Generate combat log for auto-hit spell (Magic Missile darts)."""
+        """Generate a combat log entry for an auto-hit damaging spell."""
         target_name = self.target_entity_name or "Unknown"
         caster_name = self.source_entity_name or "Unknown"
         spell_name = self.name or "Spell"
         total_dmg = self.total_damage or 0
 
-        # Get damage type from first damage
         damage_type = "force"
         if self.damages and len(self.damages) > 0:
             damage_type = self.damages[0].damage_type.value
 
-        # Build damage roll display string
         dice_str = ""
         if self.damage_rolls and len(self.damage_rolls) > 0:
             dr = self.damage_rolls[0]
             results = dr.results if isinstance(dr.results, list) else [dr.results]
-            # Format: "1d4+1: 3+1"
             num_dice = len(results)
             die_size = self.damages[0].damage_dice if self.damages else 4
             bonus = self.damages[0].damage_bonus.normalized_score if self.damages and self.damages[0].damage_bonus else 1
@@ -2964,13 +3033,10 @@ class SpellEvent(ActionEvent):
                 results_str += f"+{bonus}"
             dice_str = f" ({dice_part}: {results_str})"
 
-        # COMPACT: "Magic Missile hits Skeleton for 4 force damage"
         compact = f"{md_color(spell_name, 'yellow')} {md_color('hits', 'green')} {md_color(target_name, 'cyan')} for {md_color(str(total_dmg), 'red')} {damage_type} damage"
 
-        # VERBOSE: Add dice details
         verbose = compact + dice_str
 
-        # DETAILED: Same as verbose for auto-hit spells
         detailed = verbose
 
         return CombatLogEntry(
@@ -2995,63 +3061,52 @@ class SpellEvent(ActionEvent):
 class SpellAction(BaseAction):
     """Base class for all spells. Handles metadata and variant generation.
 
-    Each spell subclass must implement _apply() with its own logic.
-    This base class provides:
-    - Spell metadata (level, school, concentration)
-    - Variant generation for upcasting
-    - Cost generation (action + spell slot)
-
-    Note: Unlike weapon attacks, spells handle their own _apply() logic entirely.
-    Attack spells should borrow the pattern from Attack._apply() for set_from_target().
+    Spell subclasses implement their own `_apply()` logic. This base class
+    provides spell metadata, upcast variant generation, action and slot costs,
+    concentration bookkeeping, and client-facing declaration metadata.
     """
 
-    action_category: ActionCategory = Field(default=ActionCategory.SPELL)
+    action_category: ActionCategory = Field(default=ActionCategory.SPELL, description="Classifies this action as a spell.")
 
-    # Spell metadata
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
     concentration: bool = Field(default=False, description="Whether spell requires concentration")
     verbal: bool = Field(default=True, description="Whether spell has a verbal component")
 
-    # Spell range (similar to weapon range)
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range of the spell"
     )
 
-    # Variant tracking (set by variant generation)
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     is_variant: bool = Field(default=False, description="Whether this is an upcast variant")
 
-    # Caster level (for cantrip scaling)
     caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
 
-    # Concentration tracking (reset each cast, reused across convolution loop targets)
-    cast_concentrating_uuid: Optional[UUID] = Field(default=None, exclude=True)
+    cast_concentrating_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Concentrating condition UUID reused across one convolution cast.",
+    )
 
-    # Spell-specific alt overrides (set by conditions like metamagic)
     alt_range: Optional[int] = Field(default=None, description="Override spell_range.normal")
 
-    # VFX metadata
     projectile_type: Optional[str] = Field(default=None, description="VFX projectile delivery type")
     spell_damage_type: Optional[DamageType] = Field(default=None, description="Primary damage type for VFX")
 
-    # Default cost is 1 action (no spell slot for cantrips)
     costs: List[Cost] = Field(
         default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
         description="Action cost for casting"
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Set concentration flags and append slot costs for leveled spells."""
         super().model_post_init(__context)
-        # Concentration spells need cleanup hook
         if self.concentration:
             self.requires_concentration = True
-        # For leveled spells, ensure cast_at_level is set and spell slot cost is included
         if self.spell_level > 0:
             if self.cast_at_level == 0:
                 self.cast_at_level = self.spell_level
-            # Append spell slot cost if not already present
             has_slot_cost = any(c.cost_type.startswith("spell_slot") for c in self.costs)
             if not has_slot_cost:
                 cost_type = spell_slot_cost_type(self.cast_at_level)
@@ -3080,20 +3135,19 @@ class SpellAction(BaseAction):
     def ensure_concentration(self, parent_event: Event) -> "Concentrating":
         """Create or reuse Concentrating for this cast. Safe for convolution loop.
 
-        On first call per cast: creates new Concentrating (replacing any existing).
-        On subsequent calls (same convolution loop): reuses via UUID match.
+        The first call for a cast creates Concentrating and replaces any older
+        concentration. Later calls in the same convolution loop reuse the UUID
+        created by the first target.
         """
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             raise ValueError("Caster not found")
 
-        # Reuse if UUID matches (same convolution loop)
         if self.cast_concentrating_uuid:
             existing = caster.active_conditions_by_uuid.get(self.cast_concentrating_uuid)
             if existing and isinstance(existing, Concentrating):
                 return existing
 
-        # New cast → create (add_condition replaces any existing Concentrating)
         conc = Concentrating(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
@@ -3107,6 +3161,7 @@ class SpellAction(BaseAction):
 
     def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
         """Remove Concentrating if all targets saved (0-children bug fix).
+
         Also clean up empty slots in multi-slot scenarios."""
         if not self.cast_concentrating_uuid:
             return
@@ -3116,9 +3171,7 @@ class SpellAction(BaseAction):
         conc = caster.active_conditions["Concentrating"]
         if not isinstance(conc, Concentrating) or conc.uuid != self.cast_concentrating_uuid:
             return
-        # Remove if ALL slots empty (0-children bug)
         conc.cleanup_if_no_effects(parent_event=completion_event)
-        # Clean up individual empty slots (multi-slot: some spells' targets all saved)
         if "Concentrating" in caster.active_conditions:
             empty_slot_uuids = [slot_uuid for slot_uuid, slot in conc.concentration_slots.items() if not slot.linked_entries]
             for slot_uuid in empty_slot_uuids:
@@ -3156,8 +3209,9 @@ class SpellAction(BaseAction):
     def generate_variants(self, entity: Entity) -> List['SpellAction']:
         """Generate spell variants for available spell slots.
 
-        For cantrips: returns a single variant with cast_at_level=0
-        For leveled spells: returns a variant for each available slot >= spell_level
+        Cantrips return a single slotless variant. Leveled spells return one
+        variant for each currently available spell slot at or above the base
+        spell level.
 
         Args:
             entity: The entity that would cast the spell
@@ -3168,15 +3222,41 @@ class SpellAction(BaseAction):
         variants: List['SpellAction'] = []
 
         if self.spell_level == 0:
-            # Cantrip - single variant, no slot cost
             variants.append(self._create_variant(cast_at_level=0))
         else:
-            # Leveled spell - variant per available slot
             for slot_level in range(self.spell_level, 10):
                 if entity.has_spell_slot(slot_level):
                     variants.append(self._create_variant(cast_at_level=slot_level))
 
         return variants
+
+    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
+        """Return spell forms that should appear in action discovery.
+
+        Args:
+            entity: Entity requesting available actions.
+
+        Returns:
+            The registered cantrip or slotless override template, or generated
+            slot-level variants for leveled spells.
+        """
+        if self.spell_level == 0 or self.alt_skip_slot:
+            return [self]
+        return list(self.generate_variants(entity))
+
+    def get_discovery_template_name(self) -> str:
+        """Return a stable execution name for this spell discovery row."""
+        base_name = self.name or "Unknown"
+        if self.is_variant and self.spell_level > 0:
+            return f"{base_name}{SPELL_SLOT_TEMPLATE_SEPARATOR}{self.cast_at_level}"
+        return base_name
+
+    def get_discovery_display_name(self) -> str:
+        """Return a human-facing label for this spell discovery row."""
+        base_name = self.name or "Unknown"
+        if self.is_variant and self.spell_level > 0:
+            return f"{base_name} (Level {self.cast_at_level})"
+        return base_name
 
     def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
         """Clone self with modified cast level and appropriate costs.
@@ -3190,18 +3270,16 @@ class SpellAction(BaseAction):
         Returns:
             A new SpellAction instance configured for this cast level
         """
-        # Variant config: new UUID, not a template, not registered (ephemeral)
         update_dict: dict = {
             "uuid": uuid4(),
             "cast_at_level": cast_at_level,
             "is_variant": True,
             "template": False,
-            "use_register": False,  # Variants are ephemeral, don't need registry
+            "use_register": False,
             "costs": self._get_costs_for_level(cast_at_level),
         }
         update_dict.update(overrides)
 
-        # model_copy preserves object types (aoe_shape subclasses, etc.)
         return self.model_copy(deep=True, update=update_dict)
 
     def _get_costs_for_level(self, level: int) -> List[Cost]:
@@ -3216,13 +3294,11 @@ class SpellAction(BaseAction):
         Returns:
             List of Cost objects (action/bonus_action + spell slot if level > 0)
         """
-        # Use existing action cost from self.costs (preserves bonus_action for Misty Step)
         base_cost = self.costs[0] if self.costs else Cost(
             name="Cast Spell", cost_type="actions", cost=1,
             evaluator=entity_action_economy_cost_evaluator
         )
         cost = base_cost.model_copy()
-        # Apply alt_cost_type override
         if self.alt_cost_type is not None and cost.cost_type == "actions":
             cost = cost.model_copy(update={"cost_type": self.alt_cost_type})
         costs = [cost]
@@ -3282,21 +3358,25 @@ class SpellAction(BaseAction):
         return 1
 
 
-
-# =============================================================================
-# OBJECT Actions (Items on Grid)
-# =============================================================================
-
 class PickUp(BaseAction):
     """Pick up an item from the ground. Free action (no cost).
 
     Uses target_entity_uuid to hold the item UUID (items are BaseBlocks
     registered in _registry, so BaseBlock.get(uuid) finds them).
     """
-    name: str = Field(default="Pick Up")
-    description: str = Field(default="Pick up an item from the ground")
-    target_type: TargetType = Field(default=TargetType.OBJECT)
-    costs: List[Cost] = Field(default_factory=list)  # Free action
+    name: str = Field(default="Pick Up", description="Action name for ground-item pickup.")
+    description: str = Field(
+        default="Pick up an item from the ground",
+        description="Action description shown for ground-item pickup.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.OBJECT,
+        description="PickUp targets a floor object.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for pickup.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -3340,13 +3420,22 @@ class AttackObject(BaseAction):
 
     Uses target_entity_uuid to hold the item UUID.
     """
-    name: str = Field(default="Attack Object")
-    description: str = Field(default="Attack a breakable object")
-    target_type: TargetType = Field(default=TargetType.OBJECT)
-    action_category: ActionCategory = Field(default=ActionCategory.ATTACK)
+    name: str = Field(default="Attack Object", description="Action name for attacking an object.")
+    description: str = Field(
+        default="Attack a breakable object",
+        description="Action description shown for object attacks.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.OBJECT,
+        description="AttackObject targets a floor object.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ATTACK,
+        description="Classifies object attacks as attack actions.",
+    )
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Attack Object Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ])
+    ], description="Action cost for attacking a breakable object.")
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -3375,7 +3464,6 @@ class AttackObject(BaseAction):
         if not entity or not isinstance(item, BaseItem):
             return execution_event.cancel(status_message="Entity or item not found")
 
-        # Auto-hit: roll weapon damage directly
         weapon_slot = WeaponSlot.MELEE_MAIN
         damages = entity.equipment.get_damages(weapon_slot, entity.ability_scores)
         total_damage = 0
@@ -3390,31 +3478,43 @@ class AttackObject(BaseAction):
             status_message=f"Dealt {actual} {main_type.value} damage to {item.name}"
         )
 
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Apply Attack Object action costs after successful object damage."""
+        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
 
 class Drop(BaseAction):
     """Drop an item from inventory onto the ground at a position.
 
     Position-target action (POSITION_LOS) bound to a specific item.
     Valid positions: entity's own cell + adjacent cells (range 5ft).
-    Created on-the-fly via execute_drop() — same pattern as future Use actions.
 
     The item_uuid is bound at creation time (one Drop per item).
     """
-    name: str = Field(default="Drop")
-    description: str = Field(default="Drop an item from inventory")
-    target_type: TargetType = Field(default=TargetType.POSITION_LOS)
-    costs: List[Cost] = Field(default_factory=list)  # Free action
+    name: str = Field(default="Drop", description="Action name for dropping an inventory item.")
+    description: str = Field(
+        default="Drop an item from inventory",
+        description="Action description shown for inventory item drops.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.POSITION_LOS,
+        description="Drop targets a visible position.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="No-cost action-economy payload for item drops.",
+    )
     item_uuid: Optional[UUID] = Field(default=None, description="UUID of the item to drop (bound at creation)")
 
     def get_range(self) -> Optional[Range]:
         return Range(type=RangeType.REACH, normal=5)
 
     def get_valid_positions(self) -> List[Tuple[int, int]]:
-        """Adjacent + own position, must be walkable."""
+        """Return own and visible adjacent positions within 5 feet."""
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return []
-        valid: List[Tuple[int, int]] = [entity.position]  # Can drop at own feet
+        valid: List[Tuple[int, int]] = [entity.position]
         for pos, is_visible in entity.senses.visible.items():
             if not is_visible:
                 continue
@@ -3437,7 +3537,6 @@ class Drop(BaseAction):
         if self.end_position is None:
             return declaration_event.cancel(status_message="No drop position specified")
 
-        # Validate distance
         dx = abs(self.end_position[0] - entity.position[0])
         dy = abs(self.end_position[1] - entity.position[1])
         if dx > 1 or dy > 1:

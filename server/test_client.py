@@ -8,10 +8,10 @@ This script:
 
 Usage:
     # First, start the server in another terminal:
-    python -m server.event_server
+    uv run python -m server.event_server
 
     # Then run this client:
-    python -m server.test_client
+    uv run python -m server.test_client
 """
 
 import asyncio
@@ -34,12 +34,10 @@ async def listen_for_events(uri: str = "ws://localhost:8000/ws"):
         async with websockets.connect(uri) as websocket:
             print("Connected!")
 
-            # Receive initial connection message
             response = await websocket.recv()
             data = json.loads(response)
             print(f"Server: {data}")
 
-            # Listen for events
             print("\nListening for events (Ctrl+C to stop)...\n")
 
             while True:
@@ -52,7 +50,6 @@ async def listen_for_events(uri: str = "ws://localhost:8000/ws"):
                         print(f"[{event['event_type']}] {event['name']} "
                               f"(phase: {event['phase']}, uuid: {event['uuid'][:8]}...)")
 
-                        # Print extra details for spatial events
                         if "position" in event:
                             print(f"    position: {event['position']}")
                         if event.get("status_message"):
@@ -66,7 +63,7 @@ async def listen_for_events(uri: str = "ws://localhost:8000/ws"):
 
     except ConnectionRefusedError:
         print(f"Could not connect to {uri}")
-        print("Make sure the server is running: python -m server.event_server")
+        print("Make sure the server is running: uv run python -m server.event_server")
         sys.exit(1)
 
 
@@ -75,11 +72,10 @@ async def test_with_filter(uri: str = "ws://localhost:8000/ws"):
     print(f"Connecting to {uri} with filter...")
 
     async with websockets.connect(uri) as websocket:
-        # Wait for connection message
+
         await websocket.recv()
         print("Connected!")
 
-        # Set filter for only spatial events
         await websocket.send(json.dumps({
             "type": "filter",
             "event_types": ["spatial_entity_entered", "spatial_entity_left"]
@@ -88,10 +84,9 @@ async def test_with_filter(uri: str = "ws://localhost:8000/ws"):
         response = await websocket.recv()
         print(f"Filter response: {json.loads(response)}")
 
-        # Listen for filtered events
         print("\nListening for spatial events only...\n")
 
-        for _ in range(10):  # Listen for 10 events or timeout
+        for _ in range(10):
             try:
                 message = await asyncio.wait_for(websocket.recv(), timeout=5.0)
                 data = json.loads(message)
@@ -107,21 +102,17 @@ async def generate_test_events():
     """Generate test events by creating and moving entities."""
     print("Generating test events...")
 
-    # Import here to avoid circular imports and allow standalone use
     from dnd.core.gridmap import get_map, reset_map
     from dnd.entity import Entity, EntityConfig
 
-    # Clear state
     reset_map()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
 
-    # Create grid
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 10)
     print("Created 10x10 grid")
 
-    # Create entity
     entity_uuid = uuid4()
     entity = Entity.create(
         source_entity_uuid=entity_uuid,
@@ -130,7 +121,6 @@ async def generate_test_events():
     )
     print(f"Created entity at (2, 2)")
 
-    # Move entity around
     await asyncio.sleep(0.5)
     Entity.update_entity_position(entity, (3, 3))
     print("Moved entity to (3, 3)")
@@ -160,13 +150,12 @@ async def main():
     args = parser.parse_args()
 
     if args.generate:
-        # Generate events without connecting (for testing server separately)
+
         await generate_test_events()
     elif args.filter:
         await test_with_filter(args.uri)
     else:
         await listen_for_events(args.uri)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

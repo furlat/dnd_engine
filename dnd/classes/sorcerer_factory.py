@@ -23,34 +23,22 @@ from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.modifiers import DamageType
 
-# Import items
 from dnd.items.weapons import create_dagger, create_quarterstaff
 from dnd.items.armors import create_cloth_shoes, create_robes, create_wizard_hat
 from dnd.items.test_items import create_healing_potion, create_potion_of_haste
 
-# Import sorcerer features
 from dnd.classes.sorcerer import (
     DraconicResilience,
     ElementalAffinity,
     SorceryPointsFeature,
 )
 
-# Shield reaction
 from dnd.spells.abjuration import register_shield_reaction
 
 
-# =============================================================================
-# SORCEROUS ORIGIN
-# =============================================================================
-
 class SorcererOriginChoice(str, Enum):
     DRACONIC_BLOODLINE = "draconic_bloodline"
-    # WILD_MAGIC = "wild_magic"  # Future
 
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
 
 def get_proficiency_bonus(level: int) -> int:
     """Returns proficiency bonus for character level."""
@@ -102,7 +90,7 @@ def get_metamagic_count(level: int) -> int:
 
 def get_default_spells(level: int) -> List[str]:
     """Curated default spell list scaled by level."""
-    spells = ["Fire Bolt", "Ray of Frost"]  # cantrips
+    spells = ["Fire Bolt", "Ray of Frost"]
     if level >= 1:
         spells += ["Magic Missile"]
     if level >= 2:
@@ -117,11 +105,6 @@ def get_default_spells(level: int) -> List[str]:
         spells += ["Cloudkill"]
     return spells
 
-
-# =============================================================================
-# EQUIPMENT PRESETS
-# =============================================================================
-
 SorcererEquipmentPreset = Literal["dagger", "quarterstaff"]
 
 EQUIPMENT_PRESETS = {
@@ -130,52 +113,138 @@ EQUIPMENT_PRESETS = {
 }
 
 
-# =============================================================================
-# SORCERER CONFIG
-# =============================================================================
-
 class SorcererConfig(BaseModel):
-    """Configuration for creating a Sorcerer at a specific level."""
+    """Configuration for creating a Sorcerer at a specific level.
 
-    # Core
-    level: int = Field(ge=1, le=20, default=1)
-    name: str = "Sorcerer"
-    position: Tuple[int, int] = (0, 0)
+    Attributes:
+        level: Sorcerer level used to gate spellcasting, metamagic, resources, and required ASIs.
+        name: Display name for the created sorcerer entity.
+        position: Initial grid position for the created sorcerer entity.
+        faction: Faction identifier. None = enemy to everyone.
+        base_strength: Base Strength score before level-one bonuses and ASI choices.
+        base_dexterity: Base Dexterity score before level-one bonuses and ASI choices.
+        base_constitution: Base Constitution score before level-one bonuses and ASI choices.
+        base_intelligence: Base Intelligence score before level-one bonuses and ASI choices.
+        base_wisdom: Base Wisdom score before level-one bonuses and ASI choices.
+        base_charisma: Base Charisma score before level-one bonuses and ASI choices.
+        bonus_plus_2: Ability that receives the level-one +2 bonus.
+        bonus_plus_1: Ability that receives the level-one +1 bonus.
+        origin: Sorcerous origin applied by the factory.
+        draconic_damage_type: Damage type used by Draconic Bloodline Elemental Affinity.
+        metamagic_choices: Metamagic choices required by the factory at levels three and above.
+        asi_4: Ability score improvements selected at Sorcerer level four.
+        asi_8: Ability score improvements selected at Sorcerer level eight.
+        asi_12: Ability score improvements selected at Sorcerer level twelve.
+        asi_16: Ability score improvements selected at Sorcerer level sixteen.
+        asi_19: Ability score improvements selected at Sorcerer level nineteen.
+        equipment_preset: Starter equipment preset equipped by the Sorcerer factory.
+        spell_names: Explicit spell names registered by the Sorcerer factory; defaults are level-derived.
+    """
+
+    level: int = Field(
+        ge=1,
+        le=20,
+        default=1,
+        description="Sorcerer level used to gate spellcasting, metamagic, resources, and required ASIs.",
+    )
+    name: str = Field(default="Sorcerer", description="Display name for the created sorcerer entity.")
+    position: Tuple[int, int] = Field(
+        default=(0, 0),
+        description="Initial grid position for the created sorcerer entity.",
+    )
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
 
-    # Ability scores (CHA primary, CON secondary)
-    base_strength: int = Field(default=8, ge=8, le=15)
-    base_dexterity: int = Field(default=14, ge=8, le=15)
-    base_constitution: int = Field(default=13, ge=8, le=15)
-    base_intelligence: int = Field(default=10, ge=8, le=15)
-    base_wisdom: int = Field(default=12, ge=8, le=15)
-    base_charisma: int = Field(default=15, ge=8, le=15)
+    base_strength: int = Field(
+        default=8,
+        ge=8,
+        le=15,
+        description="Base Strength score before level-one bonuses and ASI choices.",
+    )
+    base_dexterity: int = Field(
+        default=14,
+        ge=8,
+        le=15,
+        description="Base Dexterity score before level-one bonuses and ASI choices.",
+    )
+    base_constitution: int = Field(
+        default=13,
+        ge=8,
+        le=15,
+        description="Base Constitution score before level-one bonuses and ASI choices.",
+    )
+    base_intelligence: int = Field(
+        default=10,
+        ge=8,
+        le=15,
+        description="Base Intelligence score before level-one bonuses and ASI choices.",
+    )
+    base_wisdom: int = Field(
+        default=12,
+        ge=8,
+        le=15,
+        description="Base Wisdom score before level-one bonuses and ASI choices.",
+    )
+    base_charisma: int = Field(
+        default=15,
+        ge=8,
+        le=15,
+        description="Base Charisma score before level-one bonuses and ASI choices.",
+    )
 
-    # Level 1 "racial" bonuses: +2 to one, +1 to another
-    bonus_plus_2: AbilityName = "charisma"
-    bonus_plus_1: AbilityName = "constitution"
+    bonus_plus_2: AbilityName = Field(
+        default="charisma",
+        description="Ability that receives the level-one +2 bonus.",
+    )
+    bonus_plus_1: AbilityName = Field(
+        default="constitution",
+        description="Ability that receives the level-one +1 bonus.",
+    )
 
-    # Origin (L1)
-    origin: SorcererOriginChoice = SorcererOriginChoice.DRACONIC_BLOODLINE
-    draconic_damage_type: str = "Fire"  # DamageType value for Draconic Bloodline
+    origin: SorcererOriginChoice = Field(
+        default=SorcererOriginChoice.DRACONIC_BLOODLINE,
+        description="Sorcerous origin applied by the factory.",
+    )
+    draconic_damage_type: str = Field(
+        default="Fire",
+        description="Damage type used by Draconic Bloodline Elemental Affinity.",
+    )
 
-    # Metamagic (L3+): choose 2 at L3, +1 at L10, +1 at L17
-    metamagic_choices: Optional[List[str]] = None  # e.g., ["quickened", "twinned"]
+    metamagic_choices: Optional[List[str]] = Field(
+        default=None,
+        description="Metamagic choices required by the factory at levels three and above.",
+    )
 
-    # ASI at levels 4, 8, 12, 16, 19
-    asi_4: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_8: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_12: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_16: Optional[List[Tuple[AbilityName, int]]] = None
-    asi_19: Optional[List[Tuple[AbilityName, int]]] = None
+    asi_4: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Sorcerer level four.",
+    )
+    asi_8: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Sorcerer level eight.",
+    )
+    asi_12: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Sorcerer level twelve.",
+    )
+    asi_16: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Sorcerer level sixteen.",
+    )
+    asi_19: Optional[List[Tuple[AbilityName, int]]] = Field(
+        default=None,
+        description="Ability score improvements selected at Sorcerer level nineteen.",
+    )
 
-    # Equipment
-    equipment_preset: SorcererEquipmentPreset = "dagger"
+    equipment_preset: SorcererEquipmentPreset = Field(
+        default="dagger",
+        description="Starter equipment preset equipped by the Sorcerer factory.",
+    )
 
-    # Spells (optional override — default curated list by level)
-    spell_names: Optional[List[str]] = None
+    spell_names: Optional[List[str]] = Field(
+        default=None,
+        description="Explicit spell names registered by the Sorcerer factory; defaults are level-derived.",
+    )
 
-    # Validators
     @field_validator("bonus_plus_1")
     @classmethod
     def validate_different_bonuses(cls, v: AbilityName, info) -> AbilityName:  # type: ignore[override]
@@ -230,10 +299,6 @@ class SorcererConfig(BaseModel):
         return self
 
 
-# =============================================================================
-# ABILITY SCORE CALCULATION
-# =============================================================================
-
 def calculate_final_ability_scores(config: SorcererConfig) -> Dict[AbilityName, int]:
     """Calculate final scores: base + L1 bonuses + all ASIs."""
     scores: Dict[AbilityName, int] = {
@@ -245,11 +310,9 @@ def calculate_final_ability_scores(config: SorcererConfig) -> Dict[AbilityName, 
         "charisma": config.base_charisma,
     }
 
-    # Apply L1 bonuses
     scores[config.bonus_plus_2] += 2
     scores[config.bonus_plus_1] += 1
 
-    # Apply ASIs
     asi_map = {
         4: config.asi_4,
         8: config.asi_8,
@@ -265,10 +328,6 @@ def calculate_final_ability_scores(config: SorcererConfig) -> Dict[AbilityName, 
     return {k: min(v, 20) for k, v in scores.items()}
 
 
-# =============================================================================
-# EQUIPMENT APPLICATION
-# =============================================================================
-
 def apply_equipment(entity: Entity, preset: SorcererEquipmentPreset) -> None:
     """Apply equipment based on preset."""
     preset_config = EQUIPMENT_PRESETS[preset]
@@ -281,23 +340,17 @@ def apply_equipment(entity: Entity, preset: SorcererEquipmentPreset) -> None:
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
 
-# =============================================================================
-# FEATURE APPLICATION
-# =============================================================================
-
 def apply_sorcerer_features(entity: Entity, config: SorcererConfig) -> None:
     """Apply all Sorcerer features appropriate for the level."""
     level = config.level
 
-    # L1: Origin features
     if config.origin == SorcererOriginChoice.DRACONIC_BLOODLINE:
         entity.add_condition(DraconicResilience(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            hp_bonus=level,  # +1 HP per sorcerer level
+            hp_bonus=level,
         ))
 
-    # L2+: Sorcery Points + Font of Magic + Metamagic
     if level >= 2:
         metamagic = config.metamagic_choices or []
         entity.add_condition(SorceryPointsFeature(
@@ -307,7 +360,6 @@ def apply_sorcerer_features(entity: Entity, config: SorcererConfig) -> None:
             metamagic_choices=metamagic,
         ))
 
-    # L6+: Elemental Affinity (Draconic)
     if level >= 6 and config.origin == SorcererOriginChoice.DRACONIC_BLOODLINE:
         entity.add_condition(ElementalAffinity(
             source_entity_uuid=entity.uuid,
@@ -315,10 +367,6 @@ def apply_sorcerer_features(entity: Entity, config: SorcererConfig) -> None:
             damage_type=DamageType(config.draconic_damage_type),
         ))
 
-
-# =============================================================================
-# FACTORY FUNCTION
-# =============================================================================
 
 def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) -> Entity:
     """Create a Sorcerer entity at the specified level with all features applied.
@@ -335,13 +383,10 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
     if source_id is None:
         source_id = uuid4()
 
-    # 1. Calculate final ability scores
     final_scores = calculate_final_ability_scores(config)
 
-    # 2. Proficiency bonus
     prof_bonus = get_proficiency_bonus(config.level)
 
-    # 3. Ability scores config
     ability_scores_config = AbilityScoresConfig(
         strength=AbilityConfig(ability_score=final_scores["strength"]),
         dexterity=AbilityConfig(ability_score=final_scores["dexterity"]),
@@ -351,7 +396,6 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         charisma=AbilityConfig(ability_score=final_scores["charisma"]),
     )
 
-    # 4. HP: Sorcerer hit dice = d6
     health_config = HealthConfig(
         hit_dices=[HitDiceConfig(
             hit_dice_value=6,
@@ -361,17 +405,14 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         )]
     )
 
-    # 5. Action economy with spell slots
     action_economy_config = ActionEconomyConfig(
         spell_slots=get_sorcerer_spell_slots(config.level),
     )
 
-    # 6. Spellcasting config
     spellcasting_config = SpellcastingConfig(
         spellcasting_ability="charisma",
     )
 
-    # 7. Entity config
     saving_throws_config = SavingThrowSetConfig(
         constitution_saving_throw=SavingThrowConfig(proficiency=True),
         charisma_saving_throw=SavingThrowConfig(proficiency=True),
@@ -397,7 +438,6 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         ),
     )
 
-    # 8. Create entity
     origin_name = f" ({config.origin.value.replace('_', ' ').title()})" if config.origin else ""
     entity = Entity.create(
         name=config.name,
@@ -406,25 +446,19 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         config=entity_config,
     )
 
-    # 9. Standard actions
     setup_standard_actions(entity)
 
-    # 10. Equipment
     apply_equipment(entity, config.equipment_preset)
     entity.equipment.equip(create_robes(entity.uuid, visual_variant_id="81000005"))
     entity.equipment.equip(create_cloth_shoes(entity.uuid, visual_variant_id="b0000004"))
 
-    # 11. Apply class features
     apply_sorcerer_features(entity, config)
 
-    # 12. Register spells
     spell_list = config.spell_names or get_default_spells(config.level)
     register_spells_by_name(entity, spell_list, caster_level=config.level)
 
-    # Shield is a reaction spell, registered separately (not via ALL_SPELLS)
     register_shield_reaction(entity)
 
-    # 13. Add starter inventory items
     entity.loot_item(create_potion_of_haste(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
     entity.loot_item(create_healing_potion(entity.uuid))
@@ -432,7 +466,6 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
     entity.loot_item(create_cloth_shoes(entity.uuid, visual_variant_id="b0000005"))
     entity.loot_item(create_wizard_hat(entity.uuid, visual_variant_id="h0000011"))
 
-    # Spare weapon — the one NOT equipped (preset picks one, inventory gets the other)
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     if "Dagger" not in equipped_names:
         entity.loot_item(create_dagger(entity.uuid))
@@ -440,11 +473,6 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         entity.loot_item(create_quarterstaff(entity.uuid))
 
     return entity
-
-
-# =============================================================================
-# EXPORTS
-# =============================================================================
 
 __all__ = [
     "SorcererConfig",

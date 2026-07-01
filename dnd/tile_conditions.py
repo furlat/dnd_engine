@@ -1,22 +1,4 @@
-"""
-Tile condition system for zone spells and terrain effects.
-
-Provides base classes for:
-- ZoneControlCondition: Applied to caster, manages a zone of tile effects
-- TileEffectCondition: Applied to individual tiles, provides the actual effect
-
-Zone Spell Pattern:
-    Caster: Concentrating(spell_name="Fog Cloud")
-        +-- linked_conditions -> FogCloudZone (on caster)
-                +-- linked_conditions -> FogCloudTileEffect (on each tile)
-
-Event Handling:
-- SPATIAL events now fire through full lifecycle: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
-- Entry damage handlers fire at EFFECT phase using standard EventHandlers
-- Turn start damage handlers also fire at EFFECT phase
-- Observer sensory updates run through EventQueue's pre-completion lifecycle hook,
-  then emit first-class SENSORY_UPDATE child events when perception changes.
-"""
+"""Zone and tile condition models for terrain, hazards, and spell areas."""
 
 import re
 from typing import Callable, List, Optional, Tuple, Type, Set, Dict
@@ -32,7 +14,7 @@ from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.core.aoe import Sphere, Cone, Line, Cube
+from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 
 
 def parse_dice_string(dice_str: str) -> Tuple[int, int]:
@@ -40,21 +22,19 @@ def parse_dice_string(dice_str: str) -> Tuple[int, int]:
     match = re.match(r'(\d+)d(\d+)', dice_str.lower())
     if match:
         return int(match.group(1)), int(match.group(2))
-    return 1, 4  # Default fallback
+    return 1, 4
 
 
 class TileEffectCondition(BaseCondition):
-    """
-    Base condition applied to tiles by zone spells.
+    """Base condition applied to tiles by zone spells.
 
     The target_entity_uuid is the tile's UUID.
     Subclasses override _apply() to add specific effects (terrain modifiers,
     damage handlers, obscurement, etc.).
-
-    This is a minimal base class - spell-specific logic belongs in subclasses.
     """
-    name: str = "Tile Effect"
-    description: str = "A tile effect from a zone spell"
+
+    name: str = Field(default="Tile Effect", description="Tile condition name.")
+    description: str = Field(default="A tile effect from a zone spell", description="Tile condition description.")
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -69,10 +49,7 @@ class TileEffectCondition(BaseCondition):
         return grid.get_tile_by_uuid(self.target_entity_uuid)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Subclasses must override to add specific effects.
-
-        Default implementation does nothing - returns empty lists.
-        """
+        """Apply no direct effect and return an effect event for parity."""
         effect_event = None
         if declaration_event is not None:
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
@@ -90,12 +67,8 @@ class TileEffectCondition(BaseCondition):
 
 
 class ZoneMarkerCondition(TileEffectCondition):
-    """Lightweight marker applied to tiles in a zone spell.
-    Pure data — no handlers, no modifiers. Just carries:
-    - name (zone spell name shown in API)
-    - hazard_filter (pathfinding avoidance)
-    - condition_stealth_dc (perception check to detect)
-    """
+    """Data-only marker applied to tiles in a zone spell."""
+
     condition_category: ConditionCategory = ConditionCategory.CONDITION
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -104,15 +77,11 @@ class ZoneMarkerCondition(TileEffectCondition):
 
 
 class SpikeTrapCondition(TileEffectCondition):
-    """Marker condition on spike trap tiles. Does NOT create handlers —
-    the shared spatial handler handles damage. This is purely for:
-    - hazard_filter → pathfinding knows to avoid
-    - condition_stealth_dc → perception check to detect
-    - condition shows in API → display/agent sees "Spike Trap"
-    """
-    name: str = "Spike Trap"
-    description: str = "Sharp spikes deal damage when stepped on"
-    hazard_filter: HazardFilter = HazardFilter.ALL
+    """Data-only marker on spike trap tiles."""
+
+    name: str = Field(default="Spike Trap", description="Spike trap condition name.")
+    description: str = Field(default="Sharp spikes deal damage when stepped on", description="Spike trap condition description.")
+    hazard_filter: HazardFilter = Field(default=HazardFilter.ALL, description="Entities that should treat the trap as hazardous.")
     condition_category: ConditionCategory = ConditionCategory.CONDITION
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -121,8 +90,7 @@ class SpikeTrapCondition(TileEffectCondition):
 
 
 class ZoneControlCondition(BaseCondition):
-    """
-    Base condition for controlling a zone of tile effects.
+    """Base condition for controlling a zone of tile effects.
 
     Applied to the caster. Uses position-indexed spatial handlers for efficient
     O(1) lookup when entities enter/exit the zone, instead of O(tiles) handlers.
@@ -138,48 +106,33 @@ class ZoneControlCondition(BaseCondition):
     2. Override _has_exit_effect() and _create_zone_exit_handler() for exit effects
     3. Override _compute_affected_positions() if using custom geometry
     """
-    name: str = "Zone Control"
-    description: str = "Controls a zone of tile effects"
+    name: str = Field(default="Zone Control", description="Zone condition name.")
+    description: str = Field(default="Controls a zone of tile effects", description="Zone condition description.")
 
-    # Zone geometry
     zone_center: Tuple[int, int] = Field(default=(0, 0), description="Center position of the zone")
-    zone_shape: str = Field(default="sphere", description="Shape: 'sphere', 'cone', 'line', 'cube'")
+    zone_shape: str = Field(default="sphere", description="Shape: 'sphere', 'cone', 'line', 'cube', or 'cylinder'")
     zone_radius_feet: int = Field(default=20, description="Radius/size in feet")
+    zone_width_feet: int = Field(default=5, description="Line width in feet for line-shaped zones")
     zone_direction: Optional[Tuple[int, int]] = Field(default=None, description="Direction for cones/lines")
 
-    # Terrain effects
     adds_difficult_terrain: bool = Field(default=False, description="If True, adds +1 to walking cost")
 
-    # Light effects
     sets_light_level: Optional[LightLevel] = Field(default=None, description="Light level to apply to zone tiles")
     light_is_obscurement: bool = Field(default=False, description="If True, uses add_obscurement(); else add_illumination()")
 
-    # Track affected positions as a set for efficient operations
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Currently affected tile positions")
 
-    # Zone-level handler UUIDs (ONE per effect type, not per tile)
     _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _exit_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _turn_start_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
-
-    # Terrain modifier tracking (separate from handlers)
-    # Maps tile.walking_cost.uuid -> [modifier_uuid, ...]
     _terrain_modifier_uuids: Dict[UUID, List[UUID]] = PrivateAttr(default_factory=dict)
-
-    # Light modifier tracking (separate from handlers)
-    # Maps tile position -> light modifier UUID used with add_illumination/add_obscurement
     _light_modifier_uuids: Dict[Tuple[int, int], UUID] = PrivateAttr(default_factory=dict)
 
-    # Tile marker fields — subclasses set these for pathfinding/display
     marker_name: Optional[str] = Field(default=None, description="Name for ZoneMarkerCondition on each tile (e.g. 'Spike Growth'). None = no markers.")
     marker_hazard_filter: Optional[HazardFilter] = Field(default=None, description="HazardFilter for tile markers")
     marker_stealth_dc: Optional[int] = Field(default=None, description="Stealth DC for tile markers (perception to detect)")
 
     model_config = {"arbitrary_types_allowed": True}
-
-    # =========================================================================
-    # Override Points for Subclasses
-    # =========================================================================
 
     def _has_entry_effect(self) -> bool:
         """Return True if this zone has an effect when entities enter."""
@@ -194,32 +147,16 @@ class ZoneControlCondition(BaseCondition):
         return False
 
     def _create_zone_entry_handler(self) -> EventHandler:
-        """Create the zone-level entry handler.
-
-        Override in subclasses. This handler will be registered for ALL
-        positions in the zone - no need to check position in the processor.
-        """
+        """Create the zone-level entry handler for all affected positions."""
         raise NotImplementedError("Subclass must implement _create_zone_entry_handler")
 
     def _create_zone_exit_handler(self) -> EventHandler:
-        """Create the zone-level exit handler.
-
-        Override in subclasses. This handler will be registered for ALL
-        positions in the zone - no need to check position in the processor.
-        """
+        """Create the zone-level exit handler for all affected positions."""
         raise NotImplementedError("Subclass must implement _create_zone_exit_handler")
 
     def _create_zone_turn_start_handler(self) -> EventHandler:
-        """Create a turn start handler for entities in the zone.
-
-        Note: Turn start handlers are NOT spatial handlers - they use normal
-        trigger registration and check position in the processor.
-        """
+        """Create a normal event handler for turn starts inside the zone."""
         raise NotImplementedError("Subclass must implement _create_zone_turn_start_handler")
-
-    # =========================================================================
-    # Spell Protection Helpers
-    # =========================================================================
 
     def _find_source_spell_level(self, event: Optional[Event]) -> Optional[int]:
         """Walk parent_event chain to find the originating SpellEvent's base level.
@@ -256,7 +193,6 @@ class ZoneControlCondition(BaseCondition):
         from dnd.entity import Entity
 
         def wrapped(event: Event, src_uuid: UUID) -> Optional[Event]:
-            # Get target entity position from the spatial event
             if event.target_entity_uuid:
                 target = Entity.get(event.target_entity_uuid)
                 if target:
@@ -267,10 +203,6 @@ class ZoneControlCondition(BaseCondition):
             return original_processor(event, src_uuid)
 
         return wrapped
-
-    # =========================================================================
-    # Geometry
-    # =========================================================================
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute which tile positions are affected by this zone.
@@ -283,19 +215,27 @@ class ZoneControlCondition(BaseCondition):
             "cone": Cone,
             "line": Line,
             "cube": Cube,
+            "cylinder": Cylinder,
         }
 
-        ShapeClass = shape_classes.get(self.zone_shape, Sphere)
-
-        # Create shape instance
         if self.zone_shape in ("cone", "line") and self.zone_direction:
-            shape = ShapeClass(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.zone_center,
-                radius_feet=self.zone_radius_feet,
-                direction=self.zone_direction
-            )
+            dx, dy = self.zone_direction
+            target = (self.zone_center[0] + dx, self.zone_center[1] + dy)
+            if self.zone_shape == "cone":
+                shape = Cone(
+                    source_entity_uuid=self.source_entity_uuid,
+                    target=target,
+                    length_feet=self.zone_radius_feet,
+                )
+            else:
+                shape = Line(
+                    source_entity_uuid=self.source_entity_uuid,
+                    target=target,
+                    length_feet=self.zone_radius_feet,
+                    width_feet=self.zone_width_feet,
+                )
         else:
+            ShapeClass = shape_classes.get(self.zone_shape, Sphere)
             shape = ShapeClass(
                 source_entity_uuid=self.source_entity_uuid,
                 target=self.zone_center,
@@ -304,10 +244,6 @@ class ZoneControlCondition(BaseCondition):
 
         shape.compute_objective(self.zone_center)
         return set(shape.affected_positions)
-
-    # =========================================================================
-    # Terrain Modifiers (separate from event handlers)
-    # =========================================================================
 
     def _apply_terrain_modifiers(self) -> List[Tuple[UUID, UUID]]:
         """Apply difficult terrain modifiers to affected tiles.
@@ -327,14 +263,13 @@ class ZoneControlCondition(BaseCondition):
                 mod = NumericalModifier.create(
                     source_entity_uuid=self.source_entity_uuid,
                     name=f"{self.name} Difficult Terrain",
-                    value=1  # +1 to walking cost (total = 2)
+                    value=1,
                 )
                 mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
                 self._terrain_modifier_uuids[tile.walking_cost.uuid] = [mod_uuid]
                 outs.append((tile.walking_cost.uuid, mod_uuid))
                 modified_positions.append(pos)
 
-        # Fire batched path notification for all modified tiles
         if modified_positions:
             hint = SensesUpdateHint(requires_paths=True)
             representative_pos = modified_positions[0]
@@ -359,10 +294,9 @@ class ZoneControlCondition(BaseCondition):
                     try:
                         value.self_static.remove_modifier(mod_uuid)
                     except (ValueError, KeyError):
-                        pass  # Modifier already removed
+                        pass
         self._terrain_modifier_uuids.clear()
 
-        # Fire batched path notification if terrain modifiers were removed
         if had_modifiers and self.affected_positions:
             hint = SensesUpdateHint(requires_paths=True)
             representative_pos = next(iter(self.affected_positions))
@@ -376,13 +310,49 @@ class ZoneControlCondition(BaseCondition):
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
 
-    # =========================================================================
-    # Tile Markers (zone name + hazard info on each tile)
-    # =========================================================================
+    def _remove_terrain_modifier_at(self, position: Tuple[int, int]) -> bool:
+        """Remove this zone's difficult-terrain modifier from one tile.
+
+        Args:
+            position: Grid position whose terrain modifier should be removed.
+
+        Returns:
+            True if a modifier was removed from the tile.
+        """
+        grid = get_map()
+        tile = grid.get_tile(*position)
+        if tile is None:
+            return False
+
+        value_uuid = tile.walking_cost.uuid
+        mod_uuids = self._terrain_modifier_uuids.pop(value_uuid, [])
+        if not mod_uuids:
+            return False
+
+        value = ModifiableValue.get(value_uuid)
+        if value is not None:
+            for mod_uuid in mod_uuids:
+                value.remove_modifier(mod_uuid)
+
+        tracked_modifiers = self.modifers_uuids.get(value_uuid)
+        if tracked_modifiers is not None:
+            for mod_uuid in mod_uuids:
+                if mod_uuid in tracked_modifiers:
+                    tracked_modifiers.remove(mod_uuid)
+            if not tracked_modifiers:
+                del self.modifers_uuids[value_uuid]
+
+        hint = SensesUpdateHint(requires_paths=True)
+        event = SpatialChangeEvent.tile_changed(
+            position, walkable=True, visible=True,
+            senses_hint=hint,
+        )
+        event = event.phase_to(EventPhase.COMPLETION)
+        EventQueue.register(event)
+        return True
 
     def _apply_tile_markers(self, parent_event: Optional[Event] = None) -> None:
-        """Apply ZoneMarkerCondition to each tile in the zone.
-        Markers are tracked via linked_conditions → auto-cleanup when zone ends."""
+        """Apply linked `ZoneMarkerCondition` records to affected tiles."""
         if self.marker_name is None:
             return
 
@@ -402,7 +372,6 @@ class ZoneControlCondition(BaseCondition):
             tile.add_condition(marker, event=parent_event)
             self.add_linked_condition(tile.uuid, marker.uuid)
 
-        # Fire batched path notification so safe paths recompute
         if self.affected_positions and self.marker_hazard_filter is not None:
             hint = SensesUpdateHint(requires_paths=True)
             representative_pos = next(iter(self.affected_positions))
@@ -415,10 +384,6 @@ class ZoneControlCondition(BaseCondition):
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
 
-    # =========================================================================
-    # Light Modifiers (separate from terrain modifiers)
-    # =========================================================================
-
     def _apply_light_modifiers(self) -> None:
         """Apply light level modifiers to affected tiles.
 
@@ -430,20 +395,26 @@ class ZoneControlCondition(BaseCondition):
 
         grid = get_map()
         changed_positions: List[Tuple[int, int]] = []
+        requires_fov = False
         for pos in self.affected_positions:
             tile = grid.get_tile(*pos)
             if tile:
                 modifier_uuid = uuid4()
+                old_light_level = tile.resolved_light_level
                 if self.light_is_obscurement:
                     if tile.add_obscurement(modifier_uuid, self.sets_light_level, fire_event=False):
                         changed_positions.append(pos)
                 else:
                     if tile.add_illumination(modifier_uuid, self.sets_light_level, fire_event=False):
                         changed_positions.append(pos)
+                if (
+                    old_light_level == LightLevel.MAGICAL_DARKNESS
+                    or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+                ):
+                    requires_fov = True
                 self._light_modifier_uuids[pos] = modifier_uuid
 
-        # Batch event for all actually-changed positions
-        grid._fire_light_batch_events(changed_positions)
+        grid._fire_light_batch_events(changed_positions, requires_fov=requires_fov)
 
     def _remove_light_modifiers(self) -> None:
         """Remove light level modifiers from affected tiles.
@@ -452,31 +423,140 @@ class ZoneControlCondition(BaseCondition):
         """
         grid = get_map()
         changed_positions: List[Tuple[int, int]] = []
+        requires_fov = False
         for pos, modifier_uuid in self._light_modifier_uuids.items():
             tile = grid.get_tile(*pos)
             if tile:
+                old_light_level = tile.resolved_light_level
                 if tile.remove_light_modifier(modifier_uuid, fire_event=False):
                     changed_positions.append(pos)
+                    if (
+                        old_light_level == LightLevel.MAGICAL_DARKNESS
+                        or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+                    ):
+                        requires_fov = True
         self._light_modifier_uuids.clear()
 
-        # Batch event for all actually-changed positions
-        grid._fire_light_batch_events(changed_positions)
+        grid._fire_light_batch_events(changed_positions, requires_fov=requires_fov)
 
-    # =========================================================================
-    # Core Apply / Remove / Move
-    # =========================================================================
+    def _remove_light_modifier_at(self, position: Tuple[int, int]) -> bool:
+        """Remove this zone's light or obscurement modifier from one tile.
+
+        Args:
+            position: Grid position whose light modifier should be removed.
+
+        Returns:
+            True if a tile light state changed.
+        """
+        modifier_uuid = self._light_modifier_uuids.pop(position, None)
+        if modifier_uuid is None:
+            return False
+
+        grid = get_map()
+        tile = grid.get_tile(*position)
+        if tile is None:
+            return False
+
+        old_light_level = tile.resolved_light_level
+        changed = tile.remove_light_modifier(modifier_uuid, fire_event=False)
+        requires_fov = (
+            old_light_level == LightLevel.MAGICAL_DARKNESS
+            or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+        )
+        if changed:
+            grid._fire_light_batch_events([position], requires_fov=requires_fov)
+        return changed
+
+    def _remove_tile_marker_at(
+        self,
+        position: Tuple[int, int],
+        parent_event: Optional[Event] = None,
+    ) -> bool:
+        """Remove this zone's linked marker condition from one tile.
+
+        Args:
+            position: Grid position whose marker should be removed.
+            parent_event: Optional parent event for removal lineage.
+
+        Returns:
+            True if a linked marker was removed.
+        """
+        if self.marker_name is None:
+            return False
+
+        grid = get_map()
+        tile = grid.get_tile(*position)
+        if tile is None:
+            return False
+
+        removed = False
+        remaining_links: List[Tuple[UUID, UUID]] = []
+        for block_uuid, condition_uuid in self.linked_conditions:
+            condition = BaseCondition.get(condition_uuid)
+            if (
+                block_uuid == tile.uuid
+                and condition is not None
+                and isinstance(condition, BaseCondition)
+                and condition.name == self.marker_name
+            ):
+                tile.remove_condition_by_uuid(condition_uuid, parent_event=parent_event)
+                removed = True
+                continue
+            remaining_links.append((block_uuid, condition_uuid))
+        self.linked_conditions = remaining_links
+        return removed
+
+    def _sync_spatial_handler_positions(self) -> None:
+        """Synchronize spatial handlers with the current affected positions."""
+        if self._entry_handler_uuid:
+            EventQueue.update_spatial_handler_positions(
+                self._entry_handler_uuid,
+                self.affected_positions,
+                EventType.SPATIAL_ENTITY_ENTERED,
+                EventPhase.EFFECT,
+            )
+
+        if self._exit_handler_uuid:
+            EventQueue.update_spatial_handler_positions(
+                self._exit_handler_uuid,
+                self.affected_positions,
+                EventType.SPATIAL_ENTITY_LEFT,
+                EventPhase.EFFECT,
+            )
+
+    def _remove_position_effects(
+        self,
+        position: Tuple[int, int],
+        parent_event: Optional[Event] = None,
+    ) -> bool:
+        """Remove terrain, light, markers, and spatial indexing for one cell.
+
+        Args:
+            position: Grid position to remove from the zone.
+            parent_event: Optional parent event for linked marker removal.
+
+        Returns:
+            True if the position belonged to this zone and was removed.
+        """
+        if position not in self.affected_positions:
+            return False
+
+        self.affected_positions.remove(position)
+        self._sync_spatial_handler_positions()
+        self._remove_terrain_modifier_at(position)
+        self._remove_light_modifier_at(position)
+        self._remove_tile_marker_at(position, parent_event=parent_event)
+        return True
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply zone control - compute positions and register spatial handlers."""
+        """Apply zone control by computing positions and registering handlers."""
         from dnd.entity import Entity
 
         handler_uuids: List[UUID] = []
         spatial_handler_uuids: List[UUID] = []
 
-        # Compute affected positions
         self.affected_positions = self._compute_affected_positions()
 
-        # Filter out positions protected by Globe of Invulnerability (or similar)
         spell_level = self._find_source_spell_level(declaration_event)
         if spell_level is not None and self.magical_origin:
             source = Entity.get(self.source_entity_uuid)
@@ -485,10 +565,8 @@ class ZoneControlCondition(BaseCondition):
                     source.position, spell_level)
                 self.affected_positions -= excluded
 
-        # Create and register entry handler using position-indexed spatial registration
         if self._has_entry_effect():
             handler = self._create_zone_entry_handler()
-            # Wrap processor with spell protection check for runtime filtering
             if spell_level is not None and self.magical_origin:
                 handler.event_processor = self._wrap_processor_with_protection(
                     handler.event_processor, self.source_entity_uuid, spell_level)
@@ -501,7 +579,6 @@ class ZoneControlCondition(BaseCondition):
             self._entry_handler_uuid = handler.uuid
             spatial_handler_uuids.append(handler.uuid)
 
-        # Create and register exit handler if needed
         if self._has_exit_effect():
             handler = self._create_zone_exit_handler()
             EventQueue.add_spatial_handler(
@@ -513,10 +590,8 @@ class ZoneControlCondition(BaseCondition):
             self._exit_handler_uuid = handler.uuid
             spatial_handler_uuids.append(handler.uuid)
 
-        # Turn start handler (not spatial - uses normal trigger)
         if self._has_turn_start_effect():
             handler = self._create_zone_turn_start_handler()
-            # Wrap turn start processor too (checks position at fire time)
             if spell_level is not None and self.magical_origin:
                 handler.event_processor = self._wrap_processor_with_protection(
                     handler.event_processor, self.source_entity_uuid, spell_level)
@@ -524,13 +599,10 @@ class ZoneControlCondition(BaseCondition):
             self._turn_start_handler_uuid = handler.uuid
             handler_uuids.append(handler.uuid)
 
-        # Apply terrain modifiers and get modifier pairs for tracking
         terrain_modifiers = self._apply_terrain_modifiers()
 
-        # Apply light modifiers to zone tiles
         self._apply_light_modifiers()
 
-        # Apply tile markers (zone name + hazard info for pathfinding/display)
         self._apply_tile_markers(parent_event=declaration_event)
 
         if declaration_event is not None:
@@ -541,11 +613,7 @@ class ZoneControlCondition(BaseCondition):
         return terrain_modifiers, handler_uuids, [], spatial_handler_uuids, effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Custom removal logic - clean up spatial handlers and modifiers.
-
-        Called by parent's remove() method during removal process.
-        """
-        # Remove spatial handlers from position indices
+        """Clean up spatial handlers and zone-owned modifiers."""
         if self._entry_handler_uuid:
             EventQueue.remove_spatial_handler(self._entry_handler_uuid)
             self._entry_handler_uuid = None
@@ -555,17 +623,11 @@ class ZoneControlCondition(BaseCondition):
             self._exit_handler_uuid = None
 
         if self._turn_start_handler_uuid:
-            # Turn start handler is in the normal event_handlers_uuids list,
-            # so parent's remove_event_handlers() will handle it, but clear our ref
             self._turn_start_handler_uuid = None
 
-        # Remove terrain modifiers
         self._remove_terrain_modifiers()
-
-        # Remove light modifiers
         self._remove_light_modifiers()
 
-        # Call parent _remove for standard event progression
         return super()._remove(event)
 
     def move_zone(self, new_center: Tuple[int, int]) -> bool:
@@ -579,15 +641,12 @@ class ZoneControlCondition(BaseCondition):
 
         Returns True on success.
         """
-        # Remove old terrain modifiers and light modifiers
         self._remove_terrain_modifiers()
         self._remove_light_modifiers()
 
-        # Compute new positions
         self.zone_center = new_center
         new_positions = self._compute_affected_positions()
 
-        # Batch update handler positions (efficient - only changes delta)
         if self._entry_handler_uuid:
             EventQueue.update_spatial_handler_positions(
                 self._entry_handler_uuid,
@@ -606,15 +665,10 @@ class ZoneControlCondition(BaseCondition):
 
         self.affected_positions = new_positions
 
-        # Apply terrain modifiers and light modifiers to new positions
         self._apply_terrain_modifiers()
         self._apply_light_modifiers()
 
         return True
-
-    # =========================================================================
-    # Legacy Compatibility: Tile Effect Pattern
-    # =========================================================================
 
     def get_tile_effect_class(self) -> Type[TileEffectCondition]:
         """Get the TileEffectCondition class to use for this zone.

@@ -1,8 +1,4 @@
-"""
-Feats Implementation
-
-Implements D&D 5e feats as conditions that can be applied to entities.
-"""
+"""Feat conditions and feat-style d20 processors."""
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.entity import Entity
@@ -12,23 +8,24 @@ from dnd.core.events import (
 )
 from dnd.core.dice import Dice
 from dnd.blocks.action_economy import RechargeType
+from pydantic import Field
 from uuid import UUID
 
-
-# =============================================================================
-# LUCKY FEAT
-# =============================================================================
 
 def lucky_processor(
     event: D20RollResultEvent,
     source_entity_uuid: UUID
 ) -> Optional[D20RollResultEvent]:
-    """
-    Spend luck point to reroll, keep better result.
+    """Spend one luck point on an automatic low-total d20 reroll.
 
-    Simple AI: Use Lucky if roll is below 10 (can be enhanced later for smarter decisions).
+    Args:
+        event: D20 result event being processed.
+        source_entity_uuid: Entity UUID that owns the Lucky handler.
+
+    Returns:
+        Modified event when Lucky replaces the effective roll, otherwise
+        `None`.
     """
-    # Only process own rolls
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -36,53 +33,48 @@ def lucky_processor(
     if not entity:
         return None
 
-    # Check resource
     if not entity.action_economy.can_afford_resource("luck_points", 1):
         return None
 
-    # Simple AI: use Lucky if roll is below 10
     original_total = event.roll.total
     if original_total >= 10:
-        return None  # Don't waste on decent rolls
+        return None
 
-    # Consume resource
     entity.action_economy.consume_resource("luck_points", 1)
 
-    # Reroll the d20
     assert event.bonus is not None, "Lucky reroll requires a bonus on the event"
     dice = Dice(count=1, value=20, bonus=event.bonus, roll_type=event.roll_type)
     new_roll = dice.roll
 
-    # Keep better result
     if new_roll.total > original_total:
         event.replace_roll(new_roll, "Lucky", f"Rerolled {original_total} -> {new_roll.total}")
         return event.model_copy(update={"modified": True})
 
-    # Original was better (or equal), return None to keep original
     return None
 
 
 class LuckyFeature(BaseCondition):
-    """
-    Lucky feat: You have 3 luck points. When you make an attack roll,
-    ability check, or saving throw, you can spend one luck point to
-    reroll the d20. You can choose to spend a luck point after you
-    see the roll, but before the outcome is determined.
+    """Automatic Lucky-style d20 reroll feature.
 
-    Luck points refresh on a long rest.
+    Attributes:
+        name: Feature condition name for Lucky lookup and cleanup.
+        description: Short rules-facing summary of the automatic Lucky policy.
     """
-    name: str = "Lucky"
-    description: str = (
-        "You have 3 luck points. When you make an attack roll, ability check, "
-        "or saving throw, you can spend one luck point to reroll the d20."
+    name: str = Field(default="Lucky", description="Feature condition name for Lucky lookup and cleanup.")
+    description: str = Field(
+        default=(
+            "You have 3 luck points. When you make an attack roll, ability check, "
+            "or saving throw, you can spend one luck point to reroll the d20."
+        ),
+        description="Short rules-facing summary of the automatic Lucky policy.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -95,12 +87,8 @@ class LuckyFeature(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Grant 3 luck points resource (recharges on long rest per SRD)
         target.action_economy.add_resource("luck_points", 3, RechargeType.LONG_REST)
 
-        # Register handlers for all d20 roll event types
-        # Note: EventQueue matches on exact event_type, so we need to register
-        # for each specific subtype (attacks, saves, checks)
         handler = EventHandler(
             name="Lucky",
             source_entity_uuid=self.target_entity_uuid,
@@ -133,3 +121,17 @@ class LuckyFeature(BaseCondition):
         )
 
         return [], [handler.uuid], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Remove the luck-point resource owned by this feature.
+
+        Args:
+            event: Removal event supplied by the condition lifecycle.
+
+        Returns:
+            Removal event after the base condition removal phases.
+        """
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target:
+            target.action_economy.remove_resource("luck_points")
+        return super()._remove(event)

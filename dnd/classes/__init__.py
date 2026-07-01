@@ -5,14 +5,8 @@ Each class is implemented as a collection of conditions that can be applied to e
 """
 
 from dnd.classes.fighter import (
-    # ==========================================================================
-    # Dice manipulation - core utility
-    # ==========================================================================
     create_modified_dice_roll,
 
-    # ==========================================================================
-    # Level 1: Fighting Styles
-    # ==========================================================================
     FightingStyleArchery,
     FightingStyleDefense,
     defense_ac_check,
@@ -27,57 +21,32 @@ from dnd.classes.fighter import (
     twf_off_hand_melee_ability_bonus,
     twf_off_hand_ranged_ability_bonus,
 
-    # ==========================================================================
-    # Level 1: Second Wind
-    # ==========================================================================
     SecondWind,
     SecondWindFeature,
 
-    # ==========================================================================
-    # Level 2: Action Surge
-    # ==========================================================================
     ActionSurging,
     ActionSurge,
     ActionSurgeFeature,
 
-    # ==========================================================================
-    # Level 3: Champion - Improved Critical
-    # ==========================================================================
     ImprovedCritical,
 
-    # ==========================================================================
-    # Level 5: Extra Attack
-    # ==========================================================================
-    # NOTE: HasAttacked and HasTakenDamage are now generic conditions in dnd/conditions.py
-    # They are registered globally by setup_standard_actions() for ALL entities.
-    # ExtraAttack feature only registers the Fighter-specific resource handler.
     extra_attack_resource_processor,
     create_extra_attack_resource_handler,
     ExtraAttack,
     ExtraAttackFeature,
-    ExtraAttacksGranted,  # Marker for Action Surge compatibility
+    ExtraAttacksGranted,
 
-    # ==========================================================================
-    # Level 9: Indomitable
-    # ==========================================================================
     Indomitable,
     create_indomitable_handler,
     indomitable_processor,
 
-    # ==========================================================================
-    # Level 15: Champion - Superior Critical
-    # ==========================================================================
     SuperiorCritical,
 
-    # ==========================================================================
-    # Level 18: Champion - Survivor
-    # ==========================================================================
     Survivor,
     create_survivor_handler,
     survivor_processor,
 )
 
-# Dice utilities - test/reference implementations
 from dnd.classes.dice_processor_utils import (
     maximize_all,
     minimize_all,
@@ -90,7 +59,6 @@ from dnd.classes.dice_processor_utils import (
     reroll_ones_once,
 )
 
-# Fighter factory
 from dnd.classes.fighter_factory import (
     FighterConfig,
     FightingStyleChoice,
@@ -103,7 +71,6 @@ from dnd.classes.fighter_factory import (
     calculate_final_ability_scores,
 )
 
-# Barbarian factory
 from dnd.classes.barbarian_factory import (
     BarbarianConfig,
     PrimalPathChoice,
@@ -112,12 +79,9 @@ from dnd.classes.barbarian_factory import (
     get_rage_uses,
     get_rage_damage,
     get_brutal_critical_dice,
-    # Note: get_proficiency_bonus and get_extra_attacks already imported from fighter
 )
 
-# Rage/Frenzy system (Barbarian L1 and L3 Berserker)
 from dnd.classes.rage import (
-    # Rage system
     rage_damage_check,
     rage_maintenance_processor,
     rage_armor_equip_handler,
@@ -129,14 +93,12 @@ from dnd.classes.rage import (
     Rage,
     EndRage,
     RageFeature,
-    # Frenzy system
     Frenzied,
     FrenziedStrike,
     Frenzy,
     FrenzyFeature,
 )
 
-# Paladin features
 from dnd.classes.paladin import (
     create_divine_smite_processor,
     create_divine_smite_handler,
@@ -144,7 +106,6 @@ from dnd.classes.paladin import (
     MAX_SMITE_DICE,
 )
 
-# Sorcerer factory
 from dnd.classes.sorcerer_factory import (
     SorcererConfig,
     SorcererOriginChoice,
@@ -155,7 +116,6 @@ from dnd.classes.sorcerer_factory import (
     get_metamagic_count,
 )
 
-# Sorcerer features
 from dnd.classes.sorcerer import (
     DraconicResilience,
     ElementalAffinity,
@@ -170,9 +130,7 @@ from dnd.classes.sorcerer import (
 )
 
 __all__ = [
-    # Dice manipulation - core utility
     "create_modified_dice_roll",
-    # Dice manipulation - test/reference utilities
     "maximize_all",
     "minimize_all",
     "set_all_to",
@@ -182,7 +140,6 @@ __all__ = [
     "reroll_below_and_substitute",
     "reroll_below_keep_best",
     "reroll_ones_once",
-    # Level 1: Fighting Styles
     "FightingStyleArchery",
     "FightingStyleDefense",
     "defense_ac_check",
@@ -196,32 +153,24 @@ __all__ = [
     "FightingStyleTwoWeaponFighting",
     "twf_off_hand_melee_ability_bonus",
     "twf_off_hand_ranged_ability_bonus",
-    # Level 1: Second Wind
     "SecondWind",
     "SecondWindFeature",
-    # Level 2: Action Surge
     "ActionSurging",
     "ActionSurge",
     "ActionSurgeFeature",
-    # Level 3: Champion - Improved Critical
     "ImprovedCritical",
-    # Level 5: Extra Attack (HasAttacked/HasTakenDamage now in dnd/conditions.py)
     "extra_attack_resource_processor",
     "create_extra_attack_resource_handler",
     "ExtraAttack",
     "ExtraAttackFeature",
     "ExtraAttacksGranted",
-    # Level 9: Indomitable
     "Indomitable",
     "create_indomitable_handler",
     "indomitable_processor",
-    # Level 15: Champion - Superior Critical
     "SuperiorCritical",
-    # Level 18: Champion - Survivor
     "Survivor",
     "create_survivor_handler",
     "survivor_processor",
-    # Fighter Factory
     "FighterConfig",
     "FightingStyleChoice",
     "FighterEquipmentPreset",
@@ -231,7 +180,6 @@ __all__ = [
     "get_action_surge_uses",
     "get_indomitable_uses",
     "calculate_final_ability_scores",
-    # Barbarian Factory
     "BarbarianConfig",
     "PrimalPathChoice",
     "BarbarianEquipmentPreset",
@@ -239,7 +187,6 @@ __all__ = [
     "get_rage_uses",
     "get_rage_damage",
     "get_brutal_critical_dice",
-    # Rage/Frenzy system (Barbarian L1 and L3 Berserker)
     "rage_damage_check",
     "rage_maintenance_processor",
     "rage_armor_equip_handler",
@@ -255,12 +202,10 @@ __all__ = [
     "FrenziedStrike",
     "Frenzy",
     "FrenzyFeature",
-    # Paladin features
     "create_divine_smite_processor",
     "create_divine_smite_handler",
     "register_divine_smite",
     "MAX_SMITE_DICE",
-    # Sorcerer Factory
     "SorcererConfig",
     "SorcererOriginChoice",
     "SorcererEquipmentPreset",
@@ -268,7 +213,6 @@ __all__ = [
     "get_sorcery_points",
     "get_sorcerer_spell_slots",
     "get_metamagic_count",
-    # Sorcerer Features
     "DraconicResilience",
     "ElementalAffinity",
     "SorceryPointsFeature",

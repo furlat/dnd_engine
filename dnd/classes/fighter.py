@@ -35,14 +35,11 @@ from dnd.actions import (
     AttackEvent,
     Attack
 )
+from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
 from uuid import UUID
 import random
 
-
-# =============================================================================
-# UTILITY FUNCTIONS: Dice Roll Manipulation
-# =============================================================================
 
 def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> DiceRoll:
     """
@@ -69,29 +66,28 @@ def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> Dic
     )
 
 
-# =============================================================================
-# LEVEL 1 FEATURES: Fighting Styles
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Archery Fighting Style
-# -----------------------------------------------------------------------------
-
 class FightingStyleArchery(BaseCondition):
-    """
-    Fighter Fighting Style: Archery
+    """Fighter fighting style that improves ranged weapon attacks.
 
-    You gain a +2 bonus to attack rolls you make with ranged weapons.
+    Attributes:
+        name: Condition name used for Archery fighting style lookup and cleanup.
+        description: Short rules-facing summary of the Archery fighting style hook.
     """
-    name: str = "Fighting Style: Archery"
-    description: str = "+2 bonus to attack rolls with ranged weapons"
+    name: str = Field(
+        default="Fighting Style: Archery",
+        description="Condition name used for Archery fighting style lookup and cleanup.",
+    )
+    description: str = Field(
+        default="+2 bonus to attack rolls with ranged weapons",
+        description="Short rules-facing summary of the Archery fighting style hook.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -106,7 +102,6 @@ class FightingStyleArchery(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add +2 static modifier to ranged attack bonus
         archery_mod = NumericalModifier.create(
             source_entity_uuid=self.target_entity_uuid,
             name="Archery",
@@ -123,10 +118,6 @@ class FightingStyleArchery(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-# -----------------------------------------------------------------------------
-# Defense Fighting Style
-# -----------------------------------------------------------------------------
-
 def defense_ac_check(
     source_entity_uuid: UUID,
     target_entity_uuid: Optional[UUID] = None,
@@ -136,7 +127,6 @@ def defense_ac_check(
     Contextual check for Defense fighting style.
     Returns +1 AC only if the entity is wearing armor.
     """
-    # Suppress unused parameter warnings (required by callable signature)
     _ = target_entity_uuid
     _ = context
 
@@ -144,7 +134,6 @@ def defense_ac_check(
     if not entity:
         return None
 
-    # Check if wearing armor (has body armor equipped that isn't cloth)
     body_armor = entity.equipment.body_armor
     if body_armor and body_armor.type != ArmorType.CLOTH:
         return NumericalModifier.create(
@@ -157,20 +146,27 @@ def defense_ac_check(
 
 
 class FightingStyleDefense(BaseCondition):
-    """
-    Fighter Fighting Style: Defense
+    """Fighter fighting style that improves AC while armored.
 
-    While you are wearing armor, you gain a +1 bonus to AC.
+    Attributes:
+        name: Condition name used for Defense fighting style lookup and cleanup.
+        description: Short rules-facing summary of the Defense fighting style hook.
     """
-    name: str = "Fighting Style: Defense"
-    description: str = "+1 AC while wearing armor"
+    name: str = Field(
+        default="Fighting Style: Defense",
+        description="Condition name used for Defense fighting style lookup and cleanup.",
+    )
+    description: str = Field(
+        default="+1 AC while wearing armor",
+        description="Short rules-facing summary of the Defense fighting style hook.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -185,7 +181,6 @@ class FightingStyleDefense(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add contextual +1 AC modifier (only applies when wearing armor)
         defense_mod = ContextualNumericalModifier(
             name="Defense",
             source_entity_uuid=self.target_entity_uuid,
@@ -210,10 +205,6 @@ class FightingStyleDefense(BaseCondition):
         return {}
 
 
-# -----------------------------------------------------------------------------
-# Dueling Fighting Style
-# -----------------------------------------------------------------------------
-
 def dueling_damage_check(
     source_entity_uuid: UUID,
     target_entity_uuid: Optional[UUID] = None,
@@ -223,7 +214,6 @@ def dueling_damage_check(
     Contextual check for Dueling fighting style.
     Returns +2 damage only if wielding a melee weapon in one hand with no other weapon.
     """
-    # Suppress unused parameter warnings (required by callable signature)
     _ = target_entity_uuid
     _ = context
 
@@ -231,20 +221,17 @@ def dueling_damage_check(
     if not entity:
         return None
 
-    # Check: main hand has a melee weapon, off-hand is empty or has shield
     main_weapon = entity.equipment.weapon_melee_main
     off_hand = entity.equipment.weapon_melee_off
 
     if main_weapon is None:
-        return None  # No weapon in main hand
+        return None
 
-    # Check if it's a one-handed weapon (not two-handed)
     if WeaponProperty.TWO_HANDED in main_weapon.properties:
-        return None  # Two-handed weapon doesn't qualify
+        return None
 
-    # Check off-hand is empty or has a shield (not a weapon)
     if off_hand is not None and not isinstance(off_hand, Shield):
-        return None  # Wielding two weapons doesn't qualify
+        return None
 
     return NumericalModifier.create(
         source_entity_uuid=source_entity_uuid,
@@ -254,21 +241,27 @@ def dueling_damage_check(
 
 
 class FightingStyleDueling(BaseCondition):
-    """
-    Fighter Fighting Style: Dueling
+    """Fighter fighting style that improves one-handed melee damage.
 
-    When you are wielding a melee weapon in one hand and no other weapons,
-    you gain a +2 bonus to damage rolls with that weapon.
+    Attributes:
+        name: Condition name used for Dueling fighting style lookup and cleanup.
+        description: Short rules-facing summary of the Dueling fighting style hook.
     """
-    name: str = "Fighting Style: Dueling"
-    description: str = "+2 damage when wielding a melee weapon in one hand"
+    name: str = Field(
+        default="Fighting Style: Dueling",
+        description="Condition name used for Dueling fighting style lookup and cleanup.",
+    )
+    description: str = Field(
+        default="+2 damage when wielding a melee weapon in one hand",
+        description="Short rules-facing summary of the Dueling fighting style hook.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -283,7 +276,6 @@ class FightingStyleDueling(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add contextual +2 melee damage modifier
         dueling_mod = ContextualNumericalModifier(
             name="Dueling",
             source_entity_uuid=self.target_entity_uuid,
@@ -301,21 +293,20 @@ class FightingStyleDueling(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-# -----------------------------------------------------------------------------
-# Great Weapon Fighting Style
-# -----------------------------------------------------------------------------
-
 def great_weapon_fighting_processor(
     event: DamageRollResultEvent,
     source_entity_uuid: UUID
 ) -> Optional[DamageRollResultEvent]:
-    """
-    Event processor for Great Weapon Fighting.
+    """Reroll low primary weapon dice for Great Weapon Fighting.
 
-    Rerolls 1s and 2s on damage dice for two-handed melee weapons.
-    Must use the new roll (cannot keep original).
+    Args:
+        event: Damage-roll result event before damage is applied.
+        source_entity_uuid: Entity that owns the GWF handler.
+
+    Returns:
+        Modified damage-roll event when primary weapon dice were rerolled, or
+        ``None`` when the event is not eligible.
     """
-    # Only process own attacks
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -323,34 +314,34 @@ def great_weapon_fighting_processor(
     if not entity:
         return None
 
-    # Check weapon is two-handed or versatile melee
     weapon = entity.equipment._get_weapon_by_slot(event.weapon_slot)
     if not weapon or isinstance(weapon, Shield):
         return None
 
-    # Type narrowing: weapon is now known to be Weapon
     if not isinstance(weapon, Weapon):
         return None
 
-    # Must be melee (REACH type)
     is_melee = weapon.range.type == RangeType.REACH
     has_two_handed = WeaponProperty.TWO_HANDED in weapon.properties
-    has_versatile = WeaponProperty.VERSATILE in weapon.properties
+    versatile_wielded_two_handed = (
+        WeaponProperty.VERSATILE in weapon.properties
+        and event.weapon_slot == WeaponSlot.MELEE_MAIN
+        and entity.equipment.weapon_melee_off is None
+    )
 
-    if not is_melee or not (has_two_handed or has_versatile):
+    if not is_melee or not (has_two_handed or versatile_wielded_two_handed):
         return None
 
-    # Process each damage roll
     any_modified = False
     for i, original_roll in enumerate(event.final_rolls):
+        if i != 0:
+            continue
         results = original_roll.results if isinstance(original_roll.results, list) else [original_roll.results]
 
-        # Check if any dice are 1 or 2
         needs_reroll = any(r <= 2 for r in results)
         if not needs_reroll:
             continue
 
-        # Reroll 1s and 2s
         new_results = []
         rerolled_dice = []
         for r in results:
@@ -361,7 +352,6 @@ def great_weapon_fighting_processor(
             else:
                 new_results.append(r)
 
-        # Create new roll and replace
         new_roll = create_modified_dice_roll(original_roll, new_results)
         event.replace_roll(
             i,
@@ -377,29 +367,30 @@ def great_weapon_fighting_processor(
 
 
 class GreatWeaponFighting(BaseCondition):
-    """
-    Fighting Style: Great Weapon Fighting
+    """Fighter fighting style that rerolls low two-handed weapon damage dice.
 
-    When you roll a 1 or 2 on a damage die for an attack you make with a melee
-    weapon that you are wielding with two hands, you can reroll the die and
-    must use the new roll, even if the new roll is a 1 or a 2. The weapon must
-    have the two-handed or versatile property for you to gain this benefit.
-
-    This condition registers an event handler that intercepts DAMAGE_ROLLED events
-    and rerolls low damage dice.
+    Attributes:
+        name: Condition name used for Great Weapon Fighting handler lookup and cleanup.
+        description: Short rules-facing summary of the Great Weapon Fighting handler.
     """
-    name: str = "Fighting Style: Great Weapon Fighting"
-    description: str = (
-        "When you roll a 1 or 2 on a damage die for an attack with a two-handed "
-        "melee weapon, you can reroll the die and must use the new roll."
+    name: str = Field(
+        default="Fighting Style: Great Weapon Fighting",
+        description="Condition name used for Great Weapon Fighting handler lookup and cleanup.",
+    )
+    description: str = Field(
+        default=(
+            "When you roll a 1 or 2 on a damage die for an attack with a two-handed "
+            "melee weapon, you can reroll the die and must use the new roll."
+        ),
+        description="Short rules-facing summary of the Great Weapon Fighting handler.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -412,7 +403,6 @@ class GreatWeaponFighting(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Create event handler for DAMAGE_ROLL_RESULT events
         handler = EventHandler(
             name="Great Weapon Fighting",
             source_entity_uuid=target.uuid,
@@ -426,7 +416,6 @@ class GreatWeaponFighting(BaseCondition):
             player_toggleable=True
         )
 
-        # Register the handler (add_event_handler internally calls EventQueue.add_event_handler)
         target.add_event_handler(handler)
 
         effect_event = declaration_event.phase_to(
@@ -434,17 +423,12 @@ class GreatWeaponFighting(BaseCondition):
             status_message=f"Applied Great Weapon Fighting to {target.name}"
         )
 
-        # Return handler UUID so it gets cleaned up when condition is removed
         return [], [handler.uuid], [], [], effect_event
 
 
-# -----------------------------------------------------------------------------
-# Protection Fighting Style
-# -----------------------------------------------------------------------------
-
 def protection_processor(
     event: Event,
-    source_entity_uuid: UUID  # The protector
+    source_entity_uuid: UUID
 ) -> Optional[Event]:
     """
     Event processor for Protection fighting style.
@@ -458,63 +442,49 @@ def protection_processor(
 
     Triggers on ATTACK events at EXECUTION phase.
     """
-    # Get the protector (handler owner)
     protector = Entity.get(source_entity_uuid)
     if not protector:
         return None
 
-    # Check 1: Am I NOT the target? (can't protect self)
     if event.target_entity_uuid == source_entity_uuid:
         return None
 
-    # Check 2: Is target within 5ft of me?
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if not target:
         return None
     distance = protector.senses.get_feet_distance(target.senses.position)
     if distance > 5:
-        return None  # Target too far
+        return None
 
-    # Check 3: Can I see the attacker?
     if event.source_entity_uuid not in protector.senses.entities:
-        return None  # Can't see attacker
+        return None
 
-    # Check 4: Do I have a shield equipped?
-    # Shield is stored in the off-hand melee slot
     off_hand = protector.equipment.weapon_melee_off
     if not off_hand or not isinstance(off_hand, Shield):
-        return None  # No shield
+        return None
 
-    # Check 5: Do I have a reaction available?
     if not protector.action_economy.can_afford("reactions", 1):
-        return None  # No reaction
+        return None
 
-    # All checks passed - apply Protection!
-
-    # Get the attack_bonus from the event
     if not isinstance(event, AttackEvent) or not event.attack_bonus:
-        return None  # No attack_bonus to modify
+        return None
     attack_bonus = event.attack_bonus
 
-    # Check if Protection disadvantage already exists (prevent multiple protectors stacking)
     for modifier in attack_bonus.self_static.advantage_modifiers.values():
         if modifier.name == "Protection":
-            return None  # Another protector already used Protection
+            return None
 
-    # Add disadvantage modifier to the attack
     attack_bonus.self_static.add_advantage_modifier(
         AdvantageModifier(
             name="Protection",
             value=AdvantageStatus.DISADVANTAGE,
-            source_entity_uuid=source_entity_uuid,  # Protector
-            target_entity_uuid=event.target_entity_uuid  # Protected ally
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=event.target_entity_uuid
         )
     )
 
-    # Consume the reaction
     protector.action_economy.consume("reactions", 1)
 
-    # Return modified event
     return event.model_copy(update={
         "modified": True,
         "status_message": f"{protector.name} uses Protection to impose disadvantage"
@@ -538,22 +508,27 @@ def create_protection_handler(source_entity_uuid: UUID) -> EventHandler:
 
 
 class FightingStyleProtection(BaseCondition):
-    """
-    Fighter Fighting Style: Protection
+    """Fighter fighting style that protects nearby allies with a reaction.
 
-    When a creature you can see attacks a target other than you
-    that is within 5 feet of you, you can use your reaction to
-    impose disadvantage on the attack roll. You must be wielding a shield.
+    Attributes:
+        name: Condition name used for Protection fighting style lookup and cleanup.
+        description: Short rules-facing summary of the Protection reaction handler.
     """
-    name: str = "Fighting Style: Protection"
-    description: str = "Use reaction to impose disadvantage on attacks against nearby allies"
+    name: str = Field(
+        default="Fighting Style: Protection",
+        description="Condition name used for Protection fighting style lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Use reaction to impose disadvantage on attacks against nearby allies",
+        description="Short rules-facing summary of the Protection reaction handler.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -566,7 +541,6 @@ class FightingStyleProtection(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Register the Protection event handler (add_event_handler internally calls EventQueue)
         handler = create_protection_handler(target.uuid)
         target.add_event_handler(handler)
 
@@ -575,13 +549,8 @@ class FightingStyleProtection(BaseCondition):
             status_message=f"Applied Protection fighting style to {target.name}"
         )
 
-        # Track handler for auto-cleanup when condition is removed
         return [], [handler.uuid], [], [], effect_event
 
-
-# -----------------------------------------------------------------------------
-# Two-Weapon Fighting Style
-# -----------------------------------------------------------------------------
 
 def twf_off_hand_melee_ability_bonus(
     source_entity_uuid: UUID,
@@ -592,7 +561,7 @@ def twf_off_hand_melee_ability_bonus(
     Contextual modifier for TWF off-hand melee damage.
     Evaluated at damage time - checks weapon properties to determine correct ability.
     """
-    _ = target_entity_uuid, context  # Suppress unused warnings
+    _ = target_entity_uuid, context
 
     entity = Entity.get(source_entity_uuid)
     if not entity:
@@ -602,7 +571,6 @@ def twf_off_hand_melee_ability_bonus(
     if not off_hand or isinstance(off_hand, Shield):
         return None
 
-    # Determine ability based on weapon properties AT EVALUATION TIME
     if WeaponProperty.FINESSE in off_hand.properties:
         str_mod = entity.ability_scores.strength.modifier
         dex_mod = entity.ability_scores.dexterity.modifier
@@ -623,7 +591,7 @@ def twf_off_hand_ranged_ability_bonus(
     context: Optional[dict] = None
 ) -> Optional[NumericalModifier]:
     """Contextual modifier for TWF off-hand ranged damage."""
-    _ = target_entity_uuid, context  # Suppress unused warnings
+    _ = target_entity_uuid, context
 
     entity = Entity.get(source_entity_uuid)
     if not entity:
@@ -633,7 +601,6 @@ def twf_off_hand_ranged_ability_bonus(
     if not off_hand:
         return None
 
-    # Ranged always uses DEX
     return NumericalModifier.create(
         source_entity_uuid=source_entity_uuid,
         name="Two-Weapon Fighting",
@@ -642,25 +609,27 @@ def twf_off_hand_ranged_ability_bonus(
 
 
 class FightingStyleTwoWeaponFighting(BaseCondition):
-    """
-    Fighter Fighting Style: Two-Weapon Fighting
+    """Fighter fighting style that adds ability modifiers to off-hand damage.
 
-    When you engage in two-weapon fighting, you can add your ability modifier
-    to the damage of the second attack.
-
-    This condition adds contextual modifiers to the off-hand ability bonus
-    ModifiableValues that evaluate at damage time and return the appropriate
-    ability modifier based on weapon properties.
+    Attributes:
+        name: Condition name used for Two-Weapon Fighting lookup and cleanup.
+        description: Short rules-facing summary of the Two-Weapon Fighting modifier hook.
     """
-    name: str = "Fighting Style: Two-Weapon Fighting"
-    description: str = "Add ability modifier to off-hand attack damage"
+    name: str = Field(
+        default="Fighting Style: Two-Weapon Fighting",
+        description="Condition name used for Two-Weapon Fighting lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Add ability modifier to off-hand attack damage",
+        description="Short rules-facing summary of the Two-Weapon Fighting modifier hook.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -675,7 +644,6 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add contextual modifier to off-hand MELEE ability bonus
         melee_mod = ContextualNumericalModifier(
             name="Two-Weapon Fighting",
             source_entity_uuid=self.target_entity_uuid,
@@ -685,7 +653,6 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
         mod_uuid = target.equipment.off_hand_melee_ability_bonus.self_contextual.add_value_modifier(melee_mod)
         outs.append((target.equipment.off_hand_melee_ability_bonus.uuid, mod_uuid))
 
-        # Add contextual modifier to off-hand RANGED ability bonus
         ranged_mod = ContextualNumericalModifier(
             name="Two-Weapon Fighting",
             source_entity_uuid=self.target_entity_uuid,
@@ -703,24 +670,34 @@ class FightingStyleTwoWeaponFighting(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-# =============================================================================
-# LEVEL 1 FEATURES: Second Wind
-# =============================================================================
-
 class SecondWind(BaseAction):
-    """
-    Fighter's Second Wind - heal 1d10 + fighter level as a bonus action.
+    """Fighter self-heal action that spends the Second Wind resource.
 
-    Uses the 'second_wind' resource (registered by SecondWindFeature).
-    Can only use when damaged (not at full health).
+    Attributes:
+        name: Action name displayed for the Fighter self-heal.
+        description: Short rules-facing summary of the Second Wind action.
+        target_type: Second Wind always targets the acting fighter.
+        fighter_level: Fighter level added to the Second Wind healing roll.
+        costs: Bonus-action and second-wind resource costs rebuilt after model initialization.
     """
-    name: str = "Second Wind"
-    description: str = "Heal 1d10 + level as a bonus action"
-    target_type: TargetType = TargetType.SELF
-    fighter_level: int = 1
+    name: str = Field(default="Second Wind", description="Action name displayed for the Fighter self-heal.")
+    description: str = Field(
+        default="Heal 1d10 + level as a bonus action",
+        description="Short rules-facing summary of the Second Wind action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Second Wind always targets the acting fighter.",
+    )
+    fighter_level: int = Field(
+        default=1,
+        description="Fighter level added to the Second Wind healing roll.",
+    )
 
-    # Cost: 1 bonus action + 1 second_wind resource
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Bonus-action and second-wind resource costs rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -737,7 +714,6 @@ class SecondWind(BaseAction):
         ]
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        # Populate entity name for combat log generation
         entity = Entity.get(self.source_entity_uuid)
         source_name = entity.name if entity else None
 
@@ -756,7 +732,6 @@ class SecondWind(BaseAction):
         if entity is None:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Check entity is damaged (has damage_taken > 0)
         if entity.health.damage_taken == 0:
             return declaration_event.cancel(status_message="Already at full health")
 
@@ -770,7 +745,6 @@ class SecondWind(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Roll healing: 1d10 + fighter level
         healing_dice = Dice(
             count=1,
             value=10,
@@ -779,17 +753,15 @@ class SecondWind(BaseAction):
                 base_value=self.fighter_level,
                 value_name="Fighter Level"
             ),
-            roll_type=RollType.CHECK  # Using CHECK type for healing dice
+            roll_type=RollType.CHECK
         )
         healing_roll = healing_dice.roll
         total_healing = healing_roll.total
 
-        # Build source description from roll for combat log
         roll_results = healing_roll.results
         roll_str = str(roll_results[0]) if isinstance(roll_results, list) and roll_results else "?"
         source_desc = f"Second Wind: d10({roll_str})+{self.fighter_level}"
 
-        # Apply healing via event system
         actual_healing = entity.receive_healing(
             total_healing, entity.uuid,
             source_description=source_desc,
@@ -810,28 +782,32 @@ class SecondWind(BaseAction):
 
 
 class SecondWindFeature(BaseCondition):
+    """Fighter feature that grants the Second Wind resource and action.
+
+    Attributes:
+        name: Feature condition name for Second Wind lookup and cleanup.
+        description: Short rules-facing summary of the Second Wind feature.
+        fighter_level: Fighter level passed into the registered Second Wind action.
     """
-    Fighter Level 1 Feature: Second Wind
-
-    You have a limited well of stamina that you can draw on to protect yourself
-    from harm. On your turn, you can use a bonus action to regain hit points
-    equal to 1d10 + your fighter level.
-
-    Once you use this feature, you must finish a short or long rest before you
-    can use it again.
-
-    This condition grants the 'second_wind' resource and registers the SecondWind action.
-    """
-    name: str = "Second Wind Feature"
-    description: str = "Heal 1d10 + fighter level as a bonus action (1/short rest)"
-    fighter_level: int = 1
+    name: str = Field(
+        default="Second Wind Feature",
+        description="Feature condition name for Second Wind lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Heal 1d10 + fighter level as a bonus action (1/short rest)",
+        description="Short rules-facing summary of the Second Wind feature.",
+    )
+    fighter_level: int = Field(
+        default=1,
+        description="Fighter level passed into the registered Second Wind action.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -844,14 +820,12 @@ class SecondWindFeature(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Add resource (recharges on short rest)
         target.action_economy.add_resource(
             name="second_wind",
             maximum=1,
             recharge_type=RechargeType.SHORT_REST
         )
 
-        # Register Second Wind action template
         second_wind = SecondWind(
             source_entity_uuid=target.uuid,
             fighter_level=self.fighter_level,
@@ -876,20 +850,26 @@ class SecondWindFeature(BaseCondition):
         return super()._remove(event)
 
 
-# =============================================================================
-# LEVEL 2 FEATURES: Action Surge
-# =============================================================================
-
 class ActionSurging(BaseCondition):
-    """
-    Temporary condition from Action Surge.
+    """Temporary internal state granted by Action Surge.
 
-    Grants +1 action for the current turn. Expires at start of next turn.
-    Also serves as a marker to prevent using Action Surge more than once per turn.
+    Attributes:
+        name: Internal marker condition name for active Action Surge state.
+        description: Short rules-facing summary of the temporary Action Surge state.
+        condition_category: Marks ActionSurging as an internal lifecycle condition.
     """
-    name: str = "ActionSurging"
-    description: str = "+1 action this turn (Action Surge used)"
-    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    name: str = Field(
+        default="ActionSurging",
+        description="Internal marker condition name for active Action Surge state.",
+    )
+    description: str = Field(
+        default="+1 action this turn (Action Surge used)",
+        description="Short rules-facing summary of the temporary Action Surge state.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Marks ActionSurging as an internal lifecycle condition.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -899,13 +879,11 @@ class ActionSurging(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
 
-        # Set duration to 1 round (expires at start of next turn)
         self.duration.duration_type = DurationType.ROUNDS
         self.duration.duration = 1
 
         outs = []
 
-        # Add +1 action modifier
         modifier = NumericalModifier(
             name="Action Surge",
             value=1,
@@ -925,21 +903,28 @@ class ActionSurging(BaseCondition):
 
 
 class ActionSurge(BaseAction):
+    """Fighter action that spends Action Surge for one extra action.
+
+    Attributes:
+        name: Action name displayed for Action Surge.
+        description: Short rules-facing summary of the Action Surge action.
+        target_type: Action Surge always targets the acting fighter.
+        costs: Action-surge resource cost rebuilt after model initialization.
     """
-    Fighter Feature: Action Surge (Level 2)
+    name: str = Field(default="Action Surge", description="Action name displayed for Action Surge.")
+    description: str = Field(
+        default="Take one additional action on your turn",
+        description="Short rules-facing summary of the Action Surge action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Action Surge always targets the acting fighter.",
+    )
 
-    On your turn, take one additional action.
-    Once used, must finish a short/long rest to use again.
-    Level 17: Can use twice before a rest, but only once per turn.
-
-    This is a free action (no action cost) - only costs the resource.
-    """
-    name: str = "Action Surge"
-    description: str = "Take one additional action on your turn"
-    target_type: TargetType = TargetType.SELF
-
-    # Free action - only costs the resource
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Action-surge resource cost rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -947,7 +932,7 @@ class ActionSurge(BaseAction):
             Cost(
                 name="Action Surge",
                 cost_type="actions",
-                cost=0,  # No action cost
+                cost=0,
                 resource_name="action_surge",
                 resource_cost=1,
                 evaluator=None,
@@ -957,7 +942,6 @@ class ActionSurge(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
         """Create the declaration event for Action Surge."""
-        # Populate entity name for combat log generation
         entity = Entity.get(self.source_entity_uuid)
         source_name = entity.name if entity else None
 
@@ -966,7 +950,7 @@ class ActionSurge(BaseAction):
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,  # Self-targeted
+            target_entity_uuid=self.source_entity_uuid,
             costs=[BaseCost.model_validate(cost) for cost in self.costs],
             use_register=use_register,
             source_entity_name=source_name
@@ -978,11 +962,9 @@ class ActionSurge(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Check resource available
         if not entity.action_economy.can_afford_resource("action_surge", 1):
             return declaration_event.cancel(status_message="Action Surge not available")
 
-        # Check not already used this turn (ActionSurging serves as the marker)
         if "ActionSurging" in entity.active_conditions:
             return declaration_event.cancel(status_message="Already used Action Surge this turn")
 
@@ -997,7 +979,6 @@ class ActionSurge(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply ActionSurging (+1 action effect, also serves as once-per-turn marker)
         surging = ActionSurging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
@@ -1015,28 +996,32 @@ class ActionSurge(BaseAction):
 
 
 class ActionSurgeFeature(BaseCondition):
+    """Fighter feature that grants Action Surge uses and action access.
+
+    Attributes:
+        name: Feature condition name for Action Surge lookup and cleanup.
+        description: Short rules-facing summary of the Action Surge feature.
+        num_uses: Maximum Action Surge resource uses granted by this feature.
     """
-    Fighter Level 2 Feature: Action Surge
-
-    On your turn, you can take one additional action on top of your regular
-    action and a possible bonus action.
-
-    Once you use this feature, you must finish a short or long rest before
-    you can use it again. Starting at 17th level, you can use it twice before
-    a rest, but only once on the same turn.
-
-    This condition grants the Action Surge resource and registers the action.
-    """
-    name: str = "Action Surge Feature"
-    description: str = "Take one additional action on your turn"
-    num_uses: int = 1  # 1 at L2, 2 at L17
+    name: str = Field(
+        default="Action Surge Feature",
+        description="Feature condition name for Action Surge lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Take one additional action on your turn",
+        description="Short rules-facing summary of the Action Surge feature.",
+    )
+    num_uses: int = Field(
+        default=1,
+        description="Maximum Action Surge resource uses granted by this feature.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1049,14 +1034,12 @@ class ActionSurgeFeature(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Add resource (recharges on short rest)
         target.action_economy.add_resource(
             name="action_surge",
             maximum=self.num_uses,
             recharge_type=RechargeType.SHORT_REST
         )
 
-        # Register action template
         action_surge = ActionSurge(
             source_entity_uuid=target.uuid,
             template=True
@@ -1077,34 +1060,31 @@ class ActionSurgeFeature(BaseCondition):
             target.action_economy.remove_resource("action_surge")
             target.unregister_action("Action Surge")
 
-        # Call parent removal logic
         return super()._remove(event)
 
 
-# =============================================================================
-# LEVEL 3 FEATURES: Champion Archetype - Improved Critical
-# =============================================================================
-
 class ImprovedCritical(BaseCondition):
-    """
-    Champion Fighter (Level 3): Improved Critical
+    """Champion feature that expands weapon critical hits to 19-20.
 
-    Your weapon attacks score a critical hit on a roll of 19 or 20.
-
-    This condition adds +1 to the general crit threshold modifier,
-    lowering the natural roll needed for a critical hit from 20 to 19.
+    Attributes:
+        name: Condition name used for Champion Improved Critical lookup and cleanup.
+        description: Short rules-facing summary of the Improved Critical feature.
     """
-    name: str = "Improved Critical"
-    description: str = (
-        "Your weapon attacks score a critical hit on a roll of 19 or 20."
+    name: str = Field(
+        default="Improved Critical",
+        description="Condition name used for Champion Improved Critical lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Your weapon attacks score a critical hit on a roll of 19 or 20.",
+        description="Short rules-facing summary of the Improved Critical feature.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1119,7 +1099,6 @@ class ImprovedCritical(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add +1 to general crit threshold (applies to all attacks)
         crit_mod = NumericalModifier.create(
             source_entity_uuid=self.target_entity_uuid,
             name="Improved Critical",
@@ -1136,28 +1115,26 @@ class ImprovedCritical(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-# =============================================================================
-# LEVEL 5 FEATURES: Extra Attack
-# =============================================================================
-
-# =============================================================================
-# NOTE: HasAttacked is now a GENERIC condition in dnd/conditions.py
-# It is applied by global handlers registered in setup_standard_actions().
-# The processor below is FIGHTER-SPECIFIC: manages extra_attacks resource.
-# =============================================================================
-
-
 class ExtraAttacksGranted(BaseCondition):
-    """
-    Marker condition: Extra attacks have been granted this turn.
+    """Internal marker for extra attacks granted during the current turn.
 
-    Used by extra_attack_resource_processor to track whether extra attacks
-    have already been granted this turn (for Action Surge compatibility).
-    Expires at TURN_START.
+    Attributes:
+        name: Internal marker condition name for Extra Attack resource grants this turn.
+        description: Short lifecycle summary for the Extra Attack grant marker.
+        condition_category: Marks ExtraAttacksGranted as an internal lifecycle condition.
     """
-    name: str = "ExtraAttacksGranted"
-    description: str = "Extra attacks have been granted this turn"
-    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    name: str = Field(
+        default="ExtraAttacksGranted",
+        description="Internal marker condition name for Extra Attack resource grants this turn.",
+    )
+    description: str = Field(
+        default="Extra attacks have been granted this turn",
+        description="Short lifecycle summary for the Extra Attack grant marker.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Marks ExtraAttacksGranted as an internal lifecycle condition.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1190,11 +1167,9 @@ def extra_attack_resource_processor(
     Triggers on ATTACK at EXECUTION phase (for action-cost attacks only).
     Uses ExtraAttacksGranted marker (not HasAttacked) to track first vs subsequent.
     """
-    # Only trigger for the attacker's own attacks
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
-    # Only on non-canceled events
     if event.canceled:
         return None
 
@@ -1202,11 +1177,9 @@ def extra_attack_resource_processor(
     if not entity:
         return None
 
-    # Only process FIRST event at EXECUTION phase for this attack
     if not EventQueue.is_first_at_phase(event):
         return None
 
-    # Check if this attack cost an action (not OA reaction, not bonus action)
     if not isinstance(event, ActionEvent) or not event.costs:
         return None
 
@@ -1215,24 +1188,19 @@ def extra_attack_resource_processor(
         for c in event.costs
     )
     if not action_cost_attack:
-        return None  # Skip OA (reaction) and bonus action attacks
+        return None
 
-    # Get Extra Attack feature and resource
     extra_attack_feature = entity.active_conditions.get("Extra Attack")
     extra_attack_resource = entity.action_economy.resources.get("extra_attacks")
 
     if not extra_attack_resource or not extra_attack_feature:
-        return None  # No Extra Attack feature
+        return None
 
     num_extra = extra_attack_feature.extra_attacks if isinstance(extra_attack_feature, ExtraAttackFeature) else 1
 
-    # Check ExtraAttacksGranted to determine first vs subsequent Attack action
-    # This marker is applied BY THIS PROCESSOR after granting extras
     if "ExtraAttacksGranted" not in entity.active_conditions:
-        # FIRST Attack action this turn - SET extra_attacks
         extra_attack_resource.current = num_extra
 
-        # Apply marker so subsequent Attack actions ADD instead of SET
         marker = ExtraAttacksGranted(
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=source_entity_uuid
@@ -1241,10 +1209,9 @@ def extra_attack_resource_processor(
         marker.duration.duration = 1
         entity.add_condition(marker)
     else:
-        # SUBSEQUENT Attack action (via Action Surge) - ADD extra_attacks
         extra_attack_resource.current += num_extra
 
-    return None  # Don't modify the attack event
+    return None
 
 
 def create_extra_attack_resource_handler(source_entity_uuid: UUID) -> EventHandler:
@@ -1263,27 +1230,38 @@ def create_extra_attack_resource_handler(source_entity_uuid: UUID) -> EventHandl
 
 
 class ExtraAttack(BaseAction):
+    """Fighter action that spends the extra-attacks resource for another attack.
+
+    Attributes:
+        name: Action name displayed for Fighter extra attacks.
+        description: Short rules-facing summary of the Extra Attack action.
+        target_type: Extra Attack targets a visible entity in weapon reach or range.
+        weapon_slot: Weapon slot used to resolve the additional attack.
+        action_category: Marks Extra Attack as an attack action for discovery and reactions.
+        costs: Extra-attack resource cost rebuilt after model initialization.
     """
-    Make an additional attack using Extra Attack feature (Fighter Level 5+).
+    name: str = Field(default="Extra Attack", description="Action name displayed for Fighter extra attacks.")
+    description: str = Field(
+        default="Make an additional weapon attack",
+        description="Short rules-facing summary of the Extra Attack action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.ENTITY,
+        description="Extra Attack targets a visible entity in weapon reach or range.",
+    )
+    weapon_slot: WeaponSlot = Field(
+        default=WeaponSlot.MELEE_MAIN,
+        description="Weapon slot used to resolve the additional attack.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ATTACK,
+        description="Marks Extra Attack as an attack action for discovery and reactions.",
+    )
 
-    Prerequisites:
-    - Must have the HasAttacked condition (meaning you've attacked this turn)
-    - Must have extra_attacks resource available
-
-    This action has no action cost (action was already spent on the first attack),
-    but consumes 1 use of the extra_attacks resource.
-
-    When used as a template (template=True), target_entity_uuid should be set via
-    set_target_entity() before pre_validate() or instantiate().
-    """
-    name: str = "Extra Attack"
-    description: str = "Make an additional weapon attack"
-    target_type: TargetType = TargetType.ENTITY
-    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
-    action_category: ActionCategory = ActionCategory.ATTACK
-
-    # Cost: only resource, no action cost
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Extra-attack resource cost rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1291,7 +1269,7 @@ class ExtraAttack(BaseAction):
             Cost(
                 name="Extra Attack",
                 cost_type="actions",
-                cost=0,  # No action cost - already spent on first Attack
+                cost=0,
                 resource_name="extra_attacks",
                 resource_cost=1,
                 evaluator=None,
@@ -1301,20 +1279,17 @@ class ExtraAttack(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""
-        # Populate entity names and weapon name for combat log generation
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         source_name = source_entity.name if source_entity else None
         target_name = target_entity.name if target_entity else None
 
-        # Get weapon name
         weapon_name = None
         if source_entity:
             weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
             weapon_name = weapon.name if weapon else "Unarmed"
 
-        # Use clean name for combat log (e.g., "Extra Attack (Shortbow)")
         display_name = f"Extra Attack ({weapon_name})" if weapon_name else "Extra Attack"
 
         return AttackEvent(
@@ -1337,15 +1312,11 @@ class ExtraAttack(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # PREREQUISITE: Must have used action to attack (ExtraAttacksGranted condition)
-        # Note: We check ExtraAttacksGranted (not HasAttacked) because Extra Attack
-        # requires an action-cost attack, while HasAttacked tracks ALL attacks for rage.
         if "ExtraAttacksGranted" not in entity.active_conditions:
             return declaration_event.cancel(
                 status_message="Must attack first before using Extra Attack"
             )
 
-        # Validate target exists
         if not self.target_entity_uuid:
             return declaration_event.cancel(status_message="No target specified")
 
@@ -1353,18 +1324,14 @@ class ExtraAttack(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        # Validate line of sight
         if self.target_entity_uuid not in entity.senses.entities:
             return declaration_event.cancel(status_message="Target not visible")
 
-        # Validate range (reuse Attack's range validation)
-        # Cast to AttackEvent since _create_declaration_event creates an AttackEvent
         attack_event = cast(AttackEvent, declaration_event)
         range_validated = Attack.validate_range(attack_event, self.source_entity_uuid)
         if range_validated is None or range_validated.canceled:
             return range_validated
 
-        # Check ranged conditions (threatened)
         ranged_conditions = Attack.check_ranged_conditions(range_validated, self.source_entity_uuid)
         if ranged_conditions is None or ranged_conditions.canceled:
             return ranged_conditions
@@ -1376,8 +1343,6 @@ class ExtraAttack(BaseAction):
 
     def _apply(self, execution_event) -> Optional[Event]:
         """Apply the extra attack - execute the actual attack logic."""
-        # Reuse the Attack.attack_consequences method for the actual attack
-        # Cast to AttackEvent since _create_declaration_event creates an AttackEvent
         attack_event = cast(AttackEvent, execution_event)
         return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
@@ -1387,33 +1352,30 @@ class ExtraAttack(BaseAction):
 
 
 class ExtraAttackFeature(BaseCondition):
+    """Fighter feature that grants extra attacks after action-cost attacks.
+
+    Attributes:
+        name: Feature condition name for Fighter Extra Attack.
+        description: Short rules-facing summary of the Extra Attack feature.
+        extra_attacks: Number of extra attacks granted after each action-cost Attack action.
     """
-    Fighter (Level 5/11/20): Extra Attack
+    name: str = Field(default="Extra Attack", description="Feature condition name for Fighter Extra Attack.")
+    description: str = Field(
+        default="Can make additional attacks when taking the Attack action",
+        description="Short rules-facing summary of the Extra Attack feature.",
+    )
 
-    Beginning at 5th level, you can attack twice, instead of once,
-    whenever you take the Attack action on your turn.
-
-    - Level 5: 1 extra attack (2 total)
-    - Level 11: 2 extra attacks (3 total)
-    - Level 20: 3 extra attacks (4 total)
-
-    This condition:
-    1. Adds the 'extra_attacks' resource to the entity's ActionEconomy
-    2. Registers ExtraAttack action templates for each equipped weapon
-    3. Registers the HasAttacked event handler to enable the Extra Attack flow
-    """
-    name: str = "Extra Attack"
-    description: str = "Can make additional attacks when taking the Attack action"
-
-    # Configuration
-    extra_attacks: int = 1  # 1 at L5, 2 at L11, 3 at L20
+    extra_attacks: int = Field(
+        default=1,
+        description="Number of extra attacks granted after each action-cost Attack action.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1428,14 +1390,12 @@ class ExtraAttackFeature(BaseCondition):
 
         handler_uuids: List[UUID] = []
 
-        # 1. Add the extra_attacks resource (recharges at turn start)
         target.action_economy.add_resource(
             name="extra_attacks",
             maximum=self.extra_attacks,
             recharge_type=RechargeType.TURN_START
         )
 
-        # 2. Register ExtraAttack action templates for each equipped weapon
         for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
                      WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
             weapon = target.equipment._get_weapon_by_slot(slot)
@@ -1448,8 +1408,6 @@ class ExtraAttackFeature(BaseCondition):
                 )
                 target.register_action(extra_attack)
 
-        # 3. Register the Extra Attack Resource handler (Fighter-specific)
-        # Note: HasAttacked tracking is now handled globally by setup_standard_actions()
         handler = create_extra_attack_resource_handler(target.uuid)
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
@@ -1459,7 +1417,6 @@ class ExtraAttackFeature(BaseCondition):
             status_message=f"Granted Extra Attack ({self.extra_attacks} extra) to {target.name}"
         )
 
-        # Return handler UUID for cleanup when condition is removed
         return [], handler_uuids, [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
@@ -1468,22 +1425,15 @@ class ExtraAttackFeature(BaseCondition):
         """
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            # Remove the resource
             target.action_economy.remove_resource("extra_attacks")
 
-            # Unregister ExtraAttack templates
             for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
                          WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
                 template_name = f"Extra Attack_{slot.value}"
                 target.unregister_action(template_name)
 
-        # Call parent removal logic
         return super()._remove(event)
 
-
-# =============================================================================
-# LEVEL 9 FEATURES: Indomitable
-# =============================================================================
 
 def indomitable_processor(
     event: Event,
@@ -1495,11 +1445,9 @@ def indomitable_processor(
 
     Per RAW: Must use the new roll, even if it's worse.
     """
-    # Only process own saves (target of save is the one making it)
     if event.target_entity_uuid != source_entity_uuid:
         return None
 
-    # Type check: must be a SavingThrowEvent
     if not isinstance(event, SavingThrowEvent):
         return None
 
@@ -1507,23 +1455,18 @@ def indomitable_processor(
     if not entity:
         return None
 
-    # Check if save failed
     if event.result is not False:
-        return None  # Save succeeded or not yet resolved
+        return None
 
-    # Check resource available
     if not entity.action_economy.can_afford_resource("indomitable", 1):
         return None
 
-    # Consume resource
     entity.action_economy.consume_resource("indomitable", 1)
 
-    # Reroll the save (must use new result per RAW)
     ability_name = event.ability_name
     save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
     new_roll = entity.roll_d20(save_bonus, RollType.SAVE, parent_event=event.uuid)
 
-    # Determine new result
     dc = event.get_dc()
     if dc is None:
         return None
@@ -1531,7 +1474,6 @@ def indomitable_processor(
     new_outcome = determine_attack_outcome(new_roll, dc)
     new_success = new_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
 
-    # Return modified event with new roll
     return event.model_copy(update={
         "dice_roll": new_roll,
         "result": new_success,
@@ -1548,7 +1490,7 @@ def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
         trigger_conditions=[
             Trigger(
                 event_type=EventType.SAVING_THROW,
-                event_phase=EventPhase.EFFECT  # After roll, can see result
+                event_phase=EventPhase.EFFECT
             )
         ],
         event_processor=indomitable_processor,
@@ -1557,24 +1499,29 @@ def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
 
 
 class Indomitable(BaseCondition):
-    """
-    Fighter Level 9 Feature: Indomitable
+    """Fighter feature that grants failed saving throw rerolls.
 
-    You can reroll a saving throw that you fail. If you do so, you must use
-    the new roll. You can use this feature once per long rest.
-
-    Additional uses: Level 13 (2 uses), Level 17 (3 uses).
+    Attributes:
+        name: Feature condition name for Indomitable.
+        description: Short rules-facing summary of the Indomitable feature.
+        num_uses: Maximum Indomitable resource uses granted by this feature.
     """
-    name: str = "Indomitable"
-    description: str = "Reroll a failed saving throw (must use new roll)"
-    num_uses: int = 1  # 1 at L9, 2 at L13, 3 at L17
+    name: str = Field(default="Indomitable", description="Feature condition name for Indomitable.")
+    description: str = Field(
+        default="Reroll a failed saving throw (must use new roll)",
+        description="Short rules-facing summary of the Indomitable feature.",
+    )
+    num_uses: int = Field(
+        default=1,
+        description="Maximum Indomitable resource uses granted by this feature.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1587,14 +1534,12 @@ class Indomitable(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Add resource (recharges on long rest)
         target.action_economy.add_resource(
             name="indomitable",
             maximum=self.num_uses,
             recharge_type=RechargeType.LONG_REST
         )
 
-        # Register event handler (add_event_handler internally calls EventQueue)
         handler = create_indomitable_handler(target.uuid)
         target.add_event_handler(handler)
 
@@ -1611,37 +1556,31 @@ class Indomitable(BaseCondition):
         if target:
             target.action_economy.remove_resource("indomitable")
 
-        # Call parent removal logic
         return super()._remove(event)
 
 
-# =============================================================================
-# LEVEL 15 FEATURES: Champion Archetype - Superior Critical
-# =============================================================================
-
 class SuperiorCritical(BaseCondition):
+    """Champion feature that expands weapon critical hits to 18-20.
+
+    Attributes:
+        name: Condition name used for Champion Superior Critical lookup and cleanup.
+        description: Short rules-facing summary of the Superior Critical feature.
     """
-    Champion Fighter (Level 15): Superior Critical
-
-    Your weapon attacks score a critical hit on a roll of 18-20.
-
-    This condition adds +2 to the general crit threshold modifier,
-    lowering the natural roll needed for a critical hit from 20 to 18.
-
-    Note: This should replace Improved Critical, not stack with it.
-    The total modifier of +2 means crits on 18, 19, or 20.
-    """
-    name: str = "Superior Critical"
-    description: str = (
-        "Your weapon attacks score a critical hit on a roll of 18, 19, or 20."
+    name: str = Field(
+        default="Superior Critical",
+        description="Condition name used for Champion Superior Critical lookup and cleanup.",
+    )
+    description: str = Field(
+        default="Your weapon attacks score a critical hit on a roll of 18, 19, or 20.",
+        description="Short rules-facing summary of the Superior Critical feature.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1656,7 +1595,6 @@ class SuperiorCritical(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        # Add +2 to general crit threshold (applies to all attacks)
         crit_mod = NumericalModifier.create(
             source_entity_uuid=self.target_entity_uuid,
             name="Superior Critical",
@@ -1673,13 +1611,9 @@ class SuperiorCritical(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-# =============================================================================
-# LEVEL 18 FEATURES: Champion Archetype - Survivor
-# =============================================================================
-
 def survivor_processor(
     event: Event,
-    source_entity_uuid: UUID  # The entity with Survivor
+    source_entity_uuid: UUID
 ) -> Optional[Event]:
     """
     Turn start handler for Survivor.
@@ -1690,7 +1624,6 @@ def survivor_processor(
     to 5 + your Constitution modifier if you have no more than half of your
     hit points left. You don't gain this benefit if you have 0 hit points.
     """
-    # Only trigger on OUR turn start
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -1699,17 +1632,14 @@ def survivor_processor(
         return None
 
     current_hp = entity.get_hp()
-    # Max HP = current HP + damage taken (since get_hp() subtracts damage_taken)
     max_hp = current_hp + entity.health.damage_taken
 
-    # Check conditions: HP > 0 AND HP <= 50%
     if current_hp <= 0:
-        return None  # No benefit at 0 HP
+        return None
 
     if current_hp > max_hp / 2:
-        return None  # Above half HP, no benefit
+        return None
 
-    # Heal 5 + CON modifier
     con_mod = entity.ability_scores.constitution.modifier
     healing = 5 + con_mod
 
@@ -1733,7 +1663,7 @@ def create_survivor_handler(source_entity_uuid: UUID) -> EventHandler:
         trigger_conditions=[
             Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EXECUTION  # Triggers at EXECUTION phase
+                event_phase=EventPhase.EXECUTION
             )
         ],
         event_processor=survivor_processor
@@ -1741,25 +1671,24 @@ def create_survivor_handler(source_entity_uuid: UUID) -> EventHandler:
 
 
 class Survivor(BaseCondition):
-    """
-    Champion Fighter Level 18: Survivor
+    """Champion feature that heals the fighter at turn start when wounded.
 
-    At the start of each of your turns, you regain hit points equal to
-    5 + your Constitution modifier if you have no more than half of your
-    hit points left. You don't gain this benefit if you have 0 hit points.
-
-    This condition registers an EventHandler that triggers at TURN_START
-    at EXECUTION phase (before conditions expire and action economy resets).
+    Attributes:
+        name: Feature condition name for Champion Survivor.
+        description: Short rules-facing summary of the Survivor turn-start healing feature.
     """
-    name: str = "Survivor"
-    description: str = "Heal 5 + CON mod at turn start when HP <= 50% max"
+    name: str = Field(default="Survivor", description="Feature condition name for Champion Survivor.")
+    description: str = Field(
+        default="Heal 5 + CON mod at turn start when HP <= 50% max",
+        description="Short rules-facing summary of the Survivor turn-start healing feature.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -1772,8 +1701,6 @@ class Survivor(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Register turn start handler at EXECUTION phase
-        # Note: target.add_event_handler() internally calls EventQueue.add_event_handler()
         handler = create_survivor_handler(target.uuid)
         target.add_event_handler(handler)
 
@@ -1782,5 +1709,4 @@ class Survivor(BaseCondition):
             status_message=f"Granted Survivor to {target.name}"
         )
 
-        # Return handler UUID for cleanup when condition is removed
         return [], [handler.uuid], [], [], effect_event

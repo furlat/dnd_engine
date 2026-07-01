@@ -1,0 +1,433 @@
+---
+title: "Values And Modifiers"
+subtitle: "How NeuroDragon builds D&D numbers from base scores, rule contributions, context, and target state."
+order: 3
+part: "Runtime Foundations"
+rules: []
+---
+
+import DiagramFigure from '../../components/DiagramFigure.astro';
+
+D&D numbers are rarely just numbers. A Strength score begins as 16, but the useful modifier is +3. An attack bonus may include proficiency, an ability modifier, a magic weapon, a temporary bonus, disadvantage from the scene, advantage from the target's state, and a rule that prevents critical hits. A damage response may be resistance, vulnerability, immunity, or none depending on all active effects.
+
+NeuroDragon represents those rule-shaped numbers with `ModifiableValue`. A modifiable value keeps the base number visible while giving every rule contribution a place to live.
+
+<DiagramFigure
+  src="/diagrams/values-and-modifiers.svg"
+  alt="A ModifiableValue receiving self static and contextual modifiers, exporting target modifiers, and importing target modifiers during a calculation."
+  caption="A modifiable value gathers its own modifiers, can export effects to entities targeting its owner, and can temporarily import the target's exported effects during a rule calculation."
+/>
+
+## Why Values Exist
+
+The previous chapter showed where actor state lives. Ability scores, action resources, health values, spell bonuses, equipment bonuses, and many other actor fields are not stored as plain integers because the engine needs to explain how the final number was produced.
+
+That explanation matters to the game client and to the developer. A client may display "Attack: STR +3, Base +1, Magic Weapon +1." A developer adding a feature needs a precise place to put a bonus, a cap, a resistance, or a target-facing effect.
+
+The value layer gives that work a small vocabulary:
+
+| Concept | Meaning |
+| --- | --- |
+| Base value | The starting number, stored as a named numerical modifier. |
+| Modifier | A contribution to score, roll state, critical state, hit state, damage type, size, or resistance. |
+| Score | The raw aggregate number. |
+| Normalized score | The aggregate number after the value's normalizer is applied. |
+| Static channel | Always-on modifiers. |
+| Contextual channel | Modifiers produced only when the current source, target, and context make them active. |
+| Target propagation | Temporarily importing the target's exported effects into the current calculation. |
+
+## The Six Channels
+
+`ModifiableValue` is made of six channels.
+
+| Channel | Meaning |
+| --- | --- |
+| `self_static` | Always-on modifiers affecting the value's owner. |
+| `self_contextual` | Conditional modifiers affecting the value's owner. |
+| `to_target_static` | Always-on modifiers exported to entities targeting the owner. |
+| `to_target_contextual` | Conditional modifiers exported to entities targeting the owner. |
+| `from_target_static` | Imported static modifiers from the current target. |
+| `from_target_contextual` | Imported contextual modifiers from the current target. |
+
+The first two channels answer "what affects me?" The exported channels answer "what do I impose on things targeting me?" The imported channels answer "what is my current target imposing on this calculation?"
+
+That split is the reason a blinded target can grant advantage to attackers without each attacker permanently owning the blinded condition's modifier. The target exports the effect; the attacker imports it only during the relevant rule calculation.
+
+## Where The Imports Come From
+
+This chapter uses the value system directly. Every imported symbol appears here before it appears in code.
+
+| Symbol | Import | Why it appears |
+| --- | --- | --- |
+| `Optional` | `from typing import Optional` | Types the contextual callable's optional target and context. |
+| `UUID`, `uuid4` | `from uuid import UUID, uuid4` | Creates tutorial actor IDs and types callable arguments. |
+| `AdvantageModifier`, `AdvantageStatus` | `from dnd.core.modifiers import AdvantageModifier, AdvantageStatus` | Teaches advantage/disadvantage aggregation. |
+| `AutoHitModifier`, `AutoHitStatus` | `from dnd.core.modifiers import AutoHitModifier, AutoHitStatus` | Teaches hit override aggregation. |
+| `CriticalModifier`, `CriticalStatus` | `from dnd.core.modifiers import CriticalModifier, CriticalStatus` | Teaches critical override aggregation. |
+| `DamageType` | `from dnd.core.modifiers import DamageType` | Identifies resistance damage types. |
+| `NumericalModifier` | `from dnd.core.modifiers import NumericalModifier` | Adds flat numerical bonuses and constraints. |
+| `ResistanceModifier`, `ResistanceStatus` | `from dnd.core.modifiers import ResistanceModifier, ResistanceStatus` | Teaches resistance, vulnerability, and immunity aggregation. |
+| `ContextualNumericalModifier`, `ModifiableValue` | `from dnd.core.values import ContextualNumericalModifier, ModifiableValue` | Creates tutorial values and contextual modifiers. |
+
+```python
+from typing import Optional
+from uuid import UUID, uuid4
+
+from dnd.core.modifiers import (
+    AdvantageModifier,
+    AdvantageStatus,
+    AutoHitModifier,
+    AutoHitStatus,
+    CriticalModifier,
+    CriticalStatus,
+    DamageType,
+    NumericalModifier,
+    ResistanceModifier,
+    ResistanceStatus,
+)
+from dnd.core.values import ContextualNumericalModifier, ModifiableValue
+```
+
+## Score And Normalized Score
+
+A value's `score` is the raw total. A value's `normalized_score` is the total after applying the value's score normalizer.
+
+Ability scores are the clearest example. D&D uses the raw score for the character sheet, but most rolls use the modifier derived from that score.
+
+```python
+def ability_score_normalizer(score: int) -> int:
+    return (score - 10) // 2
+
+
+hero_id = uuid4()
+
+strength_score = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    value_name="strength Ability Score",
+    base_value=16,
+    score_normalizer=ability_score_normalizer,
+)
+
+assert strength_score.score == 16
+assert strength_score.normalized_score == 3
+```
+
+The base value is not hidden. `ModifiableValue.create(...)` stores it as a named numerical modifier in the value's `self_static` channel. The normalizer lets the same value answer both questions: "what is the raw score?" and "what number should this contribute after conversion?"
+
+## Combining Values
+
+Many D&D calculations combine several values. An attack bonus might combine an ability modifier with a general attack bonus. `combine_values(...)` produces a new value with merged channels and generation metadata.
+
+```python
+attack_bonus = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    value_name="Attack Bonus",
+    base_value=1,
+)
+attack_bonus.self_static.add_value_modifier(
+    NumericalModifier.create(
+        source_entity_uuid=hero_id,
+        name="Magic Weapon",
+        value=1,
+    )
+)
+
+combined_attack_bonus = strength_score.combine_values(
+    [attack_bonus],
+    naming_callable=lambda names: " + ".join(names),
+)
+
+assert combined_attack_bonus.name == "strength Ability Score + Attack Bonus"
+assert combined_attack_bonus.score == 18
+assert combined_attack_bonus.normalized_score == 5
+```
+
+The raw score is `16 + 1 + 1`. The normalized score is `3 + 1 + 1`.
+
+Breakdowns make the value explain itself in client-friendly terms:
+
+```python
+assert combined_attack_bonus.get_breakdown() == [
+    {"name": "STR", "value": 3, "source": "self"},
+    {"name": "Base", "value": 1, "source": "self"},
+    {"name": "Magic Weapon", "value": 1, "source": "self"},
+]
+```
+
+This is why the engine can later show a roll as a readable list of contributions instead of a mystery total.
+
+## Static Channels
+
+Static channels hold always-on modifiers. They can change numbers, constrain numbers, or change non-numerical roll state.
+
+A maximum constraint can reduce a movement value to zero:
+
+```python
+movement = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    value_name="Movement",
+    base_value=30,
+)
+movement.self_static.add_max_constraint(
+    NumericalModifier.create(
+        source_entity_uuid=hero_id,
+        name="Grappled",
+        value=0,
+    )
+)
+
+assert movement.score == 0
+```
+
+Advantage and disadvantage aggregate by signed value. Advantage contributes +1, disadvantage contributes -1, and a final sum of zero means neither state wins.
+
+```python
+attack_roll_state = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    value_name="Attack Roll State",
+)
+attack_roll_state.self_static.add_advantage_modifier(
+    AdvantageModifier(
+        source_entity_uuid=hero_id,
+        name="Unseen Attacker",
+        value=AdvantageStatus.ADVANTAGE,
+    )
+)
+
+assert attack_roll_state.advantage == AdvantageStatus.ADVANTAGE
+
+attack_roll_state.self_static.add_advantage_modifier(
+    AdvantageModifier(
+        source_entity_uuid=hero_id,
+        name="Long Range",
+        value=AdvantageStatus.DISADVANTAGE,
+    )
+)
+
+assert attack_roll_state.advantage == AdvantageStatus.NONE
+```
+
+Critical and auto-hit states use precedence. Critical immunity beats automatic critical. Automatic miss beats automatic hit.
+
+```python
+attack_roll_state.self_static.add_critical_modifier(
+    CriticalModifier(
+        source_entity_uuid=hero_id,
+        name="Paralyzed Target",
+        value=CriticalStatus.AUTOCRIT,
+    )
+)
+attack_roll_state.self_static.add_critical_modifier(
+    CriticalModifier(
+        source_entity_uuid=hero_id,
+        name="Critical Immunity",
+        value=CriticalStatus.NOCRIT,
+    )
+)
+
+assert attack_roll_state.critical == CriticalStatus.NOCRIT
+
+attack_roll_state.self_static.add_auto_hit_modifier(
+    AutoHitModifier(
+        source_entity_uuid=hero_id,
+        name="Guided Strike",
+        value=AutoHitStatus.AUTOHIT,
+    )
+)
+attack_roll_state.self_static.add_auto_hit_modifier(
+    AutoHitModifier(
+        source_entity_uuid=hero_id,
+        name="Sanctuary",
+        value=AutoHitStatus.AUTOMISS,
+    )
+)
+
+assert attack_roll_state.auto_hit == AutoHitStatus.AUTOMISS
+```
+
+Resistance, vulnerability, and immunity aggregate by damage type. Resistance contributes +1, vulnerability contributes -1, immunity contributes +2, and the final sum determines the state.
+
+```python
+damage_response = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    value_name="Damage Response",
+)
+damage_response.self_static.add_resistance_modifier(
+    ResistanceModifier(
+        source_entity_uuid=hero_id,
+        name="Fire Resistance",
+        value=ResistanceStatus.RESISTANCE,
+        damage_type=DamageType.FIRE,
+    )
+)
+
+assert damage_response.resistance[DamageType.FIRE] == ResistanceStatus.RESISTANCE
+
+damage_response.self_static.add_resistance_modifier(
+    ResistanceModifier(
+        source_entity_uuid=hero_id,
+        name="Oil Vulnerability",
+        value=ResistanceStatus.VULNERABILITY,
+        damage_type=DamageType.FIRE,
+    )
+)
+
+assert damage_response.resistance[DamageType.FIRE] == ResistanceStatus.NONE
+
+damage_response.self_static.add_resistance_modifier(
+    ResistanceModifier(
+        source_entity_uuid=hero_id,
+        name="Fire Immunity",
+        value=ResistanceStatus.IMMUNITY,
+        damage_type=DamageType.FIRE,
+    )
+)
+
+assert damage_response.resistance[DamageType.FIRE] == ResistanceStatus.IMMUNITY
+```
+
+The value layer does not apply damage. It answers the rule question "what is the current damage response for this damage type?"
+
+## Contextual Channels
+
+Contextual modifiers are callables. They receive the source UUID, target UUID, and current context dictionary. If the rule applies, they return a concrete modifier. If it does not apply, they return `None`.
+
+Here is a small high-ground bonus:
+
+```python
+def high_ground_bonus(
+    source_entity_uuid: UUID,
+    target_entity_uuid: Optional[UUID],
+    context: Optional[dict],
+) -> Optional[NumericalModifier]:
+    if context is None or not context.get("has_high_ground", False):
+        return None
+    return NumericalModifier.create(
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=target_entity_uuid,
+        name="High Ground",
+        value=2,
+    )
+```
+
+Attach it to a ranged attack bonus:
+
+```python
+goblin_id = uuid4()
+
+ranged_attack_bonus = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    target_entity_uuid=goblin_id,
+    value_name="Ranged Attack Bonus",
+    base_value=5,
+)
+ranged_attack_bonus.self_contextual.add_value_modifier(
+    ContextualNumericalModifier(
+        source_entity_uuid=hero_id,
+        target_entity_uuid=goblin_id,
+        name="High Ground",
+        callable=high_ground_bonus,
+    )
+)
+
+assert ranged_attack_bonus.score == 5
+```
+
+The bonus appears only when the current context says it applies:
+
+```python
+ranged_attack_bonus.set_context({"has_high_ground": True})
+assert ranged_attack_bonus.score == 7
+
+assert {
+    "name": "High Ground",
+    "value": 2,
+    "source": "self_contextual",
+    "contextual": True,
+} in ranged_attack_bonus.get_full_breakdown()
+
+ranged_attack_bonus.set_context({"has_high_ground": False})
+assert ranged_attack_bonus.score == 5
+```
+
+The contextual modifier is part of the value, but the concrete +2 is a result of evaluating the value with a particular context.
+
+## Target Propagation
+
+Some effects belong to the target but affect the creature targeting it. A blinded creature is easier to attack. That advantage should live with the blinded creature's defensive state, not be permanently copied into every possible attacker.
+
+The target exports those effects through `to_target_static` or `to_target_contextual`. The active calculation imports them with `set_from_target(...)`.
+
+```python
+blinded_goblin_id = uuid4()
+
+hero_attack = ModifiableValue.create(
+    source_entity_uuid=hero_id,
+    target_entity_uuid=blinded_goblin_id,
+    value_name="Attack Bonus",
+    base_value=5,
+)
+goblin_defense = ModifiableValue.create(
+    source_entity_uuid=blinded_goblin_id,
+    target_entity_uuid=hero_id,
+    value_name="Armor Class",
+    base_value=13,
+)
+```
+
+The goblin exports effects to entities targeting it:
+
+```python
+goblin_defense.to_target_static.add_advantage_modifier(
+    AdvantageModifier(
+        source_entity_uuid=blinded_goblin_id,
+        target_entity_uuid=hero_id,
+        name="Blinded",
+        value=AdvantageStatus.ADVANTAGE,
+    )
+)
+goblin_defense.to_target_static.add_value_modifier(
+    NumericalModifier.create(
+        source_entity_uuid=blinded_goblin_id,
+        target_entity_uuid=hero_id,
+        name="Exposed Target",
+        value=2,
+    )
+)
+```
+
+Before propagation, the hero's attack value sees only its own state:
+
+```python
+assert hero_attack.score == 5
+assert hero_attack.advantage == AdvantageStatus.NONE
+```
+
+During the calculation, the attack imports the target's exported channels:
+
+```python
+hero_attack.set_from_target(goblin_defense)
+
+assert hero_attack.score == 7
+assert hero_attack.advantage == AdvantageStatus.ADVANTAGE
+assert {
+    "name": "Exposed Target",
+    "value": 2,
+    "source": "from_target",
+} in hero_attack.get_breakdown()
+```
+
+After the calculation, clear the imported target channels:
+
+```python
+hero_attack.reset_from_target()
+
+assert hero_attack.score == 5
+assert hero_attack.advantage == AdvantageStatus.NONE
+```
+
+This keeps target-facing rules local to the target while still letting the current calculation include them.
+
+## What Comes Next
+
+Values explain what number and roll state the engine should use. The next chapter introduces dice: how the uncertain roll is produced before later systems can react to the result and turn it into game state.

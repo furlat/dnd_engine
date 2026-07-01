@@ -1,9 +1,6 @@
-"""Skeleton-specific abilities for specialized skeleton units.
+"""Skeleton-specific ability conditions and actions."""
 
-Contains: Marked condition, MarkCooldown condition, MarkTargetAction.
-"""
-
-from typing import Any, Optional, List, Tuple
+from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -22,30 +19,45 @@ from dnd.actions import entity_action_economy_cost_evaluator, entity_action_econ
 from dnd.conditions import Concentrating
 
 
-# =============================================================================
-# Mark Target Conditions
-# =============================================================================
-
 class Marked(BaseCondition):
-    """Marked — target is marked by a skeleton archer.
+    """Target marker applied by a skeleton archer.
 
-    Effects:
-    - Strips existing Invisible and Hidden conditions on application
-    - Grants attackers advantage against the marked target
-    - Prevents the target from gaining Invisible or Hidden while marked
+    The condition strips existing Invisible and Hidden states, grants attackers
+    advantage against the marked target, and blocks future Invisible or Hidden
+    applications while the mark remains active.
+
+    Attributes:
+        name: Condition registry key.
+        description: Player-facing summary.
+        condition_category: Classification used by condition filtering.
+        creation_lineage_uuid: Event lineage that created this condition.
     """
-    name: str = "Marked"
-    description: str = "Marked by an archer. Attackers have advantage, cannot hide or turn invisible."
-    condition_category: ConditionCategory = ConditionCategory.CONDITION
+    name: str = Field(default="Marked", description="Condition registry key.")
+    description: str = Field(
+        default="Marked by an archer. Attackers have advantage, cannot hide or turn invisible.",
+        description="Player-facing summary for the marked condition.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        description="Classification used by condition filtering.",
+    )
 
     creation_lineage_uuid: Optional[UUID] = Field(
         default=None,
-        description="Lineage UUID of the event that created this condition (prevents self-triggering)"
+        description="Lineage UUID of the event that created this condition.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Apply marker modifiers and stealth-blocking immunities.
+
+        Args:
+            declaration_event: Condition declaration event to advance or cancel.
+
+        Returns:
+            Condition bookkeeping with the completed effect event.
+        """
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target UUID not set")
         target = Entity.get(self.target_entity_uuid)
@@ -57,36 +69,41 @@ class Marked(BaseCondition):
         target_uuid: UUID = self.target_entity_uuid
         source_uuid: UUID = self.source_entity_uuid
 
-        # 1. Strip existing Invisible and Hidden conditions
         if "Invisible" in target.active_conditions:
             target.remove_condition("Invisible", parent_event=declaration_event)
         if "Hidden" in target.active_conditions:
             target.remove_condition("Hidden", parent_event=declaration_event)
 
-        # 2. Grant advantage to attackers via to_target_static on ac_bonus
         modifier = AdvantageModifier(
             name="Marked",
             value=AdvantageStatus.ADVANTAGE,
             source_entity_uuid=target_uuid,
-            target_entity_uuid=source_uuid
+            target_entity_uuid=source_uuid,
         )
         mod_uuid = target.equipment.ac_bonus.to_target_static.add_advantage_modifier(modifier)
         outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
 
-        # 3. Add condition immunities to prevent future Invisible/Hidden
         target.add_condition_immunity("Invisible", immunity_name="Marked")
         target.add_condition_immunity("Hidden", immunity_name="Marked")
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"{target.name} is marked"
+            status_message=f"{target.name} is marked",
         )
 
         return outs, [], [], [], effect_event
 
     def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove condition immunities added by Marked, then do standard cleanup."""
+        """Remove marker immunities before standard condition cleanup.
+
+        Args:
+            expire: Whether cleanup is caused by duration expiry.
+            parent_event: Optional parent event for cleanup events.
+
+        Returns:
+            True when cleanup completes.
+        """
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target and isinstance(target, Entity):
@@ -96,57 +113,98 @@ class Marked(BaseCondition):
 
 
 class MarkCooldown(BaseCondition):
-    """Tracks that Mark Target has been used. Prevents reuse until short rest."""
-    name: str = "Mark Cooldown"
-    description: str = "Mark Target has been used"
-    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    """Internal marker that prevents repeated Mark Target use.
+
+    Attributes:
+        name: Condition registry key.
+        description: Internal summary.
+        condition_category: Internal condition classification.
+    """
+    name: str = Field(default="Mark Cooldown", description="Condition registry key.")
+    description: str = Field(default="Mark Target has been used", description="Internal cooldown summary.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Internal condition classification.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
+        """Advance the cooldown application to effect.
+
+        Args:
+            declaration_event: Condition declaration event.
+
+        Returns:
+            Empty condition bookkeeping with the effect event.
+        """
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message="Mark Cooldown applied"
+            status_message="Mark Cooldown applied",
         )
         return [], [], [], [], effect_event
 
 
-# =============================================================================
-# Mark Target Action
-# =============================================================================
-
 class MarkTargetAction(BaseAction):
-    """Mark Target — bonus action ability for Skeleton Archer.
+    """Bonus-action marking ability for skeleton archers.
 
-    Marks a single target within 60ft, granting attackers advantage against it
-    and preventing stealth. Requires concentration. One use per encounter
-    (tracked via MarkCooldown condition).
+    The action marks one visible enemy within 60 feet, starts concentration on
+    the archer, links the target condition to that concentration, and applies a
+    cooldown condition to prevent repeated use.
+
+    Attributes:
+        name: Action discovery and combat-log label.
+        description: Player-facing summary.
+        target_type: Target routing type.
+        valid_target_filter: Relationship filter for action discovery.
+        spell_range: Range used by validation.
+        costs: Runtime action-economy costs.
     """
-    name: str = Field(default="Mark Target")
-    description: str = Field(default="Mark an enemy (60ft). Attackers gain advantage, target can't hide. Concentration.")
-    target_type: TargetType = Field(default=TargetType.ENTITY)
-    valid_target_filter: str = Field(default="enemies")
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60)
+    name: str = Field(default="Mark Target", description="Action discovery and combat-log label.")
+    description: str = Field(
+        default="Mark an enemy (60ft). Attackers gain advantage, target can't hide. Concentration.",
+        description="Player-facing summary for the Mark Target action.",
     )
-    costs: List[Cost] = Field(default_factory=list)
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Target routing type.")
+    valid_target_filter: str = Field(default="enemies", description="Relationship filter for action discovery.")
+    spell_range: Range = Field(
+        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
+        description="Range used by Mark Target validation.",
+    )
+    costs: List[Cost] = Field(default_factory=list, description="Runtime action-economy costs.")
 
     def model_post_init(self, __context: Any) -> None:
+        """Install the default bonus-action cost when none is provided.
+
+        Args:
+            __context: Pydantic post-init context.
+        """
         super().model_post_init(__context)
         if not self.costs:
-            self.costs = [Cost(
-                name="Mark Target",
-                cost_type="bonus_actions",
-                cost=1,
-                evaluator=entity_action_economy_cost_evaluator
-            )]
+            self.costs = [
+                Cost(
+                    name="Mark Target",
+                    cost_type="bonus_actions",
+                    cost=1,
+                    evaluator=entity_action_economy_cost_evaluator,
+                )
+            ]
 
     def get_range(self) -> Range:
+        """Return Mark Target's validation range.
+
+        Returns:
+            Configured Mark Target range.
+        """
         return self.spell_range
 
     def pre_validate(self) -> bool:
-        """Returns False if caster already has Mark Cooldown (already used Mark)."""
+        """Check whether the archer can attempt Mark Target.
+
+        Returns:
+            False when the source entity is missing or already has Mark Cooldown.
+        """
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return False
@@ -155,18 +213,24 @@ class MarkTargetAction(BaseAction):
         return True
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Validate range and line of sight."""
+        """Validate Mark Target range and line of sight.
+
+        Args:
+            declaration_event: Action declaration event to advance or cancel.
+
+        Returns:
+            Execution event when the target is visible and in range, otherwise a
+            canceled event.
+        """
         source = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not source or not target:
             return declaration_event.cancel(status_message="Source or target not found")
 
-        # LOS check
         if target.uuid not in source.senses.entities:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
-        # Range check
         distance = source.senses.get_feet_distance(target.position)
         if distance > self.spell_range.normal:
             return declaration_event.cancel(
@@ -175,37 +239,41 @@ class MarkTargetAction(BaseAction):
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+            status_message=f"Validated {self.name}",
         )
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply Mark Target: mark the target, set up concentration."""
+        """Apply Mark Target's concentration, linked mark, and cooldown.
+
+        Args:
+            execution_event: Validated execution event.
+
+        Returns:
+            Completion event when the mark is applied, otherwise a canceled
+            event.
+        """
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        # 1. Apply Concentrating on caster (breaks existing concentration)
         concentration = Concentrating(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            spell_name="Mark Target"
+            spell_name="Mark Target",
         )
         caster.add_condition(concentration, parent_event=execution_event)
 
-        # 2. Apply Marked condition on target
         marked = Marked(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
-            creation_lineage_uuid=execution_event.lineage_uuid
+            creation_lineage_uuid=execution_event.lineage_uuid,
         )
         target.add_condition(marked, parent_event=execution_event)
 
-        # 3. Link Concentrating → Marked (breaking concentration removes mark)
         concentration.add_linked_condition(target.uuid, marked.uuid)
 
-        # 4. Apply cooldown on caster
         cooldown = MarkCooldown(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
@@ -214,14 +282,21 @@ class MarkTargetAction(BaseAction):
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
-            status_message=f"{caster.name} marks {target.name}"
+            status_message=f"{caster.name} marks {target.name}",
         )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message=f"{caster.name} marks {target.name} (concentration)"
+            status_message=f"{caster.name} marks {target.name} (concentration)",
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply bonus action cost."""
+        """Apply Mark Target's bonus-action cost.
+
+        Args:
+            completion_event: Completed action event.
+
+        Returns:
+            Completion event after action-economy cost application.
+        """
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)

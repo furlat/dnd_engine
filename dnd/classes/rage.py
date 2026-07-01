@@ -33,17 +33,10 @@ from dnd.actions import (
     entity_resource_cost_evaluator,
     Attack, AttackEvent,
 )
+from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
 from uuid import UUID
 
-
-# =============================================================================
-# RAGE SYSTEM: Contextual Modifier Functions
-# =============================================================================
-# Note: Rage maintenance now uses generic HasAttacked and HasTakenDamage
-# conditions from dnd/conditions.py instead of the Barbarian-specific KeepRage.
-# This aligns with the SRD rule: "if you haven't attacked a hostile creature
-# since your last turn or taken damage since then"
 
 def rage_damage_check(
     source_entity_uuid: UUID,
@@ -59,23 +52,20 @@ def rage_damage_check(
 
     The rage damage value comes from the Raging condition.
     """
-    _ = target_entity_uuid, context  # Suppress unused warnings
+    _ = target_entity_uuid, context
 
     entity = Entity.get(source_entity_uuid)
     if not entity:
         return None
 
-    # Must be raging
     raging = entity.active_conditions.get("Raging")
     if not isinstance(raging, Raging):
         return None
 
-    # No bonus if wearing heavy armor (Rage Impeded per BG3)
     body_armor = entity.equipment.body_armor
     if body_armor and body_armor.type == ArmorType.HEAVY:
         return None
 
-    # Get rage damage from the Raging condition
     rage_damage = raging.rage_damage
 
     return NumericalModifier.create(
@@ -84,10 +74,6 @@ def rage_damage_check(
         value=rage_damage
     )
 
-
-# =============================================================================
-# RAGE SYSTEM: Event Handler Processors
-# =============================================================================
 
 def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """
@@ -108,7 +94,6 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
     and you haven't attacked a hostile creature since your last turn or taken
     damage since then."
     """
-    # Only on OUR turn start
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -116,20 +101,16 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
     if not entity:
         return None
 
-    # Must be raging
     if "Raging" not in entity.active_conditions:
         return None
 
-    # Persistent Rage (L15+) skips this check
     if "PersistentRage" in entity.active_conditions:
         return None
 
-    # Check for attack OR damage this turn (using global combat state conditions)
     has_attacked = "HasAttacked" in entity.active_conditions
     has_taken_damage = "HasTakenDamage" in entity.active_conditions
 
     if not has_attacked and not has_taken_damage:
-        # No attack or damage this turn - rage ends
         entity.remove_condition("Raging", parent_event=event)
         return event.model_copy(update={
             "modified": True,
@@ -146,7 +127,6 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
     Triggers on ARMOR_EQUIP at EXECUTION phase.
     If the armor being equipped is heavy armor, rage ends immediately.
     """
-    # Only care about our own equipment changes
     if event.source_entity_uuid != source_entity_uuid:
         return None
 
@@ -154,11 +134,9 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
     if not entity:
         return None
 
-    # Must be raging
     if "Raging" not in entity.active_conditions:
         return None
 
-    # Check if the equipped armor is heavy
     armor_event = event if isinstance(event, ArmorEquipEvent) else None
     if armor_event:
         armor = cast(Armor, BaseBlock.get(armor_event.item_uuid))
@@ -172,13 +150,6 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
     return None
 
 
-# =============================================================================
-# RAGE SYSTEM: Handler Factory Functions
-# =============================================================================
-# Note: Attack and damage tracking is now handled by global HasAttacked and
-# HasTakenDamage handlers registered in setup_standard_actions(). We only
-# need the maintenance handler (and armor/unconscious handlers) here.
-
 def create_rage_maintenance_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create handler that checks rage maintenance at turn start (before conditions expire)."""
     return EventHandler(
@@ -187,7 +158,7 @@ def create_rage_maintenance_handler(source_entity_uuid: UUID) -> EventHandler:
         trigger_conditions=[
             Trigger(
                 event_type=EventType.TURN_START,
-                event_phase=EventPhase.EXECUTION  # Fires BEFORE conditions expire in on_turn_start()
+                event_phase=EventPhase.EXECUTION
             )
         ],
         event_processor=rage_maintenance_processor
@@ -218,7 +189,6 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
 
     Triggers on DEATH at EXECUTION phase (when entity dies).
     """
-    # Get the dead entity UUID from the event
     if not isinstance(event, DeathEvent) or event.entity_uuid != source_entity_uuid:
         return None
 
@@ -226,11 +196,9 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     if not entity:
         return None
 
-    # Must be raging
     if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
         return None
 
-    # End rage - remove Frenzied first if present (cascades to Raging)
     if "Frenzied" in entity.active_conditions:
         entity.remove_condition("Frenzied", parent_event=event)
     elif "Raging" in entity.active_conditions:
@@ -257,38 +225,33 @@ def create_rage_death_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
-# =============================================================================
-# RAGE SYSTEM: Raging Condition
-# =============================================================================
-
 class Raging(BaseCondition):
+    """Active rage state applied by the Rage action.
+
+    Attributes:
+        name: Condition name used for active rage state lookup and cleanup.
+        description: Short rules-facing summary of the active rage state.
+        rage_damage: Damage bonus supplied by the active rage state to melee attacks.
     """
-    Active rage state - applied when Rage action is used.
-
-    While raging, the barbarian gains:
-    - Advantage on STR checks and saves
-    - Rage damage bonus to melee attacks (if not in heavy armor)
-    - Resistance to bludgeoning/piercing/slashing damage (if not in heavy armor)
-
-    The condition also registers handlers to track:
-    - Turn end (to check if rage should end based on HasAttacked/HasTakenDamage)
-    - Turn end (to check if rage should end)
-
-    Rage ends if:
-    - Barbarian ends turn without attacking or taking damage (unless PersistentRage)
-    - Barbarian falls unconscious
-    - Barbarian chooses to end it (not implemented yet)
-    """
-    name: str = "Raging"
-    description: str = "In a primal rage - bonus damage, resistance, advantage on STR"
-    rage_damage: int = 2  # +2 at L1-8, +3 at L9-15, +4 at L16+
+    name: str = Field(
+        default="Raging",
+        description="Condition name used for active rage state lookup and cleanup.",
+    )
+    description: str = Field(
+        default="In a primal rage - bonus damage, resistance, advantage on STR",
+        description="Short rules-facing summary of the active rage state.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Damage bonus supplied by the active rage state to melee attacks.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -301,8 +264,6 @@ class Raging(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Mindless Rage (L6+): If charmed or frightened when entering rage,
-        # the effect is suspended (removed, BG3-style)
         if "Mindless Rage" in target.active_conditions:
             for cond_name in ["Charmed", "Frightened"]:
                 if cond_name in target.active_conditions:
@@ -311,7 +272,6 @@ class Raging(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        # 1. Advantage on STR checks (Athletics skill)
         athletics = target.skill_set.get_skill("athletics")
         str_adv_mod = AdvantageModifier(
             name="Raging",
@@ -322,7 +282,6 @@ class Raging(BaseCondition):
         mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(str_adv_mod)
         outs.append((athletics.skill_bonus.uuid, mod_uuid))
 
-        # 2. Advantage on STR saves
         str_save = target.saving_throws.get_saving_throw("strength")
         str_save_adv = AdvantageModifier(
             name="Raging",
@@ -333,7 +292,6 @@ class Raging(BaseCondition):
         mod_uuid = str_save.bonus.self_static.add_advantage_modifier(str_save_adv)
         outs.append((str_save.bonus.uuid, mod_uuid))
 
-        # 3. +rage_damage to melee attacks (contextual - checks heavy armor)
         rage_dmg_mod = ContextualNumericalModifier(
             name="Rage Damage",
             source_entity_uuid=self.target_entity_uuid,
@@ -343,7 +301,6 @@ class Raging(BaseCondition):
         mod_uuid = target.equipment.melee_damage_bonus.self_contextual.add_value_modifier(rage_dmg_mod)
         outs.append((target.equipment.melee_damage_bonus.uuid, mod_uuid))
 
-        # 4. Resistance to bludgeoning/piercing/slashing
         for damage_type in [DamageType.BLUDGEONING, DamageType.PIERCING, DamageType.SLASHING]:
             resist_mod = ResistanceModifier(
                 name=f"Rage Resistance ({damage_type.value})",
@@ -355,22 +312,14 @@ class Raging(BaseCondition):
             mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
             outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
-        # 5. Register handlers for rage maintenance
-        # Note: Attack and damage tracking is now handled globally by
-        # HasAttacked and HasTakenDamage conditions (registered in setup_standard_actions)
-
-        # Handler A: Check rage maintenance at turn end
         maintenance_handler = create_rage_maintenance_handler(target.uuid)
         target.add_event_handler(maintenance_handler)
         handler_uuids.append(maintenance_handler.uuid)
 
-        # Handler D: End rage if heavy armor is equipped
         armor_handler = create_rage_armor_handler(target.uuid)
         target.add_event_handler(armor_handler)
         handler_uuids.append(armor_handler.uuid)
 
-        # Handler E: End rage if entity dies (SRD: "rage ends if you fall unconscious")
-        # We use DEATH instead of UNCONSCIOUS since monsters die at 0 HP
         death_handler = create_rage_death_handler(target.uuid)
         target.add_event_handler(death_handler)
         handler_uuids.append(death_handler.uuid)
@@ -383,29 +332,34 @@ class Raging(BaseCondition):
         return outs, handler_uuids, [], [], effect_event
 
 
-# =============================================================================
-# RAGE SYSTEM: Rage Action
-# =============================================================================
-
 class Rage(BaseAction):
+    """Action that enters a rage as a bonus action.
+
+    Attributes:
+        name: Action name displayed for entering rage.
+        description: Short rules-facing summary of the Rage action.
+        target_type: Rage always targets the acting barbarian.
+        rage_damage: Damage bonus copied into the applied Raging condition.
+        costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
-    Enter a rage as a bonus action.
+    name: str = Field(default="Rage", description="Action name displayed for entering rage.")
+    description: str = Field(
+        default="Enter a primal rage",
+        description="Short rules-facing summary of the Rage action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Rage always targets the acting barbarian.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Damage bonus copied into the applied Raging condition.",
+    )
 
-    Prerequisites:
-    - Not already raging
-    - Not wearing heavy armor (per BG3 - prevents activation)
-    - Have rage resource available
-
-    On activation:
-    - Applies Raging condition (which registers maintenance handlers)
-    - Consumes 1 rage resource
-    """
-    name: str = "Rage"
-    description: str = "Enter a primal rage"
-    target_type: TargetType = TargetType.SELF
-    rage_damage: int = 2  # Set by RageFeature based on level
-
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Bonus-action and rage-resource costs rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -442,24 +396,19 @@ class Rage(BaseAction):
         if not entity:
             return False
 
-        # If Frenzy is available, don't show Rage (Frenzy is strictly better)
         if "Frenzy Feature" in entity.active_conditions:
             return False
 
-        # Cannot rage in heavy armor (per BG3)
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
             return False
 
-        # Cannot already be raging/frenzied
         if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
             return False
 
-        # Check rage resource
         if not entity.action_economy.can_afford_resource("rage", 1):
             return False
 
-        # Check bonus action
         if not entity.action_economy.can_afford("bonus_actions", 1):
             return False
 
@@ -471,12 +420,10 @@ class Rage(BaseAction):
         if entity is None:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Cannot rage in heavy armor (per BG3)
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
             return declaration_event.cancel(status_message="Cannot rage in heavy armor")
 
-        # Already raging?
         if "Raging" in entity.active_conditions:
             return declaration_event.cancel(status_message="Already raging")
 
@@ -491,7 +438,6 @@ class Rage(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Apply Raging condition
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
@@ -509,24 +455,29 @@ class Rage(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-# =============================================================================
-# RAGE SYSTEM: End Rage Action
-# =============================================================================
-
 class EndRage(BaseAction):
+    """Action that voluntarily ends the actor's active rage.
+
+    Attributes:
+        name: Action name displayed for voluntary rage cleanup.
+        description: Short rules-facing summary of the voluntary rage-ending action.
+        target_type: End Rage always targets the acting barbarian.
+        costs: Bonus-action cost rebuilt after model initialization.
     """
-    End your rage voluntarily as a bonus action.
+    name: str = Field(default="End Rage", description="Action name displayed for voluntary rage cleanup.")
+    description: str = Field(
+        default="End your rage voluntarily",
+        description="Short rules-facing summary of the voluntary rage-ending action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="End Rage always targets the acting barbarian.",
+    )
 
-    SRD: "You can also end your rage on your turn as a bonus action."
-
-    This removes the Frenzied condition first (if present), which cascades
-    to remove Raging. Otherwise, removes Raging directly.
-    """
-    name: str = "End Rage"
-    description: str = "End your rage voluntarily"
-    target_type: TargetType = TargetType.SELF
-
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Bonus-action cost rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -560,11 +511,9 @@ class EndRage(BaseAction):
         if not entity:
             return False
 
-        # Must be raging or frenzied
         if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
             return False
 
-        # Must have bonus action available
         if not entity.action_economy.can_afford("bonus_actions", 1):
             return False
 
@@ -576,7 +525,6 @@ class EndRage(BaseAction):
         if entity is None:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Must be raging or frenzied
         if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
             return declaration_event.cancel(status_message="Not currently raging")
 
@@ -591,7 +539,6 @@ class EndRage(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # Remove Raging - this cascades to remove Frenzied (sub-condition)
         if "Raging" in entity.active_conditions:
             entity.remove_condition("Raging", parent_event=execution_event)
 
@@ -605,43 +552,35 @@ class EndRage(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-# =============================================================================
-# RAGE SYSTEM: Rage Feature (grants resource + action)
-# =============================================================================
-
 class RageFeature(BaseCondition):
+    """Barbarian feature that grants rage resources and actions.
+
+    Attributes:
+        name: Feature condition name for Barbarian rage.
+        description: Short rules-facing summary of the Rage feature.
+        rage_uses: Maximum rage resource uses granted by the feature.
+        rage_damage: Rage damage bonus wired into registered Rage actions.
     """
-    Barbarian Level 1 Feature: Rage
-
-    In battle, you fight with primal ferocity. On your turn, you can enter a rage
-    as a bonus action.
-
-    Rage uses scale with level:
-    - Level 1-2: 2 uses
-    - Level 3-5: 3 uses
-    - Level 6-11: 4 uses
-    - Level 12-16: 5 uses
-    - Level 17-19: 6 uses
-    - Level 20: Unlimited
-
-    Rage damage scales with level:
-    - Level 1-8: +2
-    - Level 9-15: +3
-    - Level 16+: +4
-
-    This condition grants the 'rage' resource and registers the Rage action.
-    """
-    name: str = "Rage Feature"
-    description: str = "Can enter a primal rage as a bonus action"
-    rage_uses: int = 2  # Number of rage uses per long rest
-    rage_damage: int = 2  # Rage damage bonus
+    name: str = Field(default="Rage Feature", description="Feature condition name for Barbarian rage.")
+    description: str = Field(
+        default="Can enter a primal rage as a bonus action",
+        description="Short rules-facing summary of the Rage feature.",
+    )
+    rage_uses: int = Field(
+        default=2,
+        description="Maximum rage resource uses granted by the feature.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Rage damage bonus wired into registered Rage actions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],  # (modifiable_value_uuid, modifier_uuid) pairs
-        List[UUID],               # event_handler_uuids
-        List[UUID],               # subcondition_uuids
-        List[UUID],               # spatial_handler_uuids
-        Optional[Event]           # completion event
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event]
     ]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(
@@ -654,8 +593,6 @@ class RageFeature(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Add rage resource (long rest recharge, or unlimited at L20)
-        # For unlimited, we use a very high number
         recharge = RechargeType.LONG_REST if self.rage_uses < 999 else RechargeType.NEVER
         target.action_economy.add_resource(
             name="rage",
@@ -663,7 +600,6 @@ class RageFeature(BaseCondition):
             recharge_type=recharge
         )
 
-        # Register Rage action template
         rage_action = Rage(
             source_entity_uuid=target.uuid,
             rage_damage=self.rage_damage,
@@ -671,7 +607,6 @@ class RageFeature(BaseCondition):
         )
         target.register_action(rage_action)
 
-        # Register End Rage action template (SRD: end rage as bonus action)
         end_rage_action = EndRage(
             source_entity_uuid=target.uuid,
             template=True
@@ -693,36 +628,32 @@ class RageFeature(BaseCondition):
             target.unregister_action("Rage")
             target.unregister_action("End Rage")
 
-            # Also remove Raging if active
             if "Raging" in target.active_conditions:
                 target.remove_condition("Raging", parent_event=event)
 
         return super()._remove(event)
 
 
-# =============================================================================
-# FRENZY SYSTEM: Frenzied Condition
-# =============================================================================
-
 class Frenzied(BaseCondition):
+    """Active Berserker frenzy state applied by the Frenzy action.
+
+    Attributes:
+        name: Condition name used for active Berserker frenzy state lookup and cleanup.
+        description: Short rules-facing summary of the active frenzy state.
+        rage_damage: Damage bonus retained for the frenzied rage state.
     """
-    BG3-style Frenzy - enhanced rage state for Berserker Barbarians.
-
-    When activated (via Frenzy action):
-    - All normal Rage benefits (STR advantage, rage damage, resistance)
-    - Grants FrenziedStrike action (bonus action melee attack each turn)
-    - NO exhaustion (BG3 adaptation)
-
-    Duration: Same as Rage (ends on conditions outlined in Raging)
-
-    NOTE: This condition is a sub-condition of Raging (set by Frenzy action).
-    When rage maintenance removes Raging, the cascade automatically removes
-    Frenzied. The parent-child relationship is inverted from intuition to
-    make rage decay work correctly.
-    """
-    name: str = "Frenzied"
-    description: str = "In a frenzied rage - can make bonus action melee attacks"
-    rage_damage: int = 2  # Same scaling as Rage
+    name: str = Field(
+        default="Frenzied",
+        description="Condition name used for active Berserker frenzy state lookup and cleanup.",
+    )
+    description: str = Field(
+        default="In a frenzied rage - can make bonus action melee attacks",
+        description="Short rules-facing summary of the active frenzy state.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Damage bonus retained for the frenzied rage state.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -742,8 +673,6 @@ class Frenzied(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Only register FrenziedStrike action - Raging is already applied by Frenzy action
-        # (Frenzied is now a sub-condition of Raging, not the parent)
         frenzied_strike = FrenziedStrike(
             source_entity_uuid=target.uuid,
             template=True
@@ -762,31 +691,46 @@ class Frenzied(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
             target.unregister_action("Frenzied Strike")
-            # Note: Frenzied is now a sub-condition of Raging, so it gets
-            # removed automatically when rage maintenance removes Raging
 
         return super()._remove(event)
 
 
-# =============================================================================
-# FRENZY SYSTEM: Frenzied Strike Action
-# =============================================================================
-
 class FrenziedStrike(BaseAction):
-    """
-    Bonus action melee attack during Frenzy.
+    """Bonus-action melee attack available during Berserker frenzy.
 
-    Available while the Frenzied condition is active.
-    Costs a bonus action but no other resources.
-    Uses the equipped melee weapon.
+    Attributes:
+        name: Action name displayed for the Berserker bonus-action attack.
+        description: Short rules-facing summary of Frenzied Strike.
+        target_type: Frenzied Strike targets a visible entity in weapon reach.
+        weapon_slot: Weapon slot used to resolve the bonus-action melee attack.
+        action_category: Marks Frenzied Strike as an attack action for action discovery and reactions.
+        costs: Bonus-action cost rebuilt after model initialization.
     """
-    name: str = "Frenzied Strike"
-    description: str = "Make a bonus action melee attack while frenzied"
-    target_type: TargetType = TargetType.ENTITY
-    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
-    action_category: ActionCategory = ActionCategory.ATTACK
+    name: str = Field(
+        default="Frenzied Strike",
+        description="Action name displayed for the Berserker bonus-action attack.",
+    )
+    description: str = Field(
+        default="Make a bonus action melee attack while frenzied",
+        description="Short rules-facing summary of Frenzied Strike.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.ENTITY,
+        description="Frenzied Strike targets a visible entity in weapon reach.",
+    )
+    weapon_slot: WeaponSlot = Field(
+        default=WeaponSlot.MELEE_MAIN,
+        description="Weapon slot used to resolve the bonus-action melee attack.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ATTACK,
+        description="Marks Frenzied Strike as an attack action for action discovery and reactions.",
+    )
 
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Bonus-action cost rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -834,15 +778,12 @@ class FrenziedStrike(BaseAction):
         if not entity:
             return False
 
-        # Must be frenzied
         if "Frenzied" not in entity.active_conditions:
             return False
 
-        # Must have bonus action available
         if not entity.action_economy.can_afford("bonus_actions", 1):
             return False
 
-        # Must have a melee weapon
         weapon = entity.equipment._get_weapon_by_slot(self.weapon_slot)
         if weapon is None:
             return False
@@ -855,11 +796,9 @@ class FrenziedStrike(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Must be frenzied
         if "Frenzied" not in entity.active_conditions:
             return declaration_event.cancel(status_message="Must be in a frenzy")
 
-        # Validate target
         if not self.target_entity_uuid:
             return declaration_event.cancel(status_message="No target specified")
 
@@ -867,11 +806,9 @@ class FrenziedStrike(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        # Validate line of sight
         if self.target_entity_uuid not in entity.senses.entities:
             return declaration_event.cancel(status_message="Target not visible")
 
-        # Validate range
         attack_event = cast(AttackEvent, declaration_event)
         range_validated = Attack.validate_range(attack_event, self.source_entity_uuid)
         if range_validated is None or range_validated.canceled:
@@ -892,23 +829,34 @@ class FrenziedStrike(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-# =============================================================================
-# FRENZY SYSTEM: Frenzy Action
-# =============================================================================
-
 class Frenzy(BaseAction):
-    """
-    Enter a frenzy as a bonus action (Berserker Path).
+    """Action that enters a Berserker frenzy as a bonus action.
 
-    Similar to Rage but applies Frenzied condition instead of Raging.
-    The Frenzied condition includes all Rage benefits plus FrenziedStrike action.
+    Attributes:
+        name: Action name displayed for entering Berserker frenzy.
+        description: Short rules-facing summary of the Frenzy action.
+        target_type: Frenzy always targets the acting barbarian.
+        rage_damage: Damage bonus copied into the applied Raging and Frenzied conditions.
+        costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
-    name: str = "Frenzy"
-    description: str = "Enter a frenzied rage"
-    target_type: TargetType = TargetType.SELF
-    rage_damage: int = 2
+    name: str = Field(default="Frenzy", description="Action name displayed for entering Berserker frenzy.")
+    description: str = Field(
+        default="Enter a frenzied rage",
+        description="Short rules-facing summary of the Frenzy action.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Frenzy always targets the acting barbarian.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Damage bonus copied into the applied Raging and Frenzied conditions.",
+    )
 
-    costs: List[Cost] = []
+    costs: List[Cost] = Field(
+        default_factory=list,
+        description="Bonus-action and rage-resource costs rebuilt after model initialization.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -945,20 +893,16 @@ class Frenzy(BaseAction):
         if not entity:
             return False
 
-        # Cannot frenzy in heavy armor
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
             return False
 
-        # Cannot already be raging/frenzied
         if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
             return False
 
-        # Check rage resource
         if not entity.action_economy.can_afford_resource("rage", 1):
             return False
 
-        # Check bonus action
         if not entity.action_economy.can_afford("bonus_actions", 1):
             return False
 
@@ -969,12 +913,10 @@ class Frenzy(BaseAction):
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
 
-        # Cannot frenzy in heavy armor
         body_armor = entity.equipment.body_armor
         if body_armor and body_armor.type == ArmorType.HEAVY:
             return declaration_event.cancel(status_message="Cannot frenzy in heavy armor")
 
-        # Already raging/frenzied?
         if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
             return declaration_event.cancel(status_message="Already raging")
 
@@ -985,9 +927,6 @@ class Frenzy(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
-        # 1. Apply Raging condition first (will be the parent)
-        # This is reversed from the intuitive order so that rage maintenance
-        # can remove Raging and cascade to remove Frenzied automatically
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
@@ -995,19 +934,14 @@ class Frenzy(BaseAction):
         )
         entity.add_condition(raging, parent_event=execution_event)
 
-        # 2. Apply Frenzied as sub-condition of Raging
-        # KEY: Frenzied is child of Raging, so when rage maintenance removes
-        # Raging (due to no attacks), Frenzied is automatically removed too
         frenzied = Frenzied(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage,
-            parent_condition=raging.uuid  # Frenzied is child of Raging
+            parent_condition=raging.uuid
         )
         entity.add_condition(frenzied, parent_event=execution_event)
 
-        # 3. Link parent-child: add Frenzied to Raging's sub_conditions list
-        # This enables cascade removal when Raging is removed by rage maintenance
         raging.sub_conditions.append(frenzied.uuid)
 
         return execution_event.phase_to(
@@ -1019,23 +953,23 @@ class Frenzy(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-# =============================================================================
-# FRENZY SYSTEM: Frenzy Feature
-# =============================================================================
-
 class FrenzyFeature(BaseCondition):
-    """
-    Berserker Path Level 3: Frenzy
+    """Berserker feature that grants the Frenzy action.
 
-    Grants the Frenzy action which allows entering a frenzied rage.
-    While frenzied, you can make a single melee weapon attack as a
-    bonus action on each of your turns.
-
-    BG3 Adaptation: No exhaustion after frenzy ends.
+    Attributes:
+        name: Feature condition name for Berserker Frenzy.
+        description: Short rules-facing summary of the Frenzy feature.
+        rage_damage: Rage damage bonus wired into registered Frenzy actions.
     """
-    name: str = "Frenzy Feature"
-    description: str = "Can enter a frenzied rage for bonus action attacks"
-    rage_damage: int = 2
+    name: str = Field(default="Frenzy Feature", description="Feature condition name for Berserker Frenzy.")
+    description: str = Field(
+        default="Can enter a frenzied rage for bonus action attacks",
+        description="Short rules-facing summary of the Frenzy feature.",
+    )
+    rage_damage: int = Field(
+        default=2,
+        description="Rage damage bonus wired into registered Frenzy actions.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1055,7 +989,6 @@ class FrenzyFeature(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        # Register Frenzy action template
         frenzy_action = Frenzy(
             source_entity_uuid=target.uuid,
             rage_damage=self.rage_damage,
@@ -1076,7 +1009,6 @@ class FrenzyFeature(BaseCondition):
         if target:
             target.unregister_action("Frenzy")
 
-            # Also remove Frenzied if active
             if "Frenzied" in target.active_conditions:
                 target.remove_condition("Frenzied", parent_event=event)
 

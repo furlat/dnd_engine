@@ -4,7 +4,7 @@ End-to-end test for websocket event server.
 This runs the server and client in the same process to verify everything works.
 
 Usage:
-    python -m server.test_websocket
+    uv run python -m server.test_websocket
 """
 
 import time
@@ -57,23 +57,20 @@ def test_http_endpoints():
 
     clear_state()
 
-    # Start the monitor (simulating lifespan)
     event_monitor.start()
 
     with TestClient(app) as client:
-        # Test root endpoint
+
         response = client.get("/")
         assert response.status_code == 200
         data = response.json()
         print(f"✓ GET / : {data}")
 
-        # Test event-types endpoint
         response = client.get("/event-types")
         assert response.status_code == 200
         data = response.json()
         print(f"✓ GET /event-types : {len(data['event_types'])} types, {len(data['phases'])} phases")
 
-        # Generate some events
         grid = get_map()
         grid.create_rectangle(0, 0, 5, 5)
 
@@ -83,13 +80,11 @@ def test_http_endpoints():
             config=EntityConfig(position=(2, 2))
         )
 
-        # Test events endpoint
         response = client.get("/events")
         assert response.status_code == 200
         data = response.json()
         print(f"✓ GET /events : {data['count']} events")
 
-        # Test events with filter
         response = client.get("/events?event_type=spatial_entity_entered")
         assert response.status_code == 200
         data = response.json()
@@ -113,12 +108,11 @@ def test_websocket_connection():
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as websocket:
-            # Should receive connection message
+
             data = websocket.receive_json()
             assert data["type"] == "connected"
             print(f"✓ Connected: {data['message']}")
 
-            # Generate events
             grid = get_map()
             grid.create_rectangle(0, 0, 5, 5)
 
@@ -129,17 +123,14 @@ def test_websocket_connection():
             )
             print("✓ Created entity at (2, 2)")
 
-            # Should receive spatial event
             data = websocket.receive_json()
             assert data["type"] == "event"
             received_events.append(data["event"])
             print(f"✓ Received event: {data['event']['event_type']}")
 
-            # Move entity
             Entity.update_entity_position(entity, (3, 3))
             print("✓ Moved entity to (3, 3)")
 
-            # Should receive two events (left and entered)
             data = websocket.receive_json()
             received_events.append(data["event"])
             print(f"✓ Received event: {data['event']['event_type']}")
@@ -148,7 +139,6 @@ def test_websocket_connection():
             received_events.append(data["event"])
             print(f"✓ Received event: {data['event']['event_type']}")
 
-            # Test ping
             websocket.send_json({"type": "ping"})
             receive_until_type(websocket, "pong")
             print("✓ Ping/pong works")
@@ -170,10 +160,9 @@ def test_websocket_filter():
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as websocket:
-            # Get connection message
+
             websocket.receive_json()
 
-            # Set filter for only entered events
             websocket.send_json({
                 "type": "filter",
                 "event_types": ["spatial_entity_entered"]
@@ -182,7 +171,6 @@ def test_websocket_filter():
             assert data["type"] == "filter_set"
             print(f"✓ Filter set: {data['event_types']}")
 
-            # Generate events
             grid = get_map()
             grid.create_rectangle(0, 0, 5, 5)
 
@@ -192,15 +180,12 @@ def test_websocket_filter():
                 config=EntityConfig(position=(2, 2))
             )
 
-            # Should receive entered event
             data = websocket.receive_json()
             assert data["event"]["event_type"] == "spatial_entity_entered"
             print(f"✓ Received filtered event: {data['event']['event_type']}")
 
-            # Move entity - should only get entered, not left
             Entity.update_entity_position(entity, (3, 3))
 
-            # Next event should be entered (left is filtered out)
             data = websocket.receive_json()
             assert data["event"]["event_type"] == "spatial_entity_entered"
             print(f"✓ Received filtered event: {data['event']['event_type']}")
@@ -219,7 +204,6 @@ def test_get_history():
     clear_state()
     event_monitor.start()
 
-    # Generate some events first
     grid = get_map()
     grid.create_rectangle(0, 0, 5, 5)
 
@@ -235,21 +219,19 @@ def test_get_history():
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as websocket:
-            # Get connection message
+
             websocket.receive_json()
 
-            # Request history
             websocket.send_json({
                 "type": "get_history",
                 "limit": 10
             })
 
-            # Collect history events
             history_events = []
             start = time.time()
-            while time.time() - start < 2.0:  # 2 second timeout
+            while time.time() - start < 2.0:
                 try:
-                    # Non-blocking receive with short timeout
+
                     data = websocket.receive_json()
                     if data["type"] == "event":
                         history_events.append(data["event"])
@@ -284,7 +266,6 @@ def main():
     print(f"{passed}/{total} tests passed")
 
     return all(results)
-
 
 if __name__ == "__main__":
     success = main()

@@ -1,7 +1,4 @@
-"""Spell system for D&D 5e engine.
-
-Provides spell classes organized by school, plus registration utilities.
-"""
+"""Spell catalog exports organized by school and spell level."""
 from dnd.spells.base import SpellAction, SpellEvent
 from dnd.spells.evocation import (
     FireBolt, SacredFlame, MagicMissile, Fireball,
@@ -24,7 +21,6 @@ from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisib
 from dnd.spells.transmutation import SpikeGrowth, Slow, Haste, DarkvisionSpell, Disintegrate, JumpSpell, ExpeditiousRetreat, EnhanceAbility, EnlargeReduce, Telekinesis, Regenerate, RegeneratingEffect
 from dnd.spells.divination import SeeInvisibility, TrueSeeing, Guidance, GuidanceEffect
 
-# Lookup dictionaries (like dnd/items/__init__.py)
 CANTRIPS = {
     "Fire Bolt": FireBolt,
     "Sacred Flame": SacredFlame,
@@ -178,10 +174,10 @@ ALL_SPELLS = {
 }
 
 __all__ = [
-    # Base classes
+
     "SpellAction",
     "SpellEvent",
-    # Cantrips
+
     "FireBolt",
     "SacredFlame",
     "PoisonSpray",
@@ -193,7 +189,7 @@ __all__ = [
     "TrueStrike",
     "Guidance",
     "Light",
-    # Spell-specific conditions
+
     "NoHealing",
     "GuidingBoltMarked",
     "PowerWordStunEffect",
@@ -221,7 +217,7 @@ __all__ = [
     "GuardianOfFaithObject",
     "GuardianWarded",
     "RegeneratingEffect",
-    # Level 1
+
     "MagicMissile",
     "MageArmor",
     "BurningHands",
@@ -246,7 +242,7 @@ __all__ = [
     "ShieldOfFaith",
     "Sanctuary",
     "Resistance",
-    # Level 2
+
     "HoldPerson",
     "Shatter",
     "ScorchingRay",
@@ -270,7 +266,7 @@ __all__ = [
     "LesserRestoration",
     "ProtectionFromPoison",
     "Aid",
-    # Level 3
+
     "CallLightning",
     "CallLightningStrike",
     "Fireball",
@@ -288,7 +284,7 @@ __all__ = [
     "BeaconOfHope",
     "RemoveCurse",
     "BestowCurse",
-    # Level 4
+
     "Blight",
     "Stoneskin",
     "GreaterInvisibility",
@@ -298,7 +294,7 @@ __all__ = [
     "GuardianOfFaith",
     "DeathWard",
     "FreedomOfMovement",
-    # Level 5
+
     "HoldMonster",
     "ConeOfCold",
     "Cloudkill",
@@ -307,7 +303,7 @@ __all__ = [
     "FlameStrike",
     "MassCureWounds",
     "GreaterRestoration",
-    # Level 6
+
     "CircleOfDeath",
     "Disintegrate",
     "TrueSeeing",
@@ -318,20 +314,20 @@ __all__ = [
     "HealSpell",
     "Harm",
     "HeroesFeast",
-    # Level 7
+
     "PrismaticSpray",
     "FingerOfDeath",
     "Regenerate",
     "DivineWord",
-    # Level 8
+
     "Sunburst",
     "PowerWordStun",
     "IncendiaryCloud",
     "AntimagicField",
-    # Level 9
+
     "PowerWordKill",
     "MassHeal",
-    # Lookup dicts
+
     "CANTRIPS",
     "LEVEL_1_SPELLS",
     "LEVEL_2_SPELLS",
@@ -343,7 +339,7 @@ __all__ = [
     "LEVEL_8_SPELLS",
     "LEVEL_9_SPELLS",
     "ALL_SPELLS",
-    # Reaction spells
+
     "register_shield_reaction",
     "register_counterspell_reaction",
     "register_true_strike",

@@ -1,38 +1,32 @@
-""" This is the most "designed" and hardcoded part of the codebase it contains most of the dynamics possible in DND 5e and will be constantly expanded
-it introduces and Event qeueue which is the source of ground truth information flow between entities, it allows each action to broadcast its intent and results
- and allow it to be intercepted by reactions and or trigger cascade effects at any point in the game"""
+"""Event contracts and dispatch registries for game-state changes.
+
+The event layer represents declarations, execution, effects, completion, and
+cancelation as versioned event objects. `EventQueue` stores each version,
+dispatches matching handlers before completion, and exposes passive callbacks
+for logs, sensory updates, and API streams.
+"""
 
 __all__ = [
-    # Enums
     "WeaponSlot", "BodyPart", "RingSlot", "EquipmentSlot",
     "EventType", "SpatialChangeType", "EventPhase", "RangeType",
-    # Type literals
     "AbilityName", "SkillName",
-    # Core event classes
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
-    # Sensory events
     "SensoryUpdateReason", "SensoryUpdateEvent",
-    # D20 events (legacy)
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
-    # Unified dice roll events
     "DiceRollResultEvent",
     "D20RollResultEvent",
     "AttackD20RollResultEvent",
     "SavingThrowD20RollResultEvent",
     "SkillCheckD20RollResultEvent",
     "DamageRollResultEvent",
-    # Spatial events
-    "SensesUpdateHint", "SpatialChangeEvent", "ForcedMovementEvent",
-    # Combat events
-    "DamageRolledEvent", "TakeDamageEvent",  # DamageRolledEvent is DEPRECATED
-    # Combat data
+    "SensesUpdateHint", "SpatialChangeEvent", "FireExposureEvent", "ExposedFlameEvent",
+    "WindExposureEvent", "ForcedMovementEvent",
+    "DamageRolledEvent", "TakeDamageEvent",
     "Range", "Damage",
-    # Encounter/Turn events
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
     "TurnEvent", "TurnStartEvent", "TurnEndEvent",
-    # Death event
-    "DeathEvent",
+    "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
 from enum import Enum
@@ -40,7 +34,6 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set
 from dnd.core.values import ModifiableValue
 
-# Import combat log utilities for generate_combat_log methods and combat_log field
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
@@ -54,49 +47,54 @@ from datetime import datetime
 from collections import defaultdict
 from typing import Callable, Tuple
 from dnd.core.base_object import BaseObject
-# Type definition for event listeners
 T = TypeVar('T', bound='Event')
 E = TypeVar('E', bound='Event')
 
-# Replace Protocol with type alias
 EventProcessor = Callable[[E, UUID], Optional[E]]
 
-# More specific event listener types
 class TypedEventListener(Protocol[T]):
-    """Type definition for event listeners with specific event types."""
+    """Callable contract for handlers that consume one event subtype."""
+
     def __call__(self, event: T, source_entity_uuid: UUID) -> Optional[T]: ...
 
+
 class GenericEventModifier(Protocol):
-    """A protocol for callables that can modify any event type."""
+    """Callable contract for handlers that may consume any event subtype."""
+
     def __call__(self, event: 'Event', source_entity_uuid: UUID) -> Optional['Event']: ...
 
-# Protocol for entities that can have event handlers
+
 @runtime_checkable
 class EntityWithEventHandlers(Protocol):
-    """Protocol defining the expected structure of entities that can have event handlers.
-    This allows for type-safe access to the event_handlers attribute without circular imports.
+    """Structural contract for blocks that own event-handler indexes.
+
+    The event layer cannot import `Entity` or other owner types directly. This
+    protocol lets handler cleanup remove block-local indexes without adding an
+    upward dependency.
     """
+
     event_handlers: Dict[UUID, 'EventHandler']
-    
+
     def remove_event_handler_from_dicts(self, event_handler: 'EventHandler') -> None:
-        """Remove an event handler from the entity's event handler dictionaries"""
+        """Remove one handler from the owner's local lookup dictionaries.
+
+        Args:
+            event_handler: Handler being removed from the global queue.
+        """
         ...
 
 AbilityName = TypeLiteral[
-    'strength', 'dexterity', 'constitution', 
+    'strength', 'dexterity', 'constitution',
     'intelligence', 'wisdom', 'charisma'
 ]
 
 SkillName = TypeLiteral[
-    'acrobatics', 'animal_handling', 'arcana', 'athletics', 
-    'deception', 'history', 'insight', 'intimidation', 
-    'investigation', 'medicine', 'nature', 'perception', 
-    'performance', 'persuasion', 'religion', 'sleight_of_hand', 
+    'acrobatics', 'animal_handling', 'arcana', 'athletics',
+    'deception', 'history', 'insight', 'intimidation',
+    'investigation', 'medicine', 'nature', 'perception',
+    'performance', 'persuasion', 'religion', 'sleight_of_hand',
     'stealth', 'survival'
 ]
-
-
-
 
 
 class WeaponSlot(str, Enum):
@@ -122,12 +120,13 @@ class RingSlot(str, Enum):
 EquipmentSlot = Union[WeaponSlot, BodyPart, RingSlot]
 
 class EventType(str, Enum):
-    # Core events
+    """Kinds of state transitions that handlers and logs can subscribe to."""
+
     BASE_ACTION = "base_action"
     ATTACK = "attack"
     MOVEMENT = "movement"
-    STEP_MOVEMENT = "step_movement"  # Single cell transition within a path - triggers OA
-    FORCED_MOVEMENT = "forced_movement"  # Push, pull, teleport by others - does NOT trigger OA
+    STEP_MOVEMENT = "step_movement"
+    FORCED_MOVEMENT = "forced_movement"
     ABILITY_CHECK = "ability_check"
     SAVING_THROW = "saving_throw"
     SKILL_CHECK = "skill_check"
@@ -147,44 +146,44 @@ class EventType(str, Enum):
     SHIELD_EQUIP = "shield_equip"
     SHIELD_UNEQUIP = "shield_unequip"
 
-    #Trigger events
     TRIGGER_EVENT = "trigger_event"
 
-    #Dice roll events
     DICE_ROLL = "dice_roll"
-    DICE_ROLL_RESULT = "dice_roll_result"  # Base type for unified dice roll events
-    D20_ROLL_RESULT = "d20_roll_result"    # D20 base (Lucky triggers on this)
-    ATTACK_D20_ROLL_RESULT = "attack_d20_roll"  # Attack rolls
-    SAVE_D20_ROLL_RESULT = "save_d20_roll"      # Saving throws
-    CHECK_D20_ROLL_RESULT = "check_d20_roll"    # Skill checks
-    DAMAGE_ROLL_RESULT = "damage_roll_result"   # After damage dice rolled, before applied
-    HEAL_ROLL_RESULT = "heal_roll_result"       # After healing dice rolled, before applied
-    DAMAGE_ROLLED = "damage_rolled"  # DEPRECATED: Use DAMAGE_ROLL_RESULT instead
+    DICE_ROLL_RESULT = "dice_roll_result"
+    D20_ROLL_RESULT = "d20_roll_result"
+    ATTACK_D20_ROLL_RESULT = "attack_d20_roll"
+    SAVE_D20_ROLL_RESULT = "save_d20_roll"
+    CHECK_D20_ROLL_RESULT = "check_d20_roll"
+    DAMAGE_ROLL_RESULT = "damage_roll_result"
+    HEAL_ROLL_RESULT = "heal_roll_result"
+    DAMAGE_ROLLED = "damage_rolled"
 
-    # Combat events
     ENEMY_SPOTTED = "enemy_spotted"
     ENEMY_KILLED = "enemy_killed"
     ENEMY_ENGAGED = "enemy_engaged"
 
-    # Spatial events (for GridMap subscriptions)
-    SPATIAL_ENTITY_ENTERED = "spatial_entity_entered"  # Entity moved into a cell
-    SPATIAL_ENTITY_LEFT = "spatial_entity_left"        # Entity left a cell
-    SPATIAL_TILE_CHANGED = "spatial_tile_changed"      # Tile properties changed
-    SPATIAL_OBJECT_PLACED = "spatial_object_placed"    # Object placed on grid
-    SPATIAL_OBJECT_REMOVED = "spatial_object_removed"  # Object removed from grid
-    SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"  # Entity's perceivability changed (hidden/invisible)
-    SPATIAL_LIGHT_CHANGED = "spatial_light_changed"  # Tile's resolved light level changed
-    SPATIAL_OBJECT_CHANGED = "spatial_object_changed"  # Object blocking state changed (door open/close)
-    MOVEMENT_COLLISION = "movement_collision"  # Entity bumped into imperceivable blocker
-    SENSORY_UPDATE = "sensory_update"  # Observer-specific visibility/fog/entity/object delta
+    SPATIAL_ENTITY_ENTERED = "spatial_entity_entered"
+    SPATIAL_ENTITY_LEFT = "spatial_entity_left"
+    SPATIAL_TILE_CHANGED = "spatial_tile_changed"
+    SPATIAL_OBJECT_PLACED = "spatial_object_placed"
+    SPATIAL_OBJECT_REMOVED = "spatial_object_removed"
+    SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"
+    SPATIAL_LIGHT_CHANGED = "spatial_light_changed"
+    SPATIAL_OBJECT_CHANGED = "spatial_object_changed"
+    MOVEMENT_COLLISION = "movement_collision"
+    SENSORY_UPDATE = "sensory_update"
+    FIRE_EXPOSURE = "fire_exposure"
+    EXPOSED_FLAME_IGNITED = "exposed_flame_ignited"
+    WIND_EXPOSURE = "wind_exposure"
 
-    # Encounter/Turn events
     ENCOUNTER_START = "encounter_start"
     ENCOUNTER_END = "encounter_end"
     ROUND_START = "round_start"
     ROUND_END = "round_end"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
+    DEATH_SAVE = "death_save"
+    INSTANT_DEATH = "instant_death"
     DEATH = "death"
 
 
@@ -215,55 +214,98 @@ class SensoryUpdateReason(str, Enum):
 
 
 class EventPhase(str, Enum):
-    # Progression of an event
-    DECLARATION = "declaration"  # Initial creation - could be the user clicking the target, or the ai considering a possible target of an action
-    EXECUTION = "execution"      # Main action - once this start the cost is applied
-    EFFECT = "effect"            # Applying effects - this is typically when the roll is resolved and the effects have to be applied, there could be multiple effect for a single event - last chance for a reaction to block or modify the application of the effect
-    COMPLETION = "completion"    # Finalizing - the event is complete and the effects have been applied - here is like when post effect like consequences of taking damage are applied. last chance for reaction to partecipate as childrens of this event.
-    CANCEL = "cancel"            # Canceling - the event is canceled and the effects are not applied
+    """Lifecycle phase for one logical event lineage.
+
+    `DECLARATION`, `EXECUTION`, and `EFFECT` are handler-visible phases.
+    `COMPLETION` stores final lineage and combat-log data but does not dispatch
+    event handlers. `CANCEL` records an aborted lineage.
+    """
+
+    DECLARATION = "declaration"
+    EXECUTION = "execution"
+    EFFECT = "effect"
+    COMPLETION = "completion"
+    CANCEL = "cancel"
 
 ordered_event_phases = [EventPhase.DECLARATION, EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION]
 
 
 class Event(BaseObject):
-    """Base class for all game events"""
-    name: str = Field(default="Event",description="The name of the event")
-    lineage_uuid: UUID = Field(default_factory=uuid4,description="The lineageuuid of the event, this is shared through modifications of the event")
-    #human readable timestamp in typed format
-    timestamp : datetime = Field(default_factory=datetime.now,description="The timestamp of the event")
-    event_type: EventType = Field(description="The type of event")
-    phase: EventPhase = Field(default=EventPhase.DECLARATION,description="The phase of the event")
+    """Versioned state-transition record.
 
-    # Entity names (populated by actions at creation/execution time for combat log generation)
-    source_entity_name: Optional[str] = Field(default=None, description="Name of the source entity")
-    target_entity_name: Optional[str] = Field(default=None, description="Name of the target entity")
-    
-    
-    # Flag to indicate if event was modified by reactions
-    modified: bool = Field(default=False,description="Flag to indicate if event was modified by reactions")
-    
-    # Flag to indicate if event should be canceled
-    canceled: bool = Field(default=False,description="Flag to indicate if event should be canceled")
-    parent_event: Optional[UUID] = Field(default=None,description="The parent event of the current event")
-    status_message: Optional[str] = Field(default=None,description="A status message for the event")
+    Each call to `post()` or `phase_to()` creates a new UUID while preserving
+    `lineage_uuid`, allowing the queue to store both the current phase and the
+    history of a logical event. Subclasses add domain-specific payload fields
+    and may override `generate_combat_log()`.
+    """
 
-    # Phase repetition flags (for events like Attack that fire EFFECT twice)
-    is_first: bool = Field(default=True, description="True if this is the first event of this phase in this lineage")
-    is_last: bool = Field(default=True, description="True if this is the last event of this phase in this lineage")
-    
-    # Track children events differently
-    lineage_children_events: List[UUID] = Field(default_factory=list,description="All children events that happened throughout this event's lifetime")
-    children_events: List[UUID] = Field(default_factory=list,description="Children events that happened during the current phase")
-
-    # Stable hierarchy fields — populated automatically at COMPLETION phase
-    # by resolving stale phase-specific UUIDs through EventQueue lookups.
-    # Never set by callers.
-    parent_lineage: Optional[UUID] = Field(default=None, description="Parent's lineage_uuid (stable across phases)")
-    children_lineages: List[UUID] = Field(default_factory=list, description="Lineage UUIDs of all children (stable, deduped)")
-
-    # Auto-generated combat log entry (populated at COMPLETION phase)
-    # Excluded from serialization - generated on demand via generate_combat_log()
-    combat_log: Optional[CombatLogEntry] = Field(default=None, exclude=True, description="Auto-generated combat log entry")
+    name: str = Field(default="Event", description="Human-readable event label.")
+    lineage_uuid: UUID = Field(
+        default_factory=uuid4,
+        description="Stable UUID shared by all phase versions of one logical event.",
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.now,
+        description="Creation time for this event version.",
+    )
+    event_type: EventType = Field(description="Dispatch category used by triggers and history indexes.")
+    phase: EventPhase = Field(
+        default=EventPhase.DECLARATION,
+        description="Current lifecycle phase for this event version.",
+    )
+    source_entity_name: Optional[str] = Field(
+        default=None,
+        description="Display name of the acting entity, captured for log generation.",
+    )
+    target_entity_name: Optional[str] = Field(
+        default=None,
+        description="Display name of the target entity, captured for log generation.",
+    )
+    modified: bool = Field(
+        default=False,
+        description="Whether a handler or repost changed this event version.",
+    )
+    canceled: bool = Field(
+        default=False,
+        description="Whether this event lineage has been canceled before applying its effects.",
+    )
+    parent_event: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the parent event version that caused this child event.",
+    )
+    status_message: Optional[str] = Field(
+        default=None,
+        description="Short status or cancellation reason attached to this event version.",
+    )
+    is_first: bool = Field(
+        default=True,
+        description="Whether this is the first event at this phase in its lineage.",
+    )
+    is_last: bool = Field(
+        default=True,
+        description="Whether this is the last event at this phase in its lineage.",
+    )
+    lineage_children_events: List[UUID] = Field(
+        default_factory=list,
+        description="Child event UUIDs accumulated across this lineage's earlier phases.",
+    )
+    children_events: List[UUID] = Field(
+        default_factory=list,
+        description="Child event UUIDs attached during this event version's phase.",
+    )
+    parent_lineage: Optional[UUID] = Field(
+        default=None,
+        description="Stable lineage UUID of the parent, resolved during completion.",
+    )
+    children_lineages: List[UUID] = Field(
+        default_factory=list,
+        description="Stable child lineage UUIDs resolved during completion.",
+    )
+    combat_log: Optional[CombatLogEntry] = Field(
+        default=None,
+        exclude=True,
+        description="Generated combat-log entry for completed events; excluded from model serialization.",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -288,49 +330,55 @@ class Event(BaseObject):
         return set()
 
     def get_trigger(self) -> 'Trigger':
-        """ get the trigger for the event """
-        return Trigger(event_type=self.event_type, event_phase=self.phase,event_source_entity_uuid=self.source_entity_uuid,event_target_entity_uuid=self.target_entity_uuid)
-    
+        """Return the exact trigger that would match this event version."""
+        return Trigger(
+            event_type=self.event_type,
+            event_phase=self.phase,
+            event_source_entity_uuid=self.source_entity_uuid,
+            event_target_entity_uuid=self.target_entity_uuid,
+        )
+
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.use_register:
             EventQueue.register(self)
-    
 
     def set_target_entity(self, target_entity_uuid: UUID):
-        """Set the target entity for the event"""
-        self.target_entity_uuid = target_entity_uuid
-       
-    
-    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates) -> Self:
-        """
-        Create a copy of this event with a new phase and optional updates, then post it.
-        
+        """Set the target entity for the event.
+
         Args:
-            new_phase: The new phase to transition to (defaults to next in sequence)
-            status_message: Optional message explaining the phase change
-            **updates: Additional attributes to update on the event
-            
+            target_entity_uuid: Entity UUID to store as the event target.
+        """
+        self.target_entity_uuid = target_entity_uuid
+
+    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates) -> Self:
+        """Create, post, and return a new event version at another phase.
+
+        Completion resolves stable parent/child lineage metadata, generates
+        combat logs, and invokes the top-level combat-log callback if present.
+
+        Args:
+            new_phase: Phase to transition to. When omitted, the next ordered
+                phase is used.
+            status_message: Optional message explaining the phase change.
+            **updates: Additional model fields to apply to the new event version.
+
         Returns:
-            Self: The new event after processing by the event queue
+            The new event version after queue registration and handler dispatch.
         """
         if self.phase == EventPhase.COMPLETION:
             return self
-        
-        # Determine new phase if not specified
+
         if new_phase is None:
             new_phase = ordered_event_phases[ordered_event_phases.index(self.phase) + 1]
-            
-        # Create update dictionary
+
         phase_updates = {}
         phase_updates['phase'] = new_phase
         if status_message is not None:
             phase_updates['status_message'] = status_message
-            
-        # Add any additional updates
+
         phase_updates.update(updates)
-        
-        # Reset is_first/is_last to defaults unless explicitly overridden
+
         if 'is_first' not in phase_updates:
             phase_updates['is_first'] = True
         if 'is_last' not in phase_updates:
@@ -339,18 +387,15 @@ class Event(BaseObject):
         if new_phase == EventPhase.COMPLETION:
             EventQueue.run_pre_completion_callbacks(self)
 
-            # COMPLETION: carry forward ALL children and resolve stable lineage references
             all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
             phase_updates['lineage_children_events'] = all_children
             phase_updates['children_events'] = all_children
 
-            # Resolve parent_lineage from stale parent_event UUID
             if self.parent_event:
                 parent = EventQueue.get_event_by_uuid(self.parent_event)
                 if parent:
                     phase_updates['parent_lineage'] = parent.lineage_uuid
 
-            # Build children_lineages by dereferencing child UUIDs → lineage UUIDs
             child_lineages: List[UUID] = []
             seen_lineages: Set[UUID] = set()
             for child_uuid in all_children:
@@ -360,81 +405,74 @@ class Event(BaseObject):
                     seen_lineages.add(child.lineage_uuid)
             phase_updates['children_lineages'] = child_lineages
         else:
-            # Non-COMPLETION: existing behavior unchanged
             phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
             phase_updates['children_events'] = []
 
-        # Auto-generate combat log at COMPLETION phase
         if new_phase == EventPhase.COMPLETION:
             try:
-                # Update self with phase_updates first so generate_combat_log has access to final state
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
-                    # Stamp perceivers using GridMap subscribers (O(1) per position)
                     if EventQueue._perceiver_computer:
                         combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
 
-                    # CENTRALIZED: Collect children here, not in each generate_combat_log()
                     child_logs = temp_event._collect_child_combat_logs()
                     if child_logs:
                         combat_log.sub_entries = child_logs
-                        # Union child perceivers into parent — if ANY sub-event
-                        # was perceivable, the parent is too
                         for child_log in child_logs:
                             combat_log.perceiver_uuids |= child_log.perceiver_uuids
                             combat_log.revealed_entity_uuids |= child_log.revealed_entity_uuids
 
-                    # Compute revealed entities from condition removal logs in tree
                     if EventQueue._revealed_computer:
                         combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
 
                     phase_updates['combat_log'] = combat_log
 
-                    # Auto-add top-level events via callback
                     if self.parent_event is None and EventQueue._combat_log_callback:
-                        # Create temp event with updated combat_log for callback
                         final_event = self.model_copy(update=phase_updates)
                         EventQueue._combat_log_callback(final_event)
             except Exception:
-                pass  # Don't break event flow if log generation fails
+                pass
 
-        # Post the updated event
         return self.post(**phase_updates)
-    
+
     def cancel(self, status_message: Optional[str] = None, **updates) -> Self:
-        """
-        Mark this event as canceled and post it.
-        
+        """Mark this event as canceled and post the cancel version.
+
         Args:
-            status_message: Optional message explaining why the event was canceled
-            **updates: Additional attributes to update on the event
-            
+            status_message: Optional message explaining why the event was canceled.
+            **updates: Additional model fields to apply to the cancel version.
+
         Returns:
-            Self: The canceled event after processing
+            The cancel event version after queue registration.
         """
-        # Create update dictionary
         cancel_updates = {}
         cancel_updates['canceled'] = True
         cancel_updates['phase'] = EventPhase.CANCEL
         if status_message is not None:
             cancel_updates['status_message'] = status_message
-            
-        # Add any additional updates
+
         cancel_updates.update(updates)
-        
-        # Post the canceled event
         return self.post(**cancel_updates)
-    
+
     def set_parent_event(self, parent_event: 'Event'):
-        """Set the parent event for the current event this is NOT the older version of itself which is insterad tracked by the shared uuid
-        but instead the parent event is the event under which the current event is registered
-        e.g. a attack_miss event will have as parent the attack event that it is a miss of"""
-        
+        """Attach this event to the event version that caused it.
+
+        Parent events are causal parents, not prior phase versions. Phase
+        history is tracked by `lineage_uuid`.
+
+        Args:
+            parent_event: Event version that caused this child event.
+        """
+
         self.parent_event = parent_event.uuid
-    
+
     def add_child_event(self, child_event: 'Event'):
-        """Add a child event to both current phase and lineage tracking"""
+        """Add a child event to current-phase and lineage-level child lists.
+
+        Args:
+            child_event: Event version caused by this event.
+        """
         self.children_events.append(child_event.uuid)
         if child_event.uuid not in self.lineage_children_events:
             self.lineage_children_events.append(child_event.uuid)
@@ -450,7 +488,7 @@ class Event(BaseObject):
             for lineage_id in self.children_lineages:
                 lineage_events = EventQueue._events_by_lineage.get(lineage_id, [])
                 if lineage_events:
-                    result.append(lineage_events[-1])  # Latest version in lineage
+                    result.append(lineage_events[-1])
             return result
         resolved = [EventQueue.get_event_by_uuid(child_event) for child_event in self.children_events]
         return [out for out in resolved if out is not None]
@@ -464,7 +502,7 @@ class Event(BaseObject):
         if self.parent_lineage:
             events = EventQueue._events_by_lineage.get(self.parent_lineage, [])
             if events:
-                return events[-1]  # Latest version in parent lineage
+                return events[-1]
         if self.parent_event:
             return EventQueue.get_event_by_uuid(self.parent_event)
         return None
@@ -482,16 +520,13 @@ class Event(BaseObject):
         child_logs: List[CombatLogEntry] = []
 
         if self.children_lineages:
-            # Direct lookup: each entry is already a unique lineage UUID
             for lineage_id in self.children_lineages:
                 events = EventQueue._events_by_lineage.get(lineage_id, [])
-                # Walk backwards to find the COMPLETION event with combat_log
                 for ev in reversed(events):
                     if ev.combat_log:
                         child_logs.append(ev.combat_log)
                         break
         else:
-            # Fallback: de-duplicate by lineage_uuid
             seen_lineages: Set[UUID] = set()
             for child_uuid in self.lineage_children_events:
                 child = EventQueue.get_event_by_uuid(child_uuid)
@@ -501,73 +536,74 @@ class Event(BaseObject):
         return child_logs
 
     def get_history(self) -> List['Event']:
-        """ get all previous version of the event by getting the full list by uuid and getting the current event as last element
+        """Return prior versions in this event lineage.
+
+        Returns:
+            Earlier event versions ordered by their stored timestamps.
         """
         history = EventQueue.get_event_history(self.uuid)
-        
+
         outs= []
         for event in history:
             if event.timestamp < self.timestamp:
                 outs.append(event)
         return outs
-    
+
     def post(self, **updates) -> Self:
-        """
-        Update the event with new values and rebroadcast it through the queue.
-        
-        This method:
-        1. Updates the event with any provided values
-        2. Marks the event as modified
-        3. Rebroadcasts the event through EventQueue
-        4. Returns the potentially modified event after processing
-        
+        """Create a modified version of this event and rebroadcast it.
+
+        The new version receives a fresh UUID and timestamp while preserving
+        the logical lineage unless `lineage_uuid` is explicitly supplied.
+
         Args:
-            **updates: Keyword arguments with values to update on the event
-            
+            **updates: Model fields to override on the new event version.
+
         Returns:
-            Self: The potentially modified event after rebroadcasting
+            The new event version after queue registration and handler dispatch.
         """
-        # Apply updates
         updates['modified'] = True
         updates['timestamp'] = datetime.now()
-        
-        # Generate a new UUID but preserve the lineage
         updates['uuid'] = uuid4()
         if 'lineage_uuid' not in updates:
             updates['lineage_uuid'] = self.lineage_uuid
-        
-        # Create updated event
+
         updated_event = self.model_copy(update=updates)
-        
-        # Rebroadcast event through queue
+
         if updated_event.use_register:
             result = EventQueue.register(updated_event)
         else:
             result = updated_event
-        
-        # Make sure we have the right type
+
         if not isinstance(result, self.__class__):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
-            
-        return result  
-    
+
+        return result
+
 class Trigger(BaseModel):
-    name: str = Field(default="Trigger",description="The name of the trigger")
-    event_type: EventType = Field(description="The type of event to trigger the event handler")
-    event_phase: EventPhase = Field(description="The phase of the event to trigger the event handler")
-    event_source_entity_uuid: Optional[UUID] = Field(default=None,description="The source entity uuid of the event handler")
-    event_target_entity_uuid: Optional[UUID] = Field(default=None,description="The target entity uuid of the event handler")
-    
+    """Hashable event-matching predicate used by `EventHandler`."""
+
+    name: str = Field(default="Trigger", description="Human-readable trigger label.")
+    event_type: EventType = Field(description="Event category that must match.")
+    event_phase: EventPhase = Field(description="Event lifecycle phase that must match.")
+    event_source_entity_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Optional source-entity filter; absent means any source.",
+    )
+    event_target_entity_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Optional target-entity filter; absent means any target.",
+    )
+
     model_config = ConfigDict(frozen=True)
-    
+
     def __hash__(self):
-        """Make the Trigger hashable for use as dictionary keys"""
-        return hash((self.event_type, self.event_phase, 
-                    self.event_source_entity_uuid, 
+        """Return a stable hash for queue indexes."""
+        return hash((self.event_type, self.event_phase,
+                    self.event_source_entity_uuid,
                     self.event_target_entity_uuid))
-    
+
     def __eq__(self, other):
-        """Define equality for Trigger objects"""
+        """Return whether another object matches this trigger exactly."""
         if not isinstance(other, Trigger):
             return False
         return (self.event_type == other.event_type and
@@ -576,8 +612,15 @@ class Trigger(BaseModel):
                 self.event_target_entity_uuid == other.event_target_entity_uuid)
 
     def __call__(self, event: Event) -> bool:
-        """ checks if the trigger condition is satisfied by the event, this does not guarantee that the event processor will modify the event as it could apply further freeform python prevalidation """
+        """Return whether an event satisfies this trigger.
 
+        Args:
+            event: Event version to test.
+
+        Returns:
+            True when event type, phase, and optional source/target filters
+            match. A true match does not imply the handler will modify the event.
+        """
         if event.event_type == self.event_type and event.phase == self.event_phase:
             if self.event_source_entity_uuid  and event.source_entity_uuid != self.event_source_entity_uuid:
                 return False
@@ -585,27 +628,52 @@ class Trigger(BaseModel):
                 return False
             return True
         return False
-    
+
     def is_simple(self) -> bool:
-        """ check if the trigger is simple, i.e. it is only based on the event type and phase """
+        """Return True when the trigger has no source or target filters."""
         return self.event_source_entity_uuid is None and self.event_target_entity_uuid is None
-    
+
     def get_simple_trigger(self) -> 'Trigger':
-        """ get a simple trigger that is only based on the event type and phase """
+        """Return a trigger that keeps only event type and phase."""
         return Trigger(event_type=self.event_type, event_phase=self.event_phase)
 
 class BaseHandler(BaseObject):
-    """Base class for all handlers (EventHandler and SpatialHandler).
+    """Shared callable wrapper for event and spatial handlers.
 
-    Provides common fields and invocation logic.
+    A handler stores the processor callable, the owning source entity, and
+    toggle/cleanup metadata. Subclasses decide how the queue discovers them.
     """
-    name: str = Field(default="BaseHandler", description="The name of the handler")
-    event_processor: EventProcessor = Field(exclude=True, description="The event processor to handle the event")
-    enabled: bool = Field(default=True, description="Whether this handler is active. Disabled handlers are skipped during event dispatch.")
-    player_toggleable: bool = Field(default=False, description="Whether the player can toggle this handler on/off. Only True for reactions and optional features like Divine Smite.")
+
+    name: str = Field(default="BaseHandler", description="Human-readable handler label.")
+    event_processor: EventProcessor = Field(
+        exclude=True,
+        description="Callable that may inspect, replace, cancel, or ignore a matching event.",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether queue dispatch should invoke this handler.",
+    )
+    player_toggleable: bool = Field(
+        default=False,
+        description="Whether player-facing controls may enable or disable this handler.",
+    )
+    owner_block: Optional[EntityWithEventHandlers] = Field(
+        default=None,
+        exclude=True,
+        description="Block that registered this handler, used to clean block-local handler indexes."
+    )
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
-        """Execute the event processor."""
+        """Execute the stored event processor if this handler is enabled.
+
+        Args:
+            event: Event version being dispatched.
+            source_entity_uuid: Source UUID supplied by the queue. Defaults to
+                the handler's own source.
+
+        Returns:
+            A modified/canceled event, the same event, or None for no change.
+        """
         if not self.enabled:
             return None
         if source_entity_uuid is None:
@@ -613,7 +681,14 @@ class BaseHandler(BaseObject):
         return self.event_processor(event, source_entity_uuid)
 
     def get_declaration_event(self, parent_event: Optional[Event] = None) -> Event:
-        """Get the declaration event for this handler."""
+        """Build a declaration event representing this handler firing.
+
+        Args:
+            parent_event: Optional causal parent event.
+
+        Returns:
+            A trigger-event declaration with this handler as the source.
+        """
         return Event(
             name=self.name,
             event_type=EventType.TRIGGER_EVENT,
@@ -625,59 +700,94 @@ class BaseHandler(BaseObject):
 
 
 class EventHandler(BaseHandler):
-    """A trigger-based handler that matches events via Trigger conditions.
+    """Trigger-indexed handler for non-position-specific event reactions.
 
-    Use this for:
-    - Non-spatial events (attacks, damage rolls, saves, etc.)
-    - Global spatial event listening (OA needs to check ALL movements)
+    Empty `trigger_conditions` means the handler fires whenever code calls it
+    directly. Queue discovery uses populated triggers.
     """
-    name: str = Field(default="EventHandler", description="The name of the event handler")
-    trigger_conditions: List[Trigger] = Field(default_factory=list, description="The conditions that trigger the event handler")
+
+    name: str = Field(default="EventHandler", description="Human-readable event-handler label.")
+    trigger_conditions: List[Trigger] = Field(
+        default_factory=list,
+        description="Predicates that make the queue dispatch this handler.",
+    )
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
-        """Check triggers then execute processor if any match."""
+        """Execute the processor when enabled and at least one trigger matches.
+
+        Args:
+            event: Event version being dispatched.
+            source_entity_uuid: Source UUID supplied by the queue. Defaults to
+                the handler's own source.
+
+        Returns:
+            A modified/canceled event, the same event, or None for no change.
+        """
         if not self.enabled:
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
-        # Empty trigger_conditions means this handler always fires when called
-        # For spatial handlers with empty triggers, they rely on position index
         if not self.trigger_conditions or any(trigger(event) for trigger in self.trigger_conditions):
             return self.event_processor(event, source_entity_uuid)
         return None
 
     def remove(self) -> bool:
-        """Remove the event handler from the EventQueue."""
+        """Remove this handler from queue and owner-local indexes.
+
+        Returns:
+            True when the handler was present in the global queue.
+        """
         if self.uuid not in EventQueue._event_handlers:
             return False
         EventQueue.remove_event_handler(self)
+        owner = self.owner_block
+        if owner is not None and isinstance(owner, EntityWithEventHandlers):
+            if self.uuid in owner.event_handlers:
+                owner.remove_event_handler_from_dicts(self)
+            return True
+
         entity = BaseObject.get(self.source_entity_uuid)
 
         if entity is not None and isinstance(entity, EntityWithEventHandlers):
+            if self.uuid in entity.event_handlers:
                 entity.remove_event_handler_from_dicts(self)
 
         return True
 
 
 class SpatialHandler(BaseHandler):
-    """A position-indexed handler for spatial events.
+    """Position-indexed handler for spatial events.
 
-    Use this for zone spells and terrain effects that only care about
-    specific positions. Provides O(1) lookup at those positions.
-
-    Unlike EventHandler, SpatialHandler:
-    - Does NOT use trigger_conditions (position filtering is done by registry)
-    - Is stored in a SEPARATE registry (_spatial_handlers)
-    - Is found via position index, not trigger matching
+    Zone spells and terrain effects use this type when only specific cells
+    should dispatch the handler. The queue stores these in spatial indexes
+    rather than trigger indexes.
     """
-    name: str = Field(default="SpatialHandler", description="The name of the spatial handler")
-    positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Positions this handler fires at")
-    event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="The spatial event type")
-    event_phase: EventPhase = Field(default=EventPhase.EFFECT, description="The event phase to trigger at")
 
-    # No trigger check - position filtering is done by registry lookup
+    name: str = Field(default="SpatialHandler", description="Human-readable spatial-handler label.")
+    positions: Set[Tuple[int, int]] = Field(
+        default_factory=set,
+        description="Grid positions where this handler is indexed.",
+    )
+    event_type: EventType = Field(
+        default=EventType.SPATIAL_ENTITY_ENTERED,
+        description="Spatial event category this handler receives.",
+    )
+    event_phase: EventPhase = Field(
+        default=EventPhase.EFFECT,
+        description="Spatial event phase this handler receives.",
+    )
+
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
-        """Execute the event processor (position already validated by registry)."""
+        """Execute the processor after position-index lookup has matched.
+
+        Args:
+            event: Spatial event version being dispatched.
+            source_entity_uuid: Source UUID supplied by the queue. Defaults to
+                the handler's own source.
+
+        Returns:
+            A modified/canceled event, the same event, or None for no change.
+        """
         if not self.enabled:
             return None
         if source_entity_uuid is None:
@@ -685,71 +795,45 @@ class SpatialHandler(BaseHandler):
         return self.event_processor(event, source_entity_uuid)
 
     def remove(self) -> bool:
-        """Remove the spatial handler from the EventQueue."""
+        """Remove this handler from all spatial queue indexes."""
         return EventQueue.remove_spatial_handler(self.uuid)
 
 class EventQueue:
-    """Static registry for events with additional querying and reaction capabilities"""
-    # Static registry dictionaries
-    _events_by_lineage : Dict[UUID, List[Event]] = defaultdict(list)
-    _events_by_uuid : Dict[UUID, Event] = {}
-    _events_by_type : Dict[EventType, List[Event]] = defaultdict(list)
-    _events_by_timestamp : Dict[datetime, List[Event]] = defaultdict(list)
-    _events_by_phase : Dict[EventPhase, List[Event]] = defaultdict(list)
-    _events_by_source : Dict[UUID, List[Event]] = defaultdict(list)
-    _events_by_target : Dict[UUID, List[Event]] = defaultdict(list)
-    _all_events : List[Event] = []
+    """Global event store and handler dispatcher.
 
-    # =========================================================================
-    # EventHandler registries (trigger-based)
-    # =========================================================================
-    _event_handlers : Dict[UUID, 'EventHandler'] = {}
-    _event_handlers_by_trigger : Dict[Trigger, List['EventHandler']] = defaultdict(list)
-    _event_handlers_by_simple_trigger : Dict[Trigger, List['EventHandler']] = defaultdict(list)
-    _event_handlers_by_source_entity_uuid : Dict[UUID, List['EventHandler']] = defaultdict(list)
+    The queue keeps independent indexes for event history, trigger-based
+    handlers, position-indexed spatial handlers, passive callbacks, and
+    completion-time log helpers. It is intentionally class-scoped because the
+    engine currently has one active event stream per process.
+    """
 
-    # =========================================================================
-    # SpatialHandler registries (position-indexed) - COMPLETELY SEPARATE
-    # =========================================================================
-    # Main registry for spatial handlers
+    _events_by_lineage: Dict[UUID, List[Event]] = defaultdict(list)
+    _events_by_uuid: Dict[UUID, Event] = {}
+    _events_by_type: Dict[EventType, List[Event]] = defaultdict(list)
+    _events_by_timestamp: Dict[datetime, List[Event]] = defaultdict(list)
+    _events_by_phase: Dict[EventPhase, List[Event]] = defaultdict(list)
+    _events_by_source: Dict[UUID, List[Event]] = defaultdict(list)
+    _events_by_target: Dict[UUID, List[Event]] = defaultdict(list)
+    _all_events: List[Event] = []
+
+    _event_handlers: Dict[UUID, 'EventHandler'] = {}
+    _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    _event_handlers_by_simple_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
+    _event_handlers_by_source_entity_uuid: Dict[UUID, List['EventHandler']] = defaultdict(list)
+
     _spatial_handlers: Dict[UUID, 'SpatialHandler'] = {}
-
-    # Position-indexed spatial handlers for O(1) lookup
-    # (EventType, EventPhase) -> position -> List[BaseHandler]
-    # Accepts both SpatialHandler (preferred) and legacy EventHandler
     _spatial_handlers_by_position: Dict[
         Tuple[EventType, EventPhase],
         Dict[Tuple[int, int], List['BaseHandler']]
     ] = defaultdict(lambda: defaultdict(list))
-
-    # Source entity index for spatial handlers
     _spatial_handlers_by_source_entity_uuid: Dict[UUID, List['SpatialHandler']] = defaultdict(list)
-
-    # Reverse index for batch position updates (handler_uuid -> positions)
-    # Used by update_spatial_handler_positions for efficient delta computation
     _handler_positions: Dict[UUID, Tuple[Tuple[EventType, EventPhase], Set[Tuple[int, int]]]] = {}
 
-    # Passive event callbacks (for monitoring, logging, websocket broadcast)
-    # These are called for ALL events after storage, cannot modify events
     _on_event_callbacks: List[Callable[['Event'], None]] = []
-
-    # Pre-completion callbacks are lifecycle systems. They run immediately
-    # before an event phases to COMPLETION, while the causative event can still
-    # receive child events that will be captured in children_lineages.
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
     _pre_completion_running: Set[UUID] = set()
-
-    # Callback for combat log auto-capture (set by Encounter)
-    # Called for top-level events (parent_event=None) when they complete with combat_log
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
-
-    # Callback for computing perceiver UUIDs at COMPLETION phase.
-    # Takes an Event, returns Set[str] of entity UUIDs that can perceive it.
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
-
-    # Callback for computing revealed entity UUIDs at COMPLETION phase.
-    # Takes an Event and child combat logs, returns Set[str] of entity UUIDs
-    # that were revealed (Hidden/Invisible removed) during the event chain.
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
 
     @classmethod
@@ -870,103 +954,81 @@ class EventQueue:
 
     @classmethod
     def register(cls, event: Event) -> Event:
-        """Register an event and notify listeners"""
-        # Store in all appropriate indices
+        """Store an event version and dispatch matching pre-completion handlers.
+
+        Args:
+            event: Event version to index and potentially dispatch.
+
+        Returns:
+            The final event version after handler processing.
+        """
         cls._store_event(event)
-        
-        # Check for listeners
+
         handlers = cls._get_handlers_for_event(event)
-        # If no listeners or event is already in completion phase, return as is
         if not handlers or event.phase == EventPhase.COMPLETION:
             return event
-            
-        # Process through listeners
+
         current_event = event
         for handler in handlers:
-            # Execute handler
             result = handler(current_event)
 
-            # If listener returned None, continue to next handler
             if result is None:
                 continue
 
-            # If event was canceled, stop processing
             if result.canceled:
                 cls._store_event(result)
                 return result
 
-            # If event was modified, update for next handler
             if result.modified:
                 current_event = result
                 cls._store_event(current_event)
 
         return current_event
-    
+
     @classmethod
     def get_event_by_uuid(cls, uuid: UUID) -> Optional[Event]:
-        """Get an event by UUID"""
+        """Return an event version by UUID, if it is indexed."""
         return cls._events_by_uuid.get(uuid)
-    
+
     @classmethod
     def _store_event(cls, event: Event) -> None:
-        """Store an event in all indices"""
-        # By lineage UUID (for tracking event history)
+        """Store an event in all queue indexes."""
         cls._events_by_lineage[event.lineage_uuid].append(event)
-        
-        # By UUID (stores the most recent version of an event)
         cls._events_by_uuid[event.uuid] = event
-        
-        # By timestamp
         cls._events_by_timestamp[event.timestamp].append(event)
 
-        # Handle parent-child relationships
         if event.parent_event:
             parent_uuid = event.parent_event
             parent_event = cls.get_event_by_uuid(parent_uuid)
             if parent_event and event.uuid not in parent_event.children_events:
                 parent_event.add_child_event(event)
-                # Propagate child to ALL lineage versions of parent so the latest
-                # version has all children when its COMPLETION runs
                 for lineage_event in cls._events_by_lineage.get(parent_event.lineage_uuid, []):
                     if lineage_event.uuid != parent_event.uuid:
                         if event.uuid not in lineage_event.lineage_children_events:
                             lineage_event.add_child_event(event)
 
-        # By type
         cls._events_by_type[event.event_type].append(event)
-        
-        # By phase
         cls._events_by_phase[event.phase].append(event)
-
-        # By source
         cls._events_by_source[event.source_entity_uuid].append(event)
 
-        # By target (if applicable)
         if event.target_entity_uuid:
             cls._events_by_target[event.target_entity_uuid].append(event)
 
-        # Add to chronological list and sort
         cls._all_events.append(event)
-        cls._all_events.sort(key=lambda e: e.timestamp)
 
-        # Notify passive callbacks (for monitoring/logging)
         for callback in list(cls._on_event_callbacks):
             try:
                 callback(event)
             except Exception:
-                pass  # Don't let callback errors affect event processing
-    
+                pass
+
     @classmethod
     def _get_handlers_for_event(cls, event: Event) -> List['BaseHandler']:
-        """Get all handlers that should process this event.
+        """Return queue-discovered handlers for an event.
 
-        This finds handlers by:
-        1. For spatial events with position: O(1) lookup via position index
-        2. Getting simple handlers (no source/target filter) via simple trigger lookup
-        3. Iterating through all handlers and checking if their trigger matches the event
-           using Trigger.__call__ which properly handles source/target filtering
+        Spatial entity/tile events with a position use the position index first.
+        Other events use trigger indexes and trigger predicates.
         """
-        # Check if this is a spatial event with position - use position-indexed lookup
         spatial_event_types = (
             EventType.SPATIAL_ENTITY_ENTERED,
             EventType.SPATIAL_ENTITY_LEFT,
@@ -976,7 +1038,6 @@ class EventQueue:
             if isinstance(event, SpatialChangeEvent) and event.position is not None:
                 return cls._get_handlers_for_spatial_event(event, event.position)
 
-        # Non-spatial events: use existing lookup logic
         return cls._get_handlers_for_non_spatial_event(event)
 
     @classmethod
@@ -985,42 +1046,38 @@ class EventQueue:
         event: Event,
         position: Tuple[int, int]
     ) -> List['BaseHandler']:
-        """Get handlers for spatial events using position-indexed lookup.
+        """Return handlers for one spatial event at one grid position.
 
-        Returns a mix of SpatialHandler and EventHandler instances:
-        1. Position-indexed SpatialHandlers (O(1) lookup) - from _spatial_handlers
-        2. Simple trigger EventHandlers (backward compatibility for OA pattern)
-        3. Complex trigger EventHandlers that match this event
+        Position-indexed spatial handlers are discovered in O(1). Trigger-based
+        event handlers are still included for global spatial reactions such as
+        opportunity attacks.
 
-        Key insight: Step 3 only iterates _event_handlers, NOT _spatial_handlers.
-        This prevents O(N) iteration over all spatial handlers.
+        Args:
+            event: Spatial event version being dispatched.
+            position: Grid position used for the spatial lookup.
+
+        Returns:
+            De-duplicated handlers in queue dispatch order.
         """
         event_key = (event.event_type, event.phase)
         handlers: List['BaseHandler'] = []
         seen: Set[UUID] = set()
 
-        # 1. Position-indexed SpatialHandlers (O(1) lookup) - from SEPARATE registry
         pos_handlers = cls._spatial_handlers_by_position[event_key].get(position, [])
         for h in pos_handlers:
             if h.uuid not in seen:
                 handlers.append(h)
                 seen.add(h.uuid)
 
-        # 2. Simple trigger EventHandlers (e.g., OA on STEP_MOVEMENT)
         simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
         for h in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
             if h.uuid not in seen:
                 handlers.append(h)
                 seen.add(h.uuid)
 
-        # 3. Complex trigger EventHandlers (source/target filtering)
-        # Only iterates _event_handlers, NOT _spatial_handlers
-        # IMPORTANT: Skip handlers that are position-indexed (in _handler_positions)
-        # - those should ONLY fire at their registered positions, not globally
         for handler in cls._event_handlers.values():
             if handler.uuid in seen:
                 continue
-            # Skip position-indexed handlers - they should only fire via step 1 at their positions
             if handler.uuid in cls._handler_positions:
                 continue
             for trigger in handler.trigger_conditions:
@@ -1033,42 +1090,30 @@ class EventQueue:
 
     @classmethod
     def _get_handlers_for_non_spatial_event(cls, event: Event) -> List['BaseHandler']:
-        """Get handlers for non-spatial events using existing lookup logic."""
-        # Get the simple trigger for the event (just type + phase)
+        """Return trigger-indexed handlers for a non-spatial event."""
         simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
-
-        # Get handlers registered with simple triggers
         simple_handlers = cls._event_handlers_by_simple_trigger.get(simple_trigger, [])
 
-        # For handlers with complex triggers (source/target filtering),
-        # we need to check each one since their trigger may filter by source/target UUID.
-        # Use a set to avoid duplicates (handlers may be in both registries)
         handler_set: Set[UUID] = {h.uuid for h in simple_handlers}
         matching_handlers: List['BaseHandler'] = list(simple_handlers)
 
-        # Check all handlers to find ones with complex triggers that match this event
         for handler in cls._event_handlers.values():
             if handler.uuid in handler_set:
-                continue  # Already included
-            # Check if any of the handler's triggers match this event
+                continue
             for trigger in handler.trigger_conditions:
-                if trigger(event):  # Uses Trigger.__call__ for proper matching
+                if trigger(event):
                     matching_handlers.append(handler)
                     handler_set.add(handler.uuid)
-                    break  # Only add handler once even if multiple triggers match
+                    break
 
         return matching_handlers
-    
+
     @classmethod
     def add_event_handler(cls, event_handler: EventHandler) -> None:
-        """
-        Add a handler for events of a specific type and phase
-        
+        """Add a trigger-indexed handler to queue lookup tables.
+
         Args:
-            event_type: Type of event to listen for (or None for all types)
-            event_phase: Phase of event to listen for (or None for all phases)
-            source_entity_uuid: UUID of the entity that owns this listener
-            listener: The listener function to call when an event matches
+            event_handler: Handler containing one or more trigger conditions.
         """
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
@@ -1076,11 +1121,10 @@ class EventQueue:
             cls._event_handlers_by_trigger[trigger].append(event_handler)
         cls._event_handlers[event_handler.uuid] = event_handler
         cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].append(event_handler)
-    
+
     @classmethod
     def remove_event_handler(cls, event_handler: EventHandler) -> None:
         """Remove a handler from all indices."""
-        # Remove from trigger indices
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
                 simple_trigger = trigger.get_simple_trigger()
@@ -1089,27 +1133,20 @@ class EventQueue:
             if event_handler in cls._event_handlers_by_trigger.get(trigger, []):
                 cls._event_handlers_by_trigger[trigger].remove(event_handler)
 
-        # Remove from main handler dict (only once, outside the loop)
         cls._event_handlers.pop(event_handler.uuid, None)
 
-        # Remove from source entity index
         source_handlers = cls._event_handlers_by_source_entity_uuid.get(event_handler.source_entity_uuid, [])
         if event_handler in source_handlers:
             source_handlers.remove(event_handler)
 
-        # Remove from spatial handler indices if present
         cls._remove_from_spatial_indices(event_handler.uuid)
 
     @classmethod
     def remove_event_handlers_by_uuid(cls, uuid: UUID) -> None:
-        """Remove a handler by uuid"""
+        """Remove an event handler by UUID if present."""
         event_handler = cls._event_handlers.get(uuid)
         if event_handler:
             cls.remove_event_handler(event_handler)
-
-    # =========================================================================
-    # Position-Indexed Spatial Handlers
-    # =========================================================================
 
     @classmethod
     def add_spatial_handler(
@@ -1119,58 +1156,44 @@ class EventQueue:
         event_type: EventType = EventType.SPATIAL_ENTITY_ENTERED,
         event_phase: EventPhase = EventPhase.EFFECT
     ) -> None:
-        """
-        Register a handler for specific positions only.
+        """Register a handler for spatial lookup at specific positions.
 
-        This provides O(1) handler lookup for spatial events instead of
-        iterating through all handlers. Used by zone spells to efficiently
-        handle entry/exit effects.
-
-        Accepts either:
-        - SpatialHandler: Uses handler.positions, handler.event_type, handler.event_phase
-        - EventHandler: Uses provided positions, event_type, event_phase (legacy support)
+        `SpatialHandler` instances use their own positions and event metadata
+        unless explicit positions are supplied. Legacy `EventHandler` instances
+        can also be position-indexed with the provided event type and phase.
 
         Args:
-            handler: The handler to register (SpatialHandler or EventHandler)
-            positions: Set of (x, y) positions (optional if handler is SpatialHandler)
-            event_type: The spatial event type (default: SPATIAL_ENTITY_ENTERED)
-            event_phase: The event phase to trigger at (default: EFFECT)
+            handler: Spatial or legacy event handler to register.
+            positions: Grid positions for lookup. Optional for `SpatialHandler`.
+            event_type: Spatial event type for legacy handlers.
+            event_phase: Spatial event phase for legacy handlers.
         """
-        # Handle SpatialHandler - use its built-in positions and event settings
         if isinstance(handler, SpatialHandler):
             actual_positions = handler.positions if not positions else positions
             event_key = (handler.event_type, handler.event_phase)
 
-            # Update handler's positions if provided
             if positions:
                 handler.positions = positions.copy()
 
-            # Add to position index
             for pos in actual_positions:
                 cls._spatial_handlers_by_position[event_key][pos].append(handler)
 
-            # Track positions in reverse index for efficient updates
             cls._handler_positions[handler.uuid] = (event_key, actual_positions.copy())
 
-            # Add to SPATIAL handler registries (SEPARATE from _event_handlers)
             cls._spatial_handlers[handler.uuid] = handler
             cls._spatial_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
 
         else:
-            # Legacy EventHandler support - add to position index but also main registry
             if positions is None:
                 positions = set()
 
             event_key = (event_type, event_phase)
 
-            # Add to position index
             for pos in positions:
                 cls._spatial_handlers_by_position[event_key][pos].append(handler)
 
-            # Track positions in reverse index for efficient updates
             cls._handler_positions[handler.uuid] = (event_key, positions.copy())
 
-            # Also add to main handler registry (for general queries)
             cls._event_handlers[handler.uuid] = handler
             cls._event_handlers_by_source_entity_uuid[handler.source_entity_uuid].append(handler)
 
@@ -1182,25 +1205,23 @@ class EventQueue:
         event_type: Optional[EventType] = None,
         event_phase: Optional[EventPhase] = None
     ) -> bool:
-        """
-        Batch update handler positions - compute delta, only change affected positions.
+        """Update one spatial handler's indexed positions.
 
-        This is efficient for zone movement: instead of removing all positions
-        and adding all new positions, we only modify the difference.
+        The queue computes a position delta when event type/phase are unchanged
+        and fully reindexes when the event key changes.
 
         Args:
-            handler_uuid: UUID of the handler to update
-            new_positions: New set of positions for this handler
-            event_type: Override event type (uses stored value if None)
-            event_phase: Override event phase (uses stored value if None)
+            handler_uuid: Handler UUID to update.
+            new_positions: Replacement grid-position set.
+            event_type: Optional replacement spatial event type.
+            event_phase: Optional replacement spatial event phase.
 
         Returns:
-            True if handler was found and updated, False otherwise
+            True if the handler was found and updated.
         """
         if handler_uuid not in cls._handler_positions:
             return False
 
-        # Look for handler in both registries
         handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
         if not handler:
             handler = cls._event_handlers.get(handler_uuid)
@@ -1209,15 +1230,12 @@ class EventQueue:
 
         old_event_key, old_positions = cls._handler_positions[handler_uuid]
 
-        # Use new event key if provided, otherwise keep old
         if event_type is not None and event_phase is not None:
             new_event_key = (event_type, event_phase)
         else:
             new_event_key = old_event_key
 
-        # If event key changed, remove from all old positions and add to all new
         if new_event_key != old_event_key:
-            # Remove from old event key positions
             for pos in old_positions:
                 handlers_at_pos = cls._spatial_handlers_by_position[old_event_key].get(pos, [])
                 if handler in handlers_at_pos:
@@ -1225,15 +1243,12 @@ class EventQueue:
                     if not handlers_at_pos:
                         del cls._spatial_handlers_by_position[old_event_key][pos]
 
-            # Add to new event key positions
             for pos in new_positions:
                 cls._spatial_handlers_by_position[new_event_key][pos].append(handler)
         else:
-            # Same event key - compute position delta
             positions_to_remove = old_positions - new_positions
             positions_to_add = new_positions - old_positions
 
-            # Remove handler from positions we're leaving
             for pos in positions_to_remove:
                 handlers_at_pos = cls._spatial_handlers_by_position[new_event_key].get(pos, [])
                 if handler in handlers_at_pos:
@@ -1241,14 +1256,11 @@ class EventQueue:
                     if not handlers_at_pos:
                         del cls._spatial_handlers_by_position[new_event_key][pos]
 
-            # Add handler to new positions
             for pos in positions_to_add:
                 cls._spatial_handlers_by_position[new_event_key][pos].append(handler)
 
-        # Update reverse index
         cls._handler_positions[handler_uuid] = (new_event_key, new_positions.copy())
 
-        # If this is a SpatialHandler, also update its positions field
         if isinstance(handler, SpatialHandler):
             handler.positions = new_positions.copy()
 
@@ -1256,22 +1268,20 @@ class EventQueue:
 
     @classmethod
     def remove_spatial_handler(cls, handler_uuid: UUID) -> bool:
-        """
-        Remove a spatial handler from all position indices.
+        """Remove a spatial handler from all queue indexes.
 
-        Works with both SpatialHandler (in _spatial_handlers) and
-        legacy EventHandler (in _event_handlers) registered via add_spatial_handler.
+        Works for both native `SpatialHandler` objects and legacy
+        `EventHandler` objects registered with `add_spatial_handler()`.
 
         Args:
-            handler_uuid: UUID of the handler to remove
+            handler_uuid: Handler UUID to remove.
 
         Returns:
-            True if handler was found and removed, False otherwise
+            True if the handler or its spatial index entry was found.
         """
         if handler_uuid not in cls._handler_positions:
             return False
 
-        # Look for handler in both registries
         handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
         is_spatial_handler = handler is not None
 
@@ -1279,14 +1289,11 @@ class EventQueue:
             handler = cls._event_handlers.get(handler_uuid)
 
         if not handler:
-            # Still clean up indices even if handler is gone
             cls._remove_from_spatial_indices(handler_uuid)
             return True
 
-        # Remove from spatial indices
         cls._remove_from_spatial_indices(handler_uuid)
 
-        # Remove from appropriate registry
         if is_spatial_handler:
             cls._spatial_handlers.pop(handler_uuid, None)
             source_handlers = cls._spatial_handlers_by_source_entity_uuid.get(handler.source_entity_uuid, [])
@@ -1302,18 +1309,16 @@ class EventQueue:
 
     @classmethod
     def _remove_from_spatial_indices(cls, handler_uuid: UUID) -> None:
-        """Internal helper to remove handler from spatial position indices."""
+        """Remove a handler from the position index and reverse index."""
         if handler_uuid not in cls._handler_positions:
             return
 
         event_key, positions = cls._handler_positions[handler_uuid]
 
-        # Look for handler in both registries
         handler: Optional['BaseHandler'] = cls._spatial_handlers.get(handler_uuid)
         if not handler:
             handler = cls._event_handlers.get(handler_uuid)
 
-        # Remove from each position
         for pos in positions:
             handlers_at_pos = cls._spatial_handlers_by_position[event_key].get(pos, [])
             if handler and handler in handlers_at_pos:
@@ -1321,7 +1326,6 @@ class EventQueue:
                 if not handlers_at_pos:
                     del cls._spatial_handlers_by_position[event_key][pos]
 
-        # Remove from reverse index
         del cls._handler_positions[handler_uuid]
 
     @classmethod
@@ -1331,28 +1335,22 @@ class EventQueue:
         event_type: EventType = EventType.SPATIAL_ENTITY_ENTERED,
         event_phase: EventPhase = EventPhase.EFFECT
     ) -> List['BaseHandler']:
-        """
-        Get all spatial handlers registered for a specific position.
+        """Return spatial handlers registered for a specific position.
 
         Args:
-            position: The (x, y) position to query
-            event_type: The spatial event type
-            event_phase: The event phase
+            position: Grid position to query.
+            event_type: Spatial event type index.
+            event_phase: Spatial event phase index.
 
         Returns:
-            List of handlers registered at this position (may be empty)
+            A copy of the handlers registered at that key.
         """
         event_key = (event_type, event_phase)
         return cls._spatial_handlers_by_position[event_key].get(position, []).copy()
 
-    # =========================================================================
-    # End Spatial Handler Methods
-    # =========================================================================
-
     @classmethod
     def reset(cls) -> None:
-        """Clear all events and handlers. Call when starting a new game."""
-        # Clear events
+        """Clear all event, handler, and callback registries."""
         cls._all_events.clear()
         cls._events_by_uuid.clear()
         cls._events_by_type.clear()
@@ -1361,80 +1359,98 @@ class EventQueue:
         cls._events_by_target.clear()
         cls._events_by_lineage.clear()
         cls._events_by_timestamp.clear()
-        # Clear EventHandler registries
         cls._event_handlers.clear()
         cls._event_handlers_by_trigger.clear()
         cls._event_handlers_by_simple_trigger.clear()
         cls._event_handlers_by_source_entity_uuid.clear()
-        # Clear SpatialHandler registries (SEPARATE)
         cls._spatial_handlers.clear()
         cls._spatial_handlers_by_position.clear()
         cls._spatial_handlers_by_source_entity_uuid.clear()
         cls._handler_positions.clear()
-        # Clear event callbacks (spatial senses callbacks, etc.)
         cls._on_event_callbacks.clear()
         cls._pre_completion_callbacks.clear()
         cls._pre_completion_running.clear()
         cls._perceiver_computer = None
         cls._revealed_computer = None
 
-
     @classmethod
-    def get_events_chronological(cls, start_time: Optional[datetime] = None, 
+    def get_events_chronological(cls, start_time: Optional[datetime] = None,
                                end_time: Optional[datetime] = None) -> List[Event]:
-        """Get events in chronological order, optionally within a time range"""
+        """Return events in chronological order, optionally within a time range.
+
+        Args:
+            start_time: Optional inclusive lower timestamp bound.
+            end_time: Optional inclusive upper timestamp bound.
+
+        Returns:
+            Stored event versions ordered by timestamp.
+        """
+        chronological_events = sorted(cls._all_events, key=lambda e: e.timestamp)
         if start_time is None and end_time is None:
-            return cls._all_events
-            
-        filtered_events = cls._all_events
-        
+            return chronological_events
+
+        filtered_events = chronological_events
+
         if start_time:
             filtered_events = [e for e in filtered_events if e.timestamp >= start_time]
-            
+
         if end_time:
             filtered_events = [e for e in filtered_events if e.timestamp <= end_time]
-            
+
         return filtered_events
-    
+
     @classmethod
     def get_latest_events(cls, count: int) -> List[Event]:
-        """Get the most recent events"""
+        """Return the last stored event versions.
+
+        Args:
+            count: Maximum number of events to return.
+
+        Returns:
+            At most `count` events from the end of the stream.
+        """
         return cls._all_events[-count:] if len(cls._all_events) >= count else cls._all_events
-    
+
     @classmethod
     def get_event_history(cls, event_uuid: UUID) -> List[Event]:
-        """Get the complete history of an event by its lineage UUID"""
+        """Return all stored versions in the lineage containing `event_uuid`.
+
+        Args:
+            event_uuid: UUID of any event version in the lineage.
+
+        Returns:
+            Chronological event versions for that lineage, or an empty list.
+        """
         event = cls._events_by_uuid.get(event_uuid)
         if not event:
             return []
-        
-        # Return all events with the same lineage UUID
+
         lineage_uuid = event.lineage_uuid
         return sorted(cls._events_by_lineage.get(lineage_uuid, []), key=lambda e: e.timestamp)
-    
+
     @classmethod
     def get_events_by_type(cls, event_type: EventType) -> List[Event]:
-        """Get all events of a specific type"""
+        """Return all events indexed under an event type."""
         return cls._events_by_type.get(event_type, [])
-    
+
     @classmethod
     def get_events_by_phase(cls, event_phase: EventPhase) -> List[Event]:
-        """Get all events in a specific phase"""
+        """Return all events indexed under an event phase."""
         return cls._events_by_phase.get(event_phase, [])
-    
+
     @classmethod
     def get_events_by_source(cls, source_entity_uuid: UUID) -> List[Event]:
-        """Get all events from a specific source entity"""
+        """Return all events indexed under a source entity UUID."""
         return cls._events_by_source.get(source_entity_uuid, [])
-    
+
     @classmethod
     def get_events_by_target(cls, target_entity_uuid: UUID) -> List[Event]:
-        """Get all events targeting a specific entity"""
+        """Return all events indexed under a target entity UUID."""
         return cls._events_by_target.get(target_entity_uuid, [])
-    
+
     @classmethod
     def get_events_by_timestamp(cls, timestamp: datetime) -> List[Event]:
-        """Get all events with a specific timestamp"""
+        """Return all events indexed at an exact timestamp."""
         return cls._events_by_timestamp.get(timestamp, [])
 
     @classmethod
@@ -1451,35 +1467,49 @@ class EventQueue:
         history = cls._events_by_lineage.get(event.lineage_uuid, [])
         for e in history:
             if e.uuid == event.uuid:
-                continue  # Skip self
+                continue
             if e.phase == event.phase and e.timestamp < event.timestamp:
-                return False  # Found an earlier event at same phase
+                return False
         return True
-    
 
 
 class D20Event(Event):
-    """A d20 event"""
-    name: str = Field(default="D20",description="A d20 event")
-    dc: Optional[Union[int, ModifiableValue]] = Field(default=None,description="The dc of the d20")
-    bonus: Optional[Union[int, ModifiableValue]] = Field(default=0,description="The bonus to the d20")
-    dice: Optional[Dice] = Field(default=None,description="The dice used to roll the d20")
-    dice_roll: Optional[DiceRoll] = Field(default=None,description="The result of the dice roll")
-    result: Optional[bool] = Field(default=None,description="Whether the d20 event was successful")
+    """Legacy event payload for a resolved d20 check."""
+
+    name: str = Field(default="D20", description="Human-readable d20 event label.")
+    dc: Optional[Union[int, ModifiableValue]] = Field(
+        default=None,
+        description="Difficulty class for the roll, either fixed or modifiable.",
+    )
+    bonus: Optional[Union[int, ModifiableValue]] = Field(
+        default=0,
+        description="Roll bonus, either fixed or represented by a modifiable value.",
+    )
+    dice: Optional[Dice] = Field(default=None, description="Dice object used to create the roll.")
+    dice_roll: Optional[DiceRoll] = Field(default=None, description="Resolved dice roll.")
+    result: Optional[bool] = Field(default=None, description="Whether the roll met or exceeded its DC.")
 
     def get_dc(self) -> Optional[int]:
-        """Get the dc of the d20 event"""
+        """Return the current numeric difficulty class."""
         if self.dc is None:
             return None
         if isinstance(self.dc, ModifiableValue):
             return self.dc.normalized_score
         return self.dc
-    
+
 class SavingThrowEvent(D20Event):
-    """An event that represents a saving throw"""
-    name: str = Field(default="Saving Throw",description="A saving throw event")
-    ability_name: AbilityName = Field(description="The ability that is being saved against")
-    event_type: EventType = Field(default=EventType.SAVING_THROW,description="The type of event")
+    """Legacy event payload for a resolved saving throw."""
+
+    name: str = Field(default="Saving Throw", description="Human-readable saving throw label.")
+    ability_name: AbilityName = Field(description="Ability used for the saving throw.")
+    condition_context: Optional[str] = Field(
+        default=None,
+        description="Optional condition name this save is made against, such as Poisoned.",
+    )
+    event_type: EventType = Field(
+        default=EventType.SAVING_THROW,
+        description="Event category for saving throw events.",
+    )
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this saving throw event.
@@ -1487,14 +1517,11 @@ class SavingThrowEvent(D20Event):
         Uses self.* fields only - no external lookups. Entity names must be
         populated when the event is created.
         """
-        # Use entity names from self - no external lookups
         target_name = self.target_entity_name or "Unknown"
         source_name = self.source_entity_name or "Unknown"
 
-        # Get DC
         dc = self.get_dc() or 0
 
-        # Build dice roll display
         roll = DiceRollDisplay(
             dice_str="d20",
             results=[],
@@ -1509,7 +1536,6 @@ class SavingThrowEvent(D20Event):
                 roll.all_d20_rolls = list(results)
                 roll.d20_used = results[0] if results else 0
 
-                # Check for advantage/disadvantage
                 adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
@@ -1526,7 +1552,6 @@ class SavingThrowEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        # Build bonus breakdown
         bonus_breakdown: List[ModifierBreakdown] = []
         if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_breakdown():
@@ -1536,7 +1561,6 @@ class SavingThrowEvent(D20Event):
                     source=mod.get('source', 'self')
                 ))
 
-        # Build advantage breakdown
         advantage_breakdown: List[ModifierBreakdown] = []
         if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_full_advantage_breakdown():
@@ -1550,25 +1574,19 @@ class SavingThrowEvent(D20Event):
                         name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
                     ))
 
-        # Determine success
         success = self.result if self.result is not None else (roll.total >= dc if dc > 0 else None)
 
-        # Build ability name display
-        ability_display = self.ability_name.upper()[:3]  # STR, DEX, etc.
+        ability_display = self.ability_name.upper()[:3]
 
-        # Build markdown-formatted verbosity levels
         success_str = md_color("succeeds", "green") if success else md_color("fails", "red")
 
-        # COMPACT: "{cyan:Hero} {green:succeeds} {yellow:DEX} save (DC 14)"
         compact_text = f"{md_color(target_name, 'cyan')} {success_str} {md_color(ability_display, 'yellow')} save (DC {dc})"
 
-        # VERBOSE: Add the roll details
         d20_str = md_d20_roll(roll)
         bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
         verbose_text = f"{md_color(target_name, 'cyan')} {md_color(ability_display, 'yellow')} save vs DC {dc}"
         verbose_text += f"\n  Save: {d20_str} {bonus_str} = {roll.total} → {success_str}"
 
-        # DETAILED: Add breakdown
         detailed_text = f"{md_color(target_name, 'cyan')} {md_color(ability_display, 'yellow')} save vs DC {dc}"
         breakdown_str = md_breakdown(bonus_breakdown)
         detailed_text += f"\n  Save: {d20_str} {bonus_str}"
@@ -1576,7 +1594,6 @@ class SavingThrowEvent(D20Event):
             detailed_text += f" {breakdown_str}"
         detailed_text += f" = {roll.total} → {success_str}"
 
-        # Build structured data
         data = SavingThrowLogData(
             entity_name=target_name,
             entity_uuid=str(self.target_entity_uuid) if self.target_entity_uuid else str(self.source_entity_uuid),
@@ -1604,10 +1621,14 @@ class SavingThrowEvent(D20Event):
 
 
 class SkillCheckEvent(D20Event):
-    """An event that represents a skill check"""
-    name: str = Field(default="Skill Check",description="A skill check event")
-    skill_name: SkillName = Field(description="The skill that is being checked")
-    event_type: EventType = Field(default=EventType.SKILL_CHECK,description="The type of event")
+    """Legacy event payload for a resolved skill check."""
+
+    name: str = Field(default="Skill Check", description="Human-readable skill check label.")
+    skill_name: SkillName = Field(description="Skill used for the check.")
+    event_type: EventType = Field(
+        default=EventType.SKILL_CHECK,
+        description="Event category for skill check events.",
+    )
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this skill check event.
@@ -1615,13 +1636,10 @@ class SkillCheckEvent(D20Event):
         Uses self.* fields only - no external lookups. Entity names must be
         populated when the event is created.
         """
-        # Use entity name from self - no external lookups
         source_name = self.source_entity_name or "Unknown"
 
-        # Get DC (may not exist for opposed checks)
         dc = self.get_dc()
 
-        # Build dice roll display
         roll = DiceRollDisplay(
             dice_str="d20",
             results=[],
@@ -1636,7 +1654,6 @@ class SkillCheckEvent(D20Event):
                 roll.all_d20_rolls = list(results)
                 roll.d20_used = results[0] if results else 0
 
-                # Check for advantage/disadvantage
                 adv_status = self.dice_roll.advantage_status
                 if adv_status:
                     adv_value = adv_status.value.lower()
@@ -1653,7 +1670,6 @@ class SkillCheckEvent(D20Event):
             roll.bonus = self.dice_roll.bonus
             roll.total = self.dice_roll.total
 
-        # Build bonus breakdown
         bonus_breakdown: List[ModifierBreakdown] = []
         if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_breakdown():
@@ -1663,7 +1679,6 @@ class SkillCheckEvent(D20Event):
                     source=mod.get('source', 'self')
                 ))
 
-        # Build advantage breakdown
         advantage_breakdown: List[ModifierBreakdown] = []
         if self.bonus and isinstance(self.bonus, ModifiableValue):
             for mod in self.bonus.get_full_advantage_breakdown():
@@ -1677,13 +1692,10 @@ class SkillCheckEvent(D20Event):
                         name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
                     ))
 
-        # Determine success
         success = self.result if self.result is not None else (roll.total >= dc if dc is not None and dc > 0 else None)
 
-        # Build skill name display (capitalize first letter)
         skill_display = self.skill_name.replace('_', ' ').title()
 
-        # Build markdown-formatted verbosity levels
         d20_str = md_d20_roll(roll)
         bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
         breakdown_str = md_breakdown(bonus_breakdown)
@@ -1691,21 +1703,17 @@ class SkillCheckEvent(D20Event):
         if dc is not None:
             success_str = md_color("succeeds", "green") if success else md_color("fails", "red")
 
-            # COMPACT: "{cyan:Hero} {green:succeeds} {yellow:Athletics} check (DC 14)"
             compact_text = f"{md_color(source_name, 'cyan')} {success_str} {md_color(skill_display, 'yellow')} check (DC {dc})"
 
-            # VERBOSE: Add the roll details
             verbose_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check vs DC {dc}"
             verbose_text += f"\n  {skill_display}: {d20_str} {bonus_str} = {roll.total} → {success_str}"
 
-            # DETAILED: Add breakdown
             detailed_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check vs DC {dc}"
             detailed_text += f"\n  {skill_display}: {d20_str} {bonus_str}"
             if breakdown_str:
                 detailed_text += f" {breakdown_str}"
             detailed_text += f" = {roll.total} → {success_str}"
         else:
-            # No DC - just show the roll
             compact_text = f"{md_color(source_name, 'cyan')} rolls {md_color(skill_display, 'yellow')}: {md_color(str(roll.total), 'cyan')}"
             verbose_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check"
             verbose_text += f"\n  {skill_display}: {d20_str} {bonus_str} = {roll.total}"
@@ -1714,7 +1722,6 @@ class SkillCheckEvent(D20Event):
                 detailed_text = f"{md_color(source_name, 'cyan')} {md_color(skill_display, 'yellow')} check"
                 detailed_text += f"\n  {skill_display}: {d20_str} {bonus_str} {breakdown_str} = {roll.total}"
 
-        # Build structured data
         data = SkillCheckLogData(
             entity_name=source_name,
             entity_uuid=str(self.source_entity_uuid),
@@ -1739,42 +1746,71 @@ class SkillCheckEvent(D20Event):
 
 
 class SensesUpdateHint(BaseModel):
-    """Carried by spatial events — tells observers what to update incrementally.
+    """Incremental recomputation hint carried by spatial events.
 
-    Encodes which of the three independent senses layers changed:
-    - FOV (geometric visibility): walls, magical darkness, vision-blocking objects
-    - Paths (movement routes): entities moving, walkability changes, movement-blocking objects
-    - Entity filter (who's seen): light levels, perceivability, entity presence
+    The hints separate field-of-view geometry, movement topology, light/filter
+    updates, object dictionaries, and directional blocking so observers can
+    update only the senses layers affected by a spatial change.
     """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    # Which senses layers need recomputing
-    requires_fov: bool = False       # Vision geometry changed (magical darkness, wall, door vision blocking)
-    requires_paths: bool = False     # Path topology changed (entity moved, walkability changed, door movement blocking)
-
-    # Entity dict updates (O(1) per entry)
-    entity_entered: Optional[Tuple[UUID, Tuple[int, int]]] = None
-    entity_left: Optional[Tuple[UUID, Tuple[int, int]]] = None
-
-    # Light-based re-filtering at specific positions
-    light_changed_positions: Optional[Set[Tuple[int, int]]] = None
-
-    # Perceivability re-check for one entity
-    perceivability_entity: Optional[UUID] = None
-
-    # Object dict updates
-    object_placed: Optional[Tuple[UUID, Tuple[int, int]]] = None
-    object_removed: Optional[Tuple[UUID, Tuple[int, int]]] = None
-
-    # Death: entity stopped blocking
-    entity_died: Optional[Tuple[UUID, Tuple[int, int]]] = None
-
-    # Tile-owned directional blocking changes
-    directional_positions: Optional[Set[Tuple[int, int]]] = None
-    directional_neighbors: Optional[Set[Tuple[int, int]]] = None
-    directional_channels_changed: Optional[Set[str]] = None
-    requires_light_recompute: bool = False
-    requires_propagation_recompute: bool = False
+    requires_fov: bool = Field(
+        default=False,
+        description="Whether vision geometry must be recomputed.",
+    )
+    requires_paths: bool = Field(
+        default=False,
+        description="Whether movement/path topology must be recomputed.",
+    )
+    entity_entered: Optional[Tuple[UUID, Tuple[int, int]]] = Field(
+        default=None,
+        description="Entity UUID and position for an O(1) visible-entity insertion.",
+    )
+    entity_left: Optional[Tuple[UUID, Tuple[int, int]]] = Field(
+        default=None,
+        description="Entity UUID and position for an O(1) visible-entity removal.",
+    )
+    light_changed_positions: Optional[Set[Tuple[int, int]]] = Field(
+        default=None,
+        description="Positions whose resolved light should be re-filtered.",
+    )
+    perceivability_entity: Optional[UUID] = Field(
+        default=None,
+        description="Entity UUID whose hidden/invisible perceivability should be rechecked.",
+    )
+    object_placed: Optional[Tuple[UUID, Tuple[int, int]]] = Field(
+        default=None,
+        description="Object UUID and position for an O(1) visible-object insertion.",
+    )
+    object_removed: Optional[Tuple[UUID, Tuple[int, int]]] = Field(
+        default=None,
+        description="Object UUID and position for an O(1) visible-object removal.",
+    )
+    entity_died: Optional[Tuple[UUID, Tuple[int, int]]] = Field(
+        default=None,
+        description="Entity UUID and position for path updates after death stops blocking movement.",
+    )
+    directional_positions: Optional[Set[Tuple[int, int]]] = Field(
+        default=None,
+        description="Tiles whose directional blocking metadata changed.",
+    )
+    directional_neighbors: Optional[Set[Tuple[int, int]]] = Field(
+        default=None,
+        description="Neighbor cells affected by directional blocking metadata.",
+    )
+    directional_channels_changed: Optional[Set[str]] = Field(
+        default=None,
+        description="Directional channels affected, such as movement, vision, light, or propagation.",
+    )
+    requires_light_recompute: bool = Field(
+        default=False,
+        description="Whether light propagation must be recomputed.",
+    )
+    requires_propagation_recompute: bool = Field(
+        default=False,
+        description="Whether non-light propagation fields must be recomputed.",
+    )
 
 
 class SensoryUpdateEvent(Event):
@@ -1785,31 +1821,76 @@ class SensoryUpdateEvent(Event):
     parent completes, so clients can animate perception changes from the event
     tree without recomputing FOV or polling snapshots for timing.
     """
-    name: str = Field(default="Sensory Update", description="Observer sensory state changed")
-    event_type: EventType = Field(default=EventType.SENSORY_UPDATE)
-    observer_uuid: UUID = Field(description="Observer whose sensory state changed")
-    cause_event_uuid: UUID = Field(description="Event UUID that caused this sensory update")
-    update_reason: SensoryUpdateReason = Field(default=SensoryUpdateReason.UNKNOWN)
-
-    visible_cells_added: List[Tuple[int, int]] = Field(default_factory=list)
-    visible_cells_removed: List[Tuple[int, int]] = Field(default_factory=list)
-    seen_cells_added: List[Tuple[int, int]] = Field(default_factory=list)
-
-    visible_entities_added: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
-    visible_entities_removed: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
-    visible_entities_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(default_factory=dict)
-
-    visible_objects_added: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
-    visible_objects_removed: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict)
-    visible_objects_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(default_factory=dict)
-
-    sense_modes_changed: bool = Field(default=False)
-    sense_modes: Optional[List[Dict[str, Any]]] = Field(default=None)
-    passive_perception_changed: bool = Field(default=False)
-    passive_perception: Optional[int] = Field(default=None)
-    paths_dirty: bool = Field(default=False)
+    name: str = Field(default="Sensory Update", description="Observer sensory state changed.")
+    event_type: EventType = Field(
+        default=EventType.SENSORY_UPDATE,
+        description="Event category for observer-specific sensory deltas.",
+    )
+    observer_uuid: UUID = Field(description="Observer whose sensory state changed.")
+    cause_event_uuid: UUID = Field(description="Event UUID that caused this sensory update.")
+    update_reason: SensoryUpdateReason = Field(
+        default=SensoryUpdateReason.UNKNOWN,
+        description="Reason category used by clients to interpret the delta.",
+    )
+    visible_cells_added: List[Tuple[int, int]] = Field(
+        default_factory=list,
+        description="Cells newly visible to the observer.",
+    )
+    visible_cells_removed: List[Tuple[int, int]] = Field(
+        default_factory=list,
+        description="Cells no longer visible to the observer.",
+    )
+    seen_cells_added: List[Tuple[int, int]] = Field(
+        default_factory=list,
+        description="Cells newly added to the observer's explored area.",
+    )
+    visible_entities_added: Dict[UUID, Tuple[int, int]] = Field(
+        default_factory=dict,
+        description="Entity UUIDs and positions newly visible to the observer.",
+    )
+    visible_entities_removed: Dict[UUID, Tuple[int, int]] = Field(
+        default_factory=dict,
+        description="Entity UUIDs and last positions no longer visible to the observer.",
+    )
+    visible_entities_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(
+        default_factory=dict,
+        description="Entity UUIDs mapped to old and new visible positions.",
+    )
+    visible_objects_added: Dict[UUID, Tuple[int, int]] = Field(
+        default_factory=dict,
+        description="Object UUIDs and positions newly visible to the observer.",
+    )
+    visible_objects_removed: Dict[UUID, Tuple[int, int]] = Field(
+        default_factory=dict,
+        description="Object UUIDs and last positions no longer visible to the observer.",
+    )
+    visible_objects_moved: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]] = Field(
+        default_factory=dict,
+        description="Object UUIDs mapped to old and new visible positions.",
+    )
+    sense_modes_changed: bool = Field(
+        default=False,
+        description="Whether the observer's sense modes changed.",
+    )
+    sense_modes: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Serialized sense-mode payload after a sense-mode change.",
+    )
+    passive_perception_changed: bool = Field(
+        default=False,
+        description="Whether the observer's passive perception changed.",
+    )
+    passive_perception: Optional[int] = Field(
+        default=None,
+        description="Current passive perception value when it changed.",
+    )
+    paths_dirty: bool = Field(
+        default=False,
+        description="Whether the observer should refresh cached path data.",
+    )
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return every grid cell referenced by this sensory delta."""
         positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
         positions.update(self.visible_cells_removed)
         positions.update(self.seen_cells_added)
@@ -1825,7 +1906,6 @@ class SensoryUpdateEvent(Event):
             positions.add(new_pos)
         return positions
 
-
 _DIRECTION_DELTAS: Dict[str, Tuple[int, int]] = {
     "north": (0, 1),
     "south": (0, -1),
@@ -1835,6 +1915,15 @@ _DIRECTION_DELTAS: Dict[str, Tuple[int, int]] = {
 
 
 def _directional_neighbors(position: Tuple[int, int], directions: Optional[List[str]]) -> Set[Tuple[int, int]]:
+    """Return neighboring cells touched by directional tile metadata.
+
+    Args:
+        position: Origin tile for the directional metadata.
+        directions: Direction labels such as north, south, east, and west.
+
+    Returns:
+        Neighboring grid positions for recognized direction labels.
+    """
     neighbors: Set[Tuple[int, int]] = set()
     if not directions:
         return neighbors
@@ -1846,40 +1935,36 @@ def _directional_neighbors(position: Tuple[int, int], directions: Optional[List[
 
 
 class SpatialChangeEvent(Event):
-    """
-    Event fired when something changes at a grid position.
+    """Event fired when grid occupancy, tile state, light, or blocking changes.
 
-    Used for:
-    - Entity sense updates (entities subscribe to visible cells)
-    - UI/renderer updates (websocket broadcasts these events)
-
-    Entities can subscribe to cells via EventHandler with triggers matching:
-    - event_type: SPATIAL_ENTITY_ENTERED, SPATIAL_ENTITY_LEFT, or SPATIAL_TILE_CHANGED
-    - event_phase: COMPLETION (spatial changes are instantaneous)
+    GridMap creates these as declaration events and controls registration as it
+    advances the event lifecycle. The payload is consumed by senses, spatial
+    handlers, combat logs, and frontend reducers.
     """
+
     name: str = Field(default="Spatial Change", description="A spatial change event")
     event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="Type of spatial change")
     change_type: SpatialChangeType = Field(description="Specific type of spatial change")
     position: Tuple[int, int] = Field(description="Grid position where change occurred")
     entity_uuid: Optional[UUID] = Field(default=None, description="UUID of entity involved (if any)")
     object_uuid: Optional[UUID] = Field(default=None, description="UUID of object involved (if any)")
-    old_position: Optional[Tuple[int, int]] = Field(default=None, description="Previous position (for movement)")
+    old_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Secondary movement position: previous position on enter events, destination on leave events.",
+    )
     tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
     tile_visible: Optional[bool] = Field(default=None, description="New visible state (for tile changes)")
     senses_hint: Optional[SensesUpdateHint] = Field(default=None, description="Hint for incremental senses updates")
 
-    # For frontend reducer — light level after change
     new_light_level: Optional[int] = Field(default=None, description="Resolved light level at position after change")
     light_level_map: Optional[Dict[str, int]] = Field(default=None, description="Map of 'x,y' -> resolved light_level for all changed positions in batch")
 
-    # For frontend reducer — object metadata (placed/changed events)
     object_name: Optional[str] = Field(default=None, description="Object name (e.g. 'Door', 'Torch')")
     object_map_char: Optional[str] = Field(default=None, description="Object map character (e.g. 'D', 'φ')")
     object_blocks_movement: Optional[bool] = Field(default=None, description="Object blocks_movement after change")
     object_blocks_vision: Optional[bool] = Field(default=None, description="Object blocks_vision after change")
     object_is_open: Optional[bool] = Field(default=None, description="Object is_open state (doors)")
 
-    # Directional tile metadata (tile-owned, JSON-safe)
     directional_position: Optional[Tuple[int, int]] = Field(default=None, description="Tile whose directional state changed")
     directional_directions: Optional[List[str]] = Field(default=None, description="Tile-relative directions changed")
     directional_channels: Optional[List[str]] = Field(default=None, description="Directional channels changed")
@@ -1938,7 +2023,7 @@ class SpatialChangeEvent(Event):
             entity_uuid=entity_uuid,
             old_position=old_position,
             phase=EventPhase.DECLARATION,
-            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
             directional_position=directional_position,
@@ -1995,9 +2080,9 @@ class SpatialChangeEvent(Event):
             change_type=SpatialChangeType.ENTITY_LEFT,
             position=position,
             entity_uuid=entity_uuid,
-            old_position=new_position,  # Store new position in old_position field for reference
+            old_position=new_position,
             phase=EventPhase.DECLARATION,
-            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
             directional_position=directional_position,
@@ -2048,7 +2133,7 @@ class SpatialChangeEvent(Event):
             tile_walkable=walkable,
             tile_visible=visible,
             phase=EventPhase.DECLARATION,
-            use_register=False,  # GridMap controls registration via _fire_spatial_event
+            use_register=False,
             parent_event=parent_event,
             senses_hint=senses_hint,
             directional_position=directional_position,
@@ -2202,7 +2287,7 @@ class SpatialChangeEvent(Event):
             event_type=EventType.SPATIAL_LIGHT_CHANGED,
             change_type=SpatialChangeType.LIGHT_CHANGED,
             position=position,
-            entity_uuid=tile_uuid,  # Tile UUID stored in entity_uuid field
+            entity_uuid=tile_uuid,
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
@@ -2329,37 +2414,110 @@ class SpatialChangeEvent(Event):
         return positions
 
 
+class FireExposureEvent(Event):
+    """Position-level event for environmental fire exposure."""
+
+    name: str = Field(default="Fire Exposure", description="Human-readable fire exposure event label.")
+    event_type: EventType = Field(default=EventType.FIRE_EXPOSURE, description="Event category for fire exposure.")
+    position: Tuple[int, int] = Field(description="Grid position exposed to fire.")
+    duration_rounds: int = Field(
+        default=1,
+        ge=1,
+        description="Number of rounds the exposure's lingering fire should last.",
+    )
+    damage_dice: str = Field(
+        default="2d4",
+        description="Rules-facing lingering fire damage expression for consumers that apply damage.",
+    )
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return the exposed grid position."""
+        return {self.position}
+
+
+class ExposedFlameEvent(Event):
+    """Event emitted after an item creates an exposed flame."""
+
+    name: str = Field(default="Exposed Flame Ignited", description="Human-readable exposed-flame event label.")
+    event_type: EventType = Field(
+        default=EventType.EXPOSED_FLAME_IGNITED,
+        description="Event category for a newly ignited exposed flame.",
+    )
+    item_uuid: UUID = Field(description="Item that owns the exposed flame.")
+    position: Tuple[int, int] = Field(description="Grid position where the flame is exposed.")
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return the exposed flame position."""
+        return {self.position}
+
+
+class WindExposureEvent(Event):
+    """Area-level event for environmental wind exposure."""
+
+    name: str = Field(default="Wind Exposure", description="Human-readable wind exposure event label.")
+    event_type: EventType = Field(
+        default=EventType.WIND_EXPOSURE,
+        description="Event category for wind exposure.",
+    )
+    positions: Set[Tuple[int, int]] = Field(
+        default_factory=set,
+        description="Grid positions exposed to the wind.",
+    )
+    wind_speed_mph: int = Field(
+        default=0,
+        ge=0,
+        description="Wind speed in miles per hour.",
+    )
+    source_description: str = Field(
+        default="wind",
+        description="Rules-facing description of the wind source.",
+    )
+
+    def gas_dispersal_rounds(self) -> Optional[int]:
+        """Return SRD gas dispersal rounds for this wind speed.
+
+        Returns:
+            One round for strong wind, four rounds for moderate wind, or
+            ``None`` when the wind is too weak to disperse gas.
+        """
+        if self.wind_speed_mph >= 20:
+            return 1
+        if self.wind_speed_mph >= 10:
+            return 4
+        return None
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return positions exposed to wind."""
+        return set(self.positions)
+
+
 class ForcedMovementEvent(Event):
-    """Forced movement (push/pull) - does NOT trigger opportunity attacks.
+    """Forced movement event for pushes, pulls, and similar displacement.
 
-    This event type intentionally uses FORCED_MOVEMENT instead of MOVEMENT to ensure
-    OA handlers never fire. GridMap spatial events still fire normally when the
-    target's position is updated.
-
-    Used by: Shove, Thunderwave, repelling effects, etc.
-
-    Note: target_entity_uuid is inherited from Event and should always be set
-    for forced movement events (it's the entity being pushed).
+    This uses `FORCED_MOVEMENT` rather than `MOVEMENT`, so opportunity-attack
+    handlers that listen to voluntary movement do not trigger. GridMap still
+    emits spatial enter/leave events when the target position changes.
     """
-    name: str = Field(default="Forced Movement")
-    event_type: EventType = Field(default=EventType.FORCED_MOVEMENT)
 
-    # Movement details (target_entity_uuid is inherited from Event - it's who's being pushed)
-    start_position: Tuple[int, int] = Field(description="Position before push")
-    end_position: Tuple[int, int] = Field(description="Position after push")
-    direction: Tuple[int, int] = Field(description="Push direction as (dx, dy)")
-    intended_distance: int = Field(description="How far we tried to push (feet)")
-    actual_distance: int = Field(default=0, description="How far they actually moved")
-    blocked_by_obstacle: bool = Field(default=False, description="Stopped by wall/entity")
-    blocked_by: Optional[str] = Field(default=None, description="What blocked the push (e.g. 'Wall', 'Skeleton 1')")
-    cause: str = Field(default="shove", description="What caused this: shove, thunderwave, etc.")
+    name: str = Field(default="Forced Movement", description="Human-readable forced-movement label.")
+    event_type: EventType = Field(
+        default=EventType.FORCED_MOVEMENT,
+        description="Event category for forced displacement.",
+    )
+    start_position: Tuple[int, int] = Field(description="Target position before displacement.")
+    end_position: Tuple[int, int] = Field(description="Target position after displacement.")
+    direction: Tuple[int, int] = Field(description="Displacement direction as (dx, dy).")
+    intended_distance: int = Field(description="Requested displacement distance in feet.")
+    actual_distance: int = Field(default=0, description="Distance actually moved in feet.")
+    blocked_by_obstacle: bool = Field(default=False, description="Whether an obstacle stopped movement early.")
+    blocked_by: Optional[str] = Field(default=None, description="Obstacle or entity that blocked movement.")
+    cause: str = Field(default="shove", description="Mechanic that caused the displacement.")
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for forced movement."""
         source_name = self.source_entity_name or "Unknown"
         target_name = self.target_entity_name or "Unknown"
 
-        # Build blocked suffix
         blocked_suffix = ""
         if self.blocked_by_obstacle:
             if self.blocked_by:
@@ -2367,7 +2525,6 @@ class ForcedMovementEvent(Event):
             else:
                 blocked_suffix = " (blocked)"
 
-        # Build markdown-formatted verbosity levels
         if self.actual_distance == 0:
             compact_text = f"{md_color(target_name, 'yellow')} resists being pushed"
         elif self.blocked_by_obstacle:
@@ -2375,7 +2532,6 @@ class ForcedMovementEvent(Event):
         else:
             compact_text = f"{md_color(target_name, 'yellow')} pushed {md_color(f'{self.actual_distance}ft', 'green')}"
 
-        # VERBOSE: Add pusher
         verbose_text = f"{md_color(source_name, 'cyan')} pushes {md_color(target_name, 'yellow')}"
         if self.actual_distance > 0:
             verbose_text += f" {md_color(f'{self.actual_distance}ft', 'green')}"
@@ -2384,7 +2540,6 @@ class ForcedMovementEvent(Event):
         else:
             verbose_text += f" - {md_color('resisted', 'red')}"
 
-        # DETAILED: Add direction and positions
         detailed_text = verbose_text
         detailed_text += f"\n  Direction: {self.direction}"
         detailed_text += f"\n  {self.start_position} → {self.end_position}"
@@ -2392,7 +2547,7 @@ class ForcedMovementEvent(Event):
             detailed_text += f"\n  Intended: {self.intended_distance}ft, Actual: {self.actual_distance}ft"
 
         return CombatLogEntry(
-            entry_type=CombatLogEntryType.MOVEMENT,  # Reuse existing type for display
+            entry_type=CombatLogEntryType.MOVEMENT,
             source_name=source_name,
             source_uuid=str(self.source_entity_uuid),
             target_name=target_name,
@@ -2467,7 +2622,7 @@ class StepMovementEvent(Event):
 class RangeType(str, Enum):
     REACH = "Reach"
     RANGE = "Range"
-    SELF = "Self"  # For spells that originate from caster (cone, line, cube from self)
+    SELF = "Self"
 
 
 class Range(BaseModel):
@@ -2490,24 +2645,35 @@ class Range(BaseModel):
             return f"{self.normal} ft."
         elif self.type == RangeType.RANGE:
             return f"{self.normal}/{self.long} ft." if self.long else f"{self.normal} ft."
-        
+
 class Damage(BaseObject):
-    name: str = Field(default="Damage", description="Name of the damage")
-    damage_dice: Literal[4,6,8,10,12,20] = Field(
-        description="Number of sides on the damage dice (e.g., 6 for d6)"
+    """Damage dice specification plus damage type."""
+
+    name: str = Field(default="Damage", description="Human-readable damage label.")
+    damage_dice: Literal[4, 6, 8, 10, 12, 20] = Field(
+        description="Number of sides on each damage die."
     )
     dice_numbers: int = Field(
-        description="Number of dice to roll for damage (e.g., 2 for 2d6)"
+        description="Number of damage dice to roll."
     )
     damage_bonus: Optional[ModifiableValue] = Field(
         default=None,
-        description="Fixed bonus to damage rolls"
+        description="Modifiable flat bonus added to damage rolls."
     )
     damage_type: DamageType = Field(
-        description="Type of damage dealt by the weapon"
+        description="Damage type applied to this damage packet."
     )
-    
+
     def get_dice(self, attack_outcome: AttackOutcome, crit_extra_dice: int = 0) -> Dice:
+        """Build a `Dice` object for this damage packet.
+
+        Args:
+            attack_outcome: Attack outcome used for critical-damage handling.
+            crit_extra_dice: Extra critical dice to add beyond the base rule.
+
+        Returns:
+            Dice configured for a damage roll.
+        """
         assert self.damage_bonus is not None, "Damage requires damage_bonus to be set"
         return Dice(count=self.dice_numbers, value=self.damage_dice, bonus=self.damage_bonus, roll_type=RollType.DAMAGE, attack_outcome=attack_outcome, crit_extra_dice=crit_extra_dice)
 
@@ -2527,6 +2693,7 @@ class Healing(BaseObject):
     )
 
     def get_dice(self) -> Dice:
+        """Build a `Dice` object for this healing packet."""
         assert self.healing_bonus is not None, "Healing requires healing_bonus to be set"
         return Dice(
             count=self.dice_numbers,
@@ -2536,31 +2703,29 @@ class Healing(BaseObject):
         )
 
 
-# =============================================================================
-# Unified Dice Roll Event Hierarchy
-# =============================================================================
-
 class DiceRollResultEvent(Event):
-    """
-    Base class for all dice roll result events.
+    """Base event for post-roll, pre-application dice interception.
 
-    Provides unified handler interception for d20 rolls, damage rolls, etc.
+    Result processors such as Lucky, Great Weapon Fighting, or healing dice
+    maximizers modify these events after dice have been rolled but before the
+    consuming action applies the result.
     """
-    event_type: EventType = Field(default=EventType.DICE_ROLL_RESULT)
 
-    # Roll type classification
+    event_type: EventType = Field(
+        default=EventType.DICE_ROLL_RESULT,
+        description="Base event category for dice result interception.",
+    )
     roll_type: RollType = Field(
         ...,
-        description="ATTACK, SAVE, CHECK, or DAMAGE - determines handler eligibility"
+        description="Roll category used by handlers to decide eligibility.",
     )
-
-    # Handler context (arbitrary data for handler decisions)
-    context: Dict[str, Any] = Field(default_factory=dict)
-
-    # Modification tracking
+    context: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arbitrary handler context carried with the roll result.",
+    )
     roll_modifications: List[Tuple[str, str]] = Field(
         default_factory=list,
-        description="[(handler_name, reason), ...] for combat log/debugging"
+        description="Audit entries describing handlers that modified this roll.",
     )
 
     def add_modification(self, handler_name: str, reason: str) -> None:
@@ -2570,29 +2735,35 @@ class DiceRollResultEvent(Event):
 
 
 class D20RollResultEvent(DiceRollResultEvent):
+    """Base event for d20 result interception.
+
+    Broad handlers may listen to this base d20 result type; attack, save, and
+    check-specific handlers listen to the subclasses below.
     """
-    Base class for d20 roll results.
 
-    Subclasses: AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent
-
-    Handlers like Lucky can register for this base type to catch ALL d20 rolls.
-    Type-specific handlers register for the specific subclass.
-    """
-    event_type: EventType = Field(default=EventType.D20_ROLL_RESULT)
-
-    # The Roll (single d20)
-    roll: DiceRoll = Field(..., description="The initial roll result")
-    original_roll: DiceRoll = Field(..., description="Immutable copy for audit trail")
-    final_roll: Optional[DiceRoll] = Field(default=None, description="After handler modifications")
-
-    # D20-specific context
-    dc: Optional[int] = Field(default=None, description="Difficulty class if known")
-    bonus: Optional[ModifiableValue] = Field(default=None, description="All modifiers applied")
-    result: Optional[bool] = Field(default=None, description="Success/failure - set AFTER outcome")
+    event_type: EventType = Field(
+        default=EventType.D20_ROLL_RESULT,
+        description="Base event category for d20 result interception.",
+    )
+    roll: DiceRoll = Field(..., description="Initial d20 roll result.")
+    original_roll: DiceRoll = Field(..., description="Immutable d20 roll kept for audit.")
+    final_roll: Optional[DiceRoll] = Field(
+        default=None,
+        description="Replacement d20 roll after handlers modify the result.",
+    )
+    dc: Optional[int] = Field(default=None, description="Difficulty class or armor class, if known.")
+    bonus: Optional[ModifiableValue] = Field(default=None, description="Modifiers used for the d20 roll.")
+    result: Optional[bool] = Field(default=None, description="Success flag set after the outcome is evaluated.")
 
     def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
-        """Replace the roll result. Handler helper method."""
-        old_total = self.roll.total
+        """Replace the effective d20 roll and append an audit entry.
+
+        Args:
+            new_roll: Replacement roll result.
+            handler_name: Name of the handler making the replacement.
+            reason: Human-readable reason for the replacement.
+        """
+        old_total = self.get_effective_roll().total
         new_total = new_roll.total
         self.final_roll = new_roll
         self.add_modification(handler_name, f"{reason} ({old_total} → {new_total})")
@@ -2603,200 +2774,160 @@ class D20RollResultEvent(DiceRollResultEvent):
 
 
 class AttackD20RollResultEvent(D20RollResultEvent):
-    """
-    Event for attack d20 rolls.
+    """D20 result event for attack rolls."""
 
-    Additional context: weapon_slot for weapon-specific handlers.
-    """
-    event_type: EventType = Field(default=EventType.ATTACK_D20_ROLL_RESULT)
-    roll_type: RollType = Field(default=RollType.ATTACK)
-
-    # Attack-specific context
-    weapon_slot: Optional[WeaponSlot] = Field(default=None, description="Weapon used for attack")
+    event_type: EventType = Field(
+        default=EventType.ATTACK_D20_ROLL_RESULT,
+        description="Event category for attack d20 result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.ATTACK, description="Roll category for attack d20 results.")
+    weapon_slot: Optional[WeaponSlot] = Field(default=None, description="Weapon slot used for the attack.")
 
 
 class SavingThrowD20RollResultEvent(D20RollResultEvent):
-    """
-    Event for saving throw d20 rolls.
+    """D20 result event for saving throws."""
 
-    Additional context: ability_name for ability-specific handlers (e.g., Evasion for DEX saves).
-    """
-    event_type: EventType = Field(default=EventType.SAVE_D20_ROLL_RESULT)
-    roll_type: RollType = Field(default=RollType.SAVE)
-
-    # Save-specific context
-    ability_name: AbilityName = Field(..., description="The ability being saved against")
+    event_type: EventType = Field(
+        default=EventType.SAVE_D20_ROLL_RESULT,
+        description="Event category for saving throw d20 result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.SAVE, description="Roll category for saving throw d20 results.")
+    ability_name: AbilityName = Field(..., description="Ability used for the saving throw.")
 
 
 class SkillCheckD20RollResultEvent(D20RollResultEvent):
-    """
-    Event for skill check d20 rolls.
+    """D20 result event for skill checks."""
 
-    Additional context: skill_name for skill-specific handlers (e.g., Reliable Talent).
-    """
-    event_type: EventType = Field(default=EventType.CHECK_D20_ROLL_RESULT)
-    roll_type: RollType = Field(default=RollType.CHECK)
-
-    # Skill-specific context
-    skill_name: SkillName = Field(..., description="The skill being checked")
-
-
-# =============================================================================
-# Damage Roll Result Event (for damage dice manipulation)
-# =============================================================================
+    event_type: EventType = Field(
+        default=EventType.CHECK_D20_ROLL_RESULT,
+        description="Event category for skill check d20 result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.CHECK, description="Roll category for skill check d20 results.")
+    skill_name: SkillName = Field(..., description="Skill used for the check.")
 
 class DamageRollResultEvent(DiceRollResultEvent):
+    """Damage-roll result event fired before damage is applied.
+
+    Handlers replace entries in `final_rolls` while `original_rolls` remains
+    available for audit. This supports reroll, keep-best, and partial-reroll
+    mechanics.
     """
-    Event fired after damage dice are rolled but before damage is applied.
 
-    Handlers create new DiceRoll versions - original rolls are immutable.
-    After all handlers run, final_rolls contains the versions to apply.
-
-    This enables:
-    - Reroll and substitute (Great Weapon Fighting)
-    - Reroll and keep best (Halfling Lucky, Elemental Adept)
-    - Partial rerolls (only lightning damage dice)
-    - Audit trail (see what changed and why)
-    """
-    name: str = Field(default="Damage Roll Result")
-    event_type: EventType = Field(default=EventType.DAMAGE_ROLL_RESULT)
-    roll_type: RollType = Field(default=RollType.DAMAGE)
-
-    # Attack context (read-only)
-    weapon_slot: WeaponSlot = Field(description="The weapon slot used for the attack")
-    attack_outcome: AttackOutcome = Field(description="The outcome of the attack (HIT, CRIT, etc.)")
-    damages: List[Damage] = Field(description="Damage specifications")
-
-    # IMMUTABLE: Original rolls (never modified)
-    original_rolls: List[DiceRoll] = Field(description="Original dice rolls before any modifications")
-
-    # MUTABLE: Current best rolls (handlers replace with new versions)
-    # Initialized to copy of original_rolls
-    final_rolls: List[DiceRoll] = Field(description="Final dice rolls after handler modifications")
-
-    # AUDIT: History of modifications (override parent's simpler format)
+    name: str = Field(default="Damage Roll Result", description="Human-readable damage-roll result label.")
+    event_type: EventType = Field(
+        default=EventType.DAMAGE_ROLL_RESULT,
+        description="Event category for damage-roll result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.DAMAGE, description="Roll category for damage results.")
+    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
+    attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
+    damages: List[Damage] = Field(description="Damage packets that produced the rolls.")
+    original_rolls: List[DiceRoll] = Field(description="Original immutable damage rolls.")
+    final_rolls: List[DiceRoll] = Field(description="Damage rolls to apply after handler modifications.")
     roll_modifications: List[Tuple[str, int, int, int, str]] = Field(  # type: ignore[assignment]
         default_factory=list,
-        description="Audit trail of roll modifications: (handler_name, roll_index, old_total, new_total, reason)"
+        description="Audit trail of damage roll replacements: handler, roll index, old total, new total, reason."
     )
 
     def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
-        """Helper for handlers to replace a roll and track the change."""
+        """Replace one final damage roll and append an audit entry.
+
+        Args:
+            index: Index in `final_rolls` to replace.
+            new_roll: Replacement damage roll.
+            handler_name: Name of the handler making the replacement.
+            reason: Human-readable reason for the replacement.
+        """
         old_roll = self.final_rolls[index]
         self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
         self.final_rolls[index] = new_roll
 
 
 class HealRollResultEvent(DiceRollResultEvent):
+    """Healing-roll result event fired before healing is applied.
+
+    Mirrors the damage-roll result pattern for effects that maximize or replace
+    healing dice.
     """
-    Event fired after healing dice are rolled but before healing is applied.
 
-    Mirrors DamageRollResultEvent pattern. Handlers can maximize or replace
-    healing dice (e.g., Beacon of Hope maximizes all healing dice).
-    """
-    name: str = Field(default="Heal Roll Result")
-    event_type: EventType = Field(default=EventType.HEAL_ROLL_RESULT)
-    roll_type: RollType = Field(default=RollType.HEAL)
-
-    # Context
-    spell_name: str = Field(default="", description="Name of the healing spell")
-
-    # IMMUTABLE: Original roll
-    original_roll: DiceRoll = Field(description="Original healing dice roll before modifications")
-
-    # MUTABLE: Current best roll (handlers replace)
-    final_roll: DiceRoll = Field(description="Final healing dice roll after handler modifications")
+    name: str = Field(default="Heal Roll Result", description="Human-readable healing-roll result label.")
+    event_type: EventType = Field(
+        default=EventType.HEAL_ROLL_RESULT,
+        description="Event category for healing-roll result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.HEAL, description="Roll category for healing results.")
+    spell_name: str = Field(default="", description="Name of the healing spell or effect.")
+    original_roll: DiceRoll = Field(description="Original immutable healing roll.")
+    final_roll: DiceRoll = Field(description="Healing roll to apply after handler modifications.")
 
     def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
-        """Helper for handlers to replace the healing roll and track the change."""
+        """Replace the final healing roll and append an audit entry.
+
+        Args:
+            new_roll: Replacement healing roll.
+            handler_name: Name of the handler making the replacement.
+            reason: Human-readable reason for the replacement.
+        """
         self.roll_modifications.append((handler_name, reason))
         self.final_roll = new_roll
         self.modified = True
 
 
-# =============================================================================
-# DEPRECATED: DamageRolledEvent - Use DamageRollResultEvent instead
-# =============================================================================
-
 class DamageRolledEvent(Event):
+    """Legacy damage-roll interception event.
+
+    Use `DamageRollResultEvent` for new handlers. This class remains for
+    compatibility with older callers.
     """
-    Event fired after damage dice are rolled but before damage is applied.
 
-    Handlers create new DiceRoll versions - original rolls are immutable.
-    After all handlers run, final_rolls contains the versions to apply.
-
-    This enables:
-    - Reroll and substitute (Great Weapon Fighting)
-    - Reroll and keep best (Halfling Lucky, Elemental Adept)
-    - Partial rerolls (only lightning damage dice)
-    - Audit trail (see what changed and why)
-    """
-    name: str = Field(default="Damage Rolled")
-    event_type: EventType = Field(default=EventType.DAMAGE_ROLLED)
-
-    # Attack context (read-only)
-    weapon_slot: WeaponSlot = Field(description="The weapon slot used for the attack")
-    attack_outcome: AttackOutcome = Field(description="The outcome of the attack (HIT, CRIT, etc.)")
-    damages: List[Damage] = Field(description="Damage specifications")
-
-    # IMMUTABLE: Original rolls (never modified)
-    original_rolls: List[DiceRoll] = Field(description="Original dice rolls before any modifications")
-
-    # MUTABLE: Current best rolls (handlers replace with new versions)
-    # Initialized to copy of original_rolls
-    final_rolls: List[DiceRoll] = Field(description="Final dice rolls after handler modifications")
-
-    # AUDIT: History of modifications [(handler_name, roll_index, old_total, new_total, reason), ...]
+    name: str = Field(default="Damage Rolled", description="Human-readable legacy damage-roll label.")
+    event_type: EventType = Field(
+        default=EventType.DAMAGE_ROLLED,
+        description="Legacy event category for damage-roll interception.",
+    )
+    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
+    attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
+    damages: List[Damage] = Field(description="Damage packets that produced the rolls.")
+    original_rolls: List[DiceRoll] = Field(description="Original immutable damage rolls.")
+    final_rolls: List[DiceRoll] = Field(description="Damage rolls to apply after handler modifications.")
     roll_modifications: List[Tuple[str, int, int, int, str]] = Field(
         default_factory=list,
-        description="Audit trail of roll modifications: (handler_name, roll_index, old_total, new_total, reason)"
+        description="Audit trail of damage roll replacements: handler, roll index, old total, new total, reason."
     )
 
     def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
-        """Helper for handlers to replace a roll and track the change."""
+        """Replace one final damage roll and append an audit entry.
+
+        Args:
+            index: Index in `final_rolls` to replace.
+            new_roll: Replacement damage roll.
+            handler_name: Name of the handler making the replacement.
+            reason: Human-readable reason for the replacement.
+        """
         old_roll = self.final_rolls[index]
         self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
         self.final_rolls[index] = new_roll
 
 
-# =============================================================================
-# Take Damage Event (for damage tracking and interception)
-# =============================================================================
-
 class TakeDamageEvent(Event):
+    """Damage-application event for tracking, reduction, and cancellation.
+
+    Handlers use this event to reduce, replace, cancel, or react to incoming
+    damage. `final_damage` overrides `total_damage` when present.
     """
-    Event fired when an entity is about to take damage.
 
-    This event enables:
-    - Tracking damage taken (e.g., rage maintenance - HasTakenDamage marker)
-    - Modifying damage (e.g., resistance, vulnerability, reduction)
-    - Canceling damage (e.g., immunity, absorption)
-    - Reacting to lethal damage (e.g., Relentless Rage)
-
-    Phases:
-    - DECLARATION: Damage is about to be applied
-    - EXECUTION: Processing begins
-    - EFFECT: Handlers can modify/reduce/cancel damage
-    - COMPLETION: Damage has been applied (or canceled)
-
-    Handlers should check `canceled` flag before applying damage.
-    If `final_damage` is set, use that instead of `total_damage`.
-    """
-    name: str = Field(default="Take Damage")
-    event_type: EventType = Field(default=EventType.TAKE_DAMAGE)
-
-    # Damage details
+    name: str = Field(default="Take Damage", description="Human-readable damage-application label.")
+    event_type: EventType = Field(
+        default=EventType.TAKE_DAMAGE,
+        description="Event category for damage application.",
+    )
     total_damage: int = Field(description="Total damage before any modifications")
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
-
-    # For handlers that need to modify damage
     final_damage: Optional[int] = Field(
         default=None,
         description="Modified damage after handlers. If None, use total_damage."
     )
-
-    # For frontend reducer — authoritative HP after damage applied
     resulting_hp: Optional[int] = Field(
         default=None,
         description="Entity HP after damage applied (set at EFFECT phase)"
@@ -2813,16 +2944,14 @@ class TakeDamageEvent(Event):
         Attack damage is logged by the attack event itself.
         """
         target_name = self.target_entity_name or "Unknown"
-        source_name = self.source_entity_name or "terrain"  # Default to terrain for zone damage
+        source_name = self.source_entity_name or "terrain"
 
         damage = self.get_effective_damage()
 
-        # Get damage type from first damage entry, or default to "damage"
         damage_type_str = "damage"
         if self.damages:
             damage_type_str = str(self.damages[0].damage_type.value).lower()
 
-        # Canceled damage (e.g., Shield blocks Magic Missile)
         if self.canceled:
             reason = self.status_message or "blocked"
             compact_text = f"{md_color(target_name, 'yellow')} takes {md_color('0', 'green')} {damage_type_str} ({reason})"
@@ -2846,15 +2975,12 @@ class TakeDamageEvent(Event):
                 success=False
             )
 
-        # COMPACT: "Skeleton takes 5 piercing"
         compact_text = f"{md_color(target_name, 'yellow')} takes {md_color(str(damage), 'red')} {damage_type_str}"
 
-        # VERBOSE: Add source
         verbose_text = f"{md_color(target_name, 'yellow')} takes {md_color(str(damage), 'red')} {damage_type_str}"
         if source_name and source_name != "terrain":
             verbose_text += f" from {md_color(source_name, 'cyan')}"
 
-        # DETAILED: Add roll info if available
         detailed_text = verbose_text
         if self.damage_rolls:
             roll_strs = []
@@ -2883,27 +3009,24 @@ class TakeDamageEvent(Event):
         )
 
 
-# =============================================================================
-# Heal Event
-# =============================================================================
-
 class HealEvent(Event):
-    """Fired when an entity receives healing."""
-    name: str = Field(default="Heal", description="Healing event")
-    event_type: EventType = Field(default=EventType.HEAL)
-    total_healing: int = Field(default=0, description="Healing amount requested")
-    actual_healing: int = Field(default=0, description="Actual HP restored (after cap)")
-    source_description: str = Field(default="", description="Description of healing source (e.g. 'Second Wind: d10(7)+1')")
-    was_blocked: bool = Field(default=False, description="True if healing was blocked (e.g. Chill Touch)")
-    spell_level: int = Field(default=0, description="Spell level used (0 = non-spell healing)")
+    """Healing-application event for HP restoration and blocking."""
 
-    # For frontend reducer — authoritative HP after healing applied
+    name: str = Field(default="Heal", description="Human-readable healing event label.")
+    event_type: EventType = Field(default=EventType.HEAL, description="Event category for healing application.")
+    total_healing: int = Field(default=0, description="Requested healing amount before HP caps.")
+    actual_healing: int = Field(default=0, description="HP actually restored after caps and blockers.")
+    source_description: str = Field(default="", description="Human-readable description of the healing source.")
+    was_blocked: bool = Field(default=False, description="Whether healing was blocked by an effect.")
+    spell_level: int = Field(default=0, description="Spell level used, or 0 for non-spell healing.")
+
     resulting_hp: Optional[int] = Field(
         default=None,
         description="Entity HP after healing applied (set at EFFECT phase)"
     )
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Generate a combat log entry for healing application."""
         target_name = self.target_entity_name or "Unknown"
 
         if self.was_blocked:
@@ -2947,74 +3070,82 @@ class HealEvent(Event):
             success=True
         )
 
-
-# =============================================================================
-# Encounter/Turn Events
-# =============================================================================
-
 class EncounterEvent(Event):
     """Base event for encounter lifecycle."""
-    name: str = Field(default="Encounter Event", description="An encounter lifecycle event")
-    encounter_uuid: UUID = Field(description="UUID of the encounter")
-    combatant_uuids: List[UUID] = Field(default_factory=list, description="UUIDs of all combatants")
+
+    name: str = Field(default="Encounter Event", description="Human-readable encounter event label.")
+    encounter_uuid: UUID = Field(description="Encounter whose lifecycle changed.")
+    combatant_uuids: List[UUID] = Field(default_factory=list, description="Combatants participating in the encounter.")
 
 
 class EncounterStartEvent(EncounterEvent):
     """Fired when an encounter begins."""
-    name: str = Field(default="Encounter Start", description="Encounter has started")
-    event_type: EventType = Field(default=EventType.ENCOUNTER_START)
-    initiative_order: List[UUID] = Field(default_factory=list, description="Combatants sorted by initiative")
+
+    name: str = Field(default="Encounter Start", description="Human-readable encounter-start label.")
+    event_type: EventType = Field(
+        default=EventType.ENCOUNTER_START,
+        description="Event category for encounter start.",
+    )
+    initiative_order: List[UUID] = Field(default_factory=list, description="Combatants sorted by initiative.")
 
 
 class EncounterEndEvent(EncounterEvent):
     """Fired when an encounter ends."""
-    name: str = Field(default="Encounter End", description="Encounter has ended")
-    event_type: EventType = Field(default=EventType.ENCOUNTER_END)
-    reason: Optional[str] = Field(default=None, description="Why the encounter ended")
+
+    name: str = Field(default="Encounter End", description="Human-readable encounter-end label.")
+    event_type: EventType = Field(
+        default=EventType.ENCOUNTER_END,
+        description="Event category for encounter end.",
+    )
+    reason: Optional[str] = Field(default=None, description="Reason the encounter ended.")
 
 
 class RoundEvent(Event):
     """Base event for round lifecycle."""
-    name: str = Field(default="Round Event", description="A round lifecycle event")
-    encounter_uuid: UUID = Field(description="UUID of the encounter")
-    round_number: int = Field(description="Current round number (1-indexed)")
+
+    name: str = Field(default="Round Event", description="Human-readable round event label.")
+    encounter_uuid: UUID = Field(description="Encounter whose round changed.")
+    round_number: int = Field(description="Current 1-indexed round number.")
 
 
 class RoundStartEvent(RoundEvent):
     """Fired at the start of a new round."""
-    name: str = Field(default="Round Start", description="A new round has started")
-    event_type: EventType = Field(default=EventType.ROUND_START)
+
+    name: str = Field(default="Round Start", description="Human-readable round-start label.")
+    event_type: EventType = Field(default=EventType.ROUND_START, description="Event category for round start.")
 
 
 class RoundEndEvent(RoundEvent):
     """Fired at the end of a round."""
-    name: str = Field(default="Round End", description="The round has ended")
-    event_type: EventType = Field(default=EventType.ROUND_END)
+
+    name: str = Field(default="Round End", description="Human-readable round-end label.")
+    event_type: EventType = Field(default=EventType.ROUND_END, description="Event category for round end.")
 
 
 class TurnEvent(Event):
     """Base event for turn lifecycle."""
-    name: str = Field(default="Turn Event", description="A turn lifecycle event")
-    encounter_uuid: UUID = Field(description="UUID of the encounter")
-    entity_uuid: UUID = Field(description="UUID of the entity whose turn it is")
-    round_number: int = Field(description="Current round number")
-    turn_index: int = Field(description="Position in initiative order (0-indexed)")
+
+    name: str = Field(default="Turn Event", description="Human-readable turn event label.")
+    encounter_uuid: UUID = Field(description="Encounter whose turn order advanced.")
+    entity_uuid: UUID = Field(description="Entity whose turn is represented.")
+    round_number: int = Field(description="Current round number.")
+    turn_index: int = Field(description="0-indexed position in initiative order.")
 
 
 class TurnStartEvent(TurnEvent):
     """Fired at the start of an entity's turn."""
-    name: str = Field(default="Turn Start", description="Entity's turn has started")
-    event_type: EventType = Field(default=EventType.TURN_START)
-    actions_available: int = Field(default=1, description="Actions available this turn")
-    bonus_actions_available: int = Field(default=1, description="Bonus actions available")
-    movement_available: int = Field(default=30, description="Movement available in feet")
-    reaction_available: int = Field(default=1, description="Reaction available")
+
+    name: str = Field(default="Turn Start", description="Human-readable turn-start label.")
+    event_type: EventType = Field(default=EventType.TURN_START, description="Event category for turn start.")
+    actions_available: int = Field(default=1, description="Actions available at turn start.")
+    bonus_actions_available: int = Field(default=1, description="Bonus actions available at turn start.")
+    movement_available: int = Field(default=30, description="Movement available at turn start, in feet.")
+    reaction_available: int = Field(default=1, description="Reactions available at turn start.")
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for turn start."""
         entity_name = self.source_entity_name or "Unknown"
 
-        # Turn start/end use the same format at all verbosity levels
         text = f"─── {md_color(entity_name, 'bold yellow')}'s turn ───"
 
         return CombatLogEntry(
@@ -3035,17 +3166,17 @@ class TurnStartEvent(TurnEvent):
 
 class TurnEndEvent(TurnEvent):
     """Fired at the end of an entity's turn."""
-    name: str = Field(default="Turn End", description="Entity's turn has ended")
-    event_type: EventType = Field(default=EventType.TURN_END)
-    actions_used: int = Field(default=0, description="Actions used this turn")
-    bonus_actions_used: int = Field(default=0, description="Bonus actions used")
-    movement_used: int = Field(default=0, description="Movement used in feet")
+
+    name: str = Field(default="Turn End", description="Human-readable turn-end label.")
+    event_type: EventType = Field(default=EventType.TURN_END, description="Event category for turn end.")
+    actions_used: int = Field(default=0, description="Actions spent during this turn.")
+    bonus_actions_used: int = Field(default=0, description="Bonus actions spent during this turn.")
+    movement_used: int = Field(default=0, description="Movement spent during this turn, in feet.")
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for turn end."""
         entity_name = self.source_entity_name or "Unknown"
 
-        # Turn end uses dimmer formatting
         text = f"─ {md_color(entity_name, 'dim')}'s turn ends ─"
 
         return CombatLogEntry(
@@ -3064,20 +3195,80 @@ class TurnEndEvent(TurnEvent):
         )
 
 
+class DeathSaveEvent(Event):
+    """Fired when a player-style dying entity makes a death saving throw."""
+
+    name: str = Field(default="Death Save", description="Human-readable death-save event label.")
+    event_type: EventType = Field(default=EventType.DEATH_SAVE, description="Event category for death saving throws.")
+    entity_uuid: UUID = Field(description="Entity making the death saving throw.")
+    entity_name: str = Field(default="", description="Display name of the entity making the death save.")
+    roll: Optional[DiceRoll] = Field(default=None, description="Effective d20 roll after result handlers.")
+    natural_roll: Optional[int] = Field(default=None, description="Natural d20 face used for death-save special rules.")
+    dc: int = Field(default=10, description="Death saving throw DC.")
+    succeeded: bool = Field(default=False, description="Whether this death save succeeded.")
+    successes: int = Field(default=0, ge=0, description="Death-save successes after this event.")
+    failures: int = Field(default=0, ge=0, description="Death-save failures after this event.")
+    became_stable: bool = Field(default=False, description="Whether this event stabilized the entity.")
+    regained_hit_point: bool = Field(default=False, description="Whether a natural 20 restored 1 hit point.")
+    died: bool = Field(default=False, description="Whether this event caused death.")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a combat log entry for a death saving throw."""
+        entity_name = self.entity_name or self.source_entity_name or "Unknown"
+        roll_total = self.roll.total if self.roll else 0
+        natural = self.natural_roll if self.natural_roll is not None else roll_total
+        outcome = "success" if self.succeeded else "failure"
+        if self.regained_hit_point:
+            outcome = "natural 20"
+        elif self.died:
+            outcome = "death"
+        elif self.became_stable:
+            outcome = "stable"
+
+        text = (
+            f"{md_color(entity_name, 'yellow')} death save "
+            f"{md_color(str(natural), 'cyan')} vs DC {self.dc}: {outcome} "
+            f"({self.successes} successes, {self.failures} failures)"
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SAVING_THROW,
+            source_name=entity_name,
+            source_uuid=str(self.entity_uuid),
+            target_name=entity_name,
+            target_uuid=str(self.entity_uuid),
+            compact=text,
+            verbose=text,
+            detailed=text,
+            data={
+                "entity_name": entity_name,
+                "entity_uuid": str(self.entity_uuid),
+                "roll": roll_total,
+                "natural_roll": natural,
+                "dc": self.dc,
+                "successes": self.successes,
+                "failures": self.failures,
+                "became_stable": self.became_stable,
+                "regained_hit_point": self.regained_hit_point,
+                "died": self.died,
+            },
+            success=self.succeeded or self.regained_hit_point or self.became_stable,
+        )
+
+
 class DeathEvent(Event):
     """Fired when an entity dies (HP drops to 0 or below)."""
-    name: str = Field(default="Death", description="Entity has died")
-    event_type: EventType = Field(default=EventType.DEATH)
-    entity_uuid: UUID = Field(description="UUID of the entity that died")
-    entity_name: str = Field(default="", description="Name of the entity that died")
-    killer_uuid: Optional[UUID] = Field(default=None, description="UUID of entity that dealt killing blow")
-    killer_name: str = Field(default="", description="Name of killer if known")
-    final_hp: int = Field(default=0, description="Final HP value (typically negative)")
-    encounter_uuid: Optional[UUID] = Field(default=None, description="UUID of encounter if in combat")
+
+    name: str = Field(default="Death", description="Human-readable death event label.")
+    event_type: EventType = Field(default=EventType.DEATH, description="Event category for entity death.")
+    entity_uuid: UUID = Field(description="Entity that died.")
+    entity_name: str = Field(default="", description="Display name of the dead entity.")
+    killer_uuid: Optional[UUID] = Field(default=None, description="Entity that dealt the killing blow, if known.")
+    killer_name: str = Field(default="", description="Display name of the killer, if known.")
+    final_hp: int = Field(default=0, description="Final HP value after lethal damage.")
+    encounter_uuid: Optional[UUID] = Field(default=None, description="Encounter where the death occurred, if any.")
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log entry for death."""
-        # Death uses dramatic formatting
         compact_text = f"☠ {md_color(self.entity_name, 'bold red')} has been defeated!"
         verbose_text = compact_text
         detailed_text = f"☠ {md_color(self.entity_name, 'bold red')} has been defeated!"
@@ -3095,3 +3286,15 @@ class DeathEvent(Event):
             data={"entity_name": self.entity_name, "final_hp": self.final_hp},
             success=True
         )
+
+
+class InstantDeathEvent(Event):
+    """Interruptible event for effects that kill without dealing damage."""
+
+    name: str = Field(default="Instant Death", description="Human-readable instant-death event label.")
+    event_type: EventType = Field(default=EventType.INSTANT_DEATH, description="Event category for no-damage death effects.")
+    entity_uuid: UUID = Field(description="Entity subjected to the instant-death effect.")
+    entity_name: str = Field(default="", description="Display name of the affected entity.")
+    killer_uuid: Optional[UUID] = Field(default=None, description="Entity or effect source causing the instant-death effect.")
+    killer_name: str = Field(default="", description="Display name of the instant-death source, if known.")
+    source_description: str = Field(default="", description="Rules-facing source or effect description.")

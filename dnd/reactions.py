@@ -1,3 +1,5 @@
+"""Reaction handlers for combat movement triggers."""
+
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, WeaponSlot, StepMovementEvent
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
@@ -10,29 +12,30 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     """Check if a single movement step triggers an opportunity attack.
 
     Triggers when an entity leaves a threatened position to a non-threatened position.
-    The source_entity_uuid is the entity that could make the OA (the one watching).
-    The event.source_entity_uuid is the entity that is moving.
+
+    Args:
+        event: Movement step being processed.
+        source_entity_uuid: Entity that could make the opportunity attack.
+
+    Returns:
+        The processed step event.
     """
     reaction_source_entity = Entity.get(source_entity_uuid)
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
         return event
 
-    # Can't OA yourself
     if reaction_source_entity.uuid == event_source_entity.uuid:
         return event
 
-    # Can't OA allies
     if reaction_source_entity.is_ally(event_source_entity):
         return event
 
-    # Disengage action prevents opportunity attacks
     if "Disengaging" in event_source_entity.active_conditions:
         return event
 
     threatened_positions = reaction_source_entity.senses.get_threathened_positions()
 
-    # OA triggers when THIS STEP leaves threatened area
     if event.from_position in threatened_positions and event.to_position not in threatened_positions:
         reaction_attack = Attack(
             name="Opportunity Attack",
@@ -56,7 +59,14 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
 
 
 def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create an OA handler that triggers on STEP_MOVEMENT events."""
+    """Create an opportunity-attack handler for one entity.
+
+    Args:
+        source_entity_uuid: Entity that owns the reaction handler.
+
+    Returns:
+        Player-toggleable step-movement handler.
+    """
     return EventHandler(
         name="Opportunity Attack Handler",
         trigger_conditions=[Trigger(
@@ -70,11 +80,15 @@ def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
-# Keep old name for backwards compatibility
 def create_opputinity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Deprecated: use create_opportunity_attack_handler instead."""
+    """Create opportunity-attack handler using the legacy misspelled API name."""
     return create_opportunity_attack_handler(source_entity_uuid)
 
 
-def add_opportunity_attack_handler(entity: Entity):
+def add_opportunity_attack_handler(entity: Entity) -> None:
+    """Register an opportunity-attack handler on an entity.
+
+    Args:
+        entity: Entity receiving the reaction handler.
+    """
     entity.add_event_handler(create_opportunity_attack_handler(entity.uuid))

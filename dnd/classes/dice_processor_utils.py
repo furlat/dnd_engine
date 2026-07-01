@@ -14,13 +14,8 @@ as it's used directly by Great Weapon Fighting.
 from dnd.core.dice import DiceRoll
 import random
 
-# Import the core utility from fighter (avoids duplication)
 from dnd.classes.fighter import create_modified_dice_roll
 
-
-# =============================================================================
-# DETERMINISTIC PROCESSORS (for testing/special abilities)
-# =============================================================================
 
 def maximize_all(roll: DiceRoll, dice_size: int) -> DiceRoll:
     """All dice show maximum value. Use for: testing, divine intervention."""
@@ -61,10 +56,6 @@ def ceiling_results(roll: DiceRoll, maximum: int) -> DiceRoll:
     return create_modified_dice_roll(roll, new_results)
 
 
-# =============================================================================
-# STOCHASTIC PROCESSORS (random element)
-# =============================================================================
-
 def reroll_below_and_substitute(roll: DiceRoll, threshold: int, dice_size: int) -> DiceRoll:
     """
     Reroll dice below threshold, MUST use new result.
@@ -88,7 +79,7 @@ def reroll_below_keep_best(roll: DiceRoll, threshold: int, dice_size: int) -> Di
     for r in results:
         if r <= threshold:
             rerolled = random.randint(1, dice_size)
-            new_results.append(max(r, rerolled))  # Keep best
+            new_results.append(max(r, rerolled))
         else:
             new_results.append(r)
     return create_modified_dice_roll(roll, new_results)

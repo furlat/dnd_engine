@@ -1,0 +1,391 @@
+"""Manual Chapter 20 checks for encounters, turns, controllers, and APIs."""
+
+import warnings
+from typing import Optional
+from uuid import UUID, uuid4
+
+warnings.filterwarnings(
+    "ignore",
+    message="Using `httpx` with `starlette.testclient` is deprecated.*",
+)
+
+from fastapi.testclient import TestClient
+from pydantic import Field
+
+from dnd.actions import Attack
+from dnd.controller import Controller, HumanController, PassController, TurnContext
+from dnd.core.base_actions import BaseAction
+from dnd.core.base_block import BaseBlock
+from dnd.core.base_object import BaseObject
+from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.core.values import BaseValue
+from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.entity import Entity
+from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.utils import force_attack_hit, get_hp, remove_attack_modifier, reset_combat_state, set_hp
+from server.event_server import _available_actions_cache, app, sim
+
+
+class RecordingController(Controller):
+    """Record encounter and turn callbacks for tutorial assertions."""
+
+    name: str = Field(default="Recording Controller")
+    controller_type: str = Field(default="recording")
+    encounter_start_names: list[str] = Field(default_factory=list)
+    encounter_end_names: list[str] = Field(default_factory=list)
+    turn_start_contexts: list[TurnContext] = Field(default_factory=list)
+    turn_end_contexts: list[TurnContext] = Field(default_factory=list)
+
+    def on_encounter_start(self, entities: list[Entity]) -> None:
+        """Record the entities assigned to this controller at encounter start."""
+        self.encounter_start_names.extend(entity.name for entity in entities)
+
+    def on_encounter_end(self, entities: list[Entity]) -> None:
+        """Record the entities assigned to this controller at encounter end."""
+        self.encounter_end_names.extend(entity.name for entity in entities)
+
+    def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
+        """Record the context available at turn start."""
+        self.turn_start_contexts.append(context)
+
+    def on_turn_end(self, entity: Entity, context: TurnContext) -> None:
+        """Record the context available at turn end."""
+        self.turn_end_contexts.append(context)
+
+
+class OneAttackController(Controller):
+    """Return one melee attack, then stop asking to continue the turn."""
+
+    name: str = Field(default="One Attack Controller")
+    controller_type: str = Field(default="one_attack")
+    target_uuid: UUID = Field(description="Target UUID for the scripted attack.")
+    used: bool = Field(default=False)
+
+    def get_next_action(self, entity: Entity, context: TurnContext) -> Optional[BaseAction]:
+        """Return the scripted attack once."""
+        if self.used:
+            return None
+        self.used = True
+        return Attack(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=self.target_uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+            template=False,
+        )
+
+    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
+        """Continue until the scripted attack has been returned."""
+        return not self.used
+
+
+def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
+    """Clear global runtime state and create a rectangular tutorial arena."""
+    reset_combat_state()
+    EventQueue.set_combat_log_callback(None)
+    EventQueue.set_perceiver_computer(None)
+    EventQueue.set_revealed_computer(None)
+    BaseObject._registry.clear()
+    BaseValue._registry.clear()
+    BaseBlock._registry.clear()
+    Controller.clear_registry()
+    Encounter.clear_registry()
+    Encounter._combat_log_listeners.clear()
+    _available_actions_cache.clear()
+
+    manager = sim.get_session_manager()
+    manager.sessions.clear()
+    manager.games.clear()
+    manager.active_game = None
+    sim.encounter = None
+    sim._game_session = None
+    sim.combat_task = None
+    sim.paused = True
+
+    get_map().create_rectangle(0, 0, width, height)
+
+
+def create_runtime_pair() -> tuple[Entity, Entity]:
+    """Create two opposing tutorial combatants."""
+    hero = create_goblin(name="Runtime Hero", position=(1, 1), faction="heroes")
+    monster = create_skeleton(name="Runtime Skeleton", position=(2, 1), faction="monsters")
+    Entity.update_all_entities_senses()
+    return hero, monster
+
+
+def start_ordered_encounter(
+    hero: Entity,
+    monster: Entity,
+    hero_controller: Controller,
+    monster_controller: Controller,
+    first: Entity,
+) -> Encounter:
+    """Create an active encounter with deterministic initiative order."""
+    encounter = Encounter(name="Runtime Encounter", source_entity_uuid=uuid4())
+    encounter.add_combatant(hero, hero_controller)
+    encounter.add_combatant(monster, monster_controller)
+    encounter.roll_initiative()
+    second = monster if first.uuid == hero.uuid else hero
+    encounter.initiative_order = [first.uuid, second.uuid]
+    encounter.current_turn_index = 0
+    encounter.start_encounter()
+    return encounter
+
+
+def create_session_controlled_turn() -> tuple[TestClient, str, Entity, Entity, Encounter]:
+    """Create an in-process API session that controls the active hero turn."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+    encounter.start_turn()
+    sim.encounter = encounter
+    sim.create_game_session(encounter)
+
+    client = TestClient(app)
+    session_response = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Runtime Player"},
+    )
+    assert session_response.status_code == 200
+    session_id = session_response.json()["session_id"]
+
+    join_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [str(hero.uuid)]},
+    )
+    assert join_response.status_code == 200
+    assert join_response.json()["controlled_entities"] == [str(hero.uuid)]
+
+    return client, session_id, hero, monster, encounter
+
+
+def test_encounter_start_and_end_own_runtime_callbacks() -> None:
+    """Encounter start and end own active state, callbacks, and controller notices."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    hero_controller = RecordingController(source_entity_uuid=hero.uuid)
+    monster_controller = RecordingController(source_entity_uuid=monster.uuid)
+
+    encounter = start_ordered_encounter(hero, monster, hero_controller, monster_controller, hero)
+
+    assert encounter.state == EncounterState.ACTIVE
+    assert Encounter.get_active() is encounter
+    assert encounter.round_number == 1
+    assert encounter.turn_state == TurnState.NOT_STARTED
+    assert encounter.initiative_order == [hero.uuid, monster.uuid]
+    assert hero_controller.encounter_start_names == ["Runtime Hero"]
+    assert monster_controller.encounter_start_names == ["Runtime Skeleton"]
+    assert EventQueue._combat_log_callback == encounter._on_event_combat_log
+    assert EventQueue._perceiver_computer is not None
+    assert EventQueue._revealed_computer is not None
+
+    end_event = encounter.end_encounter("tutorial complete")
+
+    assert end_event.reason == "tutorial complete"
+    assert encounter.state == EncounterState.ENDED
+    assert Encounter.get_active() is None
+    assert hero_controller.encounter_end_names == ["Runtime Hero"]
+    assert monster_controller.encounter_end_names == ["Runtime Skeleton"]
+    assert EventQueue._combat_log_callback is None
+    assert EventQueue._perceiver_computer is None
+    assert EventQueue._revealed_computer is None
+
+
+def test_turn_lifecycle_builds_controller_context_and_advances_rounds() -> None:
+    """Turn boundaries create controller context and advance rounds."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    hero_controller = RecordingController(source_entity_uuid=hero.uuid)
+    monster_controller = RecordingController(source_entity_uuid=monster.uuid)
+    encounter = start_ordered_encounter(hero, monster, hero_controller, monster_controller, hero)
+
+    start_event = encounter.start_turn()
+
+    assert start_event is not None
+    assert encounter.turn_state == TurnState.IN_PROGRESS
+    assert encounter.get_current_entity() is hero
+    assert hero_controller.turn_start_contexts
+    start_context = hero_controller.turn_start_contexts[-1]
+    assert start_context.entity_uuid == hero.uuid
+    assert start_context.round_number == 1
+    assert start_context.actions_remaining == 1
+    assert monster.uuid in start_context.visible_enemies
+
+    end_event = encounter.end_turn()
+
+    assert end_event is not None
+    assert encounter.turn_state == TurnState.ENDED
+    assert encounter.combatants[hero.uuid].has_acted_this_round
+    assert encounter.combatants[hero.uuid].turn_count == 1
+    assert hero_controller.turn_end_contexts[-1].entity_uuid == hero.uuid
+
+    next_event = encounter.next_turn()
+
+    assert next_event is not None
+    assert encounter.get_current_entity() is monster
+    assert encounter.current_turn_index == 1
+    assert encounter.round_number == 1
+
+    encounter.end_turn()
+    encounter.next_turn()
+
+    assert encounter.get_current_entity() is hero
+    assert encounter.current_turn_index == 0
+    assert encounter.round_number == 2
+    assert not encounter.combatants[hero.uuid].has_acted_this_round
+    assert not encounter.combatants[monster.uuid].has_acted_this_round
+
+
+def test_advance_until_player_runs_automated_turns_and_stops_for_input() -> None:
+    """Automated controllers run until a human-controlled turn needs input."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        monster,
+    )
+
+    result = encounter.advance_until_player()
+
+    assert result.status == "waiting_for_human"
+    assert result.entity_uuid == hero.uuid
+    assert result.entity_name == "Runtime Hero"
+    assert result.round_number == 1
+    assert result.turn_index == 1
+    assert encounter.get_current_entity() is hero
+    assert encounter.turn_state == TurnState.IN_PROGRESS
+    assert encounter.combatants[monster.uuid].turn_count == 1
+
+
+def test_controller_run_turn_executes_actions_and_combat_log_listeners() -> None:
+    """Encounter-run controller actions are captured in the combat log."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    controller = OneAttackController(source_entity_uuid=hero.uuid, target_uuid=monster.uuid)
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        controller,
+        PassController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+    listener_calls: list[tuple[int, str]] = []
+
+    def listener(active: Encounter, index: int, entry, event) -> None:
+        listener_calls.append((index, entry.entry_type.value))
+
+    force_uuid = force_attack_hit(hero)
+    starting_hp = get_hp(monster)
+    Encounter.add_combat_log_listener(listener)
+    try:
+        end_event = encounter.run_turn()
+    finally:
+        remove_attack_modifier(hero, force_uuid)
+        Encounter.remove_combat_log_listener(listener)
+
+    assert end_event is not None
+    assert controller.used
+    assert get_hp(monster) < starting_hp
+    assert encounter.combat_log
+    assert listener_calls
+    assert listener_calls[-1][0] == len(encounter.combat_log) - 1
+    assert encounter.get_combat_log(since=listener_calls[-1][0])[0] is encounter.combat_log[-1]
+
+
+def test_death_checks_mark_dead_combatants_and_end_by_faction_survival() -> None:
+    """Encounter death checks mark dead actors and end when one faction survives."""
+    reset_runtime_tutorial_state()
+    hero, monster = create_runtime_pair()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+
+    set_hp(monster, 0)
+    death_events = encounter.check_deaths()
+
+    assert death_events
+    assert encounter.combatants[monster.uuid].is_dead
+    assert "Dead" in monster.active_conditions
+    assert encounter.state == EncounterState.ENDED
+    assert Encounter.get_active() is None
+    assert len(encounter.get_alive_combatants()) == 1
+    assert encounter.get_dead_combatants()[0].entity_uuid == monster.uuid
+
+
+def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
+    """The API boundary gates actions by session ownership and active turn."""
+    client, session_id, hero, monster, encounter = create_session_controlled_turn()
+
+    turn_response = client.get("/encounter/current-turn")
+    turn_payload = turn_response.json()
+
+    assert turn_response.status_code == 200
+    assert turn_payload["encounter_active"] is True
+    assert turn_payload["current_entity_uuid"] == str(hero.uuid)
+    assert turn_payload["current_entity_name"] == "Runtime Hero"
+    assert turn_payload["is_human_turn"] is True
+    assert turn_payload["controller_type"] == "human"
+
+    actions_response = client.get(f"/entity/{hero.uuid}/available-actions")
+    actions_payload = actions_response.json()
+
+    assert actions_response.status_code == 200
+    assert actions_payload["entity_uuid"] == str(hero.uuid)
+    attack_rows = [
+        action for action in actions_payload["entity_actions"]
+        if action["template_name"] == "Attack_MELEE_MAIN"
+    ]
+    assert attack_rows
+    assert any(
+        target.get("target_uuid") == str(monster.uuid)
+        for target in attack_rows[0]["valid_targets"]
+    )
+
+    force_uuid = force_attack_hit(hero)
+    starting_hp = get_hp(monster)
+    try:
+        action_response = client.post(
+            "/action/execute",
+            json={
+                "session_id": session_id,
+                "entity_uuid": str(hero.uuid),
+                "template_name": "Attack_MELEE_MAIN",
+                "target_index": 0,
+            },
+        )
+    finally:
+        remove_attack_modifier(hero, force_uuid)
+
+    action_payload = action_response.json()
+
+    assert action_response.status_code == 200
+    assert action_payload["success"] is True
+    assert action_payload["target_hp"] < starting_hp
+    assert action_payload["combat_log_entries"]
+    assert encounter.combat_log
+
+    denied_response = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(monster.uuid),
+            "template_name": "Attack_MELEE_MAIN",
+            "target_index": 0,
+        },
+    )
+
+    assert denied_response.status_code == 403
+    assert denied_response.json()["detail"]["code"] == "entity_not_controlled"

@@ -1,16 +1,7 @@
-"""
-GridMap - Centralized spatial data management for the D&D engine.
-
-Manages:
-- Tile grid (stores Tile objects which can have conditions)
-- Spatial queries (walkable, visible, entities at position)
-- FOV and pathfinding (with occupancy awareness)
-- Entity position registry
-- Cell subscriptions for spatial events
-"""
+"""Central spatial registry for tiles, entities, objects, light, and paths."""
 
 import math
-from typing import Dict, List, Optional, Tuple, Set, DefaultDict, cast
+from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, cast
 from uuid import UUID, uuid4
 from collections import defaultdict
 
@@ -23,78 +14,57 @@ from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
 
-
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
 
 
 class LightSourceData(BaseModel):
     """Tracks a light source and its affected tiles."""
-    uuid: UUID = Field(default_factory=uuid4)
+
+    uuid: UUID = Field(default_factory=uuid4, description="Light source identity.")
     position: Tuple[int, int] = Field(description="Current position of the light source")
     very_bright_radius_feet: int = Field(default=0, description="Radius of very bright light in feet (innermost zone)")
     bright_radius_feet: int = Field(description="Radius of bright light in feet (extends beyond very bright)")
     dim_radius_feet: int = Field(description="Radius of dim light in feet (extends beyond bright)")
     anchor_uuid: Optional[UUID] = Field(default=None, description="BaseBlock this light is attached to (follows its movement)")
     affected_tiles: Dict[Tuple[int, int], LightLevel] = Field(default_factory=dict, description="pos -> level applied")
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=True, description="Whether this light currently illuminates tiles.")
 
 
 class GridMap:
-    """
-    Singleton-like manager for spatial data.
+    """Singleton-like manager for grid state and spatial queries.
 
-    Holds the tile grid, entity positions, and provides efficient spatial queries.
-    All spatial operations should go through this class.
-
-    Subscription System:
-    - Entities subscribe to cells they can see
-    - When something changes at a cell, SpatialChangeEvents are fired
-    - Subscribed entities receive these events via their EventHandlers
+    The map owns tile storage, entity/object position indexes, event-backed
+    spatial changes, cell subscriptions, light sources, FOV, and pathfinding.
     """
 
     _instance: Optional['GridMap'] = None
 
     def __init__(self):
-        # Tile storage - now stores actual Tile objects (BaseBlock with conditions)
         self._tiles: Dict[Tuple[int, int], Tile] = {}
-        # UUID -> position lookup for tiles
         self._tiles_by_uuid: Dict[UUID, Tuple[int, int]] = {}
 
-        # Cached grid bounds (updated on tile add/remove)
         self._min_x: int = 0
         self._max_x: int = 0
         self._min_y: int = 0
         self._max_y: int = 0
         self._bounds_dirty: bool = True
 
-        # Entity position tracking
         self._entities_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_positions: Dict[UUID, Tuple[int, int]] = {}
 
-        # Object position tracking (items on the grid)
         self._object_positions: Dict[UUID, Tuple[int, int]] = {}
         self._objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
 
-        # Cell subscription system
-        # cell -> set of entity UUIDs subscribed to that cell
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
-        # entity -> set of cells it's subscribed to
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
 
-        # Light source tracking
         self._light_sources: Dict[UUID, LightSourceData] = {}
 
-        # Event firing enabled flag (can be disabled during batch operations)
         self._events_enabled: bool = True
-
-        # Pending events (when events are disabled, queue them here)
         self._pending_events: List['SpatialChangeEvent'] = []
 
-        # Callback for light source movement (registered once)
         self._light_callback_registered: bool = False
-
-        # Callback for vision-blocking changes (registered once)
         self._blocking_callback_registered: bool = False
 
     @classmethod
@@ -109,43 +79,32 @@ class GridMap:
         """Reset the GridMap (for testing)."""
         cls._instance = None
 
-    # =========================================================================
-    # Event Firing
-    # =========================================================================
-
     def _fire_spatial_event(self, event: 'SpatialChangeEvent') -> Optional['SpatialChangeEvent']:
-        """
-        Fire a spatial change event through full phase lifecycle.
+        """Fire a spatial change event through the full phase lifecycle.
 
         Progresses: DECLARATION -> EXECUTION -> EFFECT -> COMPLETION
 
-        Returns None if event was cancelled, otherwise returns completed event.
+        Returns `None` if event was cancelled, otherwise returns completed event.
         If events are disabled (batch mode), queues for later and returns None.
         """
         if not self._events_enabled:
             self._pending_events.append(event)
             return None
 
-        # Register at DECLARATION phase - handlers can react/cancel
         current_event = cast(SpatialChangeEvent, EventQueue.register(event))
         if current_event.canceled:
             return None
 
-        # Progress to EXECUTION
         current_event = current_event.phase_to(EventPhase.EXECUTION)
         current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
         if current_event.canceled:
             return None
 
-        # Progress to EFFECT - this is where damage/saves/conditions happen
         current_event = current_event.phase_to(EventPhase.EFFECT)
         current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
         if current_event.canceled:
             return None
 
-        # Progress to COMPLETION. Pre-completion lifecycle systems, including
-        # sensory updates, run during phase_to(COMPLETION) before metadata is
-        # finalized.
         current_event = current_event.phase_to(EventPhase.COMPLETION)
         current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
 
@@ -154,7 +113,6 @@ class GridMap:
     def enable_events(self) -> None:
         """Enable event firing and flush pending events through full lifecycle."""
         self._events_enabled = True
-        # Fire all pending events through full lifecycle
         pending = self._pending_events.copy()
         self._pending_events.clear()
         for event in pending:
@@ -168,29 +126,20 @@ class GridMap:
         """Get all entity UUIDs subscribed to a cell."""
         return self._cell_subscribers.get(position, set()).copy()
 
-    # =========================================================================
-    # Cell Subscriptions
-    # =========================================================================
-
     def subscribe_to_cells(self, entity_uuid: UUID, cells: Set[Tuple[int, int]]) -> None:
-        """
-        Subscribe an entity to a set of cells.
+        """Subscribe an entity to a set of cells.
 
         Replaces any existing subscriptions for this entity.
         Typically called after updating entity senses with the visible cells.
         """
-        # Get current subscriptions
         old_cells = self._entity_subscriptions.get(entity_uuid, set())
 
-        # Remove from cells we're no longer watching
         for cell in old_cells - cells:
             self._cell_subscribers[cell].discard(entity_uuid)
 
-        # Add to new cells
         for cell in cells - old_cells:
             self._cell_subscribers[cell].add(entity_uuid)
 
-        # Update entity's subscription set
         self._entity_subscriptions[entity_uuid] = cells.copy()
 
     def unsubscribe_entity(self, entity_uuid: UUID) -> None:
@@ -203,15 +152,10 @@ class GridMap:
         """Get all cells an entity is subscribed to."""
         return self._entity_subscriptions.get(entity_uuid, set()).copy()
 
-    # =========================================================================
-    # Tile Management
-    # =========================================================================
-
     def set_tile(self, x: int, y: int, walkable: bool = True, visible: bool = True,
                  name: str = "Floor", sprite_name: Optional[str] = None,
                  fire_event: bool = True, tile: Optional[Tile] = None) -> Tile:
-        """
-        Set a tile at the given position.
+        """Set or replace a tile at a position.
 
         If tile parameter is provided, uses that tile directly (updating its position if needed).
         Otherwise creates a new Tile object with the given parameters.
@@ -221,16 +165,12 @@ class GridMap:
         old_tile = self._tiles.get(position)
         old_directional = self._directional_block_map(position)
 
-        # Remove old tile from UUID lookup if exists
         if old_tile:
             self._tiles_by_uuid.pop(old_tile.uuid, None)
 
-        # Use provided tile or create new one
         if tile is not None:
-            # Update tile position if needed
             tile.position = position
         else:
-            # Create new Tile object
             tile = Tile.create(
                 position=position,
                 walkable=walkable,
@@ -245,7 +185,6 @@ class GridMap:
         new_directional = self._directional_block_map(position)
         directional_metadata = self._directional_metadata_from_delta(position, old_directional, new_directional)
 
-        # Fire tile changed event if properties actually changed
         if fire_event and self._events_enabled:
             old_walkable = old_tile.walkable if old_tile else None
             old_visible = old_tile.visible if old_tile else None
@@ -397,13 +336,11 @@ class GridMap:
 
     def is_position_hazardous_for(self, x: int, y: int,
                                   entity_uuid: Optional[UUID] = None) -> bool:
-        """Check if position is hazardous for a specific entity.
-        Checks tile conditions AND object conditions at position (not entities)."""
+        """Return whether tile or placed-object hazards affect an entity."""
         tile = self.get_tile(x, y)
         if tile is not None and tile.is_hazardous_for(entity_uuid):
             return True
 
-        # Check objects on tile (items placed on grid — e.g., bear traps, caltrops)
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             obj = BaseBlock.get(obj_uuid)
             if obj is not None and obj.is_hazardous_for(entity_uuid):
@@ -420,8 +357,7 @@ class GridMap:
                         walk_in_danger: bool = True,
                         subjective: bool = False,
                         collision_blocked: Optional[Set[Tuple[int, int]]] = None) -> bool:
-        """
-        Check if position is walkable for a specific entity.
+        """Check whether a position is walkable for a specific entity.
 
         Considers:
         1. Tile must exist and be walkable for the given movement mode
@@ -441,7 +377,6 @@ class GridMap:
                     continue
                 return False
 
-        # Check objects at this position (e.g., large boulder blocks walking)
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
@@ -449,12 +384,10 @@ class GridMap:
                     continue
                 return False
 
-        # Hazard avoidance when walk_in_danger=False
         if not walk_in_danger:
             if self.is_position_hazardous_for(x, y, requesting_entity_uuid):
                 return False
 
-        # Positions remembered as blocked from previous collisions
         if collision_blocked and (x, y) in collision_blocked:
             return False
 
@@ -466,12 +399,10 @@ class GridMap:
         return tile is not None and not tile.blocks_vision()
 
     def is_blocking(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Check if position blocks line of sight (tile or object).
-        Magical darkness blocks vision unless observer has TRUESIGHT/DEVILS_SIGHT."""
+        """Return whether a tile or placed object blocks line of sight."""
         tile = self._tiles.get((x, y))
         if tile is None or tile.blocks_vision(requesting_entity_uuid):
             return True
-        # Check objects that block vision (e.g., barricade)
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_vision(requesting_entity_uuid):
@@ -507,8 +438,8 @@ class GridMap:
 
     def _directional_metadata_from_delta(self, position: Tuple[int, int],
                                          old: Dict[str, Dict[str, bool]],
-                                         new: Dict[str, Dict[str, bool]]) -> Dict[str, object]:
-        empty: Dict[str, object] = {
+                                         new: Dict[str, Dict[str, bool]]) -> Dict[str, Any]:
+        empty: Dict[str, Any] = {
             "directional_position": None,
             "directional_directions": None,
             "directional_channels": None,
@@ -537,13 +468,13 @@ class GridMap:
             "directional_blocks_propagation": new["propagation"],
         }
 
-    def recompute_tile_directional_blocking(self, position: Tuple[int, int]) -> Dict[str, object]:
+    def recompute_tile_directional_blocking(self, position: Tuple[int, int]) -> Dict[str, Any]:
         """Refresh object/entity-derived tile directional state for one tile.
 
         The stored state is objective/default. Subjective pathing still re-derives
         from the live blocks so imperceivable directional blockers do not leak.
         """
-        empty: Dict[str, object] = {
+        empty: Dict[str, Any] = {
             "directional_position": None,
             "directional_directions": None,
             "directional_channels": None,
@@ -795,10 +726,6 @@ class GridMap:
 
         return "obstacle"
 
-    # =========================================================================
-    # Grid Bounds (cached)
-    # =========================================================================
-
     def _update_bounds(self) -> None:
         """Recalculate grid bounds from tiles."""
         if not self._tiles:
@@ -838,10 +765,6 @@ class GridMap:
         """Grid size as (width, height)."""
         return (self.width, self.height)
 
-    # =========================================================================
-    # Grid Creation Helpers
-    # =========================================================================
-
     def create_rectangle(self, x: int, y: int, width: int, height: int,
                          walkable: bool = True, visible: bool = True,
                          name: str = "Floor", sprite_name: Optional[str] = None) -> None:
@@ -850,7 +773,6 @@ class GridMap:
         try:
             for tx in range(x, x + width):
                 for ty in range(y, y + height):
-                    # Remove old tile from UUID lookup if exists
                     old_tile = self._tiles.get((tx, ty))
                     if old_tile:
                         self._tiles_by_uuid.pop(old_tile.uuid, None)
@@ -880,14 +802,12 @@ class GridMap:
                 self._tiles[pos] = tile
                 self._tiles_by_uuid[tile.uuid] = pos
 
-            # Walls
             for tx in range(x, x + width):
                 _set_tile((tx, y), Tile.create((tx, y), walkable=False, visible=False, name=wall_name))
                 _set_tile((tx, y + height - 1), Tile.create((tx, y + height - 1), walkable=False, visible=False, name=wall_name))
             for ty in range(y, y + height):
                 _set_tile((x, ty), Tile.create((x, ty), walkable=False, visible=False, name=wall_name))
                 _set_tile((x + width - 1, ty), Tile.create((x + width - 1, ty), walkable=False, visible=False, name=wall_name))
-            # Floor
             for tx in range(x + 1, x + width - 1):
                 for ty in range(y + 1, y + height - 1):
                     _set_tile((tx, ty), Tile.create((tx, ty), walkable=True, visible=True, name=floor_name))
@@ -895,19 +815,13 @@ class GridMap:
         finally:
             self.enable_events()
 
-    # =========================================================================
-    # Entity Position Management
-    # =========================================================================
-
     def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
                          parent_event: Optional[UUID] = None) -> None:
         """Register an entity at a position."""
-        # Remove from old position if exists
         old_pos = self._entity_positions.get(entity_uuid)
         if old_pos is not None:
             self._entities_by_position[old_pos].discard(entity_uuid)
             old_directional_metadata = self.recompute_tile_directional_blocking(old_pos)
-            # Fire entity left event
             if self._events_enabled:
                 event = SpatialChangeEvent.entity_left(
                     old_pos, entity_uuid, position, parent_event=parent_event,
@@ -915,12 +829,10 @@ class GridMap:
                 )
                 self._fire_spatial_event(event)
 
-        # Add to new position
         self._entity_positions[entity_uuid] = position
         self._entities_by_position[position].add(entity_uuid)
         new_directional_metadata = self.recompute_tile_directional_blocking(position)
 
-        # Fire entity entered event
         if self._events_enabled:
             event = SpatialChangeEvent.entity_entered(
                 position, entity_uuid, old_pos, parent_event=parent_event,
@@ -936,7 +848,6 @@ class GridMap:
             self._entities_by_position[pos].discard(entity_uuid)
             directional_metadata = self.recompute_tile_directional_blocking(pos)
 
-            # Fire entity left event
             if self._events_enabled:
                 event = SpatialChangeEvent.entity_left(
                     pos, entity_uuid, parent_event=parent_event,
@@ -946,7 +857,6 @@ class GridMap:
 
             del self._entity_positions[entity_uuid]
 
-        # Also remove subscriptions
         self.unsubscribe_entity(entity_uuid)
 
     def move_entity(
@@ -964,12 +874,10 @@ class GridMap:
         """
         old_position = self._entity_positions.get(entity_uuid)
 
-        # Update position tracking
         if old_position is not None:
             self._entities_by_position[old_position].discard(entity_uuid)
             old_directional_metadata = self.recompute_tile_directional_blocking(old_position)
 
-            # Fire entity left event for old position
             if self._events_enabled:
                 event = SpatialChangeEvent.entity_left(
                     old_position, entity_uuid, new_position, parent_event=parent_event,
@@ -981,7 +889,6 @@ class GridMap:
         self._entities_by_position[new_position].add(entity_uuid)
         new_directional_metadata = self.recompute_tile_directional_blocking(new_position)
 
-        # Fire entity entered event for new position
         if self._events_enabled:
             event = SpatialChangeEvent.entity_entered(
                 new_position, entity_uuid, old_position, parent_event=parent_event,
@@ -1001,18 +908,17 @@ class GridMap:
         """Get all entity positions."""
         return self._entity_positions.copy()
 
-    # =========================================================================
-    # Object Position Management
-    # =========================================================================
-
     def place_object(self, object_uuid: UUID, position: Tuple[int, int],
                       parent_event: Optional[UUID] = None) -> None:
         """Place an object on the grid at a position."""
+        old_position = self._object_positions.get(object_uuid)
+        if old_position is not None and old_position != position:
+            self.remove_object(object_uuid, parent_event=parent_event, clear_object_location=False)
+
         self._object_positions[object_uuid] = position
         self._objects_by_position[position].add(object_uuid)
         directional_metadata = self.recompute_tile_directional_blocking(position)
         if self._events_enabled:
-            # Check object blocking properties for hint
             obj = BaseBlock.get(object_uuid)
             blocks_vision = obj.blocks_vision() if obj else False
             blocks_walking = obj.blocks_walking() if obj else False
@@ -1029,15 +935,17 @@ class GridMap:
             ))
 
     def remove_object(self, object_uuid: UUID,
-                       parent_event: Optional[UUID] = None) -> None:
+                       parent_event: Optional[UUID] = None,
+                       clear_object_location: bool = True) -> None:
         """Remove an object from the grid."""
-        # Check blocking properties BEFORE removing (for hint)
         obj = BaseBlock.get(object_uuid)
         blocks_vision = obj.blocks_vision() if obj else False
         blocks_walking = obj.blocks_walking() if obj else False
         position = self._object_positions.pop(object_uuid, None)
         if position is not None:
             self._objects_by_position[position].discard(object_uuid)
+            if obj is not None:
+                obj.on_grid_object_removed(position, clear_location=clear_object_location)
             directional_metadata = self.recompute_tile_directional_blocking(position)
             if self._events_enabled:
                 self._fire_spatial_event(SpatialChangeEvent.object_removed(
@@ -1067,10 +975,6 @@ class GridMap:
             if block is not None and block.active_conditions:
                 result.append(block)
         return result
-
-    # =========================================================================
-    # FOV and Pathfinding
-    # =========================================================================
 
     def _has_directional_blockers(self, channel: str) -> bool:
         for tile in self._tiles.values():
@@ -1190,28 +1094,29 @@ class GridMap:
                       directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
                       ignore_difficult_terrain: bool = False
                       ) -> Tuple[Dict[Tuple[int, int], int], Dict[Tuple[int, int], List[Tuple[int, int]]]]:
-        """
-        Compute all reachable positions and paths from start using Dijkstra.
+        """Compute all reachable positions and paths from start using Dijkstra.
 
         Args:
-            start: Starting position
-            max_distance: Maximum distance to compute paths for (in movement cost units)
+            start: Starting position.
+            max_distance: Maximum distance to compute paths for, in movement cost units.
             requesting_entity_uuid: If provided, treats cells occupied by OTHER entities as blocked.
-                                    The requesting entity's own position is always walkable.
-            movement_mode: The movement mode to use for pathfinding (affects terrain costs)
-            walk_in_danger: If False, hazardous positions are treated as unwalkable
+                The requesting entity's own position is always walkable.
+            movement_mode: Movement mode used for terrain costs.
+            walk_in_danger: Whether hazardous positions remain walkable.
+            subjective: Whether imperceivable blockers are ignored.
+            collision_blocked: Positions remembered as blocked by collision.
+            directional_collision_blocked: Directional transitions remembered as blocked by collision.
+            ignore_difficult_terrain: Whether costs above base movement are capped at 1.
 
-        Returns (distances_dict, paths_dict) where distances account for terrain costs.
+        Returns:
+            `(distances, paths)` where distances account for terrain costs.
         """
         if self._bounds_dirty:
             self._update_bounds()
 
-        # Use actual grid bounds for dijkstra
-        # Add padding to handle positions outside current bounds
-        grid_width = self._max_x + 2
-        grid_height = self._max_y + 2
+        grid_width = self.width
+        grid_height = self.height
 
-        # Choose walkability function based on whether we're checking occupancy
         if requesting_entity_uuid is not None:
             def walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode,
@@ -1220,17 +1125,15 @@ class GridMap:
             def walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable(x, y, movement_mode)
 
-        # Get tile cost for movement mode
         def get_tile_cost(x: int, y: int) -> float:
             tile = self.get_tile(x, y)
             if not tile:
-                return 0  # No tile = impassable
+                return 0
             cost = tile.get_movement_cost(movement_mode)
             if ignore_difficult_terrain:
-                return min(cost, 1.0)  # Cap at base cost
+                return min(cost, 1.0)
             return cost
 
-        # Check if entry is allowed from a direction (border check)
         def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
             return self.can_transition(
                 from_pos, to_pos, requesting_entity_uuid, movement_mode,
@@ -1246,7 +1149,9 @@ class GridMap:
             diagonal=True,
             max_distance=max_distance,
             cost_func=get_tile_cost,
-            can_enter=can_enter_tile
+            can_enter=can_enter_tile,
+            min_x=self._min_x,
+            min_y=self._min_y,
         )
 
     def get_visible_entities(self, origin: Tuple[int, int], max_distance: Optional[float] = None
@@ -1273,10 +1178,6 @@ class GridMap:
         """Get walking distance from start to end, or None if unreachable."""
         distances, _ = self.compute_paths(start, requesting_entity_uuid=requesting_entity_uuid)
         return distances.get(end)
-
-    # =========================================================================
-    # Light Source Management
-    # =========================================================================
 
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
@@ -1306,16 +1207,13 @@ class GridMap:
         )
         self._light_sources[source.uuid] = source
 
-        # Attach to anchor if provided
         if anchor_uuid:
             anchor = BaseBlock.get(anchor_uuid)
             if anchor:
                 anchor.attach_light_source(source.uuid)
 
-        # Apply illumination to tiles
         self._apply_light_source(source, parent_event=parent_event)
 
-        # Register movement callback if not already done
         self._ensure_light_callback()
 
         return source.uuid
@@ -1327,10 +1225,8 @@ class GridMap:
         if source is None:
             return
 
-        # Remove tile illumination
         self._remove_light_source_tiles(source, parent_event=parent_event)
 
-        # Detach from anchor
         if source.anchor_uuid:
             anchor = BaseBlock.get(source.anchor_uuid)
             if anchor:
@@ -1359,36 +1255,30 @@ class GridMap:
 
         old_affected = dict(source.affected_tiles)
 
-        # Compute new affected tiles at new position
         new_affected = self._compute_light_tiles(source, new_position)
 
-        # Delta: only modify tiles that actually change
         changed_positions: List[Tuple[int, int]] = []
         all_positions = set(old_affected) | set(new_affected)
         for pos in all_positions:
             old_level = old_affected.get(pos)
             new_level = new_affected.get(pos)
             if old_level == new_level:
-                continue  # No change for this tile — skip entirely
+                continue
 
             tile = self._tiles.get(pos)
             if tile is None:
                 continue
 
             if old_level is not None and new_level is None:
-                # Tile leaving light range — remove illumination
                 if tile.remove_light_modifier(source.uuid, fire_event=False):
                     changed_positions.append(pos)
             elif new_level is not None:
-                # Tile entering range or level changed — add/update illumination
                 if tile.add_illumination(source.uuid, new_level, fire_event=False):
                     changed_positions.append(pos)
 
-        # Update source state
         source.position = new_position
         source.affected_tiles = new_affected
 
-        # Fire events for changed tiles
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
     def toggle_light_source(self, light_uuid: UUID, active: bool) -> None:
@@ -1461,8 +1351,12 @@ class GridMap:
         source.affected_tiles.clear()
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
-    def _fire_light_batch_events(self, changed_positions: List[Tuple[int, int]],
-                                  parent_event: Optional[UUID] = None) -> None:
+    def _fire_light_batch_events(
+        self,
+        changed_positions: List[Tuple[int, int]],
+        parent_event: Optional[UUID] = None,
+        requires_fov: bool = False,
+    ) -> None:
         """Fire efficient events after a batch light change.
 
         Two-tier approach:
@@ -1473,26 +1367,24 @@ class GridMap:
 
         The Tier 2 event carries a SensesUpdateHint with light_changed_positions
         containing all changed positions. If any position has magical darkness,
-        requires_fov is set to True.
+        or if the caller knows magical darkness was removed, requires_fov is set
+        to True.
         """
         if not changed_positions:
             return
 
-        # Detect magical darkness for requires_fov
-        has_magical_darkness = False
+        has_magical_darkness = requires_fov
         for pos in changed_positions:
             tile = self._tiles.get(pos)
             if tile and tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS:
                 has_magical_darkness = True
                 break
 
-        # Build batch hint with all changed positions
         batch_hint = SensesUpdateHint(
             requires_fov=has_magical_darkness,
             light_changed_positions=set(changed_positions),
         )
 
-        # Tier 1: Full lifecycle for positions with entities (Hidden reveal handler)
         handled_positions: Set[Tuple[int, int]] = set()
         for pos in changed_positions:
             entity_uuids = self._entities_by_position.get(pos, set())
@@ -1500,7 +1392,6 @@ class GridMap:
                 handled_positions.add(pos)
                 tile = self._tiles.get(pos)
                 if tile:
-                    # Per-position hint for individual entity events
                     per_pos_hint = SensesUpdateHint(
                         requires_fov=has_magical_darkness,
                         light_changed_positions={pos},
@@ -1510,8 +1401,6 @@ class GridMap:
                     event.parent_event = parent_event
                     self._fire_spatial_event(event)
 
-        # Tier 2: Single COMPLETION event for senses refresh
-        # Pick any unhandled position, or first position if all handled
         senses_pos = None
         for pos in changed_positions:
             if pos not in handled_positions:
@@ -1522,7 +1411,6 @@ class GridMap:
         if senses_pos is not None:
             tile = self._tiles.get(senses_pos)
             if tile:
-                # Build per-position light level map for client reducer
                 level_map: Dict[str, int] = {}
                 for pos in changed_positions:
                     t = self._tiles.get(pos)
@@ -1550,7 +1438,6 @@ class GridMap:
         """Move light sources when their anchor entity moves."""
         if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
             return
-        # Only fire once per event lifecycle (at COMPLETION)
         if event.phase != EventPhase.COMPLETION:
             return
         if not isinstance(event, SpatialChangeEvent) or event.entity_uuid is None:
@@ -1583,7 +1470,7 @@ class GridMap:
         if event.phase != EventPhase.DECLARATION:
             return
         if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
-            return  # Prevent recursion
+            return
         if not isinstance(event, SpatialChangeEvent):
             return
         hint = event.senses_hint
@@ -1607,18 +1494,15 @@ class GridMap:
         for source in self._light_sources.values():
             if not source.is_active:
                 continue
-            # Check if position is within the light's maximum range
             total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
             dx = position[0] - source.position[0]
             dy = position[1] - source.position[1]
             if math.sqrt(dx * dx + dy * dy) > total_radius_tiles:
                 continue
 
-            # Save old, recompute new at same position
             old_affected = dict(source.affected_tiles)
             new_affected = self._compute_light_tiles(source)
 
-            # Delta: only modify tiles that actually change
             changed_positions: List[Tuple[int, int]] = []
             all_positions = set(old_affected) | set(new_affected)
             for pos in all_positions:
@@ -1641,10 +1525,6 @@ class GridMap:
             source.affected_tiles = new_affected
             self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
-    # =========================================================================
-    # AoE Prefilter
-    # =========================================================================
-
     def get_positions_near_entities(
         self, entity_positions: Set[Tuple[int, int]], radius: int
     ) -> Set[Tuple[int, int]]:
@@ -1658,21 +1538,17 @@ class GridMap:
             candidates |= circle_positions(ent_pos, radius)
         return candidates
 
-    # =========================================================================
-    # AoE Propagation (physical barriers only, ignores magical darkness)
-    # =========================================================================
-
     def is_blocking_propagation(self, x: int, y: int) -> bool:
         """Check if position blocks AoE propagation (physical barriers only).
 
         Unlike is_blocking(), this ignores magical darkness — AoE spreads
         through darkness but not through walls/closed doors."""
         tile = self._tiles.get((x, y))
-        if tile is None or not tile.visible:  # Wall or out-of-bounds
+        if tile is None or not tile.visible:
             return True
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
-            if block is not None and block.blocks_vision():  # Closed door, barricade
+            if block is not None and block.blocks_vision():
                 return True
         return False
 
@@ -1703,7 +1579,7 @@ class GridMap:
         skip shadowcast entirely."""
         barriers: Set[Tuple[int, int]] = set()
         for pos, tile in self._tiles.items():
-            if not tile.visible:  # Wall
+            if not tile.visible:
                 barriers.add(pos)
             elif any(not tile.allows_direction(direction, "propagation") for direction in DIRECTIONS):
                 barriers.add(pos)
@@ -1713,10 +1589,6 @@ class GridMap:
                 if block is not None and block.blocks_vision():
                     barriers.add(pos)
         return barriers
-
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
 
     def clear(self) -> None:
         """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
@@ -1752,10 +1624,6 @@ class GridMap:
         """Get total number of cell subscriptions."""
         return sum(len(subs) for subs in self._cell_subscribers.values())
 
-
-# =========================================================================
-# Module-level convenience functions
-# =========================================================================
 
 def get_map() -> GridMap:
     """Get the global GridMap instance."""
