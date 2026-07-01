@@ -20,7 +20,7 @@ D&D 5e game engine with event-driven architecture and component-based entities. 
 
 2. **Use sub-agents aggressively for context gathering.** Dispatch parallel Explore agents to read related files, grep for patterns, and understand existing code. Don't try to hold everything in your head - delegate research to sub-agents and synthesize their findings.
 
-3. **Test after every change.** Run the relevant `examples/test_*.py` files to validate. If a test doesn't exist for what you're changing, write one first.
+3. **Test after every change.** Run the relevant `uv run pytest tests/...` file to validate. If a test doesn't exist for what you're changing, write one first.
 
 4. **Document bugs found during implementation.** When running tests for a feature, if you discover failing tests or suspect bugs in unrelated code, **dispatch a background sub-agent** to document them in `KNOWN_ISSUES.md` (next to AGENTS.md) while you keep working. Don't stop your flow - log it and move on.
 
@@ -37,9 +37,9 @@ D&D 5e game engine with event-driven architecture and component-based entities. 
 
 ### Testing Rules
 
-- **NEVER run `pytest` on the entire test suite.** It takes hours and hangs. Always run individual test files: `python examples/test_<feature>.py`
-- **NEVER run server tests** (`examples/server_tests/`) in batch — they require a running server and will hang.
-- **Always run tests** for the feature you're modifying: `python examples/test_<feature>.py`
+- **NEVER run `pytest` on the entire test suite.** It takes hours and hangs. Always run individual test files: `uv run pytest tests/<area>/test_<feature>.py`
+- **NEVER run archived server tests** (`to_archive/examples/server_tests/`) in batch — they require a running server and will hang.
+- **Always run tests** for the feature you're modifying: `uv run pytest tests/<area>/test_<feature>.py`
 - **To validate regressions**, run a few specific related test files individually, NOT `pytest` with no arguments.
 - **When tests fail** on code you didn't touch: don't fix them silently. Document in `KNOWN_ISSUES.md` with the test file, error, and your hypothesis. Dispatch a background sub-agent for this.
 - **Write new tests** for new features using patterns from `claude_docs/IMPLEMENTATION_GUIDE.md` (Section 14)
@@ -77,10 +77,9 @@ BaseObject, BaseBlock (base classes)
 ## Common Commands
 
 ```bash
-source .venv/bin/activate              # Activate venv
-pip install -e .                        # Install dev mode
-python examples/test_<feature>.py      # Run specific test (NEVER use pytest on full suite)
-pyright                                 # Type checking
+uv sync                                 # Install/update the workspace environment
+uv run pytest tests/<area>/test_<feature>.py  # Run a specific test file
+uv run pyright                          # Type checking
 ```
 
 ## Architecture Overview
@@ -603,7 +602,9 @@ Concentration spells are fully implemented:
 - **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
 - **DropConcentration action**: Free action (0 cost) to voluntarily end concentration. Registered via `setup_standard_actions()`, validates that entity is concentrating.
 
-See `examples/test_concentration.py`, `examples/test_concentration_spells.py`, and `examples/test_child_parent_notification.py` for tests.
+See `tests/engine_book/test_chapter_14_spellcasting_core.py` and
+`tests/engine_book/test_chapter_15_spell_families.py` for active concentration
+coverage. Legacy concentration scripts live under `to_archive/examples/`.
 
 #### Stealth System (Layer 1)
 
@@ -653,7 +654,7 @@ Subjective hazard detection and safe pathfinding. See `claude_docs/TERRAIN_MOVEM
 **CRITICAL: Before writing any code that uses existing classes/methods:**
 
 1. **Never assume method/attribute names** - Always read the actual class definition first
-2. **Check existing examples** - Look at `examples/combat_basic.py` or `examples/combat_conditions.py` for correct usage patterns
+2. **Check existing tests** - Look at the matching `tests/engine_book/` or `tests/manual/` file for correct usage patterns
 3. **Verify imports exist** - Grep for `class ClassName` to find where things are defined
 4. **Check Config classes** - Many classes have `*Config` counterparts with different field structures (e.g., `AbilityConfig` vs raw int)
 5. **Test imports before running** - Run `python -c "import module_name"` to catch import errors early
@@ -979,25 +980,17 @@ if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
 - **Intercept** (action-setup reaction): Player spends 1 action + movement to declare a charge destination. When an enemy steps into that cell, interceptor charges there first, occupies the cell (blocking enemy path), and makes a melee attack. Uses per-cell `is_walkable_for()` checks at reaction time.
 - **Dodge Roll** (passive reaction): When attacked, moves up to 2 cells away from attacker and imposes disadvantage. Uses per-cell `is_walkable_for()` checks.
 
-Both validate that environment changes (door open/close) correctly propagate through `_paths_dirty` to affect reaction-time walkability checks. Tests: `examples/test_intercept_dodge_roll.py` (52 assertions).
+Both validate that environment changes (door open/close) correctly propagate through `_paths_dirty` to affect reaction-time walkability checks. Legacy coverage lives in `to_archive/examples/test_intercept_dodge_roll.py`; migrate it into `tests/` before changing this reaction behavior.
 
-## CLI and Server Architecture
+## Server, Sessions, and Controllers
 
-Two CLIs connect to a FastAPI server (`server/event_server.py`) with session-based authority (`server/session.py`):
-- **Human CLI** (`cli/main.py`): Rich terminal interface — `python -m cli play` (vs AI) or `python -m cli playpvp` (vs Codex)
-- **Agent CLI** (`cli/agent.py`): Codex's command interface for PvP
+The active external surface is the FastAPI server (`server/event_server.py`) with
+session-based authority (`server/session.py`). Controllers live in
+`dnd/controller.py`; the newer in-process AI layer lives in `ai/` and implements
+the `TurnRunner` protocol used by `AIAgentController`.
 
-**PvP Quick Start**: Start server (`uvicorn server.event_server:app --reload`), user runs `python -m cli playpvp`, Codex connects via agent CLI.
-
-**Agent turn flow** — **CRITICAL**: After `end`, you MUST run `watch` again!
-
-```bash
-connect → watch → [state/actions/move/attack/end] → watch → repeat
-```
-
-To restart: User restarts `playpvp`, Codex runs `disconnect` → `connect` → `watch`
-
-See `claude_docs/CLI_GUIDE.md` for full agent command reference and session details.
+The old subprocess CLI was moved to `to_archive/cli`. Keep it as reference
+material unless the user explicitly asks to recover or rebuild that surface.
 
 ## Reference
 
@@ -1012,8 +1005,8 @@ See `claude_docs/CLI_GUIDE.md` for full agent command reference and session deta
 **Spells**: `dnd/spells/` (evocation, abjuration, enchantment, conjuration, necromancy, illusion, transmutation)
 **Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
 **Monsters**: `dnd/monsters/bestiary.py` (create_goblin, create_skeleton, create_goblin_archer, create_sorcerer)
-**Server/CLI**: `server/event_server.py`, `server/session.py`, `cli/agent.py`, `cli/display.py`, `cli/commands.py`
-**Tests**: `examples/test_*.py` — named by feature (e.g., `test_barbarian_rage.py`, `test_fireball.py`)
+**Server/AI**: `server/event_server.py`, `server/session.py`, `ai/`, `dnd/controller.py`
+**Tests**: `tests/` — named by manual/engine-book area and feature
 
 ### Documentation
 
