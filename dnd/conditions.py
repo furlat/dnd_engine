@@ -29,7 +29,7 @@ from dnd.core.base_block import SensesType, LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, TakeDamageEvent, SavingThrowEvent, DeathEvent, SpatialChangeEvent
+from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SavingThrowEvent, DeathEvent, SpatialChangeEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
@@ -323,7 +323,7 @@ def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
-                event_type=EventType.TAKE_DAMAGE,
+                event_type=EventType.DAMAGE_APPLIED,
                 event_phase=EventPhase.EFFECT
             )
         ],
@@ -448,10 +448,10 @@ class Charmed(BaseCondition):
 
 
 class Dashing(BaseCondition):
-    """Status condition that adds movement equal to the target's base speed."""
+    """Status condition that adds movement equal to the target's current speed."""
 
     name: str = Field(default="Dashing", description="Condition name.")
-    description: str = Field(default="A dashing creature gains extra movement equal to its base movement speed.", description="Condition description.")
+    description: str = Field(default="A dashing creature gains extra movement equal to its current speed.", description="Condition description.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Status-effect condition category.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -462,15 +462,12 @@ class Dashing(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            base_speed_modifier = target_entity.action_economy.movement.get_base_modifier()
-            if not base_speed_modifier:
-                raise ValueError(f"Base speed modifier is not set for the entity {target_entity.uuid}")
-            base_speed = base_speed_modifier.value
-            if base_speed > 0:
-                extra_modifier = NumericalModifier(name="Dashing",value=base_speed,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid)
+            current_speed = target_entity.action_economy.current_speed()
+            if current_speed > 0:
+                extra_modifier = NumericalModifier(name="Dashing",value=current_speed,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid)
                 target_entity.action_economy.movement.self_static.add_value_modifier(extra_modifier)
                 outs.append((target_entity.action_economy.movement.uuid,extra_modifier.uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied base speed modifier from Dashing to {target_entity.name}")
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied current speed modifier from Dashing to {target_entity.name}")
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -1444,6 +1441,7 @@ def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     entity.add_condition(dead_condition, parent_event=event, check_save_throw=False)
 
     entity.non_blocking = True
+    get_map().invalidate_occupancy_paths()
 
     return None
 
@@ -1496,6 +1494,10 @@ class Concentrating(BaseCondition):
     description: str = "Concentrating on a spell"
     condition_category: ConditionCategory = ConditionCategory.STATUS
     child_removal_policy: Literal["none", "any", "last"] = "last"
+    tags: set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.CONCENTRATION},
+        description="Typed concentration classification used by subjective projection.",
+    )
 
     spell_name: str = ""
 
@@ -1658,12 +1660,14 @@ class Concentrating(BaseCondition):
                 entity.remove_condition("Concentrating", parent_event=event)
                 return None
 
-            if not isinstance(event, TakeDamageEvent):
+            if not isinstance(event, DamageAppliedEvent):
                 return None
 
-            damage = event.final_damage if event.final_damage is not None else event.total_damage
-            if damage <= 0:
+            if event.resulting_normal_hp <= 0:
+                entity.remove_condition("Concentrating", parent_event=event)
                 return None
+
+            damage = event.applied_damage
 
             dc = max(10, damage // 2)
 
@@ -1699,7 +1703,7 @@ class Concentrating(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             trigger_conditions=[
                 Trigger(
-                    event_type=EventType.TAKE_DAMAGE,
+                    event_type=EventType.DAMAGE_APPLIED,
                     event_phase=EventPhase.EFFECT,
                     event_target_entity_uuid=self.target_entity_uuid
                 ),
@@ -1845,7 +1849,7 @@ class Hidden(BaseCondition):
                 trigger_conditions=[
                     Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
                             event_source_entity_uuid=target_entity.uuid),
-                    Trigger(event_type=EventType.TAKE_DAMAGE, event_phase=EventPhase.EFFECT,
+                    Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT,
                             event_target_entity_uuid=target_entity.uuid),
                     Trigger(event_type=EventType.CONDITION_APPLICATION, event_phase=EventPhase.EFFECT,
                             event_target_entity_uuid=target_entity.uuid),
@@ -1904,7 +1908,14 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
     if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
         entity = Entity.get(source_entity_uuid)
         if entity and isinstance(entity, Entity) and "Hidden" in entity.active_conditions:
-            if isinstance(event, SpatialChangeEvent) and event.position == entity.position:
+            changed_positions = {event.position} if isinstance(event, SpatialChangeEvent) else set()
+            if (
+                isinstance(event, SpatialChangeEvent)
+                and event.senses_hint is not None
+                and event.senses_hint.light_changed_positions
+            ):
+                changed_positions.update(event.senses_hint.light_changed_positions)
+            if entity.position in changed_positions:
                 tile = get_map().get_tile(*entity.position)
                 if tile and tile.resolved_light_level == LightLevel.VERY_BRIGHT:
                     removal_parent = event.get_parent_event() or event
@@ -2053,6 +2064,9 @@ class GreaterInvisibilityEffect(BaseCondition):
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        if self.duration.duration_type is DurationType.PERMANENT and self.duration.duration is None:
+            self.duration.duration_type = DurationType.ROUNDS
+            self.duration.duration = 10
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
         target_entity = Entity.get(self.target_entity_uuid)

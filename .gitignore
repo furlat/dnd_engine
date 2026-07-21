@@ -15,6 +15,7 @@ htmlcov/
 /.venv/
 /build/
 /dist/
+/sdk/typescript/dist/
 *.egg-info/
 
 .vscode/settings.json
@@ -31,4 +32,6 @@ node_modules/
 *.mp3
 Tomb of the Serpent_Kings v4.pdf
 /game_logs/
+/ai/evidence/
 /data/mapeditor/maps/
+/to_archive

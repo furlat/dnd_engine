@@ -1,7 +1,8 @@
 """Area-of-effect shape models for targeting and spell execution."""
 from __future__ import annotations
 
-from typing import Optional, Set, Tuple
+from math import gcd
+from typing import AbstractSet, Optional, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -48,6 +49,21 @@ class AoEShape(BaseObject):
         """Return the explicit or default origin for this shape."""
         return self.origin_override or self._default_origin(caster_pos)
 
+    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+        """Return the target coordinate identity that determines this footprint."""
+        return ("target", *self.target)
+
+    def _normalized_direction_key(
+        self,
+        caster_pos: Tuple[int, int],
+    ) -> Tuple[object, ...]:
+        """Return a canonical integer ray from this shape's current origin."""
+        origin_x, origin_y = self.get_origin(caster_pos)
+        delta_x = self.target[0] - origin_x
+        delta_y = self.target[1] - origin_y
+        divisor = gcd(abs(delta_x), abs(delta_y)) or 1
+        return ("ray", delta_x // divisor, delta_y // divisor)
+
     def compute_subjective(
         self,
         caster_pos: Tuple[int, int],
@@ -55,6 +71,7 @@ class AoEShape(BaseObject):
         fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
         barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
+        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
         """Compute affected positions using caster-visible state.
 
@@ -73,18 +90,24 @@ class AoEShape(BaseObject):
             barrier_positions: Optional pre-computed set of positions that block AoE
                 propagation.
             caster_uuid: Optional caster UUID that is always known to the caster.
+            caster_visible_positions: Optional immutable visibility snapshot shared
+                by every candidate in one action-discovery query.
 
         Returns:
             Self for chaining.
         """
         self.computed_origin = self.get_origin(caster_pos)
 
-        caster_fov = {pos for pos, vis in senses.visible.items() if vis}
+        caster_fov = (
+            caster_visible_positions
+            if caster_visible_positions is not None
+            else {pos for pos, visible in senses.visible.items() if visible}
+        )
 
         if self.computed_origin != caster_pos:
             geometric = self._get_positions_in_shape(self.computed_origin)
 
-            if barrier_positions is not None and not (geometric & barrier_positions):
+            if barrier_positions is not None and geometric.isdisjoint(barrier_positions):
                 origin_fov = geometric
             else:
                 cache_key = (self.computed_origin, self._get_max_radius_tiles())
@@ -100,28 +123,58 @@ class AoEShape(BaseObject):
                     if fov_cache is not None:
                         fov_cache[cache_key] = origin_fov
 
-            perceived_fov = caster_fov & origin_fov
-            self.affected_positions = geometric & perceived_fov
+            if origin_fov is geometric:
+                self.affected_positions = geometric.intersection(caster_fov)
+            else:
+                self.affected_positions = geometric.intersection(caster_fov, origin_fov)
         else:
-            perceived_fov = caster_fov
             geometric = self._get_positions_in_shape(self.computed_origin)
-            self.affected_positions = geometric & perceived_fov
+            self.affected_positions = geometric.intersection(caster_fov)
 
-        if self.computed_origin != caster_pos:
-            grid = get_map()
-            self.affected_entity_uuids = set()
-            for pos in self.affected_positions:
-                for entity_uuid in grid.get_entities_at(pos):
-                    if entity_uuid in senses.entities or entity_uuid == caster_uuid:
-                        self.affected_entity_uuids.add(entity_uuid)
-        else:
-            self.affected_entity_uuids = {
-                entity_uuid
-                for entity_uuid, pos in senses.entities.items()
-                if pos in self.affected_positions
-            }
-
+        self._resolve_subjective_entities(caster_pos, senses, caster_uuid)
         return self
+
+    def set_subjective_footprint(
+        self,
+        caster_pos: Tuple[int, int],
+        senses: "Senses",
+        affected_positions: Set[Tuple[int, int]],
+        caster_uuid: Optional[UUID] = None,
+    ) -> "AoEShape":
+        """Restore a cached footprint and resolve current perceived occupants.
+
+        Args:
+            caster_pos: Caster position used to resolve this shape's origin.
+            senses: Current caster senses used to authorize affected entities.
+            affected_positions: Cached geometry and propagation result.
+            caster_uuid: Optional caster UUID that remains self-perceivable.
+
+        Returns:
+            Self with current subjective entity occupancy applied.
+        """
+        self.computed_origin = self.get_origin(caster_pos)
+        self.affected_positions = set(affected_positions)
+        self._resolve_subjective_entities(caster_pos, senses, caster_uuid)
+        return self
+
+    def _resolve_subjective_entities(
+        self,
+        caster_pos: Tuple[int, int],
+        senses: "Senses",
+        caster_uuid: Optional[UUID],
+    ) -> None:
+        """Populate perceived occupants for the current subjective footprint."""
+        self.affected_entity_uuids = {
+            entity_uuid
+            for entity_uuid, pos in senses.entities.items()
+            if pos in self.affected_positions
+        }
+        if (
+            self.computed_origin != caster_pos
+            and caster_uuid is not None
+            and caster_pos in self.affected_positions
+        ):
+            self.affected_entity_uuids.add(caster_uuid)
 
     def compute_objective(self, caster_pos: Tuple[int, int]) -> "AoEShape":
         """Compute affected positions from actual propagation state.
@@ -144,7 +197,7 @@ class AoEShape(BaseObject):
         geometric = self._get_positions_in_shape(self.computed_origin)
 
         barriers = grid.get_barrier_positions()
-        if not (geometric & barriers):
+        if geometric.isdisjoint(barriers):
             self.affected_positions = geometric
         else:
             fov_from_origin = set(
@@ -152,7 +205,7 @@ class AoEShape(BaseObject):
                     self.computed_origin, self._get_max_radius_tiles()
                 )
             )
-            self.affected_positions = geometric & fov_from_origin
+            self.affected_positions = geometric.intersection(fov_from_origin)
 
         self.affected_entity_uuids = set()
         for pos in self.affected_positions:
@@ -200,6 +253,10 @@ class Cone(AoEShape):
     def _get_max_radius_tiles(self) -> int:
         return self.length_feet // 5
 
+    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+        """Return the canonical cone ray because distance does not alter its area."""
+        return self._normalized_direction_key(caster_pos)
+
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         return cone_positions(
             origin, self.target, self.length_feet // 5, self.angle_degrees
@@ -222,6 +279,10 @@ class Line(AoEShape):
 
     def _get_max_radius_tiles(self) -> int:
         return self.length_feet // 5
+
+    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+        """Return the canonical line ray because distance does not alter its area."""
+        return self._normalized_direction_key(caster_pos)
 
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         width_tiles = max(1, self.width_feet // 5)
@@ -247,6 +308,17 @@ class Cube(AoEShape):
 
     def _get_max_radius_tiles(self) -> int:
         return self.size_feet // 5
+
+    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+        """Return the center or cardinal extension that determines this cube."""
+        if self.centered:
+            return super().footprint_target_key(caster_pos)
+        origin_x, origin_y = self.get_origin(caster_pos)
+        delta_x = self.target[0] - origin_x
+        delta_y = self.target[1] - origin_y
+        if abs(delta_x) >= abs(delta_y):
+            return ("axis", "x", 1 if delta_x >= 0 else -1)
+        return ("axis", "y", 1 if delta_y >= 0 else -1)
 
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         direction = None if self.centered else self.target
@@ -284,6 +356,7 @@ class Cylinder(AoEShape):
         fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
         barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
+        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
         """Compute cylinder previews using full footprint and perceived entities."""
         return self.compute_for_targeting(
@@ -292,6 +365,7 @@ class Cylinder(AoEShape):
             fov_cache=fov_cache,
             barrier_positions=barrier_positions,
             caster_uuid=caster_uuid,
+            caster_visible_positions=caster_visible_positions,
         )
 
     def compute_for_targeting(
@@ -301,6 +375,7 @@ class Cylinder(AoEShape):
         fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
         barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
+        caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
         """Cylinder ignores barriers — hits full geometric area from above/below.
 

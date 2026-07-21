@@ -1194,6 +1194,7 @@ def test_eb_15_010_shield_blocks_magic_missile_darts_against_its_target_only() -
     ally_hp = get_hp(ally)
 
     event = MagicMissile(
+        name="Opaque Force Darts",
         source_entity_uuid=attacker.uuid,
         target_entity_uuid=shielded.uuid,
         extra_target_entity_uuids=[ally.uuid],
@@ -1716,6 +1717,47 @@ def test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup() -> None:
     assert "Concentrating" not in caster.active_conditions
 
 
+def test_eb_15_017_hold_person_successful_initial_save_has_truthful_synced_log() -> None:
+    """Hold Person reports the resolved save and cleans empty concentration."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={2: 1})
+    target = create_family_target(name="Resisting Humanoid", position=(3, 1))
+    boost_save(target, "wisdom")
+    Entity.update_all_entities_senses()
+
+    event = HoldPerson(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        template=False,
+    ).apply()
+
+    event = assert_completed_spell(event)
+    assert event.save_success is True
+    assert event.save_roll is not None
+    assert event.save_bonus == event.save_roll.bonus
+    assert "Hold Person" not in target.active_conditions
+    assert "Paralyzed" not in target.active_conditions
+    assert "Concentrating" not in caster.active_conditions
+    assert event.status_message is not None
+    assert "saved" in event.status_message.lower()
+    assert "concentrat" not in event.status_message.lower()
+
+    assert event.combat_log is not None
+    assert event.combat_log.entry_type == CombatLogEntryType.SPELL_SAVE
+    saving_throw_logs = [
+        entry for entry in event.combat_log.sub_entries
+        if entry.entry_type == CombatLogEntryType.SAVING_THROW
+    ]
+    assert len(saving_throw_logs) == 1
+    nested_save_log = saving_throw_logs[0]
+    parent_roll = event.combat_log.data["save_roll"]
+    nested_roll = nested_save_log.data["roll"]
+    assert parent_roll["results"] == nested_roll["results"]
+    assert parent_roll["bonus"] == nested_roll["bonus"]
+    assert parent_roll["total"] == nested_roll["total"]
+    assert event.combat_log.data["save_success"] == nested_save_log.data["success"]
+
+
 def test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup() -> None:
     """EB-15-018: Hold Monster rejects undead and cleans up on repeat save."""
     reset_spell_family_state()
@@ -1761,6 +1803,47 @@ def test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup() -> None:
     assert "Paralyzed" not in target.active_conditions
     assert "Incapacitated" not in target.active_conditions
     assert "Concentrating" not in caster.active_conditions
+
+
+def test_eb_15_018_hold_monster_successful_initial_save_has_synced_log() -> None:
+    """Hold Monster keeps its per-target spell log aligned with the child save."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={5: 1})
+    target = create_family_target(name="Resisting Monster", position=(3, 1))
+    target.creature_type = CreatureType.MONSTROSITY
+    boost_save(target, "wisdom")
+    Entity.update_all_entities_senses()
+
+    event = HoldMonster(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        template=False,
+    ).apply()
+
+    event = assert_completed_spell(event)
+    assert "Hold Monster" not in target.active_conditions
+    assert "Paralyzed" not in target.active_conditions
+    assert "Concentrating" not in caster.active_conditions
+
+    assert event.combat_log is not None
+    spell_save_logs = [
+        entry for entry in event.combat_log.sub_entries
+        if entry.entry_type == CombatLogEntryType.SPELL_SAVE
+    ]
+    assert len(spell_save_logs) == 1
+    spell_save_log = spell_save_logs[0]
+    saving_throw_logs = [
+        entry for entry in spell_save_log.sub_entries
+        if entry.entry_type == CombatLogEntryType.SAVING_THROW
+    ]
+    assert len(saving_throw_logs) == 1
+    nested_save_log = saving_throw_logs[0]
+    parent_roll = spell_save_log.data["save_roll"]
+    nested_roll = nested_save_log.data["roll"]
+    assert parent_roll["results"] == nested_roll["results"]
+    assert parent_roll["bonus"] == nested_roll["bonus"]
+    assert parent_roll["total"] == nested_roll["total"]
+    assert spell_save_log.data["save_success"] == nested_save_log.data["success"]
 
 
 def test_eb_15_019_mirror_image_duplicates_absorb_missed_attacks() -> None:

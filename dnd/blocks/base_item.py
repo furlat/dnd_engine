@@ -13,9 +13,16 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.events import EquipmentSlot, SpatialChangeEvent
+from dnd.core.events import (
+    EquipmentSlot,
+    Event,
+    EventPhase,
+    EventType,
+    SpatialChangeEvent,
+)
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import ActionEvent, BaseAction
+from dnd.core.content import ContentKind
 
 
 class ItemRarity(str, Enum):
@@ -26,6 +33,13 @@ class ItemRarity(str, Enum):
     RARE = "rare"
     VERY_RARE = "very_rare"
     LEGENDARY = "legendary"
+
+
+class EquippedVisualPolicy(str, Enum):
+    """Describe whether equipped gear contributes a separate actor layer."""
+
+    VISIBLE = "visible"
+    HIDDEN = "hidden"
 
 
 class BaseItem(BaseBlock):
@@ -41,6 +55,14 @@ class BaseItem(BaseBlock):
         description="Whether this item can own event handlers and active conditions.",
     )
     name: str = Field(default="Item", description="Display name for this item.")
+    semantic_key: Optional[str] = Field(
+        default=None,
+        description="Stable rules-content identity; defaults to the item class identity.",
+    )
+    content_kind: ContentKind = Field(
+        default=ContentKind.ITEM,
+        description="Rules-content family represented by this item.",
+    )
     description: Optional[str] = Field(
         default=None,
         description="Optional rules or UI description for this item.",
@@ -78,6 +100,10 @@ class BaseItem(BaseBlock):
         default=None,
         description="Renderer sub-item variant id under visual_item_name.",
     )
+    equipped_visual_policy: EquippedVisualPolicy = Field(
+        default=EquippedVisualPolicy.VISIBLE,
+        description="Whether this item renders as a separate equipment layer while equipped.",
+    )
     tags: List[str] = Field(
         default_factory=list,
         description="Free-form tags used by item queries and filtering.",
@@ -110,6 +136,12 @@ class BaseItem(BaseBlock):
     owner_uuid: Optional[UUID] = Field(default=None, description="UUID of the entity or item (e.g. chest) that owns this item")
     stored_in_uuid: Optional[UUID] = Field(default=None, description="UUID of the container block (Inventory, Equipment) holding this item")
     tile_uuid: Optional[UUID] = Field(default=None, description="UUID of tile at this item's grid position (set when on floor)")
+
+    def get_semantic_key(self) -> str:
+        """Return an explicit key or the stable item class identity."""
+        if self.semantic_key:
+            return self.semantic_key
+        return f"{type(self).__module__}.{type(self).__name__}"
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -317,6 +349,12 @@ class BaseItem(BaseBlock):
         directional_metadata = grid.recompute_tile_directional_blocking(position)
         directional_channels = directional_metadata.get("directional_channels") or []
         direction_changed = bool(directional_channels)
+        revision_channels = set(directional_channels)
+        if vision_changed:
+            revision_channels.update({"vision", "propagation"})
+        if walking_changed:
+            revision_channels.add("movement")
+        grid.invalidate_spatial_caches(revision_channels)
         if vision_changed or walking_changed or direction_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,
@@ -560,6 +598,34 @@ class UsableItem(BaseItem):
         description="Action templates cloned and rebound when this item is used.",
     )
 
+    def remaining_finite_uses(self) -> Optional[int]:
+        """Return total currently available uses represented by this stack.
+
+        Returns:
+            Remaining uses across the active item and stacked copies, or
+            ``None`` when the item has unlimited charges.
+        """
+        if self.charges == -1:
+            return None
+        reserve_uses = (
+            max(0, self.stack_count - 1) * max(0, self.max_charges)
+            if self.stack_id is not None
+            else 0
+        )
+        return self.charges + reserve_uses
+
+    def maximum_finite_uses(self) -> Optional[int]:
+        """Return the configured finite capacity represented by a full stack.
+
+        Returns:
+            Maximum uses for ``max_stack`` copies, or ``None`` for an
+            unlimited-charge item.
+        """
+        if self.max_charges == -1:
+            return None
+        stack_capacity = self.max_stack if self.stack_id is not None else 1
+        return stack_capacity * max(0, self.max_charges)
+
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return action templates this item provides.
 
@@ -600,3 +666,111 @@ class UsableItem(BaseItem):
             else:
                 self.destroy()
         return True
+
+    def consume_charge_with_event(
+        self,
+        amount: int,
+        source_entity_uuid: UUID,
+        parent_event: Event,
+    ) -> "ItemChargeConsumptionEvent":
+        """Consume a finite charge through a child event lifecycle.
+
+        Args:
+            amount: Number of charges to consume.
+            source_entity_uuid: Entity whose action spends the item resource.
+            parent_event: Action effect that caused the charge consumption.
+
+        Returns:
+            Completed or canceled item-charge event.
+
+        Raises:
+            RuntimeError: If the item cannot pay a charge already validated by
+                action discovery and execution.
+        """
+        declaration = ItemChargeConsumptionEvent(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=self.uuid,
+            parent_event=parent_event.uuid,
+            item_uuid=self.uuid,
+            item_semantic_key=self.get_semantic_key(),
+            item_name=self.name,
+            amount=amount,
+            charges_before=self.charges,
+            charges_after=self.charges,
+            stack_count_before=self.stack_count,
+            stack_count_after=self.stack_count,
+        )
+        execution = declaration.phase_to(
+            EventPhase.EXECUTION,
+            status_message="Finite item resource validated",
+        )
+        effect = execution.phase_to(
+            EventPhase.EFFECT,
+            status_message="Finite item resource ready for consumption",
+        )
+        if effect.canceled:
+            return effect
+        if not self.consume_charge(amount):
+            effect.cancel(status_message="Finite item resource changed after validation")
+            raise RuntimeError(
+                f"Item {self.uuid} could not consume {amount} charge after successful action"
+            )
+        return effect.phase_to(
+            EventPhase.COMPLETION,
+            status_message="Finite item resource consumption completed",
+            charges_after=max(0, self.charges),
+            stack_count_after=self.stack_count,
+            item_destroyed=BaseBlock.get(self.uuid) is None,
+        )
+
+
+class ItemChargeConsumptionEvent(Event):
+    """Finite usable-item resource consumption owned by the item domain."""
+
+    name: str = Field(
+        default="Item Charge Consumption",
+        description="Human-readable item-resource event label.",
+    )
+    event_type: EventType = Field(
+        default=EventType.ITEM_CHARGE_CONSUMPTION,
+        description="Event category for finite item-resource consumption.",
+    )
+    item_uuid: UUID = Field(description="Usable item whose finite resource changes.")
+    item_semantic_key: str = Field(
+        default="item.unclassified",
+        description="Stable semantic identity of the consumed item.",
+    )
+    item_name: str = Field(default="Item", description="Human-readable consumed item name.")
+    amount: int = Field(default=1, ge=1, description="Number of charges consumed.")
+    charges_before: int = Field(ge=0, description="Active-item charges before consumption.")
+    charges_after: int = Field(ge=0, description="Active-item charges after consumption.")
+    stack_count_before: int = Field(ge=1, description="Represented item copies before consumption.")
+    stack_count_after: int = Field(ge=1, description="Represented item copies after consumption.")
+    item_destroyed: bool = Field(
+        default=False,
+        description="Whether consumption removed the final item from engine registries.",
+    )
+
+
+def consume_item_charge_before_action_completion(event: Event) -> None:
+    """Consume one item-bound action resource before its root lineage completes."""
+    if not isinstance(event, ActionEvent):
+        return
+    if (
+        event.source_item_uuid is None
+        or event.item_charge_cost <= 0
+        or event.item_charge_action_lineage_uuid != event.lineage_uuid
+    ):
+        return
+    item = BaseBlock.get(event.source_item_uuid)
+    if not isinstance(item, UsableItem) or item.charges == -1:
+        return
+    result = item.consume_charge_with_event(
+        event.item_charge_cost,
+        event.source_entity_uuid,
+        event,
+    )
+    if result.canceled:
+        raise RuntimeError(
+            f"Item charge consumption was canceled for completed action lineage {event.lineage_uuid}"
+        )

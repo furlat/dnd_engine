@@ -5,9 +5,11 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi",
     "httpx",
+    "numpy",
     "pydantic",
     "requests",
     "rich",
+    "scipy",
     "typer",
     "uvicorn",
     "websockets",

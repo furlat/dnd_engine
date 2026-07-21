@@ -16,8 +16,9 @@ Level 18: Champion - Survivor (DEFERRED)
 from typing import Any, Dict
 from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
+from dnd.core.content import ContentKind
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
     Trigger, EventHandler, DamageRollResultEvent, RangeType, WeaponSlot, SavingThrowEvent
@@ -33,7 +34,8 @@ from dnd.actions import (
     entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
     AttackEvent,
-    Attack
+    Attack,
+    build_weapon_attack_outcome_profile,
 )
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
@@ -495,6 +497,8 @@ def create_protection_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create an EventHandler for Protection fighting style."""
     return EventHandler(
         name="Protection",
+        semantic_key="feature.fighter.protection",
+        content_kind=ContentKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -1276,6 +1280,10 @@ class ExtraAttack(BaseAction):
                 resource_evaluator=entity_resource_cost_evaluator
             )
         ]
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return the same actor-baseline weapon profile as a normal attack."""
+        return build_weapon_attack_outcome_profile(actor, self.weapon_slot)
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""

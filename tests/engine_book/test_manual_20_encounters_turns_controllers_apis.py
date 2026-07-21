@@ -22,7 +22,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
 from dnd.utils import force_attack_hit, get_hp, remove_attack_modifier, reset_combat_state, set_hp
 from server.event_server import _available_actions_cache, app, sim
 
@@ -389,3 +389,78 @@ def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
 
     assert denied_response.status_code == 403
     assert denied_response.json()["detail"]["code"] == "entity_not_controlled"
+
+
+def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> None:
+    """Lethal Magic Missile reports its nested death without fallback duplication."""
+    reset_runtime_tutorial_state()
+    caster = create_caster(name="Runtime Caster", position=(1, 1), faction="heroes")
+    monster = create_skeleton(name="Runtime Target", position=(2, 1), faction="monsters")
+    Entity.update_all_entities_senses()
+    encounter = start_ordered_encounter(
+        caster,
+        monster,
+        HumanController(source_entity_uuid=caster.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        caster,
+    )
+    encounter.start_turn()
+    sim.encounter = encounter
+    sim.create_game_session(encounter)
+    client = TestClient(app)
+    session_response = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Runtime Caster Player"},
+    )
+    session_id = session_response.json()["session_id"]
+    join_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [str(caster.uuid)]},
+    )
+    assert join_response.status_code == 200
+    set_hp(monster, 1)
+
+    available = client.get(f"/entity/{caster.uuid}/available-actions").json()
+    missile = next(
+        row
+        for row in available["entity_actions"]
+        if row.get("base_template_name") == "Magic Missile"
+        and row.get("cast_at_level") == 1
+    )
+    target_index = next(
+        target["index"]
+        for target in missile["valid_targets"]
+        if target.get("target_uuid") == str(monster.uuid)
+    )
+
+    response = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(caster.uuid),
+            "template_name": missile["template_name"],
+            "target_index": target_index,
+            "extra_target_uuids": [str(monster.uuid), str(monster.uuid)],
+        },
+    )
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["deaths"] == [monster.name]
+    assert payload["target_hp"] == monster.get_hp()
+    assert payload["encounter_ended"] is True
+    death_entries = [
+        entry
+        for root in payload["combat_log_entries"]
+        for entry in _walk_combat_log_entries(root)
+        if entry["entry_type"] == "death"
+    ]
+    assert len(death_entries) == 1
+
+
+def _walk_combat_log_entries(entry: dict) -> list[dict]:
+    """Return one combat-log subtree in depth-first order."""
+    descendants = [entry]
+    for child in entry.get("sub_entries", []):
+        descendants.extend(_walk_combat_log_entries(child))
+    return descendants

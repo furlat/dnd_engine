@@ -2,10 +2,12 @@
 
 from uuid import UUID, uuid4
 
+import pytest
 from pydantic import Field
 
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
 from dnd.controller import PassController
 from dnd.core.base_actions import ActionEvent
@@ -21,6 +23,7 @@ from dnd.core.events import (
     EventType,
     SensoryUpdateEvent,
     SensoryUpdateReason,
+    SensesUpdateHint,
     SpatialChangeEvent,
 )
 from dnd.core.gridmap import get_map
@@ -774,6 +777,300 @@ def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -
     assert caster.action_economy.spell_slot_3.normalized_score == 2
 
 
+def test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths() -> None:
+    """EB-12-020: off-screen movement does not invalidate unrelated observer paths."""
+    reset_senses_state(width=16, height=1)
+    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    distant_mover = create_skeleton(name="Distant Mover", position=(12, 0), darkvision=False)
+    observer.update_entity_senses(max_distance=3)
+
+    assert distant_mover.uuid not in observer.senses.entities
+    assert observer.senses._paths_dirty is False
+    assert completed_sensory_updates(observer.uuid) == []
+
+    Entity.update_entity_position(distant_mover, (13, 0))
+
+    assert observer.senses._paths_dirty is False
+    assert distant_mover.uuid not in observer.senses.entities
+    assert completed_sensory_updates(observer.uuid) == []
+
+
+def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> None:
+    """EB-12-021: movement-end senses reuse matches a cold full recompute."""
+    reset_senses_state(width=8, height=3)
+    grid = get_map()
+    mover = create_skeleton(name="Mover", position=(0, 1), darkvision=False)
+    target = create_skeleton(name="Target", position=(4, 1), darkvision=False)
+    marker = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Visible Marker",
+        is_pickable=False,
+        include_in_senses_objects=True,
+    )
+    grid.place_object(marker.uuid, (3, 2))
+    mover.update_entity_senses(max_distance=5)
+
+    Entity.update_entity_position(mover, (1, 1))
+
+    assert target.uuid in mover.senses.entities
+    assert marker.uuid in mover.senses.objects
+    assert mover.senses._visibility_cache is not None
+
+    mover.update_entity_senses(max_distance=5, reuse_visibility_cache=True)
+    cached_snapshot = {
+        "visible": dict(mover.senses.visible),
+        "seen": set(mover.senses.seen),
+        "entities": dict(mover.senses.entities),
+        "objects": dict(mover.senses.objects),
+        "walkable": dict(mover.senses.walkable),
+        "paths": {pos: list(path) for pos, path in mover.senses.paths.items()},
+        "safe_paths": {pos: list(path) for pos, path in mover.senses.safe_paths.items()},
+        "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
+    }
+    assert mover.senses._visibility_cache is None
+
+    mover.update_entity_senses(max_distance=5)
+    cold_snapshot = {
+        "visible": dict(mover.senses.visible),
+        "seen": set(mover.senses.seen),
+        "entities": dict(mover.senses.entities),
+        "objects": dict(mover.senses.objects),
+        "walkable": dict(mover.senses.walkable),
+        "paths": {pos: list(path) for pos, path in mover.senses.paths.items()},
+        "safe_paths": {pos: list(path) for pos, path in mover.senses.safe_paths.items()},
+        "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
+    }
+
+    assert cached_snapshot == cold_snapshot
+
+
+def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
+    """EB-12-022: one step keeps two objective events but one sensory delta."""
+    reset_senses_state(width=6, height=1)
+    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    mover = create_skeleton(name="Mover", position=(2, 0), darkvision=False)
+    Entity.update_all_entities_senses(max_distance=5)
+
+    assert mover.uuid in observer.senses.entities
+    before_updates = len(completed_sensory_updates(observer.uuid))
+
+    Entity.update_entity_position(mover, (3, 0))
+
+    movement_updates = completed_sensory_updates(observer.uuid)[before_updates:]
+    objective_events = [
+        event
+        for event in EventQueue._all_events
+        if isinstance(event, SpatialChangeEvent)
+        and event.phase == EventPhase.COMPLETION
+        and event.entity_uuid == mover.uuid
+        and event.event_type in {
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_ENTITY_ENTERED,
+        }
+    ]
+
+    assert {event.event_type for event in objective_events} == {
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_ENTERED,
+    }
+    assert len(movement_updates) == 1
+    assert movement_updates[0].visible_entities_moved == {
+        mover.uuid: ((2, 0), (3, 0))
+    }
+    assert movement_updates[0].visible_entities_added == {}
+    assert movement_updates[0].visible_entities_removed == {}
+
+
+def test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates() -> None:
+    """EB-12-023: distant observers are excluded before sensory recomputation."""
+    reset_senses_state(width=20, height=1)
+    local_observer = create_skeleton(
+        name="Local Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+    mover = create_skeleton(name="Mover", position=(2, 0), darkvision=False)
+    distant_observer = create_skeleton(
+        name="Distant Observer",
+        position=(15, 0),
+        darkvision=False,
+    )
+    Entity.update_all_entities_senses(max_distance=3)
+    entered = SpatialChangeEvent.entity_entered(
+        (2, 0),
+        mover.uuid,
+        old_position=(1, 0),
+    )
+
+    candidates = spatial_senses_system.candidate_observer_uuids(entered)
+
+    assert local_observer.uuid in candidates
+    assert mover.uuid in candidates
+    assert distant_observer.uuid not in candidates
+
+
+def test_eb_12_024_sensory_dispatch_targets_own_perception_conditions() -> None:
+    """EB-12-024: perception conditions select only their target observer."""
+    reset_senses_state(width=4, height=1)
+    target = create_skeleton(name="Target", position=(0, 0), darkvision=False)
+    unrelated = create_skeleton(name="Unrelated", position=(2, 0), darkvision=False)
+    Entity.update_all_entities_senses(max_distance=3)
+    condition_event = Event(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+        event_type=EventType.CONDITION_APPLICATION,
+        use_register=False,
+    )
+
+    candidates = spatial_senses_system.candidate_observer_uuids(condition_event)
+
+    assert candidates == {target.uuid}
+    assert unrelated.uuid not in candidates
+
+
+def test_eb_12_025_attached_light_emits_one_batched_lifecycle_per_step() -> None:
+    """EB-12-025: one torch step publishes one complete light-change event."""
+    reset_senses_state(width=7, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    mover = create_skeleton(name="Torchbearer", position=(1, 0), darkvision=False)
+    create_skeleton(name="Light-change Witness", position=(3, 0), darkvision=False)
+    grid.add_light_source(
+        mover.position,
+        bright_radius_feet=5,
+        dim_radius_feet=10,
+        anchor_uuid=mover.uuid,
+    )
+    mover.update_entity_senses(max_distance=6)
+    event_cursor = EventQueue.event_cursor()
+
+    Entity.update_entity_position(mover, (2, 0))
+
+    light_completions = [
+        event
+        for _, event in EventQueue.iter_events_since(event_cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type == EventType.SPATIAL_LIGHT_CHANGED
+        and event.phase == EventPhase.COMPLETION
+    ]
+    assert len(light_completions) == 1
+    hint = light_completions[0].senses_hint
+    assert hint is not None
+    assert hint.light_changed_positions
+    assert (3, 0) in hint.light_changed_positions
+
+
+def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
+    """EB-12-026: hidden reveal checks every tile in a batched light event."""
+    reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    hidden = create_skeleton(name="Hidden Target", position=(4, 0), darkvision=False)
+    hidden.add_condition(
+        Hidden(
+            source_entity_uuid=hidden.uuid,
+            target_entity_uuid=hidden.uuid,
+            stealth_result=30,
+        )
+    )
+    hidden_tile = grid.get_tile(4, 0)
+    representative_tile = grid.get_tile(0, 0)
+    assert hidden_tile is not None
+    assert representative_tile is not None
+    hidden_tile.add_illumination(uuid4(), LightLevel.VERY_BRIGHT, fire_event=False)
+    event = SpatialChangeEvent.light_changed(
+        representative_tile.position,
+        representative_tile.uuid,
+        senses_hint=SensesUpdateHint(
+            light_changed_positions={representative_tile.position, hidden_tile.position},
+        ),
+    )
+
+    grid._fire_spatial_event(event)
+
+    assert "Hidden" not in hidden.active_conditions
+    assert hidden.stealth_dc is None
+
+
+def test_eb_12_027_equivalent_light_and_vision_channels_share_directional_fov(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EB-12-027: equivalent directional channels reuse one geometric scan."""
+    reset_senses_state(width=7, height=1)
+    grid = get_map()
+    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    grid.set_tile_directional_border((3, 0), "vision", "east", False)
+    grid.set_tile_directional_border((3, 0), "light", "east", False)
+    directional_calls: list[str] = []
+    original = grid._compute_directional_fov
+
+    def track_directional_fov(
+        origin: tuple[int, int],
+        max_distance: float | None,
+        channel: str,
+        observer_uuid: UUID | None = None,
+    ) -> list[tuple[int, int]]:
+        directional_calls.append(channel)
+        return original(origin, max_distance, channel, observer_uuid)
+
+    monkeypatch.setattr(grid, "_compute_directional_fov", track_directional_fov)
+
+    vision = grid.compute_fov(observer.position, 6, observer_uuid=observer.uuid)
+    light = grid.compute_light_fov(observer.position, 3)
+
+    expected_light = [
+        position
+        for position in vision
+        if (
+            (position[0] - observer.position[0]) ** 2
+            + (position[1] - observer.position[1]) ** 2
+        ) ** 0.5 <= 3
+    ]
+    assert light == expected_light
+    assert directional_calls == ["vision"]
+
+
+def test_eb_12_028_directional_transition_cache_is_revision_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EB-12-028: repeated scans reuse edges until vision topology changes."""
+    reset_senses_state(width=7, height=3)
+    grid = get_map()
+    observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
+    grid.set_tile_directional_border((3, 1), "vision", "east", False)
+    transition_calls = 0
+    original = grid.can_see_transition
+
+    def track_transition(
+        from_position: tuple[int, int],
+        to_position: tuple[int, int],
+        observer_uuid: UUID | None = None,
+        subjective: bool = False,
+    ) -> bool:
+        nonlocal transition_calls
+        transition_calls += 1
+        return original(
+            from_position,
+            to_position,
+            observer_uuid,
+            subjective,
+        )
+
+    monkeypatch.setattr(grid, "can_see_transition", track_transition)
+
+    first = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
+    calls_after_first = transition_calls
+    second = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
+
+    assert first == second
+    assert calls_after_first > 0
+    assert transition_calls == calls_after_first
+
+    grid.set_tile_directional_border((3, 1), "vision", "east", True)
+    third = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
+
+    assert transition_calls > calls_after_first
+    assert third != second
+
+
 if __name__ == "__main__":
     tests = [
         test_eb_12_001_geometric_fov_is_filtered_by_effective_light,
@@ -795,6 +1092,13 @@ if __name__ == "__main__":
         test_eb_12_017_multi_entity_spell_cancels_when_target_becomes_hidden,
         test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them,
         test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload,
+        test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths,
+        test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache,
+        test_eb_12_022_paired_movement_emits_one_subjective_transition,
+        test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates,
+        test_eb_12_024_sensory_dispatch_targets_own_perception_conditions,
+        test_eb_12_025_attached_light_emits_one_batched_lifecycle_per_step,
+        test_eb_12_026_batched_light_positions_reveal_hidden_entities,
     ]
 
     for test in tests:

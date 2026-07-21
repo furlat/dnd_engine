@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NeuroDragon Agent Observer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101522;
+      --panel: #141d2f;
+      --panel-2: #172033;
+      --border: #2b3b58;
+      --muted: #9eabc0;
+      --text: #eef3fb;
+      --accent: #75d2ff;
+      --good: #7ee59d;
+      --warn: #ffd36f;
+      --bad: #ff8a9a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #agent-observer {
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .shell {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      letter-spacing: 0;
+      font-weight: 650;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input,
+    select,
+    button {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      min-height: 34px;
+    }
+
+    input,
+    select {
+      padding: 7px 9px;
+      min-width: 220px;
+    }
+
+    button {
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: #35708a;
+      background: #173345;
+      color: #dff6ff;
+    }
+
+    .status {
+      border: 1px solid var(--border);
+      background: #111a2a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status.good {
+      color: var(--good);
+    }
+
+    .status.warn {
+      color: var(--warn);
+    }
+
+    .status.bad {
+      color: var(--bad);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric,
+    section {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 8px;
+    }
+
+    .metric {
+      padding: 12px;
+      min-height: 78px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric .value {
+      margin-top: 5px;
+      font-size: 22px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.85fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    section {
+      padding: 14px;
+      min-width: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #23314a;
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    tr[data-selected="true"] {
+      background: #1d2c46;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #202d45;
+      color: #cbd7e8;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill.debug {
+      color: #aab6c9;
+    }
+
+    .pill.info {
+      color: var(--accent);
+    }
+
+    .pill.warning {
+      color: var(--warn);
+    }
+
+    .pill.error {
+      color: var(--bad);
+    }
+
+    .filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .filters input {
+      flex: 1 1 260px;
+      min-width: 180px;
+    }
+
+    .event-table-wrap {
+      max-height: 62vh;
+      overflow: auto;
+      border: 1px solid #23314a;
+      border-radius: 8px;
+    }
+
+    .counts {
+      display: grid;
+      gap: 8px;
+    }
+
+    .kv {
+      display: grid;
+      gap: 7px;
+      font-size: 13px;
+    }
+
+    .kv-row {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 10px;
+      border-bottom: 1px solid #23314a;
+      padding-bottom: 7px;
+    }
+
+    .kv-row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .kv-row span:first-child {
+      color: var(--muted);
+    }
+
+    .compact-table {
+      max-height: 240px;
+      overflow: auto;
+      border: 1px solid #23314a;
+      border-radius: 8px;
+    }
+
+    .compact-table table {
+      font-size: 12px;
+    }
+
+    .count-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #23314a;
+      color: #cbd7e8;
+      font-size: 13px;
+    }
+
+    .count-row:last-child {
+      border-bottom: 0;
+    }
+
+    pre {
+      margin: 0;
+      min-height: 180px;
+      max-height: 46vh;
+      overflow: auto;
+      border: 1px solid #23314a;
+      border-radius: 8px;
+      background: #0d1422;
+      color: #d8e3f4;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 16px;
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      header,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, minmax(150px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="agent-observer">
+    <div class="shell">
+      <header>
+        <div>
+          <h1>NeuroDragon Agent Observer</h1>
+          <div class="subtle">Session telemetry viewer for policy, processor, command, stale, and resync events.</div>
+        </div>
+        <div class="toolbar">
+          <label>
+            Backend
+            <input id="ao-api-base" type="url" value="http://127.0.0.1:8000" autocomplete="off">
+          </label>
+          <label>
+            Session
+            <input id="ao-session-id" type="text" placeholder="AI session id" autocomplete="off">
+          </label>
+          <label>
+            Active Agents
+            <select id="ao-session-list">
+              <option value="">Load sessions...</option>
+            </select>
+          </label>
+          <button id="ao-load-sessions">Sessions</button>
+          <button id="ao-load-history">Replay</button>
+          <label>
+            Artifact
+            <input id="ao-artifact-file" type="file" accept="application/json,.json">
+          </label>
+          <button id="ao-connect" class="primary">Connect</button>
+          <button id="ao-disconnect">Disconnect</button>
+          <button id="ao-clear">Clear</button>
+        </div>
+      </header>
+
+      <div id="ao-status" class="status">Idle. Enter a session id, replay retained telemetry, or connect to the live stream.</div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="label">Agent Cursor</div>
+          <div id="ao-agent-cursor" class="value">0</div>
+        </div>
+        <div class="metric">
+          <div class="label">Observation Cursor</div>
+          <div id="ao-observation-cursor" class="value">n/a</div>
+        </div>
+        <div class="metric">
+          <div class="label">Current Epoch</div>
+          <div id="ao-epoch-id" class="value">n/a</div>
+        </div>
+        <div class="metric">
+          <div class="label">Events</div>
+          <div id="ao-event-count" class="value">0</div>
+        </div>
+        <div class="metric">
+          <div class="label">Warnings</div>
+          <div id="ao-warning-count" class="value">0</div>
+        </div>
+        <div class="metric">
+          <div class="label">Errors</div>
+          <div id="ao-error-count" class="value">0</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section>
+          <h2>Events</h2>
+          <div class="filters">
+            <input id="ao-filter" type="search" placeholder="Filter type, source, actor, summary, tag">
+            <select id="ao-level-filter">
+              <option value="">All levels</option>
+              <option value="debug">Debug</option>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+          <div class="event-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cursor</th>
+                  <th>Level</th>
+                  <th>Type</th>
+                  <th>Source</th>
+                  <th>Actor</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="ao-events-body">
+                <tr><td colspan="6" class="empty">No telemetry loaded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div>
+          <section>
+            <h2>Latest Command</h2>
+            <div id="ao-latest-command" class="kv">
+              <div class="empty">No command telemetry yet.</div>
+            </div>
+          </section>
+          <section style="margin-top: 14px;">
+            <h2>Latest Decision</h2>
+            <div id="ao-latest-decision" class="kv">
+              <div class="empty">No policy decision yet.</div>
+            </div>
+          </section>
+          <section style="margin-top: 14px;">
+            <h2>Candidates</h2>
+            <div id="ao-candidates" class="compact-table">
+              <div class="empty">No candidate rows yet.</div>
+            </div>
+          </section>
+          <section style="margin-top: 14px;">
+            <h2>Command Flow</h2>
+            <div id="ao-command-flow" class="compact-table">
+              <div class="empty">No command events yet.</div>
+            </div>
+          </section>
+          <section style="margin-top: 14px;">
+            <h2>Timings</h2>
+            <div id="ao-timings" class="kv">
+              <div class="empty">No timing telemetry yet.</div>
+            </div>
+          </section>
+          <section style="margin-top: 14px;">
+            <h2>Event Types</h2>
+            <div id="ao-type-counts" class="counts">
+              <div class="empty">No counts yet.</div>
+            </div>
+          </section>
+          <section>
+            <h2>Selected Payload</h2>
+            <pre id="ao-detail">Select an event.</pre>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      events: [],
+      cursor: 0,
+      observationCursor: null,
+      epochId: null,
+      source: null,
+      selectedCursor: null,
+      connected: false
+    };
+
+    const els = {
+      apiBase: document.getElementById("ao-api-base"),
+      sessionId: document.getElementById("ao-session-id"),
+      sessionList: document.getElementById("ao-session-list"),
+      loadSessions: document.getElementById("ao-load-sessions"),
+      loadHistory: document.getElementById("ao-load-history"),
+      artifactFile: document.getElementById("ao-artifact-file"),
+      connect: document.getElementById("ao-connect"),
+      disconnect: document.getElementById("ao-disconnect"),
+      clear: document.getElementById("ao-clear"),
+      status: document.getElementById("ao-status"),
+      agentCursor: document.getElementById("ao-agent-cursor"),
+      observationCursor: document.getElementById("ao-observation-cursor"),
+      epochId: document.getElementById("ao-epoch-id"),
+      eventCount: document.getElementById("ao-event-count"),
+      warningCount: document.getElementById("ao-warning-count"),
+      errorCount: document.getElementById("ao-error-count"),
+      eventsBody: document.getElementById("ao-events-body"),
+      latestCommand: document.getElementById("ao-latest-command"),
+      latestDecision: document.getElementById("ao-latest-decision"),
+      candidates: document.getElementById("ao-candidates"),
+      commandFlow: document.getElementById("ao-command-flow"),
+      timings: document.getElementById("ao-timings"),
+      typeCounts: document.getElementById("ao-type-counts"),
+      detail: document.getElementById("ao-detail"),
+      filter: document.getElementById("ao-filter"),
+      levelFilter: document.getElementById("ao-level-filter")
+    };
+
+    function apiBase() {
+      return els.apiBase.value.trim().replace(/\/+$/, "");
+    }
+
+    function sessionId() {
+      return els.sessionId.value.trim();
+    }
+
+    function setStatus(message, tone = "") {
+      els.status.textContent = message;
+      els.status.className = `status ${tone}`.trim();
+    }
+
+    function endpoint(path) {
+      const base = apiBase();
+      if (!base) {
+        throw new Error("Backend URL is required.");
+      }
+      return `${base}${path}`;
+    }
+
+    function requireSession() {
+      const id = sessionId();
+      if (!id) {
+        throw new Error("Session id is required.");
+      }
+      return id;
+    }
+
+    function short(value) {
+      if (value === null || value === undefined || value === "") {
+        return "n/a";
+      }
+      const text = String(value);
+      return text.length > 12 ? `${text.slice(0, 8)}...` : text;
+    }
+
+    function formatCursor(value) {
+      return value ?? "n/a";
+    }
+
+    function eventSearchText(payload) {
+      const event = payload.event ?? {};
+      return [
+        payload.agent_cursor,
+        payload.observation_cursor,
+        payload.epoch_id,
+        event.event_type,
+        event.level,
+        event.source,
+        event.actor_uuid,
+        event.summary,
+        ...(event.tags ?? [])
+      ].filter((value) => value !== null && value !== undefined).join(" ").toLowerCase();
+    }
+
+    function addPayload(payload) {
+      if (!payload || payload.agent_cursor === undefined || payload.agent_cursor === null) {
+        return;
+      }
+      if (state.events.some((row) => row.agent_cursor === payload.agent_cursor)) {
+        return;
+      }
+      state.events.push(payload);
+      state.events.sort((a, b) => a.agent_cursor - b.agent_cursor);
+      state.cursor = Math.max(state.cursor, payload.agent_cursor);
+      state.observationCursor = payload.observation_cursor ?? state.observationCursor;
+      state.epochId = payload.epoch_id ?? state.epochId;
+      render();
+    }
+
+    function applySync(payload) {
+      state.cursor = Math.max(state.cursor, payload.agent_cursor ?? 0);
+      state.observationCursor = payload.observation_cursor ?? state.observationCursor;
+      state.epochId = payload.epoch_id ?? state.epochId;
+      render();
+    }
+
+    async function loadHistory() {
+      try {
+        const id = requireSession();
+        const url = endpoint(`/ai/sessions/${encodeURIComponent(id)}/agent-events?since=${state.cursor}&limit=500`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`History request failed with ${response.status}.`);
+        }
+        const payload = await response.json();
+        for (const row of payload.events ?? []) {
+          addPayload(row);
+        }
+        if (payload.resync_required === true) {
+          setStatus(`History cursor was evicted. Earliest retained cursor is ${payload.earliest_agent_cursor ?? "unknown"}.`, "warn");
+        } else {
+          setStatus(`Loaded ${payload.count ?? 0} retained events.`, "good");
+        }
+      } catch (error) {
+        setStatus(error.message, "bad");
+      }
+    }
+
+    async function loadArtifactFile(file) {
+      if (!file) {
+        return;
+      }
+      try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        const rows = extractAgentEventRows(payload);
+        if (!rows.length) {
+          throw new Error("No agent telemetry events found in selected JSON.");
+        }
+        disconnect(false);
+        state.events = [];
+        state.cursor = 0;
+        state.observationCursor = null;
+        state.epochId = null;
+        state.selectedCursor = null;
+        els.detail.textContent = "Select an event.";
+        for (const row of rows) {
+          addPayload(row);
+        }
+        const label = payload.run_id || payload.match_id || payload.artifact_type || file.name;
+        setStatus(`Loaded ${rows.length} retained agent events from ${label}.`, "good");
+      } catch (error) {
+        setStatus(error.message, "bad");
+      }
+    }
+
+    function extractAgentEventRows(payload) {
+      const candidate = findAgentEventRows(payload);
+      const normalizedRows = candidate.rows.map((row, index) => normalizeAgentEventRow(row, index)).filter(Boolean);
+      if (candidate.history) {
+        validateAgentEventHistoryMetadata(candidate.history, candidate.rows, normalizedRows);
+      }
+      return normalizedRows;
+    }
+
+    function findAgentEventRows(payload) {
+      const envelopes = [
+        payload?.agent_events_response,
+        payload?.agent_events,
+        payload?.agent_event_history,
+        payload
+      ];
+      for (const envelope of envelopes) {
+        if (envelope && Array.isArray(envelope.events)) {
+          return {
+            rows: envelope.events,
+            history: hasAgentHistoryMetadata(envelope) ? envelope : null
+          };
+        }
+      }
+      if (Array.isArray(payload)) {
+        return { rows: payload, history: null };
+      }
+      return { rows: [], history: null };
+    }
+
+    function hasAgentHistoryMetadata(envelope) {
+      return [
+        "count",
+        "total",
+        "next_agent_cursor",
+        "earliest_agent_cursor",
+        "resync_required"
+      ].some((key) => Object.prototype.hasOwnProperty.call(envelope, key));
+    }
+
+    function validateAgentEventHistoryMetadata(history, rawRows, normalizedRows) {
+      if (normalizedRows.length !== rawRows.length) {
+        throw new Error("Agent telemetry history contains invalid event rows.");
+      }
+      if (Number(history.count) !== normalizedRows.length) {
+        throw new Error("Agent telemetry count does not match retained rows.");
+      }
+      const cursors = normalizedRows.map((row) => Number(row.agent_cursor));
+      if (cursors.some((cursor) => !Number.isFinite(cursor) || cursor <= 0)) {
+        throw new Error("Agent telemetry cursors must be positive.");
+      }
+      const ordered = cursors.every((cursor, index) => index === 0 || cursors[index - 1] < cursor);
+      if (!ordered) {
+        throw new Error("Agent telemetry cursors must be unique and ordered.");
+      }
+      const total = Number(history.total);
+      const nextCursor = Number(history.next_agent_cursor);
+      const earliestCursor = Number(history.earliest_agent_cursor);
+      if (![total, nextCursor, earliestCursor].every((value) => Number.isFinite(value) && value >= 0)) {
+        throw new Error("Agent telemetry cursor metadata must be non-negative.");
+      }
+      if (!cursors.length) {
+        if (nextCursor > total || earliestCursor > total) {
+          throw new Error("Agent telemetry empty-history cursors contradict total.");
+        }
+        return;
+      }
+      const firstCursor = cursors[0];
+      const lastCursor = cursors[cursors.length - 1];
+      if (total < lastCursor) {
+        throw new Error("Agent telemetry total cursor predates retained rows.");
+      }
+      if (nextCursor !== lastCursor) {
+        throw new Error("Agent telemetry next cursor does not match retained rows.");
+      }
+      if (earliestCursor > firstCursor) {
+        throw new Error("Agent telemetry earliest cursor is newer than returned rows.");
+      }
+    }
+
+    function normalizeAgentEventRow(row, index) {
+      if (!row) {
+        return null;
+      }
+      if (row.event && row.agent_cursor !== undefined) {
+        return row;
+      }
+      if (row.event_type) {
+        const cursor = row.agent_cursor ?? index + 1;
+        return {
+          event_index: row.event_index ?? index,
+          agent_cursor: cursor,
+          observation_cursor: row.observation_cursor ?? null,
+          epoch_id: row.epoch_id ?? null,
+          event: row
+        };
+      }
+      return null;
+    }
+
+    async function loadSessions() {
+      try {
+        const response = await fetch(endpoint("/ai/sessions"));
+        if (!response.ok) {
+          throw new Error(`Session index request failed with ${response.status}.`);
+        }
+        const payload = await response.json();
+        const sessions = payload.sessions ?? [];
+        els.sessionList.innerHTML = "";
+        if (!sessions.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "No AI sessions";
+          els.sessionList.appendChild(option);
+          setStatus("No AI or Codex sessions are currently observable.", "warn");
+          return;
+        }
+        for (const row of sessions) {
+          const option = document.createElement("option");
+          option.value = row.session_id;
+          const entities = row.controlled_entities ?? [];
+          const entityNames = entities.map((entity) => entity.entity_name).filter(Boolean).join(", ");
+          const turnMarker = row.is_active_turn ? " - active" : "";
+          const claimMarker = (row.takeover_claim_ids ?? []).length ? " - takeover" : "";
+          option.textContent = `${row.name} (${row.player_type}, ${entities.length})${turnMarker}${claimMarker}${entityNames ? `: ${entityNames}` : ""}`;
+          option.dataset.cursor = row.agent_cursor ?? 0;
+          option.dataset.observationCursor = row.observation_cursor ?? "";
+          option.dataset.epochId = row.current_epoch_id ?? "";
+          els.sessionList.appendChild(option);
+        }
+        els.sessionList.value = sessions[0].session_id;
+        selectSessionFromList();
+        setStatus(`Loaded ${sessions.length} observable AI session${sessions.length === 1 ? "" : "s"}.`, "good");
+      } catch (error) {
+        setStatus(error.message, "bad");
+      }
+    }
+
+    function selectSessionFromList() {
+      const selected = els.sessionList.selectedOptions[0];
+      if (!selected || !selected.value) {
+        return;
+      }
+      els.sessionId.value = selected.value;
+      state.events = [];
+      state.cursor = 0;
+      state.selectedCursor = null;
+      state.observationCursor = selected.dataset.observationCursor ? Number(selected.dataset.observationCursor) : state.observationCursor;
+      state.epochId = selected.dataset.epochId || state.epochId;
+      els.detail.textContent = "Select an event.";
+      render();
+    }
+
+    function connect() {
+      try {
+        disconnect(false);
+        const id = requireSession();
+        const url = endpoint(`/ai/sessions/${encodeURIComponent(id)}/agent-events/subscribe?since=${state.cursor}`);
+        const source = new EventSource(url);
+        state.source = source;
+        state.connected = true;
+        setStatus("Connecting to agent telemetry stream...", "warn");
+
+        source.addEventListener("open", () => {
+          setStatus("Connected to agent telemetry stream.", "good");
+        });
+        source.addEventListener("sync", (event) => {
+          applySync(JSON.parse(event.data));
+        });
+        source.addEventListener("agent_event", (event) => {
+          addPayload(JSON.parse(event.data));
+        });
+        source.addEventListener("heartbeat", (event) => {
+          applySync(JSON.parse(event.data));
+        });
+        source.addEventListener("evicted", (event) => {
+          const payload = JSON.parse(event.data);
+          disconnect(false);
+          setStatus(`Stream evicted: ${payload.reason ?? "unknown"}. Replay history to resync.`, "warn");
+        });
+        source.addEventListener("error", () => {
+          if (state.connected) {
+            setStatus("Stream error. The browser may retry automatically; check backend and session id.", "warn");
+          }
+        });
+      } catch (error) {
+        setStatus(error.message, "bad");
+      }
+    }
+
+    function disconnect(showStatus = true) {
+      if (state.source) {
+        state.source.close();
+      }
+      state.source = null;
+      state.connected = false;
+      if (showStatus) {
+        setStatus("Disconnected.");
+      }
+    }
+
+    function clearEvents() {
+      state.events = [];
+      state.cursor = 0;
+      state.observationCursor = null;
+      state.epochId = null;
+      state.selectedCursor = null;
+      els.detail.textContent = "Select an event.";
+      render();
+      setStatus("Cleared local observer state.");
+    }
+
+    function filteredEvents() {
+      const text = els.filter.value.trim().toLowerCase();
+      const level = els.levelFilter.value;
+      return state.events.filter((payload) => {
+        const event = payload.event ?? {};
+        if (level && event.level !== level) {
+          return false;
+        }
+        if (text && !eventSearchText(payload).includes(text)) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function render() {
+      const warnings = state.events.filter((payload) => payload.event?.level === "warning").length;
+      const errors = state.events.filter((payload) => payload.event?.level === "error").length;
+      els.agentCursor.textContent = state.cursor;
+      els.observationCursor.textContent = formatCursor(state.observationCursor);
+      els.epochId.textContent = short(state.epochId);
+      els.eventCount.textContent = state.events.length;
+      els.warningCount.textContent = warnings;
+      els.errorCount.textContent = errors;
+      renderEvents();
+      renderDerivedTelemetry();
+      renderCounts();
+    }
+
+    function renderEvents() {
+      const rows = filteredEvents().slice(-400).reverse();
+      if (!rows.length) {
+        els.eventsBody.innerHTML = '<tr><td colspan="6" class="empty">No matching telemetry.</td></tr>';
+        return;
+      }
+      els.eventsBody.innerHTML = "";
+      for (const payload of rows) {
+        const event = payload.event ?? {};
+        const tr = document.createElement("tr");
+        tr.dataset.selected = payload.agent_cursor === state.selectedCursor ? "true" : "false";
+        tr.innerHTML = `
+          <td>${payload.agent_cursor}</td>
+          <td><span class="pill ${event.level ?? "info"}">${event.level ?? "info"}</span></td>
+          <td>${escapeHtml(event.event_type ?? "n/a")}</td>
+          <td>${escapeHtml(event.source ?? "n/a")}</td>
+          <td>${escapeHtml(short(event.actor_uuid))}</td>
+          <td>${escapeHtml(event.summary ?? "")}</td>
+        `;
+        tr.addEventListener("click", () => {
+          state.selectedCursor = payload.agent_cursor;
+          els.detail.textContent = JSON.stringify(payload, null, 2);
+          renderEvents();
+        });
+        els.eventsBody.appendChild(tr);
+      }
+    }
+
+    function renderCounts() {
+      const counts = new Map();
+      for (const payload of state.events) {
+        const type = payload.event?.event_type ?? "unknown";
+        counts.set(type, (counts.get(type) ?? 0) + 1);
+      }
+      const rows = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      if (!rows.length) {
+        els.typeCounts.innerHTML = '<div class="empty">No counts yet.</div>';
+        return;
+      }
+      els.typeCounts.innerHTML = "";
+      for (const [type, count] of rows) {
+        const div = document.createElement("div");
+        div.className = "count-row";
+        div.innerHTML = `<span>${escapeHtml(type)}</span><strong>${count}</strong>`;
+        els.typeCounts.appendChild(div);
+      }
+    }
+
+    function renderDerivedTelemetry() {
+      const latestDecision = latestEvent((payload) => payload.event?.event_type === "policy.decision_evaluated");
+      const latestCommand = latestEvent((payload) => isCommandEvent(payload));
+      const latestTiming = latestEvent((payload) => payload.event?.event_type === "runtime.command_timing");
+      renderLatestDecision(latestDecision);
+      renderLatestCommand(latestCommand);
+      renderCandidates(latestDecision);
+      renderCommandFlow();
+      renderTimings(latestTiming);
+    }
+
+    function latestEvent(predicate) {
+      for (let index = state.events.length - 1; index >= 0; index -= 1) {
+        if (predicate(state.events[index])) {
+          return state.events[index];
+        }
+      }
+      return null;
+    }
+
+    function isCommandEvent(payload) {
+      const type = payload.event?.event_type ?? "";
+      return (
+        type === "command.submitted"
+        || type.startsWith("command.ack.")
+        || type.startsWith("command.stream_result.")
+        || type === "external_ai.command_result"
+      );
+    }
+
+    function renderLatestDecision(payload) {
+      if (!payload) {
+        els.latestDecision.innerHTML = '<div class="empty">No policy decision yet.</div>';
+        return;
+      }
+      const event = payload.event ?? {};
+      const body = event.payload ?? {};
+      const decision = body.decision ?? body.telemetry?.decision ?? body;
+      const selected = decision.selected ?? body.selected ?? {};
+      const intent = selected.intent ?? body.selected_intent ?? {};
+      const evidence = selected.evidence ?? {};
+      const diagnostics = body.diagnostics ?? body.timing ?? {};
+      els.latestDecision.innerHTML = kvHtml([
+        ["Cursor", payload.agent_cursor],
+        ["Actor", short(event.actor_uuid)],
+        ["Epoch", short(payload.epoch_id ?? event.epoch_id)],
+        ["Goal", selected.goal ?? intent.intent_type ?? intent.type ?? "n/a"],
+        ["Reason", selected.reason ?? body.reason ?? event.summary],
+        ["Row", intent.row_id ?? selected.row_id ?? body.row_id ?? "n/a"],
+        ["Candidates", candidateRowsFromDecision(payload).length || decision.candidates?.length || body.policy_candidate_count || "n/a"],
+        ["Wall ms", formatMaybeNumber(diagnostics.wall_total_ms ?? diagnostics.total_ms)]
+      ]);
+    }
+
+    function renderLatestCommand(payload) {
+      if (!payload) {
+        els.latestCommand.innerHTML = '<div class="empty">No command telemetry yet.</div>';
+        return;
+      }
+      const event = payload.event ?? {};
+      const body = event.payload ?? {};
+      const command = body.selected_command ?? body.command ?? body;
+      const result = body.result ?? body.command_result ?? body;
+      els.latestCommand.innerHTML = kvHtml([
+        ["Cursor", payload.agent_cursor],
+        ["Type", event.event_type ?? "n/a"],
+        ["Status", command.status ?? result.status ?? statusFromEventType(event.event_type) ?? "n/a"],
+        ["Command", command.command_type ?? body.command_type ?? "n/a"],
+        ["Row", command.row_id ?? body.row_id ?? result.row_id ?? "n/a"],
+        ["Target", command.target_name ?? command.target_uuid ?? body.target_uuid ?? "n/a"],
+        ["Routine", command.routine_id ?? body.routine_id ?? "n/a"],
+        ["Reason", command.reason ?? body.reason ?? event.summary]
+      ]);
+    }
+
+    function renderCandidates(payload) {
+      const rows = candidateRowsFromDecision(payload).slice(0, 12);
+      if (!rows.length) {
+        els.candidates.innerHTML = '<div class="empty">No candidate rows yet.</div>';
+        return;
+      }
+      els.candidates.innerHTML = `
+        <table>
+          <thead><tr><th>#</th><th>Goal</th><th>Row</th><th>Score</th><th>Reason</th></tr></thead>
+          <tbody>
+            ${rows.map((row, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(row.goal ?? "n/a")}</td>
+                <td>${escapeHtml(short(row.row_id ?? row.intent?.row_id))}</td>
+                <td>${escapeHtml(formatMaybeNumber(row.score ?? row.utility ?? row.rank_score))}</td>
+                <td>${escapeHtml(row.reason ?? "")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderCommandFlow() {
+      const rows = state.events.filter(isCommandEvent).slice(-14).reverse();
+      if (!rows.length) {
+        els.commandFlow.innerHTML = '<div class="empty">No command events yet.</div>';
+        return;
+      }
+      els.commandFlow.innerHTML = `
+        <table>
+          <thead><tr><th>Cursor</th><th>Type</th><th>Status</th><th>Row</th></tr></thead>
+          <tbody>
+            ${rows.map((payload) => {
+              const event = payload.event ?? {};
+              const body = event.payload ?? {};
+              const command = body.selected_command ?? body.command ?? body;
+              return `
+                <tr>
+                  <td>${payload.agent_cursor}</td>
+                  <td>${escapeHtml(event.event_type ?? "n/a")}</td>
+                  <td>${escapeHtml(command.status ?? body.status ?? statusFromEventType(event.event_type) ?? "n/a")}</td>
+                  <td>${escapeHtml(short(command.row_id ?? body.row_id ?? body.command_result?.row_id))}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderTimings(payload) {
+      if (!payload) {
+        els.timings.innerHTML = '<div class="empty">No timing telemetry yet.</div>';
+        return;
+      }
+      const body = payload.event?.payload ?? {};
+      els.timings.innerHTML = kvHtml([
+        ["Cursor", payload.agent_cursor],
+        ["Status", body.status ?? "n/a"],
+        ["Total", formatMaybeNumber(body.total_ms)],
+        ["Submit", formatMaybeNumber(body.submit_ms ?? body.command_submit_ms)],
+        ["SSE wait", formatMaybeNumber(body.sse_wait_ms)],
+        ["Frames", formatMaybeNumber(body.frame_apply_ms ?? body.apply_frames_ms)],
+        ["Resync", formatMaybeNumber(body.resync_ms)]
+      ]);
+    }
+
+    function candidateRowsFromDecision(payload) {
+      if (!payload) {
+        return [];
+      }
+      const body = payload.event?.payload ?? {};
+      const decision = body.decision ?? body.telemetry?.decision ?? body;
+      const candidates = decision.candidates ?? body.candidates ?? body.ranked_candidates ?? [];
+      if (!Array.isArray(candidates)) {
+        return [];
+      }
+      return candidates.map((candidate) => {
+        const intent = candidate.intent ?? {};
+        return {
+          ...candidate,
+          row_id: candidate.row_id ?? intent.row_id,
+          goal: candidate.goal ?? intent.intent_type ?? intent.type
+        };
+      });
+    }
+
+    function kvHtml(rows) {
+      return rows.map(([label, value]) => `
+        <div class="kv-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "n/a")}</strong></div>
+      `).join("");
+    }
+
+    function statusFromEventType(type) {
+      if (!type || !type.startsWith("command.")) {
+        return null;
+      }
+      const parts = type.split(".");
+      return parts.length >= 3 ? parts[2] : null;
+    }
+
+    function formatMaybeNumber(value) {
+      if (value === null || value === undefined || value === "") {
+        return "n/a";
+      }
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return String(value);
+      }
+      return Math.abs(numeric) >= 100 ? numeric.toFixed(1) : numeric.toFixed(3).replace(/\.?0+$/, "");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    els.loadSessions.addEventListener("click", loadSessions);
+    els.sessionList.addEventListener("change", selectSessionFromList);
+    els.loadHistory.addEventListener("click", loadHistory);
+    els.artifactFile.addEventListener("change", (event) => loadArtifactFile(event.target.files?.[0]));
+    els.connect.addEventListener("click", connect);
+    els.disconnect.addEventListener("click", () => disconnect(true));
+    els.clear.addEventListener("click", clearEvents);
+    els.filter.addEventListener("input", renderEvents);
+    els.levelFilter.addEventListener("change", renderEvents);
+
+    render();
+  </script>
+</body>
+</html>

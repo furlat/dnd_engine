@@ -7,6 +7,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Hidden, Invisible
+from dnd.actions_functional import execute_by_index
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
@@ -20,6 +21,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
+from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
 
 
 def reset_perception_tutorial_state(
@@ -84,6 +86,106 @@ def completed_sensory_updates(observer) -> list[SensoryUpdateEvent]:
         and event.phase == EventPhase.COMPLETION
         and event.observer_uuid == observer.uuid
     ]
+
+
+def test_sensory_delta_is_one_completed_observational_event() -> None:
+    """A sensory delta retains causality without empty mutable phases."""
+    reset_perception_tutorial_state(width=6, height=1, default_light=LightLevel.DARKNESS)
+    observer = create_perception_actor("Observer", position=(0, 0), faction="heroes")
+    create_perception_actor("Target", position=(3, 0), faction="monsters")
+    observer.update_entity_senses(max_distance=5)
+    source_cursor = EventQueue.event_cursor()
+
+    get_map().add_light_source((3, 0), bright_radius_feet=5, dim_radius_feet=0)
+    sensory_events = [
+        event
+        for _, event in EventQueue.iter_events_since(source_cursor)
+        if isinstance(event, SensoryUpdateEvent)
+    ]
+
+    assert sensory_events
+    assert {event.phase for event in sensory_events} == {EventPhase.COMPLETION}
+    assert len(sensory_events) == len({event.lineage_uuid for event in sensory_events})
+    assert all(event.parent_lineage is not None for event in sensory_events)
+    observer_update = next(
+        event for event in sensory_events if event.observer_uuid == observer.uuid
+    )
+    assert observer_update.observer_position == observer.position
+    assert observer_update.effective_light_levels == (
+        observer.senses.get_effective_light_levels(observer.uuid)
+    )
+
+
+def test_light_change_emits_subjective_levels_without_visibility_membership_delta() -> None:
+    """A brighter visible tile still reaches clients when FOV membership is stable."""
+    reset_perception_tutorial_state(width=5, height=1, default_light=LightLevel.DIM_LIGHT)
+    observer = create_perception_actor("Observer", position=(0, 0), faction="heroes")
+    observer.update_entity_senses(max_distance=5)
+    visible_before = set(observer.senses.visible)
+    source_cursor = EventQueue.event_cursor()
+
+    get_map().add_light_source((2, 0), bright_radius_feet=5, dim_radius_feet=0)
+
+    updates = [
+        event
+        for _, event in EventQueue.iter_events_since(source_cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+    ]
+    assert set(observer.senses.visible) == visible_before
+    assert updates
+    assert updates[-1].visible_cells_added == []
+    assert updates[-1].visible_cells_removed == []
+    assert updates[-1].effective_light_levels == (
+        observer.senses.get_effective_light_levels(observer.uuid)
+    )
+
+
+def test_movement_end_preserves_contacts_revealed_by_carried_light() -> None:
+    """A movement-end refresh does not reuse visibility from before light moved."""
+    arena = create_ai_validation_arena("standard_skeleton_doors")
+    observer = arena.hero
+    updates_before = len(completed_sensory_updates(observer))
+    actions = observer.get_available_actions()
+    movement = next(
+        action
+        for action in actions.position_actions
+        if action.template_name == "Move"
+    )
+    destination = next(
+        target
+        for target in movement.valid_targets
+        if target.position == (7, 12)
+    )
+
+    result = execute_by_index(
+        observer,
+        movement.template_name,
+        destination.index,
+        available=actions,
+    )
+    movement_updates = completed_sensory_updates(observer)[updates_before:]
+    added_contacts = {
+        entity_uuid
+        for update in movement_updates
+        for entity_uuid in update.visible_entities_added
+    }
+    removed_contacts = {
+        entity_uuid
+        for update in movement_updates
+        for entity_uuid in update.visible_entities_removed
+    }
+    expected_visible = {entity.uuid for entity in arena.monsters[1:]}
+    warm_entities = dict(observer.senses.entities)
+    observer.update_entity_senses(max_distance=20)
+    cold_entities = dict(observer.senses.entities)
+
+    assert result is not None
+    assert not result.canceled
+    assert expected_visible <= added_contacts
+    assert expected_visible <= set(warm_entities)
+    assert not expected_visible & removed_contacts
+    assert warm_entities == cold_entities
 
 
 def test_first_perception_example_prints_visible_observer_knowledge(capsys) -> None:
@@ -190,6 +292,29 @@ def test_senses_subscribe_to_geometric_fov_before_light_filtering(capsys) -> Non
     ]
     assert geometry_lines == expected_geometry_lines
     assert capsys.readouterr().out.splitlines() == expected_geometry_lines
+
+
+def test_shadowcast_memoizes_blocking_checks_within_one_fov_query(monkeypatch) -> None:
+    """One FOV query resolves each observer-specific blocking cell once."""
+    reset_perception_tutorial_state(width=20, height=20)
+    grid = get_map()
+    original_is_blocking = grid.is_blocking
+    checked_positions: list[tuple[int, int]] = []
+
+    def record_is_blocking(x: int, y: int, requesting_entity_uuid=None) -> bool:
+        checked_positions.append((x, y))
+        return original_is_blocking(x, y, requesting_entity_uuid)
+
+    monkeypatch.setattr(grid, "is_blocking", record_is_blocking)
+
+    visible = grid.compute_fov((10, 10), max_distance=8)
+
+    assert visible
+    assert len(checked_positions) == len(set(checked_positions))
+    assert all(
+        max(abs(x - 10), abs(y - 10)) <= 8
+        for x, y in checked_positions
+    )
 
 
 def test_special_senses_change_subjective_light(capsys) -> None:
@@ -329,7 +454,7 @@ def test_light_changes_reveal_subscribed_cells_reactively(capsys) -> None:
     expected_reactive_lines = [
         "before light: target_visible=False, cell_visible=False, cell_seen=False",
         "after light: target_visible=True, cell_visible=True, cell_seen=True",
-        "light updates: count=2, added_cell=True, added_target=True",
+        "light updates: count=1, added_cell=True, added_target=True",
     ]
     assert reactive_lines == expected_reactive_lines
     assert capsys.readouterr().out.splitlines() == expected_reactive_lines

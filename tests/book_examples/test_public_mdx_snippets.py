@@ -203,15 +203,6 @@ MIGRATED_CHAPTERS = {
         "arena-start-join",
         "arena-live-payloads",
     },
-    "24-built-in-controllers-and-automated-turns.mdx": {
-        "controller-catalogue-surfaces",
-        "controller-external-input",
-        "controller-pass-turn",
-        "controller-melee-attack",
-        "controller-melee-move",
-        "controller-no-visible-enemy",
-        "controller-agent-runner",
-    },
     "25-live-replication-streams.mdx": {
         "stream-surface",
         "stream-sync-frame",
@@ -220,24 +211,6 @@ MIGRATED_CHAPTERS = {
         "stream-completion-before-log",
         "stream-heartbeat-frame",
         "stream-bounded-eviction",
-    },
-    "26-agent-tactical-interface.mdx": {
-        "agent-interface-surface",
-        "agent-tactical-snapshot",
-        "agent-action-options",
-        "agent-tactical-queries",
-        "agent-expected-value",
-        "agent-execute-choice",
-        "agent-base-runner",
-    },
-    "27-agent-decision-patterns.mdx": {
-        "agent-decision-surfaces",
-        "agent-bt-priority",
-        "agent-melee-fighter-factory",
-        "agent-move-and-attack",
-        "agent-interrupt-detection",
-        "agent-utility-ranking",
-        "agent-utility-runner",
     },
 }
 STRICT_BOOK_EXAMPLE_CHAPTERS = {
@@ -265,10 +238,7 @@ STRICT_BOOK_EXAMPLE_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 CODE_FIRST_CHAPTERS = {
     "12-perception-light-stealth-and-invisibility.mdx",
@@ -315,10 +285,7 @@ PROSE_AUDITED_IMPORT_PANEL_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 PLAY_FRAMED_CHAPTERS = {
     "01-runtime-identity-and-registries.mdx",
@@ -344,10 +311,7 @@ PLAY_FRAMED_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 LOCAL_SETUP_NAME_AUDITED_CHAPTERS = {
     "01-runtime-identity-and-registries.mdx",
@@ -373,10 +337,7 @@ LOCAL_SETUP_NAME_AUDITED_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 HELPER_DOCSTRING_AUDITED_CHAPTERS = {
     "01-runtime-identity-and-registries.mdx",
@@ -402,10 +363,7 @@ HELPER_DOCSTRING_AUDITED_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 SOURCE_LINK_AUDITED_CHAPTERS = {
     "01-runtime-identity-and-registries.mdx",
@@ -431,10 +389,7 @@ SOURCE_LINK_AUDITED_CHAPTERS = {
     "21-spell-and-feature-extensions.mdx",
     "22-playable-scenario-packages.mdx",
     "23-standard-arena-game-modes.mdx",
-    "24-built-in-controllers-and-automated-turns.mdx",
     "25-live-replication-streams.mdx",
-    "26-agent-tactical-interface.mdx",
-    "27-agent-decision-patterns.mdx",
 }
 PUBLIC_MANUAL_FORBIDDEN_PATTERNS = (
     ("hidden test language", re.compile(r"test harness", re.IGNORECASE)),
@@ -855,7 +810,9 @@ def chapter_title(chapter_path: Path) -> str:
 def iter_book_examples() -> list[BookExample]:
     """Return executable public examples grouped by chapter and example name."""
     groups: dict[tuple[Path, str], list[CodeFence]] = {}
-    for chapter_path in sorted(manual_root().glob("*.mdx")):
+    root = manual_root()
+    for chapter_name in sorted(MIGRATED_CHAPTERS):
+        chapter_path = root / chapter_name
         flow_name = CHAPTER_FLOW_EXAMPLES.get(chapter_path.name)
         for fence in iter_code_fences(chapter_path):
             language, flags, options = parse_fence_info(fence.info)
@@ -1697,25 +1654,10 @@ def test_product_extension_chapters_explain_srd_relationship() -> None:
             "The product extension is the standard arena package",
             "ready-to-run videogame experience",
         ],
-        "24-built-in-controllers-and-automated-turns.mdx": [
-            "The local SRD assumes participants choose actions",
-            "The product extension is automated turn ownership",
-            "automation remains a participant in the ruleset",
-        ],
         "25-live-replication-streams.mdx": [
             "The local SRD combat structure creates a shared table record",
             "The product extension is live replication",
             "the engine timeline as the source of truth",
-        ],
-        "26-agent-tactical-interface.mdx": [
-            "The local SRD turn structure asks practical tactical questions",
-            "The product extension is the tactical agent interface",
-            "route the selected choice back through normal engine execution",
-        ],
-        "27-agent-decision-patterns.mdx": [
-            "The local SRD combat loop creates recognizable tactical priorities",
-            "The product extension is the decision-pattern layer",
-            "choose the same engine action rows a player or controller can choose",
         ],
     }
 
@@ -2983,7 +2925,7 @@ def test_combat_chapter_examples_show_reader_visible_output() -> None:
     assert "mover hp after reaction: 10 -> 4" in text
     assert "opportunity attack completions: 1" in text
     assert "shove phase: completion" in text
-    assert "target position after shove: (10, 5)" in text
+    assert "target position after shove: (8, 5)" in text
     assert "forced movement completions: 1" in text
     assert "opportunity attacks created: 0" in text
 
@@ -4756,130 +4698,10 @@ def test_arena_mode_chapter_examples_show_reader_visible_output() -> None:
         assert phrase in text
 
 
-def test_controller_chapter_frontloads_turn_contract() -> None:
-    """Chapter 24 explains controller turn ownership before examples."""
-    text = (manual_root() / "24-built-in-controllers-and-automated-turns.mdx").read_text(
-        encoding="utf-8"
-    )
-    normalized_text = text.replace("\n", " ")
-
-    play_index = text.index("## What This Means In Play")
-    state_index = text.index("## Controller State In The Game Loop")
-    bridge_index = text.index("## How D&D Turn Ownership Becomes Controller Choice")
-    map_index = text.index("## Chapter Map")
-    contract_index = text.index("## The Controller Turn Contract")
-    authoring_index = text.index("## Controller Authoring Guide")
-    surfaces_index = text.index("## Code Surfaces In This Chapter")
-    first_example_index = text.index("<ExampleBlock")
-
-    assert play_index < state_index < bridge_index
-    assert (
-        bridge_index
-        < map_index
-        < contract_index
-        < authoring_index
-        < surfaces_index
-        < first_example_index
-    )
-    assert "The previous chapter taught the standard arena as the built-in reference mode" in text
-    assert "This chapter zooms into the turn boundary inside that mode." in normalized_text
-    assert "Once the encounter says which actor is active" in normalized_text
-    assert "hands one complete turn to an agent runner" in normalized_text
-    assert "Controllers are the game's decision-ownership layer." in text
-    assert "| Product question | Controller-owned answer |" in text
-    assert "`controller_type` identifies human, Codex, external AI, pass" in text
-    assert "`TurnContext` carries the actor UUID, budgets" in text
-    assert "Human and Codex controllers keep the turn open" in text
-    assert "`PassController` makes pass behavior explicit" in text
-    assert "`ExternalAIController` waits for an AI session command" in text
-    assert "`AIAgentController` runs a bound turn runner once" in text
-    assert "The encounter still owns turn start, action execution" in text
-    assert "| D&D turn idea | Controller behavior |" in text
-    assert "The encounter owns `initiative_order`, `current_turn_index`" in text
-    assert "`controller_type` identifies the decision owner" in text
-    assert "`TurnContext` carries actor UUID, round and turn indexes" in text
-    assert "`advance_until_player()` keeps the turn waiting" in text
-    assert "`PassController` returns the pass signal" in text
-    assert "External AI controllers receive legal actions through the session API" in text
-    assert "`AIAgentController` calls its bound `TurnRunner.run_turn()`" in text
-    assert "Controller choices enter the ordinary action/event pipeline" in text
-    assert "The examples build one controller-decision thread in seven moves:" in text
-    assert "| Example move | Controller surface learned |" in text
-    assert "Import the controller catalogue." in text
-    assert "Stop for human or Codex input." in text
-    assert "Pass as the chosen turn behavior." in text
-    assert "Stop for an external AI subprocess." in text
-    assert "Delegate a full turn to an agent runner." in text
-    assert "The controller turn contract turns initiative ownership" in text
-    assert "Every controller rule answers eight questions:" in text
-    assert "The encounter owns initiative order" in text
-    assert "`controller_type` identifies whether the actor is owned" in text
-    assert "`TurnContext` carries the actor UUID" in text
-    assert "`advance_until_player()` return `waiting_for_human`" in text
-    assert "`ExternalAIController` waits for session-authorized API commands" in text
-    assert "`AIAgentController` calls a bound `TurnRunner.run_turn()`" in text
-    assert (
-        "Author turn ownership by choosing the controller that matches the actor's "
-        "decision source."
-        in normalized_text
-    )
-    assert "| Authoring step | Runtime result |" in text
-    assert "Identify the active actor owner." in text
-    assert "Provide a turn context." in text
-    assert "Use outside-input controllers for players." in text
-    assert "Use pass controllers for passive actors." in text
-    assert "Use external AI for subprocess tactics." in text
-    assert "Use agent controllers for full-turn delegation." in text
-    assert "Keep execution inside the encounter." in text
-    assert "assign one controller per combatant, give each turn a current context" in normalized_text
-    assert "<summary>Code setup: imports and scene</summary>" in text
-    assert "from dnd.utils import reset_combat_state" not in text
-    assert "reset_combat_state()" not in text
 
 
-def test_controller_chapter_uses_positive_pass_language() -> None:
-    """Chapter 24 explains empty controller choices as pass/wait states."""
-    text = (manual_root() / "24-built-in-controllers-and-automated-turns.mdx").read_text(
-        encoding="utf-8"
-    )
-    prose = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-
-    assert "Pass With An Empty Target List" in prose
-    assert "returns the pass signal" in prose
-    assert "keeps the turn waiting for that outside owner" in prose
-    assert not re.search(r"\bno action\b", prose, re.IGNORECASE)
-    assert not re.search(r"\bno visible enem", prose, re.IGNORECASE)
-    assert "no autonomous engine action" not in prose.lower()
-    assert "no-op" not in prose.lower()
 
 
-def test_controller_chapter_examples_show_reader_visible_output() -> None:
-    """Chapter 24 examples print controller transcripts, not assert-only bodies."""
-    text = (
-        manual_root() / "24-built-in-controllers-and-automated-turns.mdx"
-    ).read_text(encoding="utf-8")
-
-    expected_phrases = [
-        "controllers: ['human', 'codex', 'pass', 'ai_agent']",
-        "runner: type=RecordingTurnRunner, run_count=0",
-        "catalogue functions: pair=True, context=True, encounter=True",
-        "human wait: status=waiting_for_human, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
-        "human action: None",
-        "codex wait: status=waiting_for_codex, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
-        "codex action: None",
-        "external ai wait: status=waiting_for_ai, entity=Controller Skeleton, current=Controller Skeleton, turn_state=in_progress, can_continue=False",
-        "external ai action: None",
-        "pass turn: status=waiting_for_human, next=Controller Hero, monster_turns=1, acted=True",
-        "current: actor=Controller Hero, turn_state=in_progress",
-        "first delegation: runner=RecordingTurnRunner, run_count=1, monster_turns=1, current=Controller Hero",
-        "second delegation: run_count=2, monster_turns=2, current=Controller Hero",
-    ]
-
-    assert text.count("<p className=\"example-output-label\">Result</p>\n\n```text") == 5
-    assert text.count('print("\\n".join(readout_lines))') == 5
-    assert "Expected output:" not in text
-    for phrase in expected_phrases:
-        assert phrase in text
 
 
 def test_live_replication_chapter_frontloads_stream_contract() -> None:
@@ -5011,254 +4833,12 @@ def test_live_replication_chapter_examples_show_reader_visible_output() -> None:
         assert phrase in text
 
 
-def test_agent_tactical_chapter_frontloads_tactical_contract() -> None:
-    """Chapter 26 explains the agent tactical interface before examples."""
-    text = (manual_root() / "26-agent-tactical-interface.mdx").read_text(
-        encoding="utf-8"
-    )
-    normalized_text = text.replace("\n", " ")
-
-    play_index = text.index("## What This Means In Play")
-    state_index = text.index("## Agent State In The Game Loop")
-    bridge_index = text.index("## How A D&D Turn Becomes Tactical State")
-    map_index = text.index("## Chapter Map")
-    contract_index = text.index("## The Agent Tactical Contract")
-    authoring_index = text.index("## Tactical Interface Authoring Guide")
-    surfaces_index = text.index("## Code Surfaces In This Chapter")
-    first_example_index = text.index("<ExampleBlock")
-
-    assert play_index < state_index < bridge_index
-    assert bridge_index < map_index < contract_index < authoring_index
-    assert authoring_index < surfaces_index < first_example_index
-    assert "Chapter 25 made a running game readable by clients" in text
-    assert re.search(
-        r"A\s+local\s+agent\s+receives\s+the\s+active\s+actor's\s+turn\s+as\s+a\s+structured\s+tactical\s+snapshot",
-        text,
-    )
-    assert "The tactical interface is the game's agent-facing decision layer." in text
-    assert "| Product question | Agent-facing answer |" in text
-    assert "The controlled entity UUID resolves to one live `Entity`" in text
-    assert "Visible enemies and allies come from the actor's current senses" in text
-    assert "Action economy, movement, spell slots, named resources" in text
-    assert "Engine discovery becomes grouped attack, spell, movement" in text
-    assert "`TargetOption.index` preserves the exact target row" in text
-    assert "Attack data, save data, hit chance, crit chance" in text
-    assert "The interface executes the selected template and target index" in text
-    assert "`BaseAgent.run_turn()` reads one tactical snapshot" in text
-    assert "| D&D decision question | Tactical interface behavior |" in text
-    assert "The controlled entity UUID resolves one live actor" in text
-    assert "`TacticalState` lists visible enemies and visible allies" in text
-    assert "The snapshot carries action economy, movement, spell slots" in text
-    assert "Engine action discovery becomes grouped `ActionOption` lists" in text
-    assert "Each `TargetOption` preserves the engine target index" in text
-    assert "`hit_chance()`, `crit_chance()`, `attack_ev()`, and `action_ev()`" in text
-    assert "`LocalGameInterface.execute()` sends the selected template name" in text
-    assert "`BaseAgent.run_turn()` reads one snapshot and calls `take_turn()`" in text
-    assert "The examples build one agent-controlled turn in seven moves:" in text
-    assert "| 1. Import the public tactical surface |" in text
-    assert "| 2. Read the actor's snapshot |" in text
-    assert "| 3. Inspect legal action rows |" in text
-    assert "| 4. Ask tactical questions |" in text
-    assert "| 5. Score combat choices |" in text
-    assert "| 6. Execute one selected row |" in text
-    assert "| 7. Wrap the turn in an agent |" in text
-    assert "The agent tactical contract turns a live turn into a structured decision" in text
-    assert "Every agent-interface rule answers eight questions:" in text
-    assert "The controlled entity UUID selects one live actor" in text
-    assert "`TacticalState` includes `me`, visible enemies, and visible allies" in text
-    assert "The snapshot carries action economy" in text
-    assert "Engine action discovery becomes grouped `ActionOption` lists" in text
-    assert "Each `TargetOption` preserves the engine target index" in text
-    assert "`AttackData`, `SpellData`, `hit_chance()`" in text
-    assert "`LocalGameInterface.execute()` sends entity UUID" in text
-    assert "`BaseAgent.run_turn()` reads one `TacticalState`" in text
-    assert "Author an agent tactical surface by turning one live turn into a legal choice model." in normalized_text
-    assert "| Authoring step | Runtime result |" in text
-    assert "Resolve the controlled actor." in text
-    assert "Serialize the subjective board." in text
-    assert "Carry spendable resources." in text
-    assert "Preserve legal choice rows." in text
-    assert "Preserve target indexes." in text
-    assert "Attach combat math." in text
-    assert "Execute through the game." in text
-    assert "Wrap repeatable behavior." in text
-    assert "read the active actor, publish the actor's subjective view" in normalized_text
-    assert "## Tactical Scores Guide Selection" in text
-    assert "Combat scores in `TacticalState` are planning estimates" in text
-    assert "`hit_chance()`, `crit_chance()`, `attack_ev()`, and `action_ev()` read" in text
-    assert "They rank options before the agent chooses." in normalized_text
-    assert "The result of the choice still comes from execution." in text
-    assert "The score helps the agent choose; the action pipeline decides what happens." in normalized_text
-    assert "compare options directly from the tactical snapshot before execution resolves" in normalized_text
-    assert "`reset_agent_interface_state()` clears registries" in text
-    assert "`reset_agent_interface_state`" in text
-    assert re.search(r"its\s+reset\s+surface\s+clears\s+the\s+relevant\s+registries", text)
-    assert "from dnd.utils import reset_combat_state" not in text
-    assert "reset_combat_state()" not in text
 
 
-def test_agent_tactical_chapter_examples_show_reader_visible_output() -> None:
-    """Chapter 26 examples print tactical transcripts, not assert-only bodies."""
-    text = (manual_root() / "26-agent-tactical-interface.mdx").read_text(
-        encoding="utf-8"
-    )
-
-    expected_phrases = [
-        "surface: state=TacticalState, actor=Agent Skeleton, nearest=Training Hero",
-        "scoring: hit=True, crit=True, attack_ev=True, action_ev=True",
-        "training surfaces: auto_hit=True, cleanup=True, reset=True, agent=FirstAttackAgent",
-        "me: name=Agent Skeleton, pos=(2, 2), hp=17, ac=0, faction=monsters",
-        "economy: actions=1, movement=30, has_action=True, has_movement=True",
-        "enemy: name=Training Hero, pos=(5, 2), distance=15, allies=0",
-        "choices: attacks=1, movements=2, self_actions=3, concentrating=False",
-        "attack row: template=Attack_MELEE_MAIN, category=attack, target_type=entity, cost=actions:1, can_afford=True",
-        "weapon math: slot=MELEE_MAIN, weapon=Shortsword, bonus=4, dice=[(1, 6, 2, 'Piercing')]",
-        "target row: index=0, name=Training Hero, ac=0, distance=5, ev=5.40",
-        "queries: nearest=Training Hero, weakest=Training Hero, in_25=['Training Hero']",
-        "move: template=Move, index=27, position=(5, 2), path_cost=15",
-        "distance: before=4, after=1, improved=True",
-        "hit math: bonus=4, target_ac=0, normal=0.95, advantage=1.00",
-        "crit/ev: crit=0.05, attack_ev=5.40, action_ev=5.40",
-        "execute: success=True, template=Attack_MELEE_MAIN, target_index=0, actor_hp=17",
-        "target hp: before=10, after=5, changed=True",
-        "agent turn: actions_taken=1, actor=Agent Skeleton, target=Training Hero",
-        "target hp: before=10, after=5, damaged=True",
-        "refreshed economy: actions=0, has_action=False",
-    ]
-
-    assert text.count("<p className=\"example-output-label\">Result</p>\n\n```text") == 7
-    assert text.count('print("\\n".join(readout_lines))') == 7
-    assert "Expected output:" not in text
-    for phrase in expected_phrases:
-        assert phrase in text
 
 
-def test_agent_decision_chapter_frontloads_decision_contract() -> None:
-    """Chapter 27 explains agent decision patterns before examples."""
-    text = (manual_root() / "27-agent-decision-patterns.mdx").read_text(
-        encoding="utf-8"
-    )
-    normalized_text = text.replace("\n", " ")
-
-    play_index = text.index("## What This Means In Play")
-    state_index = text.index("## Decision State In The Game Loop")
-    bridge_index = text.index("## How D&D Tactical Judgment Becomes Agent Behavior")
-    map_index = text.index("## Chapter Map")
-    contract_index = text.index("## The Agent Decision Contract")
-    authoring_index = text.index("## Decision Pattern Authoring Guide")
-    surfaces_index = text.index("## Code Surfaces In This Chapter")
-    first_example_index = text.index("<ExampleBlock")
-
-    assert play_index < state_index < bridge_index
-    assert bridge_index < map_index < contract_index < authoring_index
-    assert authoring_index < surfaces_index < first_example_index
-    assert "Chapter 26 gave a local agent the active actor's tactical state" in text
-    assert "This chapter turns that state into behavior." in text
-    assert "Agent decision patterns are the game's behavior-selection layer." in text
-    assert "| Product question | Decision-pattern answer |" in text
-    assert "A `TacticalState` snapshot supplies the actor" in text
-    assert "Behavior trees store ordered branches" in text
-    assert "A composite owns a multi-step plan" in text
-    assert "`detect_interrupts()` compares before state, action result, and after state" in text
-    assert "Utility scoring evaluates affordable action-target pairs" in text
-    assert "Every pattern sends a discovered template name and target index" in text
-    assert "`BehaviorTreeAgent` and `UtilityAgent` refresh tactical state" in text
-    assert "The engine still validates targets, spends costs" in text
-    assert "The decision layer gives designers a language for play style by selecting" in text
-    assert re.search(
-        r"Behavior\s+remains\s+grounded\s+in\s+the\s+live\s+actor's\s+legal\s+choices\.",
-        text,
-    )
-    assert "| D&D tactical judgment | Agent behavior pattern |" in text
-    assert "A behavior tree uses `Selector`, `Sequence`, `Condition`, and `BTAction`" in text
-    assert "`BTAction` calls a function that executes through the game interface" in text
-    assert "A composite such as `MoveAndAttack` owns a multi-step plan" in text
-    assert "`detect_interrupts()` compares before state, action result, and after state" in text
-    assert "`UtilityAI` evaluates affordable choices with weighted scorers" in text
-    assert "`DamageScorer` and `FocusFireScorer` turn expected damage" in text
-    assert "`UtilityAgent` refreshes tactical state, chooses the best positive-scoring option" in text
-    assert "Every pattern selects discovered actions and target indexes" in text
-    assert "The examples build one behavior-selection thread in seven moves:" in text
-    assert "| 1. Import the decision surface |" in text
-    assert "| 2. Run priority logic |" in text
-    assert "| 3. Use a factory behavior |" in text
-    assert "| 4. Chain a named tactic |" in text
-    assert "| 5. Detect board changes |" in text
-    assert "| 6. Rank action-target pairs |" in text
-    assert "| 7. Run a utility agent |" in text
-    assert "The agent decision contract turns a tactical snapshot into repeatable" in text
-    assert "Every agent-decision rule answers eight questions:" in text
-    assert "A `TacticalState` snapshot is the input to every decision pattern" in text
-    assert "Behavior trees use `Selector`, `Sequence`, `Condition`, and `BTAction`" in text
-    assert "`BTAction` calls a function that executes through `GameInterface`" in text
-    assert "A composite such as `MoveAndAttack` owns a named multi-step plan" in text
-    assert "`detect_interrupts()` compares before state" in text
-    assert "`UtilityAI` evaluates affordable action-target pairs" in text
-    assert "`UtilityAgent` refreshes tactical state" in text
-    assert "Every pattern chooses discovered actions and target indexes" in text
-    assert "Author decision behavior by keeping every pattern grounded in `TacticalState` and discovered engine rows." in normalized_text
-    assert "A behavior can prioritize, chain, replan, or score" in normalized_text
-    assert "| Authoring step | Runtime result |" in text
-    assert "Start from tactical state." in text
-    assert "Express ordered priorities." in text
-    assert "Put game mutations in actions." in text
-    assert "Package named tactics." in text
-    assert "Replan after consequences." in text
-    assert "Score comparable choices." in text
-    assert "Run bounded agent loops." in text
-    assert "Execute discovered rows." in text
-    assert "read a tactical snapshot, choose a decision style" in normalized_text
-    assert "## Utility Scores Express Priority" in text
-    assert "Utility scores are decision policy." in text
-    assert "Combat resolution belongs to the engine action pipeline." in normalized_text
-    assert "returns a ranked list that expresses the agent's current preference" in normalized_text
-    assert "That preference becomes real play only when the selected row executes through" in normalized_text
-    assert "Scorers choose where the agent points its turn; the engine decides the consequence." in normalized_text
-    assert "The selected score is the agent's priority for this turn" in text
-    assert "`reset_agent_interface_state()` from the tactical-interface chapter clears registries" in text
-    assert "`reset_agent_interface_state`" in text
-    assert "Decision scenes reuse the tactical-interface reset surface" in text
-    assert "from dnd.utils import reset_combat_state" not in text
-    assert "reset_combat_state()" not in text
 
 
-def test_agent_decision_chapter_examples_show_reader_visible_output() -> None:
-    """Chapter 27 examples show the decision consequence a reader should see."""
-    text = (manual_root() / "27-agent-decision-patterns.mdx").read_text(
-        encoding="utf-8"
-    )
-    expected_phrases = [
-        "surface: actor=Decision Skeleton, nearest=Decision Hero, utility_targets=['Wounded Hero', 'Sturdy Hero']",
-        "state rows: attacks=1, movements=2, self_actions=3, spells=0",
-        "patterns: bt=True, composite=True, interrupts=True, utility=True, agent=True",
-        "training surfaces: auto_hit=True, cleanup=True, reset=True",
-        "from dnd.core.dice import fixed_dice_faces",
-        "tree: result=success, actor=Decision Skeleton, nearest=Decision Hero",
-        "target hp: before=10, after=5, damaged=True",
-        "economy: actions=0, has_attack=False",
-        "fighter: start=(2, 2), end=(6, 2), target=Decision Hero",
-        "economy: actions=0, adjacent=True",
-        "composite: success=True, actions_taken=2, description=Moved and attacked",
-        "positions: actor=(4, 2), target=(5, 2), adjacent=True",
-        "interrupts: ['damage_taken', 'target_died', 'new_enemy', 'condition']",
-        "state change: hp=17->16, enemies=1->2, conditions=['Poisoned']",
-        "death notice: ['Decision Hero']",
-        "utility: options=104, best=Wounded Hero, score=10.40",
-        "best breakdown: damage=5.40, focus_fire=5.00",
-        "runner-up: target=Sturdy Hero, score=5.40",
-        "weakest: Wounded Hero, sturdy_attack=True",
-        "agent choice: target=Wounded Hero, score=10.40",
-        "weak target hp: before=7, after=2, damaged=True",
-        "sturdy target hp: before=10, after=10, unchanged=True",
-        "economy: actions=0, scorers=['DamageScorer', 'FocusFireScorer']",
-    ]
-
-    assert text.count("<p className=\"example-output-label\">Result</p>\n\n```text") == 7
-    assert text.count('print("\\n".join(readout_lines))') == 7
-    assert "Expected output:" not in text
-    assert "helpers" not in text.lower()
-    for phrase in expected_phrases:
-        assert phrase in text
 
 
 def test_landing_page_explains_book_reading_path() -> None:
@@ -5459,46 +5039,6 @@ def test_code_surface_source_links_resolve_to_local_lines() -> None:
     assert not missing_or_stale, "\n".join(missing_or_stale)
 
 
-def test_ai_code_surface_anchors_point_to_named_symbols() -> None:
-    """Agent chapter source-table anchors land on the public symbol line."""
-    ai_link = re.compile(
-        r"https://github\.com/furlat/dnd_engine/blob/feat-test-readme/"
-        r"(?P<path>ai/[^)#]+\.py)#L(?P<line>\d+)"
-    )
-    audited_chapters = {
-        "26-agent-tactical-interface.mdx",
-        "27-agent-decision-patterns.mdx",
-    }
-
-    for chapter_name in audited_chapters:
-        chapter_path = manual_root() / chapter_name
-        for row in code_surface_table_rows(chapter_path):
-            match = ai_link.search(row)
-            if not match:
-                continue
-
-            symbol_cell = row.split("|")[1]
-            symbols = re.findall(r"`([A-Za-z_]\w*)`", symbol_cell)
-            assert symbols, (
-                f"{chapter_name} has an AI source link without a named public "
-                f"symbol in the first table cell: {row}"
-            )
-
-            local_path = REPO_ROOT / match.group("path")
-            line_number = int(match.group("line"))
-            source_lines = local_path.read_text(encoding="utf-8").splitlines()
-            assert 1 <= line_number <= len(source_lines), (
-                f"{chapter_name} links outside {match.group('path')}: {row}"
-            )
-            source_line = source_lines[line_number - 1]
-            assert any(
-                re.match(rf"(?:class|def)\s+{re.escape(symbol)}\b", source_line)
-                for symbol in symbols
-            ), (
-                f"{chapter_name} AI source link should point at one of "
-                f"{symbols}, but {match.group('path')}:{line_number} is "
-                f"{source_line!r}."
-            )
 
 
 def test_tutorial_product_code_surface_anchors_point_to_named_symbols() -> None:

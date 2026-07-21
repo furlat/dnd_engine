@@ -3,7 +3,9 @@
 import asyncio
 import inspect
 
-from dnd.core.events import EventPhase, EventQueue
+from dnd.actions import Dodge, Shove, ShoveEvent
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events import EventPhase, EventQueue, ForcedMovementEvent
 from server import live_replication
 from server.event_stream import (
     BoundedSubscription,
@@ -14,6 +16,7 @@ from server.event_stream import (
     format_sse,
     make_stream_id,
 )
+from server.api_models import SessionPingResponse
 from server.live_replication import (
     create_stream_scene,
     drain_subscription,
@@ -60,7 +63,7 @@ def test_live_stream_surface_exposes_payloads_subscriptions_and_scene(capsys) ->
     ]
     expected_lines = [
         "scene: hero=Stream Hero, monster=Stream Skeleton, encounter=Stream Encounter",
-        "stream: id=e=52;l=1, event_cursor=52, combat_log_cursor=1",
+        "stream: id=e=42;l=1, event_cursor=42, combat_log_cursor=1",
         "surfaces: sync=StreamSyncPayload, heartbeat=HeartbeatPayload, subscription=BoundedSubscription, attack=True, parse=True, drain=True",
     ]
 
@@ -75,9 +78,18 @@ def test_sync_frame_reports_the_current_cursor_pair(capsys) -> None:
     scene = create_stream_scene()
 
     sync_payload = StreamSyncPayload(
+        generation_id=str(EventQueue.generation_id()),
         event_cursor=event_stream.current_event_cursor(),
         combat_log_cursor=event_stream.current_combat_log_cursor(scene.encounter),
-        session={"active_entity": scene.hero.name},
+        session=SessionPingResponse(
+            status="ok",
+            session_id="stream-session",
+            connection_status="connected",
+            is_my_turn=True,
+            active_entity_uuid=str(scene.hero.uuid),
+            active_entity_name=scene.hero.name,
+            controlled_entities=[str(scene.hero.uuid)],
+        ),
     )
     stream_id = event_stream.current_stream_id(scene.encounter)
     frame = format_sse("sync", sync_payload, stream_id)
@@ -89,7 +101,8 @@ def test_sync_frame_reports_the_current_cursor_pair(capsys) -> None:
     assert "\nevent: sync\n" in frame
     assert data["event_cursor"] == EventQueue.event_cursor()
     assert data["combat_log_cursor"] == len(scene.encounter.combat_log)
-    assert data["session"]["active_entity"] == scene.hero.name
+    assert data["session"]["active_entity_name"] == scene.hero.name
+    assert data["generation_id"] == str(EventQueue.generation_id())
     assert scene.monster.name == "Stream Skeleton"
 
     readout_lines = [
@@ -103,7 +116,7 @@ def test_sync_frame_reports_the_current_cursor_pair(capsys) -> None:
             "sync data: "
             f"event_cursor={data['event_cursor']}, "
             f"combat_log_cursor={data['combat_log_cursor']}, "
-            f"active_entity={data['session']['active_entity']}"
+            f"active_entity={data['session']['active_entity_name']}"
         ),
         (
             "cursor check: "
@@ -112,9 +125,9 @@ def test_sync_frame_reports_the_current_cursor_pair(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "sync frame: id=e=52;l=1, event=sync, starts_with_id=True",
-        "sync data: event_cursor=52, combat_log_cursor=1, active_entity=Stream Hero",
-        "cursor check: expected=e=52;l=1, monster=Stream Skeleton",
+        "sync frame: id=e=42;l=1, event=sync, starts_with_id=True",
+        "sync data: event_cursor=42, combat_log_cursor=1, active_entity=Stream Hero",
+        "cursor check: expected=e=42;l=1, monster=Stream Skeleton",
     ]
 
     print("\n".join(readout_lines))
@@ -161,7 +174,7 @@ def test_live_stream_reset_owns_the_stream_runtime_state(capsys) -> None:
     ]
     expected_lines = [
         "reset source: reset_combat_state=False, required=7/7",
-        "post reset: event_cursor=52, queue_cursor=52, log_cursor=1, logs=1",
+        "post reset: event_cursor=42, queue_cursor=42, log_cursor=1, logs=1",
     ]
 
     print("\n".join(readout_lines))
@@ -215,9 +228,9 @@ def test_cursor_replay_returns_events_and_logs_after_saved_cursors(capsys) -> No
         ),
     ]
     expected_lines = [
-        "saved cursors: event=52, log=1",
-        "replay: game_events=26, combat_logs=1, completions=6",
-        "cursor range: first_event=52, last_cursor=78, log_cursor=2",
+        "saved cursors: event=42, log=1",
+        "replay: game_events=30, combat_logs=1, completions=7",
+        "cursor range: first_event=42, last_cursor=72, log_cursor=2",
         "payload types: logs_are_combat=True",
     ]
 
@@ -285,15 +298,105 @@ def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "fanout: total=27, game_events=26, combat_logs=1",
-        "latest game: id=e=78;l=2, phase=completion, cursor=78",
-        "latest log: id=e=78;l=2, log_cursor=2, within_log=True",
+        "fanout: total=31, game_events=30, combat_logs=1",
+        "latest game: id=e=72;l=2, phase=completion, cursor=72",
+        "latest log: id=e=72;l=2, log_cursor=2, within_log=True",
     ]
 
     print("\n".join(readout_lines))
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
+    """A server-ahead monster turn retains forced motion and its child log."""
+    scene = create_stream_scene()
+    scene.hero.weight = 100
+    subscription = event_stream.subscribe(max_depth=128)
+    event_cursor_before = EventQueue.event_cursor()
+    combat_log_cursor_before = len(scene.encounter.combat_log)
+
+    try:
+        with fixed_dice_faces(20):
+            shove_event = Shove(
+                source_entity_uuid=scene.monster.uuid,
+                target_entity_uuid=scene.hero.uuid,
+            ).apply()
+        dodge_event = Dodge(source_entity_uuid=scene.monster.uuid).apply()
+        envelopes = asyncio.run(drain_subscription(subscription, limit=128))
+    finally:
+        event_stream.unsubscribe(subscription)
+
+    assert isinstance(shove_event, ShoveEvent)
+    assert shove_event.contest_success is True
+    assert dodge_event is not None
+
+    game_event_envelopes = [
+        envelope for envelope in envelopes if envelope["event"] == "game_event"
+    ]
+    completion_envelopes = [
+        envelope
+        for envelope in game_event_envelopes
+        if envelope["data"].event.phase == EventPhase.COMPLETION
+    ]
+    forced_envelope = next(
+        envelope
+        for envelope in completion_envelopes
+        if isinstance(envelope["data"].event, ForcedMovementEvent)
+    )
+    shove_envelope = next(
+        envelope
+        for envelope in completion_envelopes
+        if isinstance(envelope["data"].event, ShoveEvent)
+    )
+
+    forced_event = forced_envelope["data"].event
+    forced_wire = forced_envelope["data"].model_dump(mode="json")["event"]
+    assert forced_event.source_entity_uuid == scene.monster.uuid
+    assert forced_event.target_entity_uuid == scene.hero.uuid
+    assert forced_event.start_position != forced_event.end_position
+    assert forced_event.end_position == scene.hero.position
+    assert forced_event.cause == "shove"
+    assert forced_wire["wire_type"] == "dnd.core.events.ForcedMovementEvent"
+    assert forced_wire["event_type"] == "forced_movement"
+    assert forced_wire["start_position"] == list(forced_event.start_position)
+    assert forced_wire["end_position"] == list(forced_event.end_position)
+    assert forced_envelope["data"].event_index < shove_envelope["data"].event_index
+    assert game_event_envelopes[-1]["data"].event_cursor == EventQueue.event_cursor()
+
+    replayed_events = event_stream.iter_game_events_since(
+        event_cursor_before,
+        scene.encounter,
+    )
+    replayed_forced = [
+        payload.event
+        for payload in replayed_events
+        if isinstance(payload.event, ForcedMovementEvent)
+        and payload.event.phase == EventPhase.COMPLETION
+    ]
+    assert len(replayed_forced) == 1
+    assert replayed_forced[0].end_position == scene.hero.position
+
+    combat_logs = event_stream.iter_combat_logs_since(
+        scene.encounter,
+        combat_log_cursor_before,
+    )
+    shove_log = next(
+        payload.entry
+        for payload in combat_logs
+        if payload.entry.data.get("action_type") == "shove"
+    )
+    forced_logs = [
+        entry
+        for entry in shove_log.sub_entries
+        if entry.data.get("type") == "forced_movement"
+    ]
+    assert len(forced_logs) == 1
+    assert forced_logs[0].data["start_position"] == list(forced_event.start_position)
+    assert forced_logs[0].data["end_position"] == list(forced_event.end_position)
+    assert str(forced_event.start_position) in forced_logs[0].verbose
+    assert str(forced_event.end_position) in forced_logs[0].verbose
 
 
 def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None:
@@ -329,7 +432,7 @@ def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None
         f"log_after_completion={first_log_index > completion_indexes[-1]}",
     ]
     expected_lines = [
-        "ordering: first_log_index=26, last_completion_before_log=25, completions_before_log=6",
+        "ordering: first_log_index=30, last_completion_before_log=29, completions_before_log=7",
         "log_after_completion=True",
     ]
 
@@ -344,10 +447,19 @@ def test_heartbeat_frame_carries_current_cursors(capsys) -> None:
     scene = create_stream_scene()
 
     heartbeat = HeartbeatPayload(
+        generation_id=str(EventQueue.generation_id()),
         server_time=100.0,
         event_cursor=event_stream.current_event_cursor(),
         combat_log_cursor=event_stream.current_combat_log_cursor(scene.encounter),
-        session={"waiting_for_input": True},
+        session=SessionPingResponse(
+            status="ok",
+            session_id="stream-session",
+            connection_status="connected",
+            is_my_turn=True,
+            active_entity_uuid=str(scene.hero.uuid),
+            active_entity_name=scene.hero.name,
+            controlled_entities=[str(scene.hero.uuid)],
+        ),
     )
     frame = format_sse("heartbeat", heartbeat, event_stream.current_stream_id(scene.encounter))
     data = parse_sse_data(frame)
@@ -356,7 +468,8 @@ def test_heartbeat_frame_carries_current_cursors(capsys) -> None:
     assert data["server_time"] == 100.0
     assert data["event_cursor"] == EventQueue.event_cursor()
     assert data["combat_log_cursor"] == len(scene.encounter.combat_log)
-    assert data["session"]["waiting_for_input"] is True
+    assert data["session"]["is_my_turn"] is True
+    assert data["generation_id"] == str(EventQueue.generation_id())
 
     readout_lines = [
         (
@@ -369,12 +482,12 @@ def test_heartbeat_frame_carries_current_cursors(capsys) -> None:
             "heartbeat cursors: "
             f"event={data['event_cursor']}, "
             f"log={data['combat_log_cursor']}, "
-            f"waiting={data['session']['waiting_for_input']}"
+            f"waiting={data['session']['is_my_turn']}"
         ),
     ]
     expected_lines = [
-        "heartbeat frame: event=heartbeat, server_time=100.0, id=e=52;l=1",
-        "heartbeat cursors: event=52, log=1, waiting=True",
+        "heartbeat frame: event=heartbeat, server_time=100.0, id=e=42;l=1",
+        "heartbeat cursors: event=42, log=1, waiting=True",
     ]
 
     print("\n".join(readout_lines))

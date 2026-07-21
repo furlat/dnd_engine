@@ -1,15 +1,26 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
+import time
+
 from dnd.core.base_actions import (
-    BaseAction, CostType, Cost, BaseCost, ActionEvent, TargetType,
-    ActionCategory, SPELL_SLOT_TEMPLATE_SEPARATOR, spell_slot_cost_type,
+    ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
+    Cost, CostType, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
+    PositionDiscoveryContract, SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType,
+    ActionTargetEffectProfile,
+    spell_slot_cost_type,
 )
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName
+from dnd.core.events import RangeType, Event, EventQueue, EventType, WeaponSlot, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, SensoryUpdateReason, MovementTrajectory
+from dnd.core.action_execution import (
+    MovementContinuationDecision,
+    MovementStepBoundary,
+    MovementTerminationReason,
+    revalidate_after_committed_movement_step,
+)
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.base_tiles import Tile
@@ -17,18 +28,20 @@ from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
+from dnd.action_timing import record_action_elapsed, record_action_timing
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color
 )
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Any, Dict, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.equipment import Weapon
+from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
@@ -65,7 +78,45 @@ def entity_action_economy_cost_evaluator(source_entity_uuid: UUID, cost_type: Co
         return False
     return entity.action_economy.can_afford(cost_type, cost)
 
+
+def build_weapon_attack_outcome_profile(
+    actor: Any,
+    weapon_slot: WeaponSlot,
+    override_ability: Optional[AbilityName] = None,
+) -> Optional[ActionOutcomeProfile]:
+    """Build one actor-baseline weapon profile for all attack wrappers.
+
+    Args:
+        actor: Entity discovering the weapon attack.
+        weapon_slot: Equipment slot used by the attack rule.
+        override_ability: Optional ability selected by the action rule.
+
+    Returns:
+        Actor-owned stochastic data, or ``None`` for an invalid actor or slot.
+    """
+    if not isinstance(actor, Entity):
+        return None
+    baseline = actor.weapon_attack_outcome_baseline(
+        weapon_slot,
+        override_ability,
+    )
+    damage_rolls = actor.weapon_damage_outcome_baseline(
+        weapon_slot,
+        override_ability,
+    )
+    if not damage_rolls:
+        return None
+    return ActionOutcomeProfile(
+        resolution=OutcomeResolution.ATTACK_ROLL,
+        damage_rolls=damage_rolls,
+        attack_bonus=baseline.attack_bonus,
+        advantage=baseline.advantage,
+        critical_threshold=baseline.critical_threshold,
+        critical_extra_dice=baseline.critical_extra_dice,
+    )
+
 PolymorphicActionEvent = TypeVar('PolymorphicActionEvent', bound='ActionEvent')
+
 
 def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> Optional[PolymorphicActionEvent]:
     """Validate that the action target is visible to the source entity.
@@ -119,6 +170,8 @@ def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent,
                 return completion_event.cancel(
                     status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
                 )
+    if completion_event.canceled:
+        return completion_event
     return completion_event.phase_to(
         new_phase=EventPhase.COMPLETION,
         status_message=f"Successfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
@@ -133,7 +186,27 @@ class MovementEvent(ActionEvent):
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized movement costs.")
     start_position: Tuple[int, int] = Field(description="Position occupied before movement starts.")
     end_position: Tuple[int, int] = Field(description="Intended or actual final movement position.")
+    requested_end_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Destination requested before any partial-path termination.",
+    )
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Grid path used by the movement.")
+    trajectory: MovementTrajectory = Field(
+        default=MovementTrajectory.PATH,
+        description="Typed trajectory used for each committed movement step.",
+    )
+    termination_reason: MovementTerminationReason = Field(
+        default=MovementTerminationReason.COMPLETED,
+        description="Reason the authoritative traversed path ended.",
+    )
+    controller_revalidation: bool = Field(
+        default=False,
+        description="Whether a committed step required a fresh controller decision.",
+    )
+    controller_revalidation_reason: Optional[str] = Field(
+        default=None,
+        description="Typed subjective change that required controller revalidation.",
+    )
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return movement positions relevant to spatial handlers."""
@@ -179,7 +252,11 @@ class MovementEvent(ActionEvent):
             end_position=self.end_position,
             path=path,
             distance_feet=distance_feet,
-            movement_cost=movement_cost
+            movement_cost=movement_cost,
+            requested_end_position=self.requested_end_position,
+            termination_reason=self.termination_reason.value,
+            controller_revalidation=self.controller_revalidation,
+            controller_revalidation_reason=self.controller_revalidation_reason,
         )
 
         return CombatLogEntry(
@@ -426,6 +503,7 @@ class Move(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
             end_position=end_position,
+            requested_end_position=end_position,
             path=path,
             costs=[BaseCost.model_validate(cost) for cost in costs],
             use_register=use_register,
@@ -464,12 +542,16 @@ class Move(BaseAction):
                 status_message=f"Added paths to {execution_event.uuid}"
             )
 
+        started = time.perf_counter()
         costs = [BaseCost.model_validate(cost) for cost in self.costs]
+        record_action_timing("movement.validate_cost_models_ms", started)
+        started = time.perf_counter()
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             costs=costs,
             status_message=f"Added costs to {execution_event.uuid}"
         )
+        record_action_timing("movement.phase_to_effect_ms", started)
         if effect_event.canceled:
             return effect_event
 
@@ -477,14 +559,28 @@ class Move(BaseAction):
         path = self.path or []
         total_path_length = len(path)
         actual_end_position = source_entity.position
+        traversed_path = [source_entity.position]
+        traversed_movement_cost = 0
         interrupted_by_condition = False
+        termination_reason = MovementTerminationReason.COMPLETED
+        controller_revalidation_reason: Optional[str] = None
+        transition_check_seconds = 0.0
+        step_post_seconds = 0.0
+        update_position_seconds = 0.0
+        step_completion_seconds = 0.0
+        consume_movement_seconds = 0.0
+        step_cost_seconds = 0.0
 
+        source_entity.senses.clear_visibility_cache()
         try:
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
                 to_pos = path[i]
+                step_source_cursor_start = EventQueue.event_cursor()
 
+                phase_started = time.perf_counter()
                 if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                    transition_check_seconds += time.perf_counter() - phase_started
                     if grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode, subjective=True):
                         cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, self.movement_mode)
                         directions = []
@@ -506,14 +602,19 @@ class Move(BaseAction):
                             directional_channels=["movement"] if directions and not cell_blocked else None,
                             )
                         grid._fire_spatial_event(collision_event)
+                    termination_reason = MovementTerminationReason.COLLISION
                     break
+                transition_check_seconds += time.perf_counter() - phase_started
 
                 tile = grid.get_tile(*to_pos)
+                phase_started = time.perf_counter()
                 step_cost_units = self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
                 step_cost_feet = int(step_cost_units * 5)
+                step_cost_seconds += time.perf_counter() - phase_started
 
                 remaining_movement = source_entity.action_economy.movement.normalized_score
                 if remaining_movement < step_cost_feet:
+                    termination_reason = MovementTerminationReason.INSUFFICIENT_MOVEMENT
                     break
 
                 step_event = StepMovementEvent(
@@ -524,54 +625,175 @@ class Move(BaseAction):
                     path_index=i,
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
+                    trajectory=execution_event.trajectory,
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
                 )
+                phase_started = time.perf_counter()
                 processed_step = step_event.post(use_register=True)
+                step_post_seconds += time.perf_counter() - phase_started
 
                 if processed_step.canceled:
+                    termination_reason = MovementTerminationReason.STEP_CANCELED
                     break
 
                 if "Dead" in source_entity.active_conditions or "Incapacitated" in source_entity.active_conditions:
                     interrupted_by_condition = True
+                    termination_reason = (
+                        MovementTerminationReason.DEAD
+                        if "Dead" in source_entity.active_conditions
+                        else MovementTerminationReason.INCAPACITATED
+                    )
+                    processed_step.phase_to(
+                        EventPhase.COMPLETION,
+                        committed=False,
+                        status_message=f"Movement step interrupted before entering {to_pos}",
+                    )
                     break
 
+                phase_started = time.perf_counter()
                 if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
+                    transition_check_seconds += time.perf_counter() - phase_started
+                    termination_reason = MovementTerminationReason.COLLISION
+                    processed_step.phase_to(
+                        EventPhase.COMPLETION,
+                        committed=False,
+                        status_message=f"Movement step blocked before entering {to_pos}",
+                    )
                     break
+                transition_check_seconds += time.perf_counter() - phase_started
 
+                phase_started = time.perf_counter()
+                source_entity.action_economy.consume("movement", step_cost_feet)
+                consume_movement_seconds += time.perf_counter() - phase_started
+
+                phase_started = time.perf_counter()
                 Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
                 actual_end_position = to_pos
+                traversed_path.append(to_pos)
+                traversed_movement_cost += step_cost_feet
+                update_position_seconds += time.perf_counter() - phase_started
 
-                processed_step.phase_to(EventPhase.COMPLETION)
+                phase_started = time.perf_counter()
+                processed_step.phase_to(EventPhase.COMPLETION, committed=True)
+                step_completion_seconds += time.perf_counter() - phase_started
 
                 if "Dead" in source_entity.active_conditions:
+                    termination_reason = MovementTerminationReason.DEAD
                     break
 
-                source_entity.action_economy.consume("movement", step_cost_feet)
+                continuation = revalidate_after_committed_movement_step(
+                    MovementStepBoundary(
+                        actor_uuid=source_entity.uuid,
+                        movement_event_uuid=effect_event.uuid,
+                        movement_lineage_uuid=effect_event.lineage_uuid,
+                        step_event_uuid=processed_step.uuid,
+                        from_position=from_pos,
+                        to_position=to_pos,
+                        traversed_path=tuple(traversed_path),
+                        movement_spent=traversed_movement_cost,
+                        movement_remaining=(
+                            source_entity.action_economy.movement.normalized_score
+                        ),
+                        source_event_cursor_start=step_source_cursor_start,
+                        source_event_cursor_end=EventQueue.event_cursor(),
+                    )
+                )
+                if continuation.decision is MovementContinuationDecision.INTERRUPT:
+                    controller_revalidation_reason = continuation.reason
+                    if to_pos != execution_event.end_position:
+                        termination_reason = (
+                            MovementTerminationReason.SUBJECTIVE_REVALIDATION
+                        )
+                    break
 
         finally:
-            source_entity.update_entity_senses(max_distance=20)
+            record_action_elapsed("movement.transition_checks_ms", transition_check_seconds)
+            record_action_elapsed("movement.step_costs_ms", step_cost_seconds)
+            record_action_elapsed("movement.step_event_post_ms", step_post_seconds)
+            record_action_elapsed("movement.update_position_ms", update_position_seconds)
+            record_action_elapsed("movement.step_completion_ms", step_completion_seconds)
+            record_action_elapsed("movement.consume_movement_ms", consume_movement_seconds)
+            started = time.perf_counter()
+            senses_before_refresh = capture_senses_snapshot(source_entity.senses)
+            remaining_path_distance = max(
+                0,
+                (source_entity.action_economy.movement.normalized_score + 4) // 5,
+            )
+            source_entity.update_entity_senses(
+                max_distance=20,
+                reuse_visibility_cache=True,
+                path_max_distance=remaining_path_distance,
+            )
+            senses_after_refresh = capture_senses_snapshot(source_entity.senses)
+            record_action_timing("movement.final_update_senses_ms", started)
+            emit_sensory_update_delta(
+                source_entity.senses,
+                source_entity.uuid,
+                effect_event,
+                senses_before_refresh,
+                senses_after_refresh,
+                SensoryUpdateReason.SELF_MOVEMENT,
+            )
+
+        completion_costs = [
+            cost for cost in effect_event.costs
+            if cost.cost_type != "movement"
+        ]
+        if self.use_movement_cost:
+            completion_costs.append(BaseCost(
+                name="Movement Cost",
+                cost_type="movement",
+                cost=traversed_movement_cost,
+            ))
+        completion_updates = {
+            "end_position": actual_end_position,
+            "requested_end_position": execution_event.requested_end_position,
+            "path": traversed_path,
+            "costs": completion_costs,
+            "termination_reason": termination_reason,
+            "controller_revalidation": controller_revalidation_reason is not None,
+            "controller_revalidation_reason": controller_revalidation_reason,
+            "outcome_code": (
+                "movement.subjective_revalidation"
+                if controller_revalidation_reason is not None
+                else effect_event.outcome_code
+            ),
+        }
 
         if source_entity.position == execution_event.start_position:
             if interrupted_by_condition:
-                return execution_event.phase_to(
+                started = time.perf_counter()
+                result = effect_event.phase_to(
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
-                    end_position=actual_end_position
+                    **completion_updates,
                 )
-            return effect_event.cancel(status_message=f"Failed to move for {execution_event.name}")
+                record_action_timing("movement.phase_to_completion_ms", started)
+                return result
+            started = time.perf_counter()
+            result = effect_event.cancel(status_message=f"Failed to move for {execution_event.name}")
+            record_action_timing("movement.cancel_failed_move_ms", started)
+            return result
         elif source_entity.position != execution_event.end_position:
-            return execution_event.phase_to(
+            started = time.perf_counter()
+            result = effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
-                end_position=actual_end_position
+                **completion_updates,
             )
+            record_action_timing("movement.phase_to_completion_ms", started)
+            return result
 
-        return effect_event.phase_to(
+        started = time.perf_counter()
+        result = effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message=f"Applied movement for {execution_event.name}"
+            status_message=f"Applied movement for {execution_event.name}",
+            **completion_updates,
         )
+        record_action_timing("movement.phase_to_completion_ms", started)
+        return result
 
     def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
         """Apply costs - movement is already consumed per-step in _apply().
@@ -739,7 +961,6 @@ class AttackEvent(ActionEvent):
             is_crit = outcome == "crit"
 
         damage_roll_displays: List[DamageRollDisplay] = []
-        total_damage = 0
 
         if self.damage_rolls and self.damages:
             for i, dr in enumerate(self.damage_rolls):
@@ -775,7 +996,7 @@ class AttackEvent(ActionEvent):
                     bonus_breakdown=damage_bonus_breakdown
                 ))
 
-                total_damage += dr.total
+        total_damage = self.total_damage if is_hit else 0
 
         target_hp = target_entity.get_hp() if target_entity else None
 
@@ -868,6 +1089,52 @@ class Attack(BaseAction):
         if self.weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
             self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
         return self
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return the actor-baseline stochastic profile for this weapon attack."""
+        profile = build_weapon_attack_outcome_profile(
+            actor,
+            self.weapon_slot,
+            self.override_ability,
+        )
+        if profile is None or not isinstance(actor, Entity):
+            return profile
+        extra_damage_rolls: list[DamageRollProfile] = []
+        for condition in actor.active_conditions.values():
+            for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
+                if isinstance(damage_profile, DamageRollProfile):
+                    extra_damage_rolls.append(damage_profile)
+        if not extra_damage_rolls:
+            return profile
+        return profile.model_copy(update={
+            "damage_rolls": tuple(profile.damage_rolls) + tuple(extra_damage_rolls),
+        })
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Return target-effect riders contributed by active actor traits."""
+        if not isinstance(actor, Entity):
+            return None
+        profiles: list[ActionTargetEffectProfile] = []
+        for condition in actor.active_conditions.values():
+            profile = condition.get_action_target_effect_profile(self, actor)
+            if isinstance(profile, ActionTargetEffectProfile):
+                profiles.append(profile)
+        if not profiles:
+            return None
+        if len(profiles) == 1:
+            return profiles[0]
+        branches = []
+        seen_effect_ids: set[str] = set()
+        for profile in profiles:
+            for branch in profile.branches:
+                if branch.effect_id in seen_effect_ids:
+                    continue
+                seen_effect_ids.add(branch.effect_id)
+                branches.append(branch)
+        return ActionTargetEffectProfile(
+            semantic_id="attack.weapon.hit_riders",
+            branches=tuple(branches),
+        )
 
     @staticmethod
     def validate_range(declaration_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
@@ -962,6 +1229,7 @@ class Attack(BaseAction):
             Returns:
                 Completed attack event, canceled event, or `None`.
             """
+            started = time.perf_counter()
             source_entity = Entity.get(source_entity_uuid)
             target_entity_uuid = execution_event.target_entity_uuid
             weapon_slot = execution_event.weapon_slot
@@ -976,6 +1244,9 @@ class Attack(BaseAction):
                 return execution_event.cancel(status_message=f"Target entity not found for {execution_event.name}")
             if not isinstance(target_entity, Entity):
                 return execution_event.cancel(status_message=f"Target entity not found for {execution_event.name}")
+            record_action_timing("attack.resolve_entities_ms", started)
+
+            started = time.perf_counter()
             should_clear_source_target = False
             should_clear_target_target = False
             if source_entity.target_entity_uuid != target_entity_uuid:
@@ -991,6 +1262,9 @@ class Attack(BaseAction):
                 if should_clear_target_target:
                     target_entity.clear_target_entity()
 
+            record_action_timing("attack.set_target_context_ms", started)
+
+            started = time.perf_counter()
             override_ability = execution_event.override_ability
             attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability)
             ac = target_entity.ac_bonus(source_entity.uuid)
@@ -1006,7 +1280,9 @@ class Attack(BaseAction):
                 "is_long_range": execution_event.is_long_range,
             }
             attack_bonus.set_context(attack_context)
+            record_action_timing("attack.compute_attack_bonus_ac_ms", started)
 
+            started = time.perf_counter()
             ranged_disadvantage_modifiers: List[UUID] = []
             is_ranged = execution_event.range is not None and execution_event.range.type == RangeType.RANGE
 
@@ -1031,44 +1307,60 @@ class Attack(BaseAction):
                     )
                 )
                 ranged_disadvantage_modifiers.append(modifier_uuid)
+            record_action_timing("attack.ranged_disadvantage_modifiers_ms", started)
 
+            started = time.perf_counter()
             attack_event = execution_event.phase_to(
                 new_phase=EventPhase.EXECUTION,
                 status_message="Rolling attack",
                 attack_bonus=attack_bonus,
                 ac=ac
             )
+            record_action_timing("attack.phase_to_roll_ms", started)
 
             if attack_event.canceled:
+                started = time.perf_counter()
                 attack_bonus.clear_context()
                 clear_temporary_targets()
+                record_action_timing("attack.cleanup_canceled_roll_ms", started)
                 return attack_event
 
+            started = time.perf_counter()
             dice_roll = source_entity.roll_d20(
                 attack_bonus,
                 RollType.ATTACK,
                 weapon_slot=weapon_slot,
                 parent_event=attack_event.uuid,
             )
+            record_action_timing("attack.roll_d20_ms", started)
+            started = time.perf_counter()
             crit_threshold = source_entity.get_crit_threshold(weapon_slot)
             attack_outcome = determine_attack_outcome(dice_roll, ac, crit_threshold)
+            record_action_timing("attack.determine_outcome_ms", started)
 
+            started = time.perf_counter()
             attack_event = attack_event.post(
                 dice_roll=dice_roll,
                 attack_outcome=attack_outcome,
                 status_message=f"Attack rolled {dice_roll.total} and {attack_outcome}"
             )
+            record_action_timing("attack.post_attack_roll_ms", started)
+            started = time.perf_counter()
             ac.reset_from_target()
             attack_bonus.reset_from_target()
             attack_bonus.clear_event_lineage()
             ac.clear_event_lineage()
             attack_bonus.clear_context()
+            record_action_timing("attack.cleanup_roll_modifiers_ms", started)
 
             if attack_event.canceled:
+                started = time.perf_counter()
                 clear_temporary_targets()
+                record_action_timing("attack.clear_targets_after_canceled_roll_ms", started)
                 return attack_event
 
             if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+                started = time.perf_counter()
                 attack_event = attack_event.phase_to(
                     EventPhase.EFFECT,
                     status_message=f"Attack missed"
@@ -1077,29 +1369,41 @@ class Attack(BaseAction):
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Attack missed"
                 )
+                record_action_timing("attack.miss_completion_ms", started)
+                started = time.perf_counter()
                 clear_temporary_targets()
+                record_action_timing("attack.clear_targets_after_miss_ms", started)
                 return completion_event
 
+            started = time.perf_counter()
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability)
+            record_action_timing("attack.get_damages_ms", started)
+            started = time.perf_counter()
             attack_event = attack_event.phase_to(
                 EventPhase.EFFECT,
                 is_last=False,
                 status_message=f"Damages: {[(damage.dice_numbers,damage.damage_dice,damage.damage_bonus.normalized_score if damage.damage_bonus else 0,damage.damage_type) for damage in damages]}",
                 damages=damages
             )
+            record_action_timing("attack.phase_to_damage_effect_ms", started)
 
             if attack_event.canceled:
+                started = time.perf_counter()
                 clear_temporary_targets()
+                record_action_timing("attack.clear_targets_after_canceled_damage_ms", started)
                 return attack_event
 
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
+                started = time.perf_counter()
                 crit_extra_dice = source_entity.get_crit_extra_dice(weapon_slot)
                 original_rolls = []
                 for damage in damages:
                     dice = damage.get_dice(attack_outcome=attack_event.attack_outcome, crit_extra_dice=crit_extra_dice)
                     roll = dice.roll
                     original_rolls.append(roll)
+                record_action_timing("attack.roll_damage_dice_ms", started)
 
+                started = time.perf_counter()
                 damage_roll_event = DamageRollResultEvent(
                     source_entity_uuid=source_entity.uuid,
                     target_entity_uuid=target_entity.uuid,
@@ -1111,18 +1415,26 @@ class Attack(BaseAction):
                     parent_event=attack_event.uuid,
                     phase=EventPhase.DECLARATION
                 )
+                record_action_timing("attack.create_damage_roll_event_ms", started)
 
+                started = time.perf_counter()
                 damage_roll_event = damage_roll_event.phase_to(
                     EventPhase.EFFECT,
                     status_message="Damage dice rolled"
                 )
+                record_action_timing("attack.damage_roll_effect_ms", started)
 
                 damage_rolls = damage_roll_event.final_rolls
 
+                started = time.perf_counter()
                 damage_roll_event.phase_to(EventPhase.COMPLETION)
+                record_action_timing("attack.damage_roll_completion_ms", started)
+                started = time.perf_counter()
                 total_damage = sum(roll.total for roll in damage_rolls)
+                record_action_timing("attack.sum_damage_ms", started)
 
-                target_entity.receive_damage(
+                started = time.perf_counter()
+                actual_damage = target_entity.receive_damage(
                     amount=total_damage,
                     damage_type=damages[0].damage_type,
                     source_entity_uuid=source_entity.uuid,
@@ -1131,23 +1443,32 @@ class Attack(BaseAction):
                     parent_event=attack_event.uuid,
                     critical_hit=execution_event.attack_outcome == AttackOutcome.CRIT
                 )
+                record_action_timing("attack.receive_damage_ms", started)
 
+                started = time.perf_counter()
                 attack_event = attack_event.phase_to(
                     new_phase=EventPhase.EFFECT,
                     is_first=False,
                     damage_rolls=damage_rolls,
+                    total_damage=actual_damage,
                     status_message=f"Damages taken: {[damage.total for damage in damage_rolls]}"
                 )
+                record_action_timing("attack.phase_to_post_damage_effect_ms", started)
             else:
                 damage_rolls = None
 
+            started = time.perf_counter()
             clear_temporary_targets()
+            record_action_timing("attack.clear_targets_after_hit_ms", started)
 
-            return attack_event.phase_to(
+            started = time.perf_counter()
+            completion_event = attack_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message="Attack completed",
                 damage_rolls=damage_rolls,
             )
+            record_action_timing("attack.final_completion_ms", started)
+            return completion_event
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the attack action."""
@@ -1225,7 +1546,7 @@ class Attack(BaseAction):
 class Dash(BaseAction):
     """Dash action that grants extra movement for the current turn.
 
-    Applies the Dashing condition which adds movement equal to base speed.
+    Applies the Dashing condition which adds movement equal to current speed.
     Lasts until the start of your next turn (duration=1, advanced at turn start).
     """
 
@@ -1279,10 +1600,10 @@ class Dash(BaseAction):
 
         entity.add_condition(dashing, parent_event=execution_event)
 
-        base_movement = entity.action_economy.get_base_value("movement")
+        current_speed = entity.action_economy.current_speed()
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
-            status_message=f"Applied Dashing - gained {base_movement}ft extra movement"
+            status_message=f"Applied Dashing - gained {current_speed}ft extra movement"
         )
 
     def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
@@ -1830,6 +2151,10 @@ class JumpEvent(ActionEvent):
     end_position: Tuple[int, int] = Field(description="Intended or actual landing position.")
     jump_distance: int = Field(default=0, description="Jump distance in feet.")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line airborne cell path.")
+    trajectory: MovementTrajectory = Field(
+        default=MovementTrajectory.DIRECT_ARC,
+        description="Typed trajectory used for each committed jump step.",
+    )
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return jump path positions relevant to spatial handlers."""
@@ -1895,6 +2220,15 @@ class Jump(BaseAction):
     description: str = Field(default="Jump to a visible position", description="Jump action description.")
     target_type: TargetType = Field(default=TargetType.POSITION_LOS, description="Jump targets visible positions.")
     action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT, description="Movement action category.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=lambda: PositionDiscoveryContract(
+            requires_subjective_walkable=True,
+            requires_subjective_unoccupied=True,
+            bounded_by_remaining_movement=True,
+            distance_is_movement_cost=True,
+        ),
+        description="Subjective landing prerequisites for jump discovery.",
+    )
     end_position: Optional[Tuple[int, int]] = Field(default=None, description="Requested landing position.")
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
@@ -2012,9 +2346,14 @@ class Jump(BaseAction):
         instance._setup_movement_cost()
         return instance
 
-    @staticmethod
-    def _get_line_path(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
-        """Get all cells in a straight line from start to end (Bresenham's algorithm)."""
+    def get_disclosed_movement_path(
+        self,
+        start_position: Tuple[int, int],
+        end_position: Tuple[int, int],
+    ) -> Optional[List[Tuple[int, int]]]:
+        """Return the straight-line cells traversed by jump execution."""
+        start = start_position
+        end = end_position
         x0, y0 = start
         x1, y1 = end
         path: List[Tuple[int, int]] = []
@@ -2053,7 +2392,12 @@ class Jump(BaseAction):
 
         self._setup_movement_cost()
 
-        line_path = self._get_line_path(source_entity.position, end_position)
+        line_path = self.get_disclosed_movement_path(
+            source_entity.position,
+            end_position,
+        )
+        if line_path is None:
+            return None
 
         return JumpEvent(
             name=self.name,
@@ -2116,8 +2460,10 @@ class Jump(BaseAction):
         path = execution_event.path or []
         total_path_length = len(path)
         actual_end_position = source_entity.position
+        traversed_path = [source_entity.position]
         interrupted_by_condition = False
 
+        source_entity.senses.clear_visibility_cache()
         try:
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
@@ -2143,6 +2489,7 @@ class Jump(BaseAction):
                     path_index=i,
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
+                    trajectory=execution_event.trajectory,
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
@@ -2154,12 +2501,18 @@ class Jump(BaseAction):
 
                 if "Dead" in source_entity.active_conditions or "Incapacitated" in source_entity.active_conditions:
                     interrupted_by_condition = True
+                    processed_step.phase_to(
+                        EventPhase.COMPLETION,
+                        committed=False,
+                        status_message=f"Jump step interrupted before entering {to_pos}",
+                    )
                     break
 
                 Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
                 actual_end_position = to_pos
+                traversed_path.append(to_pos)
 
-                processed_step.phase_to(EventPhase.COMPLETION)
+                processed_step.phase_to(EventPhase.COMPLETION, committed=True)
 
                 if "Dead" in source_entity.active_conditions:
                     break
@@ -2171,22 +2524,28 @@ class Jump(BaseAction):
                     return execution_event.phase_to(
                         new_phase=EventPhase.COMPLETION,
                         status_message=f"Partial jump, stopped at {source_entity.position}",
-                        end_position=actual_end_position
+                        end_position=actual_end_position,
+                        path=traversed_path,
+                        jump_distance=(len(traversed_path) - 1) * 5,
                     )
                 return effect_event.cancel(status_message=f"Failed to jump")
             elif source_entity.position != execution_event.end_position:
                 return execution_event.phase_to(
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Partial jump, stopped at {source_entity.position}",
-                    end_position=actual_end_position
+                    end_position=actual_end_position,
+                    path=traversed_path,
+                    jump_distance=(len(traversed_path) - 1) * 5,
                 )
 
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
-                status_message=f"Jumped to {execution_event.end_position}"
+                status_message=f"Jumped to {execution_event.end_position}",
+                path=traversed_path,
+                jump_distance=(len(traversed_path) - 1) * 5,
             )
         finally:
-            source_entity.update_entity_senses(max_distance=20)
+            source_entity.update_entity_senses(max_distance=20, reuse_visibility_cache=True)
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action). Movement consumed per-step in _apply()."""
@@ -2205,6 +2564,15 @@ class Jump(BaseAction):
         return completion_event
 
 
+POUNDS_PER_KILOGRAM = 2.2046226218487757
+BG3_SHOVE_WEIGHT_MULTIPLIER_KG = 12.0
+BG3_SHOVE_CURVE_CONSTANT = 65.0
+BG3_SHOVE_MIN_DISTANCE_METERS = 1.0
+BG3_SHOVE_MAX_DISTANCE_METERS = 6.0
+BG3_GRID_CELL_METERS = 1.5
+ENGINE_GRID_CELL_FEET = 5
+
+
 class ShoveEvent(ActionEvent):
     """Event payload for a BG3-style shove action.
 
@@ -2214,7 +2582,7 @@ class ShoveEvent(ActionEvent):
     - Range: 5ft (adjacent only)
     - Contest: Shover's Athletics CHECK vs target's passive skill DC
     - Allies: Auto-succeed (no check required)
-    - Weight limit: STR score x 12
+    - Weight limit: Strength score x 12 kilograms
     """
 
     name: str = Field(default="Shove", description="Human-readable shove event label.")
@@ -2301,15 +2669,16 @@ class ShoveEvent(ActionEvent):
 class Shove(BaseAction):
     """BG3-style shove action that pushes or knocks prone.
 
-    Costs a bonus action. Pushes target 5-20ft based on STR, or knocks prone.
+    Costs a bonus action. Push distance depends on Strength and target weight.
 
     Mechanics (BG3-style):
     - Range: 5ft (adjacent only)
     - Contest: Shover's Athletics CHECK vs target's passive DC
     - Target DC: 10 + max(Athletics, Acrobatics) bonus + advantage modifier
     - Allies: Auto-succeed (no check required)
-    - Weight limit: Can't shove targets heavier than STR x 12 lbs
-    - Distance: 5ft base + 5ft per positive STR modifier (max 20ft)
+    - Weight limit: Strength score x 12 kilograms
+    - Distance: Weight-sensitive BG3 force curve, clamped to 1-6 metres
+      and quantized to the engine's 5-foot grid
 
     Forced movement does NOT trigger opportunity attacks.
     """
@@ -2325,29 +2694,50 @@ class Shove(BaseAction):
 
     @staticmethod
     def get_max_shove_weight(entity: Entity) -> int:
-        """Calculate max weight entity can shove.
+        """Calculate the maximum BG3 shove weight in engine pounds.
 
         Args:
             entity: Entity attempting the shove.
 
         Returns:
-            Maximum shoveable weight in pounds.
+            Maximum whole-pound target weight the entity can shove.
         """
-        return entity.ability_scores.strength.ability_score.score * 12
+        strength_score = entity.ability_scores.strength.ability_score.score
+        maximum_kg = strength_score * BG3_SHOVE_WEIGHT_MULTIPLIER_KG
+        return int(maximum_kg * POUNDS_PER_KILOGRAM)
 
     @staticmethod
-    def get_push_distance(entity: Entity) -> int:
-        """Calculate push distance based on Strength.
+    def get_push_distance(entity: Entity, target: Entity) -> int:
+        """Calculate BG3-calibrated shove distance on the engine grid.
+
+        BG3 exposes a target-weight-dependent ``ShoveDistance``, a curve
+        constant of 65, and a 1-6 metre clamp, but keeps the native arithmetic
+        private. The engine uses the direct force-margin interpretation of
+        those constants. Entity weights are converted from pounds to kilograms
+        before the result is rounded to the nearest 5-foot grid cell.
 
         Args:
             entity: Entity attempting the shove.
+            target: Entity being shoved.
 
         Returns:
             Push distance in feet.
         """
-        str_mod = entity.ability_scores.strength.modifier
-        bonus = max(0, str_mod) * 5
-        return min(20, max(5, 5 + bonus))
+        strength_score = entity.ability_scores.strength.ability_score.score
+        shove_capacity_kg = strength_score * BG3_SHOVE_WEIGHT_MULTIPLIER_KG
+        target_weight_kg = target.weight / POUNDS_PER_KILOGRAM
+        distance_meters = (
+            shove_capacity_kg - target_weight_kg
+        ) / BG3_SHOVE_CURVE_CONSTANT
+        distance_meters = min(
+            BG3_SHOVE_MAX_DISTANCE_METERS,
+            max(BG3_SHOVE_MIN_DISTANCE_METERS, distance_meters),
+        )
+        distance_cells = int(distance_meters / BG3_GRID_CELL_METERS + 0.5)
+        minimum_cells = 1
+        maximum_cells = int(BG3_SHOVE_MAX_DISTANCE_METERS / BG3_GRID_CELL_METERS)
+        distance_cells = min(maximum_cells, max(minimum_cells, distance_cells))
+        return distance_cells * ENGINE_GRID_CELL_FEET
 
     @staticmethod
     def get_push_direction(source_pos: Tuple[int, int], target_pos: Tuple[int, int]) -> Tuple[int, int]:
@@ -2574,7 +2964,7 @@ class Shove(BaseAction):
             )
 
         direction = self.get_push_direction(source.position, target.position)
-        distance = self.get_push_distance(source)
+        distance = self.get_push_distance(source, target)
         final_pos, actual_dist, blocked, blocked_by = self.calculate_final_position(
             target.position, direction, distance, target.uuid
         )
@@ -2664,6 +3054,10 @@ class SpellEvent(ActionEvent):
     ac: Optional[ModifiableValue] = Field(default=None, description="The target's AC")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="The attack roll result")
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="The attack outcome")
+    is_threatened: bool = Field(
+        default=False,
+        description="Whether a visible hostile threatens the caster during a ranged spell attack.",
+    )
 
     save_ability: Optional[AbilityName] = Field(default=None, description="Ability for saving throw")
     save_dc: Optional[int] = Field(default=None, description="Save DC")
@@ -2785,28 +3179,6 @@ class SpellEvent(ActionEvent):
 
         save_bonus_breakdown: List[ModifierBreakdown] = []
         save_advantage_breakdown: List[ModifierBreakdown] = []
-        if self.target_entity_uuid and self.save_ability:
-            target_entity = Entity.get(self.target_entity_uuid)
-            if target_entity:
-                save_mv = target_entity.saving_throw_bonus(
-                    self.source_entity_uuid, self.save_ability
-                )
-                for mod in save_mv.get_breakdown():
-                    save_bonus_breakdown.append(ModifierBreakdown(
-                        name=mod.get('name', 'Unknown'),
-                        value=mod.get('value', 0),
-                        source=mod.get('source', 'self')
-                    ))
-                for mod in save_mv.get_full_advantage_breakdown():
-                    adv_val = mod.get('value', 'inactive')
-                    if adv_val == 'advantage':
-                        save_advantage_breakdown.append(ModifierBreakdown(
-                            name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-                        ))
-                    elif adv_val == 'disadvantage':
-                        save_advantage_breakdown.append(ModifierBreakdown(
-                            name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-                        ))
 
         data = SpellSaveLogData(
             caster_name=caster_name,
@@ -2991,7 +3363,8 @@ class SpellEvent(ActionEvent):
             is_crit=is_crit,
             damage_rolls=damage_roll_displays,
             total_damage=total_damage,
-            target_hp=target_hp
+            target_hp=target_hp,
+            is_threatened=self.is_threatened,
         )
 
         return CombatLogEntry(
@@ -3056,6 +3429,18 @@ class SpellEvent(ActionEvent):
             },
             success=True
         )
+
+
+class SpellAttackResolution(BaseModel):
+    """Resolved spell attack roll and the values that produced it."""
+
+    attack_bonus: ModifiableValue = Field(description="Combined spell attack value used for the roll.")
+    target_ac: ModifiableValue = Field(description="Target armor class used to determine the outcome.")
+    dice_roll: DiceRoll = Field(description="Completed d20 spell attack roll.")
+    outcome: AttackOutcome = Field(description="Hit, miss, or critical outcome of the roll.")
+    is_threatened: bool = Field(
+        description="Whether ranged-attack disadvantage was applied because a visible hostile threatened the caster.",
+    )
 
 
 class SpellAction(BaseAction):
@@ -3131,6 +3516,186 @@ class SpellAction(BaseAction):
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
         return max(0, self.cast_at_level - self.spell_level)
+
+    def spell_attack_outcome_profile(
+        self,
+        caster: Entity,
+        *,
+        dice_count: int,
+        die_size: int,
+        damage_type: DamageType,
+        applications: int = 1,
+        flat_bonus: Optional[int] = None,
+    ) -> ActionOutcomeProfile:
+        """Build the actor-baseline model for a spell attack rule."""
+        baseline = caster.spell_attack_outcome_baseline()
+        advantage = baseline.advantage
+        if self.get_range().type is RangeType.RANGE and caster.is_threatened():
+            advantage = (
+                AdvantageStatus.NONE
+                if advantage is AdvantageStatus.ADVANTAGE
+                else AdvantageStatus.DISADVANTAGE
+            )
+        bonus = caster.spell_damage_outcome_bonus() if flat_bonus is None else flat_bonus
+        return ActionOutcomeProfile(
+            resolution=OutcomeResolution.ATTACK_ROLL,
+            applications=applications,
+            damage_rolls=[DamageRollProfile(
+                dice_count=dice_count,
+                die_size=die_size,
+                flat_bonus=bonus,
+                damage_type=damage_type.value,
+            )],
+            attack_bonus=baseline.attack_bonus,
+            advantage=advantage,
+            critical_threshold=baseline.critical_threshold,
+            critical_extra_dice=baseline.critical_extra_dice,
+        )
+
+    def resolve_spell_attack(
+        self,
+        caster: Entity,
+        target: Entity,
+        parent_event_uuid: UUID,
+        *,
+        extra_advantage_modifiers: Tuple[AdvantageModifier, ...] = (),
+    ) -> SpellAttackResolution:
+        """Resolve one spell attack through the shared ranged-threat rule.
+
+        Args:
+            caster: Entity making the spell attack.
+            target: Entity whose armor class opposes the attack.
+            parent_event_uuid: Parent spell event for the d20 result event.
+            extra_advantage_modifiers: Spell-specific roll modifiers to include.
+
+        Returns:
+            Typed spell attack values, roll, outcome, and threat state.
+        """
+        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        target_ac = target.ac_bonus(caster.uuid)
+        for modifier in extra_advantage_modifiers:
+            attack_bonus.self_static.add_advantage_modifier(modifier)
+
+        is_threatened = self.get_range().type is RangeType.RANGE and caster.is_threatened()
+        if is_threatened:
+            attack_bonus.self_static.add_advantage_modifier(
+                AdvantageModifier(
+                    name="Threatened (Ranged)",
+                    value=AdvantageStatus.DISADVANTAGE,
+                    source_entity_uuid=caster.uuid,
+                    target_entity_uuid=target.uuid,
+                )
+            )
+
+        attack_bonus.set_from_target(target_ac)
+        target_ac.set_from_target(attack_bonus)
+        dice_roll = caster.roll_d20(
+            attack_bonus,
+            RollType.ATTACK,
+            parent_event=parent_event_uuid,
+        )
+        outcome = determine_attack_outcome(
+            dice_roll,
+            target_ac,
+            caster.get_spell_crit_threshold(),
+        )
+        attack_bonus.reset_from_target()
+        target_ac.reset_from_target()
+        return SpellAttackResolution(
+            attack_bonus=attack_bonus,
+            target_ac=target_ac,
+            dice_roll=dice_roll,
+            outcome=outcome,
+            is_threatened=is_threatened,
+        )
+
+    def automatic_damage_outcome_profile(
+        self,
+        *,
+        dice_count: int,
+        die_size: int,
+        flat_bonus: int,
+        damage_type: DamageType,
+        applications: int = 1,
+        effect_id: Optional[str] = None,
+    ) -> ActionOutcomeProfile:
+        """Build an automatic-hit damage model declared by a spell rule."""
+        return ActionOutcomeProfile(
+            effect_id=effect_id,
+            resolution=OutcomeResolution.AUTOMATIC,
+            applications=applications,
+            damage_rolls=[DamageRollProfile(
+                dice_count=dice_count,
+                die_size=die_size,
+                flat_bonus=flat_bonus,
+                damage_type=damage_type.value,
+            )],
+        )
+
+    def saving_throw_damage_outcome_profile(
+        self,
+        caster: Entity,
+        *,
+        dice_count: int,
+        die_size: int,
+        damage_type: DamageType,
+        save_ability: str,
+        half_damage_on_save: bool,
+        application_scope: OutcomeApplicationScope = OutcomeApplicationScope.ALLOCATED_TARGETS,
+        applications: int = 1,
+        flat_bonus: Optional[int] = None,
+    ) -> ActionOutcomeProfile:
+        """Build an actor-known saving-throw damage rule for policy estimates."""
+        bonus = caster.spell_damage_outcome_bonus() if flat_bonus is None else flat_bonus
+        return ActionOutcomeProfile(
+            resolution=OutcomeResolution.SAVING_THROW,
+            applications=applications,
+            application_scope=application_scope,
+            damage_rolls=[DamageRollProfile(
+                dice_count=dice_count,
+                die_size=die_size,
+                flat_bonus=bonus,
+                damage_type=damage_type.value,
+            )],
+            save_dc=caster.spell_save_dc(),
+            save_ability=save_ability,
+            half_damage_on_save=half_damage_on_save,
+        )
+
+    def resolve_saving_throw(
+        self,
+        execution_event: SpellEvent,
+        *,
+        caster: Entity,
+        target: Entity,
+        ability_name: AbilityName,
+        dc: int,
+    ) -> Tuple[SpellEvent, DiceRoll, bool]:
+        """Resolve a child save and synchronize its result onto the spell event."""
+        ability_display = ability_name.upper()[:3]
+        effect_event = execution_event.phase_to(
+            new_phase=EventPhase.EFFECT,
+            save_ability=ability_name,
+            save_dc=dc,
+            status_message=f"Requesting {ability_display} save DC {dc}",
+        )
+        save_request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name=ability_name,
+            dc=dc,
+            parent_event=effect_event.uuid,
+        )
+        _, save_roll, success = target.saving_throw(save_request)
+        synced_event = effect_event.post(
+            save_success=success,
+            save_roll=save_roll,
+            save_bonus=save_roll.bonus,
+            status_message=(
+                f"{ability_display} save: {save_roll.total} vs DC {dc} - "
+                f"{'Success' if success else 'Failure'}"
+            ),
+        )
+        return synced_event, save_roll, success
 
     def ensure_concentration(self, parent_event: Event) -> "Concentrating":
         """Create or reuse Concentrating for this cast. Safe for convolution loop.
@@ -3259,9 +3824,11 @@ class SpellAction(BaseAction):
         return base_name
 
     def _create_variant(self, cast_at_level: int, **overrides) -> 'SpellAction':
-        """Clone self with modified cast level and appropriate costs.
+        """Create a lightweight read-only discovery variant for one slot level.
 
-        Uses model_copy() to preserve object types (e.g., AoE shape subclasses).
+        Definition submodels are shared with the registered template while the
+        variant is inspected during discovery. Execution subsequently creates
+        one deep executable copy before any target or area state can mutate.
 
         Args:
             cast_at_level: The spell slot level to use (0 for cantrips)
@@ -3280,7 +3847,7 @@ class SpellAction(BaseAction):
         }
         update_dict.update(overrides)
 
-        return self.model_copy(deep=True, update=update_dict)
+        return self.model_copy(deep=False, update=update_dict)
 
     def _get_costs_for_level(self, level: int) -> List[Cost]:
         """Get costs for casting at a specific level.
@@ -3316,7 +3883,7 @@ class SpellAction(BaseAction):
         source_name = source_entity.name if source_entity else None
         target_name = target_entity.name if target_entity else None
 
-        return SpellEvent(
+        event = SpellEvent(
             name=f"{self.name}",
             spell_id=normalize_spell_id(self.name or ""),
             parent_event=parent_event.uuid if parent_event else None,
@@ -3338,11 +3905,24 @@ class SpellAction(BaseAction):
             range_ft=self.spell_range.normal,
             projectile_type=self.projectile_type,
             damage_types=[self.spell_damage_type] if self.spell_damage_type else [],
+            source_item_uuid=self.source_item_uuid,
+            item_charge_cost=self.charge_cost if self.source_item_uuid is not None else 0,
+            item_charge_action_lineage_uuid=None,
+            declared_target_entity_uuids=self._declared_target_entity_uuids(),
         )
+        event.item_charge_action_lineage_uuid = event.lineage_uuid
+        return event
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the costs of the spell."""
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+    def _apply_execution_cancellation_costs(
+        self,
+        canceled_event: ActionEvent,
+    ) -> Optional[ActionEvent]:
+        """Spend a committed cast when a reaction interrupts its execution."""
+        return entity_action_economy_cost_applier(canceled_event, self.source_entity_uuid)
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """Get number of damage dice for cantrips based on caster level.

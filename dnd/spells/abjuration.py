@@ -12,9 +12,21 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_actions import ActionEvent, BaseAction, CostType, TargetType, spell_slot_cost_type, Cost
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, ConditionTag, SpellProtectionRegistry, SpellProtection, DurationType
+from dnd.core.base_actions import (
+    ActionEvent,
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    BaseAction,
+    CostType,
+    OutcomeResolution,
+    TargetEffectDisposition,
+    TargetType,
+    spell_slot_cost_type,
+    Cost,
+)
+from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, ConditionTag, OutcomeProtection, SpellProtectionRegistry, SpellProtection, DurationType
 from dnd.core.base_object import BaseObject
+from dnd.core.content import ContentKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier
 from dnd.core.aoe import Sphere
@@ -22,24 +34,77 @@ from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
 
 from dnd.core.dice import AttackOutcome, Dice
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
 from dnd.conditions import Incapacitated
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.spells.transmutation import HasteEffect
+from dnd.spells.effect_ids import (
+    COUNTERSPELL_FAILURE_OUTCOME_CODE,
+    COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+    MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+)
+
+
+class CounterspellReactionEvent(ActionEvent):
+    """Observable resolution of one Counterspell reaction."""
+
+    name: str = Field(default="Counterspell", description="Reaction event name.")
+    event_type: EventType = Field(default=EventType.TRIGGER_EVENT, description="Reaction event category.")
+    triggered_event_uuid: UUID = Field(description="Incoming spell event version that triggered the reaction.")
+    triggered_lineage_uuid: UUID = Field(description="Incoming spell lineage interrupted or challenged.")
+    incoming_spell_name: str = Field(description="Display name of the incoming spell.")
+    incoming_spell_level: int = Field(ge=0, description="Level of the incoming cast.")
+    counterspell_slot_level: int = Field(ge=3, description="Slot level spent on Counterspell.")
+    automatic: bool = Field(description="Whether the selected slot guarantees interruption.")
+    check_total: Optional[int] = Field(default=None, description="Spellcasting check total when required.")
+    check_dc: Optional[int] = Field(default=None, description="Spellcasting check DC when required.")
+    succeeded: bool = Field(description="Whether Counterspell interrupted the incoming spell.")
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate a typed, subjectivity-filterable reaction log."""
+        counterspeller_name = self.source_entity_name or "Unknown"
+        original_caster_name = self.target_entity_name or "Unknown"
+        result_text = "interrupts" if self.succeeded else "fails to interrupt"
+        compact = (
+            f"{counterspeller_name} uses Counterspell and {result_text} "
+            f"{original_caster_name}'s {self.incoming_spell_name}"
+        )
+        data = SpellInterruptionLogData(
+            outcome_code=self.outcome_code or COUNTERSPELL_FAILURE_OUTCOME_CODE,
+            counterspeller_name=counterspeller_name,
+            counterspeller_uuid=str(self.source_entity_uuid),
+            original_caster_name=original_caster_name,
+            original_caster_uuid=str(self.target_entity_uuid),
+            spell_name=self.incoming_spell_name,
+            incoming_spell_level=self.incoming_spell_level,
+            counterspell_slot_level=self.counterspell_slot_level,
+            automatic=self.automatic,
+            check_total=self.check_total,
+            check_dc=self.check_dc,
+            succeeded=self.succeeded,
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SPELL_INTERRUPTION,
+            source_name=counterspeller_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=original_caster_name,
+            target_uuid=str(self.target_entity_uuid),
+            compact=compact,
+            verbose=compact,
+            detailed=compact,
+            data=data.model_dump(mode="json"),
+            success=self.succeeded,
+        )
 
 
 def _is_magic_missile_damage(event: Event) -> bool:
-    """Check if a TakeDamageEvent originates from Magic Missile by tracing parent events."""
-    parent_uuid = event.parent_event
-    while parent_uuid is not None:
-        parent = EventQueue.get_event_by_uuid(parent_uuid)
-        if parent is None:
-            break
-        if isinstance(parent, SpellEvent) and parent.name == "Magic Missile":
-            return True
-        parent_uuid = parent.parent_event
-    return False
+    """Return whether typed damage identity matches a Magic Missile dart."""
+    return (
+        isinstance(event, TakeDamageEvent)
+        and event.effect_id == MAGIC_MISSILE_DAMAGE_EFFECT_ID
+    )
 
 
 class ShieldBuff(BaseCondition):
@@ -54,6 +119,15 @@ class ShieldBuff(BaseCondition):
     tags: Set[ConditionTag] = Field(
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup, suppression, and rules filters.",
+    )
+    outcome_protections: Tuple[OutcomeProtection, ...] = Field(
+        default_factory=lambda: (
+            OutcomeProtection(
+                protection_id="dnd.spells.abjuration.ShieldBuff.magic_missile",
+                blocked_effect_ids=frozenset({MAGIC_MISSILE_DAMAGE_EFFECT_ID}),
+            ),
+        ),
+        description="Typed effects completely blocked while Shield is active.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -92,7 +166,7 @@ class ShieldBuff(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.TAKE_DAMAGE,
-                    event_phase=EventPhase.EFFECT,
+                    event_phase=EventPhase.EXECUTION,
                     event_target_entity_uuid=target_uuid
                 )
             ],
@@ -226,6 +300,8 @@ def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
     """
     return EventHandler(
         name="Shield",
+        semantic_key="reaction.spell.shield",
+        content_kind=ContentKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -235,7 +311,7 @@ def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
             ),
             Trigger(
                 event_type=EventType.TAKE_DAMAGE,
-                event_phase=EventPhase.EFFECT,
+                event_phase=EventPhase.EXECUTION,
                 event_target_entity_uuid=source_entity_uuid
             )
         ],
@@ -370,6 +446,22 @@ class MageArmor(SpellAction):
         description="Touch range for the target.",
     )
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Mage Armor's protective AC condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.mage_armor",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.mage_armor.ac_floor",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.mage_armor",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.MageArmorCondition"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target is unarmored and in range."""
 
@@ -481,6 +573,23 @@ class ProtectionFromEnergy(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
     chosen_energy_type: DamageType = Field(default=DamageType.FIRE, description="Energy damage type selected for resistance.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Protection from Energy's resistance condition."""
+        _ = actor
+        energy_key = self.chosen_energy_type.value.lower()
+        return ActionTargetEffectProfile(
+            semantic_id=f"support.protection_from_energy.{energy_key}",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id=f"support.protection_from_energy.{energy_key}",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=(f"selected_target.resistance.{energy_key}",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.ProtectionFromEnergyEffect"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
@@ -607,6 +716,26 @@ class Stoneskin(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Stoneskin's physical resistance condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.stoneskin",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.stoneskin.physical_resistance",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=(
+                        "selected_target.resistance.bludgeoning",
+                        "selected_target.resistance.piercing",
+                        "selected_target.resistance.slashing",
+                    ),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.StoneskinEffect"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
 
@@ -663,6 +792,49 @@ class Stoneskin(SpellAction):
         )
 
 
+def _complete_counterspell_reaction(
+    incoming_event: SpellEvent,
+    counterspeller: Entity,
+    original_caster: Entity,
+    *,
+    slot_level: int,
+    automatic: bool,
+    succeeded: bool,
+    check_total: Optional[int] = None,
+    check_dc: Optional[int] = None,
+) -> CounterspellReactionEvent:
+    """Emit one complete typed reaction event for observation and combat logs."""
+    outcome_code = (
+        COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+        if succeeded
+        else COUNTERSPELL_FAILURE_OUTCOME_CODE
+    )
+    declaration = CounterspellReactionEvent(
+        source_entity_uuid=counterspeller.uuid,
+        target_entity_uuid=original_caster.uuid,
+        source_entity_name=counterspeller.name,
+        target_entity_name=original_caster.name,
+        triggered_event_uuid=incoming_event.uuid,
+        triggered_lineage_uuid=incoming_event.lineage_uuid,
+        incoming_spell_name=incoming_event.name,
+        incoming_spell_level=incoming_event.cast_at_level or incoming_event.spell_level,
+        counterspell_slot_level=slot_level,
+        automatic=automatic,
+        check_total=check_total,
+        check_dc=check_dc,
+        succeeded=succeeded,
+        outcome_code=outcome_code,
+    )
+    effect = declaration.phase_to(
+        EventPhase.EFFECT,
+        status_message="Counterspell reaction resolved.",
+    )
+    return effect.phase_to(
+        EventPhase.COMPLETION,
+        status_message="Counterspell reaction completed.",
+    )
+
+
 def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """Attempt to counter a visible spell cast within sixty feet.
 
@@ -686,6 +858,8 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     spell_caster = Entity.get(event.source_entity_uuid)
     if not spell_caster:
         return None
+    if not entity.is_enemy(spell_caster):
+        return None
     distance = entity.senses.get_feet_distance(spell_caster.position)
     if distance > 60:
         return None
@@ -696,18 +870,26 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     if entity.get_lowest_spell_slot(3) is None:
         return None
 
-    spell_cast_level = 0
-    if isinstance(event, SpellEvent):
-        spell_cast_level = event.cast_at_level or event.spell_level
-    if spell_cast_level <= 0:
+    if not isinstance(event, SpellEvent):
         return None
+    spell_cast_level = event.cast_at_level or event.spell_level
 
-    auto_slot = entity.get_lowest_spell_slot(spell_cast_level)
+    auto_slot = entity.get_lowest_spell_slot(max(3, spell_cast_level))
     if auto_slot is not None:
         entity.action_economy.consume("reactions", 1)
         entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
+        _complete_counterspell_reaction(
+            event,
+            entity,
+            spell_caster,
+            slot_level=auto_slot,
+            automatic=True,
+            succeeded=True,
+        )
         return event.cancel(
-            status_message=f"{entity.name} casts Counterspell (L{auto_slot} slot) - auto-counters L{spell_cast_level} spell!"
+            status_message="The spell was interrupted.",
+            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+            outcome_source_entity_uuid=entity.uuid,
         )
 
     cheap_slot = entity.get_lowest_spell_slot(3)
@@ -723,19 +905,40 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     d20 = random.randint(1, 20)
     check_total = d20 + ability_mod
     if check_total >= dc:
-        return event.cancel(
-            status_message=f"{entity.name} casts Counterspell (L{cheap_slot} slot) - check {check_total} vs DC {dc} - countered!"
+        _complete_counterspell_reaction(
+            event,
+            entity,
+            spell_caster,
+            slot_level=cheap_slot,
+            automatic=False,
+            succeeded=True,
+            check_total=check_total,
+            check_dc=dc,
         )
-    else:
-        return event.model_copy(update={
-            "status_message": f"{entity.name} casts Counterspell (L{cheap_slot} slot) - check {check_total} vs DC {dc} - FAILED"
-        })
+        return event.cancel(
+            status_message="The spell was interrupted.",
+            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+            outcome_source_entity_uuid=entity.uuid,
+        )
+    _complete_counterspell_reaction(
+        event,
+        entity,
+        spell_caster,
+        slot_level=cheap_slot,
+        automatic=False,
+        succeeded=False,
+        check_total=check_total,
+        check_dc=dc,
+    )
+    return None
 
 
 def create_counterspell_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create a Counterspell reaction handler for an entity."""
     return EventHandler(
         name="Counterspell",
+        semantic_key="reaction.spell.counterspell",
+        content_kind=ContentKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -1085,6 +1288,25 @@ class Banishment(SpellAction):
     )
     valid_target_filter: str = Field(default="enemies", description="Target filter key for available action discovery.")
     include_self: bool = Field(default=False, description="Whether self-targeting is allowed.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Banishment's save-based removal branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.banishment",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.banishment.banished",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="charisma",
+                    condition_fact_ids=("selected_target.condition.banished",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.BanishedCondition"}),
+                ),
+            ),
+        )
 
     def get_multi_target_count(self) -> int:
         """1 target base + 1 per level above 4th."""
@@ -1523,6 +1745,25 @@ class ProtectionFromPoison(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare poison resistance and Poisoned immunity support."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.protection_from_poison",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.protection_from_poison.resistance",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=(
+                        "selected_target.resistance.poison",
+                        "selected_target.immunity.condition.poisoned",
+                    ),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.ProtectionFromPoisonEffect"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
@@ -1610,16 +1851,18 @@ class DeathWardEffect(BaseCondition):
             entity = Entity.get(target_uuid)
             if not entity:
                 return None
-            current_hp = entity.get_hp()
-            damage = event.total_damage
-            if current_hp - damage > 0:
+            current_hp = entity.get_normal_hp()
+            preview = entity.preview_take_damage(event)
+            if current_hp - preview.normal_hit_point_damage > 0:
                 return None
-            new_damage = current_hp - 1
+            damage_cap = max(0, current_hp - 1)
+            if event.normal_hit_point_damage_cap is not None:
+                damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
             if "Death Ward" in entity.active_conditions:
                 entity.remove_condition("Death Ward", parent_event=event)
             return event.model_copy(update={
                 "modified": True,
-                "final_damage": max(0, new_damage),
+                "normal_hit_point_damage_cap": damage_cap,
                 "status_message": f"Death Ward! {entity.name} survives with 1 HP"
             })
 
@@ -1664,6 +1907,22 @@ class DeathWard(SpellAction):
     )
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Death Ward's one-shot lethal protection condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.death_ward",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.death_ward.lethal_protection",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.death_ward",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.DeathWardEffect"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1929,6 +2188,26 @@ class FreedomOfMovement(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Freedom of Movement's mobility protection condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.freedom_of_movement",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.freedom_of_movement.mobility",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=(
+                        "selected_target.ignore_difficult_terrain",
+                        "selected_target.immunity.condition.grappled",
+                        "selected_target.immunity.condition.restrained",
+                    ),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.FreedomOfMovementEffect"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
@@ -2070,6 +2349,22 @@ class Resistance(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Resistance's one-use saving-throw support condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.resistance",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.resistance.save_bonus",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.resistance",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.ResistanceEffect"}),
+                ),
+            ),
+        )
+
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -2160,6 +2455,22 @@ class ShieldOfFaith(SpellAction):
         Cost(name="Shield of Faith Cost", cost_type="bonus_actions", cost=1,
              evaluator=entity_action_economy_cost_evaluator)
     ], description="Action-economy costs paid to cast the spell.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Shield of Faith's AC bonus condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.shield_of_faith",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.shield_of_faith.ac_bonus",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.shield_of_faith",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.ShieldOfFaithEffect"}),
+                ),
+            ),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2258,6 +2569,22 @@ class Aid(SpellAction):
     def get_num_projectiles(self) -> int:
         """Return Aid's current fixed target count."""
         return 3
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Aid's maximum-hit-point support condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.aid",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.aid.max_hp",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.aid",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.AidEffect"}),
+                ),
+            ),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2432,6 +2759,23 @@ class Sanctuary(SpellAction):
         Cost(name="Sanctuary Cost", cost_type="bonus_actions", cost=1,
              evaluator=entity_action_economy_cost_evaluator)
     ], description="Action-economy costs paid to cast the spell.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Sanctuary's attack-ward condition."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="support.sanctuary",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.sanctuary.ward",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.sanctuary",),
+                    condition_semantic_keys=frozenset({"dnd.spells.abjuration.SanctuaryEffect"}),
+                ),
+            ),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)

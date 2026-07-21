@@ -491,6 +491,28 @@ class StaticValue(BaseValue):
         """
         return self._score(normalized=True)
 
+    def normalized_score_excluding(self, modifier_uuids: set[UUID]) -> int:
+        """Return the normalized static score without selected value modifiers.
+
+        Args:
+            modifier_uuids: Numerical modifier UUIDs omitted from the sum.
+
+        Returns:
+            Filtered score with this channel's constraints still applied.
+        """
+        modifier_sum = sum(
+            modifier.normalized_value
+            for modifier_uuid, modifier in self.value_modifiers.items()
+            if modifier_uuid not in modifier_uuids
+        )
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(modifier_sum, self.max))
+        if self.max is not None:
+            return min(modifier_sum, self.max)
+        if self.min is not None:
+            return max(self.min, modifier_sum)
+        return modifier_sum
+
     @computed_field
     @property
     def advantage_sum(self) -> int:
@@ -1562,6 +1584,34 @@ class ModifiableValue(BaseValue):
             Score computed from each active channel's normalized score.
         """
         return self._score(normalized=True)
+
+    def normalized_score_excluding_static_modifiers(
+        self,
+        modifier_uuids: set[UUID],
+    ) -> int:
+        """Return the aggregate normalized score without selected static modifiers.
+
+        Args:
+            modifier_uuids: Static numerical modifier UUIDs omitted from every
+                active static channel.
+
+        Returns:
+            Filtered aggregate with channel and value constraints preserved.
+        """
+        channel_scores = [
+            channel.normalized_score_excluding(modifier_uuids)
+            if isinstance(channel, StaticValue)
+            else channel.normalized_score
+            for channel in self.get_typed_modifiers()
+        ]
+        score = sum(channel_scores)
+        if self.max is not None and self.min is not None:
+            return max(self.min, min(score, self.max))
+        if self.max is not None:
+            return min(score, self.max)
+        if self.min is not None:
+            return max(self.min, score)
+        return score
 
     @computed_field
     @property

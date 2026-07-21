@@ -2,6 +2,9 @@
 
 from uuid import UUID, uuid4
 
+import pytest
+
+import dnd.core.gridmap as gridmap_module
 from dnd.blocks.base_item import BaseItem
 from dnd.core.aoe import Cone, Cylinder, Line, Sphere
 from dnd.core.base_block import BaseBlock, MovementMode
@@ -369,6 +372,68 @@ def test_eb_11_007_directional_channels_are_independent() -> None:
     assert (0, 1) in set(grid.compute_fov((1, 1), max_distance=3))
 
 
+def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
+    """EB-11-022: cached FOV cannot survive changed vision topology."""
+    reset_grid_state(width=6, height=3)
+    grid = get_map()
+
+    first_fov = set(grid.compute_fov((0, 1), max_distance=6))
+    first_revision = grid.vision_revision
+    assert (5, 1) in first_fov
+
+    wall = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Vision Cache Wall",
+        is_pickable=False,
+        blocks_vision_field=True,
+    )
+    grid.place_object(wall.uuid, (2, 1))
+
+    second_fov = set(grid.compute_fov((0, 1), max_distance=6))
+
+    assert grid.vision_revision > first_revision
+    assert (5, 1) not in second_fov
+    assert (1, 1) in second_fov
+
+
+def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EB-11-023: AoE propagation caches follow physical blocker revisions."""
+    reset_grid_state(width=6, height=3)
+    grid = get_map()
+    original_compute_fov = gridmap_module.compute_fov
+    compute_calls = 0
+
+    def track_compute_fov(*args, **kwargs):
+        nonlocal compute_calls
+        compute_calls += 1
+        return original_compute_fov(*args, **kwargs)
+
+    monkeypatch.setattr(gridmap_module, "compute_fov", track_compute_fov)
+    first_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
+    first_revision = grid.propagation_revision
+    first_fov.append((99, 99))
+    second_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
+
+    assert compute_calls == 1
+    assert (99, 99) not in second_fov
+    assert (5, 1) in second_fov
+
+    wall = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Propagation Cache Wall",
+        is_pickable=False,
+        blocks_vision_field=True,
+    )
+    grid.place_object(wall.uuid, (2, 1))
+    third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
+
+    assert grid.propagation_revision > first_revision
+    assert compute_calls == 2
+    assert (5, 1) not in third_fov
+
+
 def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> None:
     """EB-11-017: push movement and Jump both consult directional blockers."""
     reset_grid_state(width=4, height=3)
@@ -728,6 +793,7 @@ if __name__ == "__main__":
         test_eb_11_015_dead_entities_become_non_blocking_for_paths,
         test_eb_11_006_directional_borders_block_transitions_and_emit_metadata,
         test_eb_11_007_directional_channels_are_independent,
+        test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change,
         test_eb_11_017_forced_movement_and_jump_respect_directional_blockers,
         test_eb_11_008_hazards_can_be_excluded_from_safe_paths,
         test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths,

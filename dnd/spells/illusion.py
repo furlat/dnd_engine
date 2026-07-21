@@ -11,8 +11,22 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 from typing import cast as type_cast
 
-from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, DurationType, HazardFilter
+from dnd.core.base_actions import (
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    OutcomeResolution,
+    TargetEffectDisposition,
+    TargetType,
+)
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionAgencyDenial,
+    ConditionRemovalTrigger,
+    ConditionTag,
+    Duration,
+    DurationType,
+    HazardFilter,
+)
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.dice import AttackOutcome
@@ -87,6 +101,22 @@ class Blur(SpellAction):
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Blur's defensive self condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="defense.blur",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="defense.blur.incoming_disadvantage",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("actor.condition.blur",),
+                    condition_semantic_keys=frozenset({"dnd.spells.illusion.BlurEffect"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate that the caster exists for this self spell."""
@@ -268,6 +298,28 @@ class Fear(SpellAction):
                 length_feet=30
             )
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Fear's save-based frightened branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.fear",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.fear",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=("selected_target.condition.frightened",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.illusion.FearEffect",
+                        "dnd.conditions.Frightened",
+                    }),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction."""
         caster = Entity.get(self.source_entity_uuid)
@@ -345,6 +397,14 @@ class HypnoticPatternEffect(BaseCondition):
     name: str = Field(default="Hypnotic Pattern", description="Condition name.")
     description: str = Field(default="Charmed and incapacitated by swirling pattern", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
+    removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
+        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
+        description="Positive applied damage ends the pattern for this target.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="The complete effect removes the target's turn agency.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply the charmed/incapacitated condition tree and break handler.
@@ -405,7 +465,6 @@ class HypnoticPatternEffect(BaseCondition):
         def damage_break_processor(event: Event, _: UUID) -> Optional[Event]:
             if event.target_entity_uuid != target_uuid:
                 return None
-
             target = Entity.get(target_uuid)
             if not target:
                 return None
@@ -421,7 +480,7 @@ class HypnoticPatternEffect(BaseCondition):
             name=f"Hypnotic Pattern Damage Break ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TAKE_DAMAGE, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT)
             ],
             event_processor=damage_break_processor
         )
@@ -462,6 +521,29 @@ class HypnoticPattern(SpellAction):
                 size_feet=30,
                 centered=True
             )
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Hypnotic Pattern's save-based agency denial."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.hypnotic_pattern",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.hypnotic_pattern",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=("selected_target.condition.hypnotic_pattern",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.illusion.HypnoticPatternEffect",
+                        "dnd.conditions.Charmed",
+                        "dnd.conditions.Incapacitated",
+                    }),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
@@ -745,6 +827,22 @@ class Invisibility(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Invisibility's selected-target stealth condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="defense.invisibility",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="defense.invisibility.hidden",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.invisible",),
+                    condition_semantic_keys=frozenset({"dnd.conditions.InvisibilityEffect"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
         caster = Entity.get(self.source_entity_uuid)
@@ -819,6 +917,22 @@ class GreaterInvisibility(SpellAction):
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Greater Invisibility's maintained stealth condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="defense.greater_invisibility",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="defense.greater_invisibility.hidden",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.greater_invisibility",),
+                    condition_semantic_keys=frozenset({"dnd.conditions.GreaterInvisibilityEffect"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
@@ -1018,6 +1132,22 @@ class MirrorImage(SpellAction):
     concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Mirror Image's defensive duplicate condition."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="defense.mirror_image",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="defense.mirror_image.duplicates",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("actor.condition.mirror_image",),
+                    condition_semantic_keys=frozenset({"dnd.spells.illusion.MirrorImageEffect"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate that the caster exists for this self spell."""

@@ -1,13 +1,14 @@
 from uuid import UUID, uuid4
-from pydantic import Field, computed_field, BaseModel, field_serializer, model_validator
+from pydantic import ConfigDict, Field, computed_field, BaseModel, field_serializer, model_validator
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
 from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
+from dnd.core.events import BaseHandler, Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.content import ContentKind
 
 
 class HazardFilter(str, Enum):
@@ -29,6 +30,7 @@ class ConditionTag(str, Enum):
     PETRIFICATION = "petrification"
     ABILITY_SCORE_REDUCTION = "ability_score_reduction"
     HIT_POINT_MAXIMUM_REDUCTION = "hit_point_maximum_reduction"
+    CONCENTRATION = "concentration"
 
 
 class ConditionCategory(str, Enum):
@@ -39,6 +41,19 @@ class ConditionCategory(str, Enum):
     INTERNAL = "internal"
 
 
+class ConditionRemovalTrigger(str, Enum):
+    """Observable state transition that removes a condition."""
+
+    POSITIVE_DAMAGE_APPLIED = "positive_damage_applied"
+
+
+class ConditionAgencyDenial(str, Enum):
+    """Degree of turn agency denied while a condition remains active."""
+
+    NONE = "none"
+    FULL_TURN = "full_turn"
+
+
 class DurationType(str, Enum):
     """Supported duration progression modes for conditions."""
 
@@ -46,6 +61,18 @@ class DurationType(str, Enum):
     PERMANENT = "permanent"
     UNTIL_LONG_REST = "until_long_rest"
     ON_CONDITION = "on_condition"
+
+
+class OutcomeProtection(BaseModel):
+    """Condition-owned rule that blocks specifically identified effects."""
+
+    model_config = ConfigDict(frozen=True)
+
+    protection_id: str = Field(description="Stable identity of the protection rule.")
+    blocked_effect_ids: frozenset[str] = Field(
+        default_factory=frozenset,
+        description="Stable effect identities fully blocked by this protection.",
+    )
 
 
 class Duration(BaseObject):
@@ -246,6 +273,34 @@ class ConditionRemovalEvent(Event):
 class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
 
+    semantic_key: Optional[str] = Field(
+        default=None,
+        description="Stable rules-content identity; defaults to the condition class identity.",
+    )
+    content_kind: ContentKind = Field(
+        default=ContentKind.CONDITION,
+        description="Rules-content family represented by this condition.",
+    )
+
+    def get_semantic_key(self) -> str:
+        """Return an explicit key or the stable condition class identity."""
+        if self.semantic_key:
+            return self.semantic_key
+        return f"{type(self).__module__}.{type(self).__name__}"
+
+    def get_content_kind(self) -> ContentKind:
+        """Return the declared or source-domain-derived rules-content family."""
+        if self.content_kind != ContentKind.CONDITION:
+            return self.content_kind
+        module = type(self).__module__
+        if module == "dnd.classes.feats":
+            return ContentKind.FEAT
+        if module.startswith("dnd.monsters"):
+            return ContentKind.TRAIT
+        if module.startswith("dnd.classes"):
+            return ContentKind.CLASS_FEATURE
+        return ContentKind.CONDITION
+
     condition_category: ConditionCategory = Field(
         default=ConditionCategory.CONDITION,
         description="Broad category used by logs and condition consumers."
@@ -306,6 +361,49 @@ class BaseCondition(BaseObject):
         default_factory=set,
         description="Condition tags such as MAGICAL, CURSE, DISEASE, POISON, EXHAUSTION, PETRIFICATION, ability-score reduction, and hit-point-maximum reduction."
     )
+    outcome_protections: Tuple[OutcomeProtection, ...] = Field(
+        default_factory=tuple,
+        description="Typed effect protections active while this condition is applied.",
+    )
+    removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
+        default_factory=frozenset,
+        description="Typed state transitions that remove this condition.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.NONE,
+        description="Turn agency denied by this complete condition while active.",
+    )
+    applied_source_event_cursor: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Objective event cursor of the completed application boundary.",
+    )
+
+    def get_action_target_effect_profile(self, action: Any, actor: Any) -> Optional[Any]:
+        """Return target-effect metadata this condition adds to an action.
+
+        Args:
+            action: Action template being discovered.
+            actor: Entity discovering that action.
+
+        Returns:
+            A dependency-neutral target-effect profile, or `None` when this
+            condition does not modify the discovered action.
+        """
+        return None
+
+    def get_action_damage_roll_profiles(self, action: Any, actor: Any) -> Tuple[Any, ...]:
+        """Return extra damage profiles this condition adds to an action.
+
+        Args:
+            action: Action template being discovered.
+            actor: Entity discovering that action.
+
+        Returns:
+            Dependency-neutral damage-profile metadata. The action layer
+            validates concrete model types before exposing them.
+        """
+        return ()
 
     @property
     def magical_origin(self) -> bool:
@@ -507,6 +605,18 @@ class BaseCondition(BaseObject):
             self.modifers_uuids[block_uuid].append(modifiers_uuids)
 
         for event_handler_uuid in event_handlers_uuids:
+            handler = BaseObject.get(event_handler_uuid)
+            if isinstance(handler, BaseHandler):
+                if handler.content_kind == ContentKind.UNCLASSIFIED:
+                    handler.content_kind = self.get_content_kind()
+                if handler.semantic_key is None:
+                    handler_name = "_".join(
+                        part for part in "".join(
+                            character.lower() if character.isalnum() else "_"
+                            for character in handler.name
+                        ).split("_") if part
+                    )
+                    handler.semantic_key = f"{self.get_semantic_key()}.handler.{handler_name or 'effect'}"
             if event_handler_uuid not in self.event_handlers_uuids:
                 self.event_handlers_uuids.append(event_handler_uuid)
         for sub_condition_uuid in sub_conditions_uuids:
@@ -518,6 +628,7 @@ class BaseCondition(BaseObject):
 
         self.applied = True
         completed_event = effect_event.phase_to(EventPhase.COMPLETION)
+        self.applied_source_event_cursor = EventQueue.event_cursor()
         return completed_event
 
     def remove_condition_modifiers(self) -> bool:

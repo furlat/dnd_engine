@@ -16,6 +16,7 @@ class PlayerType(str, Enum):
     HUMAN = "human"
     CODEX = "codex"
     AI = "ai"
+    OBSERVER = "observer"
 
 
 class ConnectionStatus(str, Enum):
@@ -233,8 +234,12 @@ class SessionManager:
 
     @classmethod
     def reset(cls) -> None:
-        """Reset the singleton (for testing)."""
-        cls._instance = None
+        """Clear the singleton without invalidating existing owner references."""
+        if cls._instance is None:
+            return
+        cls._instance.sessions.clear()
+        cls._instance.games.clear()
+        cls._instance.active_game = None
 
     def create_session(
         self,

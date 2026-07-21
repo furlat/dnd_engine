@@ -22,12 +22,12 @@ class ExternalAIProcessManager:
         """Create an empty process manager."""
         self._processes: Dict[str, subprocess.Popen] = {}
 
-    def start_external_melee_agent(
+    def start_external_agent(
         self,
         session_id: UUID | str,
         base_url: str,
     ) -> subprocess.Popen:
-        """Start or replace the external melee agent for a session.
+        """Start or replace the external agent for a session.
 
         Args:
             session_id: AI session id assigned by the game session.
@@ -48,7 +48,7 @@ class ExternalAIProcessManager:
         command = [
             sys.executable,
             "-m",
-            "ai.external_melee_agent",
+            "ai.external_agent",
             "--base-url",
             base_url.rstrip("/"),
             "--session-id",

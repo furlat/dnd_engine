@@ -8,7 +8,26 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, ActionCategory, BaseCost
+from dnd.core.base_actions import (
+    ActionCategory,
+    ActionEvent,
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    ActionInformationOperation,
+    ActionWorldEffectAnchor,
+    ActionWorldEffectCertainty,
+    ActionWorldEffectProfile,
+    ActionWorldEffectScope,
+    ActionWorldEffectShape,
+    BaseAction,
+    BaseCost,
+    Cost,
+    InformationEffectProfile,
+    OutcomeResolution,
+    PositionDiscoveryContract,
+    TargetEffectDisposition,
+    TargetType,
+)
 from dnd.core.base_conditions import BaseCondition, ConditionTag, HazardFilter, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
@@ -122,6 +141,10 @@ class SpikeGrowth(SpellAction):
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.PIERCING, description="Primary damage type for VFX")
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for spike growth targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=150),
         description="Maximum range for the zone center.",
@@ -517,6 +540,29 @@ class Slow(SpellAction):
                 centered=True
             )
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Slow's failed-save action-economy debuff branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.slow",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.slow.debuff",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=(
+                        "selected_target.condition.slowed",
+                        "selected_target.reactions_blocked",
+                        "selected_target.speed_reduced",
+                    ),
+                    condition_semantic_keys=frozenset({"dnd.spells.transmutation.SlowedEffect"}),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
         caster = Entity.get(self.source_entity_uuid)
@@ -897,6 +943,38 @@ class DarkvisionSpell(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare the granted darkvision sense and possible discoveries.
+
+        Args:
+            actor: Entity discovering the spell. The sense contract is fixed.
+
+        Returns:
+            Typed information effects matching the runtime sense mode.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="information.darkvision",
+            information_effects=(
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.GRANT_SENSE,
+                    certainty=ActionWorldEffectCertainty.GUARANTEED,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.TARGET,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=60,
+                    sense_type=SensesType.DARKVISION.name.lower(),
+                ),
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.REVEAL_REGION,
+                    certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=60,
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)

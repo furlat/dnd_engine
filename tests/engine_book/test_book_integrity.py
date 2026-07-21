@@ -191,7 +191,7 @@ COMBAT_LOG_MODELS = {
         "EntitySpottedLogData",
         "HazardDetectedLogData",
         "HealLogData",
-        "SelfActionLogData",
+        "ActionLogData",
         "TurnLogData",
         "MultiEntityLogData",
         "CombatLogEntry",
@@ -205,7 +205,6 @@ CONTROLLER_MODELS = {
         "HumanController",
         "CodexController",
         "ExternalAIController",
-        "AIAgentController",
     },
 }
 ENCOUNTER_MODELS = {

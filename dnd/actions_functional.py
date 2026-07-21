@@ -12,13 +12,20 @@ from dnd.core.base_actions import (
     BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
     AvailableActionsResult, SPELL_SLOT_TEMPLATE_SEPARATOR,
 )
-from dnd.core.events import Event, EventHandler, Trigger, EventType, EventPhase, EventQueue
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
 from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
 from dnd.spells import ALL_SPELLS
-from dnd.blocks.base_item import UsableItem
+from dnd.blocks.base_item import UsableItem, consume_item_charge_before_action_completion
 from dnd.core.base_block import BaseBlock
 
 STANDARD_ENTITY_HANDLER_NAMES = {
@@ -119,6 +126,9 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
 
         base_movement = entity.action_economy.get_base_value("movement")
         half_movement = base_movement // 2
+        current_movement = entity.action_economy.movement.normalized_score
+        if current_movement < half_movement:
+            return None
         entity.action_economy.consume("movement", half_movement)
         entity.remove_condition("Prone")
         return None
@@ -208,18 +218,23 @@ def update_weapon_templates(entity: Entity) -> None:
         update_weapon_template(entity, slot)
 
 
-def get_available_actions(entity: Entity) -> AvailableActionsResult:
+def get_available_actions(
+    entity: Entity,
+    *,
+    legal_only: bool = False,
+) -> AvailableActionsResult:
     """Get all available actions for an entity.
 
     Wrapper around Entity.get_available_actions() for functional API consistency.
 
     Args:
         entity: Entity to query.
+        legal_only: When true, omit unaffordable rows from discovery.
 
     Returns:
         Grouped actions and valid targets.
     """
-    return entity.get_available_actions()
+    return entity.get_available_actions(legal_only=legal_only)
 
 
 def _parse_spell_variant_template_name(template_name: str) -> Tuple[str, Optional[int]]:
@@ -295,6 +310,35 @@ def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
     return action.model_copy(deep=True, update=update_dict)
 
 
+def _disclosed_movement_path(
+    entity: Entity,
+    target: AvailableTarget,
+    *,
+    prefer_safe: bool,
+) -> Optional[List[Tuple[int, int]]]:
+    """Choose an affordable path from the selected discovery target.
+
+    Args:
+        entity: Entity paying the movement cost.
+        target: Server-disclosed movement target selected by index.
+        prefer_safe: Whether an affordable disclosed safe route is preferred.
+
+    Returns:
+        The exact path to bind, or `None` when discovery supplied no path.
+    """
+    movement_remaining = entity.action_economy.movement.normalized_score
+    if (
+        prefer_safe
+        and target.safe_path is not None
+        and target.safe_path_cost is not None
+        and target.safe_path_cost <= movement_remaining
+    ):
+        return list(target.safe_path)
+    if target.path is not None:
+        return list(target.path)
+    return None
+
+
 def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
                     prefer_safe: bool = True) -> Optional[Event]:
     """Execute an action from template + target.
@@ -315,6 +359,17 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
         ValueError: If the template is not found or the target is invalid.
     """
     template = _resolve_executable_template(entity, template_name)
+    return _execute_bound_action(entity, template, target, prefer_safe=prefer_safe)
+
+
+def _execute_bound_action(
+    entity: Entity,
+    template: BaseAction,
+    target: AvailableTarget,
+    *,
+    prefer_safe: bool,
+) -> Optional[Event]:
+    """Execute one exact discovered action object against an authorized target."""
 
     eff_tt = template.effective_target_type
     if eff_tt == TargetType.ENTITY:
@@ -340,7 +395,19 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
     elif eff_tt in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
             raise ValueError("POSITION action requires position")
-        instance = _bind_executable_action(template, end_position=target.position, prefer_safe=prefer_safe)
+        position_overrides: dict[str, object] = {
+            "end_position": target.position,
+            "prefer_safe": prefer_safe,
+        }
+        if isinstance(template, Move):
+            disclosed_path = _disclosed_movement_path(
+                entity,
+                target,
+                prefer_safe=prefer_safe,
+            )
+            if disclosed_path is not None:
+                position_overrides["path"] = disclosed_path
+        instance = _bind_executable_action(template, **position_overrides)
 
     elif eff_tt == TargetType.OBJECT:
         if target.target_uuid is None:
@@ -351,6 +418,81 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
         instance = _bind_executable_action(template)
 
     return instance.apply()
+
+
+def _validated_extra_target_uuids(
+    action_info: AvailableActionInfo,
+    primary_target: AvailableTarget,
+    extra_target_uuids: Optional[List[str]],
+) -> List[UUID]:
+    """Validate additional targets against one exact engine discovery row."""
+    if not extra_target_uuids:
+        return []
+    if action_info.target_type != TargetType.MULTI_ENTITY or action_info.num_projectiles is None:
+        raise ValueError("Additional targets require a multi-entity action")
+    if len(extra_target_uuids) + 1 > action_info.num_projectiles:
+        raise ValueError("Additional targets exceed the action allocation count")
+    try:
+        selected = [UUID(target_uuid) for target_uuid in extra_target_uuids]
+    except ValueError as exc:
+        raise ValueError("Additional target UUID is invalid") from exc
+    legal_target_uuids = {
+        target.target_uuid
+        for target in action_info.valid_targets
+        if target.target_uuid is not None
+    }
+    if any(target_uuid not in legal_target_uuids for target_uuid in selected):
+        raise ValueError("Additional target is absent from the discovered target options")
+    allocation = [
+        *([primary_target.target_uuid] if primary_target.target_uuid is not None else []),
+        *selected,
+    ]
+    if action_info.allow_same_target is False and len(set(allocation)) != len(allocation):
+        raise ValueError("Action requires unique target allocation")
+    return selected
+
+
+def execute_available_action(
+    entity: Entity,
+    action_info: AvailableActionInfo,
+    target: AvailableTarget,
+    *,
+    extra_target_uuids: Optional[List[str]] = None,
+    prefer_safe: bool = True,
+) -> Optional[Event]:
+    """Execute one exact discovery row without name lookup or target mutation."""
+    validated_extras = _validated_extra_target_uuids(
+        action_info,
+        target,
+        extra_target_uuids,
+    )
+    bound_target = target.model_copy(
+        deep=True,
+        update={"extra_target_uuids": validated_extras or None},
+    )
+    if action_info.is_item_use and action_info.source_item_uuid:
+        action_name = (
+            action_info.template_name.split("__item_")[0]
+            if "__item_" in action_info.template_name
+            else action_info.template_name
+        )
+        if action_info.target_type == TargetType.SELF:
+            return execute_use_action(entity, action_info.source_item_uuid, action_name)
+        return execute_use_action(
+            entity,
+            action_info.source_item_uuid,
+            action_name,
+            bound_target,
+        )
+    template = action_info.execution_template
+    if template is None:
+        template = _resolve_executable_template(entity, action_info.template_name)
+    return _execute_bound_action(
+        entity,
+        template,
+        bound_target,
+        prefer_safe=prefer_safe,
+    )
 
 
 def execute_by_index(
@@ -392,19 +534,6 @@ def execute_by_index(
     if action_info is None:
         raise ValueError(f"Action {template_name} not available")
 
-    if action_info.is_item_use and action_info.source_item_uuid:
-        action_name = template_name.split("__item_")[0] if "__item_" in template_name else template_name
-        if action_info.target_type == TargetType.SELF:
-            return execute_use_action(entity, action_info.source_item_uuid, action_name)
-        target: Optional[AvailableTarget] = None
-        for t in action_info.valid_targets:
-            if t.index == target_index:
-                target = t
-                break
-        if target is None:
-            raise ValueError(f"Target index {target_index} not valid for {template_name}")
-        return execute_use_action(entity, action_info.source_item_uuid, action_name, target)
-
     target = None
     for t in action_info.valid_targets:
         if t.index == target_index:
@@ -414,10 +543,13 @@ def execute_by_index(
     if target is None:
         raise ValueError(f"Target index {target_index} not valid for {template_name}")
 
-    if extra_target_uuids:
-        target.extra_target_uuids = [UUID(uid) for uid in extra_target_uuids]
-
-    return execute_action(entity, template_name, target, prefer_safe=prefer_safe)
+    return execute_available_action(
+        entity,
+        action_info,
+        target,
+        extra_target_uuids=extra_target_uuids,
+        prefer_safe=prefer_safe,
+    )
 
 
 def register_spell(entity: Entity, spell_class: type, caster_level: int = 1) -> None:
@@ -548,10 +680,8 @@ def execute_use_action(
     else:
         instance = template.instantiate()
 
+    EventQueue.add_pre_completion_callback(consume_item_charge_before_action_completion)
     result = instance.apply()
-
-    if result and not result.canceled:
-        item.consume_charge(charge_cost)
 
     return result
 

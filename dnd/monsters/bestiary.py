@@ -20,7 +20,8 @@ from dnd.core.events import BodyPart
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.core.modifiers import DamageType, CreatureType
+from dnd.core.modifiers import DamageType, CreatureType, Size
+from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
 from dnd.core.values import ModifiableValue
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.actions import Hide, Disengage
@@ -57,6 +58,7 @@ GOBLIN_NIMBLE_HIDE_ACTION = "Nimble Escape: Hide"
 GOBLIN_NIMBLE_DISENGAGE_ACTION = "Nimble Escape: Disengage"
 
 GOBLIN_APPEARANCE = AppearanceConfig(
+    visual_scale=0.82,
     body_category="NakedBody",
     skin_tint=0x7A9A3A,
     head_category=None,
@@ -205,6 +207,7 @@ def create_goblin(
         position=position,
         faction=faction,
         weight=weight,
+        size=Size.SMALL,
         appearance=GOBLIN_APPEARANCE
     )
 
@@ -401,6 +404,7 @@ def create_goblin_archer(
         position=position,
         faction=faction,
         weight=weight,
+        size=Size.SMALL,
         appearance=GOBLIN_APPEARANCE
     )
 
@@ -438,10 +442,10 @@ def create_caster(
 
     No class features — use sorcerer_factory.create_sorcerer() for a real Sorcerer.
 
-    Level 5 caster with:
+    Full-caster progression with:
     - CHA 18 (primary casting stat)
     - DEX 14, CON 14 (survivability)
-    - Spell slots: 4/3/2 for levels 1/2/3
+    - Proficiency, hit dice, and spell slots determined by ``level``
     - Spells: Fireball, Magic Missile, BurningHands, LightningBolt, Shatter, Thunderwave
 
     Args:
@@ -475,7 +479,7 @@ def create_caster(
     )
 
     action_economy_config = ActionEconomyConfig(
-        spell_slots={1: 4, 2: 3, 3: 3, 4: 2, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1}
+        spell_slots=full_caster_spell_slots_for_level(level)
     )
 
     equipment_config = EquipmentConfig()
@@ -486,7 +490,7 @@ def create_caster(
         equipment=equipment_config,
         action_economy=action_economy_config,
         spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
-        proficiency_bonus=3,
+        proficiency_bonus=proficiency_bonus_for_level(level),
         position=position,
         faction=faction,
         appearance=CASTER_APPEARANCE

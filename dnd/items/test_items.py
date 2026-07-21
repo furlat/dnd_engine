@@ -10,7 +10,18 @@ from typing import Any, Optional, List, Tuple, cast as type_cast
 from uuid import UUID, uuid4
 from pydantic import Field
 
-from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
+from dnd.core.base_actions import (
+    ActionSelfSetupProfile,
+    ActionSetupDuration,
+    ActionSetupMaintenanceFailure,
+    ActionSetupMaintenanceProfile,
+    ActionSetupMaintenanceTrigger,
+    ActionPresentationKind,
+    BaseAction,
+    ActionEvent,
+    TargetType,
+    Cost,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent, WeaponSlot, SkillName, RangeType, Range, Damage
@@ -23,7 +34,12 @@ from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
-from dnd.actions import entity_action_economy_cost_evaluator, SpellAction, SpellEvent
+from dnd.actions import (
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_applier,
+    entity_action_economy_cost_evaluator,
+)
 from dnd.conditions import Concentrating, GreaterInvisibilityEffect
 from dnd.spells.evocation import BurningHands, FireBolt, Fireball, MagicMissile
 from dnd.spells.enchantment import HoldPerson
@@ -254,7 +270,7 @@ class PullLeverAction(BaseAction):
         for tile_uuid in self.trap_tile_uuids:
             tile = BaseBlock.get(tile_uuid)
             if tile is not None and "Spike Trap" in tile.active_conditions:
-                tile.remove_condition("Spike Trap")
+                tile.remove_condition("Spike Trap", parent_event=execution_event)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Trap deactivated")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Lever pulled")
 
@@ -691,7 +707,34 @@ def create_fireball_cannon(owner_uuid: UUID, position: Tuple[int, int] = (0, 0),
     return item
 
 
-class DrinkPotionAction(BaseAction):
+class PotionDrinkAction(BaseAction):
+    """Shared videogame rule for drinking a potion as a bonus action."""
+
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(
+                name="Drink Potion Cost",
+                cost_type="bonus_actions",
+                cost=1,
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ],
+        description="One bonus action consumed by every potion-drinking action.",
+    )
+    presentation_kind: ActionPresentationKind = Field(
+        default=ActionPresentationKind.DRINK,
+        description="Tells presentation clients to render a potion-drinking action.",
+    )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+        """Consume the potion's bonus-action cost after successful resolution."""
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
+        )
+
+
+class DrinkPotionAction(PotionDrinkAction):
     """Drink a potion to heal."""
 
     name: str = Field(default="Drink Potion", description="Action name for drinking this potion.")
@@ -703,15 +746,15 @@ class DrinkPotionAction(BaseAction):
         default=TargetType.SELF,
         description="Healing potions target the user.",
     )
-    costs: List[Cost] = Field(
-        default_factory=list,
-        description="No-cost action-economy payload for the test potion.",
-    )
     source_item_uuid: Optional[UUID] = Field(
         default=None,
         description="UUID of the potion item this action consumes.",
     )
     heal_amount: int = Field(default=7, description="Hit points restored by this potion action.")
+
+    def get_fixed_healing(self, actor: Any) -> Optional[int]:
+        """Return the potion's deterministic restoration amount."""
+        return self.heal_amount
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1023,7 +1066,7 @@ def create_arcane_device(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -
     return device
 
 
-class DrinkGreaterInvisibilityPotionAction(BaseAction):
+class DrinkGreaterInvisibilityPotionAction(PotionDrinkAction):
     """Drink a potion to become invisible (BG3-style Greater Invisibility)."""
 
     name: str = Field(default="Drink Greater Invisibility Potion", description="Action name for drinking this potion.")
@@ -1032,8 +1075,31 @@ class DrinkGreaterInvisibilityPotionAction(BaseAction):
         description="Action description shown for greater invisibility potions.",
     )
     target_type: TargetType = Field(default=TargetType.SELF, description="Greater invisibility potions target the user.")
-    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for drinking the potion.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the potion item being consumed.")
+
+    def get_self_setup_profile(self, actor: Any) -> ActionSelfSetupProfile:
+        """Return the typed combat consequences of greater invisibility."""
+        stealth_bonus = actor.skill_bonus(target_entity_uuid=None, skill_name="stealth")
+        return ActionSelfSetupProfile(
+            semantic_id="setup.greater_invisibility",
+            duration=ActionSetupDuration.UNTIL_REMOVED,
+            condition_fact_ids=("actor.condition.invisible",),
+            active_condition_semantic_keys=frozenset({
+                "dnd.conditions.GreaterInvisibilityEffect",
+            }),
+            grants_outgoing_attack_advantage=True,
+            grants_incoming_attack_disadvantage=True,
+            grants_invisibility=True,
+            maintenance=ActionSetupMaintenanceProfile(
+                trigger=ActionSetupMaintenanceTrigger.REVEALING_ACTION,
+                skill_name="stealth",
+                initial_dc=15,
+                dc_increment_per_success=1,
+                check_bonus=stealth_bonus.normalized_score,
+                check_advantage=stealth_bonus.advantage,
+                failure=ActionSetupMaintenanceFailure.REMOVE_SETUP,
+            ),
+        )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -1423,7 +1489,7 @@ def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = T
     return torch
 
 
-class DrinkHastePotionAction(BaseAction):
+class DrinkHastePotionAction(PotionDrinkAction):
     """Drink a potion to gain Haste (no concentration, no lethargy)."""
 
     name: str = Field(default="Drink Haste Potion", description="Action name for drinking this potion.")
@@ -1432,8 +1498,23 @@ class DrinkHastePotionAction(BaseAction):
         description="Action description shown for haste potions.",
     )
     target_type: TargetType = Field(default=TargetType.SELF, description="Haste potions target the user.")
-    costs: List[Cost] = Field(default_factory=list, description="No-cost action-economy payload for drinking the potion.")
     source_item_uuid: Optional[UUID] = Field(default=None, description="UUID of the potion item being consumed.")
+
+    def get_self_setup_profile(self, actor: Any) -> ActionSelfSetupProfile:
+        """Return the typed combat consequences of the current Haste effect."""
+        return ActionSelfSetupProfile(
+            semantic_id="setup.haste",
+            duration=ActionSetupDuration.UNTIL_REMOVED,
+            maximum_duration_rounds=10,
+            condition_fact_ids=("actor.condition.haste",),
+            active_condition_semantic_keys=frozenset({
+                "dnd.spells.transmutation.HasteEffect",
+            }),
+            armor_class_bonus=2,
+            movement_speed_multiplier=2.0,
+            extra_actions_per_turn=1,
+            incapacitates_on_removal=True,
+        )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)

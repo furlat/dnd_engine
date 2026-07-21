@@ -2,23 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Tuple
+from typing import Any, Iterable, Tuple, cast
 
 from ai.observation.models import (
+    KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
     ObservationFrame,
-    ObservationMaterializedState,
+    ObservationFrameType,
     ObservationObjectFact,
     ObservationObserverState,
     ObservationPatchType,
     ObservationSessionState,
     ObservationSnapshot,
+    ObservationStateReplacement,
+    SubjectiveWorldState,
     ObservationTileFact,
+)
+from ai.observation.legacy_semantics import (
+    migrate_legacy_frame_semantics,
+    migrate_legacy_snapshot_semantics,
 )
 
 
-def materialize_snapshot(snapshot: ObservationSnapshot | dict[str, Any]) -> ObservationMaterializedState:
+def materialize_snapshot(snapshot: ObservationSnapshot | dict[str, Any]) -> SubjectiveWorldState:
     """Create a materialized subjective state from a full snapshot.
 
     Args:
@@ -28,9 +35,10 @@ def materialize_snapshot(snapshot: ObservationSnapshot | dict[str, Any]) -> Obse
         Materialized state keyed for efficient replay assertions.
     """
     if not isinstance(snapshot, ObservationSnapshot):
+        snapshot = cast(dict[str, Any], migrate_legacy_snapshot_semantics(snapshot))
         snapshot = ObservationSnapshot.model_validate(snapshot)
 
-    return ObservationMaterializedState(
+    return SubjectiveWorldState(
         observation_cursor=snapshot.observation_cursor,
         session=snapshot.session,
         encounter=snapshot.encounter,
@@ -38,14 +46,16 @@ def materialize_snapshot(snapshot: ObservationSnapshot | dict[str, Any]) -> Obse
         known_entities={entity.uuid: entity for entity in snapshot.known_entities},
         known_objects={obj.uuid: obj for obj in snapshot.known_objects},
         known_tiles={tile.key: tile for tile in snapshot.known_tiles},
-        combat_logs=[],
+        combat_logs=list(snapshot.combat_logs),
+        current_epoch=snapshot.current_epoch,
+        epoch_cursor=snapshot.current_epoch.epoch_index if snapshot.current_epoch is not None else 0,
     )
 
 
 def apply_observation_frame(
-    state: ObservationMaterializedState,
+    state: SubjectiveWorldState,
     frame: ObservationFrame | dict[str, Any],
-) -> ObservationMaterializedState:
+) -> SubjectiveWorldState:
     """Apply one subjective frame idempotently.
 
     Args:
@@ -56,12 +66,24 @@ def apply_observation_frame(
         Updated materialized state. Old or duplicate frames are ignored.
     """
     if not isinstance(frame, ObservationFrame):
+        frame = cast(dict[str, Any], migrate_legacy_frame_semantics(frame))
         frame = ObservationFrame.model_validate(frame)
 
     if frame.observation_cursor <= state.observation_cursor:
         return state
 
-    next_state = state.model_copy(deep=True)
+    next_state = state.model_copy(
+        update={
+            "observers": dict(state.observers),
+            "known_entities": dict(state.known_entities),
+            "known_objects": dict(state.known_objects),
+            "known_tiles": dict(state.known_tiles),
+            "combat_logs": list(state.combat_logs),
+        },
+        deep=False,
+    )
+    if frame.state_replacement is not None:
+        _apply_state_replacement(next_state, frame.state_replacement)
     for patch in frame.patches:
         if patch.patch_type == ObservationPatchType.SESSION:
             next_state.session = ObservationSessionState.model_validate(patch.data["session"])
@@ -73,24 +95,145 @@ def apply_observation_frame(
             _apply_observer_patch(next_state, patch.data)
         elif patch.patch_type == ObservationPatchType.ENTITY and "entity" in patch.data:
             entity = ObservationEntityFact.model_validate(patch.data["entity"])
-            next_state.known_entities[entity.uuid] = entity
+            next_state.known_entities[entity.uuid] = _merge_entity_fact(
+                next_state.known_entities.get(entity.uuid),
+                entity,
+            )
+        elif patch.patch_type == ObservationPatchType.ENTITY and "entity_update" in patch.data:
+            _apply_entity_update_patch(next_state, patch.data["entity_update"])
         elif patch.patch_type == ObservationPatchType.OBJECT and "object" in patch.data:
             obj = ObservationObjectFact.model_validate(patch.data["object"])
             next_state.known_objects[obj.uuid] = obj
+        elif patch.patch_type == ObservationPatchType.TILE and "tiles" in patch.data:
+            for tile_payload in patch.data["tiles"]:
+                tile = ObservationTileFact.model_validate(tile_payload)
+                next_state.known_tiles[tile.key] = _merge_tile_fact(
+                    next_state.known_tiles.get(tile.key),
+                    tile,
+                )
         elif patch.patch_type == ObservationPatchType.TILE and "tile" in patch.data:
             tile = ObservationTileFact.model_validate(patch.data["tile"])
-            next_state.known_tiles[tile.key] = tile
+            next_state.known_tiles[tile.key] = _merge_tile_fact(
+                next_state.known_tiles.get(tile.key),
+                tile,
+            )
         elif patch.patch_type == ObservationPatchType.COMBAT_LOG and "combat_log" in patch.data:
             next_state.combat_logs.append(patch.data["combat_log"])
 
     if frame.combat_log is not None and frame.combat_log not in next_state.combat_logs:
         next_state.combat_logs.append(frame.combat_log)
+    if frame.frame_type == ObservationFrameType.DECISION_EPOCH:
+        next_state.current_epoch = frame.decision_epoch
+        next_state.epoch_cursor = frame.decision_epoch.epoch_index if frame.decision_epoch is not None else 0
     next_state.observation_cursor = frame.observation_cursor
     return next_state
 
 
+def _apply_state_replacement(
+    state: SubjectiveWorldState,
+    replacement: ObservationStateReplacement,
+) -> None:
+    """Atomically replace subjective state at a session-control boundary."""
+    state.session = replacement.session
+    state.encounter = replacement.encounter
+    state.observers = {
+        observer.observer_uuid: observer
+        for observer in replacement.observers
+    }
+    state.known_entities = {
+        entity.uuid: entity
+        for entity in replacement.known_entities
+    }
+    state.known_objects = {
+        obj.uuid: obj
+        for obj in replacement.known_objects
+    }
+    state.known_tiles = {
+        tile.key: tile
+        for tile in replacement.known_tiles
+    }
+    state.combat_logs = list(replacement.combat_logs)
+    state.current_epoch = replacement.current_epoch
+    state.epoch_cursor = (
+        replacement.current_epoch.epoch_index
+        if replacement.current_epoch is not None
+        else 0
+    )
+
+
+def _apply_entity_update_patch(
+    state: SubjectiveWorldState,
+    data: dict,
+) -> None:
+    """Apply a partial entity update to an existing known fact."""
+    entity_uuid = data.get("uuid")
+    if not isinstance(entity_uuid, str):
+        return
+    previous = state.known_entities.get(entity_uuid)
+    if previous is None:
+        return
+    update = {
+        key: value
+        for key, value in data.items()
+        if key != "uuid"
+    }
+    position = update.get("position")
+    if isinstance(position, list):
+        update["position"] = tuple(position)
+    knowledge_state = update.get("knowledge_state")
+    if isinstance(knowledge_state, str):
+        update["knowledge_state"] = KnowledgeState(knowledge_state)
+    state.known_entities[entity_uuid] = previous.model_copy(update=update)
+
+
+def _merge_entity_fact(
+    previous: ObservationEntityFact | None,
+    current: ObservationEntityFact,
+) -> ObservationEntityFact:
+    """Merge monotonic knowledge into a replacement entity fact.
+
+    Args:
+        previous: Previously materialized subjective fact, when any.
+        current: Newly projected full fact.
+
+    Returns:
+        Current fact with terminal knowledge retained across redaction.
+    """
+    if previous is None:
+        return current
+
+    retained: dict[str, object] = {}
+    if previous.is_dead is True and current.is_dead is None:
+        retained["is_dead"] = True
+    if (
+        current.knowledge_state in {KnowledgeState.SEEN, KnowledgeState.REMEMBERED}
+        and current.faction is None
+        and previous.faction is not None
+    ):
+        retained["faction"] = previous.faction
+    if retained:
+        return current.model_copy(update=retained)
+    return current
+
+
+def _merge_tile_fact(
+    previous: ObservationTileFact | None,
+    current: ObservationTileFact,
+) -> ObservationTileFact:
+    """Merge remembered spatial boundary knowledge into sparse tile deltas."""
+    if previous is None:
+        return current
+    if (
+        current.knowledge_state in {KnowledgeState.SEEN, KnowledgeState.REMEMBERED}
+        and not current.adjacent_domain
+        and previous.adjacent_domain
+    ):
+        return current.model_copy(update={"adjacent_domain": previous.adjacent_domain})
+    return current
+
+
 def _apply_observer_patch(
-    state: ObservationMaterializedState,
+    state: SubjectiveWorldState,
     data: dict,
 ) -> None:
     """Apply sensory deltas to one observer state."""
