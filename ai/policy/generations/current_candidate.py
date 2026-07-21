@@ -1,0 +1,1136 @@
+"""Executable current-generation policy behavior built above frozen v31."""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from ai.planning.registry import logical_policy_method
+from ai.policy.generations.current_annotations import (
+    BUILD_CURRENT_CANDIDATES_CONTRACT,
+    GENERIC_SEMANTIC_ADMISSION_CONTRACT,
+    PLAN_CURRENT_ROUTINES_CONTRACT,
+    POSITION_THEN_PRESSURE_CONTRACT,
+)
+from ai.knowledge.replay import position_replay_token
+from ai.knowledge.topology import KnownLineOfSightWorkspace, grid_distance_feet
+from ai.policy.candidates import (
+    DIRECT_DAMAGE_TAGS,
+    PolicyCandidateSet,
+    _capability_projection_at_origin,
+    _future_capability_target_projections,
+    build_policy_candidate_set as build_v31_candidate_set,
+)
+from ai.policy.contracts import (
+    CapabilityTargetProjection,
+    ExecuteIntent,
+    PolicyContext,
+    PolicyEvidence,
+    PolicyGoal,
+    PolicyProposal,
+    SpacingEvidence,
+)
+from ai.policy.economy import AffordabilityWorkspace
+from ai.policy.generations.current_scoring import (
+    CURRENT_VALUE_PROFILE,
+    TacticalValueVector,
+    proposal_with_tactical_value,
+    tactical_value_for_proposal,
+)
+from ai.policy.memory import RoutineProgress, SemanticActionGoal
+from ai.policy.routines import (
+    AUGMENT_THEN_ACT,
+    ENABLE_THEN_ACT,
+    PURSUE_CAPABILITY,
+    RoutinePlan,
+    RoutinePlanningInstrumentation,
+    RoutinePlanStatus,
+    RoutineRevalidation,
+    plan_pursue_capability,
+    plan_registered_routines as plan_v31_registered_routines,
+)
+from ai.protocol.control import (
+    ActionAffordance,
+    ActionCapability,
+    ActionCostProfile,
+    ActionTarget,
+)
+from ai.protocol.semantics import (
+    ActionSemantics,
+    ActionTag,
+    ConcentrationOperation,
+    EffectDisposition,
+    ResourceOperation,
+)
+
+
+SEARCH_EXHAUSTION_LIMIT = 3
+POSITION_THEN_PRESSURE_MARGIN = 4.0
+CONCENTRATING_CONDITION_KEY = "dnd.conditions.Concentrating"
+FRAGILE_EXPOSURE_HP_FRACTION = 0.65
+FRAGILE_EXPOSURE_LIABILITY_LIMIT = 0.75
+
+
+class CandidateGenerationModel(BaseModel):
+    """Immutable base for candidate-generation diagnostics."""
+
+    model_config = ConfigDict(frozen=True)
+
+
+class SemanticAdmissionStatus(str, Enum):
+    """Policy coverage state for one legal semantic action row."""
+
+    ACTIONABLE = "actionable"
+    CONDITIONALLY_ACTIONABLE = "conditionally_actionable"
+    PLANNING_ONLY = "planning_only"
+    TERMINAL = "terminal"
+    UNSUPPORTED = "unsupported"
+
+
+class SemanticAdmissionRecord(CandidateGenerationModel):
+    """Inspectable admission result for one server-issued legal row."""
+
+    row_id: str = Field(description="Decision-epoch row being classified.")
+    semantic_id: str = Field(description="Stable typed semantic family.")
+    status: SemanticAdmissionStatus = Field(description="How the current policy handles this row.")
+    proposal_reasons: tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Policy reasons that admitted this row into arbitration.",
+    )
+    detail: str = Field(description="Stable explanation when admission is conditional or unsupported.")
+
+
+@logical_policy_method(BUILD_CURRENT_CANDIDATES_CONTRACT)
+def build_current_candidate_set(context: PolicyContext) -> PolicyCandidateSet:
+    """Build current-generation candidates without mutating frozen v31 behavior."""
+    legacy = build_v31_candidate_set(context)
+    rescored = PolicyCandidateSet(
+        direct_damage=_rescore(context, legacy.direct_damage),
+        healing=_rescore(context, legacy.healing),
+        control=_rescore(context, legacy.control),
+        control_preservation=_rescore(context, legacy.control_preservation),
+        target_effects=_rescore(context, legacy.target_effects),
+        self_setup=_rescore(context, legacy.self_setup),
+        spacing=_rescore(context, legacy.spacing),
+        exploration=_rescore(context, _suppress_exhausted_searches(legacy.exploration)),
+    )
+    guarded = _suppress_immediate_concentration_replacement(context, rescored)
+    represented = _represented_row_ids(context, guarded)
+    semantic_candidates = _generic_semantic_candidates(context, represented)
+    return PolicyCandidateSet(
+        direct_damage=guarded.direct_damage,
+        healing=guarded.healing,
+        control=_ordered((*guarded.control, *semantic_candidates.control)),
+        control_preservation=guarded.control_preservation,
+        target_effects=_ordered((*guarded.target_effects, *semantic_candidates.target_effects)),
+        self_setup=_ordered((*guarded.self_setup, *semantic_candidates.self_setup)),
+        spacing=_ordered((*guarded.spacing, *semantic_candidates.spacing)),
+        exploration=_ordered((*guarded.exploration, *semantic_candidates.exploration)),
+    )
+
+@logical_policy_method(PLAN_CURRENT_ROUTINES_CONTRACT)
+def plan_current_routines(
+    context: PolicyContext,
+    prior_progress: Optional[RoutineProgress],
+    revalidation: RoutineRevalidation,
+    candidates: Optional[PolicyCandidateSet] = None,
+    instrumentation: Optional[RoutinePlanningInstrumentation] = None,
+) -> tuple[RoutinePlan, ...]:
+    """Plan current candidates through retained, revalidating routines."""
+    candidate_set = candidates or build_current_candidate_set(context)
+    raw_registered = plan_v31_registered_routines(
+        context,
+        prior_progress,
+        revalidation,
+        candidate_set,
+        instrumentation,
+    )
+    if (
+        prior_progress is None
+        and revalidation.progress is None
+        and not any(
+            plan.routine_id == PURSUE_CAPABILITY.routine_id
+            and plan.proposal is not None
+            for plan in raw_registered
+        )
+    ):
+        pursuit = plan_pursue_capability(
+            context,
+            None,
+            candidate_set,
+            instrumentation,
+        )
+        if pursuit.proposal is not None:
+            raw_registered = (*raw_registered, pursuit)
+    registered = _suppress_fragile_exposure_routines(
+        context,
+        _rescore_offensive_routine_plans(context, raw_registered),
+    )
+    if revalidation.progress is not None:
+        return registered
+    if _same_turn_enable_attempt(context, prior_progress):
+        return tuple(
+            plan
+            for plan in registered
+            if not (
+                plan.routine_id == ENABLE_THEN_ACT.routine_id
+                and plan.step_id == "enable"
+            )
+        )
+    stronger_pressure = _plan_position_then_pressure_routine(context, candidate_set)
+    if stronger_pressure is None or stronger_pressure.proposal is None:
+        return registered
+    return (
+        *tuple(
+            plan
+            for plan in registered
+            if plan.proposal is None
+            or plan.proposal.intent != stronger_pressure.proposal.intent
+        ),
+        stronger_pressure,
+    )
+
+
+def audit_semantic_admission(
+    context: PolicyContext,
+    candidates: Optional[PolicyCandidateSet] = None,
+) -> tuple[SemanticAdmissionRecord, ...]:
+    """Classify every legal row as admitted, conditional, planning, or unsupported."""
+    candidate_set = candidates or build_current_candidate_set(context)
+    reasons_by_row: dict[str, list[str]] = {}
+    for proposal in _all_proposals(candidate_set):
+        if isinstance(proposal.intent, ExecuteIntent):
+            reasons_by_row.setdefault(proposal.intent.row_id, []).append(proposal.reason)
+    records: list[SemanticAdmissionRecord] = []
+    for row in context.facts.affordances.rows:
+        semantics = context.facts.affordances.semantics_by_row_id.get(row.row_id)
+        tags = semantics.tags if semantics is not None else frozenset({ActionTag.UNKNOWN})
+        reasons = tuple(sorted(set(reasons_by_row.get(row.row_id, tuple()))))
+        if reasons:
+            status = SemanticAdmissionStatus.ACTIONABLE
+            detail = "row_reaches_policy_arbitration"
+        elif ActionTag.TURN_END in tags or ActionTag.CONCENTRATION_END in tags:
+            status = SemanticAdmissionStatus.TERMINAL
+            detail = "handled_by_turn_or_concentration_lifecycle"
+        elif tags & {ActionTag.MOVEMENT_VOLUNTARY, ActionTag.MOBILITY_EXTEND}:
+            status = SemanticAdmissionStatus.PLANNING_ONLY
+            detail = "consumed by typed movement and bounded-routine planning"
+        elif semantics is not None and _has_purposeful_effects(semantics):
+            status = SemanticAdmissionStatus.CONDITIONALLY_ACTIONABLE
+            detail = "typed effect exists but current subjective state gives it no positive value"
+        else:
+            status = SemanticAdmissionStatus.UNSUPPORTED
+            detail = "no executable typed tactical effect is available"
+        records.append(SemanticAdmissionRecord(
+            row_id=row.row_id,
+            semantic_id=semantics.semantic_id if semantics is not None else "action.unknown",
+            status=status,
+            proposal_reasons=reasons,
+            detail=detail,
+        ))
+    return tuple(records)
+
+
+def _rescore(
+    context: PolicyContext,
+    proposals: tuple[PolicyProposal, ...],
+) -> tuple[PolicyProposal, ...]:
+    """Apply one common current-generation value profile to legacy candidates."""
+    return _ordered(tuple(
+        proposal_with_tactical_value(
+            proposal,
+            tactical_value_for_proposal(context, proposal),
+            profile=CURRENT_VALUE_PROFILE,
+        )
+        for proposal in proposals
+    ))
+
+
+def _suppress_exhausted_searches(
+    proposals: tuple[PolicyProposal, ...],
+) -> tuple[PolicyProposal, ...]:
+    """Suppress exhausted contacts while retaining independent frontier value."""
+    retained: list[PolicyProposal] = []
+    for proposal in proposals:
+        exploration = proposal.evidence.exploration
+        if (
+            exploration is None
+            or exploration.remembered_target_uuid is None
+            or exploration.remembered_search_attempt < SEARCH_EXHAUSTION_LIMIT
+        ):
+            retained.append(proposal)
+            continue
+        if (
+            exploration.unknown_frontier_count <= 0
+            and exploration.remembered_search_novelty_feet < 10
+        ):
+            continue
+        frontier = exploration.model_copy(update={
+            "remembered_target_uuid": None,
+            "current_remembered_distance": None,
+            "selected_remembered_distance": None,
+            "expanded_remembered_search": False,
+            "remembered_search_attempt": 0,
+        })
+        retained.append(proposal.model_copy(update={
+            "reason": "explore_novel_frontier_after_exhausted_contact",
+            "evidence": proposal.evidence.model_copy(update={"exploration": frontier}),
+            "replay_key": (*proposal.replay_key, "exhausted-contact-frontier"),
+        }))
+    return tuple(retained)
+
+
+def _suppress_immediate_concentration_replacement(
+    context: PolicyContext,
+    candidates: PolicyCandidateSet,
+) -> PolicyCandidateSet:
+    """Keep a newly established concentration effect through its first turn."""
+    if not _concentration_started_this_turn(context):
+        return candidates
+
+    def retain(proposals: tuple[PolicyProposal, ...]) -> tuple[PolicyProposal, ...]:
+        return tuple(
+            proposal
+            for proposal in proposals
+            if not _proposal_starts_or_replaces_concentration(context, proposal)
+        )
+
+    return PolicyCandidateSet(
+        direct_damage=retain(candidates.direct_damage),
+        healing=retain(candidates.healing),
+        control=retain(candidates.control),
+        control_preservation=candidates.control_preservation,
+        target_effects=retain(candidates.target_effects),
+        self_setup=retain(candidates.self_setup),
+        spacing=retain(candidates.spacing),
+        exploration=retain(candidates.exploration),
+    )
+
+
+def _concentration_started_this_turn(context: PolicyContext) -> bool:
+    """Return whether typed concentration was applied after this turn began."""
+    actor_uuid = context.facts.actor.actor_uuid
+    encounter = context.world.encounter
+    if actor_uuid is None or encounter is None or encounter.turn_started_source_event_cursor is None:
+        return False
+    actor = context.world.known_entities.get(actor_uuid)
+    if actor is None or actor.condition_facts is None:
+        return False
+    return any(
+        fact.semantic_key == CONCENTRATING_CONDITION_KEY
+        and fact.applied_source_event_cursor is not None
+        and fact.applied_source_event_cursor >= encounter.turn_started_source_event_cursor
+        for fact in actor.condition_facts
+    )
+
+
+def _proposal_starts_or_replaces_concentration(
+    context: PolicyContext,
+    proposal: PolicyProposal,
+) -> bool:
+    """Return whether a proposal declares a new concentration start."""
+    if not isinstance(proposal.intent, ExecuteIntent):
+        return False
+    semantics = context.facts.affordances.semantics_by_row_id.get(proposal.intent.row_id)
+    return (
+        semantics is not None
+        and semantics.concentration_effect is not None
+        and semantics.concentration_effect.operation is ConcentrationOperation.START_OR_REPLACE
+    )
+
+
+class _SemanticCandidates:
+    """Mutable local buckets for effect-oriented semantic admission."""
+
+    def __init__(self) -> None:
+        self.control: list[PolicyProposal] = []
+        self.target_effects: list[PolicyProposal] = []
+        self.self_setup: list[PolicyProposal] = []
+        self.spacing: list[PolicyProposal] = []
+        self.exploration: list[PolicyProposal] = []
+
+
+@logical_policy_method(GENERIC_SEMANTIC_ADMISSION_CONTRACT)
+def _generic_semantic_candidates(
+    context: PolicyContext,
+    represented_row_ids: frozenset[str],
+) -> _SemanticCandidates:
+    """Admit purposeful typed effects omitted by the frozen v31 reducers."""
+    buckets = _SemanticCandidates()
+    for row in context.facts.affordances.rows:
+        semantics = context.facts.affordances.semantics_by_row_id.get(row.row_id)
+        if (
+            row.row_id in represented_row_ids
+            or semantics is None
+            or not row.can_afford
+            or row.cost.affordability == "unaffordable"
+            or not context.execution_constraints.allows(row)
+            or not _has_purposeful_effects(semantics)
+        ):
+            continue
+        tags = semantics.tags
+        if (
+            ActionTag.MOVEMENT_VOLUNTARY in tags
+            or tags & {ActionTag.INTERACTION_DOOR_OPEN, ActionTag.INTERACTION_DOOR_CLOSE}
+        ):
+            continue
+        vector = _generic_tactical_value(context, row, semantics)
+        if vector is None:
+            continue
+        if tags & {ActionTag.ZONE_PERSISTENT, ActionTag.SUMMON}:
+            goal = PolicyGoal.HOSTILE_CONTROL
+            source_node = "Current/SpatialControl"
+            reason = "apply_typed_zone_or_summon_pressure"
+            destination = buckets.control
+        elif semantics.target_effects:
+            goal = PolicyGoal.CONDITIONAL_TARGET_EFFECT
+            source_node = "Current/TargetEffects"
+            reason = "apply_typed_target_effect"
+            destination = buckets.target_effects
+        elif ActionTag.SUPPORT_BUFF in tags or ActionTag.RESOURCE_ACQUIRE in tags:
+            goal = PolicyGoal.SELF_SETUP
+            source_node = "Current/BeneficialStateChange"
+            reason = "apply_typed_beneficial_state_or_resource_change"
+            destination = buckets.self_setup
+        elif tags & {ActionTag.MOVEMENT_FORCED, ActionTag.MOVEMENT_TELEPORT}:
+            goal = PolicyGoal.POSITION_AND_SURVIVAL
+            source_node = "Current/SpatialTransition"
+            reason = "apply_typed_spatial_transition"
+            destination = buckets.spacing
+        elif tags & {
+            ActionTag.INTERACTION_HAZARD_DEACTIVATE,
+            ActionTag.INFORMATION_REVEAL,
+        }:
+            goal = PolicyGoal.INFORMATION_GATHERING
+            source_node = "Current/WorldInteraction"
+            reason = "apply_typed_world_or_information_change"
+            destination = buckets.exploration
+        else:
+            continue
+        proposal = PolicyProposal(
+            intent=ExecuteIntent(row_id=row.row_id),
+            goal=goal,
+            source_node=source_node,
+            reason=reason,
+            replay_key=(row.semantic_key, semantics.semantic_id, row.row_id),
+            semantic_tags=tags,
+        )
+        destination.append(proposal_with_tactical_value(proposal, vector))
+    return buckets
+
+
+def _generic_tactical_value(
+    context: PolicyContext,
+    row: ActionAffordance,
+    semantics: ActionSemantics,
+) -> Optional[TacticalValueVector]:
+    """Value a purposeful semantic effect without action-name heuristics."""
+    tags = semantics.tags
+    hostile_coverage = _hostile_spatial_coverage(context, row, semantics)
+    selected_hostiles = sum(
+        target.target_uuid in context.facts.contacts.visible_hostile_uuids
+        for target in row.targets
+        if target.target_uuid is not None
+    )
+    friendly_recipients = sum(
+        target.target_uuid in context.facts.contacts.controlled_entity_uuids
+        or target.target_uuid in context.facts.contacts.visible_ally_uuids
+        for target in row.targets
+        if target.target_uuid is not None
+    )
+    enemy_actions_denied = 0.0
+    actor_actions_preserved = 0.0
+    information_gain = 0.0
+    positional_value = 0.0
+
+    if ActionTag.ZONE_PERSISTENT in tags:
+        if not context.facts.contacts.visible_hostile_uuids:
+            return None
+        enemy_actions_denied += 0.45 + 0.45 * hostile_coverage
+    if ActionTag.SUMMON in tags:
+        actor_actions_preserved += 0.9
+    if ActionTag.SUPPORT_BUFF in tags:
+        actor_actions_preserved += 0.45 * max(1, friendly_recipients)
+    if ActionTag.RESOURCE_ACQUIRE in tags:
+        acquired = sum(
+            effect.amount
+            for effect in semantics.resource_effects
+            if effect.operation in {ResourceOperation.ACQUIRE, ResourceOperation.RESTORE}
+        )
+        if acquired <= 0:
+            return None
+        actor_actions_preserved += 0.3 * acquired
+    if ActionTag.MOVEMENT_FORCED in tags:
+        if selected_hostiles <= 0:
+            return None
+        enemy_actions_denied += 0.2 * selected_hostiles
+        positional_value += 0.5 * selected_hostiles
+    if ActionTag.MOVEMENT_TELEPORT in tags:
+        positional_value += 0.8
+    if semantics.topology_effects:
+        positional_value += 0.6 * len(semantics.topology_effects)
+    if semantics.information_effects:
+        information_gain += 2.0 * len(semantics.information_effects)
+    if semantics.target_effects:
+        harmful = sum(effect.disposition is EffectDisposition.HARMFUL for effect in semantics.target_effects)
+        beneficial = sum(effect.disposition is EffectDisposition.BENEFICIAL for effect in semantics.target_effects)
+        enemy_actions_denied += harmful * max(1, selected_hostiles) * 0.25
+        actor_actions_preserved += beneficial * max(1, friendly_recipients) * 0.2
+    if not any((enemy_actions_denied, actor_actions_preserved, information_gain, positional_value)):
+        return None
+    return TacticalValueVector(
+        expected_enemy_actions_denied=enemy_actions_denied,
+        expected_actor_actions_preserved=actor_actions_preserved,
+        information_gain=information_gain,
+        positional_value=positional_value,
+        resource_expenditure=_resource_units(row),
+        action_opportunity_cost=_economy_units(row),
+        concentration_value_lost=float(
+            context.facts.actor.is_concentrating
+            and ActionTag.CONCENTRATION_START in tags
+        ),
+        risk=_movement_risk(row),
+    )
+
+
+
+def _same_turn_enable_attempt(
+    context: PolicyContext,
+    progress: Optional[RoutineProgress],
+) -> bool:
+    """Return whether this actor already spent its bounded enabler this turn."""
+    epoch = context.world.current_epoch
+    if epoch is None:
+        return False
+    return bool(
+        progress is not None
+        and progress.routine_id == ENABLE_THEN_ACT.routine_id
+        and progress.enablers_used >= 1
+        and progress.started_round_number == epoch.round_number
+        and progress.started_turn_index == epoch.turn_index
+    )
+
+
+def _rescore_offensive_routine_plans(
+    context: PolicyContext,
+    plans: tuple[RoutinePlan, ...],
+) -> tuple[RoutinePlan, ...]:
+    """Put inherited offensive movement routines on the candidate value scale."""
+    rescored: list[RoutinePlan] = []
+    for plan in plans:
+        if (
+            plan.proposal is None
+            or plan.routine_id
+            not in {ENABLE_THEN_ACT.routine_id, PURSUE_CAPABILITY.routine_id}
+            or plan.step_id not in {"enable", "approach", "extend_mobility"}
+        ):
+            rescored.append(plan)
+            continue
+        valuation = _offensive_routine_value(context, plan)
+        if valuation is None:
+            rescored.append(plan)
+            continue
+        vector, refined_goal = valuation
+        progress = plan.next_progress_on_success
+        refined_progress = (
+            progress.model_copy(update={"goal": refined_goal})
+            if progress is not None
+            else None
+        )
+        rescored.append(plan.model_copy(update={
+            "proposal": proposal_with_tactical_value(plan.proposal, vector),
+            "next_progress_on_success": refined_progress,
+        }))
+    return tuple(rescored)
+
+
+def _suppress_fragile_exposure_routines(
+    context: PolicyContext,
+    plans: tuple[RoutinePlan, ...],
+) -> tuple[RoutinePlan, ...]:
+    """Block offensive setup that exceeds a fragile actor's exposure budget."""
+    hp = context.facts.actor.hp
+    max_hp = context.facts.actor.max_hp
+    if hp is None or max_hp is None or max_hp <= 0:
+        return plans
+    hp_fraction = float(hp) / float(max_hp)
+    if hp_fraction > FRAGILE_EXPOSURE_HP_FRACTION:
+        return plans
+
+    guarded: list[RoutinePlan] = []
+    for plan in plans:
+        proposal = plan.proposal
+        if (
+            plan.routine_id != AUGMENT_THEN_ACT.routine_id
+            or plan.step_id != "augment"
+            or proposal is None
+        ):
+            guarded.append(plan)
+            continue
+        exposure = next(
+            (
+                component.raw_value
+                for component in proposal.utility_components
+                if component.name == "surviving_hostile_exposure_liability"
+            ),
+            0.0,
+        )
+        if exposure <= FRAGILE_EXPOSURE_LIABILITY_LIMIT:
+            guarded.append(plan)
+            continue
+        guarded.append(plan.model_copy(update={
+            "status": RoutinePlanStatus.BLOCKED,
+            "proposal": None,
+            "next_progress_on_success": None,
+            "reason": "current_risk_budget_rejects_fragile_hostile_exposure",
+        }))
+    return tuple(guarded)
+
+
+def _offensive_routine_value(
+    context: PolicyContext,
+    plan: RoutinePlan,
+) -> Optional[tuple[TacticalValueVector, SemanticActionGoal]]:
+    """Project one inherited move-to-pressure step from subjective facts."""
+    proposal = plan.proposal
+    progress = plan.next_progress_on_success
+    actor_position = context.facts.actor.position
+    if (
+        proposal is None
+        or not isinstance(proposal.intent, ExecuteIntent)
+        or progress is None
+        or progress.goal is None
+        or actor_position is None
+    ):
+        return None
+    row = context.facts.affordances.by_id.get(proposal.intent.row_id)
+    if row is None:
+        return None
+    selected_target = next(
+        (
+            target
+            for target in row.targets
+            if target.index == plan.selected_target_index
+        ),
+        row.targets[0] if row.targets else ActionTarget(index=0),
+    )
+    endpoint_position = (
+        selected_target.position
+        if (
+            ActionTag.MOVEMENT_VOLUNTARY in proposal.semantic_tags
+            and selected_target.position is not None
+        )
+        else actor_position
+    )
+    topology = KnownLineOfSightWorkspace.from_world(
+        context.world,
+        vision_blocker_positions=context.facts.topology.vision_blocker_positions,
+    )
+    best: Optional[tuple[float, TacticalValueVector, SemanticActionGoal]] = None
+    for projection in _future_capability_target_projections(
+        context,
+        topology_workspace=topology,
+    ):
+        if projection.target_entity_uuid != progress.goal.target_uuid:
+            continue
+        capability = context.facts.capabilities.by_id.get(projection.capability_id)
+        semantics = context.facts.capabilities.semantics_by_capability_id.get(
+            projection.capability_id
+        )
+        if (
+            capability is None
+            or semantics is None
+            or not progress.goal.required_tags.issubset(semantics.tags)
+            or (
+                progress.goal.required_target_allocation is not None
+                and semantics.targeting.allocation
+                is not progress.goal.required_target_allocation
+            )
+        ):
+            continue
+        endpoint = (
+            projection
+            if endpoint_position == actor_position
+            else _capability_projection_at_origin(
+                context,
+                projection,
+                endpoint_position,
+                topology_workspace=topology,
+            )
+        )
+        if not endpoint.eligible:
+            continue
+        if endpoint.distance_feet <= endpoint.normal_range_feet:
+            discount = 0.85
+        elif plan.step_id == "extend_mobility":
+            discount = 0.15
+        else:
+            discount = 0.30
+        vector = _projected_sequence_value(
+            context,
+            row,
+            selected_target,
+            capability,
+            projection,
+            endpoint,
+            damage_discount=discount,
+        )
+        refined_goal = SemanticActionGoal(
+            required_tags=progress.goal.required_tags,
+            target_uuid=projection.target_entity_uuid,
+            required_target_allocation=semantics.targeting.allocation,
+            minimum_selected_targets=max(1, semantics.targeting.minimum_targets),
+        )
+        score = proposal_with_tactical_value(proposal, vector).score
+        if best is None or score > best[0]:
+            best = (score, vector, refined_goal)
+    return (best[1], best[2]) if best is not None else None
+
+
+def _projected_sequence_value(
+    context: PolicyContext,
+    row: ActionAffordance,
+    target: ActionTarget,
+    capability: ActionCapability,
+    projection: CapabilityTargetProjection,
+    endpoint: CapabilityTargetProjection,
+    *,
+    damage_discount: float,
+) -> TacticalValueVector:
+    """Value movement and its projected follow-up in common tactical units."""
+    current = projection
+    future = endpoint
+    current_deficit = max(0, current.distance_feet - current.normal_range_feet)
+    endpoint_deficit = max(0, future.distance_feet - future.normal_range_feet)
+    preferred_improvement = max(
+        0,
+        abs(current.distance_feet - current.preferred_minimum_range_feet)
+        - abs(future.distance_feet - future.preferred_minimum_range_feet),
+    )
+    return TacticalValueVector(
+        expected_enemy_hp_loss=(future.expected_hp_loss or 0.0) * damage_discount,
+        enemy_defeat_probability=(future.defeat_probability or 0.0) * damage_discount,
+        positional_value=(
+            current_deficit - endpoint_deficit + preferred_improvement
+        )
+        / 5.0,
+        resource_expenditure=(
+            _resource_cost_units(row.cost)
+            + _resource_cost_units(capability.cost)
+        ),
+        action_opportunity_cost=(
+            _economy_cost_units(row.cost)
+            + _economy_cost_units(capability.cost)
+        ),
+        concentration_value_lost=float(future.replaces_concentration),
+        risk=(
+            _target_route_risk(target)
+            + _subjective_endpoint_exposure_risk(context, future.origin_position)
+        ),
+    )
+
+
+def _subjective_endpoint_exposure_risk(
+    context: PolicyContext,
+    endpoint: tuple[int, int],
+) -> float:
+    """Estimate disclosed overextension without inventing enemy capabilities."""
+    actor_position = context.facts.actor.position
+    if actor_position is None or endpoint == actor_position:
+        return 0.0
+    hostile_positions = tuple(
+        entity.position
+        for entity_uuid in context.facts.contacts.visible_hostile_uuids
+        for entity in [context.world.known_entities.get(entity_uuid)]
+        if entity is not None and entity.position is not None
+    )
+    if not hostile_positions:
+        return 0.0
+    current_pressure = sum(
+        _proximity_pressure(actor_position, position)
+        for position in hostile_positions
+    )
+    endpoint_pressure = sum(
+        _proximity_pressure(endpoint, position)
+        for position in hostile_positions
+    )
+    close_hostiles = sum(
+        grid_distance_feet(endpoint, position) <= 30
+        for position in hostile_positions
+    )
+    ally_uuids = {
+        *context.facts.contacts.controlled_entity_uuids,
+        *context.facts.contacts.visible_ally_uuids,
+    }
+    close_allies = sum(
+        grid_distance_feet(endpoint, entity.position) <= 30
+        for entity_uuid in ally_uuids
+        if entity_uuid != context.facts.actor.actor_uuid
+        for entity in [context.world.known_entities.get(entity_uuid)]
+        if entity is not None and entity.position is not None
+    )
+    actor_hp = context.facts.actor.normal_hp
+    if actor_hp is None:
+        actor_hp = context.facts.actor.hp
+    max_hp = context.facts.actor.max_hp
+    missing_fraction = (
+        max(0.0, min(1.0, 1.0 - actor_hp / max_hp))
+        if actor_hp is not None and max_hp not in (None, 0)
+        else 0.0
+    )
+    added_pressure = max(0.0, endpoint_pressure - current_pressure)
+    unsupported_contacts = max(0, close_hostiles - close_allies - 1)
+    return (
+        added_pressure + 0.35 * unsupported_contacts
+    ) * (0.65 + 0.75 * missing_fraction)
+
+
+def _proximity_pressure(
+    origin: tuple[int, int],
+    target: tuple[int, int],
+) -> float:
+    """Return a transparent range-agnostic pressure prior for one contact."""
+    distance = grid_distance_feet(origin, target)
+    if distance <= 5:
+        return 1.0
+    if distance <= 30:
+        return 0.45
+    if distance <= 60:
+        return 0.15
+    return 0.0
+
+
+def _immediate_damage_scores_by_target(
+    proposals: tuple[PolicyProposal, ...],
+) -> dict[str, float]:
+    """Return the best currently legal damage score for each typed target."""
+    scores: dict[str, float] = {}
+    for proposal in proposals:
+        target_uuids = {
+            outcome.entity_uuid
+            for outcome in proposal.evidence.damage_outcomes
+        }
+        if proposal.evidence.target_plan is not None:
+            target_uuids.update(proposal.evidence.target_plan.hostile_entity_uuids)
+        for target_uuid in target_uuids:
+            scores[target_uuid] = max(scores.get(target_uuid, float("-inf")), proposal.score)
+    return scores
+
+@logical_policy_method(POSITION_THEN_PRESSURE_CONTRACT)
+def _plan_position_then_pressure_routine(
+    context: PolicyContext,
+    candidates: PolicyCandidateSet,
+) -> Optional[RoutinePlan]:
+    """Plan one retained move before a strictly stronger damage follow-up."""
+    epoch = context.world.current_epoch
+    economy = context.facts.actor.economy
+    actor_position = context.facts.actor.position
+    if (
+        epoch is None
+        or economy is None
+        or actor_position is None
+        or not context.facts.contacts.visible_hostile_uuids
+        or not candidates.direct_damage
+    ):
+        return None
+    immediate_scores_by_target = _immediate_damage_scores_by_target(candidates.direct_damage)
+    workspace = AffordabilityWorkspace(economy)
+    topology = KnownLineOfSightWorkspace.from_world(
+        context.world,
+        vision_blocker_positions=context.facts.topology.vision_blocker_positions,
+    )
+    projections = _future_capability_target_projections(context, topology_workspace=topology)
+    if not projections:
+        return None
+    best: Optional[RoutinePlan] = None
+    for row_id in context.facts.affordances.row_ids_by_tag.get(
+        ActionTag.MOVEMENT_VOLUNTARY,
+        tuple(),
+    ):
+        row = context.facts.affordances.by_id.get(row_id)
+        semantics = context.facts.affordances.semantics_by_row_id.get(row_id)
+        if (
+            row is None
+            or semantics is None
+            or not row.can_afford
+            or not context.execution_constraints.allows(row)
+        ):
+            continue
+        for target in row.targets:
+            if target.position is None or target.position == actor_position:
+                continue
+            movement_cost = (
+                target.safe_path_cost
+                if target.safe_path_cost is not None
+                else target.path_cost
+            )
+            if movement_cost is None:
+                continue
+            for projection in projections:
+                immediate_score = immediate_scores_by_target.get(projection.target_entity_uuid)
+                if immediate_score is None:
+                    continue
+                capability = context.facts.capabilities.by_id.get(projection.capability_id)
+                capability_semantics = (
+                    context.facts.capabilities.semantics_by_capability_id.get(
+                        projection.capability_id
+                    )
+                )
+                if (
+                    capability is None
+                    or capability_semantics is None
+                    or not projection.eligible
+                    or projection.distance_feet <= projection.normal_range_feet
+                ):
+                    continue
+                goal_tags = frozenset(capability_semantics.tags & DIRECT_DAMAGE_TAGS)
+                if not goal_tags:
+                    continue
+                endpoint = _capability_projection_at_origin(
+                    context,
+                    projection,
+                    target.position,
+                    topology_workspace=topology,
+                )
+                if (
+                    not endpoint.eligible
+                    or endpoint.distance_feet > endpoint.normal_range_feet
+                    or not workspace.combined_costs_affordable(
+                        row.cost,
+                        capability.cost,
+                        first_movement_cost=movement_cost,
+                    )
+                ):
+                    continue
+                endpoint_deficit = max(
+                    0,
+                    endpoint.distance_feet - endpoint.normal_range_feet,
+                )
+                vector = _projected_sequence_value(
+                    context,
+                    row,
+                    target,
+                    capability,
+                    projection,
+                    endpoint,
+                    damage_discount=0.9,
+                )
+                provisional = PolicyProposal(
+                    intent=ExecuteIntent(row_id=row.row_id, prefer_safe=True),
+                    goal=PolicyGoal.ROUTINE,
+                    source_node="Current/PositionThenPressure/Enable",
+                    reason="move_once_then_revalidate_stronger_typed_pressure",
+                    replay_key=(
+                        row.semantic_key,
+                        position_replay_token(target.position),
+                        projection.semantic_id,
+                        projection.target_entity_uuid,
+                    ),
+                    semantic_tags=semantics.tags,
+                    evidence=PolicyEvidence(spacing=SpacingEvidence(
+                        reference_entity_uuid=projection.target_entity_uuid,
+                        reference_position=projection.target_position,
+                        current_distance_cells=projection.distance_feet // 5,
+                        selected_distance_cells=endpoint.distance_feet // 5,
+                        spacing_floor_cells=endpoint.preferred_minimum_range_feet // 5,
+                        hostile_spacing_deficit_cells=endpoint_deficit // 5,
+                        anchor_position=target.position,
+                        normal_attack_range_cells=endpoint.normal_range_feet // 5,
+                        offensive_range_deficit_cells=endpoint_deficit // 5,
+                        opportunity_attack_exposures=tuple(
+                            target.safe_path_opportunity_attack_exposures
+                            if target.safe_path_cost is not None
+                            else target.opportunity_attack_exposures
+                        ),
+                        capability_target_projection=endpoint,
+                    )),
+                )
+                proposal = proposal_with_tactical_value(provisional, vector)
+                if proposal.score <= immediate_score + POSITION_THEN_PRESSURE_MARGIN:
+                    continue
+                progress = RoutineProgress(
+                    routine_id=ENABLE_THEN_ACT.routine_id,
+                    step_id="reassess",
+                    started_epoch_index=epoch.epoch_index,
+                    target_uuid=projection.target_entity_uuid,
+                    target_position=projection.target_position,
+                    goal=SemanticActionGoal(
+                        required_tags=goal_tags,
+                        target_uuid=projection.target_entity_uuid,
+                        required_target_allocation=capability_semantics.targeting.allocation,
+                        minimum_selected_targets=max(
+                            1,
+                            capability_semantics.targeting.minimum_targets,
+                        ),
+                    ),
+                    enablers_used=1,
+                    started_round_number=epoch.round_number,
+                    started_turn_index=epoch.turn_index,
+                )
+                plan = RoutinePlan(
+                    routine_id=ENABLE_THEN_ACT.routine_id,
+                    purpose=ENABLE_THEN_ACT.purpose,
+                    status=RoutinePlanStatus.PROPOSED,
+                    step_id="enable",
+                    target_uuid=projection.target_entity_uuid,
+                    target_position=projection.target_position,
+                    selected_target_index=target.index,
+                    proposal=proposal,
+                    next_progress_on_success=progress,
+                    reason=f"move_once_to_enable_stronger:{projection.semantic_id}",
+                )
+                if (
+                    best is None
+                    or best.proposal is None
+                    or _proposal_order_key(proposal)
+                    < _proposal_order_key(best.proposal)
+                ):
+                    best = plan
+    return best
+
+def _hostile_spatial_coverage(
+    context: PolicyContext,
+    row: ActionAffordance,
+    semantics: ActionSemantics,
+) -> int:
+    """Count visible hostiles covered by explicit targets or declared zone radius."""
+    explicit = {
+        entity_uuid
+        for target in row.targets
+        for entity_uuid in target.affected_entity_uuids
+        if entity_uuid in context.facts.contacts.visible_hostile_uuids
+    }
+    if explicit:
+        return len(explicit)
+    radius = max(
+        (
+            effect.radius_feet or 0
+            for effect in (*semantics.topology_effects, *semantics.information_effects)
+        ),
+        default=0,
+    )
+    anchors = tuple(target.position for target in row.targets if target.position is not None)
+    if not anchors:
+        return 0
+    effective_radius = max(5, radius)
+    return sum(
+        any(grid_distance_feet(anchor, entity.position) <= effective_radius for anchor in anchors)
+        for entity_uuid in context.facts.contacts.visible_hostile_uuids
+        for entity in [context.world.known_entities.get(entity_uuid)]
+        if entity is not None and entity.position is not None
+    )
+
+
+def _has_purposeful_effects(semantics: ActionSemantics) -> bool:
+    """Return whether semantics declare an executable state or knowledge change."""
+    return bool(
+        semantics.guaranteed_effects
+        or semantics.conditional_effects
+        or semantics.stochastic_effects
+        or semantics.target_effects
+        or semantics.resource_effects
+        or semantics.concentration_effect is not None
+        or semantics.self_setup is not None
+        or semantics.spatial is not None
+        or semantics.topology_effects
+        or semantics.information_effects
+        or semantics.capability_transformations
+    )
+
+
+def _represented_row_ids(
+    context: PolicyContext,
+    candidates: PolicyCandidateSet,
+) -> frozenset[str]:
+    """Return executable rows already represented by policy proposals.
+
+    Multi-target actions are encoded as one row per possible primary target.
+    Once a typed reducer chooses one primary row plus extra targets, suppress
+    the whole source-action family from the generic fallback.
+    """
+    represented: set[str] = set()
+    represented_source_ids: set[str] = set()
+    for proposal in _all_proposals(candidates):
+        if not isinstance(proposal.intent, ExecuteIntent):
+            continue
+        represented.add(proposal.intent.row_id)
+        row = context.facts.affordances.by_id.get(proposal.intent.row_id)
+        if row is not None and row.source_action_id is not None:
+            represented_source_ids.add(row.source_action_id)
+    if represented_source_ids:
+        represented.update(
+            row.row_id
+            for row in context.facts.affordances.rows
+            if row.source_action_id in represented_source_ids
+        )
+    return frozenset(represented)
+
+
+def _all_proposals(candidates: PolicyCandidateSet) -> tuple[PolicyProposal, ...]:
+    """Flatten candidate buckets without changing their owning goals."""
+    return (
+        *candidates.direct_damage,
+        *candidates.healing,
+        *candidates.control,
+        *candidates.control_preservation,
+        *candidates.target_effects,
+        *candidates.self_setup,
+        *candidates.spacing,
+        *candidates.exploration,
+    )
+
+
+def _ordered(proposals: tuple[PolicyProposal, ...]) -> tuple[PolicyProposal, ...]:
+    """Return deterministic descending-value proposal order."""
+    return tuple(sorted(proposals, key=_proposal_order_key))
+
+
+def _proposal_order_key(proposal: PolicyProposal) -> tuple[float, tuple[str, ...], str]:
+    """Return deterministic utility and replay ordering for one proposal."""
+    row_id = proposal.intent.row_id if isinstance(proposal.intent, ExecuteIntent) else ""
+    return (-proposal.score, proposal.replay_key, row_id)
+
+
+def _resource_units(row: ActionAffordance) -> float:
+    """Return finite-resource units consumed by one semantic fallback row."""
+    return _resource_cost_units(row.cost)
+
+
+def _resource_cost_units(cost: ActionCostProfile) -> float:
+    """Return finite-resource units consumed by one typed cost profile."""
+    return float(
+        (cost.spell_slot_cost or 0)
+        + sum(cost.resource_costs.values())
+        + 1.5 * sum(cost.item_charge_costs.values())
+    )
+
+
+def _economy_units(row: ActionAffordance) -> float:
+    """Return flexible action-economy units consumed by one row."""
+    return _economy_cost_units(row.cost)
+
+
+def _economy_cost_units(cost: ActionCostProfile) -> float:
+    """Return flexible action-economy units consumed by one cost profile."""
+    return float(
+        cost.action_cost
+        + 0.7 * cost.bonus_action_cost
+        + 0.5 * cost.reaction_cost
+        + 0.35 * int(cost.consumes_attack_slot)
+    )
+
+
+def _movement_risk(row: ActionAffordance) -> float:
+    """Return route risk disclosed by server-issued movement targets."""
+    return sum(_target_route_risk(target) for target in row.targets)
+
+
+def _target_route_risk(target: ActionTarget) -> float:
+    """Return disclosed hazard and reaction risk for one selected route."""
+    return float(target.is_path_hazardous and target.safe_path_cost is None) + 0.65 * len(
+        target.safe_path_opportunity_attack_exposures
+        if target.safe_path_cost is not None
+        else target.opportunity_attack_exposures
+    )

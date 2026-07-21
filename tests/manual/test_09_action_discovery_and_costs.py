@@ -15,16 +15,18 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.base_item import ItemChargeConsumptionEvent
 from dnd.core.base_actions import ActionCategory, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, HazardFilter
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
+from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items import create_healing_potion
+from dnd.items.test_items import create_scroll_of_fire_bolt
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 
 
@@ -362,6 +364,40 @@ def test_execute_by_index_instantiates_and_pays_costs(capsys) -> None:
     assert capsys.readouterr().out.splitlines() == expected_execute_lines
 
 
+def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> None:
+    """Dash adds speed, not base speed, remaining movement, or prior Dash budget."""
+    reset_action_state()
+    actor = create_tutorial_actor()
+    movement = actor.action_economy.movement
+    movement.self_static.add_value_modifier(NumericalModifier(
+        name="Fast Movement",
+        value=10,
+        source_entity_uuid=actor.uuid,
+        target_entity_uuid=actor.uuid,
+    ))
+    movement.self_static.add_value_modifier(NumericalModifier(
+        name="movement cost",
+        value=-15,
+        source_entity_uuid=actor.uuid,
+        target_entity_uuid=actor.uuid,
+    ))
+    available = get_available_actions(actor)
+    dash_info = find_action(available, "Dash")
+
+    result = execute_by_index(actor, dash_info.template_name, 0, available=available)
+
+    assert result is not None
+    assert result.canceled is False
+    assert actor.action_economy.current_speed() == 40
+    assert movement.normalized_score == 65
+    dashing_modifiers = [
+        modifier
+        for modifier in movement.self_static.value_modifiers.values()
+        if modifier.name == "Dashing"
+    ]
+    assert [modifier.value for modifier in dashing_modifiers] == [40]
+
+
 def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> None:
     """Object and item-use actions appear through the same discovery result."""
     reset_action_state()
@@ -404,6 +440,12 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
     assert drink_info.template_name.startswith("Drink Potion__item_")
     assert drink_info.display_name == "Drink Potion (Potion of Healing)"
     assert drink_info.valid_targets[0].index == 0
+    assert drink_info.cost_type == "bonus_actions"
+    assert drink_info.cost_amount == 1
+    assert drink_info.item_charge_cost == 1
+    assert drink_info.fixed_healing == 7
+
+    bonus_actions_before_drink = actor.action_economy.bonus_actions.normalized_score
 
     drink_result = execute_by_index(
         actor,
@@ -414,6 +456,8 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
 
     assert drink_result is not None
     assert not drink_result.canceled
+    assert bonus_actions_before_drink == 1
+    assert actor.action_economy.bonus_actions.normalized_score == 0
     assert potion.uuid not in actor.inventory.items
     assert BaseBlock.get(potion.uuid) is None
 
@@ -446,6 +490,52 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
     ]
     assert item_lines == expected_item_lines
     assert capsys.readouterr().out.splitlines() == expected_item_lines
+
+
+def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None:
+    """Specialized spell events retain the canonical finite-item child lineage."""
+    reset_action_state()
+    actor = create_tutorial_actor(position=(2, 2))
+    target = create_skeleton(
+        name="Scroll Target",
+        position=(4, 2),
+        faction="monsters",
+    )
+    scroll = create_scroll_of_fire_bolt(actor.uuid, caster_level=5)
+    assert actor.loot_item(scroll)
+    Entity.update_all_entities_senses(max_distance=20)
+    available = get_available_actions(actor)
+    row = next(
+        info
+        for info in available.entity_actions
+        if info.source_item_uuid == scroll.uuid
+    )
+    target_row = next(
+        option
+        for option in row.valid_targets
+        if option.target_uuid == target.uuid
+    )
+
+    result = execute_by_index(
+        actor,
+        row.template_name,
+        target_row.index,
+        available=available,
+    )
+
+    assert result is not None and not result.canceled
+    assert BaseBlock.get(scroll.uuid) is None
+    charge_events = EventQueue.get_events_by_type(EventType.ITEM_CHARGE_CONSUMPTION)
+    assert [event.phase for event in charge_events] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    completion = charge_events[-1]
+    assert isinstance(completion, ItemChargeConsumptionEvent)
+    assert completion.parent_lineage == result.lineage_uuid
+    assert completion.lineage_uuid in result.children_lineages
 
 
 def test_action_overrides_change_discovery_and_consumed_costs(capsys) -> None:
@@ -627,3 +717,113 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     ]
     assert safe_lines == expected_safe_lines
     assert capsys.readouterr().out.splitlines() == expected_safe_lines
+
+
+def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_costly() -> None:
+    """Execution must not replace a legal epoch path with an unaffordable route."""
+    reset_action_state()
+    scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    available = get_available_actions(scout)
+    move_info = find_action(available, "Move")
+    target = next(
+        candidate for candidate in move_info.valid_targets
+        if candidate.position == (5, 6)
+    )
+    assert target.position is not None
+    assert target.path is not None
+    assert target.path_cost is not None
+    assert target.path_cost <= scout.action_economy.movement.normalized_score
+
+    unaffordable_safe_path = [
+        (5, 3),
+        (4, 3),
+        (3, 3),
+        (2, 4),
+        (2, 5),
+        (3, 6),
+        (4, 6),
+        (5, 6),
+    ]
+    target.is_path_hazardous = True
+    target.safe_path = unaffordable_safe_path
+    target.safe_path_cost = 35
+    scout.senses.safe_paths[target.position] = unaffordable_safe_path
+
+    result = execute_by_index(
+        scout,
+        "Move",
+        target.index,
+        available=available,
+        prefer_safe=True,
+    )
+
+    assert result is not None
+    assert not result.canceled
+    movement_result = cast(MovementEvent, result)
+    assert movement_result.path == target.path
+    assert scout.position == target.position
+
+
+def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
+    """A newly discovered collision cannot survive as an untraversed log tail."""
+    reset_action_state()
+    scout = create_tutorial_actor(name="Scout", position=(0, 5))
+    Entity.update_all_entities_senses()
+
+    available = get_available_actions(scout)
+    move_info = find_action(available, "Move")
+    target = next(
+        candidate for candidate in move_info.valid_targets
+        if candidate.position == (6, 9)
+    )
+    disclosed_path = [
+        (0, 5),
+        (1, 5),
+        (2, 5),
+        (3, 6),
+        (4, 7),
+        (5, 8),
+        (6, 9),
+    ]
+    target.path = disclosed_path
+    target.path_cost = 30
+
+    create_tutorial_actor(
+        name="Unknown Blocker",
+        position=(4, 7),
+        faction="monsters",
+        standard_actions=False,
+    )
+
+    result = execute_by_index(
+        scout,
+        "Move",
+        target.index,
+        available=available,
+        prefer_safe=False,
+    )
+
+    assert result is not None
+    assert not result.canceled
+    movement_result = cast(MovementEvent, result)
+    traversed_path = disclosed_path[:4]
+    movement_cost = next(
+        cost.cost for cost in movement_result.costs
+        if cost.cost_type == "movement"
+    )
+
+    assert scout.position == (3, 6)
+    assert scout.action_economy.movement.normalized_score == 15
+    assert movement_result.end_position == (3, 6)
+    assert movement_result.path == traversed_path
+    assert movement_result.get_affected_positions() == set(traversed_path)
+    assert (4, 7) not in movement_result.get_affected_positions()
+    assert movement_cost == 15
+    assert movement_result.combat_log is not None
+    assert movement_result.combat_log.data["path"] == traversed_path
+    assert movement_result.combat_log.data["distance_feet"] == 15
+    assert movement_result.combat_log.data["movement_cost"] == 15
+    assert len(movement_result.combat_log.sub_entries) == 3
+    assert "15ft" in movement_result.combat_log.compact

@@ -7,16 +7,32 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           MassCureWounds, HealSpell, MassHeal
 """
 import random
+import time
 from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionCategory
+from dnd.action_timing import action_timing_enabled, record_action_timing
+from dnd.core.base_actions import (
+    ActionCategory,
+    ActionInformationOperation,
+    ActionOutcomeProfile,
+    ActionWorldEffectAnchor,
+    ActionWorldEffectCertainty,
+    ActionWorldEffectProfile,
+    ActionWorldEffectScope,
+    ActionWorldEffectShape,
+    BaseAction,
+    Cost,
+    InformationEffectProfile,
+    OutcomeApplicationScope,
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
-from dnd.core.dice import AttackOutcome, RollType
+from dnd.core.dice import AttackOutcome
 from typing import cast as type_cast
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, WeaponSlot, AbilityName, WindExposureEvent
 from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
@@ -24,10 +40,11 @@ from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import ArmorType, Weapon as WeaponItem, Shield as ShieldItem
 
-from dnd.entity import Entity, determine_attack_outcome
+from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, Attack
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
 from dnd.spells.spell_utils import fire_heal_roll_result
+from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 
 
 def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UUID) -> Optional[SpellEvent]:
@@ -72,6 +89,17 @@ class FireBolt(SpellAction):
     projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for fire bolt.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Fire Bolt's level-scaled actor-baseline attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self._get_cantrip_dice_count(self.caster_level),
+            die_size=10,
+            damage_type=DamageType.FIRE,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
@@ -103,18 +131,11 @@ class FireBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -122,6 +143,7 @@ class FireBolt(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -232,6 +254,17 @@ class RayOfFrost(SpellAction):
     projectile_type: Optional[str] = Field(default="ray", description="Projectile visualization hint for ray of frost.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.COLD, description="Primary damage type for VFX")
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Ray of Frost's level-scaled actor-baseline attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self._get_cantrip_dice_count(self.caster_level),
+            die_size=8,
+            damage_type=DamageType.COLD,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
@@ -263,18 +296,11 @@ class RayOfFrost(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -282,6 +308,7 @@ class RayOfFrost(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -477,6 +504,19 @@ class MagicMissile(SpellAction):
         """3 darts base + 1 per upcast level."""
         return 3 + self.get_upcast_bonus()
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Magic Missile's automatic per-dart damage model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.automatic_damage_outcome_profile(
+            dice_count=1,
+            die_size=4,
+            flat_bonus=1,
+            damage_type=DamageType.FORCE,
+            applications=self.get_num_projectiles(),
+            effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+        )
+
     def get_multi_target_count(self) -> Optional[int]:
         return self.get_num_projectiles()
 
@@ -561,7 +601,8 @@ class MagicMissile(SpellAction):
             amount=damage_roll.total,
             damage_type=DamageType.FORCE,
             source_entity_uuid=caster.uuid,
-            parent_event=execution_event.uuid
+            parent_event=execution_event.uuid,
+            effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
         )
 
         return execution_event.phase_to(
@@ -601,6 +642,18 @@ class ScorchingRay(SpellAction):
     def get_num_projectiles(self) -> int:
         """3 rays base + 1 per upcast level."""
         return 3 + self.get_upcast_bonus()
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Scorching Ray's independent per-ray attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=2,
+            die_size=6,
+            damage_type=DamageType.FIRE,
+            applications=self.get_num_projectiles(),
+        )
 
     def get_multi_target_count(self) -> Optional[int]:
         return self.get_num_projectiles()
@@ -660,18 +713,11 @@ class ScorchingRay(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -679,6 +725,7 @@ class ScorchingRay(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Ray attack: {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -765,6 +812,20 @@ class Fireball(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Fireball's actor-known save and damage rule."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=6,
+            damage_type=DamageType.FIRE,
+            save_ability="dexterity",
+            half_damage_on_save=True,
+            application_scope=OutcomeApplicationScope.EACH_AFFECTED_ENTITY,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
 
@@ -792,25 +853,44 @@ class Fireball(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply fireball damage to current target (called once per target by convolution)."""
+        timing = action_timing_enabled()
+
+        def start_phase() -> float:
+            return time.perf_counter() if timing else 0.0
+
+        def record_phase(phase: str, started_at: float) -> None:
+            if timing:
+                record_action_timing(f"spell.fireball.{phase}_ms", started_at)
+
+        started = start_phase()
 
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
+        record_phase("resolve_entities", started)
 
+        started = start_phase()
         dc = caster.spell_save_dc()
+        record_phase("spell_save_dc", started)
 
+        started = start_phase()
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
             dc=dc,
             parent_event=execution_event.uuid
         )
+        record_phase("create_saving_throw_request", started)
+
+        started = start_phase()
         _, save_roll, success = target.saving_throw(save_request)
+        record_phase("saving_throw", started)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = save_roll.bonus
 
+        started = start_phase()
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="dexterity",
@@ -821,7 +901,9 @@ class Fireball(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        record_phase("effect_event", started)
 
+        started = start_phase()
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -838,23 +920,29 @@ class Fireball(SpellAction):
         damage_roll = damage_dice.roll
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
+        record_phase("damage_roll", started)
 
         if final_damage > 0:
+            started = start_phase()
             target.receive_damage(
                 amount=final_damage,
                 damage_type=DamageType.FIRE,
                 source_entity_uuid=caster.uuid,
                 parent_event=effect_event.uuid
             )
+            record_phase("receive_damage", started)
 
         save_text = " (saved for half)" if success else ""
-        return effect_event.phase_to(
+        started = start_phase()
+        completion_event = effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             damages=[fire_damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,
             status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}"
         )
+        record_phase("completion_event", started)
+        return completion_event
 
 
 class BurningHands(SpellAction):
@@ -895,6 +983,20 @@ class BurningHands(SpellAction):
         """3d6 base + 1d6 per level above 1st."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Burning Hands' actor-known save and damage rule."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=6,
+            damage_type=DamageType.FIRE,
+            save_ability="dexterity",
+            half_damage_on_save=True,
+            application_scope=OutcomeApplicationScope.EACH_AFFECTED_ENTITY,
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
@@ -1016,6 +1118,20 @@ class LightningBolt(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Lightning Bolt's actor-known save and damage rule."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=6,
+            damage_type=DamageType.LIGHTNING,
+            save_ability="dexterity",
+            half_damage_on_save=True,
+            application_scope=OutcomeApplicationScope.EACH_AFFECTED_ENTITY,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line direction. Self-range means no LOS check to target position."""
 
@@ -1136,6 +1252,20 @@ class Thunderwave(SpellAction):
         """2d8 base + 1d8 per level above 1st."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Thunderwave's actor-known save and damage rule."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=8,
+            damage_type=DamageType.THUNDER,
+            save_ability="constitution",
+            half_damage_on_save=True,
+            application_scope=OutcomeApplicationScope.EACH_AFFECTED_ENTITY,
+        )
 
     def _get_push_direction(self, caster_pos: Tuple[int, int], target_pos: Tuple[int, int]) -> Tuple[int, int]:
         """Calculate push direction - away from caster (radial)."""
@@ -1352,6 +1482,20 @@ class Shatter(SpellAction):
         """3d8 base + 1d8 per level above 2nd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Shatter's actor-known save and damage rule."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=8,
+            damage_type=DamageType.THUNDER,
+            save_ability="constitution",
+            half_damage_on_save=True,
+            application_scope=OutcomeApplicationScope.EACH_AFFECTED_ENTITY,
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
@@ -2022,31 +2166,25 @@ class ShockingGrasp(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
         has_metal_armor = _is_wearing_metal_armor(target)
-        metal_adv_uuid: Optional[UUID] = None
-        if has_metal_armor:
-            metal_adv = AdvantageModifier(
+        metal_modifiers = (
+            AdvantageModifier(
                 name="Shocking Grasp (Metal Armor)",
                 value=AdvantageStatus.ADVANTAGE,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid
-            )
-            metal_adv_uuid = attack_bonus.self_static.add_advantage_modifier(metal_adv)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
-        if metal_adv_uuid:
-            attack_bonus.self_static.remove_modifier(metal_adv_uuid)
+                target_entity_uuid=target.uuid,
+            ),
+        ) if has_metal_armor else ()
+        resolution = self.resolve_spell_attack(
+            caster,
+            target,
+            execution_event.uuid,
+            extra_advantage_modifiers=metal_modifiers,
+        )
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         metal_text = " (advantage: metal armor)" if has_metal_armor else ""
         effect_event = execution_event.phase_to(
@@ -2055,6 +2193,7 @@ class ShockingGrasp(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}{metal_text}: {outcome.value}"
         )
 
@@ -2222,6 +2361,17 @@ class GuidingBolt(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Guiding Bolt's upcast actor-baseline attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=6,
+            damage_type=DamageType.RADIANT,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
@@ -2255,18 +2405,11 @@ class GuidingBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2274,6 +2417,7 @@ class GuidingBolt(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -2347,6 +2491,17 @@ class EldritchBlast(SpellAction):
     projectile_type: Optional[str] = Field(default="beam", description="Projectile visualization hint for eldritch blast.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Eldritch Blast's level-scaled actor-baseline attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self._get_cantrip_dice_count(self.caster_level),
+            die_size=10,
+            damage_type=DamageType.FORCE,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -2376,18 +2531,11 @@ class EldritchBlast(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2395,6 +2543,7 @@ class EldritchBlast(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -3637,6 +3786,38 @@ class Light(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for light.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Range contract used when validating targets for light.")
     valid_target_filter: str = Field(default="self_or_allies", description="Relationship filter used when collecting valid targets for light.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare Light's anchored illumination and possible reveal region.
+
+        Args:
+            actor: Entity discovering the spell. Light's world geometry does
+                not depend on actor-private state.
+
+        Returns:
+            Typed information effects matching the runtime light source.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="information.light",
+            information_effects=(
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.CHANGE_LIGHT,
+                    certainty=ActionWorldEffectCertainty.GUARANTEED,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=40,
+                ),
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.REVEAL_REGION,
+                    certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=40,
+                ),
+            ),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)

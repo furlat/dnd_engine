@@ -5,19 +5,29 @@ from uuid import UUID, uuid4
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, ItemChargeConsumptionEvent
 from dnd.blocks.equipment import EquipmentConfig, Weapon, WeaponProperty
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_actions import ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.events import BodyPart, EventQueue, Range, RangeType, WeaponSlot
+from dnd.core.events import (
+    BodyPart,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Range,
+    RangeType,
+    WeaponSlot,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items import create_healing_potion
+from dnd.items.test_items import create_potion_of_haste
 from dnd.items.armors import create_chain_mail, create_shield
 from dnd.items.environment import DirectionalDoor as TutorialDoor
 from dnd.items.weapons import create_greatsword, create_shortbow, create_shortsword
@@ -639,9 +649,32 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
     first_drink = execute_use_action(patient, potion.uuid, "Drink Potion")
 
     assert first_drink is not None and not first_drink.canceled
+    assert first_drink.presentation_kind is ActionPresentationKind.DRINK
     assert patient.get_hp() == full_hp
+    assert patient.action_economy.bonus_actions.normalized_score == 0
     assert potion.stack_count == 1
     assert patient.inventory.has_item(potion.uuid)
+    charge_events = EventQueue.get_events_by_type(EventType.ITEM_CHARGE_CONSUMPTION)
+    assert [event.phase for event in charge_events] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    charge_completion = charge_events[-1]
+    assert isinstance(charge_completion, ItemChargeConsumptionEvent)
+    assert charge_completion.item_uuid == potion.uuid
+    assert charge_completion.amount == 1
+    assert charge_completion.charges_before == 1
+    assert charge_completion.charges_after == 1
+    assert charge_completion.stack_count_before == 2
+    assert charge_completion.stack_count_after == 1
+    assert not charge_completion.item_destroyed
+    assert charge_completion.parent_lineage == first_drink.lineage_uuid
+    assert charge_completion.lineage_uuid in first_drink.children_lineages
+    charge_parent = EventQueue.get_event_by_uuid(charge_completion.parent_event)
+    assert charge_parent is not None
+    assert charge_parent.phase is EventPhase.EFFECT
     first_drink_state = (
         first_drink.canceled,
         patient.get_hp(),
@@ -651,6 +684,14 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
 
     patient.receive_damage(2, DamageType.SLASHING, patient.uuid)
     wounded_again = patient.get_hp()
+    blocked_second_drink = execute_use_action(patient, potion.uuid, "Drink Potion")
+
+    assert blocked_second_drink is None
+    assert patient.get_hp() == wounded_again
+    assert potion.stack_count == 1
+    assert len(EventQueue.get_events_by_type(EventType.ITEM_CHARGE_CONSUMPTION)) == 4
+
+    patient.action_economy.reset_all_costs()
     second_drink = execute_use_action(patient, potion.uuid, "Drink Potion")
 
     assert second_drink is not None and not second_drink.canceled
@@ -697,6 +738,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
             f"still_carried={first_drink_state[3]}"
         ),
         f"before second drink: hp={wounded_again}",
+        "second drink in same turn: blocked=True, stack=1",
         (
             "after second drink: "
             f"canceled={second_drink_state[0]}, "
@@ -721,9 +763,40 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         "drink action clone: name=Drink Potion, user_set=True, item_set=True, fresh_uuid=True",
         "after first drink: canceled=False, hp=18, stack=1, still_carried=True",
         "before second drink: hp=16",
+        "second drink in same turn: blocked=True, stack=1",
         "after second drink: canceled=False, hp=18, still_carried=False, block_exists=False",
         "door visible: True",
         "door actions: before=['Open Door'], after=['Close Door'], is_open=True, blocks_east=False",
     ]
     assert use_lines == expected_use_lines
     assert capsys.readouterr().out.splitlines() == expected_use_lines
+
+
+def test_condition_potion_keeps_presentation_and_condition_log_in_one_lineage() -> None:
+    """A condition potion exposes one drink action with a readable child effect."""
+    reset_item_tutorial_state()
+    actor = create_tutorial_actor("Potion Tester")
+    potion = create_potion_of_haste(actor.uuid)
+    put_in_inventory(actor, potion)
+
+    completion = execute_use_action(actor, potion.uuid, "Drink Haste Potion")
+
+    assert completion is not None and not completion.canceled
+    assert completion.presentation_kind is ActionPresentationKind.DRINK
+    assert completion.model_dump(mode="json")["presentation_kind"] == "drink"
+    assert "Haste" in actor.active_conditions
+    condition_completions = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.CONDITION_APPLICATION)
+        if event.phase is EventPhase.COMPLETION
+        and event.parent_lineage == completion.lineage_uuid
+    ]
+    assert len(condition_completions) == 1
+    condition_log = condition_completions[0].combat_log
+    assert condition_log is not None
+    assert "gains" in condition_log.compact
+    assert "Haste" in condition_log.compact
+    assert completion.combat_log is not None
+    assert condition_log.compact in {
+        sub_entry.compact for sub_entry in completion.combat_log.sub_entries
+    }

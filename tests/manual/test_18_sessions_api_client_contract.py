@@ -19,7 +19,8 @@ from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from server.event_server import app, sim
 from server.event_stream import event_stream, format_sse, make_stream_id
-from server.session import PlayerType
+from server.api_models import ReplicationBootstrapResponse
+from server.session import PlayerType, SessionManager
 
 
 class ApiClient:
@@ -116,6 +117,20 @@ def create_joined_client_game() -> tuple[ApiClient, str, Entity, Entity, Encount
     return client, session_id, hero, monster, encounter
 
 
+def test_session_manager_reset_preserves_the_shared_registry() -> None:
+    """Arena resets clear session state without creating a split registry."""
+    reset_client_api_state()
+    manager = sim.get_session_manager()
+    manager.create_session(PlayerType.HUMAN, "Reset Probe")
+
+    SessionManager.reset()
+
+    assert SessionManager.get() is manager
+    assert manager.sessions == {}
+    assert manager.games == {}
+    assert manager.active_game is None
+
+
 def make_melee_attack_auto_hit(entity: Entity) -> UUID:
     """Add an explicit auto-hit modifier to the entity's melee attack bonus."""
     modifier = AutoHitModifier(
@@ -196,7 +211,9 @@ def test_session_create_join_ping_and_game_status(capsys) -> None:
 
     assert join_response.status_code == 200
     assert join_payload["success"]
-    assert join_payload["game_id"] == str(sim.game.game_id)
+    game = sim.game
+    assert game is not None
+    assert join_payload["game_id"] == str(game.game_id)
     assert join_payload["controlled_entities"] == [str(hero.uuid)]
 
     ping_response = client.post(f"/session/{session_id}/ping")
@@ -214,7 +231,7 @@ def test_session_create_join_ping_and_game_status(capsys) -> None:
     assert status_payload["encounter_active"]
     assert status_payload["sessions"][0]["is_their_turn"]
     assert encounter.get_current_entity() is hero
-    assert sim.game.is_player_turn(UUID(session_id))
+    assert game.is_player_turn(UUID(session_id))
 
     readout_lines = [
         (
@@ -226,7 +243,7 @@ def test_session_create_join_ping_and_game_status(capsys) -> None:
         (
             "join result: "
             f"success={'yes' if join_payload['success'] else 'no'}, "
-            f"game_matches={'yes' if join_payload['game_id'] == str(sim.game.game_id) else 'no'}, "
+            f"game_matches={'yes' if join_payload['game_id'] == str(game.game_id) else 'no'}, "
             f"controlled={len(join_payload['controlled_entities'])}"
         ),
         (
@@ -253,6 +270,35 @@ def test_session_create_join_ping_and_game_status(capsys) -> None:
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_game_join_accepts_single_entity_uuid_alias() -> None:
+    """A one-entity join can use the singular convenience field."""
+    reset_client_api_state()
+    hero, _monster = create_api_pair()
+    start_api_game(hero, _monster)
+    client = ApiClient()
+
+    create_response = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Manual Player"},
+    )
+    session_id = create_response.json()["session_id"]
+
+    join_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuid": str(hero.uuid)},
+    )
+    join_payload = join_response.json()
+
+    assert join_response.status_code == 200
+    assert join_payload["success"]
+    assert join_payload["controlled_entities"] == [str(hero.uuid)]
+
+    ping_payload = client.post(f"/session/{session_id}/ping").json()
+
+    assert ping_payload["is_my_turn"]
+    assert ping_payload["controlled_entities"] == [str(hero.uuid)]
 
 
 def test_state_current_turn_and_available_actions_payloads(capsys) -> None:
@@ -361,13 +407,48 @@ def test_execute_action_by_index_returns_state_logs_and_cursors(capsys) -> None:
         "execute result: success=yes, event=attack_melee_main, turn_continues=yes",
         "hit points: monster=17->11, hero=10",
         "returned state: current=Manual Hero, actions_remaining=0, ended=no",
-        "cursors: events=78, logs=2, log_entries=1",
+        "cursors: events=72, logs=2, log_entries=1",
     ]
 
     print("\n".join(readout_lines))
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_execute_movement_returns_json_serialized_event_data() -> None:
+    """Movement coordinates cross the action boundary as JSON arrays."""
+    client, session_id, hero, _monster, _encounter = create_joined_client_game()
+    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    move = next(
+        action
+        for action in actions["position_actions"]
+        if action["template_name"] == "Move"
+    )
+    target = next(
+        row
+        for row in move["valid_targets"]
+        if row["position"] != list(hero.position)
+    )
+
+    response = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(hero.uuid),
+            "template_name": "Move",
+            "target_index": target["index"],
+            "return_available_actions": False,
+            "include_state": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"]
+    assert payload["event_data"]["start_position"] == [1, 1]
+    assert payload["event_data"]["end_position"] == target["position"]
+    assert all(isinstance(position, list) for position in payload["event_data"]["path"])
 
 
 def test_event_and_combat_log_history_are_cursor_addressed(capsys) -> None:
@@ -428,16 +509,42 @@ def test_event_and_combat_log_history_are_cursor_addressed(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "event history: route_count=78, total=78, completions=19",
+        "event history: route_count=72, total=72, completions=19",
         "combat log: route_count=2, total=2, latest_type=attack",
-        "stream cursors: event=78, combat=2",
-        "sse frame: id=id: e=78;l=2, event_line=event: combat_log",
+        "stream cursors: event=72, combat=2",
+        "sse frame: id=id: e=72;l=2, event_line=event: combat_log",
     ]
 
     print("\n".join(readout_lines))
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_replication_bootstrap_is_one_typed_cursor_aligned_base() -> None:
+    """State, visibility, logs, session, and cursors share one generation."""
+    client, session_id, hero, _, encounter = create_joined_client_game()
+
+    response = client.get("/replication/bootstrap", params={"session_id": session_id})
+
+    assert response.status_code == 200
+    bootstrap = ReplicationBootstrapResponse.model_validate(response.json())
+    assert bootstrap.protocol.generation_id == str(EventQueue.generation_id())
+    assert bootstrap.event_cursor == EventQueue.event_cursor()
+    assert bootstrap.combat_log_cursor == len(encounter.combat_log)
+    assert [entry.model_dump(mode="json") for entry in bootstrap.combat_log] == [
+        entry.model_dump(mode="json") for entry in encounter.combat_log
+    ]
+    assert bootstrap.session is not None
+    assert bootstrap.session.session_id == session_id
+    assert str(hero.uuid) in bootstrap.session.controlled_entities
+    assert any(entity.uuid == str(hero.uuid) for entity in bootstrap.state.entities)
+    assert str(hero.uuid) in bootstrap.visibility.root
+    hero_visibility = bootstrap.visibility.root[str(hero.uuid)]
+    assert hero_visibility.position == hero.position
+    assert hero_visibility.effective_light_levels == (
+        hero.senses.get_effective_light_levels(hero.uuid)
+    )
 
 
 def test_spell_catalog_route_exposes_design_time_spell_metadata(capsys) -> None:

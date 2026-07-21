@@ -4,6 +4,11 @@ from dnd.blocks.base_item import UsableItem
 from dnd.conditions import Exhaustion, Poisoned
 from dnd.core.base_block import BaseBlock, SensesType
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
+from dnd.core.base_actions import (
+    ActionSetupDuration,
+    ActionSetupMaintenanceFailure,
+    ActionSetupMaintenanceTrigger,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue, WeaponSlot
 from dnd.core.gridmap import GridMap, get_map
@@ -362,6 +367,7 @@ def test_generic_caster_preset_wires_spells_reaction_gear_and_potions(capsys) ->
         "Invisibility",
         "Greater Invisibility",
     }
+    expected_spell_slots = {1: 4, 2: 3, 3: 2, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0}
 
     assert caster.is_spellcaster
     assert caster.spellcasting.spellcasting_ability == "charisma"
@@ -373,7 +379,10 @@ def test_generic_caster_preset_wires_spells_reaction_gear_and_potions(capsys) ->
     assert hit_dice.hit_dice_value.score == 6
     assert hit_dice.hit_dice_count.score == 5
     assert caster.get_max_hp() == 40
-    assert caster.action_economy.spell_slot_3.normalized_score == 3
+    assert {
+        slot_level: caster.action_economy._get_spell_slot_value(slot_level).normalized_score
+        for slot_level in range(1, 10)
+    } == expected_spell_slots
     assert expected_spell_actions <= action_names
     assert equipped_item_name(caster, WeaponSlot.MELEE_MAIN) == "Dagger"
     assert "Attack_MELEE_MAIN" in action_names
@@ -384,17 +393,49 @@ def test_generic_caster_preset_wires_spells_reaction_gear_and_potions(capsys) ->
     haste_potion = get_inventory_item(caster, "Potion of Haste")
     invisibility_actions = invisibility_potion.get_use_actions(caster.uuid)
     haste_actions = haste_potion.get_use_actions(caster.uuid)
+    available = caster.get_available_actions()
+    potion_rows = {
+        row.source_item_uuid: row
+        for row in available.self_actions
+        if row.source_item_uuid in {invisibility_potion.uuid, haste_potion.uuid}
+    }
 
     assert invisibility_potion.is_consumable
     assert len(invisibility_actions) == 1
     assert invisibility_actions[0].name == "Drink Greater Invisibility Potion"
     assert invisibility_actions[0].source_item_uuid == invisibility_potion.uuid
-    assert invisibility_actions[0].effective_costs == []
+    assert len(invisibility_actions[0].effective_costs) == 1
+    assert invisibility_actions[0].effective_costs[0].cost_type == "bonus_actions"
+    assert invisibility_actions[0].effective_costs[0].cost == 1
     assert haste_potion.is_consumable
     assert len(haste_actions) == 1
     assert haste_actions[0].name == "Drink Haste Potion"
     assert haste_actions[0].source_item_uuid == haste_potion.uuid
-    assert haste_actions[0].effective_costs == []
+    assert len(haste_actions[0].effective_costs) == 1
+    assert haste_actions[0].effective_costs[0].cost_type == "bonus_actions"
+    assert haste_actions[0].effective_costs[0].cost == 1
+    invisibility_profile = potion_rows[invisibility_potion.uuid].self_setup_profile
+    haste_profile = potion_rows[haste_potion.uuid].self_setup_profile
+    assert invisibility_profile is not None
+    assert invisibility_profile.semantic_id == "setup.greater_invisibility"
+    assert invisibility_profile.active_condition_semantic_keys == frozenset({
+        "dnd.conditions.GreaterInvisibilityEffect",
+    })
+    maintenance = invisibility_profile.maintenance
+    stealth_bonus = caster.skill_bonus(target_entity_uuid=None, skill_name="stealth")
+    assert maintenance is not None
+    assert maintenance.trigger is ActionSetupMaintenanceTrigger.REVEALING_ACTION
+    assert maintenance.skill_name == "stealth"
+    assert maintenance.initial_dc == 15
+    assert maintenance.dc_increment_per_success == 1
+    assert maintenance.check_bonus == stealth_bonus.normalized_score
+    assert maintenance.check_advantage is stealth_bonus.advantage
+    assert maintenance.failure is ActionSetupMaintenanceFailure.REMOVE_SETUP
+    assert haste_profile is not None
+    assert haste_profile.semantic_id == "setup.haste"
+    assert haste_profile.duration is ActionSetupDuration.UNTIL_REMOVED
+    assert haste_profile.maximum_duration_rounds == 10
+    assert haste_profile.extra_actions_per_turn == 1
 
     readout_lines = [
         (
@@ -436,11 +477,11 @@ def test_generic_caster_preset_wires_spells_reaction_gear_and_potions(capsys) ->
             "caster numbers: spellcaster=yes, ability=charisma, cha_mod=4, "
             "prof=3, attack=7, dc=15"
         ),
-        "caster durability: hit_dice=5d6, mode=maximums, hp=40, level3_slots=3",
+        "caster durability: hit_dice=5d6, mode=maximums, hp=40, level3_slots=2",
         "caster actions: spells=9/9, dagger=Dagger, attack=yes, shield_handler=yes",
         (
             "caster potions: invisibility=Drink Greater Invisibility Potion, "
-            "invisibility_costs=0, haste=Drink Haste Potion, haste_costs=0"
+            "invisibility_costs=1, haste=Drink Haste Potion, haste_costs=1"
         ),
     ]
     assert readout_lines == expected_lines

@@ -28,6 +28,7 @@ class CombatLogEntryType(str, Enum):
     MULTI_ENTITY_ACTION = "multi_entity_action"
     SPELL_SAVE = "spell_save"
     SPELL_DAMAGE = "spell_damage"
+    SPELL_INTERRUPTION = "spell_interruption"
     ENTITY_SPOTTED = "entity_spotted"
     HAZARD_DETECTED = "hazard_detected"
 
@@ -185,6 +186,22 @@ class MovementLogData(BaseModel):
     path: List[Tuple[int, int]] = Field(default_factory=list, description="Path cells traversed by the movement.")
     distance_feet: int = Field(default=0, description="Movement distance in feet.")
     movement_cost: int = Field(default=0, description="Action-economy movement cost in feet.")
+    requested_end_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Originally requested destination before partial termination.",
+    )
+    termination_reason: str = Field(
+        default="completed",
+        description="Machine-readable reason the traversed movement ended.",
+    )
+    controller_revalidation: bool = Field(
+        default=False,
+        description="Whether a committed step required a fresh controller decision.",
+    )
+    controller_revalidation_reason: Optional[str] = Field(
+        default=None,
+        description="Typed subjective change that required controller revalidation.",
+    )
 
 
 class SavingThrowLogData(BaseModel):
@@ -261,6 +278,23 @@ class SpellSaveLogData(BaseModel):
     target_hp_after: Optional[int] = Field(default=None, description="Target HP after spell resolution, if known.")
 
 
+class SpellInterruptionLogData(BaseModel):
+    """Structured result of one Counterspell reaction."""
+
+    outcome_code: str = Field(description="Stable reaction outcome identity.")
+    counterspeller_name: str = Field(description="Display name of the reacting caster.")
+    counterspeller_uuid: str = Field(description="UUID of the reacting caster.")
+    original_caster_name: str = Field(description="Display name of the interrupted caster.")
+    original_caster_uuid: str = Field(description="UUID of the interrupted caster.")
+    spell_name: str = Field(description="Display name of the incoming spell.")
+    incoming_spell_level: int = Field(ge=0, description="Level of the incoming cast.")
+    counterspell_slot_level: int = Field(ge=3, description="Slot level spent on Counterspell.")
+    automatic: bool = Field(description="Whether slot level made the result automatic.")
+    check_total: Optional[int] = Field(default=None, description="Spellcasting check total when rolled.")
+    check_dc: Optional[int] = Field(default=None, description="Spellcasting check DC when rolled.")
+    succeeded: bool = Field(description="Whether the reaction interrupted the incoming spell.")
+
+
 class SkillCheckLogData(BaseModel):
     """Structured skill check data.
 
@@ -330,6 +364,37 @@ class HazardDetectedLogData(BaseModel):
     stealth_dc: int = Field(description="Stealth DC that was beaten.")
 
 
+class DamageTakenLogData(BaseModel):
+    """Structured data for blocked and successful damage events.
+
+    Attributes:
+        target_name: Display name of the damaged entity.
+        damage: Damage applied, or zero when the effect was blocked.
+        damage_type: Damage type label.
+        source_name: Display name of the damage source.
+        effect_id: Stable identity of the effect that caused the damage.
+        blocked: Whether the damage effect was blocked.
+        blocked_reason: Human-readable reason the damage was blocked.
+    """
+
+    target_name: str = Field(description="Display name of the damaged entity.")
+    damage: int = Field(description="Damage applied, or zero when the effect was blocked.")
+    damage_type: str = Field(description="Damage type label.")
+    source_name: str = Field(description="Display name of the damage source.")
+    effect_id: Optional[str] = Field(
+        default=None,
+        description="Stable identity of the effect that caused the damage.",
+    )
+    blocked: Optional[bool] = Field(
+        default=None,
+        description="Whether the damage effect was blocked.",
+    )
+    blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Human-readable reason the damage was blocked.",
+    )
+
+
 class HealLogData(BaseModel):
     """Structured data for healing events.
 
@@ -346,20 +411,24 @@ class HealLogData(BaseModel):
     source_description: str = Field(description="Description of the healing source.")
 
 
-class SelfActionLogData(BaseModel):
-    """Structured data for self-targeting actions.
+class ActionLogData(BaseModel):
+    """Structured data for actions without a more specific log model.
 
     Attributes:
         entity_name: Display name of the acting entity.
         entity_uuid: UUID string of the acting entity.
-        action_name: Display name of the self-targeting action.
+        action_name: Display name of the action.
         effect_description: Description of the action effect.
+        target_name: Display name of the target, when the action has one.
+        target_uuid: UUID string of the target, when the action has one.
     """
 
     entity_name: str = Field(description="Display name of the acting entity.")
     entity_uuid: str = Field(description="UUID string of the acting entity.")
-    action_name: str = Field(description="Display name of the self-targeting action.")
+    action_name: str = Field(description="Display name of the action.")
     effect_description: str = Field(description="Description of the action effect.")
+    target_name: Optional[str] = Field(default=None, description="Display name of the target, if any.")
+    target_uuid: Optional[str] = Field(default=None, description="UUID string of the target, if any.")
 
 
 class TurnLogData(BaseModel):
@@ -432,6 +501,10 @@ class CombatLogEntry(BaseModel):
         sub_entries: Nested combat-log entries from child events.
         perceiver_uuids: Entity UUID strings that could perceive the event.
         revealed_entity_uuids: Entity UUID strings revealed during the event chain.
+        identified_entity_observer_uuids: Internal event-time identity grants,
+            keyed by participant UUID.
+        located_entity_observer_uuids: Internal event-time exact-location grants,
+            keyed by participant UUID.
     """
 
     entry_type: CombatLogEntryType = Field(description="Category of combat-log entry.")
@@ -464,6 +537,22 @@ class CombatLogEntry(BaseModel):
     revealed_entity_uuids: Set[str] = Field(
         default_factory=set,
         description="Entity UUIDs revealed during this event chain.",
+    )
+    identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal mapping from participant UUIDs to observer UUIDs that "
+            "identified them when the event occurred."
+        ),
+    )
+    located_entity_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal mapping from participant UUIDs to observer UUIDs that "
+            "located them exactly when this event occurred."
+        ),
     )
 
     def get_text(self, verbosity: CombatLogVerbosity) -> str:

@@ -23,6 +23,7 @@ from dnd.core.modifiers import (
     Size,
 )
 from dnd.core.values import BaseValue
+from dnd.conditions import Incapacitated, Prone
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
@@ -174,6 +175,19 @@ def test_first_combat_example_prints_visible_hit_damage_and_heal(capsys) -> None
     assert readout_lines == expected_lines
     assert event.phase == EventPhase.COMPLETION
     assert capsys.readouterr().out.splitlines() == expected_lines
+
+
+def test_prone_auto_stand_waits_when_movement_is_unavailable() -> None:
+    """Turn-start auto-stand should not crash when constraints remove movement."""
+    reset_combat_tutorial_state()
+    actor = create_strong_actor("Pinned Hero", (5, 5), faction="heroes")
+    actor.add_condition(Prone(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid))
+    actor.add_condition(Incapacitated(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid))
+
+    actor.on_turn_start(round_number=1, turn_index=0)
+
+    assert "Prone" in actor.active_conditions
+    assert actor.action_economy.movement.normalized_score == 0
 
 
 def test_invalid_melee_attack_cancels_before_costs(capsys) -> None:
@@ -349,6 +363,24 @@ def test_step_movement_can_trigger_opportunity_attack(capsys) -> None:
     mover = create_goblin(name="Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
+    setup_standard_actions(mover)
+    available = mover.get_available_actions()
+    move = next(
+        action
+        for action in available.position_actions
+        if action.template_name == "Move"
+    )
+    target = next(
+        candidate
+        for candidate in move.valid_targets
+        if candidate.position == (5, 10)
+    )
+    exposure = target.opportunity_attack_exposures[0]
+
+    assert exposure.reactor_uuid == watcher.uuid
+    assert exposure.reactor_name == watcher.name
+    assert exposure.from_position == (5, 6)
+    assert exposure.to_position == (5, 7)
 
     mover_hp_before = mover.get_hp()
     hit_modifier = make_melee_attack_auto_hit(watcher)
@@ -417,8 +449,8 @@ def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(
     assert shove_event is not None
     assert shove_event.phase == EventPhase.COMPLETION
     assert shove_event.contest_success is True
-    assert shove_event.push_distance == 20
-    assert target.position == (10, 5)
+    assert shove_event.push_distance == 10
+    assert target.position == (8, 5)
     assert shover.action_economy.bonus_actions.normalized_score == 0
 
     forced_events = EventQueue.get_events_by_type(EventType.FORCED_MOVEMENT)
@@ -455,8 +487,8 @@ def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(
     expected_shove_lines = [
         "shove phase: completion",
         "contest success: True",
-        "push distance: 20",
-        "target position after shove: (10, 5)",
+        "push distance: 10",
+        "target position after shove: (8, 5)",
         "bonus actions after shove: 0",
         "forced movement completions: 1",
         "watcher reactions after forced movement: 1",

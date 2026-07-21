@@ -7,8 +7,23 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionTag, DurationType, Duration
+from dnd.core.base_actions import (
+    ActionOutcomeProfile,
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    OutcomeResolution,
+    TargetEffectDisposition,
+    TargetType,
+)
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionAgencyDenial,
+    ConditionCategory,
+    ConditionRemovalTrigger,
+    ConditionTag,
+    Duration,
+    DurationType,
+)
 from dnd.core.base_tiles import MovementMode
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, AbilityName, SkillName, ForcedMovementEvent
@@ -20,7 +35,7 @@ from dnd.core.modifiers import (
 from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
-from dnd.entity import Entity, determine_attack_outcome
+from dnd.entity import Entity
 from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
@@ -246,6 +261,18 @@ class ChillTouch(SpellAction):
             return 2
         return 1
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Chill Touch's execution-honest actor-baseline attack model."""
+        if not isinstance(actor, Entity):
+            return None
+        profile = self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self._get_cantrip_dice_count(self.caster_level),
+            die_size=8,
+            damage_type=DamageType.NECROTIC,
+        )
+        return profile.model_copy(update={"critical_threshold": 20})
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight for the spell attack."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -277,17 +304,11 @@ class ChillTouch(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        outcome = determine_attack_outcome(dice_roll, target_ac)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -295,6 +316,7 @@ class ChillTouch(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -390,6 +412,19 @@ class Blight(SpellAction):
         """Return the number of d8 damage dice after upcasting."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Blight's save-for-half necrotic damage model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=8,
+            damage_type=DamageType.NECROTIC,
+            save_ability="constitution",
+            half_damage_on_save=True,
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight, range, and invalid creature types."""
@@ -638,6 +673,32 @@ class BlindnessDeafness(SpellAction):
         """Return the action discovery multi-target count."""
         return self.get_num_projectiles()
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare the selected blindness/deafness save effect."""
+        if not isinstance(actor, Entity):
+            return None
+        effect_type = self.effect_type.lower()
+        condition_keys = (
+            frozenset({"dnd.spells.necromancy.BlindnessDeafnessEffect", "dnd.conditions.Deafened"})
+            if effect_type == "deafened"
+            else frozenset({"dnd.spells.necromancy.BlindnessDeafnessEffect", "dnd.conditions.Blinded"})
+        )
+        condition_fact = "selected_target.condition.deafened" if effect_type == "deafened" else "selected_target.condition.blinded"
+        return ActionTargetEffectProfile(
+            semantic_id=f"control.blindness_deafness.{effect_type}",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id=f"control.{effect_type}",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="constitution",
+                    condition_fact_ids=(condition_fact,),
+                    condition_semantic_keys=condition_keys,
+                ),
+            ),
+        )
+
     def get_all_targets(self) -> List[UUID]:
         """Return the selected targets trimmed to the spell's target count."""
         targets: List[UUID] = []
@@ -758,6 +819,43 @@ class NecroticBless(SpellAction):
     def get_multi_target_count(self) -> Optional[int]:
         """Return the fixed maximum number of targets."""
         return 4
+
+    def get_target_effect_profile(self, actor: Any) -> ActionTargetEffectProfile:
+        """Declare the creature-type branches used for target allocation.
+
+        Args:
+            actor: Spellcaster discovering this action.
+
+        Returns:
+            Conditional Bless and Bane effects with the actor's current save DC.
+        """
+        return ActionTargetEffectProfile(
+            semantic_id="spell.necrotic_bless",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.bless",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    included_creature_types=frozenset({CreatureType.UNDEAD.value}),
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.bless",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.enchantment.BlessEffect",
+                    }),
+                ),
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.bane",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_ability="charisma",
+                    save_dc=actor.spell_save_dc(),
+                    condition_fact_ids=("selected_target.condition.bane",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.enchantment.BaneEffect",
+                    }),
+                ),
+            ),
+        )
 
     def get_all_targets(self) -> List[UUID]:
         """Return unique selected targets trimmed to four creatures."""
@@ -952,6 +1050,14 @@ class EyebiteAsleepEffect(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup and spell interactions.",
     )
+    removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
+        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
+        description="Positive applied damage wakes this target.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="The asleep option removes the target's turn agency.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply Unconscious and register the wake-on-damage handler."""
@@ -1002,7 +1108,7 @@ class EyebiteAsleepEffect(BaseCondition):
             name=f"Eyebite: Wake on Damage ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[Trigger(
-                event_type=EventType.TAKE_DAMAGE,
+                event_type=EventType.DAMAGE_APPLIED,
                 event_phase=EventPhase.EFFECT,
                 event_target_entity_uuid=target_uuid
             )],
@@ -1269,6 +1375,42 @@ class EyebiteStrike(BaseAction):
         description="Eyebite casting-state condition that tracks successful saves.",
     )
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare the selected Eyebite strike condition."""
+        if not isinstance(actor, Entity):
+            return None
+        effect_choice = self.effect_choice.lower()
+        condition_fact, condition_keys = {
+            "asleep": (
+                "selected_target.condition.eyebite_asleep",
+                frozenset({"dnd.spells.necromancy.EyebiteAsleepEffect", "dnd.conditions.Unconscious"}),
+            ),
+            "panicked": (
+                "selected_target.condition.eyebite_panicked",
+                frozenset({"dnd.spells.necromancy.EyebitePanickedEffect"}),
+            ),
+        }.get(
+            effect_choice,
+            (
+                "selected_target.condition.sickened",
+                frozenset({"dnd.spells.necromancy.SickenedCondition"}),
+            ),
+        )
+        return ActionTargetEffectProfile(
+            semantic_id=f"control.eyebite.{effect_choice}",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id=f"control.eyebite.{effect_choice}",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=self.spell_dc,
+                    save_ability="wisdom",
+                    condition_fact_ids=(condition_fact,),
+                    condition_semantic_keys=condition_keys,
+                ),
+            ),
+        )
+
     def _get_casting_state(self, caster: Entity) -> Optional[EyebiteCastingState]:
         """Return the active Eyebite casting state for this strike."""
         if self.casting_state_condition_uuid is not None:
@@ -1494,6 +1636,20 @@ class FingerOfDeath(SpellAction):
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
         return self.base_damage_dice + upcast_bonus
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Finger of Death's upcast save-for-half damage model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=self.get_damage_dice_count(),
+            die_size=8,
+            flat_bonus=actor.spell_damage_outcome_bonus() + self.flat_damage,
+            damage_type=DamageType.NECROTIC,
+            save_ability="constitution",
+            half_damage_on_save=True,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight and range for the target."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -1598,6 +1754,17 @@ class InflictWounds(SpellAction):
         """Return the number of d10 damage dice after upcasting."""
         return 2 + self.cast_at_level
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Inflict Wounds' melee spell attack damage model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.spell_attack_outcome_profile(
+            actor,
+            dice_count=self._get_damage_dice_count(),
+            die_size=10,
+            damage_type=DamageType.NECROTIC,
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight and melee reach."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -1627,17 +1794,11 @@ class InflictWounds(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
-        target_ac = target.ac_bonus(caster.uuid)
-        attack_bonus.set_from_target(target_ac)
-        target_ac.set_from_target(attack_bonus)
-
-        dice_roll = caster.roll_d20(attack_bonus, RollType.ATTACK, parent_event=execution_event.uuid)
-        crit_threshold = caster.get_spell_crit_threshold()
-        outcome = determine_attack_outcome(dice_roll, target_ac, crit_threshold)
-
-        attack_bonus.reset_from_target()
-        target_ac.reset_from_target()
+        resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
+        attack_bonus = resolution.attack_bonus
+        target_ac = resolution.target_ac
+        dice_roll = resolution.dice_roll
+        outcome = resolution.outcome
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1645,6 +1806,7 @@ class InflictWounds(SpellAction):
             ac=target_ac,
             dice_roll=dice_roll,
             attack_outcome=outcome,
+            is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
@@ -1703,6 +1865,20 @@ class Harm(SpellAction):
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
     projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.NECROTIC, description="Primary damage type for VFX")
+
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return Harm's save-for-half necrotic damage model."""
+        if not isinstance(actor, Entity):
+            return None
+        return self.saving_throw_damage_outcome_profile(
+            actor,
+            dice_count=14,
+            die_size=6,
+            flat_bonus=0,
+            damage_type=DamageType.NECROTIC,
+            save_ability="constitution",
+            half_damage_on_save=True,
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save, roll damage, and preserve at least 1 HP."""
@@ -2154,6 +2330,44 @@ class BestowCurse(SpellAction):
     projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     curse_option: int = Field(default=1, description="Selected curse option from 1 through 4.")
     cursed_ability: AbilityName = Field(default="strength", description="Ability affected when option 1 is used.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare the selected Bestow Curse branch."""
+        if not isinstance(actor, Entity):
+            return None
+        option = max(1, min(4, self.curse_option))
+        condition_fact, condition_keys = {
+            1: (
+                f"selected_target.condition.bestow_curse.{self.cursed_ability}",
+                frozenset({"dnd.spells.necromancy.AbilityCurseEffect"}),
+            ),
+            2: (
+                "selected_target.condition.bestow_curse.attack",
+                frozenset({"dnd.spells.necromancy.AttackCurseEffect"}),
+            ),
+            3: (
+                "selected_target.condition.bestow_curse.inaction",
+                frozenset({"dnd.spells.necromancy.InactionCurseEffect"}),
+            ),
+            4: (
+                "selected_target.condition.bestow_curse.damage",
+                frozenset({"dnd.spells.necromancy.DamageCurseEffect"}),
+            ),
+        }[option]
+        return ActionTargetEffectProfile(
+            semantic_id=f"control.bestow_curse.option_{option}",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id=f"control.bestow_curse.option_{option}",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=(condition_fact,),
+                    condition_semantic_keys=condition_keys,
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target visibility, touch range, and curse option."""

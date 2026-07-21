@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from typing import Optional
 from uuid import UUID
 
 import httpx
@@ -21,6 +22,16 @@ from server.event_server import app, sim
 class ArenaApiClient:
     """Synchronous in-process client for the standard arena API."""
 
+    def __init__(self) -> None:
+        """Create a reusable in-process ASGI client.
+
+        The self-play and validation harnesses issue many small API calls. A
+        persistent runner and HTTPX client keep that path from measuring client
+        setup cost as gameplay latency.
+        """
+        self._runner: Optional[asyncio.Runner] = None
+        self._client: Optional[httpx.AsyncClient] = None
+
     def get(self, path: str, **kwargs) -> httpx.Response:
         """Issue a GET request to the arena API.
 
@@ -31,7 +42,7 @@ class ArenaApiClient:
         Returns:
             HTTP response produced by the FastAPI app.
         """
-        return asyncio.run(self._request("GET", path, **kwargs))
+        return self._run(self._request("GET", path, **kwargs))
 
     def post(self, path: str, **kwargs) -> httpx.Response:
         """Issue a POST request to the arena API.
@@ -43,7 +54,32 @@ class ArenaApiClient:
         Returns:
             HTTP response produced by the FastAPI app.
         """
-        return asyncio.run(self._request("POST", path, **kwargs))
+        return self._run(self._request("POST", path, **kwargs))
+
+    def close(self) -> None:
+        """Close the reusable ASGI client and event loop."""
+        if self._runner is None:
+            return
+        if self._client is not None:
+            self._runner.run(self._client.aclose())
+            self._client = None
+        self._runner.close()
+        self._runner = None
+
+    def __enter__(self) -> "ArenaApiClient":
+        """Return this client for context-manager use."""
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> bool:
+        """Close the reusable client and allow exceptions to propagate."""
+        self.close()
+        return False
+
+    def _run(self, awaitable):
+        """Run one coroutine on the client's persistent event loop."""
+        if self._runner is None:
+            self._runner = asyncio.Runner()
+        return self._runner.run(awaitable)
 
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         """Run one request through HTTPX's ASGI transport.
@@ -56,12 +92,13 @@ class ArenaApiClient:
         Returns:
             HTTP response produced by the FastAPI app.
         """
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            return await client.request(method, path, **kwargs)
+        if self._client is None:
+            transport = httpx.ASGITransport(app=app)
+            self._client = httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            )
+        return await self._client.request(method, path, **kwargs)
 
 
 @dataclass(frozen=True)

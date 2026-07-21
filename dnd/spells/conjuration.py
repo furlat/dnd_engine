@@ -8,7 +8,28 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_actions import TargetType, BaseAction, Cost, ActionEvent, BaseCost, ActionCategory
+from dnd.core.base_actions import (
+    ActionCategory,
+    ActionEvent,
+    ActionInformationOperation,
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    ActionTopologyOperation,
+    ActionWorldEffectAnchor,
+    ActionWorldEffectCertainty,
+    ActionWorldEffectProfile,
+    ActionWorldEffectScope,
+    ActionWorldEffectShape,
+    BaseAction,
+    BaseCost,
+    Cost,
+    InformationEffectProfile,
+    OutcomeResolution,
+    PositionDiscoveryContract,
+    TargetEffectDisposition,
+    TargetType,
+    TopologyEffectProfile,
+)
 from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType, ConditionTag
 from dnd.blocks.base_item import BaseItem, UsableItem
 import random
@@ -735,6 +756,10 @@ class Grease(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify grease.")
     concentration: bool = Field(default=True, description="Whether grease creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for grease.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for grease targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for grease.",
@@ -743,6 +768,25 @@ class Grease(SpellAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Grease Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute grease.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Grease's Dexterity-save prone branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.grease",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.grease.prone",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="dexterity",
+                    condition_fact_ids=("selected_target.condition.prone",),
+                    condition_semantic_keys=frozenset({"dnd.conditions.Prone"}),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in range and visible."""
@@ -1324,6 +1368,10 @@ class Web(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify web.")
     concentration: bool = Field(default=True, description="Whether web creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for web.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for web targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for web.",
@@ -1336,6 +1384,28 @@ class Web(SpellAction):
         default=True,
         description="Whether the cast Web is anchored between solid masses or layered across a floor, wall, or ceiling.",
     )
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Web's Dexterity-save restrained branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.web",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.web.restrained",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="dexterity",
+                    condition_fact_ids=("selected_target.condition.restrained",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.conjuration.WebRestrained",
+                        "dnd.conditions.Restrained",
+                    }),
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in range and visible."""
@@ -1652,6 +1722,10 @@ class Cloudkill(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify cloudkill.")
     concentration: bool = Field(default=True, description="Whether cloudkill creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for cloudkill.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for cloudkill targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
         description="Range contract used when validating targets for cloudkill.",
@@ -2275,6 +2349,10 @@ class FogCloud(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify fog cloud.")
     concentration: bool = Field(default=True, description="Whether fog cloud creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for fog cloud.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for fog cloud targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
         description="Range contract used when validating targets for fog cloud.",
@@ -2283,6 +2361,38 @@ class FogCloud(SpellAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Fog Cloud Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute fog cloud.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare Fog Cloud's slot-scaled concealment and vision blocker.
+
+        Args:
+            actor: Entity discovering the spell. The radius is determined by
+                this action variant's cast slot rather than actor-private data.
+
+        Returns:
+            Typed information and topology effects matching the runtime zone.
+        """
+        radius = 20 + self.get_upcast_bonus() * 20
+        return ActionWorldEffectProfile(
+            semantic_id="control.fog_cloud",
+            information_effects=(InformationEffectProfile(
+                operation=ActionInformationOperation.CONCEAL_REGION,
+                certainty=ActionWorldEffectCertainty.GUARANTEED,
+                anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                scope=ActionWorldEffectScope.REGION,
+                shape=ActionWorldEffectShape.SPHERE,
+                radius_feet=radius,
+            ),),
+            topology_effects=(TopologyEffectProfile(
+                operation=ActionTopologyOperation.CREATE_BLOCKER,
+                certainty=ActionWorldEffectCertainty.GUARANTEED,
+                anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                scope=ActionWorldEffectScope.REGION,
+                shape=ActionWorldEffectShape.SPHERE,
+                radius_feet=radius,
+                affects_vision=True,
+            ),),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2379,6 +2489,10 @@ class Darkness(SpellAction):
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify darkness.")
     concentration: bool = Field(default=True, description="Whether darkness creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for darkness.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for darkness targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Range contract used when validating targets for darkness.",
@@ -2387,6 +2501,36 @@ class Darkness(SpellAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Darkness Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute darkness.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare Darkness's concealment and magical vision blocker.
+
+        Args:
+            actor: Entity discovering the spell. Darkness has fixed geometry.
+
+        Returns:
+            Typed information and topology effects matching the runtime zone.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="control.darkness",
+            information_effects=(InformationEffectProfile(
+                operation=ActionInformationOperation.CONCEAL_REGION,
+                certainty=ActionWorldEffectCertainty.GUARANTEED,
+                anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                scope=ActionWorldEffectScope.REGION,
+                shape=ActionWorldEffectShape.SPHERE,
+                radius_feet=15,
+            ),),
+            topology_effects=(TopologyEffectProfile(
+                operation=ActionTopologyOperation.CREATE_BLOCKER,
+                certainty=ActionWorldEffectCertainty.GUARANTEED,
+                anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                scope=ActionWorldEffectScope.MAGICAL_DARKNESS,
+                shape=ActionWorldEffectShape.SPHERE,
+                radius_feet=15,
+                affects_vision=True,
+            ),),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2513,6 +2657,46 @@ class Daylight(SpellAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Daylight Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute daylight.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare Daylight's illumination and Darkness-specific removal.
+
+        Args:
+            actor: Entity discovering the spell. Daylight has fixed geometry.
+
+        Returns:
+            Typed information and topology effects matching the runtime zone.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="information.daylight",
+            information_effects=(
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.CHANGE_LIGHT,
+                    certainty=ActionWorldEffectCertainty.GUARANTEED,
+                    anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=60,
+                ),
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.REVEAL_REGION,
+                    certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                    anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=60,
+                ),
+            ),
+            topology_effects=(TopologyEffectProfile(
+                operation=ActionTopologyOperation.REMOVE_BLOCKER,
+                certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                anchor=ActionWorldEffectAnchor.SELECTED_POSITION,
+                scope=ActionWorldEffectScope.MAGICAL_DARKNESS,
+                shape=ActionWorldEffectShape.SPHERE,
+                radius_feet=60,
+                affects_vision=True,
+            ),),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2701,6 +2885,10 @@ class InsectPlague(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify insect plague.")
     concentration: bool = Field(default=True, description="Whether insect plague creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for insect plague.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for insect plague targeting.",
+    )
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for insect plague.")
     projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for insect plague.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.PIERCING, description="Primary damage type for VFX")
@@ -2954,6 +3142,10 @@ class IncendiaryCloud(SpellAction):
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
     concentration: bool = Field(default=True, description="Whether incendiary cloud creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for incendiary cloud.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for incendiary cloud targeting.",
+    )
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for incendiary cloud.")
 
     costs: List[Cost] = Field(default_factory=lambda: [
@@ -3250,6 +3442,10 @@ class StinkingCloud(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify stinking cloud.")
     concentration: bool = Field(default=True, description="Whether stinking cloud creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for stinking cloud.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for stinking cloud targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=90),
         description="Range contract used when validating targets for stinking cloud.",
@@ -3551,6 +3747,10 @@ class SleetStorm(SpellAction):
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify sleet storm.")
     concentration: bool = Field(default=True, description="Whether sleet storm creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for sleet storm.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=PositionDiscoveryContract,
+        description="Subjective visible-cell prerequisites for sleet storm targeting.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=150),
         description="Range contract used when validating targets for sleet storm.",
@@ -3636,6 +3836,13 @@ class DimensionDoor(SpellAction):
     spell_level: int = Field(default=4, description="Spell slot level required to cast dimension door; cantrips use 0.")
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify dimension door.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for dimension door.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=lambda: PositionDiscoveryContract(
+            requires_subjective_walkable=True,
+            requires_subjective_unoccupied=True,
+        ),
+        description="Subjective destination prerequisites for dimension door.",
+    )
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=500),
         description="Range contract used when validating targets for dimension door.",

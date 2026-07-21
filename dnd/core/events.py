@@ -8,7 +8,7 @@ for logs, sensory updates, and API streams.
 
 __all__ = [
     "WeaponSlot", "BodyPart", "RingSlot", "EquipmentSlot",
-    "EventType", "SpatialChangeType", "EventPhase", "RangeType",
+    "EventType", "SpatialChangeType", "EventPhase", "RangeType", "MovementTrajectory",
     "AbilityName", "SkillName",
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
@@ -21,7 +21,7 @@ __all__ = [
     "DamageRollResultEvent",
     "SensesUpdateHint", "SpatialChangeEvent", "FireExposureEvent", "ExposedFlameEvent",
     "WindExposureEvent", "ForcedMovementEvent",
-    "DamageRolledEvent", "TakeDamageEvent",
+    "DamageRolledEvent", "TakeDamageEvent", "DamageAppliedEvent",
     "Range", "Damage",
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
@@ -29,23 +29,34 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence
 from dnd.core.values import ModifiableValue
 
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
-    SavingThrowLogData, SkillCheckLogData, HealLogData,
+    SavingThrowLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
     md_color, md_d20_roll, md_breakdown
 )
+from dnd.core.content import (
+    ContentKind,
+    HandlerDispatchEvidence,
+    HandlerDispatchOutcome,
+)
 from dnd.core.modifiers import DamageType
+from dnd.core.senses import SenseMode
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import datetime
 from collections import defaultdict
 from typing import Callable, Tuple
+import time
+
+from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_object import BaseObject
 T = TypeVar('T', bound='Event')
 E = TypeVar('E', bound='Event')
@@ -62,6 +73,14 @@ class GenericEventModifier(Protocol):
     """Callable contract for handlers that may consume any event subtype."""
 
     def __call__(self, event: 'Event', source_entity_uuid: UUID) -> Optional['Event']: ...
+
+
+class PreCompletionSystem(Protocol):
+    """Dependency-neutral lifecycle system invoked for selected event types."""
+
+    def __call__(self, event: 'Event') -> None: ...
+
+    def reset(self) -> None: ...
 
 
 @runtime_checkable
@@ -132,6 +151,7 @@ class EventType(str, Enum):
     SKILL_CHECK = "skill_check"
     INFLICT_DAMAGE = "inflicted_damage"
     TAKE_DAMAGE = "take_damage"
+    DAMAGE_APPLIED = "damage_applied"
     HEAL = "heal"
     CAST_SPELL = "cast_spell"
     ATTACK_MISS = "attack_miss"
@@ -145,6 +165,7 @@ class EventType(str, Enum):
     ARMOR_UNEQUIP = "armor_unequip"
     SHIELD_EQUIP = "shield_equip"
     SHIELD_UNEQUIP = "shield_unequip"
+    ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
 
     TRIGGER_EVENT = "trigger_event"
 
@@ -157,7 +178,6 @@ class EventType(str, Enum):
     DAMAGE_ROLL_RESULT = "damage_roll_result"
     HEAL_ROLL_RESULT = "heal_roll_result"
     DAMAGE_ROLLED = "damage_rolled"
-
     ENEMY_SPOTTED = "enemy_spotted"
     ENEMY_KILLED = "enemy_killed"
     ENEMY_ENGAGED = "enemy_engaged"
@@ -187,6 +207,13 @@ class EventType(str, Enum):
     DEATH = "death"
 
 
+class MovementTrajectory(str, Enum):
+    """Geometry used to present an ordered voluntary movement transition."""
+
+    PATH = "path"
+    DIRECT_ARC = "direct_arc"
+
+
 class SpatialChangeType(str, Enum):
     """Types of spatial changes that can occur."""
     ENTITY_ENTERED = "entity_entered"
@@ -210,6 +237,7 @@ class SensoryUpdateReason(str, Enum):
     PERCEIVABILITY = "perceivability"
     DEATH = "death"
     CONDITION = "condition"
+    TURN_START = "turn_start"
     UNKNOWN = "unknown"
 
 
@@ -269,6 +297,10 @@ class Event(BaseObject):
         default=False,
         description="Whether this event lineage has been canceled before applying its effects.",
     )
+    canceled_from_phase: Optional[EventPhase] = Field(
+        default=None,
+        description="Lifecycle phase from which cancellation terminated this event lineage.",
+    )
     parent_event: Optional[UUID] = Field(
         default=None,
         description="UUID of the parent event version that caused this child event.",
@@ -276,6 +308,14 @@ class Event(BaseObject):
     status_message: Optional[str] = Field(
         default=None,
         description="Short status or cancellation reason attached to this event version.",
+    )
+    outcome_code: Optional[str] = Field(
+        default=None,
+        description="Stable machine-readable outcome identity attached by engine rules.",
+    )
+    outcome_source_entity_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Entity responsible for the terminal outcome when distinct from the event source.",
     )
     is_first: bool = Field(
         default=True,
@@ -306,6 +346,22 @@ class Event(BaseObject):
         exclude=True,
         description="Generated combat-log entry for completed events; excluded from model serialization.",
     )
+    identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal event-time identity grants keyed by participant UUID; "
+            "values are observer UUIDs that identified that participant."
+        ),
+    )
+    located_entity_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal event-time exact-location grants keyed by participant UUID; "
+            "unlike identity grants these are recomputed at every event version."
+        ),
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -328,6 +384,18 @@ class Event(BaseObject):
         Override in subclasses with explicit position fields.
         """
         return set()
+
+    def get_participant_entity_uuids(self) -> Set[UUID]:
+        """Return entity UUIDs that participate directly in this event.
+
+        Returns:
+            Source and target UUIDs when they identify registered entities.
+        """
+        return {
+            entity_uuid
+            for entity_uuid in (self.source_entity_uuid, self.target_entity_uuid)
+            if entity_uuid is not None
+        }
 
     def get_trigger(self) -> 'Trigger':
         """Return the exact trigger that would match this event version."""
@@ -386,6 +454,13 @@ class Event(BaseObject):
 
         if new_phase == EventPhase.COMPLETION:
             EventQueue.run_pre_completion_callbacks(self)
+            if EventQueue._identified_entity_observer_computer is not None:
+                phase_updates["located_entity_observer_uuids"] = {
+                    entity_uuid: set(observer_uuids)
+                    for entity_uuid, observer_uuids in (
+                        EventQueue._identified_entity_observer_computer(self).items()
+                    )
+                }
 
             all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
             phase_updates['lineage_children_events'] = all_children
@@ -413,6 +488,14 @@ class Event(BaseObject):
                 temp_event = self.model_copy(update=phase_updates)
                 combat_log = temp_event.generate_combat_log()
                 if combat_log is not None:
+                    combat_log.identified_entity_observer_uuids = {
+                        entity_uuid: set(observer_uuids)
+                        for entity_uuid, observer_uuids in temp_event.identified_entity_observer_uuids.items()
+                    }
+                    combat_log.located_entity_observer_uuids = {
+                        entity_uuid: set(observer_uuids)
+                        for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
+                    }
                     if EventQueue._perceiver_computer:
                         combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
 
@@ -422,6 +505,11 @@ class Event(BaseObject):
                         for child_log in child_logs:
                             combat_log.perceiver_uuids |= child_log.perceiver_uuids
                             combat_log.revealed_entity_uuids |= child_log.revealed_entity_uuids
+                            for entity_uuid, observer_uuids in child_log.identified_entity_observer_uuids.items():
+                                combat_log.identified_entity_observer_uuids.setdefault(entity_uuid, set()).update(
+                                    observer_uuids
+                                )
+                        _enrich_multi_entity_log_from_children(combat_log, child_logs)
 
                     if EventQueue._revealed_computer:
                         combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
@@ -449,6 +537,7 @@ class Event(BaseObject):
         cancel_updates = {}
         cancel_updates['canceled'] = True
         cancel_updates['phase'] = EventPhase.CANCEL
+        cancel_updates['canceled_from_phase'] = self.canceled_from_phase or self.phase
         if status_message is not None:
             cancel_updates['status_message'] = status_message
 
@@ -522,17 +611,32 @@ class Event(BaseObject):
         if self.children_lineages:
             for lineage_id in self.children_lineages:
                 events = EventQueue._events_by_lineage.get(lineage_id, [])
+                found_log = False
                 for ev in reversed(events):
                     if ev.combat_log:
                         child_logs.append(ev.combat_log)
+                        found_log = True
                         break
+                if not found_log and events:
+                    child_logs.extend(events[-1]._collect_child_combat_logs())
         else:
             seen_lineages: Set[UUID] = set()
             for child_uuid in self.lineage_children_events:
                 child = EventQueue.get_event_by_uuid(child_uuid)
-                if child and child.combat_log and child.lineage_uuid not in seen_lineages:
-                    child_logs.append(child.combat_log)
-                    seen_lineages.add(child.lineage_uuid)
+                if child is None or child.lineage_uuid in seen_lineages:
+                    continue
+                seen_lineages.add(child.lineage_uuid)
+                lineage_events = EventQueue._events_by_lineage.get(child.lineage_uuid, [])
+                logged_event = next(
+                    (candidate for candidate in reversed(lineage_events) if candidate.combat_log),
+                    None,
+                )
+                if logged_event is not None:
+                    logged_combat_log = logged_event.combat_log
+                    if logged_combat_log is not None:
+                        child_logs.append(logged_combat_log)
+                elif lineage_events:
+                    child_logs.extend(lineage_events[-1]._collect_child_combat_logs())
         return child_logs
 
     def get_history(self) -> List['Event']:
@@ -578,6 +682,111 @@ class Event(BaseObject):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
 
         return result
+
+
+def _enrich_multi_entity_log_from_children(
+    combat_log: CombatLogEntry,
+    child_logs: List[CombatLogEntry],
+) -> None:
+    """Fill parent multi-target summary data from child combat logs.
+
+    Args:
+        combat_log: Parent combat-log entry generated by a multi-target action.
+        child_logs: Direct child logs produced by individual target effects.
+    """
+    if combat_log.entry_type != CombatLogEntryType.MULTI_ENTITY_ACTION:
+        return
+
+    data = dict(combat_log.data)
+    target_logs = _multi_entity_target_logs(child_logs, data.get("total_targets"))
+    target_names = _unique_nonempty([child.target_name for child in target_logs])
+
+    per_target_damage: List[int] = []
+    per_target_logs: List[Optional[Dict[str, Any]]] = []
+    saves_succeeded = 0
+    saves_failed = 0
+
+    for child in target_logs:
+        child_data = dict(child.data)
+        per_target_logs.append(child_data if child_data else None)
+        damage = _damage_from_log_data(child_data)
+        if damage is not None:
+            per_target_damage.append(damage)
+        if child.entry_type == CombatLogEntryType.SPELL_SAVE:
+            if bool(child_data.get("save_success")):
+                saves_succeeded += 1
+            else:
+                saves_failed += 1
+
+    if target_names:
+        data["target_names"] = target_names
+    if per_target_damage:
+        data["per_target_damage"] = per_target_damage
+        data["total_damage"] = sum(per_target_damage)
+    if per_target_logs:
+        data["per_target_logs"] = per_target_logs
+    data["saves_succeeded"] = saves_succeeded
+    data["saves_failed"] = saves_failed
+    combat_log.data = data
+
+
+def _multi_entity_target_logs(
+    child_logs: Sequence[CombatLogEntry],
+    total_targets: Any,
+) -> List[CombatLogEntry]:
+    """Return direct children that represent target applications.
+
+    Auxiliary causal children such as condition cleanup remain nested in the
+    parent log, but they must not become action targets or per-target results.
+
+    Args:
+        child_logs: Direct causal children collected from the parent event.
+        total_targets: Declared number of target applications on the parent.
+
+    Returns:
+        Ordered target-effect logs, bounded by the declared application count.
+    """
+    target_entry_types = {
+        CombatLogEntryType.ACTION,
+        CombatLogEntryType.ATTACK,
+        CombatLogEntryType.HEAL,
+        CombatLogEntryType.SPELL_DAMAGE,
+        CombatLogEntryType.SPELL_SAVE,
+    }
+    candidates = [
+        child
+        for child in child_logs
+        if child.entry_type in target_entry_types and child.target_uuid is not None
+    ]
+    if isinstance(total_targets, int) and not isinstance(total_targets, bool) and total_targets >= 0:
+        return candidates[:total_targets]
+    return candidates
+
+
+def _unique_nonempty(values: Sequence[Optional[str]]) -> List[str]:
+    """Return non-empty strings in first-seen order."""
+    out: List[str] = []
+    seen: Set[str] = set()
+    for value in values:
+        if not value or value in seen:
+            continue
+        out.append(value)
+        seen.add(value)
+    return out
+
+
+def _damage_from_log_data(data: Dict[str, Any]) -> Optional[int]:
+    """Extract the main damage total from a child combat-log payload."""
+    for key in ("final_damage", "total_damage", "damage"):
+        value = data.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+    return None
+
 
 class Trigger(BaseModel):
     """Hashable event-matching predicate used by `EventHandler`."""
@@ -645,6 +854,14 @@ class BaseHandler(BaseObject):
     """
 
     name: str = Field(default="BaseHandler", description="Human-readable handler label.")
+    semantic_key: Optional[str] = Field(
+        default=None,
+        description="Stable rules-content identity; defaults to the processor's code identity.",
+    )
+    content_kind: ContentKind = Field(
+        default=ContentKind.UNCLASSIFIED,
+        description="Rules-content family used by evaluation and developer tooling.",
+    )
     event_processor: EventProcessor = Field(
         exclude=True,
         description="Callable that may inspect, replace, cancel, or ignore a matching event.",
@@ -662,6 +879,14 @@ class BaseHandler(BaseObject):
         exclude=True,
         description="Block that registered this handler, used to clean block-local handler indexes."
     )
+
+    def get_semantic_key(self) -> str:
+        """Return an explicit key or a stable processor code identity."""
+        if self.semantic_key:
+            return self.semantic_key
+        module = getattr(self.event_processor, "__module__", type(self.event_processor).__module__)
+        qualname = getattr(self.event_processor, "__qualname__", type(self.event_processor).__qualname__)
+        return f"{module}.{qualname}".replace(".<locals>.", ".")
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the stored event processor if this handler is enabled.
@@ -815,6 +1040,7 @@ class EventQueue:
     _events_by_source: Dict[UUID, List[Event]] = defaultdict(list)
     _events_by_target: Dict[UUID, List[Event]] = defaultdict(list)
     _all_events: List[Event] = []
+    _generation_uuid: UUID = uuid4()
 
     _event_handlers: Dict[UUID, 'EventHandler'] = {}
     _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
@@ -830,11 +1056,39 @@ class EventQueue:
     _handler_positions: Dict[UUID, Tuple[Tuple[EventType, EventPhase], Set[Tuple[int, int]]]] = {}
 
     _on_event_callbacks: List[Callable[['Event'], None]] = []
+    _on_event_callback_filters: Dict[
+        Callable[['Event'], None],
+        Tuple[Optional[frozenset[EventType]], Optional[frozenset[EventPhase]]],
+    ] = {}
+    _on_event_sequence_callbacks: List[
+        Callable[[Sequence['Event']], None]
+    ] = []
+    _on_event_sequence_callback_filters: Dict[
+        Callable[[Sequence['Event']], None],
+        Tuple[Optional[frozenset[EventType]], Optional[frozenset[EventPhase]]],
+    ] = {}
+    _on_event_batch_callbacks: List[Callable[[Sequence['Event']], None]] = []
+    _on_handler_dispatch_callbacks: List[Callable[[HandlerDispatchEvidence], None]] = []
+    _handler_dispatch_cursor: int = 0
+    _event_batch_depth: ContextVar[int] = ContextVar(
+        "event_queue_batch_depth",
+        default=0,
+    )
+    _pending_event_batch: ContextVar[Optional[List['Event']]] = ContextVar(
+        "event_queue_pending_batch",
+        default=None,
+    )
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
+    _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
+    _pre_completion_systems_by_event_type: Dict[
+        EventType,
+        Dict[str, PreCompletionSystem],
+    ] = defaultdict(dict)
     _pre_completion_running: Set[UUID] = set()
     _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
+    _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, Set[str]]]] = None
 
     @classmethod
     def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
@@ -866,6 +1120,24 @@ class EventQueue:
         cls._revealed_computer = func
 
     @classmethod
+    def set_identified_entity_observer_computer(
+        cls,
+        func: Optional[Callable[['Event'], Dict[str, Set[str]]]],
+    ) -> None:
+        """Register the event-time participant identity provider.
+
+        The provider runs before an event version is stored or dispatched. Its
+        grants remain immutable for each participant across later phases, so
+        effects such as death cannot erase identity that an observer already
+        possessed when the event began.
+
+        Args:
+            func: Callback returning participant UUID keys and the observer
+                UUIDs that currently identify each participant.
+        """
+        cls._identified_entity_observer_computer = func
+
+    @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
         """Push a standalone combat log entry to the encounter.
 
@@ -880,27 +1152,257 @@ class EventQueue:
             event_type=EventType.CONDITION_APPLICATION,
             phase=EventPhase.COMPLETION,
             use_register=False,
-            combat_log=entry
+            combat_log=entry,
+            context={"combat_log_origin": "standalone"},
         )
         cls._combat_log_callback(event)
 
     @classmethod
-    def add_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
-        """Add a callback that fires for every event after storage.
+    def add_on_event_callback(
+        cls,
+        callback: Callable[['Event'], None],
+        *,
+        event_types: Optional[Set[EventType]] = None,
+        phases: Optional[Set[EventPhase]] = None,
+    ) -> None:
+        """Add a passive callback that fires after event storage.
 
         Unlike EventHandlers, these callbacks:
-        - Fire for ALL events regardless of phase
         - Cannot modify or cancel events
         - Are for passive monitoring (logging, websocket broadcast, etc.)
+
+        Args:
+            callback: Passive observer invoked after storage.
+            event_types: Optional event-type filter. Omit for every type.
+            phases: Optional phase filter. Omit for every phase.
         """
         if callback not in cls._on_event_callbacks:
             cls._on_event_callbacks.append(callback)
+        cls._on_event_callback_filters[callback] = (
+            frozenset(event_types) if event_types is not None else None,
+            frozenset(phases) if phases is not None else None,
+        )
+
+    @classmethod
+    def add_on_handler_dispatch_callback(
+        cls,
+        callback: Callable[[HandlerDispatchEvidence], None],
+    ) -> None:
+        """Add a passive observer for matched handler invocations.
+
+        Dispatch observers run after the handler and cannot replace or cancel
+        its result. Observer failures are isolated from engine execution.
+
+        Args:
+            callback: Observer receiving immutable dispatch evidence.
+        """
+        if callback not in cls._on_handler_dispatch_callbacks:
+            cls._on_handler_dispatch_callbacks.append(callback)
+
+    @classmethod
+    def remove_on_handler_dispatch_callback(
+        cls,
+        callback: Callable[[HandlerDispatchEvidence], None],
+    ) -> None:
+        """Remove a previously registered handler-dispatch observer."""
+        if callback in cls._on_handler_dispatch_callbacks:
+            cls._on_handler_dispatch_callbacks.remove(callback)
+
+    @classmethod
+    def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
+        """Invoke one matched handler and publish passive effect evidence."""
+        before_cursor = cls.event_cursor()
+        result = handler(event)
+        emitted_event_count = cls.event_cursor() - before_cursor
+        if result is not None and result.canceled:
+            outcome = HandlerDispatchOutcome.CANCELED_EVENT
+        elif result is not None and result.modified:
+            outcome = HandlerDispatchOutcome.MODIFIED_EVENT
+        elif emitted_event_count:
+            outcome = HandlerDispatchOutcome.EMITTED_EVENTS
+        else:
+            outcome = HandlerDispatchOutcome.NO_EFFECT
+        evidence = HandlerDispatchEvidence(
+            dispatch_index=cls._handler_dispatch_cursor,
+            handler_semantic_key=handler.get_semantic_key(),
+            handler_name=handler.name,
+            content_kind=handler.content_kind,
+            handler_uuid=str(handler.uuid),
+            source_entity_uuid=str(handler.source_entity_uuid) if handler.source_entity_uuid else None,
+            event_uuid=str(event.uuid),
+            lineage_uuid=str(event.lineage_uuid),
+            event_type=event.event_type.value,
+            event_phase=event.phase.value,
+            outcome=outcome,
+            emitted_event_count=emitted_event_count,
+        )
+        cls._handler_dispatch_cursor += 1
+        for callback in tuple(cls._on_handler_dispatch_callbacks):
+            try:
+                callback(evidence)
+            except Exception:
+                pass
+        return result
 
     @classmethod
     def remove_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
         """Remove an event callback."""
         if callback in cls._on_event_callbacks:
             cls._on_event_callbacks.remove(callback)
+        cls._on_event_callback_filters.pop(callback, None)
+
+    @classmethod
+    def add_on_event_sequence_callback(
+        cls,
+        callback: Callable[[Sequence['Event']], None],
+        *,
+        event_types: Optional[Set[EventType]] = None,
+        phases: Optional[Set[EventPhase]] = None,
+    ) -> None:
+        """Add a callback for one atomic sequence of stored event versions.
+
+        Args:
+            callback: Passive observer receiving events in storage order.
+            event_types: Optional event-type filter. Omit for every type.
+            phases: Optional phase filter. Omit for every phase.
+        """
+        if callback not in cls._on_event_sequence_callbacks:
+            cls._on_event_sequence_callbacks.append(callback)
+        cls._on_event_sequence_callback_filters[callback] = (
+            frozenset(event_types) if event_types is not None else None,
+            frozenset(phases) if phases is not None else None,
+        )
+
+    @classmethod
+    def remove_on_event_sequence_callback(
+        cls,
+        callback: Callable[[Sequence['Event']], None],
+    ) -> None:
+        """Remove an event-sequence callback.
+
+        Args:
+            callback: Previously registered sequence observer.
+        """
+        if callback in cls._on_event_sequence_callbacks:
+            cls._on_event_sequence_callbacks.remove(callback)
+        cls._on_event_sequence_callback_filters.pop(callback, None)
+
+    @classmethod
+    def _dispatch_event_sequence(cls, events: Sequence['Event']) -> None:
+        """Notify passive observers of one atomic stored sequence."""
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
+        for callback in list(cls._on_event_sequence_callbacks):
+            event_types, phases = cls._on_event_sequence_callback_filters.get(
+                callback,
+                (None, None),
+            )
+            if event_types is not None and not any(
+                event.event_type in event_types for event in events
+            ):
+                continue
+            if phases is not None and not any(event.phase in phases for event in events):
+                continue
+            callback_started = time.perf_counter() if timing else 0.0
+            try:
+                callback(events)
+            except Exception:
+                pass
+            finally:
+                if timing:
+                    callback_name = cls._timing_callback_name(callback)
+                    record_action_timing(
+                        f"event_queue.sequence.callback.{callback_name}_ms",
+                        callback_started,
+                    )
+        if timing:
+            record_action_timing("event_queue.sequence.callbacks_ms", total_started)
+
+    @classmethod
+    def add_on_event_batch_callback(
+        cls,
+        callback: Callable[[Sequence['Event']], None],
+    ) -> None:
+        """Add a passive callback that receives one completed causal batch.
+
+        Events registered outside an explicit batch are delivered as a
+        one-event sequence. Nested action applications share the outer action's
+        batch, preserving authoritative storage order across reactions and
+        child actions.
+
+        Args:
+            callback: Passive observer invoked after the batch boundary.
+        """
+        if callback not in cls._on_event_batch_callbacks:
+            cls._on_event_batch_callbacks.append(callback)
+
+    @classmethod
+    def remove_on_event_batch_callback(
+        cls,
+        callback: Callable[[Sequence['Event']], None],
+    ) -> None:
+        """Remove a passive causal-batch callback.
+
+        Args:
+            callback: Previously registered batch observer.
+        """
+        if callback in cls._on_event_batch_callbacks:
+            cls._on_event_batch_callbacks.remove(callback)
+
+    @classmethod
+    def is_event_batch_active(cls) -> bool:
+        """Return whether the current context is inside a causal event batch."""
+        return cls._event_batch_depth.get() > 0
+
+    @classmethod
+    @contextmanager
+    def batch_on_event_callbacks(cls) -> Iterator[None]:
+        """Collect passive batch notifications until the outer action closes.
+
+        Immediate per-event callbacks and event handlers are unaffected. Only
+        observers registered through `add_on_event_batch_callback` are delayed.
+        Nested scopes append to the same ordered batch and only the outermost
+        scope dispatches it.
+
+        Yields:
+            Control while event registrations append to the current batch.
+        """
+        depth = cls._event_batch_depth.get()
+        pending_token = None
+        if depth == 0:
+            pending_token = cls._pending_event_batch.set([])
+        depth_token = cls._event_batch_depth.set(depth + 1)
+        try:
+            yield
+        finally:
+            cls._event_batch_depth.reset(depth_token)
+            if depth == 0:
+                pending = tuple(cls._pending_event_batch.get() or ())
+                if pending_token is not None:
+                    cls._pending_event_batch.reset(pending_token)
+                if pending:
+                    cls._dispatch_event_batch(pending)
+
+    @classmethod
+    def _dispatch_event_batch(cls, events: Sequence['Event']) -> None:
+        """Notify passive batch observers without affecting engine execution."""
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
+        for callback in list(cls._on_event_batch_callbacks):
+            callback_started = time.perf_counter() if timing else 0.0
+            try:
+                callback(events)
+            except Exception:
+                pass
+            finally:
+                if timing:
+                    callback_name = cls._timing_callback_name(callback)
+                    record_action_timing(
+                        f"event_queue.batch.callback.{callback_name}_ms",
+                        callback_started,
+                    )
+        if timing:
+            record_action_timing("event_queue.batch.callbacks_ms", total_started)
 
     @classmethod
     def event_cursor(cls) -> int:
@@ -908,10 +1410,21 @@ class EventQueue:
         return len(cls._all_events)
 
     @classmethod
-    def iter_events_since(cls, since: int) -> List[Tuple[int, 'Event']]:
-        """Return raw events with their zero-based event-stream indexes."""
+    def generation_id(cls) -> UUID:
+        """Return the identity of the current event-history generation.
+
+        Cursors are meaningful only within one generation. `reset()` creates a
+        new identity so reconnecting clients can never confuse events from a
+        previous game with events at the same numeric cursor in the new game.
+        """
+        return cls._generation_uuid
+
+    @classmethod
+    def iter_events_since(cls, since: int) -> Iterator[Tuple[int, 'Event']]:
+        """Yield raw events with their zero-based event-stream indexes."""
         start = max(0, since)
-        return list(enumerate(cls._all_events[start:], start=start))
+        for index in range(start, len(cls._all_events)):
+            yield index, cls._all_events[index]
 
     @classmethod
     def get_event_index(cls, event_uuid: UUID) -> Optional[int]:
@@ -939,6 +1452,36 @@ class EventQueue:
             cls._pre_completion_callbacks.remove(callback)
 
     @classmethod
+    def add_pre_completion_system(
+        cls,
+        name: str,
+        system: PreCompletionSystem,
+        event_types: Set[EventType],
+    ) -> None:
+        """Register one indexed lifecycle system for selected event types.
+
+        Args:
+            name: Stable registry identity for replacement and removal.
+            system: Callable lifecycle system with explicit reset behavior.
+            event_types: Event categories that can affect the system.
+        """
+        cls.remove_pre_completion_system(name)
+        cls._pre_completion_systems[name] = system
+        for event_type in event_types:
+            cls._pre_completion_systems_by_event_type[event_type][name] = system
+
+    @classmethod
+    def remove_pre_completion_system(cls, name: str) -> None:
+        """Remove an indexed lifecycle system from every event-type registry."""
+        system = cls._pre_completion_systems.pop(name, None)
+        if system is None:
+            return
+        for event_type, systems in tuple(cls._pre_completion_systems_by_event_type.items()):
+            systems.pop(name, None)
+            if not systems:
+                cls._pre_completion_systems_by_event_type.pop(event_type, None)
+
+    @classmethod
     def run_pre_completion_callbacks(cls, event: Event) -> None:
         """Run lifecycle systems before an event completes."""
         if event.event_type == EventType.SENSORY_UPDATE:
@@ -946,11 +1489,39 @@ class EventQueue:
         if event.uuid in cls._pre_completion_running:
             return
         cls._pre_completion_running.add(event.uuid)
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
         try:
-            for callback in list(cls._pre_completion_callbacks):
-                callback(event)
+            callbacks: List[Callable[[Event], None]] = list(cls._pre_completion_callbacks)
+            callbacks.extend(
+                cls._pre_completion_systems_by_event_type.get(event.event_type, {}).values()
+            )
+            for callback in callbacks:
+                started = time.perf_counter() if timing else 0.0
+                try:
+                    callback(event)
+                finally:
+                    if timing:
+                        callback_name = cls._timing_callback_name(callback)
+                        record_action_timing(
+                            f"event_queue.pre_completion.callback.{callback_name}_ms",
+                            started,
+                        )
         finally:
             cls._pre_completion_running.discard(event.uuid)
+            if timing:
+                record_action_timing("event_queue.pre_completion.total_ms", total_started)
+
+    @staticmethod
+    def _timing_callback_name(callback: Callable[..., Any]) -> str:
+        """Return a stable, payload-safe name for callback timing groups."""
+        owner = getattr(callback, "__self__", None)
+        if owner is not None:
+            raw_name = f"{type(owner).__name__}.{getattr(callback, '__name__', 'call')}"
+        else:
+            raw_name = getattr(callback, "__qualname__", type(callback).__name__)
+        normalized = "".join(character if character.isalnum() else "_" for character in raw_name)
+        return "_".join(part for part in normalized.split("_") if part)
 
     @classmethod
     def register(cls, event: Event) -> Event:
@@ -962,6 +1533,11 @@ class EventQueue:
         Returns:
             The final event version after handler processing.
         """
+        stored_event = cls._events_by_uuid.get(event.uuid)
+        if stored_event is event:
+            return event
+        if stored_event is not None:
+            raise ValueError(f"Event UUID collision for {event.uuid}")
         cls._store_event(event)
 
         handlers = cls._get_handlers_for_event(event)
@@ -970,20 +1546,72 @@ class EventQueue:
 
         current_event = event
         for handler in handlers:
-            result = handler(current_event)
+            result = cls._invoke_handler(handler, current_event)
 
             if result is None:
                 continue
 
             if result.canceled:
-                cls._store_event(result)
-                return result
+                return cls._record_handler_result(result)
 
             if result.modified:
-                current_event = result
-                cls._store_event(current_event)
+                current_event = cls._record_handler_result(result)
 
         return current_event
+
+    @classmethod
+    def register_completion_sequence(
+        cls,
+        events: Sequence[Event],
+    ) -> Tuple[Event, ...]:
+        """Store simultaneous completion events and notify reducers once.
+
+        Immediate per-event callbacks still receive every event. Sequence
+        observers run once after all events are indexed, allowing reducers to
+        process one causative derived-state boundary without losing individual
+        event identities.
+
+        Args:
+            events: Completion events ordered by deterministic observer order.
+
+        Returns:
+            Stored events in the same order.
+
+        Raises:
+            ValueError: If any event is not a completion or reuses a UUID.
+        """
+        stored: List[Event] = []
+        for event in events:
+            if event.phase != EventPhase.COMPLETION:
+                raise ValueError("Completion sequences may only store completion events")
+            existing = cls._events_by_uuid.get(event.uuid)
+            if existing is not None:
+                raise ValueError(f"Event UUID collision for {event.uuid}")
+            cls._store_event(
+                event,
+                notify_sequence_callbacks=False,
+                notify_batch_callbacks=False,
+            )
+            stored.append(event)
+        if stored:
+            cls._dispatch_event_sequence(stored)
+            if cls._pending_event_batch.get() is None:
+                cls._dispatch_event_batch(stored)
+        return tuple(stored)
+
+    @classmethod
+    def _record_handler_result(cls, result: Event) -> Event:
+        """Store one handler-produced version without duplicating event identity."""
+        stored_event = cls._events_by_uuid.get(result.uuid)
+        if stored_event is result:
+            return result
+        if stored_event is not None:
+            result = result.model_copy(update={
+                "uuid": uuid4(),
+                "timestamp": datetime.now(),
+            })
+        cls._store_event(result)
+        return result
 
     @classmethod
     def get_event_by_uuid(cls, uuid: UUID) -> Optional[Event]:
@@ -991,22 +1619,70 @@ class EventQueue:
         return cls._events_by_uuid.get(uuid)
 
     @classmethod
-    def _store_event(cls, event: Event) -> None:
-        """Store an event in all queue indexes."""
+    def _store_event(
+        cls,
+        event: Event,
+        *,
+        notify_sequence_callbacks: bool = True,
+        notify_batch_callbacks: bool = True,
+    ) -> None:
+        """Store an event in all queue indexes and notify passive observers."""
+        if event.uuid in cls._events_by_uuid:
+            raise ValueError(f"Event UUID collision for {event.uuid}")
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
+        started = time.perf_counter() if timing else 0.0
+        identified = {
+            entity_uuid: set(observer_uuids)
+            for entity_uuid, observer_uuids in event.identified_entity_observer_uuids.items()
+        }
+        located = {
+            entity_uuid: set(observer_uuids)
+            for entity_uuid, observer_uuids in event.located_entity_observer_uuids.items()
+        }
+        if timing:
+            record_action_timing("event_queue.store.copy_identified_ms", started)
+        if cls._identified_entity_observer_computer is not None:
+            started = time.perf_counter() if timing else 0.0
+            captured = cls._identified_entity_observer_computer(event)
+            located = {
+                entity_uuid: set(observer_uuids)
+                for entity_uuid, observer_uuids in captured.items()
+            }
+            if timing:
+                record_action_timing("event_queue.store.compute_identified_ms", started)
+            started = time.perf_counter() if timing else 0.0
+            for entity_uuid, observer_uuids in captured.items():
+                identified.setdefault(entity_uuid, set(observer_uuids))
+            if timing:
+                record_action_timing("event_queue.store.merge_identified_ms", started)
+
+        started = time.perf_counter() if timing else 0.0
+        parent_event = cls.get_event_by_uuid(event.parent_event) if event.parent_event else None
+        if parent_event is not None:
+            for entity_uuid, observer_uuids in parent_event.identified_entity_observer_uuids.items():
+                identified.setdefault(entity_uuid, set()).update(observer_uuids)
+        event.identified_entity_observer_uuids = identified
+        event.located_entity_observer_uuids = located
+        if timing:
+            record_action_timing("event_queue.store.parent_identity_ms", started)
+
+        started = time.perf_counter() if timing else 0.0
         cls._events_by_lineage[event.lineage_uuid].append(event)
         cls._events_by_uuid[event.uuid] = event
         cls._events_by_timestamp[event.timestamp].append(event)
 
         if event.parent_event:
-            parent_uuid = event.parent_event
-            parent_event = cls.get_event_by_uuid(parent_uuid)
             if parent_event and event.uuid not in parent_event.children_events:
                 parent_event.add_child_event(event)
                 for lineage_event in cls._events_by_lineage.get(parent_event.lineage_uuid, []):
                     if lineage_event.uuid != parent_event.uuid:
                         if event.uuid not in lineage_event.lineage_children_events:
                             lineage_event.add_child_event(event)
+        if timing:
+            record_action_timing("event_queue.store.lineage_ms", started)
 
+        started = time.perf_counter() if timing else 0.0
         cls._events_by_type[event.event_type].append(event)
         cls._events_by_phase[event.phase].append(event)
         cls._events_by_source[event.source_entity_uuid].append(event)
@@ -1015,12 +1691,41 @@ class EventQueue:
             cls._events_by_target[event.target_entity_uuid].append(event)
 
         cls._all_events.append(event)
+        pending_batch = cls._pending_event_batch.get()
+        if pending_batch is not None:
+            pending_batch.append(event)
+        if timing:
+            record_action_timing("event_queue.store.indexes_ms", started)
 
+        started = time.perf_counter() if timing else 0.0
         for callback in list(cls._on_event_callbacks):
+            event_types, phases = cls._on_event_callback_filters.get(
+                callback,
+                (None, None),
+            )
+            if event_types is not None and event.event_type not in event_types:
+                continue
+            if phases is not None and event.phase not in phases:
+                continue
+            callback_started = time.perf_counter() if timing else 0.0
             try:
                 callback(event)
             except Exception:
                 pass
+            finally:
+                if timing:
+                    callback_name = cls._timing_callback_name(callback)
+                    record_action_timing(
+                        f"event_queue.store.callback.{callback_name}_ms",
+                        callback_started,
+                    )
+        if timing:
+            record_action_timing("event_queue.store.callbacks_ms", started)
+            record_action_timing("event_queue.store.total_ms", total_started)
+        if notify_sequence_callbacks:
+            cls._dispatch_event_sequence((event,))
+        if pending_batch is None and notify_batch_callbacks:
+            cls._dispatch_event_batch((event,))
 
     @classmethod
     def _get_handlers_for_event(cls, event: Event) -> List['BaseHandler']:
@@ -1351,6 +2056,7 @@ class EventQueue:
     @classmethod
     def reset(cls) -> None:
         """Clear all event, handler, and callback registries."""
+        cls._generation_uuid = uuid4()
         cls._all_events.clear()
         cls._events_by_uuid.clear()
         cls._events_by_type.clear()
@@ -1368,10 +2074,23 @@ class EventQueue:
         cls._spatial_handlers_by_source_entity_uuid.clear()
         cls._handler_positions.clear()
         cls._on_event_callbacks.clear()
+        cls._on_event_callback_filters.clear()
+        cls._on_event_sequence_callbacks.clear()
+        cls._on_event_sequence_callback_filters.clear()
+        cls._on_event_batch_callbacks.clear()
+        cls._on_handler_dispatch_callbacks.clear()
+        cls._handler_dispatch_cursor = 0
+        cls._event_batch_depth.set(0)
+        cls._pending_event_batch.set(None)
         cls._pre_completion_callbacks.clear()
+        for system in tuple(cls._pre_completion_systems.values()):
+            system.reset()
+        cls._pre_completion_systems.clear()
+        cls._pre_completion_systems_by_event_type.clear()
         cls._pre_completion_running.clear()
         cls._perceiver_computer = None
         cls._revealed_computer = None
+        cls._identified_entity_observer_computer = None
 
     @classmethod
     def get_events_chronological(cls, start_time: Optional[datetime] = None,
@@ -1827,6 +2546,17 @@ class SensoryUpdateEvent(Event):
         description="Event category for observer-specific sensory deltas.",
     )
     observer_uuid: UUID = Field(description="Observer whose sensory state changed.")
+    observer_position: Tuple[int, int] = Field(
+        default=(0, 0),
+        description="Observer grid position after the sensory update.",
+    )
+    effective_light_levels: Dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Backend-resolved subjective light levels for every currently visible "
+            "cell, keyed as 'x,y'."
+        ),
+    )
     cause_event_uuid: UUID = Field(description="Event UUID that caused this sensory update.")
     update_reason: SensoryUpdateReason = Field(
         default=SensoryUpdateReason.UNKNOWN,
@@ -1872,9 +2602,9 @@ class SensoryUpdateEvent(Event):
         default=False,
         description="Whether the observer's sense modes changed.",
     )
-    sense_modes: Optional[List[Dict[str, Any]]] = Field(
+    sense_modes: Optional[List[SenseMode]] = Field(
         default=None,
-        description="Serialized sense-mode payload after a sense-mode change.",
+        description="Typed sense modes after a sense-mode change.",
     )
     passive_perception_changed: bool = Field(
         default=False,
@@ -2009,6 +2739,7 @@ class SpatialChangeEvent(Event):
             requires_fov="vision" in directional_channels_set,
             requires_paths=True,
             entity_entered=(entity_uuid, position),
+            entity_left=(entity_uuid, old_position) if old_position is not None else None,
             directional_positions={directional_pos} if directional_channels_set else None,
             directional_neighbors=directional_neighbors or None,
             directional_channels_changed=directional_channels_set or None,
@@ -2535,6 +3266,7 @@ class ForcedMovementEvent(Event):
         verbose_text = f"{md_color(source_name, 'cyan')} pushes {md_color(target_name, 'yellow')}"
         if self.actual_distance > 0:
             verbose_text += f" {md_color(f'{self.actual_distance}ft', 'green')}"
+            verbose_text += f": {self.start_position} \u2192 {self.end_position}"
             if self.blocked_by_obstacle:
                 verbose_text += blocked_suffix
         else:
@@ -2589,6 +3321,14 @@ class StepMovementEvent(Event):
     path_index: int = Field(default=0, description="Index of this step in the overall path")
     total_path_length: int = Field(default=0, description="Total number of positions in path")
     movement_cost: float = Field(default=5.0, description="Movement cost in feet for this step")
+    trajectory: MovementTrajectory = Field(
+        default=MovementTrajectory.PATH,
+        description="Typed trajectory shared by every step in the movement action.",
+    )
+    committed: bool = Field(
+        default=False,
+        description="Whether the entity position was committed to the destination cell.",
+    )
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for a movement step (usually not logged individually)."""
@@ -2610,7 +3350,9 @@ class StepMovementEvent(Event):
                 "from_position": list(self.from_position),
                 "to_position": list(self.to_position),
                 "path_index": self.path_index,
-                "movement_cost": self.movement_cost
+                "movement_cost": self.movement_cost,
+                "trajectory": self.trajectory.value,
+                "committed": self.committed,
             },
             success=True
         )
@@ -2924,9 +3666,21 @@ class TakeDamageEvent(Event):
     total_damage: int = Field(description="Total damage before any modifications")
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
+    effect_id: Optional[str] = Field(
+        default=None,
+        description="Stable identity of the effect causing this damage application.",
+    )
     final_damage: Optional[int] = Field(
         default=None,
         description="Modified damage after handlers. If None, use total_damage."
+    )
+    normal_hit_point_damage_cap: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Maximum normal hit points this packet may remove after defenses and temporary hit points. "
+            "Multiple survival effects compose by retaining the lowest cap."
+        ),
     )
     resulting_hp: Optional[int] = Field(
         default=None,
@@ -2964,14 +3718,15 @@ class TakeDamageEvent(Event):
                 compact=compact_text,
                 verbose=compact_text,
                 detailed=compact_text,
-                data={
-                    "target_name": target_name,
-                    "damage": 0,
-                    "damage_type": damage_type_str,
-                    "source_name": source_name,
-                    "blocked": True,
-                    "blocked_reason": reason,
-                },
+                data=DamageTakenLogData(
+                    target_name=target_name,
+                    damage=0,
+                    damage_type=damage_type_str,
+                    source_name=source_name,
+                    effect_id=self.effect_id,
+                    blocked=True,
+                    blocked_reason=reason,
+                ).model_dump(exclude_none=True),
                 success=False
             )
 
@@ -2999,14 +3754,60 @@ class TakeDamageEvent(Event):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data={
-                "target_name": target_name,
-                "damage": damage,
-                "damage_type": damage_type_str,
-                "source_name": source_name,
-            },
+            data=DamageTakenLogData(
+                target_name=target_name,
+                damage=damage,
+                damage_type=damage_type_str,
+                source_name=source_name,
+                effect_id=self.effect_id,
+            ).model_dump(exclude_none=True),
             success=True
         )
+
+
+class DamageAppliedEvent(Event):
+    """Factual post-mitigation boundary for positive damage.
+
+    `TakeDamageEvent` represents the interruptible incoming packet. This event
+    is emitted only after defenses and temporary hit points have been applied,
+    and only when a positive amount of damage was actually absorbed or lost.
+    Consequences of taking damage subscribe to this event rather than the
+    mutable incoming packet.
+    """
+
+    name: str = Field(default="Damage Applied", description="Human-readable applied-damage label.")
+    event_type: EventType = Field(
+        default=EventType.DAMAGE_APPLIED,
+        description="Event category for a positive post-mitigation damage result.",
+    )
+    applied_damage: int = Field(
+        gt=0,
+        description="Positive damage remaining after defenses, including temporary hit points lost.",
+    )
+    normal_hit_point_damage: int = Field(
+        ge=0,
+        description="Damage applied beyond temporary hit points to the normal hit-point pool.",
+    )
+    temporary_hit_point_damage: int = Field(
+        ge=0,
+        description="Temporary hit points consumed by the damage application.",
+    )
+    resulting_normal_hp: int = Field(
+        description="Target normal hit points immediately after damage application.",
+    )
+    resulting_temporary_hp: int = Field(
+        ge=0,
+        description="Target temporary hit points immediately after damage application.",
+    )
+    damage_type: DamageType = Field(description="Primary damage type used by the incoming packet.")
+    damages: List['Damage'] = Field(
+        default_factory=list,
+        description="Typed damage components carried by the incoming packet.",
+    )
+    effect_id: Optional[str] = Field(
+        default=None,
+        description="Stable identity of the effect that caused the applied damage.",
+    )
 
 
 class HealEvent(Event):
@@ -3023,6 +3824,15 @@ class HealEvent(Event):
     resulting_hp: Optional[int] = Field(
         default=None,
         description="Entity HP after healing applied (set at EFFECT phase)"
+    )
+    resulting_normal_hp: Optional[int] = Field(
+        default=None,
+        description="Entity normal hit points immediately after healing.",
+    )
+    resulting_temporary_hp: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Entity temporary hit points immediately after healing.",
     )
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
@@ -3069,6 +3879,7 @@ class HealEvent(Event):
             ).model_dump(),
             success=True
         )
+
 
 class EncounterEvent(Event):
     """Base event for encounter lifecycle."""

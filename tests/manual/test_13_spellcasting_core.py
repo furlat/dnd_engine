@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from dnd.actions import SpellEvent
+from dnd.actions import SpellAction, SpellEvent
 from dnd.actions_functional import (
     execute_by_index,
     get_available_actions,
@@ -12,17 +12,313 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.core.base_actions import ActionCategory, AvailableActionInfo
+from dnd.core.base_actions import (
+    ActionCategory,
+    AvailableActionInfo,
+    OutcomeApplicationScope,
+    OutcomeResolution,
+    TargetEffectDisposition,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, MultiEntityLogData
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import EventQueue
+from dnd.core.events import EventQueue, _enrich_multi_entity_log_from_children
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.modifiers import CreatureType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.spells import FireBolt, Haste, MagicMissile
+from dnd.spells import (
+    BurningHands,
+    ChillTouch,
+    EldritchBlast,
+    FingerOfDeath,
+    Fireball,
+    FireBolt,
+    GuidingBolt,
+    Haste,
+    MagicMissile,
+    NecroticBless,
+    ScorchingRay,
+    Thunderwave,
+)
+
+
+def test_eldritch_blast_discloses_level_scaled_attack_outcome() -> None:
+    """Eldritch Blast publishes the same typed damage boundary it executes."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Warlock",
+        (1, 1),
+        "monsters",
+        spell_slots={1: 1},
+    )
+    spell = EldritchBlast(
+        source_entity_uuid=caster.uuid,
+        caster_level=5,
+    )
+
+    profile = spell.get_outcome_profile(caster)
+
+    assert profile is not None
+    assert profile.resolution is OutcomeResolution.ATTACK_ROLL
+    assert profile.attack_bonus == caster.spell_attack_outcome_baseline().attack_bonus
+    assert profile.damage_rolls[0].dice_count == 2
+    assert profile.damage_rolls[0].die_size == 10
+    assert profile.damage_rolls[0].damage_type == "Force"
+
+
+def test_immediate_damage_spells_disclose_execution_honest_outcomes() -> None:
+    """Attack, save, upcast, bonus, and critical rules match runtime behavior."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Outcome Mage",
+        (1, 1),
+        "heroes",
+        spellcasting=SpellcastingConfig(
+            spellcasting_ability="intelligence",
+            spell_damage_modifiers=[("Arcane Potency", 3)],
+            spell_crit_threshold_modifiers=[("Spell Sniper", 1)],
+            spell_crit_extra_dice_modifiers=[("Arcane Surge", 2)],
+        ),
+    )
+
+    guiding = GuidingBolt(
+        source_entity_uuid=caster.uuid,
+        cast_at_level=3,
+    ).get_outcome_profile(caster)
+    chill = ChillTouch(
+        source_entity_uuid=caster.uuid,
+        caster_level=11,
+    ).get_outcome_profile(caster)
+    finger = FingerOfDeath(
+        source_entity_uuid=caster.uuid,
+        cast_at_level=8,
+    ).get_outcome_profile(caster)
+
+    assert guiding is not None
+    assert guiding.resolution is OutcomeResolution.ATTACK_ROLL
+    assert guiding.damage_rolls[0].dice_count == 6
+    assert guiding.damage_rolls[0].die_size == 6
+    assert guiding.damage_rolls[0].flat_bonus == 3
+    assert guiding.damage_rolls[0].damage_type == "Radiant"
+    assert guiding.critical_threshold == 19
+    assert guiding.critical_extra_dice == 2
+
+    assert chill is not None
+    assert chill.resolution is OutcomeResolution.ATTACK_ROLL
+    assert chill.damage_rolls[0].dice_count == 3
+    assert chill.damage_rolls[0].die_size == 8
+    assert chill.damage_rolls[0].flat_bonus == 3
+    assert chill.damage_rolls[0].damage_type == "Necrotic"
+    assert chill.critical_threshold == 20
+    assert chill.critical_extra_dice == 2
+
+    assert finger is not None
+    assert finger.resolution is OutcomeResolution.SAVING_THROW
+    assert finger.damage_rolls[0].dice_count == 8
+    assert finger.damage_rolls[0].die_size == 8
+    assert finger.damage_rolls[0].flat_bonus == 33
+    assert finger.damage_rolls[0].damage_type == "Necrotic"
+    assert finger.save_dc == caster.spell_save_dc()
+    assert finger.save_ability == "constitution"
+    assert finger.half_damage_on_save is True
+
+
+def test_spell_outcome_profiles_declare_target_application_scope() -> None:
+    """Area rules apply per affected entity while projectiles use allocation."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Wizard",
+        (1, 1),
+        "heroes",
+        spell_slots={1: 1, 2: 1, 3: 1},
+    )
+
+    fireball = Fireball(source_entity_uuid=caster.uuid, cast_at_level=3)
+    missile = MagicMissile(source_entity_uuid=caster.uuid, cast_at_level=1)
+    rays = ScorchingRay(source_entity_uuid=caster.uuid, cast_at_level=2)
+
+    fireball_profile = fireball.get_outcome_profile(caster)
+    missile_profile = missile.get_outcome_profile(caster)
+    ray_profile = rays.get_outcome_profile(caster)
+
+    assert fireball_profile is not None
+    assert missile_profile is not None
+    assert ray_profile is not None
+    assert fireball_profile.application_scope is OutcomeApplicationScope.EACH_AFFECTED_ENTITY
+    assert missile_profile.application_scope is OutcomeApplicationScope.ALLOCATED_TARGETS
+    assert ray_profile.application_scope is OutcomeApplicationScope.ALLOCATED_TARGETS
+
+
+def test_close_area_spells_disclose_save_damage_and_upcast_scaling() -> None:
+    """Burning Hands and Thunderwave expose their actor-known damage rules."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Wizard",
+        (1, 1),
+        "heroes",
+        spell_slots={1: 1, 2: 1, 3: 1},
+    )
+
+    burning_hands = BurningHands(source_entity_uuid=caster.uuid, cast_at_level=2)
+    thunderwave = Thunderwave(source_entity_uuid=caster.uuid, cast_at_level=3)
+    burning_profile = burning_hands.get_outcome_profile(caster)
+    thunder_profile = thunderwave.get_outcome_profile(caster)
+
+    assert burning_profile is not None
+    assert burning_profile.resolution is OutcomeResolution.SAVING_THROW
+    assert burning_profile.application_scope is OutcomeApplicationScope.EACH_AFFECTED_ENTITY
+    assert burning_profile.save_ability == "dexterity"
+    assert burning_profile.half_damage_on_save is True
+    assert burning_profile.damage_rolls[0].dice_count == 4
+    assert burning_profile.damage_rolls[0].die_size == 6
+
+    assert thunder_profile is not None
+    assert thunder_profile.resolution is OutcomeResolution.SAVING_THROW
+    assert thunder_profile.application_scope is OutcomeApplicationScope.EACH_AFFECTED_ENTITY
+    assert thunder_profile.save_ability == "constitution"
+    assert thunder_profile.half_damage_on_save is True
+    assert thunder_profile.damage_rolls[0].dice_count == 4
+    assert thunder_profile.damage_rolls[0].die_size == 8
+
+
+def test_necrotic_bless_declares_conditional_target_effects() -> None:
+    """Mixed ally/enemy effects are engine-owned rule data, not name policy."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Necromancer",
+        (1, 1),
+        "monsters",
+        spell_slots={2: 1},
+    )
+
+    profile = NecroticBless(
+        source_entity_uuid=caster.uuid,
+        cast_at_level=2,
+    ).get_target_effect_profile(caster)
+
+    assert profile is not None
+    assert profile.semantic_id == "spell.necrotic_bless"
+    assert len(profile.branches) == 2
+    blessing = next(
+        branch
+        for branch in profile.branches
+        if branch.disposition is TargetEffectDisposition.BENEFICIAL
+    )
+    bane = next(
+        branch
+        for branch in profile.branches
+        if branch.disposition is TargetEffectDisposition.HARMFUL
+    )
+    assert blessing.included_creature_types == frozenset({"undead"})
+    assert blessing.excluded_creature_types == frozenset()
+    assert blessing.resolution is OutcomeResolution.AUTOMATIC
+    assert blessing.condition_fact_ids == ("selected_target.condition.bless",)
+    assert bane.included_creature_types == frozenset()
+    assert bane.excluded_creature_types == frozenset({"undead"})
+    assert bane.resolution is OutcomeResolution.SAVING_THROW
+    assert bane.save_ability == "charisma"
+    assert bane.save_dc == caster.spell_save_dc()
+    assert bane.condition_fact_ids == ("selected_target.condition.bane",)
+
+
+def test_necrotic_bless_combat_log_preserves_each_target_identity() -> None:
+    """Mixed target logs identify every living and undead recipient."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Necromancer",
+        (1, 1),
+        "monsters",
+        spell_slots={2: 1},
+    )
+    living_target = create_spell_actor("Living Target", (2, 1), "heroes")
+    undead_ally = create_spell_actor("Undead Ally", (1, 2), "monsters")
+    undead_ally.creature_type = CreatureType.UNDEAD
+    Entity.update_all_entities_senses(max_distance=30)
+
+    with fixed_dice_faces(1):
+        event = NecroticBless(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=living_target.uuid,
+            extra_target_entity_uuids=[undead_ally.uuid],
+            cast_at_level=2,
+        ).apply()
+
+    assert isinstance(event, SpellEvent)
+    assert event.combat_log is not None
+    assert event.combat_log.data["target_names"] == [
+        "Living Target",
+        "Undead Ally",
+    ]
+    assert [entry.target_uuid for entry in event.combat_log.sub_entries] == [
+        str(living_target.uuid),
+        str(undead_ally.uuid),
+    ]
+    assert [
+        target_log["target_uuid"]
+        for target_log in event.combat_log.data["per_target_logs"]
+    ] == [
+        str(living_target.uuid),
+        str(undead_ally.uuid),
+    ]
+
+
+def test_multi_target_summary_excludes_auxiliary_cleanup_from_target_data() -> None:
+    """Causal cleanup stays nested without becoming a spell target."""
+    damage_children = [
+        CombatLogEntry(
+            entry_type=CombatLogEntryType.SPELL_DAMAGE,
+            source_name="Sorcerer",
+            source_uuid="sorcerer",
+            target_name=target_name,
+            target_uuid=target_uuid,
+            compact=f"Magic Missile hits {target_name}",
+            verbose=f"Magic Missile hits {target_name}",
+            detailed=f"Magic Missile hits {target_name}",
+            data={"final_damage": damage},
+            success=True,
+        )
+        for target_name, target_uuid, damage in (
+            ("Warrior", "warrior", 4),
+            ("Archer", "archer", 5),
+        )
+    ]
+    cleanup = CombatLogEntry(
+        entry_type=CombatLogEntryType.CONDITION_REMOVED,
+        source_name="Sorcerer",
+        source_uuid="sorcerer",
+        target_name="Sorcerer",
+        target_uuid="sorcerer",
+        compact="Sorcerer is no longer MetamagicActive",
+        verbose="Sorcerer is no longer MetamagicActive",
+        detailed="Sorcerer is no longer MetamagicActive",
+        data={},
+        success=True,
+    )
+    parent = CombatLogEntry(
+        entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
+        source_name="Sorcerer",
+        source_uuid="sorcerer",
+        compact="Sorcerer uses Magic Missile",
+        verbose="Sorcerer uses Magic Missile",
+        detailed="Sorcerer uses Magic Missile",
+        data=MultiEntityLogData(
+            action_name="Magic Missile",
+            caster_name="Sorcerer",
+            total_targets=2,
+        ).model_dump(),
+        success=True,
+        sub_entries=[*damage_children, cleanup],
+    )
+
+    _enrich_multi_entity_log_from_children(parent, parent.sub_entries)
+
+    assert parent.data["target_names"] == ["Warrior", "Archer"]
+    assert parent.data["per_target_damage"] == [4, 5]
+    assert len(parent.data["per_target_logs"]) == 2
+    assert parent.sub_entries == [*damage_children, cleanup]
 
 
 def reset_spell_tutorial_state(width: int = 10, height: int = 6) -> None:
@@ -79,6 +375,28 @@ def create_spell_actor(
             faction=faction,
         ),
     )
+
+
+def test_spell_discovery_variants_share_the_read_only_definition_graph() -> None:
+    """Epoch discovery does not deep-clone a complete spell graph per slot."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Wizard",
+        (1, 1),
+        "heroes",
+        spell_slots={1: 2, 2: 1},
+    )
+    register_spell(caster, MagicMissile, caster_level=3)
+    template = caster.get_action_template("Magic Missile")
+
+    assert isinstance(template, SpellAction)
+    variant = template._create_variant(cast_at_level=2)
+
+    assert variant.uuid != template.uuid
+    assert variant.costs is not template.costs
+    assert variant.spell_range is template.spell_range
+    assert variant.is_variant is True
+    assert variant.cast_at_level == 2
 
 
 def find_action(actions, template_name: str) -> AvailableActionInfo:
@@ -190,6 +508,35 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_multi_target_execution_does_not_mutate_cached_discovery_target() -> None:
+    """Extra target allocation is bound to an execution copy of the selected row."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Missile Caster",
+        (0, 0),
+        "heroes",
+        spell_slots={1: 1},
+    )
+    first = create_spell_actor("First Target", (1, 0), "monsters")
+    second = create_spell_actor("Second Target", (2, 0), "monsters")
+    register_spell(caster, MagicMissile, caster_level=5)
+    Entity.update_all_entities_senses(max_distance=30)
+    available = get_available_actions(caster)
+    missile = find_action(available, "Magic Missile__slot_1")
+    primary = next(target for target in missile.valid_targets if target.target_uuid == first.uuid)
+
+    event = execute_by_index(
+        caster,
+        missile.template_name,
+        primary.index,
+        extra_target_uuids=[str(second.uuid)],
+        available=available,
+    )
+
+    assert event is not None
+    assert primary.extra_target_uuids is None
 
 
 def test_spell_slots_are_action_economy_values_and_reset_separately(capsys) -> None:
@@ -495,6 +842,9 @@ def test_magic_missile_auto_hits_multiple_darts_and_spends_slot(capsys) -> None:
     assert event.combat_log is not None
     assert event.combat_log.entry_type == CombatLogEntryType.MULTI_ENTITY_ACTION
     assert len(event.combat_log.sub_entries) == 3
+    assert event.combat_log.data["target_names"] == ["Training Target"]
+    assert event.combat_log.data["per_target_damage"] == [3, 4, 5]
+    assert event.combat_log.data["total_damage"] == 12
     missile_lines = [
         f"event phase: {event.phase.value}, canceled={event.canceled}",
         f"targets/projectiles: {event.total_targets}, damage={event.total_damage}",

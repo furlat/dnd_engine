@@ -14,9 +14,14 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventQueue
+from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import CreatureType, DamageType, NumericalModifier
+from dnd.core.modifiers import (
+    AdvantageStatus,
+    CreatureType,
+    DamageType,
+    NumericalModifier,
+)
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.spells import (
@@ -30,11 +35,12 @@ from dnd.spells import (
     PowerWordKill,
     SacredFlame,
 )
-from dnd.spells.abjuration import LesserRestoration, MageArmor
+from dnd.spells.abjuration import DeathWardEffect, LesserRestoration, MageArmor, ShieldBuff
 from dnd.spells.conjuration import MistyStep
 from dnd.spells.enchantment import Sleep
 from dnd.spells.evocation import CureWounds, HealingWord
-from dnd.spells.illusion import MirrorImage, MirrorImageEffect
+from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
+from dnd.spells.illusion import HypnoticPatternEffect, MirrorImage, MirrorImageEffect
 from dnd.spells.necromancy import FalseLife
 from dnd.spells.transmutation import SpikeGrowth
 from dnd.tile_conditions import ZoneControlCondition
@@ -123,6 +129,38 @@ def assert_completed_spell(event: object) -> SpellEvent:
     assert isinstance(event, SpellEvent)
     assert not event.canceled
     return event
+
+
+def test_ranged_spell_attacks_are_disadvantaged_while_threatened() -> None:
+    """Adjacent hostiles affect spell attack models, rolls, and combat logs."""
+    reset_spell_family_state()
+    caster = create_spell_family_actor("Threatened Mage", (2, 2), "heroes")
+    target = create_spell_family_actor("Adjacent Warrior", (2, 3), "monsters")
+    Entity.update_all_entities_senses(max_distance=30)
+
+    spell = FireBolt(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+    )
+    profile = spell.get_outcome_profile(caster)
+
+    assert caster.is_threatened() is True
+    assert profile is not None
+    assert profile.advantage is AdvantageStatus.DISADVANTAGE
+
+    with fixed_dice_faces(12, 8, 5):
+        event = assert_completed_spell(spell.apply())
+
+    assert event.is_threatened is True
+    assert event.dice_roll is not None
+    assert event.dice_roll.results == [12, 8]
+    assert event.dice_roll.advantage_status is AdvantageStatus.DISADVANTAGE
+
+    combat_log = event.generate_combat_log()
+    assert combat_log.data["is_threatened"] is True
+    assert combat_log.data["advantage_breakdown"] == [
+        {"name": "Threatened (Ranged)", "value": -1, "source": "self"}
+    ]
 
 
 def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
@@ -777,3 +815,252 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_blocked_damage_does_not_break_hypnotic_pattern() -> None:
+    """A canceled damage packet cannot satisfy a takes-damage trigger."""
+    reset_spell_family_state()
+    caster = create_spell_family_actor("Pattern Caster", (1, 1), "heroes")
+    target = create_spell_family_actor("Shielded Target", (3, 1), "monsters")
+    hypnotic = HypnoticPatternEffect(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+    )
+    shield = ShieldBuff(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+    )
+    target.add_condition(hypnotic)
+    target.add_condition(shield)
+
+    actual_damage = target.receive_damage(
+        5,
+        DamageType.FORCE,
+        caster.uuid,
+        effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+    )
+
+    assert actual_damage == 0
+    assert "Shield" in target.active_conditions
+    assert "Hypnotic Pattern" in target.active_conditions
+
+    target.remove_condition("Shield")
+    actual_damage = target.receive_damage(1, DamageType.FORCE, caster.uuid)
+
+    assert actual_damage == 1
+    assert "Hypnotic Pattern" not in target.active_conditions
+
+
+def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences() -> None:
+    """Only positive post-mitigation damage satisfies takes-damage rules."""
+    reset_spell_family_state()
+    caster = create_spell_family_actor("Pattern Caster", (1, 1), "heroes")
+    target = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Force-Immune Target",
+        config=EntityConfig(
+            ability_scores=AbilityScoresConfig(),
+            action_economy=ActionEconomyConfig(),
+            health=HealthConfig(
+                hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=4, mode="maximums")],
+                immunities=[DamageType.FORCE],
+            ),
+            position=(3, 1),
+            faction="monsters",
+        ),
+    )
+    target.add_condition(HypnoticPatternEffect(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+    ))
+
+    force_damage = target.receive_damage(5, DamageType.FORCE, caster.uuid)
+
+    assert force_damage == 0
+    assert "Hypnotic Pattern" in target.active_conditions
+    assert EventQueue.get_events_by_type(EventType.DAMAGE_APPLIED) == []
+
+    slashing_damage = target.receive_damage(3, DamageType.SLASHING, caster.uuid)
+
+    assert slashing_damage == 3
+    assert "Hypnotic Pattern" not in target.active_conditions
+    completions = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.DAMAGE_APPLIED)
+        if event.phase == EventPhase.COMPLETION
+    ]
+    assert len(completions) == 1
+    applied = completions[0]
+    assert isinstance(applied, DamageAppliedEvent)
+    assert applied.applied_damage == 3
+    assert applied.normal_hit_point_damage == 3
+    assert applied.temporary_hit_point_damage == 0
+    assert applied.resulting_normal_hp == target.get_normal_hp()
+    assert applied.resulting_temporary_hp == 0
+    parent = applied.get_parent_event()
+    assert parent is not None
+    assert parent.event_type == EventType.TAKE_DAMAGE
+    damage_completion = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
+        if event.phase == EventPhase.COMPLETION
+    ][-1]
+    assert damage_completion.combat_log is not None
+
+    def iter_log_tree(entry):
+        yield entry
+        for child in entry.sub_entries:
+            yield from iter_log_tree(child)
+
+    assert any(
+        entry.data.get("condition_name") == "Hypnotic Pattern"
+        for entry in iter_log_tree(damage_completion.combat_log)
+    )
+
+
+def test_temporary_hit_point_loss_is_positive_applied_damage() -> None:
+    """Temporary hit points absorb damage without suppressing takes-damage rules."""
+    reset_spell_family_state()
+    caster = create_spell_family_actor("Pattern Caster", (1, 1), "heroes")
+    target = create_spell_family_actor("Ward Target", (3, 1), "monsters")
+    target.health.add_temporary_hit_points(5, target.uuid)
+    target.add_condition(HypnoticPatternEffect(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+    ))
+
+    normal_hit_point_damage = target.receive_damage(3, DamageType.FORCE, caster.uuid)
+
+    assert normal_hit_point_damage == 0
+    assert target.health.temporary_hit_points.normalized_score == 2
+    assert "Hypnotic Pattern" not in target.active_conditions
+    completions = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.DAMAGE_APPLIED)
+        if event.phase == EventPhase.COMPLETION
+    ]
+    assert len(completions) == 1
+    applied = completions[0]
+    assert isinstance(applied, DamageAppliedEvent)
+    assert applied.applied_damage == 3
+    assert applied.normal_hit_point_damage == 0
+    assert applied.temporary_hit_point_damage == 3
+    assert applied.resulting_temporary_hp == 2
+
+
+def test_concentration_check_uses_applied_damage_not_incoming_damage() -> None:
+    """Mitigated packets do not roll concentration saves; applied damage does."""
+    reset_spell_family_state()
+    attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
+    caster = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Concentrating Caster",
+        config=EntityConfig(
+            ability_scores=AbilityScoresConfig(),
+            action_economy=ActionEconomyConfig(),
+            health=HealthConfig(
+                hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=4, mode="maximums")],
+                immunities=[DamageType.FORCE],
+            ),
+            position=(3, 1),
+            faction="monsters",
+        ),
+    )
+    caster.add_condition(Concentrating(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        spell_name="Probe",
+    ))
+
+    caster.receive_damage(8, DamageType.FORCE, attacker.uuid)
+
+    assert "Concentrating" in caster.active_conditions
+    assert EventQueue.get_events_by_type(EventType.SAVING_THROW) == []
+
+    with fixed_dice_faces(1):
+        caster.receive_damage(2, DamageType.SLASHING, attacker.uuid)
+
+    assert "Concentrating" not in caster.active_conditions
+    save_completions = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.SAVING_THROW)
+        if event.phase == EventPhase.COMPLETION
+    ]
+    assert len(save_completions) == 1
+
+
+def test_damage_reducing_a_death_save_actor_to_zero_ends_concentration_without_save() -> None:
+    """A caster at zero normal HP cannot preserve concentration with a damage save."""
+    reset_spell_family_state()
+    attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
+    caster = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Dying Caster",
+        config=EntityConfig(
+            ability_scores=AbilityScoresConfig(),
+            action_economy=ActionEconomyConfig(),
+            health=HealthConfig(
+                hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=2, mode="maximums")],
+            ),
+            position=(3, 1),
+            faction="monsters",
+            uses_death_saves=True,
+        ),
+    )
+    set_current_normal_hp(caster, 2, attacker)
+    EventQueue.reset()
+    caster.add_condition(Concentrating(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        spell_name="Probe",
+    ))
+
+    with fixed_dice_faces(20):
+        caster.receive_damage(3, DamageType.SLASHING, attacker.uuid)
+
+    assert caster.get_normal_hp() == 0
+    assert caster.is_dying
+    assert "Concentrating" not in caster.active_conditions
+    assert EventQueue.get_events_by_type(EventType.SAVING_THROW) == []
+
+
+def test_death_ward_uses_post_mitigation_lethality_and_leaves_one_normal_hp() -> None:
+    """Death Ward previews defenses and caps normal-HP loss compositionally."""
+    reset_spell_family_state()
+    attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
+
+    def create_warded_target(name: str) -> Entity:
+        target = Entity.create(
+            source_entity_uuid=uuid4(),
+            name=name,
+            config=EntityConfig(
+                ability_scores=AbilityScoresConfig(),
+                action_economy=ActionEconomyConfig(),
+                health=HealthConfig(
+                    hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=2, mode="maximums")],
+                    resistances=[DamageType.FIRE],
+                ),
+                position=(3, 1),
+                faction="monsters",
+            ),
+        )
+        set_current_normal_hp(target, 10, attacker)
+        target.add_condition(DeathWardEffect(
+            source_entity_uuid=target.uuid,
+            target_entity_uuid=target.uuid,
+        ))
+        return target
+
+    nonlethal = create_warded_target("Nonlethal Ward")
+    nonlethal_damage = nonlethal.receive_damage(15, DamageType.FIRE, attacker.uuid)
+
+    assert nonlethal_damage == 7
+    assert nonlethal.get_normal_hp() == 3
+    assert "Death Ward" in nonlethal.active_conditions
+
+    lethal = create_warded_target("Lethal Ward")
+    lethal_damage = lethal.receive_damage(25, DamageType.FIRE, attacker.uuid)
+
+    assert lethal_damage == 9
+    assert lethal.get_normal_hp() == 1
+    assert "Death Ward" not in lethal.active_conditions

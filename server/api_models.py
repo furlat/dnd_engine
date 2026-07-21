@@ -1,18 +1,29 @@
 """Pydantic DTOs for REST API serialization."""
 
 from uuid import UUID
-from pydantic import BaseModel, Field, SerializeAsAny
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from pydantic import BaseModel, Field, JsonValue, RootModel, SerializeAsAny, field_serializer
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.equipment import Armor, Shield, Weapon
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
 from dnd.core.base_conditions import ConditionCategory
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import Event
 from dnd.core.gridmap import GridMap
+from dnd.core.senses import SenseMode
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.scenarios.evaluation.compatibility import CompatibilityReport
+from dnd.scenarios.evaluation.models import (
+    BattlefieldSpec,
+    DeploymentSpec,
+    LegacyScenarioRecipe,
+    SideConfigurationSpec,
+)
+from server.event_contract import serialize_event
 
 
 class APIItemSummary(BaseModel):
@@ -27,8 +38,9 @@ class APIItemSummary(BaseModel):
         weight: Item weight in pounds.
         is_equipped: Whether the item is currently equipped.
         equipped_slot: Equipment slot name when the item is equipped.
-        visual_item_name: Renderer asset name for the item, if any.
+        visual_item_name: Effective renderer registry key for the item.
         visual_variant_id: Renderer variant identifier for the item, if any.
+        equipped_visual_policy: Whether the item contributes a separate actor layer.
         damage_dice: Weapon damage dice such as `1d8` or `2d6`.
         damage_type: Weapon damage type.
         weapon_properties: Weapon property names.
@@ -49,8 +61,9 @@ class APIItemSummary(BaseModel):
     weight: float = Field(description="Item weight in pounds.")
     is_equipped: bool = Field(description="Whether the item is currently equipped.")
     equipped_slot: Optional[str] = Field(default=None, description="Equipment slot name when the item is equipped.")
-    visual_item_name: Optional[str] = Field(default=None, description="Renderer asset name for the item, if any.")
+    visual_item_name: str = Field(description="Effective renderer registry key for the item.")
     visual_variant_id: Optional[str] = Field(default=None, description="Renderer variant identifier for the item, if any.")
+    equipped_visual_policy: Literal["visible", "hidden"] = Field(description="Whether the equipped item contributes a separate actor layer.")
     damage_dice: Optional[str] = Field(default=None, description="Weapon damage dice such as 1d8 or 2d6.")
     damage_type: Optional[str] = Field(default=None, description="Weapon damage type.")
     weapon_properties: List[str] = Field(default_factory=list, description="Weapon property names.")
@@ -84,8 +97,9 @@ class APIItemSummary(BaseModel):
             "weight": item.weight,
             "is_equipped": item.is_equipped,
             "equipped_slot": item.equipped_slot,
-            "visual_item_name": item.visual_item_name,
+            "visual_item_name": item.visual_item_name or item.name,
             "visual_variant_id": item.visual_variant_id,
+            "equipped_visual_policy": item.equipped_visual_policy.value,
         }
 
         if isinstance(item, Weapon):
@@ -180,6 +194,40 @@ class APIEquipmentOverview(BaseModel):
         )
 
 
+class APIEquippableEntry(BaseModel):
+    """One inventory item and the item it would displace from a slot."""
+
+    item_uuid: str = Field(description="Inventory item UUID.")
+    item_name: str = Field(description="Inventory item display name.")
+    swap_item_name: Optional[str] = Field(default=None, description="Currently equipped item name, if any.")
+    swap_item_uuid: Optional[str] = Field(default=None, description="Currently equipped item UUID, if any.")
+
+
+class APIEquippableItems(BaseModel):
+    """Inventory equipment candidates grouped by canonical slot name."""
+
+    entity_uuid: str = Field(description="Entity whose inventory was inspected.")
+    equippable: Dict[str, List[APIEquippableEntry]] = Field(
+        default_factory=dict,
+        description="Equipment candidates grouped by canonical slot name.",
+    )
+
+
+class APIEntityHandlersResponse(BaseModel):
+    """Player-toggleable handlers registered on one entity."""
+
+    entity_uuid: str = Field(description="Entity whose handlers were inspected.")
+    handlers: List[AvailableHandlerInfo] = Field(description="Player-toggleable handler summaries.")
+
+
+class ToggleHandlerResponse(BaseModel):
+    """Result of changing one player-toggleable handler."""
+
+    success: bool = Field(description="Whether the handler state changed.")
+    handler_name: str = Field(description="Handler display name.")
+    enabled: bool = Field(description="Resulting enabled state.")
+
+
 class EquipRequest(BaseModel):
     """Request to equip an item from inventory.
 
@@ -228,28 +276,16 @@ class EquipmentMutationResult(BaseModel):
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after side effects.")
 
 
-class APIAppearance(BaseModel):
-    """Passive renderer identity metadata.
-
-    Attributes:
-        body_category: Body sprite category used by the renderer.
-        skin_tint: Palette index for skin rendering.
-        head_category: Optional head sprite category override.
-        hair_tint: Palette index for hair rendering.
-        has_beard: Whether the renderer should draw beard features.
-        beard_tint: Palette index for beard rendering.
-    """
-
-    body_category: str = Field(description="Body sprite category used by the renderer.")
-    skin_tint: int = Field(description="Palette index for skin rendering.")
-    head_category: Optional[str] = Field(default=None, description="Optional head sprite category override.")
-    hair_tint: int = Field(description="Palette index for hair rendering.")
-    has_beard: bool = Field(description="Whether the renderer should draw beard features.")
-    beard_tint: int = Field(description="Palette index for beard rendering.")
+class APIAppearance(AppearanceConfig):
+    """Public appearance projection using the engine's canonical configuration."""
 
     @classmethod
     def create(cls, appearance: Any) -> 'APIAppearance':
         return cls(
+            portrait_key=appearance.portrait_key,
+            presentation_kind=appearance.presentation_kind,
+            visual_scale=appearance.visual_scale,
+            placeholder_tint=appearance.placeholder_tint,
             body_category=appearance.body_category,
             skin_tint=appearance.skin_tint,
             head_category=appearance.head_category,
@@ -257,6 +293,33 @@ class APIAppearance(BaseModel):
             has_beard=appearance.has_beard,
             beard_tint=appearance.beard_tint,
         )
+
+
+class APIConditionSummary(BaseModel):
+    """Condition identity needed by game clients."""
+
+    name: str = Field(description="Stable condition name.")
+    category: str = Field(description="Condition category value.")
+
+
+class APIActionEconomySnapshot(BaseModel):
+    """Current primitive action-economy values for one entity."""
+
+    actions: int = Field(description="Actions currently available.")
+    bonus_actions: int = Field(description="Bonus actions currently available.")
+    reactions: int = Field(description="Reactions currently available.")
+    movement: int = Field(description="Movement currently available in feet.")
+
+
+class APIAbilityScoresSnapshot(BaseModel):
+    """Resolved ability scores for one entity."""
+
+    strength: int = Field(description="Resolved Strength score.")
+    dexterity: int = Field(description="Resolved Dexterity score.")
+    constitution: int = Field(description="Resolved Constitution score.")
+    intelligence: int = Field(description="Resolved Intelligence score.")
+    wisdom: int = Field(description="Resolved Wisdom score.")
+    charisma: int = Field(description="Resolved Charisma score.")
 
 
 class APIEntitySummary(BaseModel):
@@ -273,6 +336,8 @@ class APIEntitySummary(BaseModel):
         condition_details: Active condition names and categories for UI filters.
         is_dead: Whether the entity currently has no hit points.
         faction: Optional faction identifier used for ally/enemy grouping.
+        creature_type: D&D creature taxonomy value.
+        size: D&D rules size value.
         appearance: Passive renderer identity metadata.
     """
 
@@ -283,12 +348,14 @@ class APIEntitySummary(BaseModel):
     max_hp: int = Field(description="Maximum hit points after constitution and bonus HP.")
     ac: int = Field(description="Current armor class.")
     conditions: List[str] = Field(description="Active condition names keyed on the entity.")
-    condition_details: List[dict] = Field(
+    condition_details: List[APIConditionSummary] = Field(
         default_factory=list,
         description="Active condition names and categories for UI filters.",
     )
     is_dead: bool = Field(description="Whether the entity currently has no hit points.")
     faction: Optional[str] = Field(default=None, description="Optional faction identifier used for ally/enemy grouping.")
+    creature_type: str = Field(description="D&D creature taxonomy value.")
+    size: str = Field(description="D&D rules size value.")
     appearance: APIAppearance = Field(description="Passive renderer identity metadata.")
 
     @classmethod
@@ -305,11 +372,16 @@ class APIEntitySummary(BaseModel):
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
             condition_details=[
-                {"name": c.name, "category": c.condition_category.value if hasattr(c.condition_category, 'value') else str(c.condition_category)}
+                APIConditionSummary(
+                    name=c.name or type(c).__name__,
+                    category=c.condition_category.value,
+                )
                 for c in entity.active_conditions.values()
             ],
             is_dead=not entity.has_hp,
             faction=entity.faction,
+            creature_type=entity.creature_type.value,
+            size=entity.size.value,
             appearance=APIAppearance.create(entity.appearance),
         )
 
@@ -324,8 +396,12 @@ class APIEntityFull(APIEntitySummary):
         equipment: Full equipment overview for the entity.
     """
 
-    action_economy: dict = Field(description="Current action, bonus-action, reaction, and movement counts.")
-    ability_scores: dict = Field(description="Current ability score values keyed by ability name.")
+    action_economy: APIActionEconomySnapshot = Field(
+        description="Current action, bonus-action, reaction, and movement counts."
+    )
+    ability_scores: APIAbilityScoresSnapshot = Field(
+        description="Current resolved ability scores."
+    )
     weapon_name: Optional[str] = Field(default=None, description="Name of the equipped main-hand melee weapon, if any.")
     equipment: Optional[APIEquipmentOverview] = Field(default=None, description="Full equipment overview for the entity.")
 
@@ -344,29 +420,43 @@ class APIEntityFull(APIEntitySummary):
             ac=entity.ac_bonus().normalized_score,
             conditions=list(entity.active_conditions.keys()),
             condition_details=[
-                {"name": c.name, "category": c.condition_category.value if hasattr(c.condition_category, 'value') else str(c.condition_category)}
+                APIConditionSummary(
+                    name=c.name or type(c).__name__,
+                    category=c.condition_category.value,
+                )
                 for c in entity.active_conditions.values()
             ],
             is_dead=not entity.has_hp,
             faction=entity.faction,
+            creature_type=entity.creature_type.value,
+            size=entity.size.value,
             appearance=APIAppearance.create(entity.appearance),
-            action_economy={
-                'actions': entity.action_economy.actions.normalized_score,
-                'bonus_actions': entity.action_economy.bonus_actions.normalized_score,
-                'reactions': entity.action_economy.reactions.normalized_score,
-                'movement': entity.action_economy.movement.normalized_score,
-            },
-            ability_scores={
-                'strength': entity.ability_scores.strength.ability_score.normalized_score,
-                'dexterity': entity.ability_scores.dexterity.ability_score.normalized_score,
-                'constitution': entity.ability_scores.constitution.ability_score.normalized_score,
-                'intelligence': entity.ability_scores.intelligence.ability_score.normalized_score,
-                'wisdom': entity.ability_scores.wisdom.ability_score.normalized_score,
-                'charisma': entity.ability_scores.charisma.ability_score.normalized_score,
-            },
+            action_economy=APIActionEconomySnapshot(
+                actions=entity.action_economy.actions.normalized_score,
+                bonus_actions=entity.action_economy.bonus_actions.normalized_score,
+                reactions=entity.action_economy.reactions.normalized_score,
+                movement=entity.action_economy.movement.normalized_score,
+            ),
+            ability_scores=APIAbilityScoresSnapshot(
+                strength=entity.ability_scores.strength.ability_score.normalized_score,
+                dexterity=entity.ability_scores.dexterity.ability_score.normalized_score,
+                constitution=entity.ability_scores.constitution.ability_score.normalized_score,
+                intelligence=entity.ability_scores.intelligence.ability_score.normalized_score,
+                wisdom=entity.ability_scores.wisdom.ability_score.normalized_score,
+                charisma=entity.ability_scores.charisma.ability_score.normalized_score,
+            ),
             weapon_name=weapon.name if weapon else None,
             equipment=APIEquipmentOverview.create(entity),
         )
+
+
+class APIDirectionalBlockMap(BaseModel):
+    """Blocking flags for the four cardinal directions."""
+
+    north: bool = Field(description="Whether passage toward north is blocked.")
+    south: bool = Field(description="Whether passage toward south is blocked.")
+    east: bool = Field(description="Whether passage toward east is blocked.")
+    west: bool = Field(description="Whether passage toward west is blocked.")
 
 
 class APITile(BaseModel):
@@ -397,20 +487,16 @@ class APITile(BaseModel):
     is_hazardous: bool = Field(default=False, description="Whether the tile is hazardous for the requesting entity.")
     conditions: List[str] = Field(default_factory=list, description="Public condition names visible on the tile.")
     light_level: int = Field(default=3, description="Resolved light level enum value.")
-    directional_blocks_movement: Dict[str, bool] = Field(
-        default_factory=dict,
+    directional_blocks_movement: APIDirectionalBlockMap = Field(
         description="Directional movement blockers keyed by compass direction.",
     )
-    directional_blocks_vision: Dict[str, bool] = Field(
-        default_factory=dict,
+    directional_blocks_vision: APIDirectionalBlockMap = Field(
         description="Directional vision blockers keyed by compass direction.",
     )
-    directional_blocks_light: Dict[str, bool] = Field(
-        default_factory=dict,
+    directional_blocks_light: APIDirectionalBlockMap = Field(
         description="Directional light blockers keyed by compass direction.",
     )
-    directional_blocks_propagation: Dict[str, bool] = Field(
-        default_factory=dict,
+    directional_blocks_propagation: APIDirectionalBlockMap = Field(
         description="Directional propagation blockers keyed by compass direction.",
     )
 
@@ -465,22 +551,30 @@ class APIGrid(BaseModel):
                 is_hazardous=is_hazardous,
                 conditions=conditions,
                 light_level=td.resolved_light_level.value,
-                directional_blocks_movement={
-                    direction: not td.allows_direction(direction, "movement")
-                    for direction in ("north", "south", "east", "west")
-                },
-                directional_blocks_vision={
-                    direction: not td.allows_direction(direction, "vision")
-                    for direction in ("north", "south", "east", "west")
-                },
-                directional_blocks_light={
-                    direction: not td.allows_direction(direction, "light")
-                    for direction in ("north", "south", "east", "west")
-                },
-                directional_blocks_propagation={
-                    direction: not td.allows_direction(direction, "propagation")
-                    for direction in ("north", "south", "east", "west")
-                },
+                directional_blocks_movement=APIDirectionalBlockMap(
+                    north=not td.allows_direction("north", "movement"),
+                    south=not td.allows_direction("south", "movement"),
+                    east=not td.allows_direction("east", "movement"),
+                    west=not td.allows_direction("west", "movement"),
+                ),
+                directional_blocks_vision=APIDirectionalBlockMap(
+                    north=not td.allows_direction("north", "vision"),
+                    south=not td.allows_direction("south", "vision"),
+                    east=not td.allows_direction("east", "vision"),
+                    west=not td.allows_direction("west", "vision"),
+                ),
+                directional_blocks_light=APIDirectionalBlockMap(
+                    north=not td.allows_direction("north", "light"),
+                    south=not td.allows_direction("south", "light"),
+                    east=not td.allows_direction("east", "light"),
+                    west=not td.allows_direction("west", "light"),
+                ),
+                directional_blocks_propagation=APIDirectionalBlockMap(
+                    north=not td.allows_direction("north", "propagation"),
+                    south=not td.allows_direction("south", "propagation"),
+                    east=not td.allows_direction("east", "propagation"),
+                    west=not td.allows_direction("west", "propagation"),
+                ),
             ))
         return cls(
             min_x=bounds[0], min_y=bounds[1],
@@ -557,16 +651,19 @@ class APIFloorObject(BaseModel):
     Attributes:
         uuid: Stable object UUID serialized as a string.
         name: Object display name.
-        position: Grid position serialized as ``[x, y]``.
+        position: Grid position serialized as an ``(x, y)`` pair.
         map_char: Map glyph used to render the object.
         state: Object-specific public state fields.
     """
 
     uuid: str = Field(description="Stable object UUID serialized as a string.")
     name: str = Field(description="Object display name.")
-    position: List[int] = Field(description="Grid position serialized as [x, y].")
+    position: Tuple[int, int] = Field(description="Grid position serialized as an (x, y) pair.")
     map_char: str = Field(default="\u03c6", description="Map glyph used to render the object.")
-    state: Dict[str, Any] = Field(default_factory=dict, description="Object-specific public state fields.")
+    state: Dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Object-specific JSON state keyed by the concrete item model.",
+    )
 
 
 class APIGameState(BaseModel):
@@ -583,6 +680,34 @@ class APIGameState(BaseModel):
     entities: List[APIEntitySummary] = Field(description="Lightweight entity summaries visible to the client.")
     encounter: Optional[APIEncounter] = Field(default=None, description="Active encounter snapshot, if combat is active.")
     floor_objects: List[APIFloorObject] = Field(default_factory=list, description="Public floor-object summaries.")
+
+
+class APIEntityVisibility(BaseModel):
+    """Current perception state for one observing entity."""
+
+    name: str = Field(description="Observer display name.")
+    position: Tuple[int, int] = Field(description="Observer grid position.")
+    visible_cells: List[Tuple[int, int]] = Field(description="Cells visible now.")
+    visible_entities: List[str] = Field(description="Entity UUIDs visible now.")
+    visible_objects: List[str] = Field(description="Object UUIDs visible now.")
+    seen_cells: List[Tuple[int, int]] = Field(description="Cells observed previously or currently.")
+    sense_modes: List[SenseMode] = Field(description="Active special senses.")
+    effective_light_levels: Dict[str, int] = Field(
+        description=(
+            "Backend-resolved subjective light levels for currently visible cells, "
+            "keyed as 'x,y'."
+        )
+    )
+
+
+class APIVisibilityResponse(RootModel[Dict[str, APIEntityVisibility]]):
+    """Visibility rows keyed by observer UUID."""
+
+
+class APIEntityListResponse(BaseModel):
+    """Lightweight summaries for every entity exposed by the server."""
+
+    entities: List[APIEntitySummary] = Field(description="Public entity summaries.")
 
 
 class MapEditorGridBounds(BaseModel):
@@ -1155,12 +1280,28 @@ class JoinGameRequest(BaseModel):
     Attributes:
         session_id: Session joining the game.
         entity_uuids: Optional entity UUIDs to control.
+        entity_uuid: Optional single entity UUID convenience alias.
         faction: Optional faction whose entities should be controlled.
     """
 
     session_id: str = Field(description="Session joining the game.")
     entity_uuids: Optional[List[str]] = Field(default=None, description="Optional entity UUIDs to control.")
+    entity_uuid: Optional[str] = Field(default=None, description="Optional single entity UUID to control.")
     faction: Optional[str] = Field(default=None, description="Optional faction whose entities should be controlled.")
+
+    def requested_entity_uuids(self) -> List[str]:
+        """Return requested entity UUIDs from list and single-entity inputs.
+
+        Returns:
+            De-duplicated entity UUID strings in request order.
+        """
+        requested: List[str] = []
+        for uuid_str in self.entity_uuids or []:
+            if uuid_str not in requested:
+                requested.append(uuid_str)
+        if self.entity_uuid and self.entity_uuid not in requested:
+            requested.append(self.entity_uuid)
+        return requested
 
 
 class JoinGameResponse(BaseModel):
@@ -1181,6 +1322,216 @@ class JoinGameResponse(BaseModel):
     message: str = Field(description="Human-readable join result.")
 
 
+GameCreationControllerKind = Literal["human", "ai", "codex"]
+GameCreationOpeningSide = Literal["initiative", "side_a", "side_b"]
+
+
+class GameCreationPreset(BaseModel):
+    """Historical scenario recipe exposed as a quick game-creation preset.
+
+    Attributes:
+        arena_id: Stable historical scenario identifier.
+        title: Human-readable scenario title.
+        tags: Searchable mechanics and content labels.
+        expected_pressure: Tactical behaviors the scenario exercises.
+        map_notes: Important terrain and object facts.
+        recipe: Canonical composition recipe used to reconstruct the scenario.
+    """
+
+    arena_id: str = Field(description="Stable historical scenario identifier.")
+    title: str = Field(description="Human-readable scenario title.")
+    tags: List[str] = Field(description="Searchable mechanics and content labels.")
+    expected_pressure: List[str] = Field(description="Tactical behaviors exercised by the scenario.")
+    map_notes: List[str] = Field(description="Important terrain and object facts.")
+    recipe: LegacyScenarioRecipe = Field(description="Canonical composition recipe for the scenario.")
+
+
+class GameCreationCatalogResponse(BaseModel):
+    """Canonical content and controller choices for the game-creation UI."""
+
+    schema_version: int = Field(default=1, description="Game-creation contract schema version.")
+    controllers: List[GameCreationControllerKind] = Field(description="Supported side controller kinds.")
+    opening_sides: List[GameCreationOpeningSide] = Field(description="Supported initiative-opening policies.")
+    hero_configurations: List[SideConfigurationSpec] = Field(description="Canonical hero-side configurations.")
+    monster_configurations: List[SideConfigurationSpec] = Field(description="Canonical monster-party configurations.")
+    battlefields: List[BattlefieldSpec] = Field(description="Canonical battlefield definitions.")
+    deployments: List[DeploymentSpec] = Field(description="Canonical spawn formations.")
+    presets: List[GameCreationPreset] = Field(description="Historical scenario quick presets.")
+
+
+class GameCreationPreflightRequest(BaseModel):
+    """Four-part composed scenario selection checked without mutating game state."""
+
+    hero_configuration_id: str = Field(description="Hero configuration catalog identifier.")
+    monster_configuration_id: str = Field(description="Monster-party configuration catalog identifier.")
+    battlefield_id: str = Field(description="Battlefield catalog identifier.")
+    deployment_id: str = Field(description="Deployment catalog identifier.")
+
+
+class GameCreationPresetScenario(BaseModel):
+    """Historical scenario selected by stable preset identifier."""
+
+    kind: Literal["preset"] = Field(default="preset", description="Scenario-selection discriminator.")
+    arena_id: str = Field(description="Historical scenario preset identifier.")
+
+
+class GameCreationComposedScenario(GameCreationPreflightRequest):
+    """Custom scenario assembled from four canonical component identifiers."""
+
+    kind: Literal["composed"] = Field(default="composed", description="Scenario-selection discriminator.")
+
+
+GameCreationScenario = Annotated[
+    Union[GameCreationPresetScenario, GameCreationComposedScenario],
+    Field(discriminator="kind"),
+]
+
+
+class GameCreationSideRequest(BaseModel):
+    """Requested controller assignment for one complete combat side."""
+
+    controller: GameCreationControllerKind = Field(description="Controller kind assigned to every entity on the side.")
+    name: str = Field(min_length=1, max_length=80, description="Participant display name.")
+
+
+class GameCreationStartRequest(BaseModel):
+    """Atomic scenario and controller assignment request."""
+
+    scenario: GameCreationScenario = Field(description="Preset or composed scenario selection.")
+    side_a: GameCreationSideRequest = Field(description="Controller assignment for the hero side.")
+    side_b: GameCreationSideRequest = Field(description="Controller assignment for the opposition side.")
+    opening_side: GameCreationOpeningSide = Field(
+        default="initiative",
+        description="Whether rolled initiative, Side A, or Side B opens combat.",
+    )
+    codex_lease_seconds: float = Field(
+        default=600.0,
+        gt=0,
+        le=86400,
+        description="Takeover lease duration for configured Codex sides.",
+    )
+
+
+class GameCreationSideResult(BaseModel):
+    """Resolved entities, ownership, and attach data for one side."""
+
+    side_id: Literal["side_a", "side_b"] = Field(description="Stable side identifier.")
+    title: str = Field(description="Resolved side configuration title.")
+    controller: GameCreationControllerKind = Field(description="Configured controller kind.")
+    participant_name: str = Field(description="Configured participant display name.")
+    entities: List[APIEntitySummary] = Field(description="Complete entity summaries belonging to the side.")
+    human_entity_uuids: List[str] = Field(
+        default_factory=list,
+        description="Entity UUIDs a human participant may claim through game join.",
+    )
+    fallback_ai_session_id: Optional[str] = Field(
+        default=None,
+        description="External-AI session controlling the side or retained behind a Codex claim.",
+    )
+    codex_session_id: Optional[str] = Field(default=None, description="Configured Codex session UUID.")
+    takeover_claim_id: Optional[str] = Field(default=None, description="Configured Codex takeover claim UUID.")
+    takeover_expires_at: Optional[float] = Field(default=None, description="Codex claim expiry timestamp.")
+
+
+class GameCreationStartResponse(BaseModel):
+    """Resolved game, sides, sessions, and first external turn boundary."""
+
+    schema_version: int = Field(default=1, description="Game-creation contract schema version.")
+    scenario_kind: Literal["preset", "composed"] = Field(description="Scenario-selection kind used for the match.")
+    preset_arena_id: Optional[str] = Field(default=None, description="Historical preset identifier when selected.")
+    encounter_uuid: str = Field(description="Created encounter UUID.")
+    game_id: str = Field(description="Created active game UUID.")
+    encounter_name: str = Field(description="Created encounter display name.")
+    opening_side: GameCreationOpeningSide = Field(description="Applied initiative-opening policy.")
+    compatibility: CompatibilityReport = Field(description="Compatibility report used to admit the scenario.")
+    side_a: GameCreationSideResult = Field(description="Resolved Side A assignment.")
+    side_b: GameCreationSideResult = Field(description="Resolved Side B assignment.")
+    status: str = Field(description="Current encounter advancement status.")
+    entity_uuid: Optional[str] = Field(default=None, description="Entity waiting at the external turn boundary.")
+    entity_name: Optional[str] = Field(default=None, description="Entity name waiting at the external turn boundary.")
+    round: Optional[int] = Field(default=None, description="Current encounter round.")
+    turn_index: Optional[int] = Field(default=None, description="Current initiative index.")
+    ai_actions: List[CombatLogEntry] = Field(
+        default_factory=list,
+        description="Automated action log entries produced during startup advancement.",
+    )
+    new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for startup advancement.")
+    event_cursor_after: Optional[int] = Field(default=None, description="Event cursor after startup advancement.")
+    combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after startup advancement.")
+
+
+class AgentSessionEntityRow(BaseModel):
+    """Entity label owned by an AI-observable session.
+
+    Attributes:
+        entity_uuid: Controlled entity UUID.
+        entity_name: Controlled entity display name.
+        faction: Controlled entity faction, if any.
+        controller_type: Encounter controller type assigned to the entity.
+        is_active_actor: Whether this entity is currently the active actor.
+    """
+
+    entity_uuid: str = Field(description="Controlled entity UUID.")
+    entity_name: str = Field(description="Controlled entity display name.")
+    faction: Optional[str] = Field(default=None, description="Controlled entity faction, if any.")
+    controller_type: Optional[str] = Field(default=None, description="Encounter controller type assigned to the entity.")
+    is_active_actor: bool = Field(description="Whether this entity is currently the active actor.")
+
+
+class AgentSessionRow(BaseModel):
+    """Read-only AI session row for observer clients.
+
+    Attributes:
+        session_id: Stable session UUID.
+        player_type: Session player type such as ai or codex.
+        name: Session display name.
+        connection_status: Current connection status.
+        is_active_turn: Whether this session controls the active actor.
+        active_controlled_entity_uuid: Active actor UUID when controlled by this session.
+        active_controlled_entity_name: Active actor name when controlled by this session.
+        controlled_entities: Controlled entity labels.
+        agent_cursor: Current telemetry cursor for the session.
+        earliest_agent_cursor: Earliest retained telemetry cursor.
+        observation_cursor: Current subjective observation cursor when available.
+        current_epoch_id: Cached active epoch id when available.
+        takeover_claim_ids: Live takeover claims owned by this session.
+    """
+
+    session_id: str = Field(description="Stable session UUID.")
+    player_type: str = Field(description="Session player type such as ai or codex.")
+    name: str = Field(description="Session display name.")
+    connection_status: str = Field(description="Current connection status.")
+    is_active_turn: bool = Field(description="Whether this session controls the active actor.")
+    active_controlled_entity_uuid: Optional[str] = Field(
+        default=None,
+        description="Active actor UUID when controlled by this session.",
+    )
+    active_controlled_entity_name: Optional[str] = Field(
+        default=None,
+        description="Active actor name when controlled by this session.",
+    )
+    controlled_entities: List[AgentSessionEntityRow] = Field(description="Controlled entity labels.")
+    agent_cursor: int = Field(description="Current telemetry cursor for the session.")
+    earliest_agent_cursor: int = Field(description="Earliest retained telemetry cursor.")
+    observation_cursor: Optional[int] = Field(default=None, description="Current subjective observation cursor when available.")
+    current_epoch_id: Optional[str] = Field(default=None, description="Cached active epoch id when available.")
+    takeover_claim_ids: List[str] = Field(default_factory=list, description="Live takeover claims owned by this session.")
+
+
+class AgentSessionListResponse(BaseModel):
+    """Read-only AI session index for observer clients.
+
+    Attributes:
+        sessions: AI or Codex sessions that can expose agent telemetry.
+        active_game_id: Active game UUID, if any.
+        encounter_active: Whether the active game has an active encounter.
+    """
+
+    sessions: List[AgentSessionRow] = Field(description="AI or Codex sessions that can expose agent telemetry.")
+    active_game_id: Optional[str] = Field(default=None, description="Active game UUID, if any.")
+    encounter_active: bool = Field(description="Whether the active game has an active encounter.")
+
+
 class ControlledEntitiesResponse(BaseModel):
     """Response listing entities controlled by a session.
 
@@ -1190,7 +1541,7 @@ class ControlledEntitiesResponse(BaseModel):
     """
 
     session_id: str = Field(description="Session whose controlled entities are listed.")
-    controlled_entities: List[dict] = Field(description="Controlled entity summaries.")
+    controlled_entities: List[APIEntitySummary] = Field(description="Controlled entity summaries.")
 
 
 class AoEPreviewResult(BaseModel):
@@ -1310,6 +1661,8 @@ class ExecuteByIndexRequest(BaseModel):
         prefer_safe: Whether movement should prefer safe paths when available.
         return_available_actions: Whether to include recomputed action rows in
             the response.
+        include_state: Whether to include the full game state snapshot.
+        include_timing: Whether to include server-side route timing.
     """
 
     session_id: str = Field(description="Session performing the action.")
@@ -1324,6 +1677,14 @@ class ExecuteByIndexRequest(BaseModel):
     return_available_actions: bool = Field(
         default=True,
         description="Whether the response should include recomputed available actions.",
+    )
+    include_state: bool = Field(
+        default=True,
+        description="Whether the response should include the full game state snapshot.",
+    )
+    include_timing: bool = Field(
+        default=False,
+        description="Whether the response should include server-side route timing.",
     )
 
 
@@ -1340,6 +1701,41 @@ class ToggleHandlerRequest(BaseModel):
     entity_uuid: str = Field(description="Entity whose handler should be toggled.")
     enabled: bool = Field(description="Desired handler enabled state.")
 
+
+class APIResourcePool(BaseModel):
+    """Current and maximum values for a named finite resource."""
+
+    current: int = Field(description="Current resource value.")
+    max: int = Field(description="Maximum resource value.")
+
+
+class APIAvailableActions(AvailableActionsResult):
+    """Engine-discovered legal actions plus current resource summaries."""
+
+    actions_remaining: int = Field(description="Actions currently available.")
+    bonus_actions_remaining: int = Field(description="Bonus actions currently available.")
+    reactions_remaining: int = Field(description="Reactions currently available.")
+    extra_attacks_remaining: int = Field(description="Extra attacks currently available.")
+    spell_slots: Dict[str, APIResourcePool] = Field(
+        default_factory=dict,
+        description="Spell-slot pools keyed by slot level.",
+    )
+    resources: Dict[str, APIResourcePool] = Field(
+        default_factory=dict,
+        description="Named custom action resources.",
+    )
+
+
+class APIServerTiming(BaseModel):
+    """Server-side command phase timing returned on request."""
+
+    command_type: str = Field(description="Command category being measured.")
+    diagnostics_enabled: bool = Field(description="Whether detailed diagnostics were active.")
+    total_ms: float = Field(description="Total command time in milliseconds.")
+    phases: Dict[str, float] = Field(description="Accumulated phase durations in milliseconds.")
+    phase_counts: Dict[str, int] = Field(description="Invocation count for each measured phase.")
+    phase_max_ms: Dict[str, float] = Field(description="Maximum duration for each measured phase.")
+
 class ActionResult(BaseModel):
     """Result of an action execution.
 
@@ -1347,6 +1743,7 @@ class ActionResult(BaseModel):
         success: Whether the action execution succeeded.
         message: Human-readable action result.
         event_type: Domain event type emitted by the action, if any.
+        outcome_code: Stable machine-readable engine outcome, if any.
         event_data: Serialized domain event data, if any.
         entity_hp: Acting entity hit points after the action, if relevant.
         target_hp: Target entity hit points after the action, if relevant.
@@ -1357,6 +1754,7 @@ class ActionResult(BaseModel):
         combat_log_entries: Combat log entries generated by the action.
         available_actions: Updated available actions after execution.
         state: Full game-state snapshot after execution.
+        server_timing: Optional server-side route timing.
         event_cursor_after: Event-history cursor after all side effects.
         combat_log_cursor_after: Combat-log cursor after all side effects.
     """
@@ -1364,16 +1762,36 @@ class ActionResult(BaseModel):
     success: bool = Field(description="Whether the action execution succeeded.")
     message: str = Field(description="Human-readable action result.")
     event_type: Optional[str] = Field(default=None, description="Domain event type emitted by the action, if any.")
-    event_data: Optional[dict] = Field(default=None, description="Serialized domain event data, if any.")
+    outcome_code: Optional[str] = Field(
+        default=None,
+        description="Stable machine-readable engine outcome, if any.",
+    )
+    event_data: Optional[Dict[str, JsonValue]] = Field(
+        default=None,
+        description="Serialized terminal domain-event data, if any.",
+    )
     entity_hp: Optional[int] = Field(default=None, description="Acting entity hit points after the action, if relevant.")
     target_hp: Optional[int] = Field(default=None, description="Target entity hit points after the action, if relevant.")
     deaths: List[str] = Field(default_factory=list, description="Names of entities that died during the action.")
-    triggered_reactions: List[dict] = Field(default_factory=list, description="Reaction summaries triggered by the action.")
+    triggered_reactions: List[Dict[str, JsonValue]] = Field(
+        default_factory=list,
+        description="Structured reaction summaries triggered by the action.",
+    )
     turn_continues: bool = Field(default=True, description="Whether the acting entity's turn continues.")
     encounter_ended: bool = Field(default=False, description="Whether the encounter ended because of the action.")
-    combat_log_entries: List[dict] = Field(default_factory=list, description="Combat log entries generated by the action.")
-    available_actions: Optional[dict] = Field(default=None, description="Updated available actions after execution.")
+    combat_log_entries: List[CombatLogEntry] = Field(
+        default_factory=list,
+        description="Combat log entries generated by the action.",
+    )
+    available_actions: Optional[APIAvailableActions] = Field(
+        default=None,
+        description="Updated available actions after execution.",
+    )
     state: Optional[APIGameState] = Field(default=None, description="Full game-state snapshot after execution.")
+    server_timing: Optional[APIServerTiming] = Field(
+        default=None,
+        description="Server-side route timing when requested.",
+    )
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after all side effects.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after all side effects.")
 
@@ -1398,10 +1816,29 @@ class AdvanceEncounterResult(BaseModel):
     entity_name: Optional[str] = Field(default=None, description="Name of the next player-controlled entity, if any.")
     round: Optional[int] = Field(default=None, description="Current encounter round after advancing.")
     turn_index: Optional[int] = Field(default=None, description="Current turn index after advancing.")
-    ai_actions: List[dict] = Field(default_factory=list, description="Actions taken by automated controllers while advancing.")
+    ai_actions: List[CombatLogEntry] = Field(
+        default_factory=list,
+        description="Action log entries produced by automated controllers while advancing.",
+    )
     new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for newly generated logs.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after advancement.")
+
+
+class StartHumanSimulationResponse(AdvanceEncounterResult):
+    """Result of creating the standard human-versus-AI simulation.
+
+    Attributes:
+        ai_session_id: Session controlling the AI side.
+        encounter_uuid: Newly created encounter UUID.
+        hero_uuid: Human-controllable hero UUID, when present.
+        message: Human-readable setup summary.
+    """
+
+    ai_session_id: str = Field(description="Session controlling the AI side.")
+    encounter_uuid: str = Field(description="Newly created encounter UUID.")
+    hero_uuid: Optional[str] = Field(default=None, description="Human-controllable hero UUID, when present.")
+    message: str = Field(description="Human-readable setup summary.")
 
 
 class TakeoverRequest(BaseModel):
@@ -1481,9 +1918,15 @@ class EventHistoryResponse(BaseModel):
         total: Total number of stored events.
     """
 
+    generation_id: str = Field(description="EventQueue generation containing these events.")
     events: List[SerializeAsAny[Event]] = Field(description="Domain events in the requested cursor window.")
     count: int = Field(description="Number of returned events.")
     total: int = Field(description="Total number of stored events.")
+
+    @field_serializer("events")
+    def serialize_wire_events(self, events: List[Event]) -> List[Dict[str, Any]]:
+        """Serialize history through the same contract used by live streams."""
+        return [serialize_event(event) for event in events]
 
 
 class CombatLogHistoryResponse(BaseModel):
@@ -1495,6 +1938,41 @@ class CombatLogHistoryResponse(BaseModel):
         total: Total number of stored combat log entries.
     """
 
+    generation_id: str = Field(description="EventQueue generation paired with these log entries.")
     entries: List[CombatLogEntry] = Field(description="Combat log entries in the requested cursor window.")
     count: int = Field(description="Number of returned combat log entries.")
     total: int = Field(description="Total number of stored combat log entries.")
+
+
+class ReplicationProtocolIdentity(BaseModel):
+    """Identity of one compatible replication protocol and event history."""
+
+    generation_id: str = Field(description="Current EventQueue generation UUID.")
+    event_contract_version: int = Field(description="Generated event-contract version.")
+    event_contract_hash: str = Field(description="Generated event-contract content hash.")
+
+
+class EventContractSummary(BaseModel):
+    """Public identity and discriminators for the generated event contract."""
+
+    contract_version: int = Field(description="Generated event-contract version.")
+    contract_hash: str = Field(description="Generated event-contract content hash.")
+    event_types: List[str] = Field(description="All semantic event type values.")
+    wire_types: List[str] = Field(description="All concrete event wire discriminators.")
+
+
+class ReplicationBootstrapResponse(BaseModel):
+    """Atomic base state and cursors used to start or recover replication."""
+
+    protocol: ReplicationProtocolIdentity = Field(description="Protocol and history identity.")
+    event_cursor: int = Field(description="First event cursor not represented by the snapshot.")
+    combat_log_cursor: int = Field(description="First combat-log cursor not represented by the snapshot.")
+    state: APIGameState = Field(description="Authoritative public game-state snapshot.")
+    visibility: APIVisibilityResponse = Field(description="Current observer visibility snapshot.")
+    combat_log: List[CombatLogEntry] = Field(
+        description="Combat-log history represented by combat_log_cursor.",
+    )
+    session: Optional[SessionPingResponse] = Field(
+        default=None,
+        description="Current session status when a session was requested.",
+    )

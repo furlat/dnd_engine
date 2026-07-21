@@ -247,6 +247,29 @@ class ActionEconomy(BaseBlock):
         return [mod for mod in value.self_static.value_modifiers.values()
                 if mod.name is not None and "cost" in mod.name]
 
+    def current_speed(self) -> int:
+        """Return movement speed before spending movement or applying Dash.
+
+        Returns:
+            Current constrained speed including ordinary speed modifiers while
+            excluding turn expenditure and existing Dash budget modifiers.
+        """
+        excluded_modifier_uuids = {
+            modifier.uuid
+            for modifier in self.get_cost_modifiers("movement")
+        }
+        excluded_modifier_uuids.update(
+            modifier.uuid
+            for modifier in self.movement.self_static.value_modifiers.values()
+            if modifier.name == "Dashing"
+        )
+        return max(
+            0,
+            self.movement.normalized_score_excluding_static_modifiers(
+                excluded_modifier_uuids
+            ),
+        )
+
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount.
 

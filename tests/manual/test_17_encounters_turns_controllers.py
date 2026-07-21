@@ -9,7 +9,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventQueue
+from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent, SensoryUpdateReason
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AutoHitModifier, AutoHitStatus, DamageType
 from dnd.core.values import BaseValue
@@ -119,6 +119,42 @@ def make_melee_attack_auto_hit(entity: Entity) -> UUID:
 def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
     """Remove an explicit melee attack modifier from an entity."""
     entity.equipment.melee_attack_bonus.self_static.remove_modifier(modifier_uuid)
+
+
+def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
+    """A turn-start recompute reaches event-first subjective replication."""
+    reset_encounter_tutorial_state(width=8, height=3)
+    hero = create_goblin(name="Turn Observer", position=(1, 1), faction="heroes")
+    monster = create_skeleton(name="Turn Target", position=(5, 1), faction="monsters")
+    hero.senses.visible.clear()
+    hero.senses.seen.clear()
+    hero.senses.entities.clear()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        PassController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        first_actor=hero,
+    )
+    source_cursor = EventQueue.event_cursor()
+
+    encounter.start_turn()
+
+    updates = [
+        event
+        for _, event in EventQueue.iter_events_since(source_cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.phase == EventPhase.COMPLETION
+        and event.observer_uuid == hero.uuid
+        and event.update_reason == SensoryUpdateReason.TURN_START
+    ]
+    assert updates
+    assert (5, 1) in {
+        position
+        for update in updates
+        for position in update.seen_cells_added
+    }
+    assert EventQueue.get_events_by_type(EventType.SENSORY_UPDATE)
 
 
 def test_first_encounter_example_prints_turn_and_combat_log(capsys) -> None:

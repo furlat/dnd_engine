@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
+from ai.protocol.control import CommandResult, DecisionEpoch
+from dnd.core.base_conditions import ConditionAgencyDenial, ConditionRemovalTrigger
+
 
 class KnowledgeState(str, Enum):
     """Subjective knowledge state for a fact in the observation layer."""
@@ -17,12 +20,53 @@ class KnowledgeState(str, Enum):
     UNKNOWN = "unknown"
 
 
+class AdjacentOffset(str, Enum):
+    """Stable eight-neighbor offset keys for local spatial-domain knowledge."""
+
+    NEGATIVE_X_NEGATIVE_Y = "-1,-1"
+    NEGATIVE_X_ZERO_Y = "-1,0"
+    NEGATIVE_X_POSITIVE_Y = "-1,1"
+    ZERO_X_NEGATIVE_Y = "0,-1"
+    ZERO_X_POSITIVE_Y = "0,1"
+    POSITIVE_X_NEGATIVE_Y = "1,-1"
+    POSITIVE_X_ZERO_Y = "1,0"
+    POSITIVE_X_POSITIVE_Y = "1,1"
+
+    @property
+    def delta(self) -> Tuple[int, int]:
+        """Return the integer coordinate delta encoded by this key."""
+        dx, dy = self.value.split(",", maxsplit=1)
+        return int(dx), int(dy)
+
+
+class SpatialDomainKnowledge(str, Enum):
+    """Subjective validity of one coordinate adjacent to a known tile."""
+
+    VALID = "valid"
+    INVALID = "invalid"
+    UNKNOWN = "unknown"
+
+
 class ObservationFrameType(str, Enum):
     """Top-level frame categories emitted by the observation projector."""
 
     EVENT = "event"
     COMBAT_LOG = "combat_log"
     PATCH = "patch"
+    STATE_REPLACEMENT = "state_replacement"
+    DECISION_EPOCH = "decision_epoch"
+    COMMAND_RESULT = "command_result"
+
+
+class ObservationSourceKind(str, Enum):
+    """Causal source category for a subjective observation frame."""
+
+    ENGINE_EVENT = "engine_event"
+    COMBAT_LOG = "combat_log"
+    SENSORY_EVENT = "sensory_event"
+    CONTROLLER_COMMAND = "controller_command"
+    DECISION_EPOCH = "decision_epoch"
+    SESSION_CONTROL = "session_control"
 
 
 class ObservationPatchType(str, Enum):
@@ -35,6 +79,8 @@ class ObservationPatchType(str, Enum):
     OBJECT = "object"
     TILE = "tile"
     COMBAT_LOG = "combat_log"
+    DECISION_EPOCH = "decision_epoch"
+    COMMAND_RESULT = "command_result"
 
 
 class ObservationSessionState(BaseModel):
@@ -69,10 +115,15 @@ class ObservationEncounterState(BaseModel):
     name: str = Field(description="Encounter display name.")
     state: str = Field(description="Encounter lifecycle state.")
     round_number: int = Field(description="Current combat round.")
-    current_turn_index: int = Field(description="Current initiative index.")
+    current_turn_index: int = Field(description="Current subjective initiative index, or -1 when the active combatant is unknown.")
     current_entity_uuid: Optional[str] = Field(default=None, description="Current acting entity UUID when known.")
     current_entity_name: Optional[str] = Field(default=None, description="Current acting entity name when known.")
-    initiative_order: List[ObservationCombatantState] = Field(default_factory=list, description="Initiative rows visible or placeholdered for the session.")
+    turn_started_source_event_cursor: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Source event cursor of the known current turn-start boundary.",
+    )
+    initiative_order: List[ObservationCombatantState] = Field(default_factory=list, description="Initiative rows currently visible or controlled by the session.")
 
 
 class ObservationObserverState(BaseModel):
@@ -89,6 +140,39 @@ class ObservationObserverState(BaseModel):
     visible_object_uuids: List[str] = Field(default_factory=list, description="Object UUIDs currently visible to this observer.")
 
 
+class ObservationEffectProtection(BaseModel):
+    """Visible condition-owned protection against identified effects."""
+
+    protection_id: str = Field(description="Stable identity of the protection rule.")
+    blocked_effect_ids: List[str] = Field(
+        default_factory=list,
+        description="Stable effect identities fully blocked by the protection.",
+    )
+    source_condition_semantic_key: Optional[str] = Field(
+        default=None,
+        description="Stable visible condition type that supplied the protection.",
+    )
+
+
+class ObservationConditionFact(BaseModel):
+    """Visible runtime semantics for one active condition."""
+
+    semantic_key: str = Field(description="Stable condition type identity.")
+    removal_triggers: List[ConditionRemovalTrigger] = Field(
+        default_factory=list,
+        description="Visible state transitions that remove this condition.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.NONE,
+        description="Turn agency denied while this complete condition remains active.",
+    )
+    applied_source_event_cursor: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Source event cursor of the condition application boundary.",
+    )
+
+
 class ObservationEntityFact(BaseModel):
     """Subjective entity fact known by a session."""
 
@@ -99,9 +183,42 @@ class ObservationEntityFact(BaseModel):
     controlled: bool = Field(default=False, description="Whether the entity is controlled by the session.")
     position: Optional[Tuple[int, int]] = Field(default=None, description="Known or last-known grid position.")
     hp: Optional[int] = Field(default=None, description="Known current hit points.")
+    normal_hp: Optional[int] = Field(
+        default=None,
+        description="Known current restorable hit points before temporary protection.",
+    )
+    temporary_hp: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Known temporary hit points layered over normal hit points.",
+    )
     max_hp: Optional[int] = Field(default=None, description="Known maximum hit points.")
+    healing_blocked: Optional[bool] = Field(
+        default=None,
+        description="Whether the entity is currently unable to regain normal hit points.",
+    )
     ac: Optional[int] = Field(default=None, description="Known Armor Class.")
     conditions: List[str] = Field(default_factory=list, description="Known active condition names.")
+    condition_semantic_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Known stable active condition type keys; None means this detail is not currently known.",
+    )
+    condition_facts: Optional[List[ObservationConditionFact]] = Field(
+        default=None,
+        description="Visible typed lifecycle facts; None means condition details are not currently known.",
+    )
+    effect_protections: Optional[List[ObservationEffectProtection]] = Field(
+        default=None,
+        description="Visible typed protections; None means live protection details are unknown.",
+    )
+    is_concentrating: bool = Field(
+        default=False,
+        description="Whether the visible entity has a typed active concentration condition.",
+    )
+    damage_vulnerabilities: List[str] = Field(default_factory=list, description="Known damage types that are especially effective.")
+    damage_resistances: List[str] = Field(default_factory=list, description="Known damage types that are reduced.")
+    damage_immunities: List[str] = Field(default_factory=list, description="Known damage types that have no effect.")
+    creature_type: Optional[str] = Field(default=None, description="Known creature type when currently observable.")
     faction: Optional[str] = Field(default=None, description="Known faction label.")
     is_dead: Optional[bool] = Field(default=None, description="Known death state.")
 
@@ -135,6 +252,26 @@ class ObservationTileFact(BaseModel):
     directional_blocks_vision: Dict[str, bool] = Field(default_factory=dict, description="Visible directional vision blockers.")
     directional_blocks_light: Dict[str, bool] = Field(default_factory=dict, description="Visible directional light blockers.")
     directional_blocks_propagation: Dict[str, bool] = Field(default_factory=dict, description="Visible directional propagation blockers.")
+    adjacent_domain: Dict[AdjacentOffset, SpatialDomainKnowledge] = Field(
+        default_factory=dict,
+        description=(
+            "Subjective validity of adjacent coordinates; unknown reveals no "
+            "terrain or occupancy, while invalid records a perceived map boundary."
+        ),
+    )
+
+
+class ObservationStateReplacement(BaseModel):
+    """Complete subjective materialization carried by a control-boundary frame."""
+
+    session: ObservationSessionState = Field(description="Session state after the control transition.")
+    encounter: Optional[ObservationEncounterState] = Field(default=None, description="Subjective encounter state after the transition.")
+    observers: List[ObservationObserverState] = Field(default_factory=list, description="Complete controlled-observer set after the transition.")
+    known_entities: List[ObservationEntityFact] = Field(default_factory=list, description="Complete entity knowledge after the transition.")
+    known_objects: List[ObservationObjectFact] = Field(default_factory=list, description="Complete object knowledge after the transition.")
+    known_tiles: List[ObservationTileFact] = Field(default_factory=list, description="Complete tile knowledge after the transition.")
+    combat_logs: List[Dict[str, Any]] = Field(default_factory=list, description="Complete visible combat-log history after the transition.")
+    current_epoch: Optional[DecisionEpoch] = Field(default=None, description="Decision epoch after the transition, when already available.")
 
 
 class ObservationPatch(BaseModel):
@@ -154,6 +291,8 @@ class ObservationFrame(BaseModel):
 
     observation_cursor: int = Field(description="Session-local cursor after this frame is observed.")
     frame_type: ObservationFrameType = Field(description="Frame category.")
+    source_kind: Optional[ObservationSourceKind] = Field(default=None, description="Causal source category for this subjective frame.")
+    source_command_id: Optional[str] = Field(default=None, description="Controller command id that caused this frame, when applicable.")
     event_type: Optional[str] = Field(default=None, description="Source engine event type when this frame came from an event.")
     event_uuid: Optional[str] = Field(default=None, description="Source event UUID for debugging and reconciliation.")
     lineage_uuid: Optional[str] = Field(default=None, description="Source event lineage UUID for debugging and reconciliation.")
@@ -162,6 +301,12 @@ class ObservationFrame(BaseModel):
     source_combat_log_cursor: Optional[int] = Field(default=None, description="Raw combat-log cursor paired with this frame.")
     patches: List[ObservationPatch] = Field(default_factory=list, description="Patches produced by this frame.")
     combat_log: Optional[Dict[str, Any]] = Field(default=None, description="Filtered combat-log entry when visible to the session.")
+    state_replacement: Optional[ObservationStateReplacement] = Field(
+        default=None,
+        description="Complete subjective state replacement for rare session-control boundaries.",
+    )
+    decision_epoch: Optional[DecisionEpoch] = Field(default=None, description="Current decision epoch after this frame, if the session can act.")
+    command_result: Optional[CommandResult] = Field(default=None, description="Command result paired with this frame, when applicable.")
 
 
 class ObservationFramesResponse(BaseModel):
@@ -185,16 +330,29 @@ class ObservationSnapshot(BaseModel):
     known_entities: List[ObservationEntityFact] = Field(default_factory=list, description="Entity facts known to this session.")
     known_objects: List[ObservationObjectFact] = Field(default_factory=list, description="Object facts known to this session.")
     known_tiles: List[ObservationTileFact] = Field(default_factory=list, description="Tile facts known to this session.")
+    combat_logs: List[Dict[str, Any]] = Field(default_factory=list, description="Visible combat-log entries known to this session.")
+    current_epoch: Optional[DecisionEpoch] = Field(default=None, description="Current decision epoch when the session owns the active actor.")
 
 
-class ObservationMaterializedState(BaseModel):
-    """Mutable-style subjective state rebuilt from a snapshot and frames."""
+class SubjectiveWorldState(BaseModel):
+    """Canonical session-subjective world rebuilt from snapshots and frames."""
 
     observation_cursor: int = Field(description="Highest observation cursor applied to this materialized state.")
     session: ObservationSessionState = Field(description="Current session state.")
     encounter: Optional[ObservationEncounterState] = Field(default=None, description="Current encounter state.")
     observers: Dict[str, ObservationObserverState] = Field(default_factory=dict, description="Observer states keyed by observer UUID.")
-    known_entities: Dict[str, ObservationEntityFact] = Field(default_factory=dict, description="Known entity facts keyed by entity UUID.")
-    known_objects: Dict[str, ObservationObjectFact] = Field(default_factory=dict, description="Known object facts keyed by object UUID.")
-    known_tiles: Dict[str, ObservationTileFact] = Field(default_factory=dict, description="Known tile facts keyed by tile key.")
+    known_entities: Dict[str, ObservationEntityFact] = Field(
+        default_factory=dict,
+        description="Known entity facts keyed by entity UUID.",
+    )
+    known_objects: Dict[str, ObservationObjectFact] = Field(
+        default_factory=dict,
+        description="Known object facts keyed by object UUID.",
+    )
+    known_tiles: Dict[str, ObservationTileFact] = Field(
+        default_factory=dict,
+        description="Known tile facts keyed by tile key.",
+    )
     combat_logs: List[Dict[str, Any]] = Field(default_factory=list, description="Visible combat-log entries applied during replay.")
+    current_epoch: Optional[DecisionEpoch] = Field(default=None, description="Current legal decision epoch for this session.")
+    epoch_cursor: int = Field(default=0, description="Highest applied decision-epoch index.")

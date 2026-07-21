@@ -209,16 +209,16 @@ def test_forced_movement_uses_forced_event_spatial_entries_and_no_step_events() 
     ]
 
     assert isinstance(shove_event, ShoveEvent)
-    assert shove_event.push_distance == 20
-    assert shove_event.end_position == (5, 0)
-    assert target.position == (5, 0)
+    assert shove_event.push_distance == 10
+    assert shove_event.end_position == (3, 0)
+    assert target.position == (3, 0)
     assert target.action_economy.movement.normalized_score == target_movement_before
 
     assert len(forced_completions) == 1
     assert forced_completions[0].event_type == EventType.FORCED_MOVEMENT
-    assert forced_completions[0].actual_distance == 20
+    assert forced_completions[0].actual_distance == 10
     assert not any(event.event_type == EventType.STEP_MOVEMENT for event in events)
-    assert entered_positions == [(2, 0), (3, 0), (4, 0), (5, 0)]
+    assert entered_positions == [(2, 0), (3, 0)]
 
 
 def test_step_handlers_see_voluntary_movement_not_forced_movement() -> None:
@@ -280,5 +280,5 @@ def test_step_handlers_see_voluntary_movement_not_forced_movement() -> None:
 
     Shove(source_entity_uuid=shover.uuid, target_entity_uuid=target.uuid).apply()
 
-    assert target.position == (5, 0)
+    assert target.position == (3, 0)
     assert forced_steps == []

@@ -22,8 +22,7 @@ REQUIRED_SURFACES = {
     "dnd.maps.arena_layout": "product/game-mode architecture",
     "dnd.scenarios.gatehouse": "public tutorial support",
     "dnd.scenarios.controller_catalogue": "public tutorial support",
-    "dnd.scenarios.agent_tactical_training": "public tutorial support",
-    "dnd.scenarios.agent_decision_training": "public tutorial support",
+    "dnd.scenarios.ai_validation_arenas": "product/game-mode architecture",
     "server.event_stream.DndEventStream": "product/game-mode architecture",
     "server.live_replication": "public tutorial support",
     "server.event_server": "product/game-mode architecture",
@@ -31,9 +30,10 @@ REQUIRED_SURFACES = {
     "server.mapeditor_support": "product/game-mode architecture",
     "server.api_models": "product/game-mode architecture",
     "/home/tommaso/Dev/MapEditor": "product/game-mode architecture",
-    "ai.models": "product/game-mode architecture",
-    "ai.primitives": "product/game-mode architecture",
-    "ai.interface.LocalGameInterface": "product/game-mode architecture",
+    "ai.protocol": "product/game-mode architecture",
+    "ai.subjective.SubjectiveRuntime": "product/game-mode architecture",
+    "ai.policy.PolicyHost": "product/game-mode architecture",
+    "ai.codex_tools": "product/game-mode architecture",
     "data/mapeditor/maps/*.json": "generated/cache output to remove",
 }
 

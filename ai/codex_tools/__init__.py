@@ -1,21 +1,41 @@
-"""Typed CLI tools for hot Codex control of game sessions."""
+"""Persistent local runtime for direct Codex game control."""
 
 from ai.codex_tools.client import CodexToolClient
 from ai.codex_tools.contracts import (
-    ActionChoice,
-    ActionTargetChoice,
-    ActionsResult,
-    BriefResult,
+    TakeoverClaimInfo,
+    TakeoverEntityInfo,
+    TakeoverHeartbeatResult,
     ToolError,
-    WatchResult,
+)
+from ai.codex_tools.hot_runtime import (
+    HotCodexActionIndex,
+    HotCodexCommandView,
+    HotCodexEndTurnRequest,
+    HotCodexExecuteRequest,
+    HotCodexHealth,
+    HotCodexQueryRequest,
+    HotCodexQueryResult,
+    HotCodexRevision,
+    HotCodexSession,
+    HotCodexTurnIndex,
+    create_hot_codex_app,
 )
 
 __all__ = [
-    "ActionChoice",
-    "ActionTargetChoice",
-    "ActionsResult",
-    "BriefResult",
     "CodexToolClient",
+    "HotCodexActionIndex",
+    "HotCodexCommandView",
+    "HotCodexEndTurnRequest",
+    "HotCodexExecuteRequest",
+    "HotCodexHealth",
+    "HotCodexQueryRequest",
+    "HotCodexQueryResult",
+    "HotCodexRevision",
+    "HotCodexSession",
+    "HotCodexTurnIndex",
+    "TakeoverClaimInfo",
+    "TakeoverEntityInfo",
+    "TakeoverHeartbeatResult",
     "ToolError",
-    "WatchResult",
+    "create_hot_codex_app",
 ]

@@ -234,6 +234,37 @@ class HealthConfig(BaseModel):
     resistances: List[DamageType] = Field(default_factory=list, description="Damage types that halve incoming damage.")
     immunities: List[DamageType] = Field(default_factory=list, description="Damage types that reduce incoming damage to zero.")
 
+
+class DamageApplicationPreview(BaseModel):
+    """Immutable preview of one damage packet after defenses.
+
+    Attributes:
+        mitigated_damage: Damage after type multipliers and flat reduction.
+        temporary_hit_point_damage: Temporary hit points that would be consumed.
+        normal_hit_point_damage: Normal hit points that would be lost.
+        applied_damage: Total positive damage that would actually be absorbed or lost.
+    """
+
+    mitigated_damage: int = Field(
+        ge=0,
+        description="Damage after type multipliers and flat reduction, before hit-point pools.",
+    )
+    temporary_hit_point_damage: int = Field(
+        ge=0,
+        description="Temporary hit points that would be consumed.",
+    )
+    normal_hit_point_damage: int = Field(
+        ge=0,
+        description="Normal hit points that would be lost after temporary hit points and caps.",
+    )
+
+    @computed_field
+    @property
+    def applied_damage(self) -> int:
+        """Return damage actually absorbed by temporary or normal hit points."""
+        return self.temporary_hit_point_damage + self.normal_hit_point_damage
+
+
 class Health(BaseBlock):
     """Entity health state and damage/healing primitives.
 
@@ -405,42 +436,56 @@ class Health(BaseBlock):
         else:
             return 1
 
-    def _apply_damage_after_multiplier(self, damage_after_multiplier: int, source_entity_uuid: UUID) -> int:
-        """Apply already-multiplied damage to temporary HP and HP.
+    def _preview_damage_after_multiplier(
+        self,
+        damage_after_multiplier: int,
+        normal_hit_point_damage_cap: Optional[int] = None,
+    ) -> DamageApplicationPreview:
+        """Preview already-mitigated damage against current hit-point pools.
 
         Args:
             damage_after_multiplier: Damage after type multipliers and flat
                 damage reduction.
-            source_entity_uuid: UUID of the entity dealing damage.
+            normal_hit_point_damage_cap: Optional maximum normal hit points
+                this packet may remove after mitigation.
 
         Returns:
-            Actual hit point damage after temporary hit points absorb damage.
+            Immutable preview of temporary and normal hit-point loss.
         """
         current_temporary_hit_points = self.temporary_hit_points.score
         if current_temporary_hit_points < 0:
             raise ValueError(f"Temporary Hit Points must be greater than 0 instead of {current_temporary_hit_points}")
-        residual_damage = damage_after_multiplier - current_temporary_hit_points
-        damage_to_temporaty_hp = current_temporary_hit_points if residual_damage > 0 else damage_after_multiplier
-        self.remove_temporary_hit_points(damage_to_temporaty_hp, source_entity_uuid)
-        if residual_damage > 0:
-            self.add_damage(residual_damage)
-            return residual_damage
-        return 0
+        temporary_hit_point_damage = min(current_temporary_hit_points, damage_after_multiplier)
+        normal_hit_point_damage = max(0, damage_after_multiplier - temporary_hit_point_damage)
+        if normal_hit_point_damage_cap is not None:
+            normal_hit_point_damage = min(
+                normal_hit_point_damage,
+                max(0, normal_hit_point_damage_cap),
+            )
+        return DamageApplicationPreview(
+            mitigated_damage=damage_after_multiplier,
+            temporary_hit_point_damage=temporary_hit_point_damage,
+            normal_hit_point_damage=normal_hit_point_damage,
+        )
 
-    def take_damage_components(self, components: List[Tuple[int, DamageType]], source_entity_uuid: UUID) -> int:
-        """Apply mixed typed damage components as one damage event.
+    def _apply_damage_preview(
+        self,
+        preview: DamageApplicationPreview,
+        source_entity_uuid: UUID,
+    ) -> int:
+        """Apply a preview produced against the current health state."""
+        if preview.temporary_hit_point_damage > 0:
+            self.remove_temporary_hit_points(preview.temporary_hit_point_damage, source_entity_uuid)
+        if preview.normal_hit_point_damage > 0:
+            self.add_damage(preview.normal_hit_point_damage)
+        return preview.normal_hit_point_damage
 
-        Args:
-            components: Damage amounts paired with their damage types.
-            source_entity_uuid: UUID of the entity dealing damage.
-
-        Returns:
-            Actual hit point damage after per-type multipliers, flat damage
-            reduction, and temporary hit points.
-
-        Raises:
-            ValueError: If a damage amount is negative or a type is invalid.
-        """
+    def preview_damage_components(
+        self,
+        components: List[Tuple[int, DamageType]],
+        normal_hit_point_damage_cap: Optional[int] = None,
+    ) -> DamageApplicationPreview:
+        """Preview mixed typed damage without mutating health state."""
         total_after_multiplier = 0
         for damage, damage_type in components:
             if damage < 0:
@@ -449,9 +494,62 @@ class Health(BaseBlock):
                 raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
             total_after_multiplier += max(0, int(damage * self.damage_multiplier(damage_type)))
         damage_after_multiplier = max(0, total_after_multiplier - self.damage_reduction.score)
-        return self._apply_damage_after_multiplier(damage_after_multiplier, source_entity_uuid)
+        return self._preview_damage_after_multiplier(
+            damage_after_multiplier,
+            normal_hit_point_damage_cap,
+        )
 
-    def take_damage(self, damage: int, damage_type: DamageType, source_entity_uuid: UUID) -> int:
+    def take_damage_components(
+        self,
+        components: List[Tuple[int, DamageType]],
+        source_entity_uuid: UUID,
+        normal_hit_point_damage_cap: Optional[int] = None,
+    ) -> int:
+        """Apply mixed typed damage components as one damage event.
+
+        Args:
+            components: Damage amounts paired with their damage types.
+            source_entity_uuid: UUID of the entity dealing damage.
+            normal_hit_point_damage_cap: Optional maximum normal hit points
+                this packet may remove after mitigation.
+
+        Returns:
+            Actual hit point damage after per-type multipliers, flat damage
+            reduction, and temporary hit points.
+
+        Raises:
+            ValueError: If a damage amount is negative or a type is invalid.
+        """
+        preview = self.preview_damage_components(components, normal_hit_point_damage_cap)
+        return self._apply_damage_preview(preview, source_entity_uuid)
+
+    def preview_damage(
+        self,
+        damage: int,
+        damage_type: DamageType,
+        normal_hit_point_damage_cap: Optional[int] = None,
+    ) -> DamageApplicationPreview:
+        """Preview one typed damage amount without mutating health state."""
+        if damage < 0:
+            raise ValueError(f"Damage must be greater than 0 instead of {damage}")
+        if not isinstance(damage_type, DamageType):
+            raise ValueError(f"Damage type must be one of the following: {[candidate.value for candidate in DamageType]} instead of {damage_type}")
+        damage_after_multiplier = max(
+            0,
+            int(damage * self.damage_multiplier(damage_type)) - self.damage_reduction.score,
+        )
+        return self._preview_damage_after_multiplier(
+            damage_after_multiplier,
+            normal_hit_point_damage_cap,
+        )
+
+    def take_damage(
+        self,
+        damage: int,
+        damage_type: DamageType,
+        source_entity_uuid: UUID,
+        normal_hit_point_damage_cap: Optional[int] = None,
+    ) -> int:
         """
         Apply damage to the entity, considering resistances and temporary hit points.
 
@@ -459,17 +557,14 @@ class Health(BaseBlock):
             damage (int): The amount of damage to apply.
             damage_type (damage_types): The type of damage being dealt.
             source_entity_uuid (UUID): The UUID of the entity dealing the damage.
+            normal_hit_point_damage_cap: Optional maximum normal hit points
+                this packet may remove after mitigation.
 
         Raises:
             ValueError: If damage is less than 0 or if the damage type is invalid.
         """
-        if damage < 0:
-            raise ValueError(f"Damage must be greater than 0 instead of {damage}")
-        if not isinstance(damage_type, DamageType):
-            raise ValueError(f"Damage type must be one of the following: {[damage.value for damage in DamageType]} instead of {damage_type}")
-        damage_after_absorption = damage
-        damage_after_multiplier = max(0,int(damage_after_absorption * self.damage_multiplier(damage_type)) - self.damage_reduction.score)
-        return self._apply_damage_after_multiplier(damage_after_multiplier, source_entity_uuid)
+        preview = self.preview_damage(damage, damage_type, normal_hit_point_damage_cap)
+        return self._apply_damage_preview(preview, source_entity_uuid)
 
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).

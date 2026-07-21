@@ -244,7 +244,7 @@ def test_eb_17_010_create_caster_wires_generic_spellcaster_state() -> None:
     action_names = action_template_names(caster)
     hit_dice = caster.health.hit_dices[0]
     shield_handler = caster.get_event_handler_by_name("Shield")
-    expected_spell_slots = {1: 4, 2: 3, 3: 3, 4: 2, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1}
+    expected_spell_slots = {1: 4, 2: 3, 3: 2, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0}
     expected_spell_actions = {
         "Fire Bolt",
         "Magic Missile",

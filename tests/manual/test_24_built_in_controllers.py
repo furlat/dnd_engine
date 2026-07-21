@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 from dnd.controller import (
-    AIAgentController,
     CodexController,
     ExternalAIController,
     HumanController,
@@ -11,7 +10,6 @@ from dnd.controller import (
 )
 from dnd.encounter import TurnState
 from dnd.scenarios.controller_catalogue import (
-    RecordingTurnRunner,
     create_controller_pair,
     make_turn_context,
     reset_controller_catalogue_state,
@@ -26,24 +24,21 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         HumanController(source_entity_uuid=uuid4()),
         CodexController(source_entity_uuid=uuid4()),
         PassController(source_entity_uuid=uuid4()),
-        AIAgentController(source_entity_uuid=uuid4()),
+        ExternalAIController(source_entity_uuid=uuid4()),
     ]
-    runner = RecordingTurnRunner()
 
     assert [controller.controller_type for controller in controllers] == [
         "human",
         "codex",
         "pass",
-        "ai_agent",
+        "external_ai",
     ]
-    assert runner.run_count == 0
     assert callable(create_controller_pair)
     assert callable(make_turn_context)
     assert callable(start_ordered_controller_encounter)
 
     readout_lines = [
         f"controllers: {[controller.controller_type for controller in controllers]}",
-        f"runner: type={runner.__class__.__name__}, run_count={runner.run_count}",
         (
             "catalogue functions: "
             f"pair={callable(create_controller_pair)}, "
@@ -52,8 +47,7 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         ),
     ]
     expected_lines = [
-        "controllers: ['human', 'codex', 'pass', 'ai_agent']",
-        "runner: type=RecordingTurnRunner, run_count=0",
+        "controllers: ['human', 'codex', 'pass', 'external_ai']",
         "catalogue functions: pair=True, context=True, encounter=True",
     ]
 
@@ -61,7 +55,6 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
 
 def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
     """Human and Codex controllers mark turns that need outside decisions."""
@@ -231,65 +224,6 @@ def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
     expected_lines = [
         "pass turn: status=waiting_for_human, next=Controller Hero, monster_turns=1, acted=True",
         "current: actor=Controller Hero, turn_state=in_progress",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
-def test_ai_agent_controller_delegates_once_per_turn(capsys) -> None:
-    """Agent controllers run the bound turn runner once for each owned turn."""
-    reset_controller_catalogue_state()
-    hero, monster = create_controller_pair(monster_position=(4, 1))
-    runner = RecordingTurnRunner()
-    agent_controller = AIAgentController(source_entity_uuid=monster.uuid)
-    agent_controller.set_agent(runner)
-    encounter = start_ordered_controller_encounter(
-        hero,
-        monster,
-        PassController(source_entity_uuid=hero.uuid),
-        agent_controller,
-        first_actor=monster,
-    )
-
-    encounter.run_turn()
-
-    assert runner.run_count == 1
-    assert encounter.combatants[monster.uuid].turn_count == 1
-    assert encounter.get_current_entity() is hero
-    first_turn_count = encounter.combatants[monster.uuid].turn_count
-    first_current = encounter.get_current_entity()
-    assert first_current is not None
-    first_current_name = first_current.name
-
-    encounter.run_turn()
-    encounter.run_turn()
-
-    assert runner.run_count == 2
-    assert encounter.combatants[monster.uuid].turn_count == 2
-    second_current = encounter.get_current_entity()
-    assert second_current is not None
-
-    readout_lines = [
-        (
-            "first delegation: "
-            f"runner={runner.__class__.__name__}, "
-            f"run_count=1, "
-            f"monster_turns={first_turn_count}, "
-            f"current={first_current_name}"
-        ),
-        (
-            "second delegation: "
-            f"run_count={runner.run_count}, "
-            f"monster_turns={encounter.combatants[monster.uuid].turn_count}, "
-            f"current={second_current.name}"
-        ),
-    ]
-    expected_lines = [
-        "first delegation: runner=RecordingTurnRunner, run_count=1, monster_turns=1, current=Controller Hero",
-        "second delegation: run_count=2, monster_turns=2, current=Controller Hero",
     ]
 
     print("\n".join(readout_lines))
