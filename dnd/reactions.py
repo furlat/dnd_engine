@@ -3,6 +3,7 @@
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, WeaponSlot, StepMovementEvent
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
+from dnd.core.content import ContentKind
 from dnd.entity import Entity
 from uuid import UUID
 from typing import Optional
@@ -69,6 +70,8 @@ def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
     """
     return EventHandler(
         name="Opportunity Attack Handler",
+        semantic_key="reaction.opportunity_attack",
+        content_kind=ContentKind.REACTION,
         trigger_conditions=[Trigger(
             name="Opportunity Attack Trigger",
             event_type=EventType.STEP_MOVEMENT,

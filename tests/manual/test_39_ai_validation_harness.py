@@ -1,0 +1,565 @@
+"""Manual checks for the AI validation rotation harness."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import httpx
+import pytest
+
+from ai.codex_tools.client import CodexToolClient
+from ai.validation_harness import (
+    ValidationArenaInfo,
+    ValidationHarnessClient,
+    build_validation_schedule,
+)
+from ai.external_selfplay import run_external_selfplay
+from ai.protocol.control import ActionResolutionStatus
+from dnd.core.dice import fixed_dice_faces
+from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
+
+
+def validation_catalog_rows() -> list[dict[str, object]]:
+    """Return validation arena specs in API-like dictionary form."""
+    return [
+        {
+            "arena_id": spec.arena_id,
+            "title": spec.title,
+            "hero_role": spec.hero_role,
+            "tags": list(spec.tags),
+            "expected_pressure": list(spec.expected_pressure),
+            "map_notes": list(spec.map_notes),
+        }
+        for spec in list_ai_validation_arena_specs()
+    ]
+
+
+def test_validation_schedule_rotates_hero_and_monster_side_focuses() -> None:
+    """The default schedule alternates core player roles and monster-side slots."""
+    schedule = build_validation_schedule(validation_catalog_rows(), rounds=8)
+
+    assert [entry.focus for entry in schedule] == [
+        "sorcerer_hero",
+        "skeleton_side",
+        "barbarian_hero",
+        "skeleton_side",
+        "skirmish_hero",
+        "skeleton_side",
+        "resource_hero",
+        "environment_hero",
+    ]
+    assert [entry.mode for entry in schedule] == [
+        "human_hero",
+        "codex_monsters",
+        "human_hero",
+        "codex_monsters",
+        "human_hero",
+        "codex_monsters",
+        "human_hero",
+        "human_hero",
+    ]
+    assert len({entry.arena_id for entry in schedule}) == 8
+    assert "standard_skeleton_doors" in {entry.arena_id for entry in schedule}
+    assert "skeleton_anti_aoe_split" in {entry.arena_id for entry in schedule}
+    assert "caster_crossfire" in {entry.arena_id for entry in schedule}
+    assert "double_door_dark_hunt" in {entry.arena_id for entry in schedule}
+    assert "goblin_water_skirmish" in {entry.arena_id for entry in schedule}
+    assert "item_resource_gauntlet" in {entry.arena_id for entry in schedule}
+    assert "arcane_device_control" in {entry.arena_id for entry in schedule}
+    assert "skeleton_mark_focus_fire" in {entry.arena_id for entry in schedule}
+    assert all(a.arena_id != b.arena_id for a, b in zip(schedule, schedule[1:]))
+
+
+def test_validation_schedule_reaches_all_validation_arenas_when_extended() -> None:
+    """A longer schedule samples the full current arena catalog."""
+    catalog = validation_catalog_rows()
+    schedule = build_validation_schedule(catalog, rounds=len(catalog) * 2)
+
+    assert {entry.arena_id for entry in schedule} == {str(row["arena_id"]) for row in catalog}
+    assert all(a.arena_id != b.arena_id for a, b in zip(schedule, schedule[1:]))
+
+
+def test_validation_schedule_supports_offsets_without_repeating_first_arena() -> None:
+    """A start offset can resume the role cycle without immediate arena repetition."""
+    schedule = build_validation_schedule(validation_catalog_rows(), rounds=5, start_index=3)
+
+    assert [entry.focus for entry in schedule] == [
+        "skeleton_side",
+        "skirmish_hero",
+        "skeleton_side",
+        "resource_hero",
+        "environment_hero",
+    ]
+    assert all(a.arena_id != b.arena_id for a, b in zip(schedule, schedule[1:]))
+
+
+def test_validation_harness_client_lists_arenas_and_starts_scheduled_entry() -> None:
+    """The client uses the existing server validation endpoints."""
+    requests: list[tuple[str, str, dict[str, str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path, dict(request.url.params)))
+        if request.url.path == "/simulation/ai-validation-arenas":
+            return httpx.Response(200, json={"arenas": validation_catalog_rows()})
+        if request.url.path == "/simulation/start-ai-validation":
+            arena_id = request.url.params["arena_id"]
+            mode = request.url.params["mode"]
+            return httpx.Response(
+                200,
+                json={
+                    "status": "started",
+                    "mode": mode,
+                    "arena_id": arena_id,
+                    "arena_title": "Mock Arena",
+                    "ai_session_id": "ai-session",
+                    "codex_session_id": "codex-session" if mode == "codex_monsters" else None,
+                    "takeover_claim_id": "claim-id" if mode == "codex_monsters" else None,
+                    "encounter_uuid": "encounter-id",
+                    "hero_uuid": "hero-id",
+                },
+            )
+        return httpx.Response(404, json={"detail": "not found"})
+
+    http_client = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        base_url="http://testserver",
+    )
+    client = ValidationHarnessClient("http://testserver", client=http_client)
+
+    schedule = client.build_schedule(2)
+    result = client.start_entry(schedule[1])
+
+    assert [arena.arena_id for arena in client.list_arenas()][:2] == [
+        "standard_skeleton_doors",
+        "goblin_water_skirmish",
+    ]
+    assert schedule[1].mode == "codex_monsters"
+    assert result.status == "started"
+    assert result.mode == "codex_monsters"
+    assert result.arena_id == schedule[1].arena_id
+    assert result.ai_session_id == "ai-session"
+    assert result.codex_session_id == "codex-session"
+    assert result.takeover_claim_id == "claim-id"
+    assert ("POST", "/simulation/start-ai-validation", {"arena_id": schedule[1].arena_id, "mode": "codex_monsters"}) in requests
+
+
+def test_validation_harness_client_supports_context_manager() -> None:
+    """The harness client mirrors other tool clients in short smoke scripts."""
+    closed = False
+
+    class RecordingClient(httpx.Client):
+        def close(self) -> None:
+            nonlocal closed
+            closed = True
+            super().close()
+
+    http_client = RecordingClient(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"arenas": []})),
+        base_url="http://testserver",
+    )
+
+    with ValidationHarnessClient("http://testserver", client=http_client) as client:
+        assert client.list_arenas() == []
+
+    assert closed is False
+
+    owned_closed = False
+
+    class OwnedRecordingClient(httpx.Client):
+        def close(self) -> None:
+            nonlocal owned_closed
+            owned_closed = True
+            super().close()
+
+    owned_http = OwnedRecordingClient(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"arenas": []})),
+        base_url="http://testserver",
+    )
+    with ValidationHarnessClient("http://testserver", client=owned_http) as client:
+        client._owns_client = True
+        assert client.list_arenas() == []
+
+    assert owned_closed is True
+
+
+def test_validation_harness_waits_for_session_turn_boundary() -> None:
+    """Probe loops can wait until their human/Codex session is active."""
+    requests: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.url.path == "/game/status":
+            return httpx.Response(
+                200,
+                json={
+                    "active": True,
+                    "game_id": "game",
+                    "encounter_active": True,
+                    "active_entity_uuid": "hero",
+                    "sessions": [],
+                },
+            )
+        if request.url.path == "/session/session/ping":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "session_id": "session",
+                    "connection_status": "connected",
+                    "is_my_turn": True,
+                    "active_entity_uuid": "hero",
+                    "active_entity_name": "Hero",
+                    "controlled_entities": ["hero"],
+                },
+            )
+        return httpx.Response(404, json={"detail": "not found"})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://testserver")
+    client = ValidationHarnessClient("http://testserver", client=http_client)
+
+    result = client.wait_for_session_boundary("session", timeout_s=1, poll_interval_s=0)
+
+    assert result.status == "session_turn"
+    assert result.active_entity_uuid == "hero"
+    assert result.active_entity_name == "Hero"
+    assert result.samples == 1
+    assert ("GET", "/game/status") in requests
+    assert ("POST", "/session/session/ping") in requests
+
+
+def test_validation_harness_reports_finished_encounter_as_boundary_not_timeout() -> None:
+    """Completed validation games should not be mislabeled as probe timeouts."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/game/status":
+            return httpx.Response(
+                200,
+                json={
+                    "active": True,
+                    "game_id": "game",
+                    "encounter_active": False,
+                    "active_entity_uuid": None,
+                    "sessions": [],
+                },
+            )
+        if request.url.path == "/session/session/ping":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "session_id": "session",
+                    "connection_status": "connected",
+                    "is_my_turn": False,
+                    "active_entity_uuid": None,
+                    "active_entity_name": None,
+                    "controlled_entities": ["hero"],
+                },
+            )
+        return httpx.Response(404, json={"detail": "not found"})
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://testserver")
+    client = ValidationHarnessClient("http://testserver", client=http_client)
+
+    result = client.wait_for_session_boundary("session", timeout_s=1, poll_interval_s=0)
+
+    assert result.status == "encounter_ended"
+    assert result.samples == 1
+
+
+def test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands() -> None:
+    """The fast local runner drives both sides through subjective AI commands."""
+    with fixed_dice_faces(*([1] * 200)):
+        result = run_external_selfplay("sorcerer_barbarian_duel", max_commands=5)
+
+    assert result.arena_id == "sorcerer_barbarian_duel"
+    assert result.command_count == 5
+    assert result.session_ids_by_faction.keys() == {"heroes", "monsters"}
+    assert sum(1 for trace in result.traces if trace.snapshot_loaded) <= len(result.session_ids_by_faction)
+    assert any(not trace.snapshot_loaded for trace in result.traces[1:])
+    assert result.traces[0].actor_name == "Validation Duel Sorcerer"
+    assert [trace.template_name for trace in result.traces[:2]] == [
+        "Quickened Spell",
+        "Hold Person__slot_2",
+    ]
+    assert result.traces[0].command_status == "accepted"
+    assert result.traces[0].affordance_timing == {}
+    assert result.traces[0].reduction_timing == {}
+    assert result.traces[0].reduce_ms == 0
+    assert any(
+        step.node_path.endswith("Control/HostileControl")
+        for step in result.traces[0].policy_trace
+    )
+    assert any(
+        step.node_path.endswith("Pressure/DirectDamage")
+        for step in result.traces[0].policy_trace
+    )
+    assert any(
+        step.node_path.endswith("Routines/TransformThenAct")
+        for step in result.traces[0].policy_trace
+    )
+    assert any(
+        "TransformThenAct/Revalidate" in step.node_path
+        for step in result.traces[1].policy_trace
+    )
+    assert result.traces[0].server_timing
+    assert result.traces[0].deep_diagnostics_enabled is True
+    assert all(
+        trace.deep_diagnostics_enabled is False
+        for trace in result.traces[1:]
+    )
+    server_phases = result.traces[0].server_timing.get("phases")
+    assert isinstance(server_phases, dict)
+    assert "build.current_epoch_ms" in server_phases
+    action_phases = result.traces[0].action_server_timing.get("phases")
+    assert isinstance(action_phases, dict)
+    assert "execute_by_index_ms" in action_phases
+    assert all(not trace.action_server_timing for trace in result.traces[1:])
+    assert result.traces[0].command_http_ms is not None
+    assert result.traces[0].command_followup_sync_ms is not None
+    assert result.traces[0].command_submit_ms is not None
+    assert result.traces[0].command_submit_ms >= (
+        result.traces[0].command_http_ms
+        + result.traces[0].command_followup_sync_ms
+    )
+    assert result.traces[0].pre_command_sync_ms is not None
+    assert result.traces[0].pre_command_frame_fetch_ms is not None
+    assert result.traces[0].pre_command_frame_apply_ms is not None
+    assert result.traces[0].followup_frame_fetch_ms is not None
+    assert result.traces[0].followup_frame_apply_ms is not None
+    assert result.traces[0].frame_fetch_ms == pytest.approx(
+        result.traces[0].pre_command_frame_fetch_ms
+        + result.traces[0].followup_frame_fetch_ms,
+        abs=0.002,
+    )
+    assert result.traces[0].frame_apply_ms == pytest.approx(
+        result.traces[0].pre_command_frame_apply_ms
+        + result.traces[0].followup_frame_apply_ms,
+        abs=0.002,
+    )
+    assert result.traces[0].frame_count == (
+        result.traces[0].pre_command_frame_count
+        + result.traces[0].followup_frame_count
+    )
+
+    held_barbarian = next(trace for trace in result.traces if trace.actor_name == "Validation Duel Barbarian")
+    reckless_rows = [row for row in held_barbarian.self_actions if row.template_name == "Reckless Attack"]
+
+    assert "Incapacitated" in held_barbarian.actor_conditions
+    assert held_barbarian.entity_action_count == 0
+    assert reckless_rows
+    assert all(not row.can_afford and row.target_count == 0 for row in reckless_rows)
+    assert held_barbarian.command_type == "end_turn"
+    assert held_barbarian.command_status == "accepted"
+
+
+def test_external_selfplay_uses_only_the_shared_policy_host() -> None:
+    """Self-play emits decisions from the shared policy host."""
+    with fixed_dice_faces(*([10] * 80)):
+        result = run_external_selfplay("sorcerer_barbarian_duel", max_commands=1)
+
+    trace = result.traces[0]
+    assert trace.reduce_ms == 0
+    assert trace.affordance_timing == {}
+    assert trace.reduction_timing == {}
+    assert any(step.node_path == "PolicyHost/ExecutionConstraints" for step in trace.policy_trace)
+
+
+def test_external_selfplay_continues_after_counterspell_interruption() -> None:
+    """Counterspell is an accepted command with a typed canceled outcome."""
+    with fixed_dice_faces(*([10] * 240)):
+        result = run_external_selfplay("reaction_counterspell_lab", max_commands=6)
+
+    assert result.arena_id == "reaction_counterspell_lab"
+    assert result.command_count > 1
+    assert result.status != "command_rejected"
+    interrupted = [trace for trace in result.traces if "spell_interruption" in trace.outcome_logical_tags]
+    assert interrupted
+    assert interrupted[0].command_status == "accepted"
+    assert interrupted[0].action_resolution == ActionResolutionStatus.CANCELED.value
+    assert interrupted[0].outcome_code == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+    assert interrupted[0].command_message == "The spell was interrupted."
+    assert interrupted[0].actor_economy is not None
+    assert interrupted[0].actor_economy.actions == 1
+    assert interrupted[0].actor_economy.spell_slots[3].current >= 1
+
+
+def test_external_selfplay_traces_spacing_reference_context() -> None:
+    """Positioning probes expose the entity and envelope facts behind holds."""
+    with fixed_dice_faces(*([10] * 260)):
+        result = run_external_selfplay("teleport_escape_skirmish", max_commands=30)
+
+    holds = [
+        trace
+        for trace in result.traces
+        if (
+            trace.reason == "hold_future_tactical_envelope"
+            and trace.spacing_floor_cells == 6
+        )
+    ]
+
+    assert holds
+    assert holds[0].reference_entity_name == "Validation Escape Barbarian"
+    assert holds[0].reference_entity_position is not None
+    assert holds[0].reference_entity_distance_cells is not None
+    assert holds[0].spacing_floor_cells == 6
+    assert holds[0].spacing_anchor_position == holds[0].actor_position
+
+
+def test_external_selfplay_traces_area_spell_affected_entities() -> None:
+    """Area-spell probes should expose the affected subjective target set."""
+    with fixed_dice_faces(*([1] * 260)):
+        result = run_external_selfplay("line_aoe_corridor", max_commands=1)
+
+    trace = result.traces[0]
+
+    assert trace.reason == "cast_visible_area_spell"
+    assert trace.template_name == "Fireball__slot_3"
+    assert trace.affected_enemy_count == 4
+    assert trace.affected_controlled_count == 0
+    assert set(trace.affected_entity_names) == {
+        "Validation Line Guard",
+        "Validation Line Archer",
+        "Validation Line Mage",
+        "Validation Off-Line Goblin",
+    }
+    assert "target_allocation" in trace.logical_tags
+
+
+def test_external_selfplay_seed_replays_semantic_decisions_and_outcomes() -> None:
+    """A retained seed reproduces action meaning and final actor health."""
+    first = run_external_selfplay(
+        "standard_skeleton_doors",
+        max_commands=10,
+        hero_first=True,
+        random_seed=8675313,
+    )
+    second = run_external_selfplay(
+        "standard_skeleton_doors",
+        max_commands=10,
+        hero_first=True,
+        random_seed=8675313,
+    )
+
+    def semantic_trace(result):
+        return [
+            (
+                trace.actor_name,
+                trace.reason,
+                trace.target_name,
+                tuple(trace.affected_entity_names),
+                trace.command_status,
+            )
+            for trace in result.traces
+        ]
+
+    assert semantic_trace(first) == semantic_trace(second)
+    assert first.final_hp_by_actor == second.final_hp_by_actor
+
+
+def test_external_selfplay_seed_replays_across_fresh_processes() -> None:
+    """A seed survives fresh UUID allocation after semantic trace normalization."""
+    script = """
+import json
+from ai.external_selfplay import run_external_selfplay
+from ai.policy.source import policy_source_snapshot
+
+result = run_external_selfplay(
+    "skeleton_anti_aoe_split",
+    max_commands=90,
+    hero_first=True,
+    random_seed=2026071406,
+)
+payload = {
+    "policy_hash": policy_source_snapshot().source_sha256,
+    "actor_uuids": sorted({trace.actor_uuid for trace in result.traces}),
+    "status": result.status,
+    "command_count": result.command_count,
+    "final_round": result.final_round,
+    "final_hp_by_actor": result.final_hp_by_actor,
+    "trace": [
+        {
+            "actor_name": trace.actor_name,
+            "round_number": trace.round_number,
+            "turn_index": trace.turn_index,
+            "semantic_key": trace.semantic_key,
+            "reason": trace.reason,
+            "target_name": trace.target_name,
+            "affected_entity_names": sorted(trace.affected_entity_names),
+            "extra_target_names": trace.extra_target_names,
+            "command_status": trace.command_status,
+        }
+        for trace in result.traces
+    ],
+}
+print("REPLAY_JSON=" + json.dumps(payload, sort_keys=True))
+"""
+
+    def replay(hash_seed: str) -> dict[str, object]:
+        environment = os.environ.copy()
+        environment["PYTHONHASHSEED"] = hash_seed
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[2],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            env=environment,
+        )
+        payload_line = next(
+            line
+            for line in completed.stdout.splitlines()
+            if line.startswith("REPLAY_JSON=")
+        )
+        return json.loads(payload_line.removeprefix("REPLAY_JSON="))
+
+    first = replay("101")
+    second = replay("202")
+    first_uuids = set(first.pop("actor_uuids"))  # type: ignore[arg-type]
+    second_uuids = set(second.pop("actor_uuids"))  # type: ignore[arg-type]
+
+    assert first_uuids.isdisjoint(second_uuids)
+    assert first == second
+
+
+def test_codex_tool_client_supports_direct_context_manager() -> None:
+    """Live smoke scripts can use CodexToolClient with standard context syntax."""
+    client = CodexToolClient("http://testserver")
+
+    with client as active:
+        assert active is client
+        assert client.client.is_closed is False
+
+    assert client.client.is_closed is True
+
+
+def test_validation_schedule_rejects_empty_nonzero_catalog() -> None:
+    """A non-empty schedule needs at least one arena row."""
+    try:
+        build_validation_schedule([], rounds=1)
+    except ValueError as exc:
+        assert "at least one arena" in str(exc)
+    else:
+        raise AssertionError("Expected missing arena catalog to fail")
+
+
+def test_validation_arena_info_accepts_tuple_fields_from_python_specs() -> None:
+    """The harness accepts both server JSON and local spec-shaped values."""
+    spec = list_ai_validation_arena_specs()[0]
+    arena = ValidationArenaInfo.model_validate(
+        {
+            "arena_id": spec.arena_id,
+            "title": spec.title,
+            "hero_role": spec.hero_role,
+            "tags": spec.tags,
+            "expected_pressure": spec.expected_pressure,
+            "map_notes": spec.map_notes,
+        }
+    )
+
+    assert arena.arena_id == "standard_skeleton_doors"
+    assert "door" in arena.tags

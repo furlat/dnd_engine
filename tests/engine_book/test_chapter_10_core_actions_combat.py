@@ -33,6 +33,7 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     ForcedMovementEvent,
+    MovementTrajectory,
     RangeType,
     SpatialChangeEvent,
     StepMovementEvent,
@@ -345,6 +346,8 @@ def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> 
         if step.source_entity_uuid == mover.uuid and step.phase == EventPhase.COMPLETION
     ]
     assert len(completed_steps) == 3
+    assert event.trajectory is MovementTrajectory.PATH
+    assert all(step.trajectory is MovementTrajectory.PATH for step in completed_steps)
 
 
 def test_eb_10_005_opportunity_attack_uses_reaction_on_step_movement() -> None:
@@ -415,7 +418,8 @@ def test_eb_10_017_lethal_opportunity_attack_stops_before_leaving_reach() -> Non
     assert len({step.uuid for step in effect_steps}) == 1
     assert all(step.from_position == (5, 6) for step in effect_steps)
     assert all(step.to_position == (5, 7) for step in effect_steps)
-    assert not completed_steps
+    assert len(completed_steps) == 1
+    assert completed_steps[0].committed is False
 
 
 def test_eb_10_006_disengage_prevents_opportunity_attack() -> None:
@@ -502,6 +506,20 @@ def test_eb_10_007_shove_forced_movement_does_not_trigger_opportunity_attack() -
     assert watcher.action_economy.reactions.normalized_score == 1
     assert EventQueue.get_events_by_type(EventType.FORCED_MOVEMENT)
 
+    assert event.combat_log is not None
+    forced_movement_logs = [
+        entry
+        for entry in event.combat_log.sub_entries
+        if entry.data.get("type") == "forced_movement"
+    ]
+    assert len(forced_movement_logs) == 1
+    forced_log = forced_movement_logs[0]
+    assert forced_log.data["cause"] == "shove"
+    assert forced_log.data["start_position"] == [3, 2]
+    assert forced_log.data["end_position"] == list(target.position)
+    assert "(3, 2) →" in forced_log.verbose
+    assert f"→ {target.position}" in forced_log.verbose
+
 
 def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> None:
     """EB-10-021: forced movement traverses terrain without voluntary steps."""
@@ -510,7 +528,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     target = strong_entity(name="Pushed Ally", position=(6, 5), faction="heroes", strength=10)
     Entity.update_all_entities_senses(max_distance=20)
 
-    create_spike_zone({(7, 5), (10, 5)})
+    create_spike_zone({(7, 5), (8, 5)})
     cursor = EventQueue.event_cursor()
     hp_before = target.get_hp()
     target_movement_before = target.action_economy.movement.normalized_score
@@ -518,7 +536,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     with fixed_terrain_damage(2):
         shove_event = Shove(source_entity_uuid=shover.uuid, target_entity_uuid=target.uuid).apply()
 
-    indexed_events = EventQueue.iter_events_since(cursor)
+    indexed_events = list(EventQueue.iter_events_since(cursor))
     new_events = [event for _, event in indexed_events]
     forced_completions = [
         event
@@ -543,19 +561,19 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
 
     assert isinstance(shove_event, ShoveEvent)
     assert shove_event.canceled is False
-    assert shove_event.push_distance == 20
-    assert shove_event.end_position == (10, 5)
-    assert target.position == (10, 5)
+    assert shove_event.push_distance == 10
+    assert shove_event.end_position == (8, 5)
+    assert target.position == (8, 5)
     assert shover.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.movement.normalized_score == target_movement_before
 
     assert len(forced_completions) == 1
     forced_event = forced_completions[0]
     assert forced_event.start_position == (6, 5)
-    assert forced_event.end_position == (10, 5)
-    assert forced_event.actual_distance == 20
+    assert forced_event.end_position == (8, 5)
+    assert forced_event.actual_distance == 10
     assert not any(event.event_type == EventType.STEP_MOVEMENT for event in new_events)
-    assert entered_effect_positions == [(7, 5), (8, 5), (9, 5), (10, 5)]
+    assert entered_effect_positions == [(7, 5), (8, 5)]
 
     assert len(damage_completions) == 2
     forced_completion_index = next(
@@ -603,12 +621,46 @@ def test_eb_10_022_shove_uses_videogame_bonus_action_forced_movement() -> None:
     assert event.target_passive == target_passive
     assert event.target_resistance_skill == "acrobatics"
     assert event.contest_success is True
-    assert event.push_distance == 20
-    assert event.end_position == (10, 5)
-    assert target.position == (10, 5)
+    assert event.push_distance == 10
+    assert event.end_position == (8, 5)
+    assert target.position == (8, 5)
     assert "Prone" not in target.active_conditions
     assert shover.action_economy.actions.normalized_score == actions_before
     assert shover.action_economy.bonus_actions.normalized_score == bonus_actions_before - 1
+
+
+def test_eb_10_024_bg3_shove_range_uses_strength_and_target_weight() -> None:
+    """EB-10-024: BG3 shove capacity and range use kilograms internally."""
+    reset_core_action_state()
+    shover = strong_entity(
+        name="Strength 14 Shove Actor",
+        position=(5, 5),
+        faction="heroes",
+        strength=14,
+    )
+    light_target = strong_entity(
+        name="Light Target",
+        position=(6, 5),
+        faction="monsters",
+        weight=40,
+    )
+    humanoid_target = strong_entity(
+        name="Humanoid Target",
+        position=(6, 6),
+        faction="monsters",
+        weight=150,
+    )
+    stronger_shover = strong_entity(
+        name="Strength 18 Shove Actor",
+        position=(5, 6),
+        faction="heroes",
+        strength=18,
+    )
+
+    assert Shove.get_max_shove_weight(shover) == 370
+    assert Shove.get_push_distance(shover, light_target) == 10
+    assert Shove.get_push_distance(shover, humanoid_target) == 5
+    assert Shove.get_push_distance(stronger_shover, humanoid_target) == 10
 
 
 def test_eb_10_008_dash_damage_healing_and_death_use_events() -> None:
@@ -867,6 +919,10 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
         DamageType.FIRE,
     ]
     assert hp_before - target.get_hp() == 9
+    assert event.total_damage == 9
+    assert event.combat_log is not None
+    assert event.combat_log.data["total_damage"] == 9
+    assert "{red:9} damage" in event.combat_log.compact
     take_damage_events = [
         event
         for event in EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
@@ -1170,6 +1226,8 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
         if step.source_entity_uuid == jumper.uuid and step.phase == EventPhase.COMPLETION
     ]
     assert len(completed_steps) == 3
+    assert jump_event.trajectory is MovementTrajectory.DIRECT_ARC
+    assert all(step.trajectory is MovementTrajectory.DIRECT_ARC for step in completed_steps)
     assert any(event.name == "Opportunity Attack" for event in EventQueue.get_events_by_type(EventType.ATTACK))
 
     reset_core_action_state()
@@ -1262,7 +1320,9 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
     assert len({step.uuid for step in effect_steps}) == 1
     assert all(step.from_position == (5, 6) for step in effect_steps)
     assert all(step.to_position == (5, 7) for step in effect_steps)
-    assert not completed_steps
+    assert len(completed_steps) == 1
+    assert completed_steps[0].committed is False
+    assert completed_steps[0].trajectory is MovementTrajectory.DIRECT_ARC
 
 
 if __name__ == "__main__":

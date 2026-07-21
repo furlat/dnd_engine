@@ -11,7 +11,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, ConditionTag
+from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, SkillName
 from dnd.core.gridmap import get_map
@@ -566,6 +566,29 @@ def test_eb_08_013_greater_invisibility_uses_stealth_checks_instead_of_reveal() 
     assert target.is_invisible is False
     assert greater.applied is False
     assert target.get_event_handler_by_name("Greater Invisibility: Stealth Check") is None
+
+
+def test_greater_invisibility_expires_after_ten_owner_turns() -> None:
+    """Greater Invisibility's declared ten-round limit uses condition expiry."""
+    reset_condition_state()
+    source = configured_entity("Source", (1, 1), "heroes")
+    target = configured_entity("Invisible Target", (2, 1), "heroes")
+    greater = GreaterInvisibilityEffect(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    target.add_condition(greater)
+
+    assert greater.duration.duration_type is DurationType.ROUNDS
+    assert greater.duration.duration == 10
+    for _ in range(9):
+        assert target.advance_duration_condition("Invisible") is False
+        assert target.is_invisible is True
+
+    assert target.advance_duration_condition("Invisible") is True
+    assert "Invisible" not in target.active_conditions
+    assert target.is_invisible is False
 
 
 def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance() -> None:

@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atomic Arena Baseline</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1118;
+      --surface: #151b24;
+      --surface-strong: #1b2330;
+      --border: #2b3544;
+      --text: #eef2f7;
+      --muted: #aab4c2;
+      --blue: #72b7ff;
+      --green: #75d69c;
+      --red: #ff8f82;
+      --gold: #e7bd68;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; }
+
+    .shell {
+      width: min(1560px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 26px 0 48px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2 { margin: 0; font-weight: 650; letter-spacing: 0; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 16px; }
+
+    .subtitle, .muted { color: var(--muted); font-size: 13px; }
+    .subtitle { margin-top: 5px; overflow-wrap: anywhere; }
+
+    .baseline-note {
+      margin: 0 0 14px;
+      border-left: 3px solid var(--gold);
+      padding: 9px 12px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .file-picker {
+      max-width: min(460px, 100%);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .file-picker::file-selector-button {
+      margin-right: 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 11px;
+      background: var(--surface-strong);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(112px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric, section {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .metric { min-height: 78px; padding: 12px; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { margin-top: 4px; font-size: 23px; font-weight: 650; overflow-wrap: anywhere; }
+    .good { color: var(--green); }
+    .bad { color: var(--red); }
+    .warn { color: var(--gold); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    section { min-width: 0; margin-bottom: 14px; padding: 14px; }
+    .wide { grid-column: 1 / -1; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    select, .filter {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 9px;
+      background: var(--surface-strong);
+      color: var(--text);
+    }
+
+    .table-wrap { max-width: 100%; overflow: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 7px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    td { color: #dfe6ef; }
+    .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+    .participant { min-width: 220px; overflow-wrap: anywhere; }
+
+    .pill {
+      display: inline-block;
+      margin: 1px 4px 1px 0;
+      border: 1px solid #3a4659;
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: var(--surface-strong);
+      color: #dbe3ed;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .chart {
+      display: block;
+      width: 100%;
+      height: 300px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #101620;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .swatch { width: 14px; height: 3px; border-radius: 1px; }
+
+    .facts {
+      display: grid;
+      grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+      gap: 7px 12px;
+      font-size: 13px;
+    }
+
+    .facts dt { color: var(--muted); }
+    .facts dd { margin: 0; overflow-wrap: anywhere; }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .empty { padding: 12px 0; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 1100px) {
+      .metrics { grid-template-columns: repeat(4, minmax(110px, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+    }
+
+    @media (max-width: 680px) {
+      .shell { width: min(100% - 20px, 1560px); padding-top: 18px; }
+      header { align-items: stretch; flex-direction: column; }
+      .metrics { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+      .section-head { align-items: stretch; flex-direction: column; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Atomic Arena Baseline</h1>
+        <div class="subtitle" id="source-label">No retained matrix loaded</div>
+      </div>
+      <input class="file-picker" id="file-input" type="file" accept="application/json,.json">
+    </header>
+
+    <p class="baseline-note">
+      This retained run compares 38 fixed arena pairs. It is regression and arena-balance evidence,
+      not a connected global ranking of hero or monster configurations.
+    </p>
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="layout">
+      <div>
+        <section>
+          <div class="section-head">
+            <h2>Standings</h2>
+            <select id="ledger-select" aria-label="Rating ledger"></select>
+          </div>
+          <div class="table-wrap" id="standings"></div>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <h2>Rating Time Series</h2>
+            <span class="muted" id="series-range"></span>
+          </div>
+          <canvas class="chart" id="series"></canvas>
+          <div class="legend" id="series-legend"></div>
+        </section>
+
+        <section>
+          <h2>Outcome Matrix</h2>
+          <div class="table-wrap" id="outcomes"></div>
+        </section>
+      </div>
+
+      <div>
+        <section>
+          <h2>Coverage</h2>
+          <dl class="facts" id="coverage"></dl>
+        </section>
+
+        <section>
+          <h2>Subjectivity</h2>
+          <dl class="facts" id="subjectivity"></dl>
+        </section>
+
+        <section>
+          <h2>Performance</h2>
+          <dl class="facts" id="performance"></dl>
+        </section>
+
+        <section>
+          <h2>Run Identity</h2>
+          <dl class="facts" id="identity"></dl>
+        </section>
+      </div>
+
+      <section class="wide">
+        <div class="section-head">
+          <h2>Arena Runtime</h2>
+          <span class="muted">Measured from retained match artifacts</span>
+        </div>
+        <div class="table-wrap" id="arena-performance"></div>
+      </section>
+
+      <section class="wide">
+        <div class="section-head">
+          <h2>Command Runtime Stages</h2>
+          <span class="muted">Client loop plus sampled server components</span>
+        </div>
+        <div class="table-wrap" id="stage-performance"></div>
+      </section>
+
+      <section class="wide">
+        <div class="section-head">
+          <h2>Failures</h2>
+          <span class="muted" id="failure-count"></span>
+        </div>
+        <div class="table-wrap" id="failures"></div>
+      </section>
+
+      <section class="wide">
+        <div class="section-head">
+          <h2>Artifacts</h2>
+          <input class="filter" id="artifact-filter" type="search" placeholder="Filter artifacts" aria-label="Filter artifacts">
+        </div>
+        <div class="table-wrap" id="artifacts"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const palette = ["#75d69c", "#72b7ff", "#e7bd68", "#ff8f82", "#c7a0ff", "#66d6d0", "#f3a3c4", "#b9d56b", "#f0a06b", "#aeb9ff", "#8fd0a8", "#e5d38a"];
+    const state = { projection: null, ledger: "setup_side", artifactQuery: "" };
+
+    document.getElementById("file-input").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const payload = JSON.parse(await file.text());
+      state.projection = normalizeProjection(payload);
+      document.getElementById("source-label").textContent = `${file.name} | ${state.projection.source?.matrix_id || "unknown matrix"}`;
+      render();
+    });
+
+    document.getElementById("ledger-select").addEventListener("change", event => {
+      state.ledger = event.target.value;
+      renderStandings();
+      renderSeries();
+    });
+
+    document.getElementById("artifact-filter").addEventListener("input", event => {
+      state.artifactQuery = event.target.value.trim().toLowerCase();
+      renderArtifacts();
+    });
+
+    window.addEventListener("resize", () => {
+      if (state.projection) renderSeries();
+    });
+
+    function normalizeProjection(payload) {
+      if (payload?.dashboard_projection?.status) return payload.dashboard_projection;
+      if (payload?.status && payload?.source) return payload;
+      return {
+        schema_version: 0,
+        source: {
+          kind: "legacy_elo_gauntlet_summary",
+          matrix_id: payload?.matrix_id,
+          schedule_hash: payload?.schedule_hash,
+          generated_at: payload?.generated_at,
+        },
+        status: {
+          mode: payload?.mode,
+          completion_status: payload?.completion_status,
+          gate_status: payload?.gate_status,
+          gate_reasons: payload?.gate_reasons || [],
+          scheduled_count: payload?.scheduled_count || 0,
+          completed_count: payload?.completed_count || 0,
+          eligible_count: payload?.eligible_count || 0,
+          skipped_rating_count: payload?.skipped_rating_count || 0,
+          failed_count: payload?.failed_count || 0,
+          pending_count: payload?.pending_count || 0,
+        },
+        coverage: payload?.coverage || {},
+        ledgers: payload?.ledgers || {},
+        outcomes: payload?.outcomes || [],
+        failures: payload?.failure_rows || payload?.failures || [],
+        subjectivity: payload?.subjectivity_summary || payload?.subjectivity || {},
+        performance: payload?.performance || {},
+        artifacts: payload?.artifacts || [],
+      };
+    }
+
+    function render() {
+      const projection = state.projection;
+      renderMetrics(projection?.status || {});
+      if (!projection) return;
+      const ledgers = projection.ledgers || {};
+      if (!ledgers[state.ledger]) state.ledger = Object.keys(ledgers)[0] || "setup_side";
+      renderLedgerSelect(ledgers);
+      renderStandings();
+      renderSeries();
+      renderOutcomes(projection.outcomes || []);
+      renderCoverage(projection.coverage || {});
+      renderSubjectivity(projection.subjectivity || {});
+      renderPerformance(projection.performance || {});
+      renderPerformanceTables(projection.performance || {});
+      renderIdentity(projection.source || {}, projection.status || {});
+      renderFailures(projection.failures || []);
+      renderArtifacts();
+    }
+
+    function renderMetrics(status) {
+      const rows = [
+        ["Scheduled", status.scheduled_count ?? 0],
+        ["Completed", status.completed_count ?? 0],
+        ["Eligible", status.eligible_count ?? 0],
+        ["Skipped", status.skipped_rating_count ?? 0],
+        ["Failed", status.failed_count ?? 0],
+        ["Pending", status.pending_count ?? 0],
+        ["Gate", status.gate_status || "not loaded"],
+      ];
+      document.getElementById("metrics").innerHTML = rows.map(([label, value]) => {
+        const tone = value === "passed" ? "good" : value === "failed" ? "bad" : label === "Pending" && value ? "warn" : "";
+        return `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value ${tone}">${escapeHtml(value)}</div></div>`;
+      }).join("");
+    }
+
+    function renderLedgerSelect(ledgers) {
+      const select = document.getElementById("ledger-select");
+      select.innerHTML = Object.keys(ledgers).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      select.value = state.ledger;
+    }
+
+    function renderStandings() {
+      const ledger = state.projection?.ledgers?.[state.ledger];
+      const rows = (ledger?.standings || []).map(row => [
+        row.rank,
+        `<span class="participant">${escapeHtml(row.display_name || row.participant_id)}</span>`,
+        numeric(row.rating, 1),
+        row.games,
+        `${row.wins}-${row.losses}-${row.draws}`,
+        signed(row.latest_delta),
+        (row.warnings || []).map(value => `<span class="pill">${escapeHtml(value)}</span>`).join(""),
+      ]);
+      document.getElementById("standings").innerHTML = table(["Rank", "Participant", "Rating", "Games", "W-L-D", "Delta", "Warnings"], rows, [2, 3, 4, 5]);
+    }
+
+    function renderSeries() {
+      const ledger = state.projection?.ledgers?.[state.ledger];
+      const points = ledger?.rating_series || [];
+      const canvas = document.getElementById("series");
+      const legend = document.getElementById("series-legend");
+      const range = document.getElementById("series-range");
+      const rect = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(640, Math.floor(rect.width * scale));
+      canvas.height = Math.floor(rect.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      legend.innerHTML = "";
+      range.textContent = "";
+      if (!points.length) {
+        drawEmptyChart(ctx, rect, "No rating updates");
+        return;
+      }
+
+      const byParticipant = new Map();
+      for (const point of points) {
+        if (!byParticipant.has(point.participant_id)) byParticipant.set(point.participant_id, []);
+        byParticipant.get(point.participant_id).push(point);
+      }
+      const standings = ledger?.standings || [];
+      const selectedIds = standings.slice(0, 12).map(row => row.participant_id);
+      const selected = selectedIds.length
+        ? selectedIds.map(id => [id, byParticipant.get(id) || []]).filter(([, rows]) => rows.length)
+        : [...byParticipant.entries()].slice(0, 12);
+      const drawnPoints = selected.flatMap(([, rows]) => rows);
+      const minMatch = Math.min(...drawnPoints.map(point => point.match_index));
+      const maxMatch = Math.max(...drawnPoints.map(point => point.match_index));
+      const minRating = Math.floor(Math.min(...drawnPoints.map(point => point.rating)) / 25) * 25 - 25;
+      const maxRating = Math.ceil(Math.max(...drawnPoints.map(point => point.rating)) / 25) * 25 + 25;
+      const plot = { left: 54, top: 20, right: rect.width - 18, bottom: rect.height - 34 };
+      drawAxes(ctx, plot, minMatch, maxMatch, minRating, maxRating);
+
+      selected.forEach(([participantId, rows], index) => {
+        const color = palette[index % palette.length];
+        const ordered = [...rows].sort((a, b) => a.match_index - b.match_index);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ordered.forEach((point, pointIndex) => {
+          const x = scaleValue(point.match_index, minMatch, maxMatch, plot.left, plot.right);
+          const y = scaleValue(point.rating, minRating, maxRating, plot.bottom, plot.top);
+          if (pointIndex === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        const standing = standings.find(row => row.participant_id === participantId);
+        const label = standing?.display_name || participantId;
+        legend.insertAdjacentHTML("beforeend", `<span class="legend-item"><span class="swatch" style="background:${color}"></span>${escapeHtml(label)}</span>`);
+      });
+      range.textContent = `matches ${minMatch}-${maxMatch} | ratings ${minRating}-${maxRating}`;
+    }
+
+    function drawAxes(ctx, plot, minMatch, maxMatch, minRating, maxRating) {
+      ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "#9da9b8";
+      ctx.strokeStyle = "#2b3544";
+      ctx.lineWidth = 1;
+      for (let step = 0; step <= 4; step += 1) {
+        const ratio = step / 4;
+        const y = plot.top + (plot.bottom - plot.top) * ratio;
+        const rating = Math.round(maxRating - (maxRating - minRating) * ratio);
+        ctx.beginPath();
+        ctx.moveTo(plot.left, y);
+        ctx.lineTo(plot.right, y);
+        ctx.stroke();
+        ctx.fillText(String(rating), 8, y + 4);
+      }
+      const xLabels = maxMatch === minMatch ? [minMatch] : [minMatch, Math.round((minMatch + maxMatch) / 2), maxMatch];
+      xLabels.forEach(value => {
+        const x = scaleValue(value, minMatch, maxMatch, plot.left, plot.right);
+        ctx.fillText(String(value), x - 8, plot.bottom + 19);
+      });
+    }
+
+    function drawEmptyChart(ctx, rect, label) {
+      ctx.fillStyle = "#9da9b8";
+      ctx.font = "13px Inter, system-ui, sans-serif";
+      ctx.fillText(label, 18, rect.height / 2);
+    }
+
+    function renderOutcomes(rows) {
+      const grouped = new Map();
+      for (const row of rows) {
+        const current = grouped.get(row.arena_id) || { arena: row.arena_id, matches: 0, heroes: 0, monsters: 0, draws: 0, unknown: 0, eligible: 0 };
+        current.matches += 1;
+        current[row.outcome in current ? row.outcome : "unknown"] += 1;
+        if (row.eligible) current.eligible += 1;
+        grouped.set(row.arena_id, current);
+      }
+      const outcomeRows = [...grouped.values()].sort((a, b) => a.arena.localeCompare(b.arena)).map(row => [
+        row.arena,
+        row.matches,
+        row.heroes,
+        row.monsters,
+        row.draws,
+        row.unknown,
+        row.eligible,
+        row.matches ? `${numeric(100 * row.heroes / row.matches, 1)}%` : "-",
+      ]);
+      document.getElementById("outcomes").innerHTML = table(["Arena", "Matches", "Hero", "Monster", "Draw", "Unknown", "Eligible", "Hero win"], outcomeRows, [1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    function renderCoverage(coverage) {
+      renderFacts("coverage", [
+        ["Arenas", `${(coverage.arena_ids_completed || []).length}/${(coverage.arena_ids_scheduled || []).length}`],
+        ["Seeds", (coverage.seeds_scheduled || []).join(", ") || "none"],
+        ["Side orders", (coverage.side_orders_scheduled || []).join(", ") || "none"],
+        ["Side counts", Object.entries(coverage.side_order_counts || {}).map(([key, value]) => `${key}: ${value}`).join(" | ") || "none"],
+        ["Tags", (coverage.tags_covered || []).join(", ") || "none"],
+        ["Missing arenas", (coverage.arena_ids_missing || []).join(", ") || "none"],
+        ["Roster hashes", (coverage.roster_hashes_covered || []).length],
+      ]);
+    }
+
+    function renderSubjectivity(subjectivity) {
+      renderFacts("subjectivity", [
+        ["Violations", subjectivity.violation_count ?? 0],
+        ["Affected matches", (subjectivity.violation_match_ids || []).length],
+        ["Audit statuses", Object.entries(subjectivity.status_counts || {}).map(([key, value]) => `${key}: ${value}`).join(" | ") || "none"],
+      ]);
+    }
+
+    function renderPerformance(performance) {
+      const traced = performance.traced_command_ms || {};
+      renderFacts("performance", [
+        ["Measured matches", performance.match_count ?? 0],
+        ["Raw artifacts", performance.artifact_match_count ?? 0],
+        ["Evaluator wall time", milliseconds(performance.evaluation_wall_elapsed_ms)],
+        ["Self-play time", milliseconds(performance.total_elapsed_ms)],
+        ["Evaluator overhead", milliseconds(performance.evaluator_overhead_ms)],
+        ["Self-play wall share", performance.simulation_time_share_pct == null ? "-" : `${numeric(performance.simulation_time_share_pct, 1)}%`],
+        ["Wall matches / minute", numeric(performance.wall_matches_per_minute, 2)],
+        ["Average match", milliseconds(performance.average_elapsed_ms)],
+        ["p95 match", milliseconds(performance.p95_elapsed_ms)],
+        ["Slowest match", milliseconds(performance.max_elapsed_ms)],
+        ["Commands", performance.total_command_count ?? 0],
+        ["Average commands", numeric(performance.average_command_count, 1)],
+        ["Actor-turns", performance.total_actor_turn_count ?? 0],
+        ["Average actor-turns", numeric(performance.average_actor_turn_count, 1)],
+        ["Average final round", numeric(performance.average_final_round, 2)],
+        ["Commands / second", numeric(performance.commands_per_second, 2)],
+        ["Actor-turns / second", numeric(performance.actor_turns_per_second, 2)],
+        ["Wall commands / second", numeric(performance.wall_commands_per_second, 2)],
+        ["Wall actor-turns / second", numeric(performance.wall_actor_turns_per_second, 2)],
+        ["Mean command loop", milliseconds(traced.mean)],
+        ["p95 command loop", milliseconds(traced.p95)],
+        ["Artifact errors", (performance.artifact_errors || []).length],
+      ]);
+    }
+
+    function renderPerformanceTables(performance) {
+      const arenaRows = (performance.arenas || []).map(row => [
+        row.arena_id,
+        row.match_count,
+        milliseconds(row.match_elapsed_ms?.mean),
+        milliseconds(row.match_elapsed_ms?.p95),
+        numeric(row.commands_per_match, 1),
+        numeric(row.actor_turns_per_match, 1),
+        numeric(row.final_round_per_match, 2),
+        numeric(row.commands_per_second, 2),
+        numeric(row.actor_turns_per_second, 2),
+      ]);
+      document.getElementById("arena-performance").innerHTML = table(
+        ["Arena", "Matches", "Mean", "p95", "Actions / match", "Turns / match", "Final round", "Actions / s", "Turns / s"],
+        arenaRows,
+        [1, 2, 3, 4, 5, 6, 7, 8],
+      );
+
+      const shares = performance.client_stage_share_pct || {};
+      const clientRows = Object.entries(performance.client_stage_ms || {}).map(([name, dist]) => [
+        "client",
+        name,
+        dist.count,
+        milliseconds(dist.mean),
+        milliseconds(dist.p95),
+        milliseconds(dist.p99),
+        shares[name] == null ? "-" : `${numeric(shares[name], 1)}%`,
+      ]);
+      const diagnosticRows = Object.entries(performance.diagnostic_components_ms || {}).map(([name, dist]) => [
+        "sampled server",
+        name,
+        dist.count,
+        milliseconds(dist.mean),
+        milliseconds(dist.p95),
+        milliseconds(dist.p99),
+        "-",
+      ]);
+      document.getElementById("stage-performance").innerHTML = table(
+        ["Layer", "Stage", "Samples", "Mean", "p95", "p99", "Command share"],
+        [...clientRows, ...diagnosticRows],
+        [2, 3, 4, 5, 6],
+      );
+    }
+
+    function renderIdentity(source, status) {
+      renderFacts("identity", [
+        ["Matrix", source.matrix_id || "unknown"],
+        ["Mode", status.mode || "unknown"],
+        ["Completion", status.completion_status || "unknown"],
+        ["Schedule hash", source.schedule_hash || "unknown"],
+        ["Generated", source.generated_at || "unknown"],
+        ["Gate reasons", (status.gate_reasons || []).join(", ") || "none"],
+      ]);
+    }
+
+    function renderFailures(rows) {
+      document.getElementById("failure-count").textContent = `${rows.length} retained`;
+      const body = rows.map(row => [
+        row.match_index ?? "",
+        row.arena_id || "",
+        row.status || "",
+        row.outcome || "unknown",
+        (row.reasons || []).map(value => `<span class="pill bad">${escapeHtml(value)}</span>`).join(""),
+        artifactLinks(row.artifact_paths || []),
+      ]);
+      document.getElementById("failures").innerHTML = table(["Index", "Arena", "Status", "Outcome", "Reasons", "Artifacts"], body, [0]);
+    }
+
+    function renderArtifacts() {
+      const rows = state.projection?.artifacts || [];
+      const query = state.artifactQuery;
+      const filtered = query ? rows.filter(row => JSON.stringify(row).toLowerCase().includes(query)) : rows;
+      const visible = filtered.slice(0, 500);
+      const body = visible.map(row => [
+        row.match_index ?? "",
+        row.arena_id || "",
+        row.kind || "run",
+        `<a href="${escapeHtml(artifactHref(row.path))}" target="_blank" rel="noreferrer">${escapeHtml(row.path)}</a>`,
+      ]);
+      const suffix = filtered.length > visible.length ? `<div class="muted">Showing ${visible.length} of ${filtered.length} matching artifacts.</div>` : "";
+      document.getElementById("artifacts").innerHTML = table(["Index", "Arena", "Kind", "Path"], body, [0]) + suffix;
+    }
+
+    function renderFacts(id, rows) {
+      document.getElementById(id).innerHTML = rows.map(([term, value]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd>`).join("");
+    }
+
+    function table(headers, rows, numericColumns = []) {
+      if (!rows.length) return `<div class="empty">No retained rows.</div>`;
+      const head = headers.map((header, index) => `<th class="${numericColumns.includes(index) ? "numeric" : ""}">${escapeHtml(header)}</th>`).join("");
+      const body = rows.map(row => `<tr>${row.map((cell, index) => `<td class="${numericColumns.includes(index) ? "numeric" : ""}">${cell ?? ""}</td>`).join("")}</tr>`).join("");
+      return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function artifactLinks(paths) {
+      return paths.map(path => `<a href="${escapeHtml(artifactHref(path))}" target="_blank" rel="noreferrer">run</a>`).join(" ") || "";
+    }
+
+    function artifactHref(path) {
+      const normalized = String(path).replaceAll("\\", "/");
+      return normalized.startsWith("ai/") ? normalized.slice(3) : normalized;
+    }
+
+    function scaleValue(value, sourceMin, sourceMax, targetMin, targetMax) {
+      if (sourceMax === sourceMin) return (targetMin + targetMax) / 2;
+      return targetMin + ((value - sourceMin) / (sourceMax - sourceMin)) * (targetMax - targetMin);
+    }
+
+    function numeric(value, digits = 0) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+      return Number(value).toFixed(digits);
+    }
+
+    function signed(value) {
+      if (value === null || value === undefined) return "-";
+      const number = Number(value);
+      return `${number > 0 ? "+" : ""}${number.toFixed(1)}`;
+    }
+
+    function milliseconds(value) {
+      if (value === null || value === undefined) return "-";
+      const number = Number(value);
+      return number >= 1000 ? `${(number / 1000).toFixed(2)} s` : `${number.toFixed(2)} ms`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    render();
+  </script>
+</body>
+</html>

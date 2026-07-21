@@ -12,7 +12,7 @@ Contains all rage/frenzy related code:
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -31,7 +31,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
-    Attack, AttackEvent,
+    Attack, AttackEvent, build_weapon_attack_outcome_profile,
 )
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
@@ -743,6 +743,10 @@ class FrenziedStrike(BaseAction):
             )
         ]
 
+    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
+        """Return the same actor-baseline weapon profile as a normal attack."""
+        return build_weapon_attack_outcome_profile(actor, self.weapon_slot)
+
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for frenzied strike."""
         source_entity = Entity.get(self.source_entity_uuid)
@@ -773,22 +777,16 @@ class FrenziedStrike(BaseAction):
         )
 
     def pre_validate(self) -> bool:
-        """Check if frenzied strike can be used."""
+        """Check whether Frenzied Strike can currently execute against its target."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
-            return False
-
-        if "Frenzied" not in entity.active_conditions:
-            return False
-
-        if not entity.action_economy.can_afford("bonus_actions", 1):
             return False
 
         weapon = entity.equipment._get_weapon_by_slot(self.weapon_slot)
         if weapon is None:
             return False
 
-        return True
+        return super().pre_validate()
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
         """Validate the frenzied strike."""

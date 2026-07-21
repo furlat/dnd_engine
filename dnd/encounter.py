@@ -25,7 +25,9 @@ from dnd.core.events import (
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
     DeathEvent,
+    SensoryUpdateReason,
 )
+from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
@@ -63,7 +65,8 @@ def _compute_perceivers(event: Event) -> Set[str]:
 
     positions: Set[Tuple[int, int]] = event.get_affected_positions()
 
-    for uuid in (event.source_entity_uuid, event.target_entity_uuid):
+    participant_uuids = event.get_participant_entity_uuids()
+    for uuid in participant_uuids:
         if uuid:
             pos = grid.get_entity_position(uuid)
             if pos:
@@ -73,11 +76,39 @@ def _compute_perceivers(event: Event) -> Set[str]:
     for pos in positions:
         perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
 
-    for uuid in (event.source_entity_uuid, event.target_entity_uuid):
+    for uuid in participant_uuids:
         if uuid:
             perceivers.add(str(uuid))
 
     return perceivers
+
+
+def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
+    """Capture which observers identify each entity participating in an event."""
+    grid = get_map()
+    grants: Dict[str, Set[str]] = {}
+    participant_uuids = {
+        entity_uuid
+        for entity_uuid in event.get_participant_entity_uuids()
+        if Entity.get(entity_uuid) is not None
+    }
+
+    for participant_uuid in participant_uuids:
+        observer_uuids = {participant_uuid}
+        position = grid.get_entity_position(participant_uuid)
+        if position is not None:
+            observer_uuids.update(grid.get_subscribers_at(position))
+
+        identified_by: Set[str] = set()
+        for observer_uuid in observer_uuids:
+            observer = Entity.get(observer_uuid)
+            if observer is None:
+                continue
+            if observer_uuid == participant_uuid or participant_uuid in observer.senses.entities:
+                identified_by.add(str(observer_uuid))
+        grants[str(participant_uuid)] = identified_by
+
+    return grants
 
 
 class EncounterState(str, Enum):
@@ -228,6 +259,11 @@ class Encounter(BaseObject):
     combat_log: List[CombatLogEntry] = Field(
         default_factory=list,
         description="Unified combat-log entries captured for the encounter.",
+    )
+    current_turn_started_source_event_cursor: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Objective event cursor of the current turn-start completion.",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -438,6 +474,7 @@ class Encounter(BaseObject):
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
         EventQueue.set_perceiver_computer(_compute_perceivers)
         EventQueue.set_revealed_computer(_compute_revealed_entities)
+        EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
 
         self._apply_surprise_reaction_lockouts()
 
@@ -480,6 +517,7 @@ class Encounter(BaseObject):
         EventQueue.set_combat_log_callback(None)
         EventQueue.set_perceiver_computer(None)
         EventQueue.set_revealed_computer(None)
+        EventQueue.set_identified_entity_observer_computer(None)
 
         self._notify_controllers_encounter_end()
 
@@ -557,14 +595,13 @@ class Encounter(BaseObject):
         """Run turn boundary hooks for a surprised combatant without allowing actions."""
         self.turn_state = TurnState.IN_PROGRESS
 
-        entity.on_turn_start(
+        event = entity.on_turn_start(
             encounter_uuid=self.uuid,
             round_number=self.round_number,
             turn_index=self.current_turn_index,
         )
-        entity.senses.collision_blocked.clear()
-        entity.senses.directional_collision_blocked.clear()
-        entity.update_entity_senses(max_distance=20)
+        self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
+        self._refresh_turn_start_senses(entity, event)
 
         if controller:
             controller.on_turn_start(entity, self._build_turn_context(entity))
@@ -621,17 +658,40 @@ class Encounter(BaseObject):
             round_number=self.round_number,
             turn_index=self.current_turn_index
         )
+        self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
 
-        entity.senses.collision_blocked.clear()
-        entity.senses.directional_collision_blocked.clear()
-
-        entity.update_entity_senses(max_distance=20)
+        self._refresh_turn_start_senses(entity, event)
 
         if controller:
             context = self._build_turn_context(entity)
             controller.on_turn_start(entity, context)
 
         return event
+
+    def _refresh_turn_start_senses(
+        self,
+        entity: Entity,
+        turn_start_event: TurnStartEvent,
+    ) -> None:
+        """Recompute one actor's senses and emit the complete subjective delta.
+
+        Args:
+            entity: Actor whose turn is starting.
+            turn_start_event: Completed turn event that caused the refresh.
+        """
+        before = capture_senses_snapshot(entity.senses)
+        entity.senses.collision_blocked.clear()
+        entity.senses.directional_collision_blocked.clear()
+        entity.update_entity_senses(max_distance=20)
+        after = capture_senses_snapshot(entity.senses)
+        emit_sensory_update_delta(
+            entity.senses,
+            entity.uuid,
+            turn_start_event,
+            before,
+            after,
+            SensoryUpdateReason.TURN_START,
+        )
 
     def end_turn(self) -> Optional[TurnEndEvent]:
         """

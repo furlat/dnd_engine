@@ -22,6 +22,7 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.modifiers import DamageType
+from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
 
 from dnd.items.weapons import create_dagger, create_quarterstaff
 from dnd.items.armors import create_cloth_shoes, create_robes, create_wizard_hat
@@ -42,7 +43,7 @@ class SorcererOriginChoice(str, Enum):
 
 def get_proficiency_bonus(level: int) -> int:
     """Returns proficiency bonus for character level."""
-    return 2 + (level - 1) // 4
+    return proficiency_bonus_for_level(level)
 
 
 def get_sorcery_points(level: int) -> int:
@@ -52,29 +53,7 @@ def get_sorcery_points(level: int) -> int:
 
 def get_sorcerer_spell_slots(level: int) -> Dict[int, int]:
     """SRD spell slot table for full casters (same as wizard)."""
-    TABLE: Dict[int, Dict[int, int]] = {
-        1: {1: 2},
-        2: {1: 3},
-        3: {1: 4, 2: 2},
-        4: {1: 4, 2: 3},
-        5: {1: 4, 2: 3, 3: 2},
-        6: {1: 4, 2: 3, 3: 3},
-        7: {1: 4, 2: 3, 3: 3, 4: 1},
-        8: {1: 4, 2: 3, 3: 3, 4: 2},
-        9: {1: 4, 2: 3, 3: 3, 4: 3, 5: 1},
-        10: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2},
-        11: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
-        12: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1},
-        13: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
-        14: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1},
-        15: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
-        16: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1},
-        17: {1: 4, 2: 3, 3: 3, 4: 3, 5: 2, 6: 1, 7: 1, 8: 1, 9: 1},
-        18: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1},
-        19: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 1, 8: 1, 9: 1},
-        20: {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 2, 8: 1, 9: 1},
-    }
-    return TABLE.get(level, TABLE[20])
+    return full_caster_spell_slots_for_level(level)
 
 
 def get_metamagic_count(level: int) -> int:

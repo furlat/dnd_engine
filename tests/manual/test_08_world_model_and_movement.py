@@ -305,6 +305,8 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
 
     assert forced_event.event_type == EventType.FORCED_MOVEMENT
     assert grid.get_entity_position(target_id) == (3, 0)
+    forced_log = forced_event.generate_combat_log()
+    assert "(1, 0) \u2192 (3, 0)" in forced_log.verbose
 
     forced_entered = [
         event

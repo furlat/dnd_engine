@@ -14,9 +14,30 @@ from dnd.core.base_block import BaseBlock
 
 BodyCategory = Literal["NakedBody", "NakedBody2", "NakedBody3"]
 HeadCategory = Literal["Head1", "Head9", "Head10", "Head16", "Head17", "Head22"]
+PresentationKind = Literal["layered", "placeholder"]
 
 
 class AppearanceConfig(BaseModel):
+    portrait_key: Optional[str] = Field(
+        default=None,
+        description="Stable authored-portrait key assigned by scenario composition.",
+    )
+    presentation_kind: PresentationKind = Field(
+        default="layered",
+        description="Renderer strategy for the actor body while full-entity assets are introduced.",
+    )
+    visual_scale: float = Field(
+        default=1.0,
+        gt=0,
+        le=4.0,
+        description="Presentation-only actor scale independent of the creature's rules size.",
+    )
+    placeholder_tint: int = Field(
+        default=0x36FF62,
+        ge=0,
+        le=0xFFFFFF,
+        description="RGB body tint used when presentation_kind is placeholder.",
+    )
     body_category: BodyCategory = Field(
         default="NakedBody",
         description="Renderer body taxonomy key used for the base creature layer.",
@@ -51,6 +72,26 @@ class AppearanceConfig(BaseModel):
 
 class Appearance(BaseBlock):
     name: str = Field(default="Appearance", description="Block name used in entity composition indexes.")
+    portrait_key: Optional[str] = Field(
+        default=None,
+        description="Stable authored-portrait key assigned by scenario composition.",
+    )
+    presentation_kind: PresentationKind = Field(
+        default="layered",
+        description="Renderer strategy for the actor body while full-entity assets are introduced.",
+    )
+    visual_scale: float = Field(
+        default=1.0,
+        gt=0,
+        le=4.0,
+        description="Presentation-only actor scale independent of the creature's rules size.",
+    )
+    placeholder_tint: int = Field(
+        default=0x36FF62,
+        ge=0,
+        le=0xFFFFFF,
+        description="RGB body tint used when presentation_kind is placeholder.",
+    )
     body_category: BodyCategory = Field(
         default="NakedBody",
         description="Renderer body taxonomy key used for the base creature layer.",

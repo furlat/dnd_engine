@@ -12,9 +12,8 @@ Current scenario modules:
 
 - `gatehouse.py`: playable encounter package.
 - `controller_catalogue.py`: built-in controller examples.
-- `agent_tactical_training.py`: local AI interface examples.
-- `agent_decision_training.py`: behavior-tree, state-machine, utility, and
-  composite decision examples.
+- `ai_validation_arenas.py`: deterministic arenas used by the shared agent
+  policy validation harness.
 
 This package is the natural place to add future map-editor-backed encounter
 fixtures: the map editor can export geometry, lights, terrain, props, and spawn

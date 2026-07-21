@@ -43,7 +43,13 @@ def compute_fov(
             return not is_blocking(x, y)
 
         first_row = Row(1, Fraction(-1), Fraction(1))
-        scan_iterative(first_row, reveal, is_wall, is_floor)
+        scan_iterative(
+            first_row,
+            reveal,
+            is_wall,
+            is_floor,
+            max_depth=math.floor(max_distance) if max_distance is not None else None,
+        )
 
 
 class Quadrant:
@@ -128,12 +134,23 @@ def scan_iterative(
     row: Row,
     reveal: Callable[[Tuple[int, int]], None],
     is_wall: Callable[[Optional[Tuple[int, int]]], bool],
-    is_floor: Callable[[Optional[Tuple[int, int]]], bool]
+    is_floor: Callable[[Optional[Tuple[int, int]]], bool],
+    max_depth: Optional[int] = None,
 ) -> None:
-    """Scan rows iteratively to avoid recursive shadowcasting depth."""
+    """Scan rows iteratively to avoid recursive shadowcasting depth.
+
+    Args:
+        row: First shadowcasting row.
+        reveal: Callback for cells accepted by the visibility scan.
+        is_wall: Callback identifying opaque cells.
+        is_floor: Callback identifying transparent cells.
+        max_depth: Optional cardinal row limit for a bounded-radius query.
+    """
     rows = [row]
     while rows:
         row = rows.pop()
+        if max_depth is not None and row.depth > max_depth:
+            continue
         prev_tile: Optional[Tuple[int, int]] = None
         for tile in row.tiles():
             if is_wall(tile) or is_symmetric(row, tile):

@@ -30,7 +30,7 @@ from server.event_server import (
 @pytest.fixture(autouse=True)
 def stub_external_ai_processes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep arena-session tutorial checks from spawning real AI subprocesses."""
-    monkeypatch.setattr(event_server.ai_process_manager, "start_external_melee_agent", lambda *_args: None)
+    monkeypatch.setattr(event_server.ai_process_manager, "start_external_agent", lambda *_args: None)
     monkeypatch.setattr(event_server.ai_process_manager, "stop_all", lambda: None)
 
 

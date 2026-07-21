@@ -81,6 +81,17 @@ class AITakeoverManager:
         """Return a claim by UUID."""
         return self._claims.get(claim_id)
 
+    def has_active_session_claim(
+        self,
+        session_id: UUID,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Return whether a live takeover claim belongs to a session."""
+        return any(
+            claim.session_id == session_id
+            for claim in self.active_claims(now)
+        )
+
     def claim(
         self,
         *,

@@ -140,6 +140,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     lever_action = PullLeverAction(
         source_entity_uuid=uuid4(),
         trap_handler_uuid=spike_handler.uuid,
+        trap_tile_uuids=[tile.uuid for tile in spike_tiles],
         template=True,
     )
     lever = TrapLever(

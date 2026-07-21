@@ -9,8 +9,20 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_actions import TargetType
-from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
+from dnd.core.base_actions import (
+    ActionTargetEffectBranchProfile,
+    ActionTargetEffectProfile,
+    OutcomeResolution,
+    TargetEffectDisposition,
+    TargetType,
+)
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionAgencyDenial,
+    ConditionRemovalTrigger,
+    ConditionTag,
+    DurationType,
+)
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent,
@@ -304,6 +316,29 @@ class HoldPerson(SpellAction):
         description="Maximum range for the target.",
     )
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Hold Person's save-based paralysis branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.hold_person",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.hold_person.paralyze",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    included_creature_types=frozenset({CreatureType.HUMANOID.value}),
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=("selected_target.condition.paralyzed",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.enchantment.HoldPersonEffect",
+                        "dnd.conditions.Paralyzed",
+                    }),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight, range, and humanoid targeting."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -343,30 +378,18 @@ class HoldPerson(SpellAction):
         dc = caster.spell_save_dc()
         concentration = self.ensure_concentration(execution_event)
 
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="wisdom",
-            save_dc=dc,
-            status_message=f"Requesting WIS save DC {dc}"
-        )
-
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
+        effect_event, _, success = self.resolve_saving_throw(
+            execution_event,
+            caster=caster,
+            target=target,
             ability_name="wisdom",
             dc=dc,
-            parent_event=effect_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        effect_event = effect_event.post(
-            save_success=success,
-            status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
         if success:
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
-                status_message=f"{self.name} - target saved (still concentrating)"
+                status_message=f"{self.name} - {target.name} saved"
             )
 
         hold_effect = HoldPersonEffect(
@@ -523,6 +546,29 @@ class HoldMonster(SpellAction):
                 targets.append(extra)
         return targets[:self.get_max_targets_for_level()]
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Hold Monster's save-based paralysis branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.hold_monster",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.hold_monster.paralyze",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=("selected_target.condition.paralyzed",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.enchantment.HoldMonsterEffect",
+                        "dnd.conditions.Paralyzed",
+                    }),
+                ),
+            ),
+        )
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight, range, and undead exclusion."""
         los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
@@ -560,20 +606,12 @@ class HoldMonster(SpellAction):
 
         concentration_condition = self.ensure_concentration(execution_event)
 
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
+        effect_event, _, success = self.resolve_saving_throw(
+            execution_event,
+            caster=caster,
+            target=target,
             ability_name="wisdom",
             dc=dc,
-            parent_event=execution_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="wisdom",
-            save_dc=dc,
-            save_success=success,
-            status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
         if success:
@@ -762,6 +800,14 @@ class SleepEffect(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup and spell interactions.",
     )
+    removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
+        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
+        description="Positive applied damage wakes this target.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Magical sleep removes the target's turn agency.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply Unconscious and register wake-on-damage cleanup."""
@@ -821,7 +867,7 @@ class SleepEffect(BaseCondition):
             name=f"Sleep Wake Handler ({target_uuid})",
             source_entity_uuid=target_uuid,
             trigger_conditions=[
-                Trigger(event_type=EventType.TAKE_DAMAGE, event_phase=EventPhase.EFFECT)
+                Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT)
             ],
             event_processor=wake_processor
         )
@@ -868,6 +914,26 @@ class Sleep(SpellAction):
         base_dice = 5
         upcast_bonus = max(0, self.cast_at_level - self.spell_level) * 2
         return (base_dice + upcast_bonus, 8)
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Sleep's automatic agency-denial condition for selected targets."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="control.sleep",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.sleep",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.sleep",),
+                    condition_semantic_keys=frozenset({
+                        "dnd.spells.enchantment.SleepEffect",
+                        "dnd.conditions.Unconscious",
+                    }),
+                ),
+            ),
+        )
 
     def get_all_targets(self) -> List[UUID]:
         """Select targets by current HP and cache the selection."""
@@ -1299,6 +1365,25 @@ class Bane(SpellAction):
     allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
 
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Bane's failed-save d20 penalty branch."""
+        if not isinstance(actor, Entity):
+            return None
+        return ActionTargetEffectProfile(
+            semantic_id="control.bane",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="control.bane.penalty",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="charisma",
+                    condition_fact_ids=("selected_target.condition.bane",),
+                    condition_semantic_keys=frozenset({"dnd.spells.enchantment.BaneEffect"}),
+                ),
+            ),
+        )
+
     def get_multi_target_count(self) -> Optional[int]:
         """Return the number of targets allowed by the slot level."""
         return 3 + self.get_upcast_bonus()
@@ -1381,6 +1466,22 @@ class Bless(SpellAction):
     )
     allow_same_target: bool = Field(default=False, description="Whether repeated targets are allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Action discovery target filter.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare Bless's automatic d20 support branch."""
+        _ = actor
+        return ActionTargetEffectProfile(
+            semantic_id="support.bless",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id="support.bless.bonus",
+                    disposition=TargetEffectDisposition.BENEFICIAL,
+                    resolution=OutcomeResolution.AUTOMATIC,
+                    condition_fact_ids=("selected_target.condition.bless",),
+                    condition_semantic_keys=frozenset({"dnd.spells.enchantment.BlessEffect"}),
+                ),
+            ),
+        )
 
     def get_multi_target_count(self) -> Optional[int]:
         """Return the number of targets allowed by the slot level."""
@@ -1614,6 +1715,43 @@ class Command(SpellAction):
     )
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
     command_word: str = Field(default="grovel", description="Command word: grovel, flee, or halt.")
+
+    def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
+        """Declare the save-based condition applied by the selected command."""
+        if not isinstance(actor, Entity):
+            return None
+        word = self.command_word.lower()
+        condition_fact, condition_keys = {
+            "halt": (
+                "selected_target.condition.command_halt",
+                frozenset({"dnd.spells.enchantment.CommandHaltEffect", "dnd.conditions.Incapacitated"}),
+            ),
+            "flee": (
+                "selected_target.condition.command_flee",
+                frozenset({"dnd.spells.enchantment.CommandFleeEffect"}),
+            ),
+        }.get(
+            word,
+            (
+                "selected_target.condition.command_grovel",
+                frozenset({"dnd.spells.enchantment.CommandGrovelEffect", "dnd.conditions.Prone"}),
+            ),
+        )
+        return ActionTargetEffectProfile(
+            semantic_id=f"control.command.{word}",
+            branches=(
+                ActionTargetEffectBranchProfile(
+                    effect_id=f"control.command.{word}",
+                    disposition=TargetEffectDisposition.HARMFUL,
+                    excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
+                    resolution=OutcomeResolution.SAVING_THROW,
+                    save_dc=actor.spell_save_dc(),
+                    save_ability="wisdom",
+                    condition_fact_ids=(condition_fact,),
+                    condition_semantic_keys=condition_keys,
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight and undead immunity."""

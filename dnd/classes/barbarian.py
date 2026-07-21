@@ -20,6 +20,7 @@ Level 20: Primal Champion
 """
 
 from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.content import ContentKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
@@ -28,7 +29,7 @@ from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
     WeaponSlot,
-    TakeDamageEvent, SkillCheckEvent
+    DamageAppliedEvent, TakeDamageEvent, SkillCheckEvent
 )
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
@@ -668,10 +669,9 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     if not isinstance(event, TakeDamageEvent):
         return None
 
-    current_hp = entity.get_hp()
-    damage = event.total_damage
-
-    if current_hp - damage > 0:
+    current_hp = entity.get_normal_hp()
+    preview = entity.preview_take_damage(event)
+    if current_hp - preview.normal_hit_point_damage > 0:
         return None
 
     resource = entity.action_economy.resources.get("relentless_rage")
@@ -688,10 +688,12 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     if total >= current_dc:
         entity.action_economy.consume_resource("relentless_rage", 1)
 
-        new_damage = current_hp - 1
+        damage_cap = max(0, current_hp - 1)
+        if event.normal_hit_point_damage_cap is not None:
+            damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
         return event.model_copy(update={
             "modified": True,
-            "final_damage": max(0, new_damage),
+            "normal_hit_point_damage_cap": damage_cap,
             "status_message": f"Relentless Rage! (CON save {total} vs DC {current_dc}) - survives with 1 HP"
         })
     else:
@@ -956,17 +958,19 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     """
     When taking damage from a creature within 5ft, make a reaction melee attack.
 
-    Triggers on TAKE_DAMAGE at EFFECT phase (when damage is being applied).
-    Note: COMPLETION phase handlers are skipped by EventQueue, so we use EFFECT.
+    Triggers after positive post-mitigation damage has been applied.
     """
     if event.target_entity_uuid != source_entity_uuid:
+        return None
+
+    if not isinstance(event, DamageAppliedEvent):
         return None
 
     if not event.source_entity_uuid:
         return None
 
     entity = Entity.get(source_entity_uuid)
-    if not entity:
+    if not entity or not entity.has_hp:
         return None
 
     attacker = Entity.get(event.source_entity_uuid)
@@ -1002,10 +1006,12 @@ def create_retaliation_handler(source_entity_uuid: UUID) -> EventHandler:
     """Create handler for Retaliation."""
     return EventHandler(
         name="Retaliation",
+        semantic_key="feature.barbarian.retaliation",
+        content_kind=ContentKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
-                event_type=EventType.TAKE_DAMAGE,
+                event_type=EventType.DAMAGE_APPLIED,
                 event_phase=EventPhase.EFFECT
             )
         ],

@@ -1,12 +1,21 @@
 """Divination spells that reveal information or grant special senses."""
 
 import random
-from typing import Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field
 
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import (
+    ActionInformationOperation,
+    ActionWorldEffectAnchor,
+    ActionWorldEffectCertainty,
+    ActionWorldEffectProfile,
+    ActionWorldEffectScope,
+    ActionWorldEffectShape,
+    InformationEffectProfile,
+    TargetType,
+)
 from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
@@ -71,6 +80,38 @@ class SeeInvisibility(SpellAction):
     concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare the granted see-invisible sense and possible discoveries.
+
+        Args:
+            actor: Entity discovering the spell. The sense contract is fixed.
+
+        Returns:
+            Typed information effects matching the runtime sense mode.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="information.see_invisibility",
+            information_effects=(
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.GRANT_SENSE,
+                    certainty=ActionWorldEffectCertainty.GUARANTEED,
+                    anchor=ActionWorldEffectAnchor.ACTOR,
+                    scope=ActionWorldEffectScope.TARGET,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=0,
+                    sense_type=SensesType.SEE_INVISIBLE.name.lower(),
+                ),
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.REVEAL_REGION,
+                    certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                    anchor=ActionWorldEffectAnchor.ACTOR,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=0,
+                ),
+            ),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply See Invisibility to the caster.
@@ -164,6 +205,38 @@ class TrueSeeing(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
+
+    def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
+        """Declare the granted truesight sense and possible discoveries.
+
+        Args:
+            actor: Entity discovering the spell. The sense contract is fixed.
+
+        Returns:
+            Typed information effects matching the runtime sense mode.
+        """
+        return ActionWorldEffectProfile(
+            semantic_id="information.true_seeing",
+            information_effects=(
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.GRANT_SENSE,
+                    certainty=ActionWorldEffectCertainty.GUARANTEED,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.TARGET,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=120,
+                    sense_type=SensesType.TRUESIGHT.name.lower(),
+                ),
+                InformationEffectProfile(
+                    operation=ActionInformationOperation.REVEAL_REGION,
+                    certainty=ActionWorldEffectCertainty.CONDITIONAL,
+                    anchor=ActionWorldEffectAnchor.SELECTED_TARGET,
+                    scope=ActionWorldEffectScope.REGION,
+                    shape=ActionWorldEffectShape.SPHERE,
+                    radius_feet=120,
+                ),
+            ),
+        )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range and visibility for True Seeing.

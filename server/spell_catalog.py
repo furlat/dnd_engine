@@ -213,7 +213,14 @@ def _damage_types(spell: SpellAction) -> List[str]:
 
 
 def _uses_attack_roll(source: str) -> bool:
-    return "spell_attack_bonus" in source or "determine_attack_outcome" in source
+    return any(
+        primitive in source
+        for primitive in (
+            "resolve_spell_attack",
+            "spell_attack_bonus",
+            "determine_attack_outcome",
+        )
+    )
 
 
 def _saving_throw(source: str) -> Optional[SpellCatalogSavingThrow]:

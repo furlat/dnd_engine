@@ -1,6 +1,5 @@
 """Scenario helpers for explaining built-in turn controllers."""
 
-from dataclasses import dataclass
 from uuid import uuid4
 
 from dnd.controller import Controller, TurnContext
@@ -13,17 +12,6 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-
-
-@dataclass
-class RecordingTurnRunner:
-    """Turn runner that records how many delegated turns it receives."""
-
-    run_count: int = 0
-
-    def run_turn(self) -> None:
-        """Record one delegated turn execution."""
-        self.run_count += 1
 
 
 def reset_controller_catalogue_state(width: int = 10, height: int = 8) -> None:

@@ -1,8 +1,10 @@
 """Manual Chapter 15 checks for class features, factories, and feats."""
 
+from typing import Any, cast
 from uuid import uuid4
 
 from dnd.actions import SpellAction
+from dnd.actions_functional import get_available_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -15,8 +17,10 @@ from dnd.classes.feats import LuckyFeature, lucky_processor
 from dnd.classes.fighter import ActionSurge, SecondWind
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.rage import Frenzy
+from dnd.classes.barbarian import RecklessAttack
 from dnd.classes.sorcerer import QuickenedSpell
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
+from dnd.conditions import Paralyzed
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
@@ -504,6 +508,77 @@ def test_barbarian_frenzy_creates_and_cleans_condition_tree(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
+def test_frenzied_strike_discovery_excludes_targets_outside_weapon_reach() -> None:
+    """Frenzied Strike discovery only exposes targets the engine can execute."""
+    reset_class_feature_state()
+    barbarian = create_barbarian(
+        BarbarianConfig(
+            level=3,
+            name="Reach Checked Berserker",
+            position=(1, 1),
+            faction="heroes",
+            primal_path=PrimalPathChoice.BERSERKER,
+        )
+    )
+    near_target = create_feature_target(name="Near Target", position=(2, 1), faction="monsters")
+    far_target = create_feature_target(name="Far Target", position=(3, 1), faction="monsters")
+    Entity.update_all_entities_senses(max_distance=20)
+
+    frenzy_event = Frenzy(source_entity_uuid=barbarian.uuid, rage_damage=2).apply()
+    assert frenzy_event is not None
+    assert not frenzy_event.canceled
+    barbarian.action_economy.reset_all_costs()
+
+    available = get_available_actions(barbarian)
+    strike = next(
+        action for action in available.entity_actions
+        if action.template_name == "Frenzied Strike"
+    )
+
+    target_uuids = {target.target_uuid for target in strike.valid_targets}
+    assert near_target.uuid in target_uuids
+    assert far_target.uuid not in target_uuids
+
+
+def test_paralyzed_barbarian_cannot_use_zero_cost_reckless_attack() -> None:
+    """Severe control blocks zero-cost class actions, not only costed actions."""
+    reset_class_feature_state()
+    barbarian = create_barbarian(
+        BarbarianConfig(
+            level=5,
+            name="Held Berserker",
+            position=(1, 1),
+            faction="heroes",
+            primal_path=PrimalPathChoice.BERSERKER,
+            asi_4=[("strength", 2)],
+        )
+    )
+    caster = create_feature_target(name="Manual Controller", position=(3, 1))
+
+    paralyze_event = barbarian.add_condition(
+        Paralyzed(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=barbarian.uuid,
+        ),
+        check_save_throw=False,
+    )
+
+    assert paralyze_event is not None
+    assert not paralyze_event.canceled
+    assert "Paralyzed" in barbarian.active_conditions
+    assert "Incapacitated" in barbarian.active_conditions
+
+    available = get_available_actions(barbarian)
+    reckless = next(
+        action for action in available.self_actions
+        if action.template_name == "Reckless Attack"
+    )
+
+    assert reckless.can_afford is False
+    assert reckless.valid_targets == []
+    assert RecklessAttack(source_entity_uuid=barbarian.uuid).apply() is None
+
+
 def test_sorcerer_quickened_spell_overrides_template_and_cleans_after_cast(capsys) -> None:
     """Quickened Spell mutates eligible spell templates until a spell is cast."""
     reset_class_feature_state()
@@ -562,10 +637,11 @@ def test_sorcerer_quickened_spell_overrides_template_and_cleans_after_cast(capsy
     assert fire_bolt_template.alt_cost_type is None
     assert sorcerer.action_economy.bonus_actions.normalized_score == 0
     assert sorcerer.action_economy.actions.normalized_score == 1
+    spell_attack_event = cast(Any, spell_event)
     readout_lines.append(
         (
             f"after fire bolt: canceled={spell_event.canceled}, "
-            f"outcome={spell_event.attack_outcome.value}, "
+            f"outcome={spell_attack_event.attack_outcome.value}, "
             f"hp={hp_before}->{target.get_hp()}, "
             f"actions={sorcerer.action_economy.actions.normalized_score}, "
             f"bonus={sorcerer.action_economy.bonus_actions.normalized_score}"

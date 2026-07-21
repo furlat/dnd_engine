@@ -1,18 +1,20 @@
 """Central spatial registry for tiles, entities, objects, light, and paths."""
 
 import math
+import time
 from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, cast
 from uuid import UUID, uuid4
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 from pydantic import BaseModel, Field
 
-from dnd.core.geometry import circle_positions, supercover_line
+from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
 from dnd.core.shadowcast import compute_fov
-from dnd.core.dijkstra import dijkstra
+from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
+from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
@@ -66,6 +68,55 @@ class GridMap:
 
         self._light_callback_registered: bool = False
         self._blocking_callback_registered: bool = False
+        self._spatial_revision: int = 0
+        self._vision_revision: int = 0
+        self._movement_revision: int = 0
+        self._occupancy_revision: int = 0
+        self._light_revision: int = 0
+        self._light_geometry_revision: int = 0
+        self._propagation_revision: int = 0
+        self._fov_cache: Dict[
+            Tuple[Tuple[int, int], Optional[float], bool, int],
+            List[Tuple[int, int]],
+        ] = {}
+        self._propagation_fov_cache: Dict[
+            Tuple[Tuple[int, int], Optional[float]],
+            Tuple[Tuple[int, int], ...],
+        ] = {}
+        self._barrier_positions_cache: Optional[frozenset[Tuple[int, int]]] = None
+        self._directional_blockers_cache: Dict[str, bool] = {}
+        self._directional_channel_equivalence_cache: Dict[
+            Tuple[str, str],
+            bool,
+        ] = {}
+        self._directional_transition_cache: Dict[
+            Tuple[str, int, bool],
+            Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
+        ] = {}
+        self._directional_blocking_cache: Dict[
+            Tuple[str, int, bool],
+            Dict[Tuple[int, int], bool],
+        ] = {}
+        self._propagation_transition_cache: Dict[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            bool,
+        ] = {}
+        self._propagation_blocking_cache: Dict[Tuple[int, int], bool] = {}
+        self._propagation_filter_cache: OrderedDict[
+            Tuple[
+                Tuple[int, int],
+                Optional[float],
+                Tuple[Tuple[int, int], ...],
+            ],
+            Tuple[Tuple[int, int], ...],
+        ] = OrderedDict()
+        self._path_cache: OrderedDict[
+            Tuple[Any, ...],
+            Tuple[
+                Dict[Tuple[int, int], int],
+                Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]],
+            ],
+        ] = OrderedDict()
 
     @classmethod
     def get_instance(cls) -> 'GridMap':
@@ -126,6 +177,13 @@ class GridMap:
         """Get all entity UUIDs subscribed to a cell."""
         return self._cell_subscribers.get(position, set()).copy()
 
+    def get_subscribers_for_cells(self, cells: Set[Tuple[int, int]]) -> Set[UUID]:
+        """Return the union of subscribers for a batch of cells."""
+        subscribers: Set[UUID] = set()
+        for cell in cells:
+            subscribers.update(self._cell_subscribers.get(cell, set()))
+        return subscribers
+
     def subscribe_to_cells(self, entity_uuid: UUID, cells: Set[Tuple[int, int]]) -> None:
         """Subscribe an entity to a set of cells.
 
@@ -151,6 +209,104 @@ class GridMap:
     def get_entity_subscriptions(self, entity_uuid: UUID) -> Set[Tuple[int, int]]:
         """Get all cells an entity is subscribed to."""
         return self._entity_subscriptions.get(entity_uuid, set()).copy()
+
+    @property
+    def vision_revision(self) -> int:
+        """Return the current vision-topology revision."""
+        return self._vision_revision
+
+    @property
+    def movement_revision(self) -> int:
+        """Return the current movement-topology revision."""
+        return self._movement_revision
+
+    @property
+    def occupancy_revision(self) -> int:
+        """Return the current entity-occupancy revision for path blocking."""
+        return self._occupancy_revision
+
+    @property
+    def propagation_revision(self) -> int:
+        """Return the current physical-propagation topology revision."""
+        return self._propagation_revision
+
+    def invalidate_spatial_caches(self, channels: Set[str]) -> None:
+        """Invalidate spatial query caches after authoritative topology changes.
+
+        Args:
+            channels: Changed spatial channels: movement, vision, light, or
+                propagation.
+        """
+        self._bump_spatial_revisions(channels)
+
+    def invalidate_occupancy_paths(self) -> None:
+        """Invalidate cached paths after entity blocking state changes."""
+        self._occupancy_revision += 1
+        self._path_cache.clear()
+
+    def _bump_spatial_revisions(self, channels: Set[str]) -> None:
+        """Advance channel revisions and clear dependent query caches."""
+        if not channels:
+            return
+        self._spatial_revision += 1
+        if "vision" in channels:
+            self._vision_revision += 1
+            self._fov_cache.clear()
+        if "movement" in channels:
+            self._movement_revision += 1
+            self._path_cache.clear()
+        if "light" in channels or "illumination" in channels:
+            self._light_revision += 1
+        if "light" in channels:
+            self._light_geometry_revision += 1
+        if "propagation" in channels:
+            self._propagation_revision += 1
+            self._propagation_fov_cache.clear()
+            self._propagation_filter_cache.clear()
+            self._barrier_positions_cache = None
+            self._propagation_transition_cache.clear()
+            self._propagation_blocking_cache.clear()
+        if channels & set(DIRECTIONAL_CHANNELS):
+            self._directional_channel_equivalence_cache.clear()
+        if "vision" in channels or "light" in channels:
+            self._directional_transition_cache.clear()
+            self._directional_blocking_cache.clear()
+        for channel in channels & set(DIRECTIONAL_CHANNELS):
+            self._directional_blockers_cache.pop(channel, None)
+
+    def _bump_all_spatial_revisions(self) -> None:
+        """Advance every spatial channel revision and clear query caches."""
+        self._bump_spatial_revisions({"movement", "vision", "light", "propagation"})
+
+    def _observer_can_pierce_magical_darkness(self, observer_uuid: Optional[UUID]) -> bool:
+        """Return the observer capability that affects magical-darkness FOV."""
+        if observer_uuid is None:
+            return False
+        observer = BaseBlock.get(observer_uuid)
+        return observer is not None and observer.can_pierce_magical_darkness()
+
+    def _path_requester_perception_signature(
+        self,
+        requester_uuid: Optional[UUID],
+        subjective: bool,
+    ) -> Tuple[Any, ...]:
+        """Return subjective observer state that can change path blockers."""
+        if requester_uuid is None or not subjective:
+            return ()
+        requester = BaseBlock.get(requester_uuid)
+        if requester is None:
+            return ()
+        return (
+            requester.get_passive_perception(),
+            requester.can_bypass_invisibility(),
+            requester.can_pierce_magical_darkness(),
+            tuple(
+                sorted(
+                    (mode.sense_type.value, mode.range_feet)
+                    for mode in requester.get_sense_modes()
+                )
+            ),
+        )
 
     def set_tile(self, x: int, y: int, walkable: bool = True, visible: bool = True,
                  name: str = "Floor", sprite_name: Optional[str] = None,
@@ -184,6 +340,19 @@ class GridMap:
         self.recompute_tile_directional_blocking(position)
         new_directional = self._directional_block_map(position)
         directional_metadata = self._directional_metadata_from_delta(position, old_directional, new_directional)
+        revision_channels: Set[str] = set()
+        if old_tile is None:
+            revision_channels.update({"movement", "vision", "light", "propagation"})
+        else:
+            if old_tile.walkable != tile.walkable:
+                revision_channels.add("movement")
+            if old_tile.visible != tile.visible:
+                revision_channels.update({"vision", "propagation"})
+            old_magical = old_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+            new_magical = tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+            if old_magical != new_magical:
+                revision_channels.update({"vision", "light"})
+        self._bump_spatial_revisions(revision_channels)
 
         if fire_event and self._events_enabled:
             old_walkable = old_tile.walkable if old_tile else None
@@ -240,6 +409,7 @@ class GridMap:
 
         if not tile.set_intrinsic_border(channel, direction, passable):
             return False
+        self._bump_spatial_revisions({channel})
         state = self._directional_block_map(position)
         metadata = {
             "directional_position": position,
@@ -291,6 +461,7 @@ class GridMap:
             self._tiles_by_uuid.pop(tile.uuid, None)
             del self._tiles[position]
             self._bounds_dirty = True
+            self._bump_all_spatial_revisions()
 
             if fire_event and self._events_enabled:
                 hint = SensesUpdateHint(
@@ -351,6 +522,16 @@ class GridMap:
     def is_position_hazardous(self, x: int, y: int) -> bool:
         """Non-entity-aware hazard check. True if ANY hazard condition exists."""
         return self.is_position_hazardous_for(x, y, entity_uuid=None)
+
+    def has_any_hazards(self) -> bool:
+        """Return whether any tile or placed object currently declares a hazard."""
+        for tile in self.get_tiles_with_conditions():
+            if any(condition.hazard_filter is not None for condition in tile.active_conditions.values()):
+                return True
+        for obj in self.get_objects_with_conditions():
+            if any(condition.hazard_filter is not None for condition in obj.active_conditions.values()):
+                return True
+        return False
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING,
@@ -505,7 +686,10 @@ class GridMap:
                         tile.set_object_border(channel, direction, False)
 
         new = self._directional_block_map(position)
-        return self._directional_metadata_from_delta(position, old, new)
+        metadata = self._directional_metadata_from_delta(position, old, new)
+        changed_channels = set(metadata.get("directional_channels") or [])
+        self._bump_spatial_revisions(changed_channels)
+        return metadata
 
     def _tile_allows_transition_side(self, tile_pos: Tuple[int, int], other_pos: Tuple[int, int],
                                      channel: str,
@@ -540,6 +724,36 @@ class GridMap:
 
         return all(open_directions.values())
 
+    def _cached_tile_allows_transition_side(
+        self,
+        tile_pos: Tuple[int, int],
+        other_pos: Tuple[int, int],
+        channel: str,
+        requester_uuid: Optional[UUID],
+        movement_mode: MovementMode,
+        subjective: bool,
+        side_cache: Optional[
+            Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]
+        ],
+    ) -> bool:
+        """Return one directional-side result through an optional query cache."""
+        key = (tile_pos, other_pos)
+        if side_cache is not None:
+            cached = side_cache.get(key)
+            if cached is not None:
+                return cached
+        result = self._tile_allows_transition_side(
+            tile_pos,
+            other_pos,
+            channel,
+            requester_uuid,
+            movement_mode,
+            subjective,
+        )
+        if side_cache is not None:
+            side_cache[key] = result
+        return result
+
     def _remembered_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                       blocked: Optional[Set[Tuple[Tuple[int, int], str]]]) -> bool:
         if not blocked:
@@ -557,14 +771,23 @@ class GridMap:
                                 movement_mode: MovementMode = MovementMode.WALKING,
                                 walk_in_danger: bool = True,
                                 subjective: bool = False,
-                                collision_blocked: Optional[Set[Tuple[int, int]]] = None) -> bool:
+                                collision_blocked: Optional[Set[Tuple[int, int]]] = None,
+                                movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         if channel == "movement":
+            if movement_cell_cache is not None:
+                cached = movement_cell_cache.get(position)
+                if cached is not None:
+                    return cached
             if requester_uuid is None:
-                return self.is_walkable(position[0], position[1], movement_mode)
-            return self.is_walkable_for(
-                position[0], position[1], requester_uuid, movement_mode,
-                walk_in_danger, subjective, collision_blocked,
-            )
+                result = self.is_walkable(position[0], position[1], movement_mode)
+            else:
+                result = self.is_walkable_for(
+                    position[0], position[1], requester_uuid, movement_mode,
+                    walk_in_danger, subjective, collision_blocked,
+                )
+            if movement_cell_cache is not None:
+                movement_cell_cache[position] = result
+            return result
         if channel == "propagation":
             return not self.is_blocking_propagation(position[0], position[1])
         return not self.is_blocking(position[0], position[1], requester_uuid)
@@ -574,7 +797,8 @@ class GridMap:
                                          requester_uuid: Optional[UUID] = None,
                                          movement_mode: MovementMode = MovementMode.WALKING,
                                          subjective: bool = False,
-                                         directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+                                         directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
+                                         side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None) -> bool:
         dx = abs(to_pos[0] - from_pos[0])
         dy = abs(to_pos[1] - from_pos[1])
         if dx + dy != 1:
@@ -584,10 +808,14 @@ class GridMap:
         if channel == "movement" and not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
             return False
         return (
-            self._tile_allows_transition_side(from_pos, to_pos, channel,
-                                             requester_uuid, movement_mode, subjective)
-            and self._tile_allows_transition_side(to_pos, from_pos, channel,
-                                                 requester_uuid, movement_mode, subjective)
+            self._cached_tile_allows_transition_side(
+                from_pos, to_pos, channel,
+                requester_uuid, movement_mode, subjective, side_cache,
+            )
+            and self._cached_tile_allows_transition_side(
+                to_pos, from_pos, channel,
+                requester_uuid, movement_mode, subjective, side_cache,
+            )
         )
 
     def _diagonal_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
@@ -597,7 +825,9 @@ class GridMap:
                                     walk_in_danger: bool = True,
                                     subjective: bool = False,
                                     collision_blocked: Optional[Set[Tuple[int, int]]] = None,
-                                    directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+                                    directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
+                                    side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
+                                    movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         dx = to_pos[0] - from_pos[0]
         dy = to_pos[1] - from_pos[1]
         if abs(dx) != 1 or abs(dy) != 1:
@@ -610,16 +840,17 @@ class GridMap:
             if not self._transition_cell_allows(
                 bridge, channel, requester_uuid, movement_mode,
                 walk_in_danger, subjective, collision_blocked,
+                movement_cell_cache,
             ):
                 continue
             if (
                 self._cardinal_transition_sides_allow(
                     from_pos, bridge, channel, requester_uuid, movement_mode,
-                    subjective, directional_collision_blocked,
+                    subjective, directional_collision_blocked, side_cache,
                 )
                 and self._cardinal_transition_sides_allow(
                     bridge, to_pos, channel, requester_uuid, movement_mode,
-                    subjective, directional_collision_blocked,
+                    subjective, directional_collision_blocked, side_cache,
                 )
             ):
                 return True
@@ -631,7 +862,9 @@ class GridMap:
                        walk_in_danger: bool = True,
                        subjective: bool = False,
                        collision_blocked: Optional[Set[Tuple[int, int]]] = None,
-                       directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None) -> bool:
+                       directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
+                       side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
+                       movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         """Return whether movement can cross from one adjacent tile to another."""
         if from_pos == to_pos:
             return True
@@ -642,28 +875,42 @@ class GridMap:
         if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
             if not self._diagonal_transition_allows(
                 from_pos, to_pos, "movement", requesting_entity_uuid, movement_mode,
-                walk_in_danger, subjective, collision_blocked, directional_collision_blocked,
+                walk_in_danger, subjective, collision_blocked,
+                directional_collision_blocked, side_cache,
+                movement_cell_cache,
             ):
                 return False
-            if requesting_entity_uuid is None:
-                return self.is_walkable(to_pos[0], to_pos[1], movement_mode)
-            return self.is_walkable_for(
-                to_pos[0], to_pos[1], requesting_entity_uuid, movement_mode,
-                walk_in_danger, subjective, collision_blocked,
+            return self._transition_cell_allows(
+                to_pos,
+                "movement",
+                requesting_entity_uuid,
+                movement_mode,
+                walk_in_danger,
+                subjective,
+                collision_blocked,
+                movement_cell_cache,
             )
         if not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
             return False
-        if not self._tile_allows_transition_side(from_pos, to_pos, "movement",
-                                                requesting_entity_uuid, movement_mode, subjective):
+        if not self._cached_tile_allows_transition_side(
+            from_pos, to_pos, "movement",
+            requesting_entity_uuid, movement_mode, subjective, side_cache,
+        ):
             return False
-        if not self._tile_allows_transition_side(to_pos, from_pos, "movement",
-                                                requesting_entity_uuid, movement_mode, subjective):
+        if not self._cached_tile_allows_transition_side(
+            to_pos, from_pos, "movement",
+            requesting_entity_uuid, movement_mode, subjective, side_cache,
+        ):
             return False
-        if requesting_entity_uuid is None:
-            return self.is_walkable(to_pos[0], to_pos[1], movement_mode)
-        return self.is_walkable_for(
-            to_pos[0], to_pos[1], requesting_entity_uuid, movement_mode,
-            walk_in_danger, subjective, collision_blocked
+        return self._transition_cell_allows(
+            to_pos,
+            "movement",
+            requesting_entity_uuid,
+            movement_mode,
+            walk_in_danger,
+            subjective,
+            collision_blocked,
+            movement_cell_cache,
         )
 
     def can_see_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
@@ -788,6 +1035,7 @@ class GridMap:
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
             self._bounds_dirty = True
         finally:
+            self._bump_all_spatial_revisions()
             self.enable_events()
 
     def create_room(self, x: int, y: int, width: int, height: int,
@@ -813,6 +1061,7 @@ class GridMap:
                     _set_tile((tx, ty), Tile.create((tx, ty), walkable=True, visible=True, name=floor_name))
             self._bounds_dirty = True
         finally:
+            self._bump_all_spatial_revisions()
             self.enable_events()
 
     def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
@@ -821,6 +1070,7 @@ class GridMap:
         old_pos = self._entity_positions.get(entity_uuid)
         if old_pos is not None:
             self._entities_by_position[old_pos].discard(entity_uuid)
+            self.invalidate_occupancy_paths()
             old_directional_metadata = self.recompute_tile_directional_blocking(old_pos)
             if self._events_enabled:
                 event = SpatialChangeEvent.entity_left(
@@ -831,6 +1081,7 @@ class GridMap:
 
         self._entity_positions[entity_uuid] = position
         self._entities_by_position[position].add(entity_uuid)
+        self.invalidate_occupancy_paths()
         new_directional_metadata = self.recompute_tile_directional_blocking(position)
 
         if self._events_enabled:
@@ -846,6 +1097,7 @@ class GridMap:
         if entity_uuid in self._entity_positions:
             pos = self._entity_positions[entity_uuid]
             self._entities_by_position[pos].discard(entity_uuid)
+            self.invalidate_occupancy_paths()
             directional_metadata = self.recompute_tile_directional_blocking(pos)
 
             if self._events_enabled:
@@ -875,26 +1127,40 @@ class GridMap:
         old_position = self._entity_positions.get(entity_uuid)
 
         if old_position is not None:
+            started = time.perf_counter()
             self._entities_by_position[old_position].discard(entity_uuid)
+            self.invalidate_occupancy_paths()
+            record_action_timing("grid.move_entity.discard_old_position_ms", started)
+            started = time.perf_counter()
             old_directional_metadata = self.recompute_tile_directional_blocking(old_position)
+            record_action_timing("grid.move_entity.recompute_old_directional_ms", started)
 
             if self._events_enabled:
+                started = time.perf_counter()
                 event = SpatialChangeEvent.entity_left(
                     old_position, entity_uuid, new_position, parent_event=parent_event,
                     **old_directional_metadata,
                 )
                 self._fire_spatial_event(event)
+                record_action_timing("grid.move_entity.fire_entity_left_ms", started)
 
+        started = time.perf_counter()
         self._entity_positions[entity_uuid] = new_position
         self._entities_by_position[new_position].add(entity_uuid)
+        self.invalidate_occupancy_paths()
+        record_action_timing("grid.move_entity.store_new_position_ms", started)
+        started = time.perf_counter()
         new_directional_metadata = self.recompute_tile_directional_blocking(new_position)
+        record_action_timing("grid.move_entity.recompute_new_directional_ms", started)
 
         if self._events_enabled:
+            started = time.perf_counter()
             event = SpatialChangeEvent.entity_entered(
                 new_position, entity_uuid, old_position, parent_event=parent_event,
                 **new_directional_metadata,
             )
             self._fire_spatial_event(event)
+            record_action_timing("grid.move_entity.fire_entity_entered_ms", started)
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
         """Get an entity's position."""
@@ -918,10 +1184,16 @@ class GridMap:
         self._object_positions[object_uuid] = position
         self._objects_by_position[position].add(object_uuid)
         directional_metadata = self.recompute_tile_directional_blocking(position)
+        obj = BaseBlock.get(object_uuid)
+        blocks_vision = obj.blocks_vision() if obj else False
+        blocks_walking = obj.blocks_walking() if obj else False
+        revision_channels: Set[str] = set()
+        if blocks_vision:
+            revision_channels.update({"vision", "propagation"})
+        if blocks_walking:
+            revision_channels.add("movement")
+        self._bump_spatial_revisions(revision_channels)
         if self._events_enabled:
-            obj = BaseBlock.get(object_uuid)
-            blocks_vision = obj.blocks_vision() if obj else False
-            blocks_walking = obj.blocks_walking() if obj else False
             obj_name = obj.name if obj else None
             obj_map_char = obj.get_map_char() if obj else None
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
@@ -947,6 +1219,12 @@ class GridMap:
             if obj is not None:
                 obj.on_grid_object_removed(position, clear_location=clear_object_location)
             directional_metadata = self.recompute_tile_directional_blocking(position)
+            revision_channels: Set[str] = set()
+            if blocks_vision:
+                revision_channels.update({"vision", "propagation"})
+            if blocks_walking:
+                revision_channels.add("movement")
+            self._bump_spatial_revisions(revision_channels)
             if self._events_enabled:
                 self._fire_spatial_event(SpatialChangeEvent.object_removed(
                     position, object_uuid,
@@ -977,11 +1255,46 @@ class GridMap:
         return result
 
     def _has_directional_blockers(self, channel: str) -> bool:
+        cached = self._directional_blockers_cache.get(channel)
+        if cached is not None:
+            return cached
         for tile in self._tiles.values():
             for direction in DIRECTIONS:
                 if not tile.allows_direction(direction, channel):
+                    self._directional_blockers_cache[channel] = True
                     return True
+        self._directional_blockers_cache[channel] = False
         return False
+
+    def _directional_channels_equivalent(
+        self,
+        first_channel: str,
+        second_channel: str,
+    ) -> bool:
+        """Return whether two directional channels have identical topology.
+
+        Args:
+            first_channel: First directional propagation channel.
+            second_channel: Second directional propagation channel.
+
+        Returns:
+            Whether every tile exposes the same directional borders for both.
+        """
+        key = (
+            min(first_channel, second_channel),
+            max(first_channel, second_channel),
+        )
+        cached = self._directional_channel_equivalence_cache.get(key)
+        if cached is not None:
+            return cached
+        equivalent = all(
+            tile.allows_direction(direction, first_channel)
+            == tile.allows_direction(direction, second_channel)
+            for tile in self._tiles.values()
+            for direction in DIRECTIONS
+        )
+        self._directional_channel_equivalence_cache[key] = equivalent
+        return equivalent
 
     def _transition_clear(self, start: Tuple[int, int], end: Tuple[int, int],
                           channel: str,
@@ -1018,17 +1331,112 @@ class GridMap:
     def _compute_directional_fov(self, origin: Tuple[int, int], max_distance: Optional[float],
                                  channel: str,
                                  observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
         if origin not in self._tiles:
             return []
         if self._bounds_dirty:
             self._update_bounds()
 
         radius = max_distance if max_distance is not None else max(self.width, self.height)
+        radius_squared = radius * radius if max_distance is not None else None
         visible_positions: List[Tuple[int, int]] = []
         min_x = max(self._min_x, math.floor(origin[0] - radius))
         max_x = min(self._max_x, math.ceil(origin[0] + radius))
         min_y = max(self._min_y, math.floor(origin[1] - radius))
         max_y = min(self._max_y, math.ceil(origin[1] + radius))
+
+        line_cache: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]] = {}
+        if channel == "propagation":
+            transition_cache = self._propagation_transition_cache
+            blocking_cache = self._propagation_blocking_cache
+        elif channel in {"vision", "light"}:
+            revision = (
+                self._vision_revision
+                if channel == "vision"
+                else self._light_geometry_revision
+            )
+            cache_key = (
+                channel,
+                revision,
+                self._observer_can_pierce_magical_darkness(observer_uuid),
+            )
+            transition_cache = self._directional_transition_cache.setdefault(
+                cache_key,
+                {},
+            )
+            blocking_cache = self._directional_blocking_cache.setdefault(
+                cache_key,
+                {},
+            )
+        else:
+            transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
+            blocking_cache: Dict[Tuple[int, int], bool] = {}
+        line_seconds = 0.0
+        transition_seconds = 0.0
+        blocking_seconds = 0.0
+
+        def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
+            nonlocal line_seconds
+            key = (end[0] - origin[0], end[1] - origin[1])
+            cached = line_cache.get(key)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            path = supercover_line_offsets(key)
+            if timing:
+                line_seconds += time.perf_counter() - started
+            line_cache[key] = path
+            return path
+
+        def transition_allows(prev: Tuple[int, int], current: Tuple[int, int]) -> bool:
+            nonlocal transition_seconds
+            key = (prev, current)
+            cached = transition_cache.get(key)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            if channel == "vision":
+                allowed = self.can_see_transition(prev, current, observer_uuid)
+            elif channel == "light":
+                allowed = self.can_light_transition(prev, current, observer_uuid)
+            else:
+                allowed = self.can_propagate_transition(prev, current, observer_uuid)
+            if timing:
+                transition_seconds += time.perf_counter() - started
+            transition_cache[key] = allowed
+            return allowed
+
+        def blocks_cell(position: Tuple[int, int]) -> bool:
+            nonlocal blocking_seconds
+            cached = blocking_cache.get(position)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            if channel in {"vision", "light"}:
+                blocked = self.is_blocking(position[0], position[1], observer_uuid)
+            else:
+                blocked = self.is_blocking_propagation(position[0], position[1])
+            if timing:
+                blocking_seconds += time.perf_counter() - started
+            blocking_cache[position] = blocked
+            return blocked
+
+        def transition_clear(start: Tuple[int, int], end: Tuple[int, int]) -> bool:
+            path = get_line_offsets(end)
+            if not path:
+                return False
+            origin_x, origin_y = start
+            prev = start
+            for index in range(1, len(path)):
+                offset_x, offset_y = path[index]
+                current = (origin_x + offset_x, origin_y + offset_y)
+                if not transition_allows(prev, current):
+                    return False
+                if index < len(path) - 1 and blocks_cell(current):
+                    return False
+                prev = current
+            return True
 
         for x in range(min_x, max_x + 1):
             for y in range(min_y, max_y + 1):
@@ -1038,10 +1446,15 @@ class GridMap:
                 if max_distance is not None:
                     dx = x - origin[0]
                     dy = y - origin[1]
-                    if math.sqrt(dx * dx + dy * dy) > max_distance:
+                    if radius_squared is not None and dx * dx + dy * dy > radius_squared:
                         continue
-                if pos == origin or self._transition_clear(origin, pos, channel, observer_uuid):
+                if pos == origin or transition_clear(origin, pos):
                     visible_positions.append(pos)
+        if timing:
+            record_action_elapsed("grid.directional_fov.supercover_line_ms", line_seconds)
+            record_action_elapsed("grid.directional_fov.transition_checks_ms", transition_seconds)
+            record_action_elapsed("grid.directional_fov.blocking_checks_ms", blocking_seconds)
+            record_action_timing("grid.directional_fov.total_ms", total_started)
         return visible_positions
 
     def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None,
@@ -1056,23 +1469,83 @@ class GridMap:
 
         Returns list of visible positions.
         """
+        timing = action_timing_enabled()
+        cache_started = time.perf_counter() if timing else 0.0
+        cache_key = (
+            origin,
+            max_distance,
+            self._observer_can_pierce_magical_darkness(observer_uuid),
+            self._vision_revision,
+        )
+        cached = self._fov_cache.get(cache_key)
+        if cached is not None:
+            if timing:
+                record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
+            return list(cached)
+        if max_distance is not None:
+            supersets = [
+                (cached_distance, positions)
+                for (
+                    cached_origin,
+                    cached_distance,
+                    cached_pierces_darkness,
+                    cached_revision,
+                ), positions in tuple(self._fov_cache.items())
+                if cached_origin == origin
+                and cached_pierces_darkness == cache_key[2]
+                and cached_revision == self._vision_revision
+                and (cached_distance is None or cached_distance >= max_distance)
+            ]
+            if supersets:
+                _, superset = min(
+                    supersets,
+                    key=lambda item: math.inf if item[0] is None else item[0],
+                )
+                radius_squared = max_distance * max_distance
+                cached = [
+                    position
+                    for position in superset
+                    if (
+                        (position[0] - origin[0]) ** 2
+                        + (position[1] - origin[1]) ** 2
+                    ) <= radius_squared
+                ]
+                self._fov_cache[cache_key] = list(cached)
+                if timing:
+                    record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
+                return list(cached)
+        if timing:
+            record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
+
         visible_positions: List[Tuple[int, int]] = []
+        blocking_cache: Dict[Tuple[int, int], bool] = {}
 
         def mark_visible(x: int, y: int) -> None:
             visible_positions.append((x, y))
 
         def is_blocking_for(x: int, y: int) -> bool:
-            return self.is_blocking(x, y, requesting_entity_uuid=observer_uuid)
+            position = (x, y)
+            cached = blocking_cache.get(position)
+            if cached is not None:
+                return cached
+            blocked = self.is_blocking(x, y, requesting_entity_uuid=observer_uuid)
+            blocking_cache[position] = blocked
+            return blocked
 
         if self._has_directional_blockers("vision"):
-            return self._compute_directional_fov(origin, max_distance, "vision", observer_uuid)
+            visible_positions = self._compute_directional_fov(origin, max_distance, "vision", observer_uuid)
+            self._fov_cache[cache_key] = list(visible_positions)
+            return list(visible_positions)
 
         compute_fov(origin, is_blocking_for, mark_visible, max_distance)
-        return visible_positions
+        self._fov_cache[cache_key] = list(visible_positions)
+        return list(visible_positions)
 
     def compute_light_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
         """Compute light reach using light directional borders and current cell blockers."""
         if self._has_directional_blockers("light"):
+            if self._directional_channels_equivalent("vision", "light"):
+                return self.compute_fov(origin, max_distance)
             return self._compute_directional_fov(origin, max_distance, "light")
         visible_positions: List[Tuple[int, int]] = []
 
@@ -1114,18 +1587,55 @@ class GridMap:
         if self._bounds_dirty:
             self._update_bounds()
 
+        timing = action_timing_enabled()
+        cache_key = (
+            start,
+            max_distance,
+            requesting_entity_uuid,
+            movement_mode,
+            walk_in_danger,
+            subjective,
+            self._movement_revision,
+            self._occupancy_revision,
+            ignore_difficult_terrain,
+            self._path_requester_perception_signature(requesting_entity_uuid, subjective),
+            tuple(sorted(collision_blocked or ())),
+            tuple(sorted(directional_collision_blocked or ())),
+            self._min_x,
+            self._min_y,
+            self._max_x,
+            self._max_y,
+        )
+        cache_started = time.perf_counter() if timing else 0.0
+        cached = self._path_cache.get(cache_key)
+        if cached is not None:
+            self._path_cache.move_to_end(cache_key)
+            if timing:
+                record_action_timing("grid.compute_paths.cache_hit_ms", cache_started)
+            cached_distances, cached_paths = cached
+            return (
+                dict(cached_distances),
+                {position: list(path) for position, path in cached_paths.items()},
+            )
+        if timing:
+            record_action_timing("grid.compute_paths.cache_miss_ms", cache_started)
+
         grid_width = self.width
         grid_height = self.height
+        transition_side_cache: Dict[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            bool,
+        ] = {}
 
         if requesting_entity_uuid is not None:
-            def walkable_check(x: int, y: int) -> bool:
+            def raw_walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable_for(x, y, requesting_entity_uuid, movement_mode,
                                             walk_in_danger, subjective, collision_blocked)
         else:
-            def walkable_check(x: int, y: int) -> bool:
+            def raw_walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable(x, y, movement_mode)
 
-        def get_tile_cost(x: int, y: int) -> float:
+        def raw_get_tile_cost(x: int, y: int) -> float:
             tile = self.get_tile(x, y)
             if not tile:
                 return 0
@@ -1134,25 +1644,130 @@ class GridMap:
                 return min(cost, 1.0)
             return cost
 
-        def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
+        def unit_movement_costs() -> bool:
+            for tile in self._tiles.values():
+                cost = tile.get_movement_cost(movement_mode)
+                if ignore_difficult_terrain:
+                    cost = min(cost, 1.0)
+                if cost != 1:
+                    return False
+            return True
+
+        def raw_can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
             return self.can_transition(
                 from_pos, to_pos, requesting_entity_uuid, movement_mode,
                 walk_in_danger, subjective, collision_blocked,
                 directional_collision_blocked=directional_collision_blocked,
+                side_cache=transition_side_cache,
+                movement_cell_cache=walkable_cache,
             )
 
-        return dijkstra(
-            start,
-            walkable_check,
-            grid_width,
-            grid_height,
-            diagonal=True,
-            max_distance=max_distance,
-            cost_func=get_tile_cost,
-            can_enter=can_enter_tile,
-            min_x=self._min_x,
-            min_y=self._min_y,
+        walkable_cache: Dict[Tuple[int, int], bool] = {}
+        tile_cost_cache: Dict[Tuple[int, int], float] = {}
+        transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
+
+        def cached_walkable_check(x: int, y: int) -> bool:
+            key = (x, y)
+            cached = walkable_cache.get(key)
+            if cached is not None:
+                return cached
+            value = raw_walkable_check(x, y)
+            walkable_cache[key] = value
+            return value
+
+        def cached_get_tile_cost(x: int, y: int) -> float:
+            key = (x, y)
+            cached = tile_cost_cache.get(key)
+            if cached is not None:
+                return cached
+            value = raw_get_tile_cost(x, y)
+            tile_cost_cache[key] = value
+            return value
+
+        def cached_can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
+            key = (from_pos, to_pos)
+            cached = transition_cache.get(key)
+            if cached is not None:
+                return cached
+            value = raw_can_enter_tile(from_pos, to_pos)
+            transition_cache[key] = value
+            return value
+
+        walkable_elapsed = 0.0
+        tile_cost_elapsed = 0.0
+        can_enter_elapsed = 0.0
+
+        if timing:
+            def walkable_check(x: int, y: int) -> bool:
+                nonlocal walkable_elapsed
+                started = time.perf_counter()
+                try:
+                    return cached_walkable_check(x, y)
+                finally:
+                    walkable_elapsed += time.perf_counter() - started
+
+            def get_tile_cost(x: int, y: int) -> float:
+                nonlocal tile_cost_elapsed
+                started = time.perf_counter()
+                try:
+                    return cached_get_tile_cost(x, y)
+                finally:
+                    tile_cost_elapsed += time.perf_counter() - started
+
+            def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
+                nonlocal can_enter_elapsed
+                started = time.perf_counter()
+                try:
+                    return cached_can_enter_tile(from_pos, to_pos)
+                finally:
+                    can_enter_elapsed += time.perf_counter() - started
+        else:
+            walkable_check = cached_walkable_check
+            get_tile_cost = cached_get_tile_cost
+            can_enter_tile = cached_can_enter_tile
+
+        started = time.perf_counter() if timing else 0.0
+        use_unit_pathfinder = unit_movement_costs()
+        if use_unit_pathfinder:
+            result = breadth_first_paths(
+                start,
+                walkable_check,
+                grid_width,
+                grid_height,
+                diagonal=True,
+                max_distance=max_distance,
+                can_enter=can_enter_tile,
+                min_x=self._min_x,
+                min_y=self._min_y,
+            )
+        else:
+            result = dijkstra(
+                start,
+                walkable_check,
+                grid_width,
+                grid_height,
+                diagonal=True,
+                max_distance=max_distance,
+                cost_func=get_tile_cost,
+                can_enter=can_enter_tile,
+                min_x=self._min_x,
+                min_y=self._min_y,
+            )
+        if timing:
+            if use_unit_pathfinder:
+                record_action_timing("grid.compute_paths.bfs_total_ms", started)
+            record_action_timing("grid.compute_paths.dijkstra_total_ms", started)
+            record_action_elapsed("grid.compute_paths.walkable_checks_ms", walkable_elapsed)
+            record_action_elapsed("grid.compute_paths.tile_cost_ms", tile_cost_elapsed)
+            record_action_elapsed("grid.compute_paths.can_enter_ms", can_enter_elapsed)
+        distances, paths = result
+        self._path_cache[cache_key] = (
+            dict(distances),
+            {position: tuple(path) for position, path in paths.items()},
         )
+        if len(self._path_cache) > 128:
+            self._path_cache.popitem(last=False)
+        return result
 
     def get_visible_entities(self, origin: Tuple[int, int], max_distance: Optional[float] = None
                              ) -> Dict[UUID, Tuple[int, int]]:
@@ -1253,10 +1868,14 @@ class GridMap:
         if source is None:
             return
 
+        timing = action_timing_enabled()
+        started = time.perf_counter() if timing else 0.0
         old_affected = dict(source.affected_tiles)
-
         new_affected = self._compute_light_tiles(source, new_position)
+        if timing:
+            record_action_timing("grid.move_light_source.compute_tiles_ms", started)
 
+        started = time.perf_counter() if timing else 0.0
         changed_positions: List[Tuple[int, int]] = []
         all_positions = set(old_affected) | set(new_affected)
         for pos in all_positions:
@@ -1275,11 +1894,16 @@ class GridMap:
             elif new_level is not None:
                 if tile.add_illumination(source.uuid, new_level, fire_event=False):
                     changed_positions.append(pos)
+        if timing:
+            record_action_timing("grid.move_light_source.apply_delta_ms", started)
 
         source.position = new_position
         source.affected_tiles = new_affected
 
+        started = time.perf_counter() if timing else 0.0
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        if timing:
+            record_action_timing("grid.move_light_source.publish_batch_ms", started)
 
     def toggle_light_source(self, light_uuid: UUID, active: bool) -> None:
         """Toggle a light source on/off without destroying it."""
@@ -1357,21 +1981,23 @@ class GridMap:
         parent_event: Optional[UUID] = None,
         requires_fov: bool = False,
     ) -> None:
-        """Fire efficient events after a batch light change.
+        """Publish one complete event for an atomic light-field delta.
 
-        Two-tier approach:
-        1. Positions with entities: fire full SPATIAL_LIGHT_CHANGED event lifecycle
-           (needed for Hidden reveal handler at EFFECT phase). Very rare.
-        2. Single COMPLETION event at one representative position to trigger
-           senses re-evaluation via batch hint with ALL changed positions.
+        The event carries every changed position so rule handlers and observer
+        senses consume the same authoritative batch exactly once. Magical
+        darkness changes request a full field-of-view refresh.
 
-        The Tier 2 event carries a SensesUpdateHint with light_changed_positions
-        containing all changed positions. If any position has magical darkness,
-        or if the caller knows magical darkness was removed, requires_fov is set
-        to True.
+        Args:
+            changed_positions: Tiles whose resolved light level changed.
+            parent_event: Optional causal parent event UUID.
+            requires_fov: Whether the light delta changes vision geometry.
         """
         if not changed_positions:
             return
+        channels = {"illumination"}
+        if requires_fov:
+            channels.update({"vision", "light"})
+        self._bump_spatial_revisions(channels)
 
         has_magical_darkness = requires_fov
         for pos in changed_positions:
@@ -1384,54 +2010,35 @@ class GridMap:
             requires_fov=has_magical_darkness,
             light_changed_positions=set(changed_positions),
         )
-
-        handled_positions: Set[Tuple[int, int]] = set()
-        for pos in changed_positions:
-            entity_uuids = self._entities_by_position.get(pos, set())
-            if entity_uuids:
-                handled_positions.add(pos)
-                tile = self._tiles.get(pos)
-                if tile:
-                    per_pos_hint = SensesUpdateHint(
-                        requires_fov=has_magical_darkness,
-                        light_changed_positions={pos},
-                    )
-                    event = SpatialChangeEvent.light_changed(pos, tile.uuid, senses_hint=per_pos_hint,
-                                                                   new_light_level=tile.resolved_light_level.value)
-                    event.parent_event = parent_event
-                    self._fire_spatial_event(event)
-
-        senses_pos = None
-        for pos in changed_positions:
-            if pos not in handled_positions:
-                senses_pos = pos
-                break
-        if senses_pos is None and changed_positions:
-            senses_pos = changed_positions[0]
-        if senses_pos is not None:
-            tile = self._tiles.get(senses_pos)
-            if tile:
-                level_map: Dict[str, int] = {}
-                for pos in changed_positions:
-                    t = self._tiles.get(pos)
-                    if t:
-                        level_map[f"{pos[0]},{pos[1]}"] = t.resolved_light_level.value
-                event = SpatialChangeEvent.light_changed(senses_pos, tile.uuid, senses_hint=batch_hint,
-                                                               new_light_level=tile.resolved_light_level.value,
-                                                               light_level_map=level_map)
-                event.parent_event = parent_event
-                current_event = EventQueue.register(event)
-                if current_event.canceled:
-                    return
-                current_event = current_event.phase_to(EventPhase.COMPLETION)
-                EventQueue.register(current_event)
+        representative_position = min(changed_positions)
+        representative_tile = self._tiles.get(representative_position)
+        if representative_tile is None:
+            return
+        level_map = {
+            f"{position[0]},{position[1]}": tile.resolved_light_level.value
+            for position in sorted(set(changed_positions))
+            if (tile := self._tiles.get(position)) is not None
+        }
+        event = SpatialChangeEvent.light_changed(
+            representative_position,
+            representative_tile.uuid,
+            senses_hint=batch_hint,
+            parent_event=parent_event,
+            new_light_level=representative_tile.resolved_light_level.value,
+            light_level_map=level_map,
+        )
+        self._fire_spatial_event(event)
 
     def _ensure_light_callback(self) -> None:
         """Register the movement callback for light source tracking (once)."""
         if self._light_callback_registered:
             return
         self._light_callback_registered = True
-        EventQueue.add_on_event_callback(self._on_light_movement_event)
+        EventQueue.add_on_event_callback(
+            self._on_light_movement_event,
+            event_types={EventType.SPATIAL_ENTITY_ENTERED},
+            phases={EventPhase.COMPLETION},
+        )
         self._ensure_blocking_callback()
 
     def _on_light_movement_event(self, event: Event) -> None:
@@ -1456,7 +2063,19 @@ class GridMap:
         if self._blocking_callback_registered:
             return
         self._blocking_callback_registered = True
-        EventQueue.add_on_event_callback(self._on_vision_blocking_changed)
+        EventQueue.add_on_event_callback(
+            self._on_vision_blocking_changed,
+            event_types={
+                EventType.SPATIAL_ENTITY_ENTERED,
+                EventType.SPATIAL_ENTITY_LEFT,
+                EventType.SPATIAL_TILE_CHANGED,
+                EventType.SPATIAL_OBJECT_PLACED,
+                EventType.SPATIAL_OBJECT_REMOVED,
+                EventType.SPATIAL_PERCEIVABILITY_CHANGED,
+                EventType.SPATIAL_OBJECT_CHANGED,
+            },
+            phases={EventPhase.DECLARATION},
+        )
 
     def _on_vision_blocking_changed(self, event: Event) -> None:
         """Recompute lights when vision-blocking geometry changes.
@@ -1558,6 +2177,13 @@ class GridMap:
 
         Unlike compute_fov(), ignores magical darkness — AoE spreads through
         darkness but not through walls/closed doors."""
+        cache_started = time.perf_counter()
+        cache_key = (origin, max_distance)
+        cached = self._propagation_fov_cache.get(cache_key)
+        if cached is not None:
+            record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
+            return list(cached)
+        record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
         visible_positions: List[Tuple[int, int]] = []
 
         def mark_visible(x: int, y: int) -> None:
@@ -1567,9 +2193,133 @@ class GridMap:
             return self.is_blocking_propagation(x, y)
 
         if self._has_directional_blockers("propagation"):
-            return self._compute_directional_fov(origin, max_distance, "propagation")
+            visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
+        else:
+            compute_fov(origin, is_blocking_for, mark_visible, max_distance)
 
-        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        self._propagation_fov_cache[cache_key] = tuple(visible_positions)
+        return list(visible_positions)
+
+    def filter_propagation_positions(
+        self,
+        origin: Tuple[int, int],
+        positions: Set[Tuple[int, int]],
+        max_distance: Optional[float] = None,
+    ) -> Set[Tuple[int, int]]:
+        """Filter a known footprint through physical propagation blockers.
+
+        This uses the same transition and blocking rules as
+        `compute_propagation_fov()`, but it tests only the supplied positions.
+        AoE previews already know their geometric footprint, so this avoids
+        scanning a full square FOV around every possible origin.
+
+        Args:
+            origin: AoE propagation origin.
+            positions: Candidate footprint positions to filter.
+            max_distance: Optional radial bound matching full FOV behavior.
+
+        Returns:
+            Candidate positions that physical propagation can reach.
+        """
+        timing = action_timing_enabled()
+        total_started = time.perf_counter() if timing else 0.0
+        if origin not in self._tiles:
+            return set()
+
+        cache_started = time.perf_counter() if timing else 0.0
+        cache_key = (origin, max_distance, tuple(sorted(positions)))
+        cached_positions = self._propagation_filter_cache.get(cache_key)
+        if cached_positions is not None:
+            self._propagation_filter_cache.move_to_end(cache_key)
+            if timing:
+                record_action_timing("grid.filter_propagation_positions.cache_hit_ms", cache_started)
+                record_action_timing("grid.filter_propagation_positions.total_ms", total_started)
+            return set(cached_positions)
+        if timing:
+            record_action_timing("grid.filter_propagation_positions.cache_miss_ms", cache_started)
+
+        radius_squared = max_distance * max_distance if max_distance is not None else None
+        transition_cache = self._propagation_transition_cache
+        blocking_cache = self._propagation_blocking_cache
+        line_cache: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]] = {}
+        line_seconds = 0.0
+        transition_seconds = 0.0
+        blocking_seconds = 0.0
+
+        def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
+            nonlocal line_seconds
+            key = (end[0] - origin[0], end[1] - origin[1])
+            cached = line_cache.get(key)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            path = supercover_line_offsets(key)
+            if timing:
+                line_seconds += time.perf_counter() - started
+            line_cache[key] = path
+            return path
+
+        def transition_allows(prev: Tuple[int, int], current: Tuple[int, int]) -> bool:
+            nonlocal transition_seconds
+            key = (prev, current)
+            cached = transition_cache.get(key)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            allowed = self.can_propagate_transition(prev, current, None)
+            if timing:
+                transition_seconds += time.perf_counter() - started
+            transition_cache[key] = allowed
+            return allowed
+
+        def blocks_cell(position: Tuple[int, int]) -> bool:
+            nonlocal blocking_seconds
+            cached = blocking_cache.get(position)
+            if cached is not None:
+                return cached
+            started = time.perf_counter() if timing else 0.0
+            blocked = self.is_blocking_propagation(position[0], position[1])
+            if timing:
+                blocking_seconds += time.perf_counter() - started
+            blocking_cache[position] = blocked
+            return blocked
+
+        def transition_clear(end: Tuple[int, int]) -> bool:
+            path = get_line_offsets(end)
+            if not path:
+                return False
+            origin_x, origin_y = origin
+            prev = origin
+            for index in range(1, len(path)):
+                offset_x, offset_y = path[index]
+                current = (origin_x + offset_x, origin_y + offset_y)
+                if not transition_allows(prev, current):
+                    return False
+                if index < len(path) - 1 and blocks_cell(current):
+                    return False
+                prev = current
+            return True
+
+        visible_positions: Set[Tuple[int, int]] = set()
+        for position in positions:
+            if position not in self._tiles:
+                continue
+            if radius_squared is not None:
+                dx = position[0] - origin[0]
+                dy = position[1] - origin[1]
+                if dx * dx + dy * dy > radius_squared:
+                    continue
+            if position == origin or transition_clear(position):
+                visible_positions.add(position)
+
+        if timing:
+            record_action_elapsed("grid.filter_propagation_positions.supercover_line_ms", line_seconds)
+            record_action_elapsed("grid.filter_propagation_positions.transition_checks_ms", transition_seconds)
+            record_action_elapsed("grid.filter_propagation_positions.blocking_checks_ms", blocking_seconds)
+            record_action_timing("grid.filter_propagation_positions.total_ms", total_started)
+        self._propagation_filter_cache[cache_key] = tuple(sorted(visible_positions))
+        if len(self._propagation_filter_cache) > 256:
+            self._propagation_filter_cache.popitem(last=False)
         return visible_positions
 
     def get_barrier_positions(self) -> Set[Tuple[int, int]]:
@@ -1577,6 +2327,11 @@ class GridMap:
 
         Used for fast-path: if geometric_shape & barrier_positions is empty,
         skip shadowcast entirely."""
+        cache_started = time.perf_counter()
+        if self._barrier_positions_cache is not None:
+            record_action_timing("grid.get_barrier_positions.cache_hit_ms", cache_started)
+            return set(self._barrier_positions_cache)
+        record_action_timing("grid.get_barrier_positions.cache_miss_ms", cache_started)
         barriers: Set[Tuple[int, int]] = set()
         for pos, tile in self._tiles.items():
             if not tile.visible:
@@ -1588,7 +2343,8 @@ class GridMap:
                 block = BaseBlock.get(obj_uuid)
                 if block is not None and block.blocks_vision():
                     barriers.add(pos)
-        return barriers
+        self._barrier_positions_cache = frozenset(barriers)
+        return set(barriers)
 
     def clear(self) -> None:
         """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
@@ -1603,6 +2359,22 @@ class GridMap:
         self._light_sources.clear()
         self._pending_events.clear()
         self._bounds_dirty = True
+        self._spatial_revision = 0
+        self._vision_revision = 0
+        self._movement_revision = 0
+        self._light_revision = 0
+        self._light_geometry_revision = 0
+        self._propagation_revision = 0
+        self._fov_cache.clear()
+        self._propagation_fov_cache.clear()
+        self._propagation_filter_cache.clear()
+        self._barrier_positions_cache = None
+        self._directional_blockers_cache.clear()
+        self._directional_channel_equivalence_cache.clear()
+        self._directional_transition_cache.clear()
+        self._directional_blocking_cache.clear()
+        self._propagation_transition_cache.clear()
+        self._propagation_blocking_cache.clear()
 
     def get_all_tiles(self) -> Dict[Tuple[int, int], Tile]:
         """Get all tiles (for serialization/debugging)."""

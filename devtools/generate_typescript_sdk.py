@@ -1,0 +1,287 @@
+"""Generate the standalone TypeScript SDK contract from backend Pydantic models."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import inspect
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
+from pydantic import BaseModel
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from devtools.generate_event_contract import (
+    SERVER_MANIFEST_PATH,
+    ContractBuilder,
+    build_manifest as build_event_manifest,
+    concrete_event_models,
+    import_dnd_modules,
+    qualified_name,
+    typescript_literal,
+    typescript_type,
+    write_or_check,
+)
+from dnd.core.events import Event
+from dnd.core import combat_log
+from server import api_models
+from server.event_stream import (
+    CombatLogPayload,
+    EvictedPayload,
+    GameEventPayload,
+    HeartbeatPayload,
+    StreamSyncPayload,
+)
+
+
+SDK_ROOT = ROOT / "sdk" / "typescript"
+SDK_MANIFEST_PATH = SDK_ROOT / "src" / "generated" / "contract.generated.json"
+SDK_TYPES_PATH = SDK_ROOT / "src" / "generated" / "contracts.generated.ts"
+STREAM_MODELS = (
+    StreamSyncPayload,
+    GameEventPayload,
+    CombatLogPayload,
+    HeartbeatPayload,
+    EvictedPayload,
+)
+
+
+def api_model_roots() -> list[type[BaseModel]]:
+    """Return every public model declared by `server.api_models`."""
+    return sorted(
+        (
+            value
+            for value in vars(api_models).values()
+            if inspect.isclass(value)
+            and issubclass(value, BaseModel)
+            and value.__module__ == api_models.__name__
+        ),
+        key=qualified_name,
+    )
+
+
+def declared_model_roots(module: Any) -> list[type[BaseModel]]:
+    """Return Pydantic models owned by one backend module."""
+    return sorted(
+        (
+            value
+            for value in vars(module).values()
+            if inspect.isclass(value)
+            and issubclass(value, BaseModel)
+            and value.__module__ == module.__name__
+        ),
+        key=qualified_name,
+    )
+
+
+def build_sdk_manifest() -> Dict[str, Any]:
+    """Build one recursive manifest for REST, SSE, logs, and engine events."""
+    import_dnd_modules()
+    event_manifest = build_event_manifest()
+    builder = ContractBuilder()
+    roots = [
+        *api_model_roots(),
+        *declared_model_roots(combat_log),
+        *STREAM_MODELS,
+    ]
+    for model in roots:
+        builder.add_model(model)
+    for model in concrete_event_models():
+        builder.add_model(model)
+
+    type_names: Dict[str, str] = {}
+    for model, descriptor in builder.models.items():
+        name = descriptor["typescript"]
+        previous = type_names.setdefault(name, qualified_name(model))
+        if previous != qualified_name(model):
+            raise RuntimeError(
+                f"TypeScript model name {name!r} is ambiguous: "
+                f"{previous!r} and {qualified_name(model)!r}."
+            )
+
+    models: Dict[str, Any] = {}
+    for model in sorted(builder.models, key=qualified_name):
+        row = dict(builder.models[model])
+        row["root_model"] = bool(getattr(model, "__pydantic_root_model__", False))
+        models[qualified_name(model)] = row
+
+    manifest: Dict[str, Any] = {
+        "contract_version": 1,
+        "event_contract_version": event_manifest["contract_version"],
+        "event_contract_hash": event_manifest["contract_hash"],
+        "event_classes": event_manifest["event_classes"],
+        "models": models,
+        "enums": {
+            qualified_name(enum): builder.enums[enum]
+            for enum in sorted(builder.enums, key=qualified_name)
+        },
+        "roots": [qualified_name(model) for model in roots],
+    }
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    manifest["contract_hash"] = hashlib.sha256(canonical).hexdigest()
+    return manifest
+
+
+def sdk_typescript_type(descriptor: Dict[str, Any], manifest: Dict[str, Any]) -> str:
+    """Render a descriptor, preserving concrete event polymorphism."""
+    kind = descriptor.get("kind")
+    if kind == "model" and descriptor.get("ref") == qualified_name(Event):
+        return "ServerEvent"
+    if kind == "array":
+        return f"Array<{sdk_typescript_type(descriptor['items'], manifest)}>"
+    if kind == "record":
+        return f"Record<string, {sdk_typescript_type(descriptor['values'], manifest)}>"
+    if kind == "tuple":
+        return "[" + ", ".join(
+            sdk_typescript_type(item, manifest)
+            for item in descriptor["items"]
+        ) + "]"
+    if kind == "union":
+        rendered = list(dict.fromkeys(
+            sdk_typescript_type(item, manifest)
+            for item in descriptor["items"]
+        ))
+        return " | ".join(rendered) if rendered else "never"
+    return typescript_type(descriptor, manifest)
+
+
+def render_typescript(manifest: Dict[str, Any]) -> str:
+    """Render exact SDK models and runtime descriptors as TypeScript."""
+    lines = [
+        "/* Generated by dnd_engine/devtools/generate_typescript_sdk.py. Do not edit. */",
+        "",
+        f"export const SDK_CONTRACT_VERSION = {manifest['contract_version']} as const;",
+        f"export const SDK_CONTRACT_HASH = {json.dumps(manifest['contract_hash'])} as const;",
+        f"export const EVENT_CONTRACT_VERSION = {manifest['event_contract_version']} as const;",
+        f"export const EVENT_CONTRACT_HASH = {json.dumps(manifest['event_contract_hash'])} as const;",
+        "",
+        "export type JsonPrimitive = null | boolean | number | string;",
+        "export type JsonValue = JsonPrimitive | ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue };",
+        "export type ContractDescriptor =",
+        "  | { readonly kind: 'json'; readonly python?: string }",
+        "  | { readonly kind: 'null' | 'string' | 'number' | 'boolean' }",
+        "  | { readonly kind: 'literal'; readonly value: JsonValue }",
+        "  | { readonly kind: 'enum' | 'model'; readonly ref: string }",
+        "  | { readonly kind: 'array'; readonly items: ContractDescriptor }",
+        "  | { readonly kind: 'record'; readonly values: ContractDescriptor }",
+        "  | { readonly kind: 'tuple' | 'union'; readonly items: ReadonlyArray<ContractDescriptor> };",
+        "export interface ContractModelDescriptor {",
+        "  readonly python: string;",
+        "  readonly typescript: string;",
+        "  readonly root_model: boolean;",
+        "  readonly fields: Readonly<Record<string, ContractDescriptor>>;",
+        "}",
+        "export interface ContractEnumDescriptor {",
+        "  readonly python: string;",
+        "  readonly typescript: string;",
+        "  readonly values: ReadonlyArray<JsonValue>;",
+        "}",
+        "",
+    ]
+
+    for enum in manifest["enums"].values():
+        values = " | ".join(typescript_literal(value) for value in enum["values"])
+        lines.append(f"export type {enum['typescript']} = {values or 'never'};")
+    lines.append("")
+
+    event_classes = manifest["event_classes"]
+    for model_path, model in manifest["models"].items():
+        fields = model["fields"]
+        if model["root_model"]:
+            root = fields["root"]
+            lines.append(
+                f"export type {model['typescript']} = "
+                f"{sdk_typescript_type(root, manifest)};"
+            )
+            lines.append("")
+            continue
+
+        is_event = model_path in event_classes
+        lines.append(f"export interface {model['typescript']} {{")
+        if is_event:
+            lines.append(f"  readonly wire_type: {json.dumps(model_path)};")
+        for name, descriptor in fields.items():
+            if is_event and name == "event_type":
+                values = event_classes[model_path]["event_types"]
+                rendered = " | ".join(json.dumps(value) for value in values)
+                lines.append(f"  readonly event_type: {rendered};")
+                continue
+            lines.append(
+                f"  readonly {name}: {sdk_typescript_type(descriptor, manifest)};"
+            )
+        lines.append("}")
+        lines.append("")
+
+    concrete_events = [
+        row["typescript"]
+        for path, row in event_classes.items()
+        if path != qualified_name(Event)
+    ]
+    lines.append("export type ConcreteServerEvent =")
+    for name in concrete_events:
+        lines.append(f"  | {name}")
+    lines[-1] = lines[-1] + ";"
+    lines.append("export type ServerEvent = ConcreteServerEvent | EngineEvent;")
+    lines.append("")
+    lines.append("export interface EventByWireType {")
+    for path, row in event_classes.items():
+        lines.append(f"  readonly {json.dumps(path)}: {row['typescript']};")
+    lines.append("}")
+    lines.append("")
+
+    lines.append("export interface SdkModelByName {")
+    for model in manifest["models"].values():
+        lines.append(f"  readonly {json.dumps(model['typescript'])}: {model['typescript']};")
+    lines.append("}")
+    lines.append("export type SdkModelName = keyof SdkModelByName;")
+    lines.append("")
+    lines.append(
+        "export const SDK_MODEL_DESCRIPTORS: Readonly<Record<string, ContractModelDescriptor>> = "
+        + json.dumps(manifest["models"], sort_keys=True, separators=(",", ":"))
+        + ";"
+    )
+    lines.append(
+        "export const SDK_ENUM_DESCRIPTORS: Readonly<Record<string, ContractEnumDescriptor>> = "
+        + json.dumps(manifest["enums"], sort_keys=True, separators=(",", ":"))
+        + ";"
+    )
+    paths_by_name = {
+        model["typescript"]: path
+        for path, model in manifest["models"].items()
+    }
+    lines.append(
+        "export const SDK_MODEL_PATHS_BY_NAME: Readonly<Record<SdkModelName, string>> = "
+        + json.dumps(paths_by_name, sort_keys=True, separators=(",", ":"))
+        + ";"
+    )
+    lines.append(
+        "export const SDK_EVENT_CLASSES: Readonly<Record<string, { readonly model: string; readonly typescript: string; readonly event_types: ReadonlyArray<string> }>> = "
+        + json.dumps(manifest["event_classes"], sort_keys=True, separators=(",", ":"))
+        + ";"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> None:
+    """Write or verify all generated backend and TypeScript contracts."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    event_manifest = build_event_manifest()
+    event_text = json.dumps(event_manifest, indent=2, sort_keys=True) + "\n"
+    write_or_check(SERVER_MANIFEST_PATH, event_text, args.check)
+
+    sdk_manifest = build_sdk_manifest()
+    sdk_text = json.dumps(sdk_manifest, indent=2, sort_keys=True) + "\n"
+    write_or_check(SDK_MANIFEST_PATH, sdk_text, args.check)
+    write_or_check(SDK_TYPES_PATH, render_typescript(sdk_manifest), args.check)
+
+
+if __name__ == "__main__":
+    main()

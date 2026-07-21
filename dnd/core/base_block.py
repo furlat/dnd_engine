@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_fi
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition, HazardFilter
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
+from dnd.core.senses import SenseMode as SenseMode, SensesType as SensesType
 
 from collections import defaultdict
 
@@ -31,24 +32,6 @@ class LightLevel(int, Enum):
     DIM_LIGHT = 2
     BRIGHT_LIGHT = 3
     VERY_BRIGHT = 4
-
-class SensesType(str, Enum):
-    """Special sense categories supported by the perception pipeline."""
-
-    BLINDSIGHT = "Blindsight"
-    DARKVISION = "Darkvision"
-    TREMORSENSE = "Tremorsense"
-    TRUESIGHT = "Truesight"
-    DEVILS_SIGHT = "Devils Sight"
-    SEE_INVISIBLE = "See Invisible"
-
-
-class SenseMode(BaseModel):
-    """A sense type with its effective range in feet. 0 = unlimited."""
-
-    sense_type: SensesType = Field(description="Special sense category.")
-    range_feet: int = Field(default=0, description="Range in feet; 0 means unlimited.")
-
 
 class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.

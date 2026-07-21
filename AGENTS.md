@@ -985,9 +985,11 @@ Both validate that environment changes (door open/close) correctly propagate thr
 ## Server, Sessions, and Controllers
 
 The active external surface is the FastAPI server (`server/event_server.py`) with
-session-based authority (`server/session.py`). Controllers live in
-`dnd/controller.py`; the newer in-process AI layer lives in `ai/` and implements
-the `TurnRunner` protocol used by `AIAgentController`.
+session-based authority (`server/session.py`). Controllers in
+`dnd/controller.py` represent turn ownership. Traditional AI and Codex use the
+same session-subjective event stream, local `ai.subjective` runtime, typed
+`ai.protocol` decision epochs, and shared `ai.policy.PolicyHost`; no controller
+policy reads live engine entities directly.
 
 The old subprocess CLI was moved to `to_archive/cli`. Keep it as reference
 material unless the user explicitly asks to recover or rebuild that surface.

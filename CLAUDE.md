@@ -981,23 +981,14 @@ if not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid):
 
 Both validate that environment changes (door open/close) correctly propagate through `_paths_dirty` to affect reaction-time walkability checks. Tests: `examples/test_intercept_dodge_roll.py` (52 assertions).
 
-## CLI and Server Architecture
+## Server, Sessions, and Controllers
 
-Two CLIs connect to a FastAPI server (`server/event_server.py`) with session-based authority (`server/session.py`):
-- **Human CLI** (`cli/main.py`): Rich terminal interface — `python -m cli play` (vs AI) or `python -m cli playpvp` (vs Claude)
-- **Agent CLI** (`cli/agent.py`): Claude's command interface for PvP
-
-**PvP Quick Start**: Start server (`uvicorn server.event_server:app --reload`), user runs `python -m cli playpvp`, Claude connects via agent CLI.
-
-**Agent turn flow** — **CRITICAL**: After `end`, you MUST run `watch` again!
-
-```bash
-connect → watch → [state/actions/move/attack/end] → watch → repeat
-```
-
-To restart: User restarts `playpvp`, Claude runs `disconnect` → `connect` → `watch`
-
-See `claude_docs/CLI_GUIDE.md` for full agent command reference and session details.
+The active external surface is the FastAPI server (`server/event_server.py`) with
+session-based authority (`server/session.py`). Controllers in
+`dnd/controller.py` represent turn ownership. Traditional AI and Codex use the
+same session-subjective event stream, local `ai.subjective` runtime, typed
+`ai.protocol` decision epochs, and shared `ai.policy.PolicyHost`. The archived
+CLI is reference material only and is not a runtime architecture.
 
 ## Reference
 

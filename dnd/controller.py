@@ -4,7 +4,7 @@ Controllers decide whether an encounter turn should run autonomously or wait for
 external input, and may provide actions while the encounter owns turn flow.
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Protocol, runtime_checkable
+from typing import Any, Optional, Dict, List, ClassVar
 
 __all__ = [
     "TurnContext",
@@ -13,8 +13,6 @@ __all__ = [
     "HumanController",
     "CodexController",
     "ExternalAIController",
-    "TurnRunner",
-    "AIAgentController",
 ]
 from uuid import UUID
 from pydantic import Field
@@ -183,7 +181,6 @@ class PassController(Controller):
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         return False
 
-
 class HumanController(Controller):
     """Controller for human-controlled entities.
 
@@ -259,64 +256,3 @@ class ExternalAIController(Controller):
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         return False
-
-
-@runtime_checkable
-class TurnRunner(Protocol):
-    """Protocol for AI agents that can run a full turn autonomously."""
-    def run_turn(self) -> None: ...
-
-
-class AIAgentController(Controller):
-    """Controller that delegates to a TurnRunner (e.g. ai.agents.base.BaseAgent).
-
-    The agent handles the entire turn internally via GameInterface,
-    so this controller runs the agent once then signals turn end.
-
-    Attributes:
-        name: Display name of this controller.
-        controller_type: Stable controller type identifier.
-    """
-
-    name: str = Field(default="AI Agent", description="Display name of this controller.")
-    controller_type: str = Field(default="ai_agent", description="Stable controller type identifier.")
-
-    _agents: ClassVar[Dict[UUID, TurnRunner]] = {}
-    _has_run: ClassVar[Dict[UUID, bool]] = {}
-
-    def set_agent(self, agent: TurnRunner) -> None:
-        """Bind a TurnRunner to this controller."""
-        self._agents[self.uuid] = agent
-
-    def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
-        """Reset the delegated-run marker at turn start.
-
-        Args:
-            entity: Entity whose turn started.
-            context: Turn context at start.
-        """
-        self._has_run[self.uuid] = False
-
-    def get_next_action(
-        self,
-        entity: Entity,
-        context: TurnContext
-    ) -> Optional[BaseAction]:
-        """Run the delegated agent once, then end the turn.
-
-        Args:
-            entity: Entity controlled by this controller.
-            context: Current turn context.
-
-        Returns:
-            Always ``None`` because the agent owns any turn actions.
-        """
-        agent = self._agents.get(self.uuid)
-        if agent:
-            agent.run_turn()
-        self._has_run[self.uuid] = True
-        return None
-
-    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        """Return whether the delegated agent has not yet run this turn."""
-        return not self._has_run.get(self.uuid, False)
