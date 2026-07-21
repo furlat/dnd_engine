@@ -271,6 +271,12 @@ def _apply_observer_patch(
         "visible_entity_uuids": sorted(visible_entities),
         "visible_object_uuids": sorted(visible_objects),
     }
+    position = data.get("position")
+    if isinstance(position, (list, tuple)) and len(position) == 2:
+        update["position"] = (int(position[0]), int(position[1]))
+    passive_perception = data.get("passive_perception")
+    if isinstance(passive_perception, int) and not isinstance(passive_perception, bool):
+        update["passive_perception"] = passive_perception
     if data.get("sense_modes") is not None:
         update["sense_modes"] = data["sense_modes"]
     state.observers[observer_uuid] = observer.model_copy(update=update)

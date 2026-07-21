@@ -69,6 +69,7 @@ from dnd.scenarios.evaluation.legacy_recipes import get_legacy_recipe
 from dnd.scenarios.evaluation.models import (
     ActorAugmentation,
     ActorBlueprint,
+    ApparelGrant,
     BarbarianActorBlueprint,
     BestiaryActorBlueprint,
     DamageAffinity,
@@ -83,6 +84,7 @@ from dnd.scenarios.evaluation.models import (
     StartingCondition,
     StartingDamage,
 )
+from dnd.scenarios.evaluation.wardrobes import equip_apparel
 from dnd.spells.abjuration import register_counterspell_reaction, register_shield_reaction
 
 
@@ -311,6 +313,8 @@ def _apply_immediate_augmentation(entity: Entity, augmentation: ActorAugmentatio
         ))
     elif isinstance(augmentation, EquipmentGrant):
         _grant_equipment(entity, augmentation)
+    elif isinstance(augmentation, ApparelGrant):
+        equip_apparel(entity, augmentation)
 
 
 def _apply_deferred_augmentation(

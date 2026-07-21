@@ -98,6 +98,17 @@ def test_catalog_is_a_lossless_projection_of_canonical_content(
     assert [row["configuration_id"] for row in payload["hero_configurations"]] == [
         spec.configuration_id for spec in HERO_CONFIGURATIONS
     ]
+    berserker = next(
+        row
+        for row in payload["hero_configurations"]
+        if row["configuration_id"] == "hero.barbarian_l5_berserker_torch"
+    )
+    assert berserker["members"][0]["augmentations"][0] == {
+        "kind": "apparel_grant",
+        "item_id": "costume",
+        "visual_variant_id": "85000004",
+        "display_name": "Pit Fighter's Wrap",
+    }
     assert [row["configuration_id"] for row in payload["monster_configurations"]] == [
         spec.configuration_id for spec in MONSTER_PARTY_CONFIGURATIONS
     ]

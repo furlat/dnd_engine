@@ -20,6 +20,36 @@ class SemanticModel(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class SemanticProvenanceKind(str, Enum):
+    """How an action semantic contract was obtained."""
+
+    EXACT = "exact"
+    STRUCTURED_PROFILE = "structured_profile"
+    CATEGORY_FALLBACK = "category_fallback"
+    UNKNOWN = "unknown"
+
+
+class ActionSemanticProvenance(SemanticModel):
+    """Auditable derivation metadata for one action semantic contract."""
+
+    kind: SemanticProvenanceKind = Field(
+        default=SemanticProvenanceKind.EXACT,
+        description="Resolution strength used to construct the semantic contract.",
+    )
+    semantic_key: Optional[str] = Field(
+        default=None,
+        description="Stable engine action key from which semantics were derived.",
+    )
+    derivation: str = Field(
+        default="declared_contract",
+        description="Stable description of the derivation mechanism.",
+    )
+    missing_inputs: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Structured semantic inputs absent when resolution remained unknown.",
+    )
+
+
 class TruthValue(str, Enum):
     """Three-valued truth used when subjective knowledge may be incomplete."""
 
@@ -796,6 +826,10 @@ class ActionSemantics(SemanticModel):
 
     semantic_id: str = Field(description="Stable action-family identifier.")
     semantic_version: int = Field(default=1, ge=1, description="Version of this semantic contract.")
+    provenance: ActionSemanticProvenance = Field(
+        default_factory=ActionSemanticProvenance,
+        description="Auditable origin and resolution strength of this contract.",
+    )
     tags: frozenset[ActionTag] = Field(default_factory=frozenset, description="Stable semantic capabilities.")
     planning_preconditions: FactExpression = Field(
         default_factory=FactExpression.unknown,
@@ -851,7 +885,21 @@ class ActionSemantics(SemanticModel):
 
 def unknown_action_semantics() -> ActionSemantics:
     """Return the explicit fallback for actions without registered meaning."""
-    return ActionSemantics(semantic_id="action.unknown", tags=frozenset({ActionTag.UNKNOWN}))
+    return ActionSemantics(
+        semantic_id="action.unknown",
+        provenance=ActionSemanticProvenance(
+            kind=SemanticProvenanceKind.UNKNOWN,
+            derivation="no_registered_or_structured_semantics",
+            missing_inputs=(
+                "exact_builder",
+                "world_effect_profile",
+                "target_effect_profile",
+                "self_setup_profile",
+                "recognized_category_contract",
+            ),
+        ),
+        tags=frozenset({ActionTag.UNKNOWN}),
+    )
 
 
 def action_semantics_ref(semantics: ActionSemantics) -> str:

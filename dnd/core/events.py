@@ -2550,6 +2550,10 @@ class SensoryUpdateEvent(Event):
         default=(0, 0),
         description="Observer grid position after the sensory update.",
     )
+    observer_position_changed: bool = Field(
+        default=False,
+        description="Whether this update changed the observer's grid position.",
+    )
     effective_light_levels: Dict[str, int] = Field(
         default_factory=dict,
         description=(

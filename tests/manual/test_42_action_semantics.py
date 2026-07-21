@@ -29,7 +29,9 @@ from ai.protocol.semantics import (
     InformationOperation,
     MovementKind,
     OutcomeKind,
+    ResourceEffect,
     ResourceOperation,
+    SemanticProvenanceKind,
     SelfSetupDuration,
     D20CheckMode,
     SelfSetupMaintenanceSemantics,
@@ -195,6 +197,152 @@ def test_display_name_does_not_change_stable_action_semantics() -> None:
     })
 
     assert action_semantics_for_available_action(original) is action_semantics_for_available_action(renamed)
+
+
+def test_end_rage_has_exact_logical_precondition_and_effects() -> None:
+    """Voluntary rage cleanup is a known capability rather than an unknown action."""
+    semantics = action_semantics_for_available_action(_action(
+        "End Rage",
+        semantic_key="dnd.classes.rage.EndRage",
+    ))
+
+    assert semantics.semantic_id == "setup.rage.end"
+    assert semantics.provenance.kind is SemanticProvenanceKind.EXACT
+    assert semantics.planning_preconditions == FactExpression(
+        operator=FactOperator.ANY,
+        operands=(
+            FactExpression(
+                operator=FactOperator.PREDICATE,
+                predicate=FactPredicate(
+                    fact_id="actor.condition.raging",
+                    expected_value=True,
+                ),
+            ),
+            FactExpression(
+                operator=FactOperator.PREDICATE,
+                predicate=FactPredicate(
+                    fact_id="actor.condition.frenzied",
+                    expected_value=True,
+                ),
+            ),
+        ),
+    )
+    assert {
+        (effect.fact_id, effect.operation)
+        for effect in semantics.guaranteed_effects
+    } == {
+        ("actor.condition.raging", EffectOperation.REMOVE),
+        ("actor.condition.frenzied", EffectOperation.REMOVE),
+    }
+
+
+def test_semantic_provenance_distinguishes_exact_profile_fallback_and_unknown() -> None:
+    """Consumers can audit semantic resolution strength without reverse engineering it."""
+    exact = action_semantics_for_available_action(_action(
+        "Move",
+        semantic_key="dnd.actions.Move",
+        target_type=TargetType.POSITION_PATH,
+        action_category=ActionCategory.MOVEMENT,
+    ))
+    profiled = action_semantics_for_available_action(_action(
+        "Opaque setup",
+        semantic_key="rules.actions.profiled_setup",
+        self_setup_profile=ActionSelfSetupProfile(
+            semantic_id="setup.opaque",
+            duration=ActionSetupDuration.UNTIL_NEXT_TURN,
+        ),
+    ))
+    fallback = action_semantics_for_available_action(_action(
+        "Opaque spell",
+        semantic_key="rules.spells.unregistered_damage",
+        action_category=ActionCategory.SPELL,
+        damage_types=["fire"],
+    ))
+    unknown = action_semantics_for_available_action(_action(
+        "Opaque ability",
+        semantic_key="rules.actions.unclassified",
+    ))
+
+    assert exact.provenance.kind is SemanticProvenanceKind.EXACT
+    assert exact.provenance.semantic_key == "dnd.actions.Move"
+    assert profiled.provenance.kind is SemanticProvenanceKind.STRUCTURED_PROFILE
+    assert fallback.provenance.kind is SemanticProvenanceKind.CATEGORY_FALLBACK
+    assert unknown.provenance.kind is SemanticProvenanceKind.UNKNOWN
+    assert unknown.provenance.missing_inputs
+
+
+def test_inventory_and_wake_actions_have_exact_logical_semantics() -> None:
+    """Core utility actions expose their real prerequisites and effects."""
+    pick_up = action_semantics_for_available_action(_action(
+        "Pick Up",
+        semantic_key="dnd.actions.PickUp",
+        target_type=TargetType.OBJECT,
+    ))
+    shake_awake = action_semantics_for_available_action(_action(
+        "Shake Awake",
+        semantic_key="dnd.actions.ShakeAwake",
+        target_type=TargetType.ENTITY,
+    ))
+
+    assert pick_up.provenance.kind is SemanticProvenanceKind.EXACT
+    assert pick_up.semantic_id == "interaction.object.pick_up"
+    assert ActionTag.RESOURCE_ACQUIRE in pick_up.tags
+    assert {effect.fact_id for effect in pick_up.guaranteed_effects} == {
+        "actor.inventory.selected_object",
+        "world.floor.selected_object",
+    }
+    assert shake_awake.provenance.kind is SemanticProvenanceKind.EXACT
+    assert shake_awake.semantic_id == "support.shake_awake"
+    assert shake_awake.guaranteed_effects[0].operation is EffectOperation.REMOVE
+
+
+def test_font_of_magic_conversions_describe_both_resource_sides() -> None:
+    """Slot and sorcery-point conversions preserve costs and acquired resources."""
+    slot_to_points = action_semantics_for_available_action(_action(
+        "Slot to SP L3",
+        semantic_key="dnd.classes.sorcerer.ConvertSlotToSP",
+        costs=[
+            BaseCost(name="Bonus Action", cost_type="bonus_actions", cost=1),
+            BaseCost(name="Level 3 Slot", cost_type="spell_slot_3", cost=1),
+        ],
+    ))
+    points_to_slot = action_semantics_for_available_action(_action(
+        "5 SP to Slot L3",
+        semantic_key="dnd.classes.sorcerer.ConvertSPToSlot",
+        costs=[
+            BaseCost(name="Bonus Action", cost_type="bonus_actions", cost=1),
+            BaseCost(
+                name="Sorcery Points",
+                cost_type="actions",
+                cost=0,
+                resource_name="sorcery_points",
+                resource_cost=5,
+            ),
+        ],
+    ))
+
+    assert slot_to_points.provenance.kind is SemanticProvenanceKind.EXACT
+    assert ResourceEffect(
+        resource_id="resource.sorcery_points",
+        operation=ResourceOperation.RESTORE,
+        amount=3,
+    ) in slot_to_points.resource_effects
+    assert ResourceEffect(
+        resource_id="spell_slot.3",
+        operation=ResourceOperation.CONSUME,
+        amount=1,
+    ) in slot_to_points.resource_effects
+    assert points_to_slot.provenance.kind is SemanticProvenanceKind.EXACT
+    assert ResourceEffect(
+        resource_id="spell_slot.3",
+        operation=ResourceOperation.RESTORE,
+        amount=1,
+    ) in points_to_slot.resource_effects
+    assert ResourceEffect(
+        resource_id="resource.sorcery_points",
+        operation=ResourceOperation.CONSUME,
+        amount=5,
+    ) in points_to_slot.resource_effects
 
 
 def test_move_and_dash_expose_distinct_spatial_meaning() -> None:

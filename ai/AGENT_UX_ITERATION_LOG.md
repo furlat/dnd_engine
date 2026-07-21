@@ -18206,3 +18206,202 @@ resolver calls first; it should attack the command aftermath structure that
 still shows `SpatialSensesSystem`, `GridMap_on_light_movement_event`, event
 store callbacks, and follow-up epoch construction dominating the worst
 commands.
+
+## 2026-07-21 - Live Balanced Codex Harness Playtest
+
+Ran a complete human-versus-Codex match through the persistent hot harness to
+validate the operator experience above the subjective runtime. This was a live
+manual playtest, not a traditional-policy or gauntlet run. Codex controlled the
+monster faction through `codex.balanced-v2` without invoking the optional
+traditional-policy oracle. A human controlled a level-5 Barbarian through
+NeuroClient.
+
+### Retained Evidence
+
+- runtime id: `de347bd0-ca43-42fa-b65f-c7dbcca47494`;
+- session id: `f4693786-92bb-4db4-b83b-3adf13a569b3`;
+- claim id: `8c0ac65b-e58a-46d4-9d94-f82c4d3b5ad7`;
+- encounter id: `bf02a0b3-acdd-4e77-85b7-c006e82b1708`;
+- profile: `codex.balanced-v2`;
+- profile manifest digest:
+  `461568ed37a82a6a319e6fb4baa7d58a6d96eee6e5cbbc7e4dad861c4565a00b`;
+- finalized transcript:
+  `game_logs/codex_sessions/20260721T163157.658040Z-de347bd0-ca43-42fa-b65f-c7dbcca47494.json`;
+- outcome: monsters won in round 3;
+- surviving controlled entity: `monster_3`, 40/40 HP;
+- defeated controlled entities: `monster_1`, `monster_2`;
+- observed damage dealt/taken: `58 / 35`;
+- commands: `15`;
+- explicit inspections: `1`.
+
+The finalized JSON contains 413 ordered records:
+
+| Record type | Count |
+|---|---:|
+| subjective frame | 249 |
+| agent event | 80 |
+| operator interaction | 36 |
+| command intent | 15 |
+| command acknowledgement | 15 |
+| command lifecycle | 15 |
+| session start | 1 |
+| subjective snapshot | 1 |
+| terminal summary | 1 |
+
+### Tactical Sequence Exercised
+
+1. `monster_1` attacked the Barbarian with its scimitar for 2 damage, used
+   `Nimble Escape: Disengage`, and retreated from `(12,3)` to `(14,3)`.
+2. `monster_3` allocated all five darts from a level-3 `Magic Missile` to the
+   same target for 21 force damage, then drank a Greater Invisibility potion.
+3. `monster_2` made a legal Shortbow attack and missed.
+4. During the human turn, the Barbarian killed both low-HP monsters and opened
+   the door. The hot process remained idle until a new controlled epoch.
+5. `monster_3` cast another five-dart level-3 `Magic Missile` for 10 damage,
+   drank a Haste potion, received the new same-turn action in the follow-up
+   epoch, and spent it on a four-dart level-2 `Magic Missile` for 14 damage.
+6. The hasted caster then used a safe route witness to move from `(12,7)` to
+   `(14,12)` while invisible.
+7. The human healed from 3 HP to 10 HP and advanced. A final four-dart level-2
+   `Magic Missile` dealt 11 damage and ended the encounter.
+
+This sequence deliberately covered repeated-target allocation, resource and
+item costs, multiple commands inside one variable-length turn, same-turn
+action-economy mutation, route execution, wait/wakeup behavior, subjective
+memory, and terminal finalization.
+
+### What Worked
+
+- The hot daemon maintained one persistent `SubjectiveRuntime`; ordinary
+  decisions did not bootstrap a new world or poll `/available-actions`.
+- `hot-watch` slept across human turns and resumed on the next controlled
+  decision epoch.
+- Repeated `--extra-target` values correctly represented all Magic Missile
+  allocations, including repeated use of one target UUID.
+- Every accepted command produced a new revision and current legal follow-up
+  affordances. Haste adding an immediate action was visible without a manual
+  state refresh.
+- Safe movement consumed a server-issued row and preserved its route witness;
+  the local helper did not manufacture a legal destination.
+- The match remained active in the backend and in the Codex runtime when an
+  unrelated NeuroClient edit reset the browser UI. The next subjective epoch
+  still arrived correctly.
+- The terminal frame cleared the actor and epoch, exposed a subjective winner,
+  and finalized the transcript automatically.
+- No objective endpoint or policy oracle was used. No hidden-information leak
+  was observed in this playtest. This is supporting evidence, not a substitute
+  for adversarial subjectivity tests.
+- Knowledge state remained explicit: objects no longer in view appeared as
+  `remembered` rather than silently disappearing or remaining falsely visible.
+
+### Harness Friction Found
+
+#### 1. Balanced automatic output is still much too large
+
+Two ordinary `hot-watch` responses were approximately 14,255 and 12,783
+tokens. `action_families` provides the useful tactical index, but the response
+also includes a long capability catalog that repeats many of the same names,
+costs, semantic keys, and tags. The full catalog is valuable for inspection
+and ablation evidence, but it should not be repeated automatically every turn.
+
+Required direction:
+
+- keep actor, economy, visible/remembered contacts, changed facts, warnings,
+  action-family summaries, multi-target requirements, and recent causal events
+  in the automatic turn brief;
+- move the complete capability catalog behind a typed local inspection call;
+- provide an explicit manifest/digest change notice when capabilities change;
+- retain all omitted data in the local canonical document and transcript.
+
+#### 2. Command responses repeat the whole follow-up representation
+
+Several `hot-execute` and `hot-end-turn` calls returned thousands of tokens;
+one end-turn response was about 9,417 tokens. The command result needs the
+status, causal ids, concise resolution, resulting revision, changed economy,
+important observed effects, and whether another controlled action is possible.
+It does not need to inline the complete next-turn representation because the
+runtime already stores it locally.
+
+Required direction:
+
+- make CLI command output a compact typed command delta by default;
+- keep the complete follow-up available through `hot-turn`,
+  `hot-representation`, and local inspection;
+- preserve the current full response as an explicit diagnostic mode.
+
+#### 3. Exact action-row lookup is functional but unnecessarily generic
+
+Finding `position|Move|pos=14,3` with `hot-search` scanned 16,853 JSON nodes to
+return one JSON pointer. Direct execution by a known stable row id was clean,
+but discovering exact movement/AoE rows should not require searching the whole
+canonical document.
+
+Required direction:
+
+- add typed local indexes for row id, action family, target UUID, and target
+  position;
+- expose exact local lookup commands without contacting the game server;
+- keep generic search for exploratory inspection, not routine row selection.
+
+#### 4. Multi-target allocation is correct but verbose for repeated targets
+
+The explicit repeated `--extra-target` interface is unambiguous and worked,
+but four identical flags for a five-dart Magic Missile are cumbersome.
+
+Required direction:
+
+- retain the exact repeated-target list in the typed command;
+- add a convenience syntax such as target UUID plus allocation count;
+- expand convenience input into the same typed list before validation and
+  transcript recording, so semantics and experimental evidence do not change.
+
+#### 5. Reported local command latency is not sufficiently decomposed
+
+Observed CLI `local_total_ms` values were roughly 66-123 ms. These samples
+include more than tactical computation: a fresh CLI process, local HTTP,
+serialization, daemon work, server submission, engine execution, stream
+reconciliation, representation rebuilding, and output construction. The
+persistent runtime itself remained responsive, but the current headline does
+not show which boundary the operator paid for.
+
+Required direction:
+
+- report CLI startup/client overhead, local daemon processing, server command,
+  stream wait/reduction, representation projection, and output serialization
+  separately;
+- preserve end-to-end wall time as a distinct user-experience metric;
+- do not optimize from the aggregate number without this decomposition.
+
+#### 6. Semantic coverage is technically complete but unevenly specific
+
+No available capability was marked unknown, but the caster's initial turn
+reported 34 capabilities with 14 category fallbacks. Generic category semantics
+are better than display-name inference, but they do not provide the same
+logical prerequisite/effect quality as exact or structured spell semantics.
+
+Required direction:
+
+- list category-fallback semantic keys in inspection and retained evidence;
+- prioritize exact structured semantics for actually exercised spells, items,
+  reactions, and class features;
+- keep `unknown_count == 0` separate from the stronger claim that all semantics
+  are tactically and logically complete.
+
+#### 7. Terminal statistics explicitly remain incomplete
+
+The subjective terminal summary correctly declares the following incomplete:
+`resources_spent`, `temporary_hp_gained`, `condition_names`, and
+`unperceived_events`. Declaring incompleteness is preferable to inventing a
+score, but a PvP-style result screen will need all perceived resource and
+condition statistics that can be derived from the retained event history.
+`unperceived_events` must remain unknowable to a participant summary; an
+authorized objective observer/replay summary is a different product.
+
+### Acceptance Evidence From This Match
+
+The vertical harness path is operational: one balanced Codex process can remain
+attached, wait through another participant's variable-length turn, inspect only
+its local subjective state, execute server-issued affordances, receive causal
+follow-up epochs, and finish with a retained terminal transcript. The next
+harness pass is therefore a representation-density and operator-ergonomics
+pass, not another transport rewrite.

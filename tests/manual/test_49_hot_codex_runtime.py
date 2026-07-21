@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from threading import Event, Thread
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from fastapi.testclient import TestClient
 import pytest
 
 from ai.codex_tools import hot_runtime as hot_runtime_module
+from ai.codex_tools.client import CodexToolClient
 from ai.codex_tools.hot_runtime import (
     HotCodexBusyError,
     HotCodexExecuteRequest,
@@ -19,7 +22,16 @@ from ai.codex_tools.hot_runtime import (
     HotCodexStaleRevisionError,
     create_hot_codex_app,
 )
-from ai.codex_tools.contracts import TakeoverClaimInfo
+from ai.codex_tools.session_transcript import (
+    CodexSessionTranscript,
+    SessionReleasePayload,
+    SessionTranscript,
+)
+from ai.codex_tools.representation.profiles import (
+    BALANCED_V2_PROFILE_ID,
+    build_builtin_representation_registry,
+)
+from ai.codex_tools.contracts import TakeoverClaimInfo, TakeoverEntityInfo
 from ai.observation.models import (
     KnowledgeState,
     ObservationEncounterState,
@@ -109,6 +121,7 @@ def test_hot_turn_index_reports_older_logs_omitted_from_bounded_view() -> None:
 
 def test_hot_attach_adopts_existing_claim_without_takeover(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """A validation-created claim becomes the hot runtime's exact lease."""
     class FakeControlClient:
@@ -149,7 +162,7 @@ def test_hot_attach_adopts_existing_claim_without_takeover(
     monkeypatch.setattr(
         hot_runtime_module,
         "SubjectiveRuntime",
-        lambda *, base_url, session_id: runtime,
+        lambda **_kwargs: runtime,
     )
     monkeypatch.setattr(HotCodexSession, "start_heartbeat", lambda self: None)
 
@@ -157,6 +170,7 @@ def test_hot_attach_adopts_existing_claim_without_takeover(
         base_url="http://127.0.0.1:8000",
         claim_id="claim-1",
         session_id="session",
+        transcript_directory=tmp_path,
     )
 
     assert session.claim_id == "claim-1"
@@ -165,6 +179,100 @@ def test_hot_attach_adopts_existing_claim_without_takeover(
     assert runtime.bootstrap_calls == 1
     session.release()
     assert controls[0].closed is True
+
+
+def test_hot_attach_infers_faction_for_explicit_entity_claim(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An explicit hero claim must not inherit the CLI's monster-side default label."""
+    class FakeControlClient:
+        def __init__(self, _base_url: str) -> None:
+            pass
+
+        def resolve_control_claim(self, **_kwargs: object) -> TakeoverClaimInfo:
+            return TakeoverClaimInfo(
+                claim_id="claim-hero",
+                session_id="session-hero",
+                name="Codex Hero",
+                faction=None,
+                created_at=10.0,
+                last_heartbeat_at=11.0,
+                lease_seconds=600.0,
+                expires_at=611.0,
+                is_expired=False,
+                claimed_entities=[TakeoverEntityInfo(
+                    entity_uuid="actor",
+                    entity_name="Sorcerer",
+                    faction="heroes",
+                    previous_controller_uuid="controller",
+                )],
+            )
+
+        def close(self) -> None:
+            pass
+
+    runtime = _FakeRuntime(_world())
+    monkeypatch.setattr(hot_runtime_module, "CodexToolClient", FakeControlClient)
+    monkeypatch.setattr(hot_runtime_module, "SubjectiveRuntime", lambda **_kwargs: runtime)
+    monkeypatch.setattr(HotCodexSession, "start_heartbeat", lambda self: None)
+
+    session = HotCodexSession.attach(
+        base_url="http://127.0.0.1:8000",
+        claim_id="claim-hero",
+        session_id="session-hero",
+        transcript_directory=tmp_path,
+    )
+
+    assert session.faction == "heroes"
+
+
+def test_hot_release_finalizes_local_transcript_when_upstream_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    """Remote teardown failure cannot discard the locally complete session record."""
+    class UnavailableControlClient:
+        def release(self, _claim_id: str) -> dict[str, object]:
+            raise ConnectionError("backend already stopped")
+
+        def close(self) -> None:
+            return None
+
+    runtime = _FakeRuntime(_world())
+    transcript = CodexSessionTranscript(
+        runtime_id="runtime-release",
+        session_id="session",
+        claim_id="claim-release",
+        faction="monsters",
+        controlled_entity_uuids=("actor",),
+        representation_manifest=build_builtin_representation_registry().resolve_profile(
+            BALANCED_V2_PROFILE_ID
+        ),
+        directory=tmp_path,
+    )
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-release",
+        faction="monsters",
+        controlled_entity_uuids=("actor",),
+        control_client=cast(CodexToolClient, UnavailableControlClient()),
+        runtime_id="runtime-release",
+        transcript=transcript,
+    )
+    session.bootstrap()
+
+    released = session.release()
+    exported = SessionTranscript.model_validate_json(
+        transcript.final_json_path.read_text(encoding="utf-8")
+    )
+
+    assert released.status == "released"
+    assert released.upstream_status == "unavailable"
+    assert exported.records[-1].record_type.value == "session_released"
+    release_payload = SessionReleasePayload.model_validate(exported.records[-1].payload)
+    assert release_payload.shutdown_failures == (
+        "upstream release: ConnectionError: backend already stopped",
+    )
 
 
 def test_hot_execute_requires_exact_viewed_revision_and_uses_runtime_command_flow() -> None:
@@ -200,6 +308,88 @@ def test_hot_execute_requires_exact_viewed_revision_and_uses_runtime_command_flo
     assert result.local_timing.runtime_command_ms >= 0
     assert result.local_timing.policy_result_ms >= 0
     assert result.local_timing.followup_projection_ms >= 0
+
+
+def test_hot_compact_command_receipt_keeps_next_context_without_diagnostics() -> None:
+    """Normal operator output remains actionable and bounded after an accepted action."""
+    runtime = _FakeRuntime(_world())
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-1",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+    )
+    session.bootstrap()
+
+    receipt = session.execute_compact(HotCodexExecuteRequest(
+        revision=session.revision(),
+        row_id="entity|Strike|uuid=enemy",
+    ))
+    payload = receipt.model_dump(mode="json")
+    encoded = json.dumps(payload, separators=(",", ":"))
+
+    assert payload["status"] == "accepted"
+    assert payload["follow_up"]["revision"]["observation_cursor"] == 6
+    assert "runtime_timing" not in payload
+    assert "policy_result" not in payload
+    assert "selected_policy" not in payload["follow_up"]
+    assert "capabilities" not in payload["follow_up"]
+    assert "topology" not in payload["follow_up"]
+    assert "transcript" not in payload["follow_up"]
+    assert len(encoded.encode("utf-8")) < 5_000
+
+
+def test_balanced_brief_retains_typed_object_summary_without_full_object_dump() -> None:
+    """Profile-safe object summaries remain useful when complete objects are omitted."""
+    session = HotCodexSession(
+        runtime=_FakeRuntime(_door_policy_world()),
+        claim_id="claim-1",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+        representation_profile_id=BALANCED_V2_PROFILE_ID,
+    )
+    session.bootstrap()
+
+    brief = session.brief()
+
+    assert session.turn_index().known_objects == ()
+    assert len(brief.known_objects) == 1
+    assert brief.known_objects[0].uuid == "door"
+    assert brief.known_objects[0].is_open is False
+    assert brief.known_objects[0].state_keys == ("is_open",)
+
+
+def test_command_follow_up_is_an_explicit_manifest_setting() -> None:
+    """A result-only ablation changes output without changing command execution."""
+    runtime = _FakeRuntime(_world())
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-1",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+    )
+    session.bootstrap()
+    session.representation_manifest = session.representation_manifest.model_copy(update={
+        "components": tuple(
+            component.model_copy(update={
+                "parameters": {
+                    **component.parameters,
+                    "include_command_follow_up": False,
+                },
+            })
+            if component.spec.component_id == "presentation.typed_json"
+            else component
+            for component in session.representation_manifest.components
+        ),
+    })
+
+    receipt = session.execute_compact(HotCodexExecuteRequest(
+        revision=session.revision(),
+        row_id="entity|Strike|uuid=enemy",
+    ))
+
+    assert receipt.status == "accepted"
+    assert receipt.follow_up is None
 
 
 def test_hot_session_rejects_a_second_concurrent_command_writer() -> None:
@@ -516,8 +706,8 @@ def test_hot_query_returns_only_locally_known_subjective_facts() -> None:
     assert details.missing_tile_keys == ("99,99",)
 
 
-def test_hot_api_exposes_only_turn_watch_and_revision_fenced_query_reads() -> None:
-    """The local API has one compact read path and one typed detail path."""
+def test_hot_api_exposes_compact_brief_and_revision_fenced_query_reads() -> None:
+    """The local API separates compact automatic context from typed detail reads."""
     runtime = _FakeRuntime(_door_policy_world())
     session = HotCodexSession(
         runtime=runtime,
@@ -530,14 +720,27 @@ def test_hot_api_exposes_only_turn_watch_and_revision_fenced_query_reads() -> No
     headers = {"Authorization": "Bearer secret-token"}
 
     with TestClient(app) as client:
-        assert client.get("/v1/brief", headers=headers).status_code == 404
+        brief_response = client.get("/v1/brief", headers=headers)
+        assert brief_response.status_code == 200
+        brief = brief_response.json()
+        assert brief["revision"] == index.revision.model_dump(mode="json")
+        assert brief["action_families"][0]["source_action_id"] == "move-row"
+        assert brief["action_families"][0]["direct_row_id"] == "move-row"
+        assert brief["action_families"][0]["row_count"] == 1
+        assert "row_ids" not in brief["action_families"][0]
+        assert brief["semantic_coverage"]["source_action_count"] == 1
+        assert brief["semantic_coverage"]["unknown_count"] == 0
+        assert "selected_policy" not in brief
+        assert "local_timing" not in brief
         assert client.get("/v1/actions", headers=headers).status_code == 404
         response = client.post(
             "/v1/query",
             headers=headers,
             json={
                 "revision": index.revision.model_dump(mode="json"),
-                "selection": {"row_ids": ["move-row"]},
+                "selection": {
+                    "action_filter": {"source_action_ids": ["move-row"]},
+                },
             },
         )
 
@@ -547,6 +750,30 @@ def test_hot_api_exposes_only_turn_watch_and_revision_fenced_query_reads() -> No
     assert payload["actions"][0]["affordance"]["row_id"] == "move-row"
     assert payload["actions"][0]["affordance"]["targets"][0]["path"][-1] == [2, 0]
     assert runtime.snapshot_fetch_calls == 1
+
+
+def test_terminal_command_receipt_includes_subjective_match_summary() -> None:
+    """The command ending a match returns a useful terminal result instead of silence."""
+    runtime = _TerminalExecuteRuntime(_world())
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-1",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+    )
+    session.bootstrap()
+
+    receipt = session.execute_compact(HotCodexExecuteRequest(
+        revision=session.revision(),
+        row_id="entity|Strike|uuid=enemy",
+    ))
+
+    assert receipt.follow_up is not None
+    assert receipt.follow_up.is_terminal is True
+    assert receipt.follow_up.encounter_summary is not None
+    assert receipt.follow_up.encounter_summary.available is True
+    assert receipt.follow_up.encounter_summary.outcome == "controlled_survived"
+    assert receipt.follow_up.encounter_summary.subjective_winning_faction == "heroes"
 
 
 class _FakeRuntime:
@@ -736,6 +963,48 @@ class _TerminalFakeRuntime(_FakeRuntime):
         self.store.world = world
         self.store.world = world
         raise SubjectiveEncounterEndedError("encounter ended")
+
+
+class _TerminalExecuteRuntime(_FakeRuntime):
+    """Runtime double whose accepted action ends the encounter."""
+
+    def execute(
+        self,
+        row_id: str,
+        *,
+        command_id: str | None = None,
+        prefer_safe: bool = True,
+        extra_target_uuids: list[str] | None = None,
+    ) -> CommandResult:
+        self.execute_calls.append((row_id, prefer_safe, extra_target_uuids))
+        assert self.store.world.encounter is not None
+        encounter = self.store.world.encounter.model_copy(update={"state": "ended"})
+        enemy = self.store.world.known_entities["enemy"].model_copy(update={
+            "hp": 0,
+            "is_dead": True,
+        })
+        world = self.store.world.model_copy(update={
+            "observation_cursor": 6,
+            "encounter": encounter,
+            "known_entities": {
+                **self.store.world.known_entities,
+                "enemy": enemy,
+            },
+            "current_epoch": None,
+        })
+        self.store.world = world
+        self.store.materialized = world
+        return CommandResult(
+            status=CommandResultStatus.ACCEPTED,
+            action_resolution=ActionResolutionStatus.COMPLETED,
+            command_id=command_id or "command-terminal",
+            session_id="session",
+            actor_uuid="actor",
+            requested_epoch_id="epoch-1",
+            current_epoch_id=None,
+            row_id=row_id,
+            accepted_at_observation_cursor=6,
+        )
 
 
 def _world(

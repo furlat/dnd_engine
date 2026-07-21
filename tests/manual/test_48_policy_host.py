@@ -584,7 +584,7 @@ def test_policy_host_fails_closed_for_accepted_execute_without_resolution() -> N
     ("status", "resolution", "commits"),
     [
         (CommandResultStatus.ACCEPTED, ActionResolutionStatus.COMPLETED, True),
-        (CommandResultStatus.ACCEPTED, ActionResolutionStatus.INTERRUPTED, False),
+        (CommandResultStatus.ACCEPTED, ActionResolutionStatus.INTERRUPTED, True),
         (CommandResultStatus.REJECTED, ActionResolutionStatus.COMPLETED, False),
         (CommandResultStatus.STALE, ActionResolutionStatus.COMPLETED, False),
     ],
@@ -594,7 +594,7 @@ def test_policy_host_commits_spacing_intention_only_after_acceptance(
     resolution: ActionResolutionStatus,
     commits: bool,
 ) -> None:
-    """A selected retreat becomes memory only after explicit completion."""
+    """A selected retreat becomes memory only after its movement effect commits."""
     world = _same_turn_spacing_world()
     host = PolicyHost()
 
@@ -626,6 +626,40 @@ def test_policy_host_commits_spacing_intention_only_after_acceptance(
     else:
         assert outcome.memory_advanced is False
         assert intention is None
+
+
+def test_policy_host_preserves_spacing_after_interrupted_committed_move() -> None:
+    """A hazard interruption cannot erase intent and admit a contradictory reversal."""
+    world = _same_turn_spacing_world()
+    host = PolicyHost()
+    host.decide(world)
+    host.prepare_submission(
+        session_id="session",
+        actor_uuid="actor",
+        epoch_id="epoch-1",
+        command_id="spacing-command",
+    )
+    host.record_result(_result(
+        CommandResultStatus.ACCEPTED,
+        command_id="spacing-command",
+        row_id="retreat-floor",
+        action_resolution=ActionResolutionStatus.INTERRUPTED,
+    ))
+    followup = _same_turn_spacing_followup_world(
+        world,
+        target_position=(0, 0),
+        movement_positions=((-5, 0), (-6, 0)),
+    )
+
+    decision = host.decide(followup)
+
+    candidate_row_ids = {
+        proposal.intent.row_id
+        for proposal in decision.candidates
+        if isinstance(proposal.intent, ExecuteIntent)
+    }
+    assert "followup-move:-5,0" not in candidate_row_ids
+    assert "followup-move:-6,0" in candidate_row_ids
 
 
 def test_policy_host_revalidates_and_enforces_same_turn_spacing_before_arbitration() -> None:

@@ -64,6 +64,26 @@ def test_codex_takeover_claims_monsters_and_stops_at_codex_turn() -> None:
     assert advance_response.json()["status"] == "waiting_for_codex"
 
 
+def test_explicit_entity_takeover_reports_the_claimed_entity_faction() -> None:
+    """Explicit hero ownership cannot retain the request model's monster default."""
+    reset_standard_arena_runtime()
+    client = TestClient(event_server.app)
+    start = client.post(
+        "/simulation/start-human",
+        params={"character_class": "sorcerer"},
+    ).json()
+
+    response = client.post(
+        "/ai/takeover",
+        json={"entity_uuids": [start["hero_uuid"]]},
+    )
+
+    assert response.status_code == 200
+    claim = response.json()
+    assert claim["faction"] == "heroes"
+    assert [row["faction"] for row in claim["claimed_entities"]] == ["heroes"]
+
+
 def test_codex_takeover_release_restores_normal_ai() -> None:
     """Releasing a claim restores previous controllers and ownership."""
     reset_standard_arena_runtime()
@@ -318,15 +338,31 @@ def test_takeover_transport_rejects_claim_session_mismatch(monkeypatch: pytest.M
     assert error.value.error.status_code == 409
 
 
-def test_codex_cli_exposes_only_persistent_runtime_and_lease_commands() -> None:
-    """No snapshot-polling read or command loop remains on the CLI."""
+def test_codex_cli_separates_takeover_transport_from_typed_hot_runtime_commands() -> None:
+    """CLI reads target the persistent local runtime, never snapshot polling."""
     command_names = {
         command.name or command.callback.__name__.replace("_", "-")
         for command in codex_commands.app.registered_commands
         if command.callback is not None
     }
 
-    assert command_names == {"hot-serve", "takeover", "release", "heartbeat"}
+    assert command_names == {
+        "heartbeat",
+        "hot-end-turn",
+        "hot-execute",
+        "hot-export",
+        "hot-geometry",
+        "hot-get",
+        "hot-oracle",
+        "hot-release",
+        "hot-representation",
+        "hot-search",
+        "hot-serve",
+        "hot-turn",
+        "hot-watch",
+        "release",
+        "takeover",
+    }
     for removed_name in ("attach", "brief", "actions", "turn", "execute", "end_turn", "watch"):
         assert not hasattr(CodexToolClient, removed_name)
 

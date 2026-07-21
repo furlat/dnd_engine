@@ -1095,6 +1095,13 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
     }
     assert spell_levels["dnd.spells.evocation.FireBolt"] == 0
     assert spell_levels["dnd.spells.evocation.MagicMissile"] == 1
+    unknown_capabilities = {
+        capability.semantic_key
+        for capability in affordances.capabilities
+        if affordances.semantic_catalog[capability.semantics_ref].semantic_id
+        == "action.unknown"
+    }
+    assert unknown_capabilities == set()
 
 
 def test_epoch_reuses_one_inventory_discovery_for_rows_and_capabilities(monkeypatch) -> None:
