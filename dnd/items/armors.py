@@ -366,72 +366,219 @@ def create_cloth_armor(source_id: UUID) -> BodyArmor:
     )
 
 
-def create_robes(source_id: UUID, visual_variant_id: Optional[str] = None) -> BodyArmor:
+def _create_cloth_outfit(
+    source_id: UUID,
+    *,
+    visual_item_name: str,
+    description: str,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> BodyArmor:
+    """Create a cosmetic cloth outfit backed by a renderer catalog entry."""
+    return BodyArmor(
+        source_entity_uuid=source_id,
+        name=display_name or visual_item_name,
+        visual_item_name=visual_item_name,
+        visual_variant_id=visual_variant_id,
+        description=description,
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.BODY,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus"),
+    )
+
+
+def _create_footwear(
+    source_id: UUID,
+    *,
+    visual_item_name: str,
+    description: str,
+    armor_type: ArmorType,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
+    """Create zero-AC footwear backed by a renderer catalog entry."""
+    return Boots(
+        source_entity_uuid=source_id,
+        name=display_name or visual_item_name,
+        visual_item_name=visual_item_name,
+        visual_variant_id=visual_variant_id,
+        description=description,
+        type=armor_type,
+        body_part=BodyPart.FEET,
+        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
+        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus"),
+    )
+
+
+def create_common_clothes(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> BodyArmor:
+    """Create everyday clothes that count as unarmored.
+
+    ``display_name`` may describe an NPC-specific outfit while
+    ``visual_item_name`` remains NeuroClient's exact ``Common Clothes`` key.
+    """
+    return _create_cloth_outfit(
+        source_id,
+        visual_item_name="Common Clothes",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Simple everyday clothing suited to work and village life.",
+    )
+
+
+def create_travelers_clothes(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> BodyArmor:
+    """Create practical travel clothes that count as unarmored."""
+    return _create_cloth_outfit(
+        source_id,
+        visual_item_name="Traveler's Clothes",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Hard-wearing clothes cut for travel and outdoor work.",
+    )
+
+
+def create_costume(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> BodyArmor:
+    """Create a performance or arena costume that counts as unarmored."""
+    return _create_cloth_outfit(
+        source_id,
+        visual_item_name="Costume",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Distinctive garb made for performance, ceremony, or the arena.",
+    )
+
+
+def create_robes(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> BodyArmor:
     """Create robes.
 
     Args:
         source_id: Entity UUID that owns the armor item.
         visual_variant_id: Optional visual variant identifier.
+        display_name: Optional RPG-facing name for the selected variant.
 
     Returns:
         Cloth body outfit that counts as unarmored for class features.
     """
-    return BodyArmor(
-        source_entity_uuid=source_id,
-        name="Robes",
-        visual_item_name="Robes" if visual_variant_id is not None else None,
+    return _create_cloth_outfit(
+        source_id,
+        visual_item_name="Robes",
         visual_variant_id=visual_variant_id,
+        display_name=display_name,
         description="Cloth robes suitable for an arcane caster.",
-        type=ArmorType.CLOTH,
-        body_part=BodyPart.BODY,
-        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Armor Class"),
-        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
     )
 
 
-def create_cloth_shoes(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
+def create_cloth_shoes(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
     """Create cloth shoes.
 
     Args:
         source_id: Entity UUID that owns the boots.
         visual_variant_id: Optional visual variant identifier.
+        display_name: Optional RPG-facing name for the selected variant.
 
     Returns:
         Cloth footwear with no armor bonus.
     """
-    return Boots(
-        source_entity_uuid=source_id,
-        name="Cloth Shoes",
-        visual_item_name="Cloth Shoes" if visual_variant_id is not None else None,
+    return _create_footwear(
+        source_id,
+        visual_item_name="Cloth Shoes",
         visual_variant_id=visual_variant_id,
+        display_name=display_name,
         description="Soft cloth shoes.",
-        type=ArmorType.CLOTH,
-        body_part=BodyPart.FEET,
-        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
-        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+        armor_type=ArmorType.CLOTH,
     )
 
 
-def create_leather_boots(source_id: UUID, visual_variant_id: Optional[str] = None) -> Boots:
+def create_leather_boots(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
     """Create leather boots.
 
     Args:
         source_id: Entity UUID that owns the boots.
         visual_variant_id: Optional visual variant identifier.
+        display_name: Optional RPG-facing name for the selected variant.
 
     Returns:
         Leather footwear with no armor bonus.
     """
-    return Boots(
-        source_entity_uuid=source_id,
-        name="Leather Boots",
-        visual_item_name="Leather Boots" if visual_variant_id is not None else None,
+    return _create_footwear(
+        source_id,
+        visual_item_name="Leather Boots",
         visual_variant_id=visual_variant_id,
+        display_name=display_name,
         description="Sturdy leather adventuring boots.",
-        type=ArmorType.LIGHT,
-        body_part=BodyPart.FEET,
-        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Armor Class"),
-        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=10, value_name="Max Dex Bonus")
+        armor_type=ArmorType.LIGHT,
+    )
+
+
+def create_sandals(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
+    """Create simple sandals with no armor bonus."""
+    return _create_footwear(
+        source_id,
+        visual_item_name="Sandals",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Simple open footwear suited to warm climates and humble dress.",
+        armor_type=ArmorType.CLOTH,
+    )
+
+
+def create_leather_shoes(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
+    """Create low leather shoes with no armor bonus."""
+    return _create_footwear(
+        source_id,
+        visual_item_name="Leather Shoes",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Plain leather shoes for daily wear.",
+        armor_type=ArmorType.LIGHT,
+    )
+
+
+def create_armored_boots(
+    source_id: UUID,
+    visual_variant_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Boots:
+    """Create plate-reinforced boots with no separate armor bonus."""
+    return _create_footwear(
+        source_id,
+        visual_item_name="Armored Boots",
+        visual_variant_id=visual_variant_id,
+        display_name=display_name,
+        description="Plate-reinforced boots intended to complete a heavy armor harness.",
+        armor_type=ArmorType.HEAVY,
     )
 
 

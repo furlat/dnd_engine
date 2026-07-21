@@ -1,5 +1,5 @@
 {
-  "contract_hash": "08b5f5b36869d617b14b9cdf7cee4089aa1bc84e3289cfad4ed3a24887a114bc",
+  "contract_hash": "8d71420abe2e7d05299abb8e495b3c417357c3e68833035cfca4c2aa1f9970d3",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -900,7 +900,7 @@
       "typescript": "CounterspellReactionEvent"
     }
   },
-  "event_contract_hash": "e26c4eb7bdabaff513fd73158d85ae3c10ebef157ae06cdc7f7e8b03da91cba9",
+  "event_contract_hash": "441ef8f2b533e3973fd3cd0307a7541396a3697bdcc85fa2d362f54a4f58a990",
   "event_contract_version": 1,
   "models": {
     "dnd.actions.AttackEvent": {
@@ -12338,6 +12338,9 @@
           ],
           "kind": "tuple"
         },
+        "observer_position_changed": {
+          "kind": "boolean"
+        },
         "observer_uuid": {
           "kind": "string"
         },
@@ -17116,6 +17119,85 @@
       "root_model": false,
       "typescript": "ActorPresentation"
     },
+    "dnd.scenarios.evaluation.models.ApparelGrant": {
+      "fields": {
+        "display_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "item_id": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "armored_boots"
+            },
+            {
+              "kind": "literal",
+              "value": "cloth_shoes"
+            },
+            {
+              "kind": "literal",
+              "value": "common_clothes"
+            },
+            {
+              "kind": "literal",
+              "value": "costume"
+            },
+            {
+              "kind": "literal",
+              "value": "leather_boots"
+            },
+            {
+              "kind": "literal",
+              "value": "leather_shoes"
+            },
+            {
+              "kind": "literal",
+              "value": "robes"
+            },
+            {
+              "kind": "literal",
+              "value": "sandals"
+            },
+            {
+              "kind": "literal",
+              "value": "travelers_clothes"
+            }
+          ],
+          "kind": "union"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "apparel_grant"
+            }
+          ],
+          "kind": "union"
+        },
+        "visual_variant_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.scenarios.evaluation.models.ApparelGrant",
+      "root_model": false,
+      "typescript": "ApparelGrant"
+    },
     "dnd.scenarios.evaluation.models.BarbarianActorBlueprint": {
       "fields": {
         "actor_id": {
@@ -17231,6 +17313,10 @@
               {
                 "kind": "model",
                 "ref": "dnd.scenarios.evaluation.models.EquipmentGrant"
+              },
+              {
+                "kind": "model",
+                "ref": "dnd.scenarios.evaluation.models.ApparelGrant"
               }
             ],
             "kind": "union"
@@ -17586,6 +17672,10 @@
               {
                 "kind": "model",
                 "ref": "dnd.scenarios.evaluation.models.EquipmentGrant"
+              },
+              {
+                "kind": "model",
+                "ref": "dnd.scenarios.evaluation.models.ApparelGrant"
               }
             ],
             "kind": "union"
@@ -18061,6 +18151,10 @@
               {
                 "kind": "model",
                 "ref": "dnd.scenarios.evaluation.models.EquipmentGrant"
+              },
+              {
+                "kind": "model",
+                "ref": "dnd.scenarios.evaluation.models.ApparelGrant"
               }
             ],
             "kind": "union"
@@ -18555,6 +18649,10 @@
               {
                 "kind": "model",
                 "ref": "dnd.scenarios.evaluation.models.EquipmentGrant"
+              },
+              {
+                "kind": "model",
+                "ref": "dnd.scenarios.evaluation.models.ApparelGrant"
               }
             ],
             "kind": "union"
@@ -18674,6 +18772,10 @@
               {
                 "kind": "model",
                 "ref": "dnd.scenarios.evaluation.models.EquipmentGrant"
+              },
+              {
+                "kind": "model",
+                "ref": "dnd.scenarios.evaluation.models.ApparelGrant"
               }
             ],
             "kind": "union"

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional
 from uuid import UUID, uuid4
 
 from dnd.actions_functional import register_spells_by_name
-from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian
+from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian as _create_barbarian
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.controller import Controller, PassController
@@ -38,15 +38,15 @@ from dnd.maps.arena_layout import (
     darken_arena,
 )
 from dnd.monsters.bestiary import (
-    create_caster,
-    create_goblin,
-    create_goblin_archer,
+    create_caster as _create_caster,
+    create_goblin as _create_goblin,
+    create_goblin_archer as _create_goblin_archer,
     create_skeleton_archer,
     create_skeleton_warlock,
     create_skeleton_warrior,
     register_goblin_nimble_escape,
 )
-from dnd.monsters.srd_roster import create_srd_monster
+from dnd.monsters.srd_roster import create_srd_monster as _create_srd_monster
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.test_items import (
     create_fireball_cannon,
@@ -70,6 +70,67 @@ from dnd.items.test_items import (
 from dnd.items.weapons import create_club, create_longbow, create_shortsword
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.abjuration import register_counterspell_reaction, register_shield_reaction
+from dnd.scenarios.evaluation.wardrobes import (
+    BERSERKER_WARDROBE,
+    BESTIARY_WARDROBES,
+    CASTER_WARDROBES,
+    SRD_WARDROBES,
+    equip_wardrobe,
+)
+
+
+def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) -> Entity:
+    """Build a legacy-setting Barbarian with its annotated arena wardrobe."""
+    return equip_wardrobe(_create_barbarian(config, source_id), BERSERKER_WARDROBE)
+
+
+def create_caster(
+    source_id: Optional[UUID] = None,
+    name: str = "Caster",
+    position: tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    level: int = 5,
+    wardrobe: Literal["arcane", "dark", "divine", "necromancer"] = "arcane",
+) -> Entity:
+    """Build a legacy-setting caster with a role-specific annotated wardrobe."""
+    entity = _create_caster(source_id, name, position, faction, level)
+    return equip_wardrobe(entity, CASTER_WARDROBES[wardrobe])
+
+
+def create_goblin(
+    source_id: Optional[UUID] = None,
+    name: str = "Goblin",
+    position: tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    weight: int = 40,
+) -> Entity:
+    """Build a legacy-setting Goblin with practical footwear."""
+    entity = _create_goblin(source_id, name, position, faction, weight)
+    return equip_wardrobe(entity, BESTIARY_WARDROBES["goblin"])
+
+
+def create_goblin_archer(
+    source_id: Optional[UUID] = None,
+    name: str = "Goblin Archer",
+    position: tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    weight: int = 40,
+) -> Entity:
+    """Build a legacy-setting Goblin Archer with practical footwear."""
+    entity = _create_goblin_archer(source_id, name, position, faction, weight)
+    return equip_wardrobe(entity, BESTIARY_WARDROBES["goblin_archer"])
+
+
+def create_srd_monster(
+    monster_id: str,
+    source_id: Optional[UUID] = None,
+    name: Optional[str] = None,
+    position: tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+) -> Entity:
+    """Build a legacy-setting SRD creature with its catalog wardrobe, when any."""
+    entity = _create_srd_monster(monster_id, source_id, name, position, faction)
+    return equip_wardrobe(entity, SRD_WARDROBES.get(monster_id, ()))
 
 
 @dataclass(frozen=True)
@@ -1302,7 +1363,13 @@ def create_support_attrition_cache_arena() -> ValidationArena:
     hero = _create_level_5_shield_fighter("Validation Attrition Fighter", (5, 7))
     wounded_guard = create_skeleton_warrior(name="Validation Wounded Guard", position=(8, 7), faction="monsters", darkvision=True)
     wounded_guard.health.take_damage(10, DamageType.SLASHING, hero.uuid)
-    support_caster = create_caster(name="Validation Support Acolyte", position=(11, 7), faction="monsters", level=5)
+    support_caster = create_caster(
+        name="Validation Support Acolyte",
+        position=(11, 7),
+        faction="monsters",
+        level=5,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         support_caster,
         ["Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"],
@@ -1571,7 +1638,13 @@ def create_concentration_control_crossroads_arena() -> ValidationArena:
             ],
         )
     )
-    support_caster = create_caster(name="Validation Crossroads Support", position=(10, 5), faction="monsters", level=5)
+    support_caster = create_caster(
+        name="Validation Crossroads Support",
+        position=(10, 5),
+        faction="monsters",
+        level=5,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         support_caster,
         ["Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"],
@@ -1658,13 +1731,25 @@ def create_darkness_reveal_labyrinth_arena() -> ValidationArena:
     darken_arena(grid)
 
     hero = _create_level_5_sorcerer("Validation Reveal Sorcerer", (2, 7))
-    shadow_mage = create_caster(name="Validation Shadow Mage", position=(11, 6), faction="monsters", level=7)
+    shadow_mage = create_caster(
+        name="Validation Shadow Mage",
+        position=(11, 6),
+        faction="monsters",
+        level=7,
+        wardrobe="dark",
+    )
     register_spells_by_name(
         shadow_mage,
         ["Darkness", "Fog Cloud", "Invisibility", "Greater Invisibility", "Silence"],
         caster_level=7,
     )
-    reveal_mage = create_caster(name="Validation Reveal Mage", position=(12, 9), faction="monsters", level=11)
+    reveal_mage = create_caster(
+        name="Validation Reveal Mage",
+        position=(12, 9),
+        faction="monsters",
+        level=11,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         reveal_mage,
         ["See Invisibility", "Daylight", "Darkvision", "Light", "True Seeing"],
@@ -1706,7 +1791,13 @@ def create_guardian_zone_shrine_arena() -> ValidationArena:
     hero = _create_level_5_shield_fighter("Validation Shrine Fighter", (5, 7))
     wounded_guard = create_skeleton_warrior(name="Validation Shrine Wounded Guard", position=(8, 7), faction="monsters", darkvision=True)
     wounded_guard.health.take_damage(12, DamageType.BLUDGEONING, hero.uuid)
-    shrine_keeper = create_caster(name="Validation Shrine Keeper", position=(11, 7), faction="monsters", level=9)
+    shrine_keeper = create_caster(
+        name="Validation Shrine Keeper",
+        position=(11, 7),
+        faction="monsters",
+        level=9,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         shrine_keeper,
         [
@@ -1812,7 +1903,13 @@ def create_condition_lock_sanctum_arena() -> ValidationArena:
             ],
         )
     )
-    support_caster = create_caster(name="Validation Lock Support", position=(10, 5), faction="monsters", level=5)
+    support_caster = create_caster(
+        name="Validation Lock Support",
+        position=(10, 5),
+        faction="monsters",
+        level=5,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         support_caster,
         ["Bless", "Bane", "Guiding Bolt", "Shield of Faith", "Sanctuary"],
@@ -1854,7 +1951,13 @@ def create_necrotic_anti_healing_duel_arena() -> ValidationArena:
 
     guard = create_skeleton_warrior(name="Validation Necrotic Guard", position=(8, 7), faction="monsters", darkvision=True)
     archer = create_skeleton_archer(name="Validation Necrotic Archer", position=(10, 5), faction="monsters", darkvision=True)
-    necromancer = create_caster(name="Validation Necromancer", position=(11, 7), faction="monsters", level=13)
+    necromancer = create_caster(
+        name="Validation Necromancer",
+        position=(11, 7),
+        faction="monsters",
+        level=13,
+        wardrobe="necromancer",
+    )
     register_spells_by_name(
         necromancer,
         ["Chill Touch", "Blindness/Deafness", "Bestow Curse", "Blight", "Harm", "Finger of Death"],
@@ -2069,7 +2172,13 @@ def create_cleanse_support_triage_arena() -> ValidationArena:
     blinded_archer = create_skeleton_archer(name="Validation Blinded Archer", position=(10, 5), faction="monsters", darkvision=True)
     blinded_archer.add_condition(Blinded(source_entity_uuid=hero.uuid, target_entity_uuid=blinded_archer.uuid))
 
-    support_caster = create_caster(name="Validation Restoration Acolyte", position=(11, 7), faction="monsters", level=9)
+    support_caster = create_caster(
+        name="Validation Restoration Acolyte",
+        position=(11, 7),
+        faction="monsters",
+        level=9,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         support_caster,
         [
@@ -2265,7 +2374,13 @@ def create_guardian_choke_body_block_arena() -> ValidationArena:
 
     hero = _create_level_5_barbarian("Validation Choke Barbarian", (3, 7))
     guard = create_skeleton_warrior(name="Validation Choke Guard", position=(7, 7), faction="monsters", darkvision=True)
-    guardian_caster = create_caster(name="Validation Guardian Caster", position=(10, 7), faction="monsters", level=9)
+    guardian_caster = create_caster(
+        name="Validation Guardian Caster",
+        position=(10, 7),
+        faction="monsters",
+        level=9,
+        wardrobe="divine",
+    )
     register_spells_by_name(
         guardian_caster,
         ["Guardian of Faith", "Spirit Guardians", "Sanctuary", "Healing Word", "Flame Strike"],

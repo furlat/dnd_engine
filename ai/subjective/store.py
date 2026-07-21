@@ -65,6 +65,8 @@ class SubjectiveStore:
         """Create an empty store."""
         self.world: Optional[SubjectiveWorldState] = None
         self.agent_state = AgentState()
+        self.observation_frames: list[ObservationFrame] = []
+        self.snapshot_observation_cursor = 0
         self.command_results: list[CommandResult] = []
         self.pending_commands: dict[str, PendingCommandLifecycle] = {}
         self.command_control_cursors: dict[str, int] = {}
@@ -87,6 +89,8 @@ class SubjectiveStore:
                 snapshot = snapshot.model_copy(update={"current_epoch": prepared_epoch})
         self.world = materialize_snapshot(snapshot)
         self.agent_state = AgentState()
+        self.observation_frames.clear()
+        self.snapshot_observation_cursor = snapshot.observation_cursor
         self.command_results.clear()
         self.pending_commands.clear()
         self.command_control_cursors.clear()
@@ -216,7 +220,16 @@ class SubjectiveStore:
                 frame.observation_cursor,
             )
         self.world = next_world
+        self.observation_frames.append(frame)
         return ApplyResult(kind=ApplyResultKind.APPLIED, world=self.world, previous_world=previous)
+
+    def frames_after(self, observation_cursor: int) -> tuple[ObservationFrame, ...]:
+        """Return retained subjective frames after one local cursor in source order."""
+        return tuple(
+            frame
+            for frame in self.observation_frames
+            if frame.observation_cursor > observation_cursor
+        )
 
     def _reject_noncontiguous_cursor(self, cursor: int) -> Optional[ApplyResult]:
         """Return duplicate or gap state without parsing rejected frame content."""

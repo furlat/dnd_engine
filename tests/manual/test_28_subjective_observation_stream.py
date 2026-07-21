@@ -801,6 +801,40 @@ def test_sensory_completion_projects_only_its_observer_session(monkeypatch) -> N
     assert monster_frames == []
 
 
+def test_position_only_sensory_update_projects_and_replays_observer_position() -> None:
+    """Observer movement remains stream-visible even when no FOV set changes."""
+    client, session_id, hero, _monster, _encounter = create_observation_game()
+    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
+    destination = (hero.position[0] + 1, hero.position[1])
+    complete_event(SensoryUpdateEvent(
+        source_entity_uuid=hero.uuid,
+        target_entity_uuid=hero.uuid,
+        observer_uuid=hero.uuid,
+        observer_position=destination,
+        observer_position_changed=True,
+        cause_event_uuid=uuid4(),
+        update_reason=SensoryUpdateReason.SPATIAL,
+        phase=EventPhase.DECLARATION,
+    ))
+
+    frames = client.get(
+        f"/ai/sessions/{session_id}/observation/frames",
+        params={"since": snapshot["observation_cursor"], "limit": 0},
+    ).json()["frames"]
+    state = materialize_snapshot(snapshot)
+    for frame in frames:
+        state = apply_observation_frame(state, frame)
+
+    assert len(frames) == 1
+    observer_patch = next(
+        patch
+        for patch in frames[0]["patches"]
+        if patch["patch_type"] == "observer"
+    )
+    assert observer_patch["data"]["position"] == list(destination)
+    assert state.observers[str(hero.uuid)].position == destination
+
+
 def test_sensory_moved_entity_uses_partial_position_update() -> None:
     """Movement deltas should not rebuild full HP, AC, and affinity facts."""
     client, session_id, hero, monster, _encounter = create_observation_game()

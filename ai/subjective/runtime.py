@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import httpx
 
-from ai.observation.models import ObservationFrame, ObservationFrameType
+from ai.observation.models import ObservationFrame, ObservationFrameType, ObservationSnapshot
 from ai.policy.contracts import PolicyDecisionTelemetry
 from ai.protocol.control import (
     ActionResolutionStatus,
@@ -39,6 +39,34 @@ class SubjectiveEncounterEndedError(RuntimeError):
 
 class SubjectiveObservationGapError(RuntimeError):
     """Raised internally when the live stream skips an observation cursor."""
+
+
+class SubjectiveEvidenceRecorder(Protocol):
+    """Durable observer for the exact subjective inputs consumed by a runtime."""
+
+    def record_snapshot(self, snapshot: ObservationSnapshot, *, reason: str) -> None:
+        """Retain one bootstrap or recovery snapshot."""
+        ...
+
+    def record_frame(self, frame: ObservationFrame) -> None:
+        """Retain one newly applied subjective event envelope."""
+        ...
+
+    def record_agent_event(self, event: AgentEvent) -> None:
+        """Retain one local runtime telemetry event."""
+        ...
+
+    def record_command_intent(self, payload: dict[str, Any]) -> None:
+        """Retain command intent before network submission."""
+        ...
+
+    def record_command_acknowledgement(self, result: CommandResult) -> None:
+        """Retain the validated controller acknowledgement."""
+        ...
+
+    def record_command_transport_failure(self, command_id: str, error: BaseException) -> None:
+        """Retain an ambiguous transport failure without claiming a game outcome."""
+        ...
 
 
 def _gc_collection_counts() -> tuple[int, int, int]:
@@ -308,8 +336,10 @@ class SubjectiveRuntime:
         session_id: str,
         *,
         event_sink: Optional[AgentEventSink] = None,
+        evidence_recorder: Optional[SubjectiveEvidenceRecorder] = None,
         processors: Optional[list] = None,
         command_followup_timeout: float = 10.0,
+        include_command_diagnostics: bool = False,
     ) -> None:
         """Create a runtime client."""
         self.base_url = base_url.rstrip("/")
@@ -336,7 +366,9 @@ class SubjectiveRuntime:
         self._command_stream_baselines: dict[str, _CommandStreamBaseline] = {}
         self._closed = False
         self.command_followup_timeout = command_followup_timeout
+        self.include_command_diagnostics = include_command_diagnostics
         self.hooks = HookRegistry(processors if processors is not None else default_processors())
+        self.evidence_recorder = evidence_recorder
         self.event_sink = event_sink or QueuedAgentEventSink(
             CompositeAgentEventSink([
                 LoggingAgentEventSink(),
@@ -383,8 +415,11 @@ class SubjectiveRuntime:
         self._emit("runtime.bootstrap_started", "Bootstrapping subjective runtime.")
         response = self.client.get(f"/ai/sessions/{self.session_id}/observation/snapshot")
         response.raise_for_status()
+        snapshot = ObservationSnapshot.model_validate(response.json())
         with self._state_changed:
-            world = self.store.load_snapshot(response.json())
+            world = self.store.load_snapshot(snapshot)
+            if self.evidence_recorder is not None:
+                self.evidence_recorder.record_snapshot(snapshot, reason="bootstrap")
             self._run_hooks(HookPoint.SNAPSHOT_LOADED)
             self._stream_error = None
             self._state_changed.notify_all()
@@ -396,7 +431,8 @@ class SubjectiveRuntime:
             observation_cursor=world.observation_cursor,
             payload={
                 "automatic_gc_suspended": automatic_gc_suspended(),
-                "retains_observation_history": False,
+                "retains_observation_history": True,
+                "observation_history_start_cursor": self.store.snapshot_observation_cursor,
             },
         )
         self._start_observation_pump()
@@ -433,6 +469,8 @@ class SubjectiveRuntime:
             if result.kind == ApplyResultKind.DUPLICATE:
                 return
             if result.kind != ApplyResultKind.GAP:
+                if self.evidence_recorder is not None:
+                    self.evidence_recorder.record_frame(frame)
                 self._run_applied_frame_effects(frame, previous_world=result.previous_world)
                 self._state_changed.notify_all()
                 return
@@ -566,6 +604,8 @@ class SubjectiveRuntime:
                 raise error
             self._stream_event_count += 1
             self._stream_frame_count += 1
+            if self.evidence_recorder is not None:
+                self.evidence_recorder.record_frame(frame)
             deferred.record(frame, result.previous_world)
             world_ended = (
                 self.store.world is not None
@@ -613,7 +653,7 @@ class SubjectiveRuntime:
             "row_id": row_id,
             "extra_target_uuids": options.get("extra_target_uuids"),
             "prefer_safe": options.get("prefer_safe", True),
-            "include_diagnostics": True,
+            "include_diagnostics": self.include_command_diagnostics,
         }
         with self._state_changed:
             self._register_pending_command(
@@ -622,6 +662,8 @@ class SubjectiveRuntime:
                 requested_epoch_id=epoch.epoch_id,
                 row_id=row_id,
             )
+        if self.evidence_recorder is not None:
+            self.evidence_recorder.record_command_intent(payload)
         self._emit("command.submitted", f"Submitting command {row_id}.", actor_uuid=epoch.actor_uuid, epoch_id=epoch.epoch_id, payload=payload)
         ack = self._submit_command(
             f"/ai/sessions/{self.session_id}/commands/execute",
@@ -661,7 +703,7 @@ class SubjectiveRuntime:
             "command_id": command_id,
             "actor_uuid": epoch.actor_uuid,
             "basis_epoch_id": epoch.epoch_id,
-            "include_diagnostics": True,
+            "include_diagnostics": self.include_command_diagnostics,
         }
         with self._state_changed:
             self._register_pending_command(
@@ -670,6 +712,8 @@ class SubjectiveRuntime:
                 requested_epoch_id=epoch.epoch_id,
                 row_id="special|End Turn|index=0",
             )
+        if self.evidence_recorder is not None:
+            self.evidence_recorder.record_command_intent(payload)
         self._emit("command.submitted", "Submitting end-turn command.", actor_uuid=epoch.actor_uuid, epoch_id=epoch.epoch_id, payload=payload)
         ack = self._submit_command(
             f"/ai/sessions/{self.session_id}/commands/end-turn",
@@ -711,13 +755,20 @@ class SubjectiveRuntime:
             parse_started = time.perf_counter()
             ack = CommandResult.model_validate(response.json())
             timing.ack_parse_ms += _elapsed_ms_float(parse_started)
-        except Exception:
+        except Exception as exc:
             if timing.submit_http_ms == 0:
                 timing.submit_http_ms = _elapsed_ms_float(submit_started)
             with self._state_changed:
                 self._discard_pending_command(command_id)
                 self._state_changed.notify_all()
+            if self.evidence_recorder is not None:
+                self.evidence_recorder.record_command_transport_failure(
+                    command_id,
+                    exc,
+                )
             raise
+        if self.evidence_recorder is not None:
+            self.evidence_recorder.record_command_acknowledgement(ack)
         with self._state_changed:
             self.store.register_pending_command(command_id, ack)
             self._state_changed.notify_all()
@@ -919,8 +970,11 @@ class SubjectiveRuntime:
         self._emit("stream.resync_started", "Resyncing subjective runtime.")
         response = self.client.get(f"/ai/sessions/{self.session_id}/observation/snapshot")
         response.raise_for_status()
+        snapshot = ObservationSnapshot.model_validate(response.json())
         with self._state_changed:
-            self.store.load_snapshot(response.json())
+            self.store.load_snapshot(snapshot)
+            if self.evidence_recorder is not None:
+                self.evidence_recorder.record_snapshot(snapshot, reason="resync")
             self._run_hooks(HookPoint.RESYNC_COMPLETED)
             self._stream_error = None
             self._resync_generation += 1
@@ -1063,6 +1117,8 @@ class SubjectiveRuntime:
             payload=payload or {},
             tags=tags or [],
         )
+        if self.evidence_recorder is not None:
+            self.evidence_recorder.record_agent_event(event)
         self.event_sink.emit(event)
 
 

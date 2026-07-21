@@ -687,7 +687,10 @@ class PolicyHost:
                 submission.routine_plan,
                 completed=intent_completed,
             )
-        if intent_completed and submission.spacing_intention_on_accept is not None:
+        if (
+            result.action_effect_committed
+            and submission.spacing_intention_on_accept is not None
+        ):
             memory.same_turn_spacing_intention = submission.spacing_intention_on_accept
         if (
             result.status is CommandResultStatus.ACCEPTED
@@ -1054,3 +1057,4 @@ def _spacing_intention_on_accept(
         started_round_number=epoch.round_number,
         started_turn_index=epoch.turn_index,
     )
+

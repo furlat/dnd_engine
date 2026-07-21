@@ -246,6 +246,7 @@ export function sensoryUpdateEvent(
     target_entity_name: "Hero",
     observer_uuid: "hero",
     observer_position: observerPosition,
+    observer_position_changed: true,
     effective_light_levels: effectiveLightLevels,
     cause_event_uuid: `cause-${cursor}`,
     update_reason: "self_movement",

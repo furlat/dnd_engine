@@ -17,6 +17,27 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 
 ## Open Issues
 
+### Stacked healing potion loses its second use action
+- **Found**: 2026-07-21 during focused wardrobe validation; unrelated to the wardrobe changes.
+- **Test file**: `tests/engine_book/test_chapter_13_items_inventory_equipment.py::test_eb_13_008_consumable_use_actions_consume_charges_and_stacks`
+- **Error**: After the first use of a stacked healing potion, the second `execute_use_action()` call returns `None` instead of executing the remaining item in the stack.
+- **Hypothesis**: The first consumption path removes or invalidates the stack's discoverable use-action source rather than preserving the remaining stack member as an executable item.
+- **Status**: OPEN
+
+### Quickened Spell fixture exhausts mocked d20 rolls under disadvantage
+- **Found**: 2026-07-21 during focused wardrobe validation; unrelated to the wardrobe changes.
+- **Test file**: `tests/engine_book/test_manual_18_class_features_feats_factories.py::test_quickened_spell_uses_feature_resource_to_override_spell_template_until_cast`
+- **Error**: The test raises `StopIteration` because the disadvantaged spell attack consumes two d20 values while the fixture provides only one mocked value.
+- **Hypothesis**: The test's deterministic dice fixture predates the current disadvantage-aware roll consumption and needs to provide both d20 results without changing the Quickened Spell assertions.
+- **Status**: OPEN
+
+### Caster potion action-cost expectation disagrees with current bonus-action cost
+- **Found**: 2026-07-21 during focused wardrobe validation; unrelated to the wardrobe changes.
+- **Test file**: `tests/engine_book/test_chapter_17_monsters_presets.py::test_eb_17_011_create_caster_inventory_potions_are_item_use_actions`
+- **Error**: The caster's potion use action exposes a bonus-action entry in `effective_costs`, while the test expects an empty list.
+- **Hypothesis**: The test expectation is stale relative to the current potion action-economy contract, or the potion factory and monster-preset fixture disagree about the intended use cost.
+- **Status**: OPEN
+
 ### Battlefield deployment neutral schedule has stale catalog cardinality expectations
 - **Found**: 2026-07-20 during focused test validation; unrelated to the change under test.
 - **Test file**: `tests/manual/test_72_battlefield_deployment_catalog.py::test_one_seed_neutral_schedule_has_all_9180_matches_and_zero_exclusions`
@@ -1132,8 +1153,9 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Found**: 2026-07-18 during focused policy-host validation for unrelated work.
 - **Command**: `uv run pytest tests/manual/test_48_policy_host.py -q`
 - **Test**: `tests/manual/test_48_policy_host.py::test_policy_host_does_not_advance_memory_for_accepted_canceled_action`
-- **Failure**: The test expected `memory_advanced is False`, but the policy host returned `True` for a command with an `ACCEPTED` acknowledgement and `ActionResolutionStatus.CANCELED` resolution.
-- **Likely area**: Policy-host command-result correlation and memory advancement logic, specifically the branch that interprets transport acceptance independently from the action's terminal canceled resolution.
+- **Failure**: `PolicyHost.record_result()` returns `memory_advanced=True` for `CommandResultStatus.ACCEPTED` with `ActionResolutionStatus.CANCELED`, while the test expects `False` because the command produced no gameplay effect.
+- **Scope**: The other 52 tests in `tests/manual/test_48_policy_host.py` passed.
+- **Likely area**: Policy-host command-result correlation and memory advancement logic, specifically the branch that interprets command acceptance independently from the action's terminal canceled resolution.
 - **Status**: OPEN; documented only, no production code or tests changed.
 
 ### Spell Studio targeting smoke uses a stale numeric-input locator
@@ -1142,3 +1164,32 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Observed output**: The process exited `1` after `8.19s` with `ok: false`, no `pageerror`, and correct target toggle/removal facts. The final fact reported `projectileSpeed: "18"` instead of the asserted `"220"`; the remaining console output was limited to Chromium WebGL `ReadPixels` performance warnings.
 - **Hypothesis**: The harness's positional selector `input[type='number']:nth(1)` is stale and now selects the target-distance input, whose production control correctly clamps values to `18`, rather than the timeline's projectile-speed input. The elapsed time comes from navigation, studio readiness, fixed waits, screenshot capture, and browser teardown; no harness timeout fired.
 - **Status**: OPEN; harness-only mismatch documented without changing NeuroClient production or test code.
+
+### AI command endpoint loses an action result's ended-turn state
+- **Found**: 2026-07-21 during focused Codex takeover-tool validation.
+- **Command**: `uv run pytest tests/manual/test_30_codex_takeover_tools.py -q`
+- **Test**: `tests/manual/test_30_codex_takeover_tools.py::test_ai_command_advances_when_accepted_action_ends_actor_turn`
+- **Assertion**: The response payload should report `turn_continues is False` after the monkeypatched `execute_action_by_index` returns an accepted action result with `turn_continues=False`.
+- **Observed behavior**: `POST /ai/sessions/{session_id}/commands/execute` reports `turn_continues=True` instead.
+- **Hypothesis**: The AI command endpoint recomputes continuation from the follow-up encounter or decision-epoch state instead of preserving the executed action's `turn_continues` result.
+- **Status**: OPEN; documented only, no fix attempted.
+
+### External AI start-human response reports `started` instead of `waiting_for_human`
+- **Found**: 2026-07-21 during focused external-AI subprocess validation.
+- **Command**: `uv run pytest tests/manual/test_29_external_ai_subprocess.py -q`
+- **Test**: `tests/manual/test_29_external_ai_subprocess.py::test_start_human_creates_ai_session_and_spawns_once`
+- **Assertion**: The `/simulation/start-human` response payload should report `status == "waiting_for_human"`.
+- **Observed behavior**: The endpoint currently reports `status == "started"`.
+- **Scope**: The other three tests in `tests/manual/test_29_external_ai_subprocess.py` passed.
+- **Hypothesis**: This is a stale server-start response contract or test expectation outside the Codex representation work.
+- **Status**: OPEN; documented only, no fix attempted.
+
+### Session API readout fixture omits the available `Shove` action
+- **Found**: 2026-07-21 during focused session API contract validation.
+- **Command**: `uv run pytest tests/manual/test_18_sessions_api_client_contract.py -q`
+- **Test**: `tests/manual/test_18_sessions_api_client_contract.py::test_state_current_turn_and_available_actions_payloads`
+- **Expected fixture**: The available-action readout includes `Attack_MELEE_MAIN` and `Attack_RANGED_MAIN` but omits `Shove`.
+- **Observed behavior**: The actual action names include `Attack_MELEE_MAIN`, `Attack_RANGED_MAIN`, and `Shove`.
+- **Scope**: The other eight tests in `tests/manual/test_18_sessions_api_client_contract.py` passed.
+- **Hypothesis**: The expected-output fixture is stale; this does not appear to be a Codex representation regression.
+- **Status**: OPEN; documented only, no fix attempted.

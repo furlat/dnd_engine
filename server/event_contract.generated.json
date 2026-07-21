@@ -1,5 +1,5 @@
 {
-  "contract_hash": "e26c4eb7bdabaff513fd73158d85ae3c10ebef157ae06cdc7f7e8b03da91cba9",
+  "contract_hash": "441ef8f2b533e3973fd3cd0307a7541396a3697bdcc85fa2d362f54a4f58a990",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -10293,6 +10293,9 @@
             }
           ],
           "kind": "tuple"
+        },
+        "observer_position_changed": {
+          "kind": "boolean"
         },
         "observer_uuid": {
           "kind": "string"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Literal
 
 from dnd.scenarios.evaluation.models import (
     ActorAugmentation,
@@ -24,6 +25,12 @@ from dnd.scenarios.evaluation.models import (
     StartingCondition,
     StartingDamage,
     BestiaryArchetype,
+)
+from dnd.scenarios.evaluation.wardrobes import (
+    BERSERKER_WARDROBE,
+    BESTIARY_WARDROBES,
+    CASTER_WARDROBES,
+    SRD_WARDROBES,
 )
 
 
@@ -162,7 +169,7 @@ def _barbarian(
         primal_path="berserker",
         equipment_preset=equipment_preset,
         asi_4=(("strength", 2),),
-        augmentations=augmentations,
+        augmentations=(*BERSERKER_WARDROBE, *augmentations),
     )
 
 
@@ -181,7 +188,7 @@ def _bestiary(
         archetype=archetype,
         level=level,
         darkvision=darkvision,
-        augmentations=augmentations,
+        augmentations=(*BESTIARY_WARDROBES.get(archetype, ()), *augmentations),
     )
 
 
@@ -199,9 +206,10 @@ def _caster(
     level: int = 5,
     spells: tuple[str, ...] = (),
     augmentations: tuple[ActorAugmentation, ...] = (),
+    wardrobe: Literal["arcane", "dark", "divine", "necromancer"] = "arcane",
 ) -> BestiaryActorBlueprint:
     """Return a generic-caster blueprint with optional additive spell grants."""
-    grants: tuple[ActorAugmentation, ...] = augmentations
+    grants: tuple[ActorAugmentation, ...] = (*CASTER_WARDROBES[wardrobe], *augmentations)
     if spells:
         grants = (SpellGrant(spell_names=spells, caster_level=level), *grants)
     return _bestiary(role, "caster", level=level, augmentations=grants)
@@ -225,7 +233,7 @@ def _srd(
         actor_id=role,
         deployment_role=role,
         monster_id=monster_id,
-        augmentations=augmentations,
+        augmentations=(*SRD_WARDROBES.get(monster_id, ()), *augmentations),
     )
 
 
@@ -579,6 +587,7 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
                 "monster_3",
                 spells=("Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"),
                 augmentations=(ItemGrant(item_id="healing_potion", heal_amount=14), ItemGrant(item_id="lightning_weapon_coat")),
+                wardrobe="divine",
             ),
         ),
         ("support_attrition_cache",),
@@ -631,7 +640,11 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         (
             _skeleton("monster_1", "skeleton_warrior"),
             _sorcerer("monster_2", 5, ("Fire Bolt", "Ray of Frost", "Magic Missile", "Hold Person", "Web", "Hypnotic Pattern", "Slow", "Fireball")),
-            _caster("monster_3", spells=("Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary")),
+            _caster(
+                "monster_3",
+                spells=("Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"),
+                wardrobe="divine",
+            ),
         ),
         ("concentration_control_crossroads",),
     ),
@@ -649,8 +662,18 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "monsters.darkness_reveal_cell",
         "Darkness And Reveal Cell",
         (
-            _caster("monster_1", level=7, spells=("Darkness", "Fog Cloud", "Invisibility", "Greater Invisibility", "Silence")),
-            _caster("monster_2", level=11, spells=("See Invisibility", "Daylight", "Darkvision", "Light", "True Seeing")),
+            _caster(
+                "monster_1",
+                level=7,
+                spells=("Darkness", "Fog Cloud", "Invisibility", "Greater Invisibility", "Silence"),
+                wardrobe="dark",
+            ),
+            _caster(
+                "monster_2",
+                level=11,
+                spells=("See Invisibility", "Daylight", "Darkvision", "Light", "True Seeing"),
+                wardrobe="divine",
+            ),
             _goblin_archer("monster_3", nimble=True),
         ),
         ("darkness_reveal_labyrinth",),
@@ -661,7 +684,12 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         (
             _skeleton("monster_1", "skeleton_warrior", (StartingDamage(amount=12, damage_type="Bludgeoning", source_role="hero"),)),
             _skeleton("monster_2", "skeleton_archer"),
-            _caster("monster_3", level=9, spells=("Spirit Guardians", "Guardian of Faith", "Beacon of Hope", "Mass Healing Word", "Flame Strike", "Sanctuary")),
+            _caster(
+                "monster_3",
+                level=9,
+                spells=("Spirit Guardians", "Guardian of Faith", "Beacon of Hope", "Mass Healing Word", "Flame Strike", "Sanctuary"),
+                wardrobe="divine",
+            ),
         ),
         ("guardian_zone_shrine",),
         ("guardian", "starting-damage", "diagnostic"),
@@ -683,7 +711,11 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         (
             _skeleton("monster_1", "skeleton_warrior"),
             _sorcerer("monster_2", 7, ("Fire Bolt", "Ray of Frost", "Command", "Hold Person", "Fear", "Hypnotic Pattern", "Slow", "Banishment")),
-            _caster("monster_3", spells=("Bless", "Bane", "Guiding Bolt", "Shield of Faith", "Sanctuary")),
+            _caster(
+                "monster_3",
+                spells=("Bless", "Bane", "Guiding Bolt", "Shield of Faith", "Sanctuary"),
+                wardrobe="divine",
+            ),
         ),
         ("condition_lock_sanctum",),
     ),
@@ -693,7 +725,12 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         (
             _skeleton("monster_1", "skeleton_warrior"),
             _skeleton("monster_2", "skeleton_archer"),
-            _caster("monster_3", level=13, spells=("Chill Touch", "Blindness/Deafness", "Bestow Curse", "Blight", "Harm", "Finger of Death")),
+            _caster(
+                "monster_3",
+                level=13,
+                spells=("Chill Touch", "Blindness/Deafness", "Bestow Curse", "Blight", "Harm", "Finger of Death"),
+                wardrobe="necromancer",
+            ),
         ),
         ("necrotic_anti_healing_duel",),
     ),
@@ -740,7 +777,12 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
                 ),
             ),
             _skeleton("monster_2", "skeleton_archer", (StartingCondition(condition_name="Blinded", source_role="hero"),)),
-            _caster("monster_3", level=9, spells=("Lesser Restoration", "Greater Restoration", "Cure Wounds", "Healing Word", "Mass Healing Word", "Bless", "Aid")),
+            _caster(
+                "monster_3",
+                level=9,
+                spells=("Lesser Restoration", "Greater Restoration", "Cure Wounds", "Healing Word", "Mass Healing Word", "Bless", "Aid"),
+                wardrobe="divine",
+            ),
         ),
         ("cleanse_support_triage",),
         ("support", "starting-damage", "starting-conditions", "diagnostic"),
@@ -794,7 +836,12 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "Guardian Choke Cell",
         (
             _skeleton("monster_1", "skeleton_warrior"),
-            _caster("monster_2", level=9, spells=("Guardian of Faith", "Spirit Guardians", "Sanctuary", "Healing Word", "Flame Strike")),
+            _caster(
+                "monster_2",
+                level=9,
+                spells=("Guardian of Faith", "Spirit Guardians", "Sanctuary", "Healing Word", "Flame Strike"),
+                wardrobe="divine",
+            ),
             _skeleton("monster_3", "skeleton_archer"),
         ),
         ("guardian_choke_body_block",),

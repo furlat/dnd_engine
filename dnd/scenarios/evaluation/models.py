@@ -150,8 +150,44 @@ class EquipmentGrant(BaseModel):
     replace: bool = Field(default=False, description="Whether an occupied target slot is unequipped before the grant.")
 
 
+class ApparelGrant(BaseModel):
+    """Clothing or footwear equipped as part of a configured loadout."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["apparel_grant"] = Field(default="apparel_grant", description="Discriminator for apparel grant.")
+    item_id: Literal[
+        "armored_boots",
+        "cloth_shoes",
+        "common_clothes",
+        "costume",
+        "leather_boots",
+        "leather_shoes",
+        "robes",
+        "sandals",
+        "travelers_clothes",
+    ] = Field(description="Stable apparel factory identifier.")
+    visual_variant_id: str | None = Field(
+        default=None,
+        description="Exact optional NeuroClient visual variant identifier.",
+    )
+    display_name: str | None = Field(
+        default=None,
+        description="RPG-facing item label; the factory's exact renderer key remains authoritative.",
+    )
+
+
 ActorAugmentation = Annotated[
-    Union[SpellGrant, ItemGrant, ReactionGrant, StartingDamage, StartingCondition, DamageAffinity, EquipmentGrant],
+    Union[
+        SpellGrant,
+        ItemGrant,
+        ReactionGrant,
+        StartingDamage,
+        StartingCondition,
+        DamageAffinity,
+        EquipmentGrant,
+        ApparelGrant,
+    ],
     Field(discriminator="kind"),
 ]
 
@@ -168,7 +204,7 @@ class ActorBlueprintBase(BaseModel):
     )
     augmentations: tuple[ActorAugmentation, ...] = Field(
         default_factory=tuple,
-        description="Typed mechanical changes applied after base construction.",
+        description="Typed post-construction changes applied to the actor.",
     )
 
 

@@ -451,6 +451,7 @@ def emit_sensory_update_delta(
         target_entity_uuid=owner_uuid,
         observer_uuid=owner_uuid,
         observer_position=after.position,
+        observer_position_changed=position_changed,
         effective_light_levels=senses.get_effective_light_levels(owner_uuid),
         cause_event_uuid=cause_event.uuid,
         update_reason=reason,
