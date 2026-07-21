@@ -8,6 +8,7 @@ from typing import Callable, Optional
 
 from ai.protocol.semantics import (
     AffectedRelationship,
+    ActionSemanticProvenance,
     ActionSemantics,
     ActionTag,
     CapabilityAmountFormula,
@@ -34,6 +35,7 @@ from ai.protocol.semantics import (
     OutcomeKind,
     ResourceEffect,
     ResourceOperation,
+    SemanticProvenanceKind,
     SelfSetupDuration,
     D20CheckMode,
     SelfSetupMaintenanceSemantics,
@@ -56,6 +58,7 @@ from dnd.core.base_actions import ActionCategory, AvailableActionInfo, TargetTyp
 
 
 SemanticBuilder = Callable[[], ActionSemantics]
+StructuredSemanticBuilder = Callable[["_SemanticInput"], ActionSemantics]
 
 
 @dataclass(frozen=True)
@@ -242,15 +245,41 @@ def action_semantics_for_available_action(row: AvailableActionInfo) -> ActionSem
 def _action_semantics_for_input(data: _SemanticInput) -> ActionSemantics:
     """Build or reuse one immutable semantic contract from structured metadata."""
     builder = _EXACT_ACTION_BUILDERS.get(data.semantic_key)
+    structured_builder = _STRUCTURED_ACTION_BUILDERS.get(data.semantic_key)
     use_profile_contract = (
         data.semantic_key in PROFILE_PREFERRED_ACTION_KEYS
         and data.target_effect is not None
     )
     semantics = (
-        builder()
+        structured_builder(data)
+        if structured_builder is not None
+        else builder()
         if builder is not None and not use_profile_contract
         else _generic_action_semantics(data)
     )
+
+    if structured_builder is not None or (builder is not None and not use_profile_contract):
+        provenance = ActionSemanticProvenance(
+            kind=SemanticProvenanceKind.EXACT,
+            semantic_key=data.semantic_key,
+            derivation="registered_exact_builder",
+        )
+    elif data.world_effect is not None or data.target_effect is not None or data.self_setup is not None:
+        provenance = ActionSemanticProvenance(
+            kind=SemanticProvenanceKind.STRUCTURED_PROFILE,
+            semantic_key=data.semantic_key,
+            derivation="engine_structured_effect_profile",
+        )
+    elif semantics.semantic_id != "action.unknown":
+        provenance = ActionSemanticProvenance(
+            kind=SemanticProvenanceKind.CATEGORY_FALLBACK,
+            semantic_key=data.semantic_key,
+            derivation="structured_category_fallback",
+        )
+    else:
+        provenance = semantics.provenance.model_copy(update={
+            "semantic_key": data.semantic_key,
+        })
 
     tags = set(semantics.tags)
     tags.update(_structured_tags(data))
@@ -263,8 +292,9 @@ def _action_semantics_for_input(data: _SemanticInput) -> ActionSemantics:
         tags.add(ActionTag.CONCENTRATION_START)
 
     return semantics.model_copy(update={
+        "provenance": provenance,
         "tags": frozenset(tags),
-        "resource_effects": _resource_effects(data),
+        "resource_effects": (*semantics.resource_effects, *_resource_effects(data)),
         "concentration_effect": concentration,
         "targeting": _targeting_semantics(data, semantics.targeting),
     })
@@ -486,6 +516,114 @@ def _drop_concentration_semantics() -> ActionSemantics:
             ),
         ),
         concentration_effect=ConcentrationEffect(operation=ConcentrationOperation.END),
+    )
+
+
+def _shake_awake_semantics() -> ActionSemantics:
+    """Return semantics for removing magical sleep from an adjacent creature."""
+    return ActionSemantics(
+        semantic_id="support.shake_awake",
+        tags=frozenset({ActionTag.SUPPORT_BUFF}),
+        planning_preconditions=_all(
+            _predicate("actor.adjacent_to_target", True),
+            _predicate("selected_target.magically_asleep", True),
+        ),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="selected_target.condition.magical_sleep",
+                operation=EffectOperation.REMOVE,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.SINGLE_ENTITY,
+            minimum_targets=1,
+            maximum_targets=1,
+            affected_relationships=frozenset({AffectedRelationship.ANY_ENTITY}),
+        ),
+    )
+
+
+def _pick_up_semantics() -> ActionSemantics:
+    """Return semantics for transferring an adjacent floor object to inventory."""
+    return ActionSemantics(
+        semantic_id="interaction.object.pick_up",
+        tags=frozenset({ActionTag.INTERACTION_OBJECT, ActionTag.RESOURCE_ACQUIRE}),
+        planning_preconditions=_all(
+            _predicate("selected_object.pickable", True),
+            _predicate("actor.adjacent_to_target", True),
+            _predicate("actor.inventory.can_add_selected_object", True),
+        ),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="actor.inventory.selected_object",
+                operation=EffectOperation.ADD,
+                value=True,
+            ),
+            LogicalEffect(
+                fact_id="world.floor.selected_object",
+                operation=EffectOperation.REMOVE,
+            ),
+        ),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.OBJECT,
+            minimum_targets=1,
+            maximum_targets=1,
+        ),
+    )
+
+
+def _convert_slot_to_sorcery_semantics(data: _SemanticInput) -> ActionSemantics:
+    """Return Font of Magic semantics for consuming a slot to restore points."""
+    slot_level = next(
+        (
+            int(cost.cost_type.removeprefix("spell_slot_"))
+            for cost in data.costs
+            if cost.cost_type.startswith("spell_slot_")
+            and cost.cost_type.removeprefix("spell_slot_").isdigit()
+        ),
+        0,
+    )
+    return ActionSemantics(
+        semantic_id="resource.convert.slot_to_sorcery_points",
+        tags=frozenset({ActionTag.RESOURCE_ACQUIRE, ActionTag.RESOURCE_SPEND}),
+        resource_effects=(ResourceEffect(
+            resource_id="resource.sorcery_points",
+            operation=ResourceOperation.RESTORE,
+            amount=slot_level,
+        ),),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.SELF,
+            minimum_targets=1,
+            maximum_targets=1,
+        ),
+    )
+
+
+def _convert_sorcery_to_slot_semantics(data: _SemanticInput) -> ActionSemantics:
+    """Return Font of Magic semantics for consuming points to restore a slot."""
+    sorcery_cost = next(
+        (
+            cost.resource_cost
+            for cost in data.costs
+            if cost.resource_name == "sorcery_points"
+        ),
+        0,
+    )
+    slot_level_by_cost = {2: 1, 3: 2, 5: 3, 6: 4, 7: 5}
+    slot_level = slot_level_by_cost.get(sorcery_cost, 0)
+    return ActionSemantics(
+        semantic_id="resource.convert.sorcery_points_to_slot",
+        tags=frozenset({ActionTag.RESOURCE_ACQUIRE, ActionTag.RESOURCE_SPEND}),
+        resource_effects=(ResourceEffect(
+            resource_id=f"spell_slot.{slot_level}",
+            operation=ResourceOperation.RESTORE,
+            amount=1,
+        ),),
+        targeting=TargetingSemantics(
+            allocation=TargetAllocation.SELF,
+            minimum_targets=1,
+            maximum_targets=1,
+        ),
     )
 
 
@@ -784,6 +922,30 @@ def _rage_semantics() -> ActionSemantics:
     )
 
 
+def _end_rage_semantics() -> ActionSemantics:
+    """Return exact meaning for voluntarily removing the Barbarian rage state."""
+    return ActionSemantics(
+        semantic_id="setup.rage.end",
+        tags=frozenset({ActionTag.SETUP_SELF}),
+        planning_preconditions=_any(
+            _predicate("actor.condition.raging", True),
+            _predicate("actor.condition.frenzied", True),
+        ),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="actor.condition.raging",
+                operation=EffectOperation.REMOVE,
+                value=True,
+            ),
+            LogicalEffect(
+                fact_id="actor.condition.frenzied",
+                operation=EffectOperation.REMOVE,
+                value=True,
+            ),
+        ),
+    )
+
+
 def _frenzy_semantics() -> ActionSemantics:
     """Return typed durable setup meaning for Berserker Frenzy."""
     rage = _rage_semantics()
@@ -969,11 +1131,14 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.classes.sorcerer.QuickenedSpell": _quickened_spell_semantics,
     "dnd.classes.sorcerer.TwinnedSpell": _twinned_spell_semantics,
     "dnd.classes.rage.Frenzy": _frenzy_semantics,
+    "dnd.classes.rage.EndRage": _end_rage_semantics,
     "dnd.classes.rage.Rage": _rage_semantics,
     "dnd.actions.Dash": _dash_semantics,
     "dnd.actions.Disengage": _disengage_semantics,
     "dnd.actions.Dodge": _dodge_semantics,
     "dnd.actions.DropConcentration": _drop_concentration_semantics,
+    "dnd.actions.PickUp": _pick_up_semantics,
+    "dnd.actions.ShakeAwake": _shake_awake_semantics,
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,
@@ -991,6 +1156,12 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.items.test_items.InteractDoorAction": _toggle_door_semantics,
     "dnd.items.test_items.OpenDoorAction": _open_door_semantics,
     "dnd.items.test_items.PullLeverAction": _deactivate_hazard_semantics,
+}
+
+
+_STRUCTURED_ACTION_BUILDERS: dict[str, StructuredSemanticBuilder] = {
+    "dnd.classes.sorcerer.ConvertSlotToSP": _convert_slot_to_sorcery_semantics,
+    "dnd.classes.sorcerer.ConvertSPToSlot": _convert_sorcery_to_slot_semantics,
 }
 
 
@@ -1648,3 +1819,8 @@ def _predicate(
 def _all(*operands: FactExpression) -> FactExpression:
     """Build a conjunction expression for registry declarations."""
     return FactExpression(operator=FactOperator.ALL, operands=tuple(operands))
+
+
+def _any(*operands: FactExpression) -> FactExpression:
+    """Build a disjunction expression for registry declarations."""
+    return FactExpression(operator=FactOperator.ANY, operands=tuple(operands))

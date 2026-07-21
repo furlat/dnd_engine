@@ -70,6 +70,11 @@ from dnd.scenarios.evaluation.combatant_catalog import (
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport, check_compatibility
 from dnd.scenarios.evaluation.deployment_catalog import DEPLOYMENTS, get_deployment
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES, get_legacy_recipe
+from dnd.scenarios.evaluation.wardrobes import (
+    BERSERKER_WARDROBE,
+    BESTIARY_WARDROBES,
+    equip_wardrobe,
+)
 from dnd.blocks.equipment import WeaponSlot
 from dnd.controller import Controller, HumanController, CodexController, ExternalAIController
 from dnd.actions_functional import execute_available_action, get_available_actions, execute_action, execute_use_action
@@ -477,7 +482,10 @@ def setup_combat() -> Encounter:
     grid = get_map()
     grid.create_rectangle(0, 0, 15, 15)
 
-    goblin = create_goblin(name="Goblin Scout", position=(2, 7))
+    goblin = equip_wardrobe(
+        create_goblin(name="Goblin Scout", position=(2, 7)),
+        BESTIARY_WARDROBES["goblin"],
+    )
     skeleton = create_skeleton(name="Skeleton Warrior", position=(12, 7))
     Entity.update_all_entities_senses()
 
@@ -700,6 +708,7 @@ def setup_aoe_test_arena(
             position=pos,
             faction="monsters"
         )
+        equip_wardrobe(goblin, BESTIARY_WARDROBES["goblin"])
         goblins.append(goblin)
 
     add_opportunity_attack_handler(player)
@@ -797,7 +806,7 @@ def create_barbarian_hero(name: str = "Hero", position: tuple = (0, 0), faction:
         asi_4=[("strength", 2)],
         equipment_preset="greataxe",
     )
-    return create_barbarian(config)
+    return equip_wardrobe(create_barbarian(config), BERSERKER_WARDROBE)
 
 
 async def advance_encounter(

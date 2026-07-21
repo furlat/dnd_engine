@@ -107,6 +107,7 @@ class AITakeoverManager:
     ) -> TakeoverClaim:
         """Claim combatants for Codex control."""
         self.restore_expired(encounter, game)
+        explicit_entities = entity_uuids is not None
         targets = self._resolve_targets(encounter, faction, entity_uuids)
         if not targets:
             raise TakeoverError("no_claim_targets", "No matching combatants can be claimed", 404)
@@ -148,7 +149,11 @@ class AITakeoverManager:
             last_heartbeat_at=now,
             lease_seconds=lease_seconds,
             name=name,
-            faction=faction,
+            faction=self._resolved_claim_faction(
+                requested_faction=faction,
+                targets=targets,
+                explicit_entities=explicit_entities,
+            ),
         )
         self._claims[claim.claim_id] = claim
         return claim
@@ -245,6 +250,26 @@ class AITakeoverManager:
             entity.uuid for entity in Entity.get_all_entities()
             if entity.uuid in encounter.combatants and (faction is None or entity.faction == faction)
         ]
+
+    def _resolved_claim_faction(
+        self,
+        *,
+        requested_faction: Optional[str],
+        targets: list[UUID],
+        explicit_entities: bool,
+    ) -> Optional[str]:
+        """Return the actual faction represented by a claim selector."""
+        if not explicit_entities:
+            return requested_faction
+        target_factions = {
+            entity.faction
+            for entity_uuid in targets
+            if (entity := Entity.get(entity_uuid)) is not None
+            and entity.faction is not None
+        }
+        if len(target_factions) == 1:
+            return next(iter(target_factions))
+        return None
 
     def _conflicting_claims(self, entity_uuids: list[UUID]) -> list[TakeoverClaim]:
         """Return live claims that overlap the requested entity UUIDs."""

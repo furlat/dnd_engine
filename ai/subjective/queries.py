@@ -56,6 +56,26 @@ class SubjectiveActionFilter(SubjectiveQueryModel):
     """Deterministic filter and page over current authoritative affordances."""
 
     buckets: Tuple[str, ...] = Field(default_factory=tuple, description="Accepted action buckets.")
+    source_action_ids: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Accepted epoch-local discovered-action identities.",
+    )
+    semantic_keys: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Accepted stable engine action-definition identities.",
+    )
+    template_names: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Accepted engine template names.",
+    )
+    base_template_names: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Accepted registered template-family names.",
+    )
+    cast_at_levels: Tuple[int, ...] = Field(
+        default_factory=tuple,
+        description="Accepted selected spell-slot levels.",
+    )
     semantic_ids: Tuple[str, ...] = Field(default_factory=tuple, description="Accepted semantic families.")
     tags: Tuple[ActionTag, ...] = Field(default_factory=tuple, description="Required semantic tags.")
     action_categories: Tuple[str, ...] = Field(default_factory=tuple, description="Accepted action categories.")
@@ -363,6 +383,14 @@ def _action_matches(
     semantics = epoch.affordances.semantics_for(row)
     return (
         (not query.buckets or row.bucket in query.buckets)
+        and (not query.source_action_ids or row.source_action_id in query.source_action_ids)
+        and (not query.semantic_keys or row.semantic_key in query.semantic_keys)
+        and (not query.template_names or row.template_name in query.template_names)
+        and (
+            not query.base_template_names
+            or row.base_template_name in query.base_template_names
+        )
+        and (not query.cast_at_levels or row.cast_at_level in query.cast_at_levels)
         and (not query.semantic_ids or row.semantic_id in query.semantic_ids)
         and (not query.tags or all(tag in semantics.tags for tag in query.tags))
         and (not query.action_categories or row.action_category in query.action_categories)

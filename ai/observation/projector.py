@@ -1603,6 +1603,11 @@ def _sensory_patches(
     started = _timing_start(record_timing)
     data = {
         "observer_uuid": str(event.observer_uuid),
+        "position": (
+            list(event.observer_position)
+            if event.observer_position_changed
+            else None
+        ),
         "update_reason": event.update_reason.value,
         "visible_cells_added": [list(position) for position in event.visible_cells_added],
         "visible_cells_removed": [list(position) for position in event.visible_cells_removed],
@@ -1729,6 +1734,7 @@ def _sensory_event_has_subjective_delta(event: SensoryUpdateEvent) -> bool:
         or event.visible_objects_added
         or event.visible_objects_removed
         or event.visible_objects_moved
+        or event.observer_position_changed
         or event.sense_modes_changed
         or event.passive_perception_changed
     )

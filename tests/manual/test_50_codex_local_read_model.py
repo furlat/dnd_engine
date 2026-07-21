@@ -10,7 +10,6 @@ from typing import Optional
 from ai.codex_tools.hot_runtime import (
     HotCodexQueryRequest,
     HotCodexSession,
-    _compact_combat_log,
 )
 from ai.observation.materializer import apply_observation_frame, materialize_snapshot
 from ai.observation.models import SubjectiveWorldState
@@ -120,7 +119,14 @@ def test_compact_combat_log_preserves_bounded_subjective_causal_children() -> No
         ],
     }
 
-    summary = _compact_combat_log(row)
+    world = _dense_artifact_world().model_copy(update={"combat_logs": [row]})
+    assert world.current_epoch is not None
+    summary = HotCodexSession(
+        runtime=_ArtifactRuntime(world),
+        claim_id="claim-log",
+        faction="heroes",
+        controlled_entity_uuids=(world.current_epoch.actor_uuid,),
+    ).bootstrap().recent_combat_logs[0]
 
     assert summary.source_name == "Sorcerer"
     assert summary.source_uuid == "sorcerer-uuid"

@@ -75,6 +75,38 @@ def test_cursor_gap_triggers_resync_required_result() -> None:
     assert result.actual_cursor == snapshot["observation_cursor"] + 2
 
 
+def test_observer_patch_updates_position_and_passive_perception() -> None:
+    """Sensory deltas keep the controlled observer record aligned with its entity."""
+    client, session_id, hero, _monster, _encounter = create_observation_game()
+    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
+    store = SubjectiveStore()
+    store.load_snapshot(snapshot)
+    observer_uuid = str(hero.uuid)
+    assert store.world is not None
+    original = store.world.observers[observer_uuid]
+    destination = (original.position[0] + 1, original.position[1] + 2)
+
+    result = store.apply_frame(ObservationFrame(
+        observation_cursor=snapshot["observation_cursor"] + 1,
+        frame_type=ObservationFrameType.PATCH,
+        patches=[ObservationPatch(
+            patch_type=ObservationPatchType.OBSERVER,
+            reason="movement",
+            data={
+                "observer_uuid": observer_uuid,
+                "position": list(destination),
+                "passive_perception": original.passive_perception + 1,
+            },
+        )],
+    ))
+
+    assert result.kind is ApplyResultKind.APPLIED
+    assert store.world is not None
+    updated = store.world.observers[observer_uuid]
+    assert updated.position == destination
+    assert updated.passive_perception == original.passive_perception + 1
+
+
 def test_apply_frame_can_skip_previous_world_capture_for_replay_batches() -> None:
     """Replay batches can avoid deep-copying the world for every frame."""
     client, session_id, _hero, _monster, _encounter = create_observation_game()
@@ -93,6 +125,36 @@ def test_apply_frame_can_skip_previous_world_capture_for_replay_batches() -> Non
     assert result.previous_world is None
     assert store.world is not None
     assert store.world.observation_cursor == snapshot["observation_cursor"] + 1
+
+
+def test_store_retains_only_applied_subjective_envelopes_after_snapshot() -> None:
+    """Decision deltas can use causal local history without retaining objective events."""
+    client, session_id, _hero, _monster, _encounter = create_observation_game()
+    snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
+    store = SubjectiveStore()
+    store.load_snapshot(snapshot)
+    first = ObservationFrame(
+        observation_cursor=snapshot["observation_cursor"] + 1,
+        frame_type=ObservationFrameType.PATCH,
+        patches=[],
+    )
+    second = ObservationFrame(
+        observation_cursor=snapshot["observation_cursor"] + 2,
+        frame_type=ObservationFrameType.PATCH,
+        patches=[],
+    )
+
+    assert store.apply_frame(first).kind is ApplyResultKind.APPLIED
+    assert store.apply_frame(first).kind is ApplyResultKind.DUPLICATE
+    assert store.apply_frame(second).kind is ApplyResultKind.APPLIED
+
+    assert store.snapshot_observation_cursor == snapshot["observation_cursor"]
+    assert store.frames_after(snapshot["observation_cursor"]) == (first, second)
+    assert store.frames_after(first.observation_cursor) == (second,)
+
+    store.load_snapshot(snapshot)
+    assert store.observation_frames == []
+    assert store.frames_after(0) == tuple()
 
 
 def test_previous_world_capture_reuses_the_immutable_world_snapshot() -> None:
