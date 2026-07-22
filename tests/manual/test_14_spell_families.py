@@ -21,6 +21,7 @@ from dnd.core.modifiers import (
     CreatureType,
     DamageType,
     NumericalModifier,
+    ResistanceStatus,
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
@@ -879,6 +880,17 @@ def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences(
     assert force_damage == 0
     assert "Hypnotic Pattern" in target.active_conditions
     assert EventQueue.get_events_by_type(EventType.DAMAGE_APPLIED) == []
+    force_completion = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
+        if event.phase == EventPhase.COMPLETION
+    ][-1]
+    assert force_completion.resolution is not None
+    assert force_completion.resolution.incoming_damage == 5
+    assert force_completion.resolution.affinity_prevented_damage == 5
+    assert force_completion.resolution.components[0].resistance_status == ResistanceStatus.IMMUNITY
+    assert force_completion.resolution.components[0].affinity_prevented_damage == 5
+    assert force_completion.resolution.applied_damage == 0
 
     slashing_damage = target.receive_damage(3, DamageType.SLASHING, caster.uuid)
 
@@ -897,6 +909,11 @@ def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences(
     assert applied.temporary_hit_point_damage == 0
     assert applied.resulting_normal_hp == target.get_normal_hp()
     assert applied.resulting_temporary_hp == 0
+    assert applied.resolution is not None
+    assert applied.resolution.incoming_damage == 3
+    assert applied.resolution.applied_damage == 3
+    assert applied.resolution.effective_normal_hit_point_damage == 3
+    assert applied.resolution.overkill_damage == 0
     parent = applied.get_parent_event()
     assert parent is not None
     assert parent.event_type == EventType.TAKE_DAMAGE
@@ -946,6 +963,9 @@ def test_temporary_hit_point_loss_is_positive_applied_damage() -> None:
     assert applied.normal_hit_point_damage == 0
     assert applied.temporary_hit_point_damage == 3
     assert applied.resulting_temporary_hp == 2
+    assert applied.resolution is not None
+    assert applied.resolution.temporary_hit_point_damage == 3
+    assert applied.resolution.normal_hit_point_damage == 0
 
 
 def test_concentration_check_uses_applied_damage_not_incoming_damage() -> None:

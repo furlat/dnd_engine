@@ -13,7 +13,7 @@ __all__ = [
     "Encounter",
 ]
 from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from pydantic import Field
 from enum import Enum
 
@@ -466,7 +466,7 @@ class Encounter(BaseObject):
             self.roll_initiative()
 
         self.state = EncounterState.ACTIVE
-        self.started_at = datetime.now()
+        self.started_at = datetime.now(UTC)
         self.round_number = 1
 
         Encounter._active_encounter = self
@@ -509,7 +509,7 @@ class Encounter(BaseObject):
             self.end_turn()
 
         self.state = EncounterState.ENDED
-        self.ended_at = datetime.now()
+        self.ended_at = datetime.now(UTC)
 
         if Encounter._active_encounter is self:
             Encounter._active_encounter = None

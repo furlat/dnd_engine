@@ -1,5 +1,8 @@
 import type {
   CombatLogPayload,
+  DirectoryEventRecord,
+  DirectoryStreamHeartbeat,
+  DirectoryStreamSync,
   EvictedPayload,
   GameEventPayload,
   HeartbeatPayload,
@@ -21,6 +24,12 @@ export type ReplicationSseEnvelope =
   | { readonly event: "combat_log"; readonly id: string | null; readonly data: CombatLogPayload }
   | { readonly event: "heartbeat"; readonly id: string | null; readonly data: HeartbeatPayload }
   | { readonly event: "session"; readonly id: string | null; readonly data: SessionPingResponse }
+  | { readonly event: "evicted"; readonly id: string | null; readonly data: EvictedPayload };
+
+export type DirectorySseEnvelope =
+  | { readonly event: "sync"; readonly id: string | null; readonly data: DirectoryStreamSync }
+  | { readonly event: "directory_event"; readonly id: string | null; readonly data: DirectoryEventRecord }
+  | { readonly event: "heartbeat"; readonly id: string | null; readonly data: DirectoryStreamHeartbeat }
   | { readonly event: "evicted"; readonly id: string | null; readonly data: EvictedPayload };
 
 export class SseDecoder {
@@ -125,5 +134,20 @@ export function decodeReplicationEnvelope(message: SseMessage): ReplicationSseEn
       return { event: "evicted", id: message.id, data: decodeModel("EvictedPayload", message.data) };
     default:
       throw new ContractValidationError("$sse.event", `unsupported event ${message.event}`);
+  }
+}
+
+export function decodeDirectoryEnvelope(message: SseMessage): DirectorySseEnvelope {
+  switch (message.event) {
+    case "sync":
+      return { event: "sync", id: message.id, data: decodeModel("DirectoryStreamSync", message.data) };
+    case "directory_event":
+      return { event: "directory_event", id: message.id, data: decodeModel("DirectoryEventRecord", message.data) };
+    case "heartbeat":
+      return { event: "heartbeat", id: message.id, data: decodeModel("DirectoryStreamHeartbeat", message.data) };
+    case "evicted":
+      return { event: "evicted", id: message.id, data: decodeModel("EvictedPayload", message.data) };
+    default:
+      throw new ContractValidationError("$directory_sse.event", `unsupported event ${message.event}`);
   }
 }

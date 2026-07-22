@@ -479,6 +479,38 @@ def test_event_and_combat_log_history_are_cursor_addressed(capsys) -> None:
     assert frame.startswith("id: e=")
     assert "\nevent: combat_log\n" in frame
 
+    transcript_cursor = EventQueue.event_cursor()
+    transcript_payload = client.get(
+        "/events/history",
+        params={
+            "from_cursor": 0,
+            "through_cursor": transcript_cursor,
+            "phase": EventPhase.COMPLETION.value,
+        },
+    ).json()
+    expected_completions = [
+        event
+        for event in EventQueue._all_events[:transcript_cursor]
+        if event.phase == EventPhase.COMPLETION
+    ]
+    assert transcript_payload["generation_id"] == events_payload["generation_id"]
+    assert transcript_payload["from_cursor"] == 0
+    assert transcript_payload["through_cursor"] == transcript_cursor
+    assert transcript_payload["total"] == EventQueue.event_cursor()
+    assert len(transcript_payload["frames"]) == len(expected_completions)
+    assert all(
+        row["event_cursor"] == row["event_index"] + 1
+        and row["event_cursor"] <= transcript_cursor
+        and row["event"]["phase"] == EventPhase.COMPLETION.value
+        for row in transcript_payload["frames"]
+    )
+
+    invalid_window = client.get(
+        "/events/history",
+        params={"from_cursor": 5, "through_cursor": 4},
+    )
+    assert invalid_window.status_code == 400
+
     completion_count = sum(
         1
         for event in events_payload["events"]

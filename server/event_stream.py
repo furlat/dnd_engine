@@ -58,6 +58,24 @@ class GameEventPayload(BaseModel):
         return serialize_event(event)
 
 
+class GameEventHistoryResponse(BaseModel):
+    """Exact cursor-bounded game-event frames for transcript hydration.
+
+    Attributes:
+        generation_id: EventQueue generation containing every returned frame.
+        from_cursor: Inclusive source cursor requested by the client.
+        through_cursor: Exclusive source cursor represented by the response.
+        frames: Typed event envelopes in authoritative storage order.
+        total: Current number of stored event versions in the generation.
+    """
+
+    generation_id: str = Field(description="EventQueue generation containing these frames.")
+    from_cursor: int = Field(ge=0, description="Inclusive event cursor represented by the response.")
+    through_cursor: int = Field(ge=0, description="Exclusive event cursor represented by the response.")
+    frames: List[GameEventPayload] = Field(description="Typed event frames in storage order.")
+    total: int = Field(ge=0, description="Current event cursor for this generation.")
+
+
 class CombatLogPayload(BaseModel):
     """Serialized combat-log entry envelope for SSE clients.
 
@@ -210,9 +228,21 @@ class DndEventStream:
         )
 
     def iter_game_events_since(self, since: int, encounter: Optional[Encounter]) -> List[GameEventPayload]:
+        return self.iter_game_events_window(since, self.current_event_cursor(), encounter)
+
+    def iter_game_events_window(
+        self,
+        from_cursor: int,
+        through_cursor: int,
+        encounter: Optional[Encounter],
+    ) -> List[GameEventPayload]:
+        """Return the exact `[from_cursor, through_cursor)` event window."""
+        start = max(0, from_cursor)
+        end = max(start, min(through_cursor, self.current_event_cursor()))
         return [
             self._game_event_payload(index, event, encounter)
-            for index, event in EventQueue.iter_events_since(since)
+            for index, event in EventQueue.iter_events_since(start)
+            if index < end
         ]
 
     def iter_combat_logs_since(

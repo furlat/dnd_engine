@@ -41,6 +41,16 @@ class RequestTimingMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
+                elapsed_to_headers_ms = (time.perf_counter() - started) * 1000
+                headers = list(message.get("headers", ()))
+                if not any(name.lower() == b"server-timing" for name, _value in headers):
+                    headers.append(
+                        (
+                            b"server-timing",
+                            f"app;dur={elapsed_to_headers_ms:.3f}".encode("ascii"),
+                        )
+                    )
+                message = {**message, "headers": headers}
             await send(message)
 
         try:

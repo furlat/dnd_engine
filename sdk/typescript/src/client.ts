@@ -18,19 +18,24 @@ import type {
   GameCreationStartRequest,
   GameCreationStartResponse,
   CompatibilityReport,
+  EventHistoryResponse,
+  GameEventHistoryResponse,
   JoinGameRequest,
   JoinGameResponse,
   JsonValue,
   ReplicationBootstrapResponse,
   SessionPingResponse,
+  ServerCapabilitiesResponse,
   SimpleActionRequest,
   SdkModelByName,
   SdkModelName,
   SpellCatalogResponse,
+  StandaloneGameStatusResponse,
   StartHumanSimulationResponse,
   ToggleHandlerRequest,
   ToggleHandlerResponse,
   UnequipRequest,
+  WorkerSummaryEvidence,
 } from "./generated/contracts.generated.js";
 import {
   ReplicationJournal,
@@ -85,13 +90,40 @@ export interface FollowReplicationOptions {
   readonly maximumReconnectDelayMs?: number;
 }
 
+export interface DndEngineClientOptions {
+  readonly fetchImplementation?: typeof fetch;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export interface GameEventHistoryQuery {
+  readonly fromCursor?: number;
+  readonly throughCursor?: number;
+  readonly eventType?: string;
+  readonly phase?: string;
+}
+
+export interface EventHistoryQuery {
+  readonly since?: number;
+  readonly limit?: number;
+  readonly eventType?: string;
+  readonly phase?: string;
+}
+
 export class DndEngineClient {
   readonly baseUrl: string;
   private readonly fetchImplementation: typeof fetch;
+  private readonly defaultHeaders: Readonly<Record<string, string>>;
 
-  constructor(baseUrl: string, fetchImplementation: typeof fetch = globalThis.fetch) {
+  constructor(
+    baseUrl: string,
+    fetchOrOptions: typeof fetch | DndEngineClientOptions = globalThis.fetch,
+  ) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.fetchImplementation = fetchImplementation.bind(globalThis);
+    const options = typeof fetchOrOptions === "function"
+      ? { fetchImplementation: fetchOrOptions }
+      : fetchOrOptions;
+    this.fetchImplementation = (options.fetchImplementation ?? globalThis.fetch).bind(globalThis);
+    this.defaultHeaders = Object.freeze({ ...(options.headers ?? {}) });
   }
 
   async bootstrap(sessionId?: string, signal?: AbortSignal): Promise<ReplicationBootstrapResponse> {
@@ -99,6 +131,16 @@ export class DndEngineClient {
       ? ""
       : `?session_id=${encodeURIComponent(sessionId)}`;
     return this.getModel("ReplicationBootstrapResponse", `/replication/bootstrap${query}`, signal);
+  }
+
+  async getServerCapabilities(signal?: AbortSignal): Promise<ServerCapabilitiesResponse> {
+    return this.getModel("ServerCapabilitiesResponse", "/server/capabilities", signal);
+  }
+
+  async getStandaloneGameStatus(
+    signal?: AbortSignal,
+  ): Promise<StandaloneGameStatusResponse> {
+    return this.getModel("StandaloneGameStatusResponse", "/game/status", signal);
   }
 
   async createSession(
@@ -168,12 +210,42 @@ export class DndEngineClient {
     return this.getModel("APIGameState", "/state", signal);
   }
 
+  async getGameEventHistory(
+    query: GameEventHistoryQuery = {},
+    signal?: AbortSignal,
+  ): Promise<GameEventHistoryResponse> {
+    const parameters = new URLSearchParams();
+    if (query.fromCursor !== undefined) parameters.set("from_cursor", String(query.fromCursor));
+    if (query.throughCursor !== undefined) parameters.set("through_cursor", String(query.throughCursor));
+    if (query.eventType !== undefined) parameters.set("event_type", query.eventType);
+    if (query.phase !== undefined) parameters.set("phase", query.phase);
+    const suffix = parameters.size === 0 ? "" : `?${parameters.toString()}`;
+    return this.getModel("GameEventHistoryResponse", `/events/history${suffix}`, signal);
+  }
+
+  async getEventHistory(
+    query: EventHistoryQuery = {},
+    signal?: AbortSignal,
+  ): Promise<EventHistoryResponse> {
+    const parameters = new URLSearchParams();
+    if (query.since !== undefined) parameters.set("since", String(query.since));
+    if (query.limit !== undefined) parameters.set("limit", String(query.limit));
+    if (query.eventType !== undefined) parameters.set("event_type", query.eventType);
+    if (query.phase !== undefined) parameters.set("phase", query.phase);
+    const suffix = parameters.size === 0 ? "" : `?${parameters.toString()}`;
+    return this.getModel("EventHistoryResponse", `/events${suffix}`, signal);
+  }
+
   async getVisibility(signal?: AbortSignal): Promise<APIVisibilityResponse> {
     return this.getModel("APIVisibilityResponse", "/visibility", signal);
   }
 
   async getSpellCatalog(signal?: AbortSignal): Promise<SpellCatalogResponse> {
     return this.getModel("SpellCatalogResponse", "/catalog/spells", signal);
+  }
+
+  async getTerminalSummary(signal?: AbortSignal): Promise<WorkerSummaryEvidence> {
+    return this.getModel("WorkerSummaryEvidence", "/game/evidence/summary", signal);
   }
 
   async getAvailableActions(entityUuid: string, signal?: AbortSignal): Promise<APIAvailableActions> {
@@ -290,8 +362,8 @@ export class DndEngineClient {
     const response = await this.fetchImplementation(
       `${this.baseUrl}/events/subscribe?${parameters.toString()}`,
       signal === undefined
-        ? { headers: { Accept: "text/event-stream" } }
-        : { headers: { Accept: "text/event-stream" }, signal },
+        ? { headers: this.headers({ Accept: "text/event-stream" }) }
+        : { headers: this.headers({ Accept: "text/event-stream" }), signal },
     );
     if (!response.ok) {
       throw await this.httpError(response);
@@ -413,7 +485,9 @@ export class DndEngineClient {
   ): Promise<SdkModelByName[Name]> {
     const response = await this.fetchImplementation(
       `${this.baseUrl}${path}`,
-      signal === undefined ? {} : { signal },
+      signal === undefined
+        ? { headers: this.headers() }
+        : { headers: this.headers(), signal },
     );
     return this.decodeResponse(name, response);
   }
@@ -426,7 +500,7 @@ export class DndEngineClient {
   ): Promise<SdkModelByName[Name]> {
     const request: RequestInit = {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
       ...(signal === undefined ? {} : { signal }),
     };
@@ -449,6 +523,10 @@ export class DndEngineClient {
     const text = await response.text();
     const payload: JsonValue = text.length === 0 ? null : parseJson(text);
     return new DndHttpError(response.status, payload);
+  }
+
+  private headers(additional: Readonly<Record<string, string>> = {}): Record<string, string> {
+    return { ...this.defaultHeaders, ...additional };
   }
 }
 

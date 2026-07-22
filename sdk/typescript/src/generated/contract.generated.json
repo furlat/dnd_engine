@@ -1,7 +1,33 @@
 {
-  "contract_hash": "8d71420abe2e7d05299abb8e495b3c417357c3e68833035cfca4c2aa1f9970d3",
+  "contract_hash": "6c003a5fd07b84b9a17970b4abef56f0df9b54753551449afc4b507663259f47",
   "contract_version": 1,
   "enums": {
+    "dnd.analytics.models.GameOutcomeResolution": {
+      "python": "dnd.analytics.models.GameOutcomeResolution",
+      "typescript": "GameOutcomeResolution",
+      "values": [
+        "victory",
+        "draw",
+        "indeterminate"
+      ]
+    },
+    "dnd.analytics.models.MetricAvailability": {
+      "python": "dnd.analytics.models.MetricAvailability",
+      "typescript": "MetricAvailability",
+      "values": [
+        "available",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "dnd.analytics.models.SummaryCompletenessStatus": {
+      "python": "dnd.analytics.models.SummaryCompletenessStatus",
+      "typescript": "SummaryCompletenessStatus",
+      "values": [
+        "complete",
+        "partial"
+      ]
+    },
     "dnd.core.action_execution.MovementTerminationReason": {
       "python": "dnd.core.action_execution.MovementTerminationReason",
       "typescript": "MovementTerminationReason",
@@ -507,6 +533,182 @@
         "Devils Sight",
         "See Invisible"
       ]
+    },
+    "server.game_directory.contracts.ArtifactKind": {
+      "python": "server.game_directory.contracts.ArtifactKind",
+      "typescript": "ArtifactKind",
+      "values": [
+        "creation_manifest",
+        "objective_event_history",
+        "combat_log",
+        "subjective_transcript",
+        "agent_telemetry",
+        "terminal_summary",
+        "replay_bundle",
+        "rating_output"
+      ]
+    },
+    "server.game_directory.contracts.AttachmentState": {
+      "python": "server.game_directory.contracts.AttachmentState",
+      "typescript": "AttachmentState",
+      "values": [
+        "connected",
+        "disconnected",
+        "expired",
+        "revoked"
+      ]
+    },
+    "server.game_directory.contracts.CharacterStatus": {
+      "python": "server.game_directory.contracts.CharacterStatus",
+      "typescript": "CharacterStatus",
+      "values": [
+        "active",
+        "retired"
+      ]
+    },
+    "server.game_directory.contracts.ClientKind": {
+      "python": "server.game_directory.contracts.ClientKind",
+      "typescript": "ClientKind",
+      "values": [
+        "neuroclient",
+        "codex_cli",
+        "external_ai",
+        "observer_tool"
+      ]
+    },
+    "server.game_directory.contracts.ExecutionKind": {
+      "python": "server.game_directory.contracts.ExecutionKind",
+      "typescript": "ExecutionKind",
+      "values": [
+        "hosted",
+        "evaluation",
+        "imported"
+      ]
+    },
+    "server.game_directory.contracts.GameLifecycleState": {
+      "python": "server.game_directory.contracts.GameLifecycleState",
+      "typescript": "GameLifecycleState",
+      "values": [
+        "reserved",
+        "starting",
+        "active",
+        "ended",
+        "failed",
+        "interrupted",
+        "archived"
+      ]
+    },
+    "server.game_directory.contracts.GrantKind": {
+      "python": "server.game_directory.contracts.GrantKind",
+      "typescript": "GrantKind",
+      "values": [
+        "invite",
+        "reconnect",
+        "observe",
+        "agent_attach",
+        "admin"
+      ]
+    },
+    "server.game_directory.contracts.MembershipRole": {
+      "python": "server.game_directory.contracts.MembershipRole",
+      "typescript": "MembershipRole",
+      "values": [
+        "owner",
+        "player",
+        "observer",
+        "agent",
+        "referee",
+        "administrator"
+      ]
+    },
+    "server.game_directory.contracts.MembershipState": {
+      "python": "server.game_directory.contracts.MembershipState",
+      "typescript": "MembershipState",
+      "values": [
+        "invited",
+        "active",
+        "disconnected",
+        "revoked",
+        "left"
+      ]
+    },
+    "server.game_directory.contracts.ObserverPolicy": {
+      "python": "server.game_directory.contracts.ObserverPolicy",
+      "typescript": "ObserverPolicy",
+      "values": [
+        "public",
+        "members",
+        "disabled"
+      ]
+    },
+    "server.game_directory.contracts.PrincipalKind": {
+      "python": "server.game_directory.contracts.PrincipalKind",
+      "typescript": "PrincipalKind",
+      "values": [
+        "human",
+        "codex",
+        "service",
+        "system_ai"
+      ]
+    },
+    "server.game_directory.contracts.ProducerKind": {
+      "python": "server.game_directory.contracts.ProducerKind",
+      "typescript": "ProducerKind",
+      "values": [
+        "directory",
+        "worker",
+        "evaluator",
+        "importer"
+      ]
+    },
+    "server.game_directory.contracts.RatingRunStatus": {
+      "python": "server.game_directory.contracts.RatingRunStatus",
+      "typescript": "RatingRunStatus",
+      "values": [
+        "reserved",
+        "running",
+        "completed",
+        "failed"
+      ]
+    },
+    "server.game_directory.contracts.VisibilityPolicy": {
+      "python": "server.game_directory.contracts.VisibilityPolicy",
+      "typescript": "VisibilityPolicy",
+      "values": [
+        "public",
+        "unlisted",
+        "private"
+      ]
+    },
+    "server.game_directory.contracts.WorkerState": {
+      "python": "server.game_directory.contracts.WorkerState",
+      "typescript": "WorkerState",
+      "values": [
+        "starting",
+        "ready",
+        "active",
+        "ended",
+        "stopping",
+        "stopped",
+        "failed",
+        "lost"
+      ]
+    },
+    "server.game_directory.contracts.WorkerTransportKind": {
+      "python": "server.game_directory.contracts.WorkerTransportKind",
+      "typescript": "WorkerTransportKind",
+      "values": [
+        "unix_socket",
+        "loopback_tcp"
+      ]
+    },
+    "server.game_gateway_models.AttachmentPolicy": {
+      "python": "server.game_gateway_models.AttachmentPolicy",
+      "typescript": "AttachmentPolicy",
+      "values": [
+        "parallel",
+        "replace_existing"
+      ]
     }
   },
   "event_classes": {
@@ -900,7 +1102,7 @@
       "typescript": "CounterspellReactionEvent"
     }
   },
-  "event_contract_hash": "441ef8f2b533e3973fd3cd0307a7541396a3697bdcc85fa2d362f54a4f58a990",
+  "event_contract_hash": "dfe91ae6387120768fc226f8b5d395ca7096fd0cc85cbd44f7f2bd3b5a780ea3",
   "event_contract_version": 1,
   "models": {
     "dnd.actions.AttackEvent": {
@@ -2773,6 +2975,1158 @@
       "python": "dnd.actions.SpellEvent",
       "root_model": false,
       "typescript": "SpellEvent"
+    },
+    "dnd.analytics.models.AttackStatisticsV1": {
+      "fields": {
+        "attempted": {
+          "kind": "number"
+        },
+        "canceled": {
+          "kind": "number"
+        },
+        "critical_hits": {
+          "kind": "number"
+        },
+        "critical_misses": {
+          "kind": "number"
+        },
+        "hits": {
+          "kind": "number"
+        },
+        "misses": {
+          "kind": "number"
+        },
+        "opportunity_attacks": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "resolved": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.AttackStatisticsV1",
+      "root_model": false,
+      "typescript": "AttackStatisticsV1"
+    },
+    "dnd.analytics.models.CombatStatisticsV1": {
+      "fields": {
+        "action_economy_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "action_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "attacks": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.AttackStatisticsV1"
+        },
+        "conditions_applied": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "conditions_removed": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "damage_dealt": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DamageStatisticsV1"
+        },
+        "damage_taken": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DamageStatisticsV1"
+        },
+        "deaths": {
+          "kind": "number"
+        },
+        "healing_done": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.HealingStatisticsV1"
+        },
+        "healing_received": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.HealingStatisticsV1"
+        },
+        "item_action_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "item_charges_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "kills": {
+          "kind": "number"
+        },
+        "movement": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.MovementStatisticsV1"
+        },
+        "resources_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "spell_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "turns_ended": {
+          "kind": "number"
+        },
+        "turns_started": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.CombatStatisticsV1",
+      "root_model": false,
+      "typescript": "CombatStatisticsV1"
+    },
+    "dnd.analytics.models.CombatStatisticsV2": {
+      "fields": {
+        "action_economy_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "action_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "attacks": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.AttackStatisticsV1"
+        },
+        "conditions_applied": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "conditions_removed": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "damage_dealt": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DamageStatisticsV2"
+        },
+        "damage_taken": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DamageStatisticsV2"
+        },
+        "deaths": {
+          "kind": "number"
+        },
+        "dice": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DiceStatisticsV2"
+        },
+        "healing_done": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.HealingStatisticsV1"
+        },
+        "healing_received": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.HealingStatisticsV1"
+        },
+        "item_action_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "item_charges_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "kills": {
+          "kind": "number"
+        },
+        "movement": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.MovementStatisticsV1"
+        },
+        "resources_spent": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "saving_throws": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.ResolutionStatisticsV2"
+        },
+        "skill_checks": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.ResolutionStatisticsV2"
+        },
+        "spell_usage": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.UsageCountV1"
+          }
+        },
+        "turns_ended": {
+          "kind": "number"
+        },
+        "turns_started": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.CombatStatisticsV2",
+      "root_model": false,
+      "typescript": "CombatStatisticsV2"
+    },
+    "dnd.analytics.models.DamagePreventionStatisticsV2": {
+      "fields": {
+        "blocked_damage": {
+          "kind": "number"
+        },
+        "event_amplification": {
+          "kind": "number"
+        },
+        "event_prevented": {
+          "kind": "number"
+        },
+        "flat_reduction_prevented": {
+          "kind": "number"
+        },
+        "immunity_prevented": {
+          "kind": "number"
+        },
+        "resistance_prevented": {
+          "kind": "number"
+        },
+        "survival_cap_prevented": {
+          "kind": "number"
+        },
+        "vulnerability_bonus": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.DamagePreventionStatisticsV2",
+      "root_model": false,
+      "typescript": "DamagePreventionStatisticsV2"
+    },
+    "dnd.analytics.models.DamageStatisticsV1": {
+      "fields": {
+        "applied": {
+          "kind": "number"
+        },
+        "applied_by_type": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "applied_packets": {
+          "kind": "number"
+        },
+        "blocked_packets": {
+          "kind": "number"
+        },
+        "incoming_packets": {
+          "kind": "number"
+        },
+        "incoming_raw": {
+          "kind": "number"
+        },
+        "normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "temporary_hit_point_damage": {
+          "kind": "number"
+        },
+        "unapplied_remainder": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.DamageStatisticsV1",
+      "root_model": false,
+      "typescript": "DamageStatisticsV1"
+    },
+    "dnd.analytics.models.DamageStatisticsV2": {
+      "fields": {
+        "after_affinity_by_type": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "applied": {
+          "kind": "number"
+        },
+        "applied_by_counterparty": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "applied_by_effect": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "applied_by_type": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "applied_packets": {
+          "kind": "number"
+        },
+        "blocked_packets": {
+          "kind": "number"
+        },
+        "effective_normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "incoming_by_type": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "incoming_packets": {
+          "kind": "number"
+        },
+        "incoming_raw": {
+          "kind": "number"
+        },
+        "normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "overkill_damage": {
+          "kind": "number"
+        },
+        "prevention": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.DamagePreventionStatisticsV2"
+        },
+        "temporary_hit_point_damage": {
+          "kind": "number"
+        },
+        "unapplied_remainder": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.DamageStatisticsV2",
+      "root_model": false,
+      "typescript": "DamageStatisticsV2"
+    },
+    "dnd.analytics.models.DiceStatisticsV2": {
+      "fields": {
+        "all_d20": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        },
+        "attack_d20": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        },
+        "damage": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        },
+        "healing": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        },
+        "saving_throw_d20": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        },
+        "skill_check_d20": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.RollLuckStatisticsV2"
+        }
+      },
+      "python": "dnd.analytics.models.DiceStatisticsV2",
+      "root_model": false,
+      "typescript": "DiceStatisticsV2"
+    },
+    "dnd.analytics.models.EntitySnapshotV1": {
+      "fields": {
+        "condition_semantic_keys": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "is_defeated": {
+          "kind": "boolean"
+        },
+        "maximum_hit_points": {
+          "kind": "number"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "normal_hit_points": {
+          "kind": "number"
+        },
+        "position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "resources": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 1
+            }
+          ],
+          "kind": "union"
+        },
+        "side_id": {
+          "kind": "string"
+        },
+        "temporary_hit_points": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.EntitySnapshotV1",
+      "root_model": false,
+      "typescript": "EntitySnapshotV1"
+    },
+    "dnd.analytics.models.EntitySummaryV1": {
+      "fields": {
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "final": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.EntitySnapshotV1"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "initial": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.EntitySnapshotV1"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "side_id": {
+          "kind": "string"
+        },
+        "statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV1"
+        }
+      },
+      "python": "dnd.analytics.models.EntitySummaryV1",
+      "root_model": false,
+      "typescript": "EntitySummaryV1"
+    },
+    "dnd.analytics.models.EntitySummaryV2": {
+      "fields": {
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "final": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.EntitySnapshotV1"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "initial": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.EntitySnapshotV1"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "side_id": {
+          "kind": "string"
+        },
+        "statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV2"
+        }
+      },
+      "python": "dnd.analytics.models.EntitySummaryV2",
+      "root_model": false,
+      "typescript": "EntitySummaryV2"
+    },
+    "dnd.analytics.models.GameOutcomeV1": {
+      "fields": {
+        "losing_side_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "reason": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "resolution": {
+          "kind": "enum",
+          "ref": "dnd.analytics.models.GameOutcomeResolution"
+        },
+        "surviving_side_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "terminal_event_observed": {
+          "kind": "boolean"
+        },
+        "winning_side_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "dnd.analytics.models.GameOutcomeV1",
+      "root_model": false,
+      "typescript": "GameOutcomeV1"
+    },
+    "dnd.analytics.models.GameSummaryV1": {
+      "fields": {
+        "canonical_sha256": {
+          "kind": "string"
+        },
+        "completeness": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.SummaryCompletenessV1"
+        },
+        "duration_seconds": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "encounter_uuid": {
+          "kind": "string"
+        },
+        "ended_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "entities": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.EntitySummaryV1"
+          },
+          "kind": "array"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "outcome": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.GameOutcomeV1"
+        },
+        "provenance": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.SummaryProvenanceV1"
+        },
+        "rounds_started": {
+          "kind": "number"
+        },
+        "schema_name": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "dnd.game-summary"
+            }
+          ],
+          "kind": "union"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 1
+            }
+          ],
+          "kind": "union"
+        },
+        "sides": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.SideSummaryV1"
+          },
+          "kind": "array"
+        },
+        "started_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "terminal_cursor": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.TerminalCursorV1"
+        },
+        "unattributed_statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV1"
+        }
+      },
+      "python": "dnd.analytics.models.GameSummaryV1",
+      "root_model": false,
+      "typescript": "GameSummaryV1"
+    },
+    "dnd.analytics.models.GameSummaryV2": {
+      "fields": {
+        "canonical_sha256": {
+          "kind": "string"
+        },
+        "completeness": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.SummaryCompletenessV1"
+        },
+        "duration_seconds": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "encounter_uuid": {
+          "kind": "string"
+        },
+        "ended_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "entities": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.EntitySummaryV2"
+          },
+          "kind": "array"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "outcome": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.GameOutcomeV1"
+        },
+        "provenance": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.SummaryProvenanceV1"
+        },
+        "rounds_started": {
+          "kind": "number"
+        },
+        "schema_name": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "dnd.game-summary"
+            }
+          ],
+          "kind": "union"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 2
+            }
+          ],
+          "kind": "union"
+        },
+        "sides": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.SideSummaryV2"
+          },
+          "kind": "array"
+        },
+        "started_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "terminal_cursor": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.TerminalCursorV1"
+        },
+        "unattributed_statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV2"
+        }
+      },
+      "python": "dnd.analytics.models.GameSummaryV2",
+      "root_model": false,
+      "typescript": "GameSummaryV2"
+    },
+    "dnd.analytics.models.HealingStatisticsV1": {
+      "fields": {
+        "applied": {
+          "kind": "number"
+        },
+        "blocked_events": {
+          "kind": "number"
+        },
+        "events": {
+          "kind": "number"
+        },
+        "requested": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.HealingStatisticsV1",
+      "root_model": false,
+      "typescript": "HealingStatisticsV1"
+    },
+    "dnd.analytics.models.MetricProvenanceV1": {
+      "fields": {
+        "availability": {
+          "kind": "enum",
+          "ref": "dnd.analytics.models.MetricAvailability"
+        },
+        "metric": {
+          "kind": "string"
+        },
+        "note": {
+          "kind": "string"
+        },
+        "sources": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "dnd.analytics.models.MetricProvenanceV1",
+      "root_model": false,
+      "typescript": "MetricProvenanceV1"
+    },
+    "dnd.analytics.models.MovementStatisticsV1": {
+      "fields": {
+        "forced_events": {
+          "kind": "number"
+        },
+        "forced_feet": {
+          "kind": "number"
+        },
+        "jump_events": {
+          "kind": "number"
+        },
+        "jump_feet": {
+          "kind": "number"
+        },
+        "voluntary_events": {
+          "kind": "number"
+        },
+        "voluntary_feet": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.MovementStatisticsV1",
+      "root_model": false,
+      "typescript": "MovementStatisticsV1"
+    },
+    "dnd.analytics.models.OutcomeCountV2": {
+      "fields": {
+        "attempted": {
+          "kind": "number"
+        },
+        "failures": {
+          "kind": "number"
+        },
+        "resolved": {
+          "kind": "number"
+        },
+        "successes": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.OutcomeCountV2",
+      "root_model": false,
+      "typescript": "OutcomeCountV2"
+    },
+    "dnd.analytics.models.ResolutionStatisticsV2": {
+      "fields": {
+        "attempted": {
+          "kind": "number"
+        },
+        "by_kind": {
+          "kind": "record",
+          "values": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.OutcomeCountV2"
+          }
+        },
+        "failures": {
+          "kind": "number"
+        },
+        "resolved": {
+          "kind": "number"
+        },
+        "successes": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.ResolutionStatisticsV2",
+      "root_model": false,
+      "typescript": "ResolutionStatisticsV2"
+    },
+    "dnd.analytics.models.RollLuckStatisticsV2": {
+      "fields": {
+        "advantage_events": {
+          "kind": "number"
+        },
+        "average_expected": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "average_observed": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "disadvantage_events": {
+          "kind": "number"
+        },
+        "expected_total": {
+          "kind": "number"
+        },
+        "luck_delta": {
+          "kind": "number"
+        },
+        "luck_z_score": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "modified_events": {
+          "kind": "number"
+        },
+        "natural_ones": {
+          "kind": "number"
+        },
+        "natural_twenties": {
+          "kind": "number"
+        },
+        "observed_total": {
+          "kind": "number"
+        },
+        "outcome_samples": {
+          "kind": "number"
+        },
+        "random_faces_rolled": {
+          "kind": "number"
+        },
+        "roll_events": {
+          "kind": "number"
+        },
+        "variance_total": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.RollLuckStatisticsV2",
+      "root_model": false,
+      "typescript": "RollLuckStatisticsV2"
+    },
+    "dnd.analytics.models.SideSummaryV1": {
+      "fields": {
+        "entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "final_combatant_count": {
+          "kind": "number"
+        },
+        "initial_combatant_count": {
+          "kind": "number"
+        },
+        "side_id": {
+          "kind": "string"
+        },
+        "statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV1"
+        },
+        "surviving_combatant_count": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.SideSummaryV1",
+      "root_model": false,
+      "typescript": "SideSummaryV1"
+    },
+    "dnd.analytics.models.SideSummaryV2": {
+      "fields": {
+        "entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "final_combatant_count": {
+          "kind": "number"
+        },
+        "initial_combatant_count": {
+          "kind": "number"
+        },
+        "side_id": {
+          "kind": "string"
+        },
+        "statistics": {
+          "kind": "model",
+          "ref": "dnd.analytics.models.CombatStatisticsV2"
+        },
+        "surviving_combatant_count": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.SideSummaryV2",
+      "root_model": false,
+      "typescript": "SideSummaryV2"
+    },
+    "dnd.analytics.models.SummaryCompletenessV1": {
+      "fields": {
+        "issues": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "status": {
+          "kind": "enum",
+          "ref": "dnd.analytics.models.SummaryCompletenessStatus"
+        }
+      },
+      "python": "dnd.analytics.models.SummaryCompletenessV1",
+      "root_model": false,
+      "typescript": "SummaryCompletenessV1"
+    },
+    "dnd.analytics.models.SummaryProvenanceV1": {
+      "fields": {
+        "combat_log_model": {
+          "kind": "string"
+        },
+        "event_lineages_seen": {
+          "kind": "number"
+        },
+        "event_model": {
+          "kind": "string"
+        },
+        "event_versions_seen": {
+          "kind": "number"
+        },
+        "final_snapshot_count": {
+          "kind": "number"
+        },
+        "initial_snapshot_count": {
+          "kind": "number"
+        },
+        "metric_provenance": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.analytics.models.MetricProvenanceV1"
+          },
+          "kind": "array"
+        },
+        "reducer_id": {
+          "kind": "string"
+        },
+        "structured_combat_logs_seen": {
+          "kind": "number"
+        },
+        "terminal_lineages_reduced": {
+          "kind": "number"
+        },
+        "top_level_combat_logs_seen": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.SummaryProvenanceV1",
+      "root_model": false,
+      "typescript": "SummaryProvenanceV1"
+    },
+    "dnd.analytics.models.TerminalCursorV1": {
+      "fields": {
+        "combat_log_cursor": {
+          "kind": "number"
+        },
+        "event_cursor": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.TerminalCursorV1",
+      "root_model": false,
+      "typescript": "TerminalCursorV1"
+    },
+    "dnd.analytics.models.UsageCountV1": {
+      "fields": {
+        "attempted": {
+          "kind": "number"
+        },
+        "canceled": {
+          "kind": "number"
+        },
+        "completed": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.analytics.models.UsageCountV1",
+      "root_model": false,
+      "typescript": "UsageCountV1"
     },
     "dnd.blocks.base_item.ItemChargeConsumptionEvent": {
       "fields": {
@@ -7196,6 +8550,92 @@
       "root_model": false,
       "typescript": "TurnLogData"
     },
+    "dnd.core.damage.DamageComponentResolution": {
+      "fields": {
+        "affinity_prevented_damage": {
+          "kind": "number"
+        },
+        "after_affinity_damage": {
+          "kind": "number"
+        },
+        "damage_type": {
+          "kind": "enum",
+          "ref": "dnd.core.modifiers.DamageType"
+        },
+        "incoming_damage": {
+          "kind": "number"
+        },
+        "multiplier": {
+          "kind": "number"
+        },
+        "resistance_status": {
+          "kind": "enum",
+          "ref": "dnd.core.modifiers.ResistanceStatus"
+        },
+        "vulnerability_bonus_damage": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.core.damage.DamageComponentResolution",
+      "root_model": false,
+      "typescript": "DamageComponentResolution"
+    },
+    "dnd.core.damage.DamageResolution": {
+      "fields": {
+        "affinity_prevented_damage": {
+          "kind": "number"
+        },
+        "after_affinity_damage": {
+          "kind": "number"
+        },
+        "components": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.damage.DamageComponentResolution"
+          },
+          "kind": "array"
+        },
+        "declared_damage": {
+          "kind": "number"
+        },
+        "effective_normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "event_amplified_damage": {
+          "kind": "number"
+        },
+        "event_prevented_damage": {
+          "kind": "number"
+        },
+        "flat_reduction_damage": {
+          "kind": "number"
+        },
+        "incoming_damage": {
+          "kind": "number"
+        },
+        "mitigated_damage": {
+          "kind": "number"
+        },
+        "normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "overkill_damage": {
+          "kind": "number"
+        },
+        "survival_cap_prevented_damage": {
+          "kind": "number"
+        },
+        "temporary_hit_point_damage": {
+          "kind": "number"
+        },
+        "vulnerability_bonus_damage": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.core.damage.DamageResolution",
+      "root_model": false,
+      "typescript": "DamageResolution"
+    },
     "dnd.core.dice.Dice": {
       "fields": {
         "attack_outcome": {
@@ -7310,6 +8750,39 @@
         },
         "dice_uuid": {
           "kind": "string"
+        },
+        "die_size": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "effective_dice_count": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "random_faces_rolled": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "results": {
           "items": [
@@ -8105,6 +9578,18 @@
         "phase": {
           "kind": "enum",
           "ref": "dnd.core.events.EventPhase"
+        },
+        "resolution": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.damage.DamageResolution"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "resulting_normal_hp": {
           "kind": "number"
@@ -14152,6 +15637,18 @@
         "phase": {
           "kind": "enum",
           "ref": "dnd.core.events.EventPhase"
+        },
+        "resolution": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.damage.DamageResolution"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "resulting_hp": {
           "items": [
@@ -22472,6 +23969,35 @@
       "root_model": false,
       "typescript": "SelfActionRequest"
     },
+    "server.api_models.ServerCapabilitiesResponse": {
+      "fields": {
+        "game_directory_enabled": {
+          "kind": "boolean"
+        },
+        "isolated_game_workers": {
+          "kind": "boolean"
+        },
+        "persistent_game_history": {
+          "kind": "boolean"
+        },
+        "server_mode": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "standalone"
+            },
+            {
+              "kind": "literal",
+              "value": "gateway"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.api_models.ServerCapabilitiesResponse",
+      "root_model": false,
+      "typescript": "ServerCapabilitiesResponse"
+    },
     "server.api_models.SessionPingResponse": {
       "fields": {
         "active_entity_name": {
@@ -23069,6 +24595,88 @@
       "root_model": false,
       "typescript": "SpellCatalogVfx"
     },
+    "server.api_models.StandaloneGameSessionSummary": {
+      "fields": {
+        "connection_status": {
+          "kind": "string"
+        },
+        "controlled_entities": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "is_their_turn": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "player_type": {
+          "kind": "string"
+        },
+        "session_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.api_models.StandaloneGameSessionSummary",
+      "root_model": false,
+      "typescript": "StandaloneGameSessionSummary"
+    },
+    "server.api_models.StandaloneGameStatusResponse": {
+      "fields": {
+        "active": {
+          "kind": "boolean"
+        },
+        "active_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "creation": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "server.api_models.GameCreationStartResponse"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "encounter_active": {
+          "kind": "boolean"
+        },
+        "game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "sessions": {
+          "items": {
+            "kind": "model",
+            "ref": "server.api_models.StandaloneGameSessionSummary"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.api_models.StandaloneGameStatusResponse",
+      "root_model": false,
+      "typescript": "StandaloneGameStatusResponse"
+    },
     "server.api_models.StartHumanSimulationResponse": {
       "fields": {
         "ai_actions": {
@@ -23454,6 +25062,29 @@
       "root_model": false,
       "typescript": "UnequipRequest"
     },
+    "server.directory_event_stream.DirectoryStreamHeartbeat": {
+      "fields": {
+        "cursor": {
+          "kind": "number"
+        },
+        "server_time": {
+          "kind": "number"
+        }
+      },
+      "python": "server.directory_event_stream.DirectoryStreamHeartbeat",
+      "root_model": false,
+      "typescript": "DirectoryStreamHeartbeat"
+    },
+    "server.directory_event_stream.DirectoryStreamSync": {
+      "fields": {
+        "cursor": {
+          "kind": "number"
+        }
+      },
+      "python": "server.directory_event_stream.DirectoryStreamSync",
+      "root_model": false,
+      "typescript": "DirectoryStreamSync"
+    },
     "server.event_stream.CombatLogPayload": {
       "fields": {
         "combat_log_cursor": {
@@ -23486,6 +25117,32 @@
       "python": "server.event_stream.EvictedPayload",
       "root_model": false,
       "typescript": "EvictedPayload"
+    },
+    "server.event_stream.GameEventHistoryResponse": {
+      "fields": {
+        "frames": {
+          "items": {
+            "kind": "model",
+            "ref": "server.event_stream.GameEventPayload"
+          },
+          "kind": "array"
+        },
+        "from_cursor": {
+          "kind": "number"
+        },
+        "generation_id": {
+          "kind": "string"
+        },
+        "through_cursor": {
+          "kind": "number"
+        },
+        "total": {
+          "kind": "number"
+        }
+      },
+      "python": "server.event_stream.GameEventHistoryResponse",
+      "root_model": false,
+      "typescript": "GameEventHistoryResponse"
     },
     "server.event_stream.GameEventPayload": {
       "fields": {
@@ -23568,6 +25225,2542 @@
       "python": "server.event_stream.StreamSyncPayload",
       "root_model": false,
       "typescript": "StreamSyncPayload"
+    },
+    "server.game_directory.contracts.AccessGrantCreate": {
+      "fields": {
+        "expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "grant_id": {
+          "kind": "string"
+        },
+        "grant_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.GrantKind"
+        },
+        "issued_by_principal_id": {
+          "kind": "string"
+        },
+        "issued_to_principal_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "max_uses": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "membership_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "scope": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        }
+      },
+      "python": "server.game_directory.contracts.AccessGrantCreate",
+      "root_model": false,
+      "typescript": "AccessGrantCreate"
+    },
+    "server.game_directory.contracts.AccessGrantRecord": {
+      "fields": {
+        "expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "grant_id": {
+          "kind": "string"
+        },
+        "grant_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.GrantKind"
+        },
+        "issued_at": {
+          "kind": "string"
+        },
+        "issued_by_principal_id": {
+          "kind": "string"
+        },
+        "issued_to_principal_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "max_uses": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "membership_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "revoked_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "scope": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "scope_digest": {
+          "kind": "string"
+        },
+        "secret_hash": {
+          "kind": "string"
+        },
+        "uses": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.AccessGrantRecord",
+      "root_model": false,
+      "typescript": "AccessGrantRecord"
+    },
+    "server.game_directory.contracts.ArtifactCreate": {
+      "fields": {
+        "artifact_id": {
+          "kind": "string"
+        },
+        "artifact_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ArtifactKind"
+        },
+        "byte_size": {
+          "kind": "number"
+        },
+        "content_digest": {
+          "kind": "string"
+        },
+        "game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "media_type": {
+          "kind": "string"
+        },
+        "producer_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ProducerKind"
+        },
+        "producer_version": {
+          "kind": "string"
+        },
+        "schema_version": {
+          "kind": "string"
+        },
+        "uri": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.ArtifactCreate",
+      "root_model": false,
+      "typescript": "ArtifactCreate"
+    },
+    "server.game_directory.contracts.ArtifactRecord": {
+      "fields": {
+        "artifact_id": {
+          "kind": "string"
+        },
+        "artifact_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ArtifactKind"
+        },
+        "byte_size": {
+          "kind": "number"
+        },
+        "content_digest": {
+          "kind": "string"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "media_type": {
+          "kind": "string"
+        },
+        "producer_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ProducerKind"
+        },
+        "producer_version": {
+          "kind": "string"
+        },
+        "schema_version": {
+          "kind": "string"
+        },
+        "uri": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.ArtifactRecord",
+      "root_model": false,
+      "typescript": "ArtifactRecord"
+    },
+    "server.game_directory.contracts.AttachmentCreate": {
+      "fields": {
+        "attachment_id": {
+          "kind": "string"
+        },
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "runtime_session_id": {
+          "kind": "string"
+        },
+        "worker_generation": {
+          "kind": "number"
+        },
+        "worker_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.AttachmentCreate",
+      "root_model": false,
+      "typescript": "AttachmentCreate"
+    },
+    "server.game_directory.contracts.AttachmentRecord": {
+      "fields": {
+        "attachment_id": {
+          "kind": "string"
+        },
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "connected_at": {
+          "kind": "string"
+        },
+        "disconnect_reason": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "disconnected_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "last_combat_log_cursor": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "last_event_cursor": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "last_seen_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "runtime_session_id": {
+          "kind": "string"
+        },
+        "runtime_token_hash": {
+          "kind": "string"
+        },
+        "state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.AttachmentState"
+        },
+        "worker_generation": {
+          "kind": "number"
+        },
+        "worker_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.AttachmentRecord",
+      "root_model": false,
+      "typescript": "AttachmentRecord"
+    },
+    "server.game_directory.contracts.CharacterCreate": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "owner_principal_id": {
+          "kind": "string"
+        },
+        "preset_configuration_id": {
+          "kind": "string"
+        },
+        "status": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.CharacterStatus"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterCreate",
+      "root_model": false,
+      "typescript": "CharacterCreate"
+    },
+    "server.game_directory.contracts.CharacterDeploymentCreate": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "deployment_id": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterDeploymentCreate",
+      "root_model": false,
+      "typescript": "CharacterDeploymentCreate"
+    },
+    "server.game_directory.contracts.CharacterDeploymentRecord": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "deployed_at": {
+          "kind": "string"
+        },
+        "deployment_id": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterDeploymentRecord",
+      "root_model": false,
+      "typescript": "CharacterDeploymentRecord"
+    },
+    "server.game_directory.contracts.CharacterRecord": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "owner_principal_id": {
+          "kind": "string"
+        },
+        "preset_configuration_id": {
+          "kind": "string"
+        },
+        "row_version": {
+          "kind": "number"
+        },
+        "status": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.CharacterStatus"
+        },
+        "updated_at": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterRecord",
+      "root_model": false,
+      "typescript": "CharacterRecord"
+    },
+    "server.game_directory.contracts.DirectoryEventRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "cursor": {
+          "kind": "number"
+        },
+        "event_id": {
+          "kind": "string"
+        },
+        "event_type": {
+          "kind": "string"
+        },
+        "game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "payload": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "payload_digest": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.DirectoryEventRecord",
+      "root_model": false,
+      "typescript": "DirectoryEventRecord"
+    },
+    "server.game_directory.contracts.DirectoryModel": {
+      "fields": {},
+      "python": "server.game_directory.contracts.DirectoryModel",
+      "root_model": false,
+      "typescript": "DirectoryModel"
+    },
+    "server.game_directory.contracts.EntityAssignmentCreate": {
+      "fields": {
+        "assignment_id": {
+          "kind": "string"
+        },
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "controller_kind": {
+          "kind": "string"
+        },
+        "entity_name": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "faction": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.EntityAssignmentCreate",
+      "root_model": false,
+      "typescript": "EntityAssignmentCreate"
+    },
+    "server.game_directory.contracts.EntityAssignmentRecord": {
+      "fields": {
+        "assigned_at": {
+          "kind": "string"
+        },
+        "assignment_id": {
+          "kind": "string"
+        },
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "controller_kind": {
+          "kind": "string"
+        },
+        "entity_name": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "faction": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "released_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.EntityAssignmentRecord",
+      "root_model": false,
+      "typescript": "EntityAssignmentRecord"
+    },
+    "server.game_directory.contracts.FinalSummaryRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "duration_ms": {
+          "kind": "number"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "is_current": {
+          "kind": "boolean"
+        },
+        "round_count": {
+          "kind": "number"
+        },
+        "schema_version": {
+          "kind": "string"
+        },
+        "source_combat_log_digest": {
+          "kind": "string"
+        },
+        "source_event_digest": {
+          "kind": "string"
+        },
+        "summary": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.GameSummaryV1"
+            },
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.GameSummaryV2"
+            }
+          ],
+          "kind": "union"
+        },
+        "summary_digest": {
+          "kind": "string"
+        },
+        "summary_id": {
+          "kind": "string"
+        },
+        "summary_revision": {
+          "kind": "number"
+        },
+        "supersedes_summary_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "terminal_reason": {
+          "kind": "string"
+        },
+        "turn_count": {
+          "kind": "number"
+        },
+        "winner_side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.FinalSummaryRecord",
+      "root_model": false,
+      "typescript": "FinalSummaryRecord"
+    },
+    "server.game_directory.contracts.GameCreate": {
+      "fields": {
+        "content_digest": {
+          "kind": "string"
+        },
+        "created_by_principal_id": {
+          "kind": "string"
+        },
+        "creation_manifest": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "engine_game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "engine_version": {
+          "kind": "string"
+        },
+        "execution_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ExecutionKind"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "lifecycle_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.GameLifecycleState"
+        },
+        "observer_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ObserverPolicy"
+        },
+        "ruleset_version": {
+          "kind": "string"
+        },
+        "scenario_id": {
+          "kind": "string"
+        },
+        "scenario_kind": {
+          "kind": "string"
+        },
+        "seed": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "visibility_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.VisibilityPolicy"
+        },
+        "worker_generation": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "worker_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.GameCreate",
+      "root_model": false,
+      "typescript": "GameCreate"
+    },
+    "server.game_directory.contracts.GameRecord": {
+      "fields": {
+        "archived_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "content_digest": {
+          "kind": "string"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "created_by_principal_id": {
+          "kind": "string"
+        },
+        "creation_manifest": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "creation_manifest_digest": {
+          "kind": "string"
+        },
+        "current_summary_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "ended_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "engine_game_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "engine_version": {
+          "kind": "string"
+        },
+        "execution_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ExecutionKind"
+        },
+        "final_combat_log_cursor": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "final_event_cursor": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "lifecycle_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.GameLifecycleState"
+        },
+        "observer_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ObserverPolicy"
+        },
+        "row_version": {
+          "kind": "number"
+        },
+        "ruleset_version": {
+          "kind": "string"
+        },
+        "scenario_id": {
+          "kind": "string"
+        },
+        "scenario_kind": {
+          "kind": "string"
+        },
+        "seed": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "started_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "terminal_reason": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "visibility_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.VisibilityPolicy"
+        },
+        "winner_side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "worker_generation": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "worker_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.GameRecord",
+      "root_model": false,
+      "typescript": "GameRecord"
+    },
+    "server.game_directory.contracts.IssuedAccessGrant": {
+      "fields": {
+        "capability": {
+          "kind": "string"
+        },
+        "grant": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.AccessGrantRecord"
+        }
+      },
+      "python": "server.game_directory.contracts.IssuedAccessGrant",
+      "root_model": false,
+      "typescript": "IssuedAccessGrant"
+    },
+    "server.game_directory.contracts.IssuedAttachment": {
+      "fields": {
+        "attachment": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.AttachmentRecord"
+        },
+        "runtime_token": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.IssuedAttachment",
+      "root_model": false,
+      "typescript": "IssuedAttachment"
+    },
+    "server.game_directory.contracts.MembershipCapabilities": {
+      "fields": {
+        "may_connect": {
+          "kind": "boolean"
+        },
+        "may_control_entities": {
+          "kind": "boolean"
+        },
+        "may_manage_game": {
+          "kind": "boolean"
+        },
+        "may_manage_members": {
+          "kind": "boolean"
+        },
+        "may_observe_public_state": {
+          "kind": "boolean"
+        },
+        "may_observe_subjective_state": {
+          "kind": "boolean"
+        },
+        "may_view_agent_telemetry": {
+          "kind": "boolean"
+        },
+        "may_view_objective_replay": {
+          "kind": "boolean"
+        }
+      },
+      "python": "server.game_directory.contracts.MembershipCapabilities",
+      "root_model": false,
+      "typescript": "MembershipCapabilities"
+    },
+    "server.game_directory.contracts.MembershipCreate": {
+      "fields": {
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "capabilities": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.MembershipCapabilities"
+        },
+        "controller_kind": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "membership_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.MembershipState"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "role": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.MembershipRole"
+        },
+        "side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "subjective_source_membership_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.MembershipCreate",
+      "root_model": false,
+      "typescript": "MembershipCreate"
+    },
+    "server.game_directory.contracts.MembershipRecord": {
+      "fields": {
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "capabilities": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.MembershipCapabilities"
+        },
+        "controller_kind": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "disconnected_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "joined_at": {
+          "kind": "string"
+        },
+        "left_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "membership_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.MembershipState"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "revoked_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "role": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.MembershipRole"
+        },
+        "side_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "subjective_source_membership_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.MembershipRecord",
+      "root_model": false,
+      "typescript": "MembershipRecord"
+    },
+    "server.game_directory.contracts.PlayerIdentityRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "identity_key": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.PlayerIdentityRecord",
+      "root_model": false,
+      "typescript": "PlayerIdentityRecord"
+    },
+    "server.game_directory.contracts.PrincipalCreate": {
+      "fields": {
+        "credential_hash": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "metadata": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "principal_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.PrincipalKind"
+        }
+      },
+      "python": "server.game_directory.contracts.PrincipalCreate",
+      "root_model": false,
+      "typescript": "PrincipalCreate"
+    },
+    "server.game_directory.contracts.PrincipalCredentialCreate": {
+      "fields": {
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "credential_id": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "secret_hash": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.PrincipalCredentialCreate",
+      "root_model": false,
+      "typescript": "PrincipalCredentialCreate"
+    },
+    "server.game_directory.contracts.PrincipalCredentialRecord": {
+      "fields": {
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "credential_id": {
+          "kind": "string"
+        },
+        "issued_at": {
+          "kind": "string"
+        },
+        "last_seen_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "revoked_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "secret_hash": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.PrincipalCredentialRecord",
+      "root_model": false,
+      "typescript": "PrincipalCredentialRecord"
+    },
+    "server.game_directory.contracts.PrincipalRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "credential_hash": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "disabled_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "last_seen_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "metadata": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "metadata_digest": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "principal_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.PrincipalKind"
+        }
+      },
+      "python": "server.game_directory.contracts.PrincipalRecord",
+      "root_model": false,
+      "typescript": "PrincipalRecord"
+    },
+    "server.game_directory.contracts.RatingAdmissionCreate": {
+      "fields": {
+        "admitted": {
+          "kind": "boolean"
+        },
+        "configuration_id": {
+          "kind": "string"
+        },
+        "exclusion_detail": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "exclusion_reason_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "summary_digest": {
+          "kind": "string"
+        },
+        "treatment_id": {
+          "kind": "string"
+        },
+        "weight": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.RatingAdmissionCreate",
+      "root_model": false,
+      "typescript": "RatingAdmissionCreate"
+    },
+    "server.game_directory.contracts.RatingAdmissionRecord": {
+      "fields": {
+        "admission_id": {
+          "kind": "string"
+        },
+        "admitted": {
+          "kind": "boolean"
+        },
+        "configuration_id": {
+          "kind": "string"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "exclusion_detail": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "exclusion_reason_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "summary_digest": {
+          "kind": "string"
+        },
+        "treatment_id": {
+          "kind": "string"
+        },
+        "weight": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.RatingAdmissionRecord",
+      "root_model": false,
+      "typescript": "RatingAdmissionRecord"
+    },
+    "server.game_directory.contracts.RatingEstimateCreate": {
+      "fields": {
+        "diagnostics": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "draws": {
+          "kind": "number"
+        },
+        "estimate": {
+          "kind": "number"
+        },
+        "games": {
+          "kind": "number"
+        },
+        "losses": {
+          "kind": "number"
+        },
+        "rank": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "subject_id": {
+          "kind": "string"
+        },
+        "uncertainty": {
+          "kind": "number"
+        },
+        "wins": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.RatingEstimateCreate",
+      "root_model": false,
+      "typescript": "RatingEstimateCreate"
+    },
+    "server.game_directory.contracts.RatingEstimateRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "diagnostics": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "diagnostics_digest": {
+          "kind": "string"
+        },
+        "draws": {
+          "kind": "number"
+        },
+        "estimate": {
+          "kind": "number"
+        },
+        "estimate_id": {
+          "kind": "string"
+        },
+        "games": {
+          "kind": "number"
+        },
+        "losses": {
+          "kind": "number"
+        },
+        "rank": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "subject_id": {
+          "kind": "string"
+        },
+        "uncertainty": {
+          "kind": "number"
+        },
+        "wins": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.RatingEstimateRecord",
+      "root_model": false,
+      "typescript": "RatingEstimateRecord"
+    },
+    "server.game_directory.contracts.RatingRunCreate": {
+      "fields": {
+        "algorithm_id": {
+          "kind": "string"
+        },
+        "algorithm_version": {
+          "kind": "string"
+        },
+        "compatibility_constraints": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "parameters": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "selection_query": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        }
+      },
+      "python": "server.game_directory.contracts.RatingRunCreate",
+      "root_model": false,
+      "typescript": "RatingRunCreate"
+    },
+    "server.game_directory.contracts.RatingRunRecord": {
+      "fields": {
+        "algorithm_id": {
+          "kind": "string"
+        },
+        "algorithm_version": {
+          "kind": "string"
+        },
+        "compatibility_constraints": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "compatibility_digest": {
+          "kind": "string"
+        },
+        "completed_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "output_artifact_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parameters": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "parameters_digest": {
+          "kind": "string"
+        },
+        "rating_run_id": {
+          "kind": "string"
+        },
+        "selection_query": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "selection_query_digest": {
+          "kind": "string"
+        },
+        "status": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.RatingRunStatus"
+        }
+      },
+      "python": "server.game_directory.contracts.RatingRunRecord",
+      "root_model": false,
+      "typescript": "RatingRunRecord"
+    },
+    "server.game_directory.contracts.RepositoryMetrics": {
+      "fields": {
+        "blocked_hot_path_operations": {
+          "kind": "number"
+        },
+        "by_operation": {
+          "kind": "record",
+          "values": {
+            "kind": "number"
+          }
+        },
+        "failed_operations": {
+          "kind": "number"
+        },
+        "injected_failures": {
+          "kind": "number"
+        },
+        "successful_operations": {
+          "kind": "number"
+        },
+        "total_operations": {
+          "kind": "number"
+        }
+      },
+      "python": "server.game_directory.contracts.RepositoryMetrics",
+      "root_model": false,
+      "typescript": "RepositoryMetrics"
+    },
+    "server.game_directory.contracts.WorkerCreate": {
+      "fields": {
+        "engine_version": {
+          "kind": "string"
+        },
+        "host_id": {
+          "kind": "string"
+        },
+        "lease_expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "pid": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "private_locator": {
+          "kind": "string"
+        },
+        "process_group_id": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "protocol_hash": {
+          "kind": "string"
+        },
+        "state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.WorkerState"
+        },
+        "transport_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.WorkerTransportKind"
+        },
+        "worker_generation": {
+          "kind": "number"
+        },
+        "worker_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.WorkerCreate",
+      "root_model": false,
+      "typescript": "WorkerCreate"
+    },
+    "server.game_directory.contracts.WorkerRecord": {
+      "fields": {
+        "engine_version": {
+          "kind": "string"
+        },
+        "failure_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "failure_detail": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "host_id": {
+          "kind": "string"
+        },
+        "last_heartbeat_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "lease_expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "pid": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "private_locator": {
+          "kind": "string"
+        },
+        "process_group_id": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "protocol_hash": {
+          "kind": "string"
+        },
+        "started_at": {
+          "kind": "string"
+        },
+        "state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.WorkerState"
+        },
+        "stopped_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "transport_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.WorkerTransportKind"
+        },
+        "worker_generation": {
+          "kind": "number"
+        },
+        "worker_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.WorkerRecord",
+      "root_model": false,
+      "typescript": "WorkerRecord"
+    },
+    "server.game_gateway_models.AttachHostedGameRequest": {
+      "fields": {
+        "capability": {
+          "kind": "string"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "grant_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.AttachHostedGameRequest",
+      "root_model": false,
+      "typescript": "AttachHostedGameRequest"
+    },
+    "server.game_gateway_models.AttachHostedGameResponse": {
+      "fields": {
+        "connection": {
+          "kind": "model",
+          "ref": "server.game_gateway_models.HostedGameConnection"
+        },
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        }
+      },
+      "python": "server.game_gateway_models.AttachHostedGameResponse",
+      "root_model": false,
+      "typescript": "AttachHostedGameResponse"
+    },
+    "server.game_gateway_models.AttachmentSummary": {
+      "fields": {
+        "attachment_id": {
+          "kind": "string"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "connected_at": {
+          "kind": "string"
+        },
+        "expires_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.AttachmentSummary",
+      "root_model": false,
+      "typescript": "AttachmentSummary"
+    },
+    "server.game_gateway_models.CreateAgentGrantRequest": {
+      "fields": {
+        "agent_principal_id": {
+          "kind": "string"
+        },
+        "principal_capability": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "side_id": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "side_a"
+            },
+            {
+              "kind": "literal",
+              "value": "side_b"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_gateway_models.CreateAgentGrantRequest",
+      "root_model": false,
+      "typescript": "CreateAgentGrantRequest"
+    },
+    "server.game_gateway_models.CreateAgentGrantResponse": {
+      "fields": {
+        "controlled_entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        },
+        "grant_capability": {
+          "kind": "string"
+        },
+        "grant_id": {
+          "kind": "string"
+        },
+        "membership": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.MembershipRecord"
+        },
+        "runtime_session_id": {
+          "kind": "string"
+        },
+        "takeover_claim_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.CreateAgentGrantResponse",
+      "root_model": false,
+      "typescript": "CreateAgentGrantResponse"
+    },
+    "server.game_gateway_models.CreateCharacterRequest": {
+      "fields": {
+        "display_name": {
+          "kind": "string"
+        },
+        "preset_configuration_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.CreateCharacterRequest",
+      "root_model": false,
+      "typescript": "CreateCharacterRequest"
+    },
+    "server.game_gateway_models.CreateHostedGameRequest": {
+      "fields": {
+        "character_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "creation": {
+          "kind": "model",
+          "ref": "server.api_models.GameCreationStartRequest"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "observer_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ObserverPolicy"
+        },
+        "owner_side": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "side_a"
+            },
+            {
+              "kind": "literal",
+              "value": "side_b"
+            },
+            {
+              "kind": "literal",
+              "value": "observer"
+            }
+          ],
+          "kind": "union"
+        },
+        "principal_capability": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        },
+        "visibility_policy": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.VisibilityPolicy"
+        }
+      },
+      "python": "server.game_gateway_models.CreateHostedGameRequest",
+      "root_model": false,
+      "typescript": "CreateHostedGameRequest"
+    },
+    "server.game_gateway_models.CreateHostedGameResponse": {
+      "fields": {
+        "connection": {
+          "kind": "model",
+          "ref": "server.game_gateway_models.HostedGameConnection"
+        },
+        "creation": {
+          "kind": "model",
+          "ref": "server.api_models.GameCreationStartResponse"
+        },
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        },
+        "reconnect_capability": {
+          "kind": "string"
+        },
+        "reconnect_grant_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.CreateHostedGameResponse",
+      "root_model": false,
+      "typescript": "CreateHostedGameResponse"
+    },
+    "server.game_gateway_models.GatewayModel": {
+      "fields": {},
+      "python": "server.game_gateway_models.GatewayModel",
+      "root_model": false,
+      "typescript": "GatewayModel"
+    },
+    "server.game_gateway_models.GuestPrincipalRequest": {
+      "fields": {
+        "display_name": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.GuestPrincipalRequest",
+      "root_model": false,
+      "typescript": "GuestPrincipalRequest"
+    },
+    "server.game_gateway_models.GuestPrincipalResponse": {
+      "fields": {
+        "principal": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.PrincipalRecord"
+        },
+        "principal_capability": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.GuestPrincipalResponse",
+      "root_model": false,
+      "typescript": "GuestPrincipalResponse"
+    },
+    "server.game_gateway_models.HostedGameConnection": {
+      "fields": {
+        "access_mode": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "participant"
+            },
+            {
+              "kind": "literal",
+              "value": "observer"
+            },
+            {
+              "kind": "literal",
+              "value": "agent"
+            }
+          ],
+          "kind": "union"
+        },
+        "attachment_id": {
+          "kind": "string"
+        },
+        "authority_epoch": {
+          "kind": "number"
+        },
+        "controlled_entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "engine_base_url": {
+          "kind": "string"
+        },
+        "expires_at": {
+          "kind": "number"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "membership": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.MembershipRecord"
+        },
+        "runtime_session_id": {
+          "kind": "string"
+        },
+        "runtime_token": {
+          "kind": "string"
+        },
+        "takeover_claim_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.game_gateway_models.HostedGameConnection",
+      "root_model": false,
+      "typescript": "HostedGameConnection"
+    },
+    "server.game_gateway_models.HostedGameListResponse": {
+      "fields": {
+        "count": {
+          "kind": "number"
+        },
+        "games": {
+          "items": {
+            "kind": "model",
+            "ref": "server.game_directory.contracts.GameRecord"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.game_gateway_models.HostedGameListResponse",
+      "root_model": false,
+      "typescript": "HostedGameListResponse"
+    },
+    "server.game_gateway_models.ObserveHostedGameRequest": {
+      "fields": {
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "principal_capability": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.ObserveHostedGameRequest",
+      "root_model": false,
+      "typescript": "ObserveHostedGameRequest"
+    },
+    "server.game_gateway_models.ObserveHostedGameResponse": {
+      "fields": {
+        "connection": {
+          "kind": "model",
+          "ref": "server.game_gateway_models.HostedGameConnection"
+        },
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        },
+        "reconnect_capability": {
+          "kind": "string"
+        },
+        "reconnect_grant_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.ObserveHostedGameResponse",
+      "root_model": false,
+      "typescript": "ObserveHostedGameResponse"
+    },
+    "server.game_gateway_models.PlayerGameSeat": {
+      "fields": {
+        "active_attachments": {
+          "items": {
+            "kind": "model",
+            "ref": "server.game_gateway_models.AttachmentSummary"
+          },
+          "kind": "array"
+        },
+        "controlled_entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "membership": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.MembershipRecord"
+        }
+      },
+      "python": "server.game_gateway_models.PlayerGameSeat",
+      "root_model": false,
+      "typescript": "PlayerGameSeat"
+    },
+    "server.game_gateway_models.PlayerIdentityRequest": {
+      "fields": {
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.PlayerIdentityRequest",
+      "root_model": false,
+      "typescript": "PlayerIdentityRequest"
+    },
+    "server.game_gateway_models.PlayerIdentityResponse": {
+      "fields": {
+        "authentication_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "name_only_local"
+            }
+          ],
+          "kind": "union"
+        },
+        "credential_id": {
+          "kind": "string"
+        },
+        "principal": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.PrincipalRecord"
+        },
+        "principal_capability": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.PlayerIdentityResponse",
+      "root_model": false,
+      "typescript": "PlayerIdentityResponse"
+    },
+    "server.game_gateway_models.PlayerProfileResponse": {
+      "fields": {
+        "characters": {
+          "items": {
+            "kind": "model",
+            "ref": "server.game_directory.contracts.CharacterRecord"
+          },
+          "kind": "array"
+        },
+        "game_seats": {
+          "items": {
+            "kind": "model",
+            "ref": "server.game_gateway_models.PlayerGameSeat"
+          },
+          "kind": "array"
+        },
+        "principal": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.PrincipalRecord"
+        }
+      },
+      "python": "server.game_gateway_models.PlayerProfileResponse",
+      "root_model": false,
+      "typescript": "PlayerProfileResponse"
+    },
+    "server.game_gateway_models.ReconnectHostedGameRequest": {
+      "fields": {
+        "attachment_policy": {
+          "kind": "enum",
+          "ref": "server.game_gateway_models.AttachmentPolicy"
+        },
+        "client_instance_id": {
+          "kind": "string"
+        },
+        "client_kind": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.ClientKind"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "principal_capability": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.ReconnectHostedGameRequest",
+      "root_model": false,
+      "typescript": "ReconnectHostedGameRequest"
+    },
+    "server.game_gateway_models.ReconnectHostedGameResponse": {
+      "fields": {
+        "connection": {
+          "kind": "model",
+          "ref": "server.game_gateway_models.HostedGameConnection"
+        },
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        },
+        "replaced_attachment_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.game_gateway_models.ReconnectHostedGameResponse",
+      "root_model": false,
+      "typescript": "ReconnectHostedGameResponse"
+    },
+    "server.game_gateway_models.StopHostedGameRequest": {
+      "fields": {
+        "principal_capability": {
+          "kind": "string"
+        },
+        "principal_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_gateway_models.StopHostedGameRequest",
+      "root_model": false,
+      "typescript": "StopHostedGameRequest"
+    },
+    "server.game_gateway_models.StopHostedGameResponse": {
+      "fields": {
+        "game": {
+          "kind": "model",
+          "ref": "server.game_directory.contracts.GameRecord"
+        },
+        "stopped": {
+          "kind": "boolean"
+        }
+      },
+      "python": "server.game_gateway_models.StopHostedGameResponse",
+      "root_model": false,
+      "typescript": "StopHostedGameResponse"
+    },
+    "server.game_summary_store.WorkerSummaryEvidence": {
+      "fields": {
+        "generation_id": {
+          "kind": "string"
+        },
+        "source_combat_log_digest": {
+          "kind": "string"
+        },
+        "source_event_digest": {
+          "kind": "string"
+        },
+        "summary": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.GameSummaryV1"
+            },
+            {
+              "kind": "model",
+              "ref": "dnd.analytics.models.GameSummaryV2"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_summary_store.WorkerSummaryEvidence",
+      "root_model": false,
+      "typescript": "WorkerSummaryEvidence"
     }
   },
   "roots": [
@@ -23651,6 +27844,7 @@
     "server.api_models.ReplicationBootstrapResponse",
     "server.api_models.ReplicationProtocolIdentity",
     "server.api_models.SelfActionRequest",
+    "server.api_models.ServerCapabilitiesResponse",
     "server.api_models.SessionPingResponse",
     "server.api_models.SimpleActionRequest",
     "server.api_models.SpellCatalogEntry",
@@ -23658,6 +27852,8 @@
     "server.api_models.SpellCatalogResponse",
     "server.api_models.SpellCatalogSavingThrow",
     "server.api_models.SpellCatalogVfx",
+    "server.api_models.StandaloneGameSessionSummary",
+    "server.api_models.StandaloneGameStatusResponse",
     "server.api_models.StartHumanSimulationResponse",
     "server.api_models.TakeoverClaimResponse",
     "server.api_models.TakeoverEntityRow",
@@ -23668,6 +27864,66 @@
     "server.api_models.ToggleHandlerRequest",
     "server.api_models.ToggleHandlerResponse",
     "server.api_models.UnequipRequest",
+    "server.game_gateway_models.AttachHostedGameRequest",
+    "server.game_gateway_models.AttachHostedGameResponse",
+    "server.game_gateway_models.AttachmentSummary",
+    "server.game_gateway_models.CreateAgentGrantRequest",
+    "server.game_gateway_models.CreateAgentGrantResponse",
+    "server.game_gateway_models.CreateCharacterRequest",
+    "server.game_gateway_models.CreateHostedGameRequest",
+    "server.game_gateway_models.CreateHostedGameResponse",
+    "server.game_gateway_models.GatewayModel",
+    "server.game_gateway_models.GuestPrincipalRequest",
+    "server.game_gateway_models.GuestPrincipalResponse",
+    "server.game_gateway_models.HostedGameConnection",
+    "server.game_gateway_models.HostedGameListResponse",
+    "server.game_gateway_models.ObserveHostedGameRequest",
+    "server.game_gateway_models.ObserveHostedGameResponse",
+    "server.game_gateway_models.PlayerGameSeat",
+    "server.game_gateway_models.PlayerIdentityRequest",
+    "server.game_gateway_models.PlayerIdentityResponse",
+    "server.game_gateway_models.PlayerProfileResponse",
+    "server.game_gateway_models.ReconnectHostedGameRequest",
+    "server.game_gateway_models.ReconnectHostedGameResponse",
+    "server.game_gateway_models.StopHostedGameRequest",
+    "server.game_gateway_models.StopHostedGameResponse",
+    "server.game_summary_store.WorkerSummaryEvidence",
+    "server.game_directory.contracts.AccessGrantCreate",
+    "server.game_directory.contracts.AccessGrantRecord",
+    "server.game_directory.contracts.ArtifactCreate",
+    "server.game_directory.contracts.ArtifactRecord",
+    "server.game_directory.contracts.AttachmentCreate",
+    "server.game_directory.contracts.AttachmentRecord",
+    "server.game_directory.contracts.CharacterCreate",
+    "server.game_directory.contracts.CharacterDeploymentCreate",
+    "server.game_directory.contracts.CharacterDeploymentRecord",
+    "server.game_directory.contracts.CharacterRecord",
+    "server.game_directory.contracts.DirectoryEventRecord",
+    "server.game_directory.contracts.DirectoryModel",
+    "server.game_directory.contracts.EntityAssignmentCreate",
+    "server.game_directory.contracts.EntityAssignmentRecord",
+    "server.game_directory.contracts.FinalSummaryRecord",
+    "server.game_directory.contracts.GameCreate",
+    "server.game_directory.contracts.GameRecord",
+    "server.game_directory.contracts.IssuedAccessGrant",
+    "server.game_directory.contracts.IssuedAttachment",
+    "server.game_directory.contracts.MembershipCapabilities",
+    "server.game_directory.contracts.MembershipCreate",
+    "server.game_directory.contracts.MembershipRecord",
+    "server.game_directory.contracts.PlayerIdentityRecord",
+    "server.game_directory.contracts.PrincipalCreate",
+    "server.game_directory.contracts.PrincipalCredentialCreate",
+    "server.game_directory.contracts.PrincipalCredentialRecord",
+    "server.game_directory.contracts.PrincipalRecord",
+    "server.game_directory.contracts.RatingAdmissionCreate",
+    "server.game_directory.contracts.RatingAdmissionRecord",
+    "server.game_directory.contracts.RatingEstimateCreate",
+    "server.game_directory.contracts.RatingEstimateRecord",
+    "server.game_directory.contracts.RatingRunCreate",
+    "server.game_directory.contracts.RatingRunRecord",
+    "server.game_directory.contracts.RepositoryMetrics",
+    "server.game_directory.contracts.WorkerCreate",
+    "server.game_directory.contracts.WorkerRecord",
     "dnd.core.combat_log.ActionLogData",
     "dnd.core.combat_log.AttackLogData",
     "dnd.core.combat_log.CombatLogEntry",
@@ -23686,9 +27942,12 @@
     "dnd.core.combat_log.SpellSaveLogData",
     "dnd.core.combat_log.TurnLogData",
     "server.event_stream.StreamSyncPayload",
+    "server.event_stream.GameEventHistoryResponse",
     "server.event_stream.GameEventPayload",
     "server.event_stream.CombatLogPayload",
     "server.event_stream.HeartbeatPayload",
-    "server.event_stream.EvictedPayload"
+    "server.event_stream.EvictedPayload",
+    "server.directory_event_stream.DirectoryStreamSync",
+    "server.directory_event_stream.DirectoryStreamHeartbeat"
   ]
 }

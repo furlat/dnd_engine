@@ -340,12 +340,32 @@ class SubjectiveRuntime:
         processors: Optional[list] = None,
         command_followup_timeout: float = 10.0,
         include_command_diagnostics: bool = False,
+        unix_socket_path: Optional[str] = None,
+        runtime_token: Optional[str] = None,
     ) -> None:
         """Create a runtime client."""
         self.base_url = base_url.rstrip("/")
         self.session_id = session_id
-        self.client = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(connect=5.0, read=None, write=10.0, pool=5.0))
-        self.stream_client = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(connect=5.0, read=None, write=10.0, pool=5.0))
+        transport = httpx.HTTPTransport(uds=unix_socket_path) if unix_socket_path else None
+        stream_transport = httpx.HTTPTransport(uds=unix_socket_path) if unix_socket_path else None
+        transport_base_url = "http://game-worker" if unix_socket_path else self.base_url
+        headers = (
+            {"Authorization": f"Bearer {runtime_token}"}
+            if runtime_token is not None
+            else None
+        )
+        self.client = httpx.Client(
+            base_url=transport_base_url,
+            timeout=httpx.Timeout(connect=5.0, read=None, write=10.0, pool=5.0),
+            transport=transport,
+            headers=headers,
+        )
+        self.stream_client = httpx.Client(
+            base_url=transport_base_url,
+            timeout=httpx.Timeout(connect=5.0, read=None, write=10.0, pool=5.0),
+            transport=stream_transport,
+            headers=headers,
+        )
         self.store = SubjectiveStore()
         self.state_lock = RLock()
         self._state_changed = Condition(self.state_lock)
@@ -409,6 +429,11 @@ class SubjectiveRuntime:
         flush_sink = getattr(self.event_sink, "flush", None)
         if callable(flush_sink):
             flush_sink()
+
+    def heartbeat_takeover_claim(self, claim_id: str) -> None:
+        """Keep one gateway-authorized controller lease alive."""
+        response = self.client.post(f"/ai/takeover/{claim_id}/heartbeat")
+        response.raise_for_status()
 
     def bootstrap(self) -> None:
         """Fetch snapshot and initialize local state."""

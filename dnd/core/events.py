@@ -47,11 +47,12 @@ from dnd.core.content import (
     HandlerDispatchEvidence,
     HandlerDispatchOutcome,
 )
+from dnd.core.damage import DamageResolution
 from dnd.core.modifiers import DamageType
 from dnd.core.senses import SenseMode
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
-from datetime import datetime
+from datetime import UTC, datetime
 from collections import defaultdict
 from typing import Callable, Tuple
 import time
@@ -273,7 +274,7 @@ class Event(BaseObject):
         description="Stable UUID shared by all phase versions of one logical event.",
     )
     timestamp: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=lambda: datetime.now(UTC),
         description="Creation time for this event version.",
     )
     event_type: EventType = Field(description="Dispatch category used by triggers and history indexes.")
@@ -666,7 +667,7 @@ class Event(BaseObject):
             The new event version after queue registration and handler dispatch.
         """
         updates['modified'] = True
-        updates['timestamp'] = datetime.now()
+        updates['timestamp'] = datetime.now(UTC)
         updates['uuid'] = uuid4()
         if 'lineage_uuid' not in updates:
             updates['lineage_uuid'] = self.lineage_uuid
@@ -1608,7 +1609,7 @@ class EventQueue:
         if stored_event is not None:
             result = result.model_copy(update={
                 "uuid": uuid4(),
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(UTC),
             })
         cls._store_event(result)
         return result
@@ -3690,6 +3691,10 @@ class TakeDamageEvent(Event):
         default=None,
         description="Entity HP after damage applied (set at EFFECT phase)"
     )
+    resolution: Optional[DamageResolution] = Field(
+        default=None,
+        description="Factual defense and hit-point allocation attached at completion.",
+    )
 
     def get_effective_damage(self) -> int:
         """Get the damage amount to apply (final_damage if set, else total_damage)."""
@@ -3811,6 +3816,10 @@ class DamageAppliedEvent(Event):
     effect_id: Optional[str] = Field(
         default=None,
         description="Stable identity of the effect that caused the applied damage.",
+    )
+    resolution: Optional[DamageResolution] = Field(
+        default=None,
+        description="Complete resolution of the parent incoming damage packet.",
     )
 
 
