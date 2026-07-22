@@ -1,0 +1,358 @@
+"""Bounded worker-local storage for objective terminal game summaries.
+
+The store is a passive observer of completed EventQueue batches. It captures
+objective entity state at encounter boundaries and delegates all aggregation to
+the pure ``dnd.analytics`` reducer. It does not participate in engine mutation
+or durable persistence.
+"""
+
+from __future__ import annotations
+
+from collections import OrderedDict
+from dataclasses import dataclass
+from hashlib import sha256
+import json
+import os
+from threading import RLock
+from typing import Sequence
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from dnd.analytics import (
+    EntitySnapshotV1,
+    GameSummaryEvidenceV1,
+    GameSummary,
+    TerminalCursorV1,
+    reduce_game_summary,
+)
+from dnd.core.events import (
+    EncounterEndEvent,
+    EncounterStartEvent,
+    Event,
+    EventPhase,
+    EventQueue,
+)
+from dnd.encounter import Encounter
+from dnd.entity import Entity
+
+
+DEFAULT_WORKER_SUMMARY_CAPACITY = 32
+_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE = "DND_HOSTED_GAME_ID"
+
+
+@dataclass(frozen=True)
+class _EncounterCapture:
+    """Evidence origin retained when an encounter starts."""
+
+    initial_entities: tuple[EntitySnapshotV1, ...]
+    initial_snapshot_complete: bool
+    event_origin: int
+    combat_log_origin: int | None
+
+
+class WorkerSummaryEvidence(BaseModel):
+    """Canonical terminal summary paired with exact source-evidence digests."""
+
+    model_config = ConfigDict(frozen=True)
+
+    generation_id: UUID = Field(description="EventQueue generation summarized by this evidence.")
+    summary: GameSummary = Field(description="Canonical objective terminal summary.")
+    source_event_digest: str = Field(min_length=64, max_length=64, description="Digest of typed event versions.")
+    source_combat_log_digest: str = Field(min_length=64, max_length=64, description="Digest of structured combat logs.")
+
+
+class WorkerGameSummaryStore:
+    """Collect and retain a bounded set of terminal summaries per worker.
+
+    Args:
+        max_summaries: Maximum terminal summaries retained in insertion order.
+    """
+
+    def __init__(self, max_summaries: int = DEFAULT_WORKER_SUMMARY_CAPACITY) -> None:
+        if max_summaries < 1:
+            raise ValueError("max_summaries must be at least 1")
+        self._max_summaries = max_summaries
+        self._captures: dict[UUID, _EncounterCapture] = {}
+        self._summaries: OrderedDict[str, WorkerSummaryEvidence] = OrderedDict()
+        self._lock = RLock()
+        self.ensure_attached()
+
+    def reset(self) -> None:
+        """Clear worker-local evidence and restore the passive attachment.
+
+        ``EventQueue.reset()`` clears callback registrations. Server reset paths
+        should therefore call this method immediately afterward.
+        """
+        with self._lock:
+            self._captures.clear()
+            self._summaries.clear()
+        self.ensure_attached()
+
+    def ensure_attached(self) -> None:
+        """Idempotently attach the store to EventQueue batch notifications."""
+        EventQueue.add_on_event_batch_callback(self._on_event_batch)
+
+    def capture_active_encounter(self, encounter: Encounter) -> None:
+        """Adopt an encounter that started while a scenario factory reset callbacks.
+
+        Scenario assembly owns engine-registry reset and may start the encounter
+        before returning it to the server. The server calls this immediately on
+        return, before any participant action, so the retained boundary remains
+        the true playable initial state.
+        """
+        start_event = next(
+            (
+                event
+                for _index, event in EventQueue.iter_events_since(0)
+                if isinstance(event, EncounterStartEvent)
+                and event.phase == EventPhase.COMPLETION
+                and event.encounter_uuid == encounter.uuid
+            ),
+            None,
+        )
+        if start_event is None:
+            raise ValueError(f"Encounter {encounter.uuid} has no retained start event")
+        self._capture_start(start_event)
+
+    def get(self, game_id: str | UUID | None = None) -> GameSummary | None:
+        """Return a defensive copy of a retained terminal summary.
+
+        Args:
+            game_id: Hosted game id or encounter UUID. When omitted, return the
+                most recently completed game.
+
+        Returns:
+            A deep copy of the immutable summary contract, or ``None`` when no
+            matching terminal summary is retained.
+        """
+        with self._lock:
+            if not self._summaries:
+                return None
+            if game_id is None:
+                evidence = next(reversed(self._summaries.values()))
+                return evidence.summary.model_copy(deep=True)
+
+            identifier = str(game_id)
+            evidence = self._summaries.get(identifier)
+            if evidence is None:
+                evidence = next(
+                    (
+                        candidate
+                        for candidate in self._summaries.values()
+                        if str(candidate.summary.encounter_uuid) == identifier
+                    ),
+                    None,
+                )
+            return evidence.summary.model_copy(deep=True) if evidence is not None else None
+
+    def get_evidence(self, game_id: str | UUID | None = None) -> WorkerSummaryEvidence | None:
+        """Return summary and source digests for gateway persistence."""
+        with self._lock:
+            if not self._summaries:
+                return None
+            if game_id is None:
+                return next(reversed(self._summaries.values())).model_copy(deep=True)
+            identifier = str(game_id)
+            evidence = self._summaries.get(identifier)
+            if evidence is None:
+                evidence = next(
+                    (
+                        candidate
+                        for candidate in self._summaries.values()
+                        if str(candidate.summary.encounter_uuid) == identifier
+                    ),
+                    None,
+                )
+            return evidence.model_copy(deep=True) if evidence is not None else None
+
+    def _on_event_batch(self, events: Sequence[Event]) -> None:
+        """Capture encounter boundaries observed in an authoritative batch.
+
+        Args:
+            events: Events in EventQueue append order for one completed batch.
+        """
+        for event in events:
+            if event.phase != EventPhase.COMPLETION:
+                continue
+            if isinstance(event, EncounterStartEvent):
+                self._capture_start(event)
+            elif isinstance(event, EncounterEndEvent):
+                self._capture_end(event)
+
+    def _capture_start(self, event: EncounterStartEvent) -> None:
+        """Capture initial entity state and evidence origins."""
+        event_origin = EventQueue.get_event_index(event.uuid)
+        if event_origin is None:
+            return
+
+        initial_entities, snapshot_complete = _capture_entities(event.combatant_uuids)
+        encounter = Encounter.get(event.encounter_uuid)
+        capture = _EncounterCapture(
+            initial_entities=initial_entities,
+            initial_snapshot_complete=snapshot_complete,
+            event_origin=event_origin,
+            combat_log_origin=(len(encounter.combat_log) if encounter is not None else None),
+        )
+        with self._lock:
+            self._captures[event.encounter_uuid] = capture
+
+    def _capture_end(self, event: EncounterEndEvent) -> None:
+        """Reduce and retain a terminal summary from typed worker evidence."""
+        terminal_event_index = EventQueue.get_event_index(event.uuid)
+        with self._lock:
+            capture = self._captures.pop(event.encounter_uuid, None)
+
+        final_entities, final_snapshot_complete = _capture_entities(event.combatant_uuids)
+        encounter = Encounter.get(event.encounter_uuid)
+
+        event_history: tuple[Event, ...] = ()
+        event_history_complete = capture is not None and terminal_event_index is not None
+        if event_history_complete and capture is not None and terminal_event_index is not None:
+            event_history = tuple(
+                retained_event
+                for index, retained_event in EventQueue.iter_events_since(capture.event_origin)
+                if index <= terminal_event_index
+            )
+            event_history_complete = bool(
+                event_history
+                and isinstance(event_history[0], EncounterStartEvent)
+                and event_history[0].encounter_uuid == event.encounter_uuid
+                and event_history[-1].uuid == event.uuid
+            )
+
+        combat_log_cursor = len(encounter.combat_log) if encounter is not None else 0
+        combat_logs = ()
+        combat_log_complete = (
+            capture is not None
+            and capture.combat_log_origin is not None
+            and encounter is not None
+        )
+        if combat_log_complete and capture is not None and encounter is not None:
+            combat_logs = tuple(encounter.combat_log[capture.combat_log_origin :])
+
+        initial_entities = capture.initial_entities if capture is not None else ()
+        evidence = GameSummaryEvidenceV1(
+            terminal_cursor=TerminalCursorV1(
+                event_cursor=(
+                    terminal_event_index + 1
+                    if terminal_event_index is not None
+                    else EventQueue.event_cursor()
+                ),
+                combat_log_cursor=combat_log_cursor,
+            ),
+            event_history_complete=event_history_complete,
+            combat_log_complete=combat_log_complete,
+            initial_snapshot_complete=(
+                capture.initial_snapshot_complete if capture is not None else False
+            ),
+            final_snapshot_complete=final_snapshot_complete,
+        )
+        game_id = os.environ.get(_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE) or str(
+            event.encounter_uuid
+        )
+        summary = reduce_game_summary(
+            game_id=game_id,
+            encounter_uuid=event.encounter_uuid,
+            initial_entities=initial_entities,
+            final_entities=final_entities,
+            event_history=event_history,
+            combat_logs=combat_logs,
+            evidence=evidence,
+        )
+        self._retain(
+            WorkerSummaryEvidence(
+                generation_id=EventQueue.generation_id(),
+                summary=summary,
+                source_event_digest=_canonical_digest(
+                    [retained.model_dump(mode="json") for retained in event_history]
+                ),
+                source_combat_log_digest=_canonical_digest(
+                    [entry.model_dump(mode="json") for entry in combat_logs]
+                ),
+            )
+        )
+
+    def _retain(self, evidence: WorkerSummaryEvidence) -> None:
+        """Retain one summary and evict the oldest entry when necessary."""
+        with self._lock:
+            self._summaries.pop(evidence.summary.game_id, None)
+            self._summaries[evidence.summary.game_id] = evidence.model_copy(deep=True)
+            while len(self._summaries) > self._max_summaries:
+                self._summaries.popitem(last=False)
+
+
+def _canonical_digest(value: object) -> str:
+    """Return a deterministic digest without depending on the SQLite package."""
+    payload = json.dumps(
+        value,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return sha256(payload).hexdigest()
+
+
+def _capture_entities(
+    entity_uuids: Sequence[UUID],
+) -> tuple[tuple[EntitySnapshotV1, ...], bool]:
+    """Capture objective state for the requested combatants.
+
+    Args:
+        entity_uuids: Encounter combatants to capture in authoritative order.
+
+    Returns:
+        Sorted snapshots and whether every requested entity was available.
+    """
+    snapshots: list[EntitySnapshotV1] = []
+    for entity_uuid in entity_uuids:
+        entity = Entity.get(entity_uuid)
+        if entity is None:
+            continue
+        snapshots.append(_capture_entity(entity))
+    snapshots.sort(key=lambda snapshot: str(snapshot.entity_uuid))
+    return tuple(snapshots), len(snapshots) == len(entity_uuids)
+
+
+def _capture_entity(entity: Entity) -> EntitySnapshotV1:
+    """Capture the typed objective boundary state of one entity."""
+    resources = {
+        name: resource.current
+        for name, resource in entity.action_economy.resources.items()
+    }
+    for level in range(1, 10):
+        spell_slot = getattr(entity.action_economy, f"spell_slot_{level}")
+        resources[f"spell_slot_{level}"] = spell_slot.normalized_score
+
+    condition_semantic_keys = tuple(
+        sorted(
+            condition.get_semantic_key()
+            for condition in entity.active_conditions.values()
+        )
+    )
+    return EntitySnapshotV1(
+        entity_uuid=entity.uuid,
+        name=entity.name,
+        side_id=entity.faction or f"entity:{entity.uuid}",
+        normal_hit_points=entity.get_normal_hp(),
+        maximum_hit_points=entity.get_max_hp(),
+        temporary_hit_points=max(
+            0,
+            entity.health.temporary_hit_points.normalized_score,
+        ),
+        is_defeated=not entity.is_encounter_alive,
+        position=entity.position,
+        condition_semantic_keys=condition_semantic_keys,
+        resources=dict(sorted(resources.items())),
+    )
+
+
+game_summary_store = WorkerGameSummaryStore()
+
+
+__all__ = [
+    "DEFAULT_WORKER_SUMMARY_CAPACITY",
+    "WorkerGameSummaryStore",
+    "WorkerSummaryEvidence",
+    "game_summary_store",
+]

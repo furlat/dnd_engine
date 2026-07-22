@@ -26,6 +26,23 @@ from dnd.scenarios.evaluation.models import (
 from server.event_contract import serialize_event
 
 
+class ServerCapabilitiesResponse(BaseModel):
+    """Describe the server topology available to a connecting game client."""
+
+    server_mode: Literal["standalone", "gateway"] = Field(
+        description="Active deployment topology exposed by this HTTP origin."
+    )
+    game_directory_enabled: bool = Field(
+        description="Whether hosted-game discovery and attachment routes are available."
+    )
+    persistent_game_history: bool = Field(
+        description="Whether completed game metadata and summaries persist across restarts."
+    )
+    isolated_game_workers: bool = Field(
+        description="Whether each hosted game executes in an isolated hot worker process."
+    )
+
+
 class APIItemSummary(BaseModel):
     """Expose lightweight item metadata for inventory and equipment views.
 
@@ -1458,6 +1475,37 @@ class GameCreationStartResponse(BaseModel):
     new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for startup advancement.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event cursor after startup advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after startup advancement.")
+
+
+class StandaloneGameSessionSummary(BaseModel):
+    """One reconnectable session exposed by a standalone game server."""
+
+    session_id: str = Field(description="Runtime session identifier.")
+    player_type: str = Field(description="Session controller type.")
+    name: str = Field(description="Session display name.")
+    connection_status: str = Field(description="Current session connection state.")
+    controlled_entities: List[str] = Field(description="Entity UUIDs owned by the session.")
+    is_their_turn: bool = Field(description="Whether this session owns the active turn.")
+
+
+class StandaloneGameStatusResponse(BaseModel):
+    """Typed directory row for the single hot game held by a standalone server."""
+
+    active: bool = Field(description="Whether the server currently holds a game session.")
+    game_id: Optional[str] = Field(default=None, description="Current engine game UUID.")
+    encounter_active: bool = Field(description="Whether the current encounter remains active.")
+    active_entity_uuid: Optional[str] = Field(
+        default=None,
+        description="Entity currently holding the turn.",
+    )
+    sessions: List[StandaloneGameSessionSummary] = Field(
+        default_factory=list,
+        description="Runtime sessions available for local reconnection.",
+    )
+    creation: Optional[GameCreationStartResponse] = Field(
+        default=None,
+        description="Resolved creation metadata needed to reconstruct the client scene.",
+    )
 
 
 class AgentSessionEntityRow(BaseModel):

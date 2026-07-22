@@ -99,6 +99,24 @@ class DiceRoll(BaseModel):
         ...,
         description="Unique identifier of the dice expression that produced this result.",
     )
+    die_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Number of faces on each die, retained for portable roll analytics.",
+    )
+    effective_dice_count: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Number of selected dice contributing to the natural result. A d20 "
+            "with advantage still contributes one selected die."
+        ),
+    )
+    random_faces_rolled: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Number of random die faces generated, including advantage alternatives.",
+    )
     roll_type: RollType = Field(
         ...,
         description="Rules category for the roll result.",
@@ -306,7 +324,15 @@ class Dice(BaseModel):
             The dice roll result. Re-reading this property returns the same
             object for the lifetime of this ``Dice`` instance.
         """
+        effective_dice_count = self.count
+        random_faces_rolled = self.count
         if self.roll_type in (RollType.DAMAGE, RollType.HEAL):
+            effective_dice_count = (
+                self.count * 2 + self.crit_extra_dice
+                if self.attack_outcome == AttackOutcome.CRIT
+                else self.count
+            )
+            random_faces_rolled = effective_dice_count
             results = [
                 roll[0]
                 for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))
@@ -318,9 +344,14 @@ class Dice(BaseModel):
             all_rolls = roll_result[1]
             results = all_rolls if all_rolls else [selected_value]
             total = selected_value + self.bonus.normalized_score
+            effective_dice_count = 1
+            random_faces_rolled = len(all_rolls) if all_rolls else 1
 
         return DiceRoll(
             dice_uuid=self.uuid,
+            die_size=self.value,
+            effective_dice_count=effective_dice_count,
+            random_faces_rolled=random_faces_rolled,
             roll_type=self.roll_type,
             results=results,
             total=total,

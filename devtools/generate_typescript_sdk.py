@@ -28,14 +28,17 @@ from devtools.generate_event_contract import (
 )
 from dnd.core.events import Event
 from dnd.core import combat_log
-from server import api_models
+from server import api_models, game_gateway_models, game_summary_store
+from server.game_directory import contracts as game_directory_contracts
 from server.event_stream import (
     CombatLogPayload,
     EvictedPayload,
+    GameEventHistoryResponse,
     GameEventPayload,
     HeartbeatPayload,
     StreamSyncPayload,
 )
+from server.directory_event_stream import DirectoryStreamHeartbeat, DirectoryStreamSync
 
 
 SDK_ROOT = ROOT / "sdk" / "typescript"
@@ -43,10 +46,13 @@ SDK_MANIFEST_PATH = SDK_ROOT / "src" / "generated" / "contract.generated.json"
 SDK_TYPES_PATH = SDK_ROOT / "src" / "generated" / "contracts.generated.ts"
 STREAM_MODELS = (
     StreamSyncPayload,
+    GameEventHistoryResponse,
     GameEventPayload,
     CombatLogPayload,
     HeartbeatPayload,
     EvictedPayload,
+    DirectoryStreamSync,
+    DirectoryStreamHeartbeat,
 )
 
 
@@ -85,6 +91,9 @@ def build_sdk_manifest() -> Dict[str, Any]:
     builder = ContractBuilder()
     roots = [
         *api_model_roots(),
+        *declared_model_roots(game_gateway_models),
+        *declared_model_roots(game_summary_store),
+        *declared_model_roots(game_directory_contracts),
         *declared_model_roots(combat_log),
         *STREAM_MODELS,
     ]

@@ -10,9 +10,10 @@ import argparse
 import json
 import logging
 import os
+from threading import Event as ThreadEvent, Thread
 import time
 from typing import Any, Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -36,6 +37,7 @@ from ai.policy.generations.registry import (
 )
 from ai.protocol.control import CommandResult, CommandResultStatus, DecisionEpoch
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
+from ai.remote_connection import redeem_remote_agent_grant
 from ai.runtime_performance import latency_sensitive_gc
 from ai.subjective.processors import AgentFactsProcessor
 from ai.subjective.runtime import SubjectiveEncounterEndedError, SubjectiveRuntime
@@ -43,12 +45,21 @@ from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
 
 logger = logging.getLogger("external_agent")
 MAX_COMMANDS_PER_TURN = 20
+TAKEOVER_HEARTBEAT_SECONDS = 30.0
 
 
 class ExternalAgent:
     """HTTP/SSE controller that executes the shared subjective policy."""
 
-    def __init__(self, base_url: str, session_id: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        session_id: str,
+        *,
+        unix_socket_path: Optional[str] = None,
+        runtime_token: Optional[str] = None,
+        takeover_claim_id: Optional[str] = None,
+    ) -> None:
         """Create an external agent.
 
         Args:
@@ -61,7 +72,20 @@ class ExternalAgent:
             base_url=self.base_url,
             session_id=self.session_id,
             processors=[AgentFactsProcessor()],
+            unix_socket_path=unix_socket_path,
+            runtime_token=runtime_token,
         )
+        self.takeover_claim_id = takeover_claim_id
+        self._takeover_heartbeat_stop = ThreadEvent()
+        self._takeover_heartbeat_thread: Optional[Thread] = None
+        if takeover_claim_id is not None:
+            self.runtime.heartbeat_takeover_claim(takeover_claim_id)
+            self._takeover_heartbeat_thread = Thread(
+                target=self._takeover_heartbeat_loop,
+                name=f"takeover-heartbeat-{session_id}",
+                daemon=True,
+            )
+            self._takeover_heartbeat_thread.start()
         self.policy_memories = PolicyMemoryStore()
         self.policy_host = create_generation_policy_host(
             get_policy_implementation(CANDIDATE_GENERATION_ID),
@@ -73,8 +97,24 @@ class ExternalAgent:
 
     def close(self) -> None:
         """Close the subjective runtime transport."""
+        self._takeover_heartbeat_stop.set()
+        if self._takeover_heartbeat_thread is not None:
+            self._takeover_heartbeat_thread.join(timeout=2.0)
         self.policy_telemetry.close()
         self.runtime.close()
+
+    def _takeover_heartbeat_loop(self) -> None:
+        """Refresh a remote-controller lease without delaying policy ticks."""
+        assert self.takeover_claim_id is not None
+        while not self._takeover_heartbeat_stop.wait(TAKEOVER_HEARTBEAT_SECONDS):
+            try:
+                self.runtime.heartbeat_takeover_claim(self.takeover_claim_id)
+            except httpx.HTTPError:
+                logger.exception(
+                    "remote takeover heartbeat failed for claim %s",
+                    self.takeover_claim_id,
+                )
+                return
 
     def execute_command(
         self,
@@ -467,12 +507,57 @@ def _logical_tags_payload(command: AgentCommand) -> list[str]:
 def main() -> int:
     """Run the external agent command-line entrypoint."""
     parser = argparse.ArgumentParser(description="Run the external AI agent.")
-    parser.add_argument("--base-url", required=True)
-    parser.add_argument("--session-id", required=True)
+    parser.add_argument("--base-url")
+    parser.add_argument("--session-id")
+    parser.add_argument("--gateway-url")
+    parser.add_argument("--game-id", default=os.environ.get("DND_GAME_ID"))
+    parser.add_argument("--grant-id", default=os.environ.get("DND_AGENT_GRANT_ID"))
+    parser.add_argument(
+        "--grant-capability",
+        default=os.environ.get("DND_AGENT_GRANT_CAPABILITY"),
+    )
+    parser.add_argument(
+        "--client-instance-id",
+        default=f"external-agent-{os.getpid()}",
+    )
     parser.add_argument("--spawned-at", type=float, default=None)
+    parser.add_argument("--unix-socket", default=None)
+    parser.add_argument("--runtime-token", default=os.environ.get("DND_RUNTIME_TOKEN"))
+    parser.add_argument("--takeover-claim-id", default=os.environ.get("DND_TAKEOVER_CLAIM_ID"))
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
+
+    base_url = args.base_url
+    session_id = args.session_id
+    runtime_token = args.runtime_token
+    takeover_claim_id = args.takeover_claim_id
+    remote_values = (args.gateway_url, args.game_id, args.grant_id, args.grant_capability)
+    if any(value is not None for value in remote_values):
+        if not all(value is not None for value in remote_values):
+            parser.error(
+                "remote attachment requires --gateway-url, --game-id, --grant-id, "
+                "and --grant-capability"
+            )
+        connection = redeem_remote_agent_grant(
+            gateway_url=args.gateway_url,
+            game_id=UUID(args.game_id),
+            grant_id=UUID(args.grant_id),
+            grant_capability=args.grant_capability,
+            client_instance_id=args.client_instance_id,
+        )
+        base_url = connection.engine_base_url
+        session_id = str(connection.runtime_session_id)
+        runtime_token = connection.runtime_token
+        takeover_claim_id = (
+            str(connection.takeover_claim_uuids[0])
+            if connection.takeover_claim_uuids
+            else None
+        )
+    if base_url is None or session_id is None:
+        parser.error(
+            "provide direct --base-url/--session-id or a complete remote attachment grant"
+        )
 
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))
     logger.info(
@@ -480,14 +565,20 @@ def main() -> int:
         json.dumps({
             "event": "process_start",
             "pid": os.getpid(),
-            "session_id": args.session_id,
-            "base_url": args.base_url,
+            "session_id": session_id,
+            "base_url": base_url,
             "startup_delay_ms": round((time.time() - args.spawned_at) * 1000, 2)
             if args.spawned_at is not None else None,
         }, sort_keys=True),
     )
     with latency_sensitive_gc():
-        agent = ExternalAgent(args.base_url, args.session_id)
+        agent = ExternalAgent(
+            base_url,
+            session_id,
+            unix_socket_path=args.unix_socket,
+            runtime_token=runtime_token,
+            takeover_claim_id=takeover_claim_id,
+        )
         try:
             if args.once:
                 agent.run_once()

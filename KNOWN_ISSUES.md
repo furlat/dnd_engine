@@ -1193,3 +1193,23 @@ Bugs, failing tests, and hypotheses documented during implementation sessions. U
 - **Scope**: The other eight tests in `tests/manual/test_18_sessions_api_client_contract.py` passed.
 - **Hypothesis**: The expected-output fixture is stale; this does not appear to be a Codex representation regression.
 - **Status**: OPEN; documented only, no fix attempted.
+
+### Hosted-worker status test expects the obsolete three-field payload
+- **Found**: 2026-07-21 during focused player-identity and persistent-character regression validation.
+- **Command**: `uv run pytest tests/manual/test_109_hosted_game_runtime.py -q`
+- **Test**: `tests/manual/test_109_hosted_game_runtime.py::test_hosted_worker_uses_private_socket_and_stops_process_group`
+- **Failure**: The test compares `/game/status` to exactly `{"active": false, "game": null, "sessions": []}`. The current typed standalone status contract also includes `active_entity_uuid`, `creation`, `encounter_active`, and `game_id`.
+- **Hypothesis**: The worker and endpoint are healthy; the exact dictionary fixture predates the expanded reconnect/observation status contract and should assert the current typed model or only the fields relevant to worker lifecycle.
+- **Status**: OPEN; documented only, no production code changed.
+
+### Session action readout omits the chosen BG3 Shove
+- **Found**: 2026-07-22 during focused session API validation.
+- **Test**: `tests/manual/test_18_sessions_api_client_contract.py::test_state_current_turn_and_available_actions_payloads`
+- **Failure**: The stale exact readout expects only `Attack_MELEE_MAIN` and `Attack_RANGED_MAIN`; current available actions correctly also include the chosen BG3 `Shove`.
+- **Status**: OPEN; documented only, no tests or production code changed.
+
+### NeuroClient event-sidebar build fails on unused imports
+- **Found**: 2026-07-22 during reconnect-history validation.
+- **Command**: `npm run build` from `/home/tommaso/Dev/NeuroClient/app`.
+- **Failure**: TypeScript reports TS6196/TS6133 in `src/ui/eventSidebar.ts` for unused `ActionLogData`, `AttackLogData`, several other combat-log data type imports, and `pinTileInspector` introduced by concurrent work.
+- **Status**: OPEN; `eventSidebar.ts` was not touched by the reconnect-history implementation, and NeuroClient was not modified while recording this issue.

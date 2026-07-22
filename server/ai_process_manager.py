@@ -56,12 +56,15 @@ class ExternalAIProcessManager:
             "--spawned-at",
             str(time.time()),
         ]
+        worker_socket = os.environ.get("DND_WORKER_UNIX_SOCKET")
+        if worker_socket:
+            command.extend(["--unix-socket", worker_socket])
         try:
             process = subprocess.Popen(
                 command,
                 cwd=str(repo_root),
                 env=env,
-                start_new_session=True,
+                start_new_session=os.environ.get("DND_GAME_WORKER") != "1",
             )
         except OSError as exc:
             raise AIProcessStartError(str(exc)) from exc

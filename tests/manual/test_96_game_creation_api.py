@@ -329,6 +329,9 @@ def test_ai_vs_ai_uses_isolated_sessions_and_processes(
     assert _controller_types(payload["side_b"]["entities"]) == {"external_ai"}
 
     status = client.get("/game/status").json()
+    assert status["active"] is True
+    assert status["game_id"] == payload["game_id"]
+    assert status["creation"]["game_id"] == payload["game_id"]
     sessions = {row["session_id"]: row for row in status["sessions"]}
     controlled_a = {row["uuid"] for row in payload["side_a"]["entities"]}
     controlled_b = {row["uuid"] for row in payload["side_b"]["entities"]}
