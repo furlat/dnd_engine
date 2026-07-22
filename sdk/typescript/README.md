@@ -108,6 +108,70 @@ const journal = new ReplicationJournal();
 journal.bootstrap(await client.bootstrap(session.session_id));
 ```
 
+## Hosted Games And Reconnection
+
+Use `DndEngineClient.getServerCapabilities()` before choosing a startup flow.
+The typed response distinguishes the DB-free standalone server from the hosted
+gateway without relying on an expected 404 from `/games`.
+
+`GameDirectoryClient` owns the cold multi-game control plane. Applications use
+it to discover games, create or observe a hosted game, reopen a reconnect grant,
+and retrieve the immutable terminal summary. Once attached, `runtimeClient()`
+returns the ordinary `DndEngineClient` bound to that game and its short-lived
+runtime authority token.
+
+Directory principal capabilities and runtime tokens are sent in headers. They
+are never placed in query strings or SSE URLs.
+
+```ts
+import {
+  GameDirectoryClient,
+  ReplicationJournal,
+} from "@neurodragon/dnd-engine-sdk";
+
+const directory = new GameDirectoryClient("/gateway-api");
+const guest = await directory.createGuest({ display_name: "Tommaso" });
+const credential = {
+  principalId: guest.principal.principal_id,
+  principalCapability: guest.principal_capability,
+};
+
+const visible = await directory.listGames(credential);
+const attachment = await directory.attach(visible.games[0]!.game_id, {
+  grant_id: savedReconnectGrantId,
+  capability: savedReconnectCapability,
+  client_instance_id: browserInstanceId,
+  client_kind: "neuroclient",
+});
+
+const client = directory.runtimeClient(attachment.connection);
+const journal = new ReplicationJournal();
+journal.bootstrap(await client.bootstrap(attachment.connection.runtime_session_id));
+```
+
+`followGames()` consumes the durable directory lifecycle stream. It validates
+every envelope, resumes from the last delivered global cursor, filters private
+games through the supplied principal credential, and reconnects after transient
+transport failures.
+
+```ts
+const controller = new AbortController();
+
+void directory.followGames({
+  credential,
+  signal: controller.signal,
+  onEnvelope: ({ event, data }) => {
+    if (event === "directory_event") {
+      // Refresh or patch the game browser from data.event_type and data.game_id.
+    }
+  },
+});
+```
+
+The SDK deliberately does not persist capabilities. The application chooses
+its platform-appropriate secret storage and supplies a saved reconnect grant
+when opening a new attachment.
+
 ## Following Replication
 
 `followReplication()` is the normal connection surface. It resumes at the

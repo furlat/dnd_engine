@@ -1810,6 +1810,7 @@ class Entity(BaseBlock):
         parent_event: TakeDamageEvent,
         normal_hit_point_damage: int,
         temporary_hit_point_damage: int,
+        resolution: DamageApplicationPreview,
     ) -> DamageAppliedEvent:
         """Emit the factual positive-damage boundary through completion.
 
@@ -1821,6 +1822,7 @@ class Entity(BaseBlock):
             parent_event: Interruptible incoming damage event that caused this result.
             normal_hit_point_damage: Damage applied beyond temporary hit points.
             temporary_hit_point_damage: Temporary hit points consumed.
+            resolution: Complete typed damage-resolution evidence.
 
         Returns:
             Completed positive post-mitigation damage event.
@@ -1843,6 +1845,7 @@ class Entity(BaseBlock):
             damage_type=damage_type,
             damages=damages,
             effect_id=effect_id,
+            resolution=resolution,
             parent_event=parent_event.uuid,
             phase=EventPhase.DECLARATION,
         )
@@ -1874,6 +1877,8 @@ class Entity(BaseBlock):
                     for roll, damage in zip(event.damage_rolls, event.damages)
                 ],
                 event.normal_hit_point_damage_cap,
+                declared_damage=event.total_damage,
+                normal_hit_points_available=max(0, self.get_normal_hp()),
             )
         if not event.damages:
             raise ValueError("TakeDamageEvent requires at least one typed damage component")
@@ -1881,6 +1886,8 @@ class Entity(BaseBlock):
             event.get_effective_damage(),
             event.damages[0].damage_type,
             event.normal_hit_point_damage_cap,
+            declared_damage=event.total_damage,
+            normal_hit_points_available=max(0, self.get_normal_hp()),
         )
 
     def receive_damage(
@@ -1945,37 +1952,20 @@ class Entity(BaseBlock):
             take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
 
         actual_damage = 0
+        damage_resolution: Optional[DamageApplicationPreview] = None
         if not take_damage_event.canceled:
-            use_damage_components = (
-                take_damage_event.final_damage is None
-                and len(take_damage_event.damage_rolls) == len(take_damage_event.damages)
-                and len(take_damage_event.damages) > 1
+            damage_resolution = self.preview_take_damage(take_damage_event)
+            actual_damage = self.health.apply_damage_preview(
+                damage_resolution,
+                source_entity_uuid,
             )
-            effective_damage = take_damage_event.get_effective_damage()
-            if use_damage_components:
-                components = [
-                    (roll.total, damage.damage_type)
-                    for roll, damage in zip(take_damage_event.damage_rolls, take_damage_event.damages)
-                ]
-                actual_damage = self.health.take_damage_components(
-                    components,
-                    source_entity_uuid=source_entity_uuid,
-                    normal_hit_point_damage_cap=take_damage_event.normal_hit_point_damage_cap,
-                )
-            else:
-                actual_damage = self.health.take_damage(
-                    effective_damage,
-                    damage_type,
-                    source_entity_uuid=source_entity_uuid,
-                    normal_hit_point_damage_cap=take_damage_event.normal_hit_point_damage_cap,
-                )
         else:
             actual_damage = 0
 
         temporary_hp_after = max(0, self.health.temporary_hit_points.normalized_score)
         temporary_hit_point_damage = max(0, temporary_hp_before - temporary_hp_after)
         applied_damage = actual_damage + temporary_hit_point_damage
-        if applied_damage > 0:
+        if applied_damage > 0 and damage_resolution is not None:
             self._complete_damage_applied_event(
                 source_entity_uuid=source_entity_uuid,
                 damage_type=damage_type,
@@ -1984,6 +1974,7 @@ class Entity(BaseBlock):
                 parent_event=take_damage_event,
                 normal_hit_point_damage=actual_damage,
                 temporary_hit_point_damage=temporary_hit_point_damage,
+                resolution=damage_resolution,
             )
 
         if not take_damage_event.canceled and actual_damage > 0 and "Dead" not in self.active_conditions:
@@ -2010,6 +2001,7 @@ class Entity(BaseBlock):
             update={
                 "final_damage": applied_damage,
                 "resulting_hp": max(0, self.get_normal_hp()) if self.uses_death_saves else self.get_hp(),
+                "resolution": damage_resolution,
             }
         )
 

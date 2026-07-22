@@ -293,6 +293,7 @@ export function damageAppliedEvent(
     damage_type: "Force",
     damages: [],
     effect_id: "fixture.damage",
+    resolution: null,
   };
   return {
     generation_id: "generation-a",

@@ -18,6 +18,7 @@ Usage:
 
 import asyncio
 import logging
+import os
 import time
 import traceback
 from dataclasses import asdict, dataclass, field
@@ -61,14 +62,10 @@ from dnd.scenarios.evaluation.assembler import (
     assemble_composed_scenario,
     assemble_legacy_scenario,
 )
-from dnd.scenarios.evaluation.battlefield_catalog import BATTLEFIELDS, get_battlefield
 from dnd.scenarios.evaluation.combatant_catalog import (
-    HERO_CONFIGURATIONS,
-    MONSTER_PARTY_CONFIGURATIONS,
     get_combatant_configuration,
 )
-from dnd.scenarios.evaluation.compatibility import CompatibilityReport, check_compatibility
-from dnd.scenarios.evaluation.deployment_catalog import DEPLOYMENTS, get_deployment
+from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES, get_legacy_recipe
 from dnd.scenarios.evaluation.wardrobes import (
     BERSERKER_WARDROBE,
@@ -100,7 +97,7 @@ from server.api_models import (
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
     GameCreationCatalogResponse, GameCreationComposedScenario,
-    GameCreationPreflightRequest, GameCreationPreset, GameCreationPresetScenario,
+    GameCreationPreflightRequest, GameCreationPresetScenario,
     GameCreationSideRequest, GameCreationSideResult,
     GameCreationStartRequest, GameCreationStartResponse,
     EventContractSummary, EventHistoryResponse, CombatLogHistoryResponse,
@@ -118,6 +115,8 @@ from server.api_models import (
     MapEditorWalkabilityResponse, MapEditorSaveMapRequest, MapEditorSavedMapDocument,
     MapEditorSavedMapList, MapEditorSavedMapMetadata,
     ReplicationBootstrapResponse, ReplicationProtocolIdentity,
+    ServerCapabilitiesResponse,
+    StandaloneGameSessionSummary, StandaloneGameStatusResponse,
 )
 from server.mapeditor_support import (
     apply_tile_patches,
@@ -136,10 +135,17 @@ from server.mapeditor_support import (
     save_current_editor_map,
 )
 from server.request_timing import RequestTimingMiddleware
+from server.hosted_worker import HostedWorkerAssignment
 from server.spell_catalog import build_spell_catalog
+from server.game_creation_catalog import (
+    GameCreationCatalogError,
+    build_game_creation_catalog,
+    preflight_game_creation as run_game_creation_preflight,
+)
 from server.event_stream import (
     BoundedSubscription,
     EvictedPayload,
+    GameEventHistoryResponse,
     HeartbeatPayload,
     StreamSyncPayload,
     event_stream,
@@ -154,6 +160,7 @@ from server.event_contract import (
 )
 from server.agent_event_stream import agent_event_stream
 from server.gauntlet_event_stream import gauntlet_event_stream
+from server.game_summary_store import WorkerSummaryEvidence, game_summary_store
 from server.action_serialization import serialize_available_actions
 from server.session import (
     SessionManager, GameSession,
@@ -382,6 +389,11 @@ class EventMonitor:
         self._running = True
         logger.info("EventMonitor started")
 
+    def ensure_attached(self) -> None:
+        """Restore the EventQueue callback after a queue generation reset."""
+        EventQueue.add_on_event_callback(self._on_event)
+        self._running = True
+
     def stop(self) -> None:
         """Stop monitoring events."""
         if not self._running:
@@ -415,6 +427,7 @@ class SimulationState:
         self.auto_run_ai: bool = True
         self._session_manager = get_session_manager()
         self._game_session: Optional[GameSession] = None
+        self.current_creation: Optional[GameCreationStartResponse] = None
 
     @property
     def game(self) -> Optional[GameSession]:
@@ -455,6 +468,7 @@ class SimulationState:
         agent_event_stream.clear_all()
         self.encounter = None
         self._game_session = None
+        self.current_creation = None
         self.combat_task = None
         self.paused = True
         self._session_manager.sessions.clear()
@@ -477,7 +491,9 @@ def setup_combat() -> Encounter:
     Entity._entity_by_position.clear()
     Encounter.clear_registry()
     EventQueue.reset()
+    game_summary_store.reset()
     event_stream.ensure_attached()
+    event_monitor.ensure_attached()
 
     grid = get_map()
     grid.create_rectangle(0, 0, 15, 15)
@@ -518,7 +534,9 @@ def setup_arena_combat(
     Controller._controller_registry.clear()
     SessionManager.reset()
     EventQueue.reset()
+    game_summary_store.reset()
     event_stream.ensure_attached()
+    event_monitor.ensure_attached()
 
     grid = get_map()
     build_standard_arena_environment(grid)
@@ -621,6 +639,7 @@ async def prepare_new_simulation_start() -> None:
     sim._session_manager.sessions.clear()
     sim._session_manager.games.clear()
     sim._session_manager.active_game = None
+    sim.current_creation = None
     _available_actions_cache.clear()
     sim.paused = False
 
@@ -674,7 +693,9 @@ def setup_aoe_test_arena(
     Controller._controller_registry.clear()
     SessionManager.reset()
     EventQueue.reset()
+    game_summary_store.reset()
     event_stream.ensure_attached()
+    event_monitor.ensure_attached()
 
     grid = get_map()
     grid.create_rectangle(0, 0, 15, 15)
@@ -1498,9 +1519,11 @@ async def lifespan(app: FastAPI):
     with latency_sensitive_gc():
         event_monitor.start()
         event_stream.start()
+        game_summary_store.ensure_attached()
         yield
         event_stream.stop()
         event_monitor.stop()
+        ai_process_manager.stop_all()
         if sim.combat_task and not sim.combat_task.done():
             sim.combat_task.cancel()
 
@@ -1565,6 +1588,31 @@ async def root():
         "has_encounter": sim.encounter is not None,
         "paused": sim.paused
     }
+
+
+@app.post("/hosted/configure")
+async def configure_hosted_worker(
+    assignment: HostedWorkerAssignment,
+) -> dict[str, str]:
+    """Assign a ready worker to one hosted game before simulation creation."""
+    if os.environ.get("DND_GAME_WORKER") != "1":
+        raise HTTPException(status_code=404, detail="Hosted worker configuration is unavailable")
+    if sim.encounter is not None or sim.game is not None:
+        raise HTTPException(status_code=409, detail="Hosted worker already owns a game")
+    os.environ["DND_HOSTED_GAME_ID"] = str(assignment.hosted_game_id)
+    os.environ["DND_PUBLIC_GAME_BASE_URL"] = assignment.public_game_base_url.rstrip("/")
+    return {"status": "configured"}
+
+
+@app.get("/server/capabilities", response_model=ServerCapabilitiesResponse)
+async def get_server_capabilities() -> ServerCapabilitiesResponse:
+    """Return the typed DB-free standalone deployment capabilities."""
+    return ServerCapabilitiesResponse(
+        server_mode="standalone",
+        game_directory_enabled=False,
+        persistent_game_history=False,
+        isolated_game_workers=False,
+    )
 
 _BASE_BLOCK_INTERNAL_FIELDS = set(BaseBlock.model_fields.keys()) | {
     'use_register', 'blocks_dict_name_uuid', 'blocks_dict_uuid_name',
@@ -2564,8 +2612,8 @@ async def join_game(request: JoinGameRequest):
     )
 
 
-@app.get("/game/status")
-async def get_game_status():
+@app.get("/game/status", response_model=StandaloneGameStatusResponse)
+async def get_game_status() -> StandaloneGameStatusResponse:
     """Return current game status including all joined sessions.
 
     Returns:
@@ -2575,30 +2623,50 @@ async def get_game_status():
     game = sim.game
 
     if not game:
-        return {
-            "active": False,
-            "game": None,
-            "sessions": []
-        }
+        return StandaloneGameStatusResponse(
+            active=False,
+            encounter_active=False,
+            sessions=[],
+        )
 
     sessions_info = []
     for session in game.players.values():
-        sessions_info.append({
-            "session_id": str(session.session_id),
-            "player_type": session.player_type.value,
-            "name": session.name,
-            "connection_status": session.connection_status.value,
-            "controlled_entities": [str(e) for e in session.controlled_entities],
-            "is_their_turn": game.is_player_turn(session.session_id)
-        })
+        sessions_info.append(StandaloneGameSessionSummary(
+            session_id=str(session.session_id),
+            player_type=session.player_type.value,
+            name=session.name,
+            connection_status=session.connection_status.value,
+            controlled_entities=[str(entity_uuid) for entity_uuid in session.controlled_entities],
+            is_their_turn=game.is_player_turn(session.session_id),
+        ))
 
-    return {
-        "active": True,
-        "game_id": str(game.game_id),
-        "encounter_active": game.encounter is not None and game.encounter.state.value == "active",
-        "active_entity_uuid": str(game.active_entity_uuid) if game.active_entity_uuid else None,
-        "sessions": sessions_info
-    }
+    return StandaloneGameStatusResponse(
+        active=True,
+        game_id=str(game.game_id),
+        encounter_active=(
+            game.encounter is not None and game.encounter.state.value == "active"
+        ),
+        active_entity_uuid=(str(game.active_entity_uuid) if game.active_entity_uuid else None),
+        sessions=sessions_info,
+        creation=sim.current_creation,
+    )
+
+
+@app.get("/game/evidence/summary", response_model=WorkerSummaryEvidence)
+async def get_worker_terminal_summary() -> WorkerSummaryEvidence:
+    """Return the worker-local canonical terminal summary.
+
+    This endpoint is private to the hosting gateway. Standalone servers may
+    still use it for local inspection, but it never reads or writes a database.
+    """
+    evidence = game_summary_store.get_evidence(os.environ.get("DND_HOSTED_GAME_ID"))
+    if evidence is None:
+        raise _api_http_exception(
+            status_code=404,
+            code="terminal_summary_not_ready",
+            message="The active game has no terminal summary yet",
+        )
+    return evidence
 
 
 @app.get("/session/{session_id}/entities")
@@ -2710,6 +2778,80 @@ async def get_events(
         events=events,
         count=len(events),
         total=len(all_events),
+    )
+
+
+@app.get("/events/history", response_model=GameEventHistoryResponse)
+async def get_game_event_history(
+    from_cursor: int = 0,
+    through_cursor: Optional[int] = None,
+    event_type: Optional[str] = None,
+    phase: Optional[str] = None,
+) -> GameEventHistoryResponse:
+    """Return an exact, typed event-frame window for transcript hydration.
+
+    The exclusive `through_cursor` lets reconnecting clients request history
+    represented by an already-captured replication bootstrap. Events emitted
+    after that boundary remain the responsibility of the live SSE stream.
+
+    Args:
+        from_cursor: Inclusive source event cursor.
+        through_cursor: Exclusive source cursor, or the current cursor.
+        event_type: Optional semantic event-type filter.
+        phase: Optional event-phase filter.
+
+    Returns:
+        Typed event frames in authoritative storage order with exact bounds.
+
+    Raises:
+        HTTPException: If cursor bounds or event filters are invalid.
+    """
+    current_cursor = EventQueue.event_cursor()
+    if from_cursor < 0:
+        raise HTTPException(status_code=400, detail="from_cursor must be non-negative")
+    requested_through = current_cursor if through_cursor is None else through_cursor
+    if requested_through < from_cursor:
+        raise HTTPException(
+            status_code=400,
+            detail="through_cursor must be greater than or equal to from_cursor",
+        )
+    bounded_through = min(requested_through, current_cursor)
+    frames = event_stream.iter_game_events_window(
+        from_cursor,
+        bounded_through,
+        sim.encounter,
+    )
+
+    if event_type is not None:
+        try:
+            typed_event = EventType(event_type)
+        except ValueError:
+            raise _event_filter_http_exception(
+                code="unknown_event_type",
+                message=f"Unknown event_type: {event_type}",
+                event_type=event_type,
+                phase=phase,
+            )
+        frames = [frame for frame in frames if frame.event.event_type == typed_event]
+
+    if phase is not None:
+        try:
+            typed_phase = EventPhase(phase)
+        except ValueError:
+            raise _event_filter_http_exception(
+                code="unknown_event_phase",
+                message=f"Unknown phase: {phase}",
+                event_type=event_type,
+                phase=phase,
+            )
+        frames = [frame for frame in frames if frame.event.phase == typed_phase]
+
+    return GameEventHistoryResponse(
+        generation_id=str(EventQueue.generation_id()),
+        from_cursor=from_cursor,
+        through_cursor=bounded_through,
+        frames=frames,
+        total=current_cursor,
     )
 
 
@@ -5587,22 +5729,14 @@ def _game_creation_preflight(
         HTTPException: If a component identifier is unknown.
     """
     try:
-        hero = get_combatant_configuration(request.hero_configuration_id)
-        monsters = get_combatant_configuration(request.monster_configuration_id)
-        battlefield = get_battlefield(request.battlefield_id)
-        deployment = get_deployment(request.deployment_id)
-    except ValueError as exc:
+        return run_game_creation_preflight(request)
+    except GameCreationCatalogError as exc:
         raise _api_http_exception(
             status_code=400,
-            code="invalid_game_creation_component",
-            message=str(exc),
-            selection=request.model_dump(mode="json"),
-            valid_hero_configuration_ids=[spec.configuration_id for spec in HERO_CONFIGURATIONS],
-            valid_monster_configuration_ids=[spec.configuration_id for spec in MONSTER_PARTY_CONFIGURATIONS],
-            valid_battlefield_ids=[spec.battlefield_id for spec in BATTLEFIELDS],
-            valid_deployment_ids=[spec.deployment_id for spec in DEPLOYMENTS],
+            code=exc.code,
+            message=exc.message,
+            **exc.context,
         ) from exc
-    return check_compatibility(hero, monsters, battlefield, deployment)
 
 
 def _game_creation_selection(
@@ -5726,30 +5860,7 @@ def _game_creation_side_result(
 @app.get("/game-creation/catalog", response_model=GameCreationCatalogResponse)
 async def get_game_creation_catalog() -> GameCreationCatalogResponse:
     """Return canonical scenarios, formations, and controller choices."""
-    specs_by_id = {
-        spec.arena_id: spec
-        for spec in list_ai_validation_arena_specs()
-    }
-    presets = []
-    for recipe in LEGACY_RECIPES:
-        spec = specs_by_id[recipe.arena_id]
-        presets.append(GameCreationPreset(
-            arena_id=recipe.arena_id,
-            title=spec.title,
-            tags=list(spec.tags),
-            expected_pressure=list(spec.expected_pressure),
-            map_notes=list(spec.map_notes),
-            recipe=recipe,
-        ))
-    return GameCreationCatalogResponse(
-        controllers=["human", "ai", "codex"],
-        opening_sides=["initiative", "side_a", "side_b"],
-        hero_configurations=list(HERO_CONFIGURATIONS),
-        monster_configurations=list(MONSTER_PARTY_CONFIGURATIONS),
-        battlefields=list(BATTLEFIELDS),
-        deployments=list(DEPLOYMENTS),
-        presets=presets,
-    )
+    return build_game_creation_catalog()
 
 
 @app.post("/game-creation/preflight", response_model=CompatibilityReport)
@@ -5807,6 +5918,11 @@ async def start_created_game(
             selection=selection.model_dump(mode="json"),
         ) from exc
 
+    game_summary_store.reset()
+    game_summary_store.capture_active_encounter(arena.encounter)
+    event_stream.ensure_attached()
+    event_monitor.ensure_attached()
+
     sim.encounter = arena.encounter
     sim.paused = False
     sim.encounter.clear_combat_log()
@@ -5852,7 +5968,10 @@ async def start_created_game(
         raise _takeover_http_exception(exc, faction=None) from exc
     _publish_takeover_ownership_changes(ownership_boundary, "game_creation_claimed")
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = os.environ.get(
+        "DND_PUBLIC_GAME_BASE_URL",
+        str(request.base_url).rstrip("/"),
+    ).rstrip("/")
     try:
         for session in (side_a_fallback, side_b_fallback):
             if session is not None:
@@ -5870,7 +5989,7 @@ async def start_created_game(
     advance = await advance_encounter()
     hero_spec = get_combatant_configuration(selection.hero_configuration_id)
     monster_spec = get_combatant_configuration(selection.monster_configuration_id)
-    return GameCreationStartResponse(
+    response = GameCreationStartResponse(
         scenario_kind=creation.scenario.kind,
         preset_arena_id=preset_arena_id,
         encounter_uuid=str(sim.encounter.uuid),
@@ -5896,6 +6015,8 @@ async def start_created_game(
         ),
         **advance.model_dump(mode="json"),
     )
+    sim.current_creation = response
+    return response
 
 
 @app.post("/simulation/start-human", response_model=StartHumanSimulationResponse)

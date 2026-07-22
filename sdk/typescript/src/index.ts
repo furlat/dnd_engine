@@ -4,3 +4,4 @@ export * from "./sse.js";
 export * from "./reducer.js";
 export * from "./journal.js";
 export * from "./client.js";
+export * from "./directoryClient.js";

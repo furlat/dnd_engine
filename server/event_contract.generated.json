@@ -1,5 +1,5 @@
 {
-  "contract_hash": "441ef8f2b533e3973fd3cd0307a7541396a3697bdcc85fa2d362f54a4f58a990",
+  "contract_hash": "dfe91ae6387120768fc226f8b5d395ca7096fd0cc85cbd44f7f2bd3b5a780ea3",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -5178,6 +5178,90 @@
       "python": "dnd.core.base_conditions.OutcomeProtection",
       "typescript": "OutcomeProtection"
     },
+    "dnd.core.damage.DamageComponentResolution": {
+      "fields": {
+        "affinity_prevented_damage": {
+          "kind": "number"
+        },
+        "after_affinity_damage": {
+          "kind": "number"
+        },
+        "damage_type": {
+          "kind": "enum",
+          "ref": "dnd.core.modifiers.DamageType"
+        },
+        "incoming_damage": {
+          "kind": "number"
+        },
+        "multiplier": {
+          "kind": "number"
+        },
+        "resistance_status": {
+          "kind": "enum",
+          "ref": "dnd.core.modifiers.ResistanceStatus"
+        },
+        "vulnerability_bonus_damage": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.core.damage.DamageComponentResolution",
+      "typescript": "DamageComponentResolution"
+    },
+    "dnd.core.damage.DamageResolution": {
+      "fields": {
+        "affinity_prevented_damage": {
+          "kind": "number"
+        },
+        "after_affinity_damage": {
+          "kind": "number"
+        },
+        "components": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.damage.DamageComponentResolution"
+          },
+          "kind": "array"
+        },
+        "declared_damage": {
+          "kind": "number"
+        },
+        "effective_normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "event_amplified_damage": {
+          "kind": "number"
+        },
+        "event_prevented_damage": {
+          "kind": "number"
+        },
+        "flat_reduction_damage": {
+          "kind": "number"
+        },
+        "incoming_damage": {
+          "kind": "number"
+        },
+        "mitigated_damage": {
+          "kind": "number"
+        },
+        "normal_hit_point_damage": {
+          "kind": "number"
+        },
+        "overkill_damage": {
+          "kind": "number"
+        },
+        "survival_cap_prevented_damage": {
+          "kind": "number"
+        },
+        "temporary_hit_point_damage": {
+          "kind": "number"
+        },
+        "vulnerability_bonus_damage": {
+          "kind": "number"
+        }
+      },
+      "python": "dnd.core.damage.DamageResolution",
+      "typescript": "DamageResolution"
+    },
     "dnd.core.dice.Dice": {
       "fields": {
         "attack_outcome": {
@@ -5291,6 +5375,39 @@
         },
         "dice_uuid": {
           "kind": "string"
+        },
+        "die_size": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "effective_dice_count": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "random_faces_rolled": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "results": {
           "items": [
@@ -6082,6 +6199,18 @@
         "phase": {
           "kind": "enum",
           "ref": "dnd.core.events.EventPhase"
+        },
+        "resolution": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.damage.DamageResolution"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "resulting_normal_hp": {
           "kind": "number"
@@ -12103,6 +12232,18 @@
         "phase": {
           "kind": "enum",
           "ref": "dnd.core.events.EventPhase"
+        },
+        "resolution": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.damage.DamageResolution"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "resulting_hp": {
           "items": [

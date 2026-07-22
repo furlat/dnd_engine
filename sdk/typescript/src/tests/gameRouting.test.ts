@@ -1,0 +1,373 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { DndEngineClient } from "../client.js";
+import { GameDirectoryClient } from "../directoryClient.js";
+import { bootstrap } from "./fixtures.js";
+import { stepEvent } from "./fixtures.js";
+
+test("server capability probe distinguishes hosted and standalone topology", async () => {
+  const urls: string[] = [];
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({
+      server_mode: "gateway",
+      game_directory_enabled: true,
+      persistent_game_history: true,
+      isolated_game_workers: true,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  const capabilities = await client.getServerCapabilities();
+
+  assert.equal(capabilities.server_mode, "gateway");
+  assert.equal(capabilities.game_directory_enabled, true);
+  assert.deepEqual(urls, ["/api/server/capabilities"]);
+});
+
+test("standalone status uses the typed single-game directory route", async () => {
+  const urls: string[] = [];
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({
+      active: false,
+      game_id: null,
+      encounter_active: false,
+      active_entity_uuid: null,
+      sessions: [],
+      creation: null,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  const status = await client.getStandaloneGameStatus();
+
+  assert.equal(status.active, false);
+  assert.deepEqual(urls, ["/api/game/status"]);
+});
+
+test("game-scoped engine client prefixes routes and sends runtime authority", async () => {
+  const requests: Array<{ url: string; authorization: string | null }> = [];
+  const fetchImplementation: typeof fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    requests.push({
+      url: String(input),
+      authorization: headers.get("authorization"),
+    });
+    return new Response(JSON.stringify(bootstrap()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api/games/game-a/runtime/", {
+    fetchImplementation,
+    headers: { Authorization: "Bearer runtime-secret" },
+  });
+
+  await client.bootstrap("session-a");
+
+  assert.deepEqual(requests, [{
+    url: "/api/games/game-a/runtime/replication/bootstrap?session_id=session-a",
+    authorization: "Bearer runtime-secret",
+  }]);
+});
+
+test("game event history requests an exact typed transcript window", async () => {
+  const urls: string[] = [];
+  const frame = stepEvent(7, [5, 0], [6, 0]);
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({
+      generation_id: frame.generation_id,
+      from_cursor: 0,
+      through_cursor: 7,
+      frames: [frame],
+      total: 9,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  const history = await client.getGameEventHistory({
+    fromCursor: 0,
+    throughCursor: 7,
+    phase: "completion",
+  });
+
+  assert.equal(history.frames[0]?.event_cursor, 7);
+  assert.deepEqual(urls, [
+    "/api/events/history?from_cursor=0&through_cursor=7&phase=completion",
+  ]);
+});
+
+test("raw event history remains a typed rolling-worker compatibility surface", async () => {
+  const urls: string[] = [];
+  const frame = stepEvent(1, [0, 0], [1, 0]);
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({
+      generation_id: frame.generation_id,
+      events: [frame.event],
+      count: 1,
+      total: 1,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  const history = await client.getEventHistory({ since: 0, limit: 0 });
+
+  assert.equal(history.events.length, 1);
+  assert.deepEqual(urls, ["/api/events?since=0&limit=0"]);
+});
+
+test("legacy fetch constructor remains supported", async () => {
+  const urls: string[] = [];
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify(bootstrap()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", fetchImplementation);
+
+  await client.bootstrap();
+
+  assert.deepEqual(urls, ["/api/replication/bootstrap"]);
+});
+
+test("terminal summary uses the typed worker evidence route", async () => {
+  const urls: string[] = [];
+  const fetchImplementation: typeof fetch = async (input) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  await assert.rejects(() => client.getTerminalSummary());
+
+  assert.deepEqual(urls, ["/api/game/evidence/summary"]);
+});
+
+test("directory discovery keeps principal capability out of the URL", async () => {
+  const requests: Array<{
+    url: string;
+    principalId: string | null;
+    capability: string | null;
+  }> = [];
+  const fetchImplementation: typeof fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    requests.push({
+      url: String(input),
+      principalId: headers.get("x-dnd-principal-id"),
+      capability: headers.get("x-dnd-principal-capability"),
+    });
+    return new Response(JSON.stringify({ games: [], count: 0 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const directory = new GameDirectoryClient("/gateway-api/", { fetchImplementation });
+
+  await directory.listGames({
+    principalId: "principal-a",
+    principalCapability: "directory-secret",
+  });
+
+  assert.deepEqual(requests, [{
+    url: "/gateway-api/games",
+    principalId: "principal-a",
+    capability: "directory-secret",
+  }]);
+});
+
+test("player identity, profile, and character routes stay typed and credential-scoped", async () => {
+  const principal = {
+    principal_id: "00000000-0000-0000-0000-000000000001",
+    principal_kind: "human",
+    display_name: "Tommaso",
+    credential_hash: null,
+    metadata: { authentication_kind: "name_only_local" },
+    metadata_digest: "metadata-digest",
+    created_at: "2026-07-21T18:00:00Z",
+    last_seen_at: null,
+    disabled_at: null,
+  };
+  const character = {
+    character_id: "00000000-0000-0000-0000-000000000002",
+    owner_principal_id: principal.principal_id,
+    display_name: "Sol",
+    preset_configuration_id: "hero.sorcerer_l5_standard_torch",
+    status: "active",
+    created_at: "2026-07-21T18:01:00Z",
+    updated_at: "2026-07-21T18:01:00Z",
+    row_version: 1,
+  };
+  const requests: Array<{ url: string; method: string; capability: string | null }> = [];
+  const fetchImplementation: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const headers = new Headers(init?.headers);
+    requests.push({
+      url,
+      method: init?.method ?? "GET",
+      capability: headers.get("x-dnd-principal-capability"),
+    });
+    const payload = url.endsWith("/directory/players/identify")
+      ? {
+          principal,
+          credential_id: "00000000-0000-0000-0000-000000000003",
+          principal_capability: "x".repeat(40),
+          authentication_kind: "name_only_local",
+        }
+      : url.endsWith("/directory/players/me")
+        ? { principal, characters: [character], game_seats: [] }
+        : character;
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const directory = new GameDirectoryClient("/gateway-api", { fetchImplementation });
+  const credential = {
+    principalId: principal.principal_id,
+    principalCapability: "browser-secret",
+  };
+
+  const identity = await directory.identifyPlayer({
+    display_name: "Tommaso",
+    client_instance_id: "browser-a",
+  });
+  const profile = await directory.getPlayerProfile(credential);
+  const created = await directory.createCharacter(credential, {
+    display_name: "Sol",
+    preset_configuration_id: "hero.sorcerer_l5_standard_torch",
+  });
+
+  assert.equal(identity.principal.principal_id, principal.principal_id);
+  assert.equal(profile.characters[0]?.character_id, character.character_id);
+  assert.equal(created.preset_configuration_id, character.preset_configuration_id);
+  assert.deepEqual(requests, [
+    { url: "/gateway-api/directory/players/identify", method: "POST", capability: null },
+    { url: "/gateway-api/directory/players/me", method: "GET", capability: "browser-secret" },
+    { url: "/gateway-api/directory/characters", method: "POST", capability: "browser-secret" },
+  ]);
+});
+
+test("directory lifecycle stream is typed, resumable, and capability-scoped", async () => {
+  const requests: Array<{
+    url: string;
+    accept: string | null;
+    principalId: string | null;
+    capability: string | null;
+  }> = [];
+  const streamBody = [
+    "id: 7",
+    "event: sync",
+    'data: {"cursor":7}',
+    "",
+    "id: 6",
+    "event: directory_event",
+    "data: " + JSON.stringify({
+      cursor: 6,
+      event_id: "00000000-0000-0000-0000-000000000006",
+      game_id: "00000000-0000-0000-0000-000000000001",
+      event_type: "game_lifecycle_changed",
+      payload: { state: "active" },
+      payload_digest: "digest-6",
+      created_at: "2026-07-21T18:00:00Z",
+    }),
+    "",
+    "id: 7",
+    "event: heartbeat",
+    'data: {"cursor":7,"server_time":1784656800}',
+    "",
+    "",
+  ].join("\n");
+  const fetchImplementation: typeof fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    requests.push({
+      url: String(input),
+      accept: headers.get("accept"),
+      principalId: headers.get("x-dnd-principal-id"),
+      capability: headers.get("x-dnd-principal-capability"),
+    });
+    return new Response(streamBody, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+  const directory = new GameDirectoryClient("/gateway-api", { fetchImplementation });
+  const envelopes = [];
+
+  for await (const envelope of directory.events(5, {
+    principalId: "principal-a",
+    principalCapability: "directory-secret",
+  })) {
+    envelopes.push(envelope);
+  }
+
+  assert.deepEqual(envelopes.map((envelope) => envelope.event), [
+    "sync",
+    "directory_event",
+    "heartbeat",
+  ]);
+  assert.equal(envelopes[1]?.event === "directory_event" && envelopes[1].data.cursor, 6);
+  assert.deepEqual(requests, [{
+    url: "/gateway-api/games/subscribe?since=5",
+    accept: "text/event-stream",
+    principalId: "principal-a",
+    capability: "directory-secret",
+  }]);
+});
+
+test("directory follower stops cleanly after the caller aborts", async () => {
+  const streamBody = [
+    "id: 1",
+    "event: directory_event",
+    "data: " + JSON.stringify({
+      cursor: 1,
+      event_id: "00000000-0000-0000-0000-000000000001",
+      game_id: null,
+      event_type: "principal_created",
+      payload: {},
+      payload_digest: "digest-1",
+      created_at: "2026-07-21T18:00:00Z",
+    }),
+    "",
+    "",
+  ].join("\n");
+  const fetchImplementation: typeof fetch = async () => new Response(streamBody, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+  const directory = new GameDirectoryClient("/gateway-api", { fetchImplementation });
+  const controller = new AbortController();
+  const seen: string[] = [];
+
+  await directory.followGames({
+    signal: controller.signal,
+    initialReconnectDelayMs: 0,
+    maximumReconnectDelayMs: 0,
+    onEnvelope: (envelope) => {
+      seen.push(envelope.event);
+      controller.abort();
+    },
+  });
+
+  assert.deepEqual(seen, ["directory_event"]);
+});
