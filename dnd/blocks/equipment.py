@@ -1,14 +1,24 @@
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
-from typing import Optional, List, Self, Literal, Union, Tuple
+from dataclasses import dataclass
+from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier, DamageType
-from dnd.blocks.abilities import AbilityScores
-from dnd.core.events import Event, EventType, EventPhase, Range, WeaponSlot, AbilityName, Damage, BodyPart, RingSlot
-
-from enum import Enum
+from dnd.blocks.abilities import Ability, AbilityScores
+from dnd.core.events import Event, EventQueue, EventType, EventPhase, Range, RangeType, AbilityName, Damage
+from dnd.core.equipment_types import (
+    ArmorType,
+    BodyPart,
+    EquipmentSlot,
+    RingSlot,
+    UnarmoredAc,
+    WeaponProperty,
+    WeaponSet,
+    WeaponSlot,
+)
+from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
 
 import copy
 
@@ -20,7 +30,8 @@ class EquipmentEvent(Event):
     """Base event for equipment slot transitions."""
 
     name: str = Field(default="Equipment Event", description="An equipment event")
-    slot: Union['BodyPart', 'RingSlot', 'WeaponSlot'] = Field(description="The slot being affected")
+    slot: EquipmentSlot = Field(description="The slot being affected")
+    item_uuid: UUID = Field(description="UUID of the item being transitioned")
 
 
 class WeaponEquipEvent(EquipmentEvent):
@@ -28,7 +39,6 @@ class WeaponEquipEvent(EquipmentEvent):
 
     name: str = Field(default="Weapon Equip", description="A weapon equip event")
     event_type: EventType = Field(default=EventType.WEAPON_EQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the weapon being equipped")
 
 
 class WeaponUnequipEvent(EquipmentEvent):
@@ -36,7 +46,6 @@ class WeaponUnequipEvent(EquipmentEvent):
 
     name: str = Field(default="Weapon Unequip", description="A weapon unequip event")
     event_type: EventType = Field(default=EventType.WEAPON_UNEQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the weapon being unequipped")
 
 
 class ArmorEquipEvent(EquipmentEvent):
@@ -44,7 +53,6 @@ class ArmorEquipEvent(EquipmentEvent):
 
     name: str = Field(default="Armor Equip", description="An armor equip event")
     event_type: EventType = Field(default=EventType.ARMOR_EQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the armor being equipped")
 
 
 class ArmorUnequipEvent(EquipmentEvent):
@@ -52,7 +60,6 @@ class ArmorUnequipEvent(EquipmentEvent):
 
     name: str = Field(default="Armor Unequip", description="An armor unequip event")
     event_type: EventType = Field(default=EventType.ARMOR_UNEQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the armor being unequipped")
 
 
 class ShieldEquipEvent(EquipmentEvent):
@@ -60,7 +67,6 @@ class ShieldEquipEvent(EquipmentEvent):
 
     name: str = Field(default="Shield Equip", description="A shield equip event")
     event_type: EventType = Field(default=EventType.SHIELD_EQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the shield being equipped")
 
 
 class ShieldUnequipEvent(EquipmentEvent):
@@ -68,40 +74,16 @@ class ShieldUnequipEvent(EquipmentEvent):
 
     name: str = Field(default="Shield Unequip", description="A shield unequip event")
     event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
-    item_uuid: UUID = Field(description="UUID of the shield being unequipped")
 
 
-class UnarmoredAc(str, Enum):
-    """Supported unarmored Armor Class formulas."""
-
-    BARBARIAN = "Barbarian"
-    MONK = "Monk"
-    DRACONIC_SORCERER = "Draconic Sorcerer"
-    MAGIC_ARMOR = "Magic Armor"
-    NONE = "None"
-
-
-class ArmorType(str, Enum):
-    """Armor weight categories used by AC and movement rules."""
-
-    LIGHT = "Light"
-    MEDIUM = "Medium"
-    HEAVY = "Heavy"
-    CLOTH = "Cloth"
-
-
-class WeaponProperty(str, Enum):
-    """Weapon properties used by attack, damage, and equipment validation."""
-
-    FINESSE = "Finesse"
-    VERSATILE = "Versatile"
-    RANGED = "Ranged"
-    THROWN = "Thrown"
-    TWO_HANDED = "Two-Handed"
-    LIGHT = "Light"
-    HEAVY = "Heavy"
-    MARTIAL = "Martial"
-    SIMPLE = "Simple"
+_EQUIPMENT_EVENT_CLASS_BY_TYPE: dict[EventType, type[EquipmentEvent]] = {
+    EventType.WEAPON_EQUIP: WeaponEquipEvent,
+    EventType.WEAPON_UNEQUIP: WeaponUnequipEvent,
+    EventType.ARMOR_EQUIP: ArmorEquipEvent,
+    EventType.ARMOR_UNEQUIP: ArmorUnequipEvent,
+    EventType.SHIELD_EQUIP: ShieldEquipEvent,
+    EventType.SHIELD_UNEQUIP: ShieldUnequipEvent,
+}
 
 
 class Armor(EquippableItem):
@@ -165,6 +147,31 @@ class Armor(EquippableItem):
         description="Whether the armor imposes disadvantage on Stealth checks"
     )
 
+    def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
+        """Armor and accessories occupy their declared body slot."""
+        return (self.body_part,)
+
+    def equipment_event_type(self, *, equipping: bool) -> EventType:
+        """Classify armor transitions for public event routing."""
+        return EventType.ARMOR_EQUIP if equipping else EventType.ARMOR_UNEQUIP
+
+    def default_equipment_slot(self) -> Optional[EquipmentSlot]:
+        """Body-part gear has one unambiguous default slot."""
+        return self.body_part
+
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add armor-owned presentation facts to the common item payload."""
+        state = super().to_item_presentation_state(stack_count=stack_count)
+        return state.model_copy(update={
+            "item_kind": ItemPresentationKind.ARMOR,
+            "armor_type": self.type.value,
+            "armor_ac": self.ac.score,
+        })
+
 class Helmet(Armor):
     """Armor item for the head slot."""
 
@@ -227,6 +234,14 @@ class Ring(Armor):
         description="Ring slot armor"
     )
 
+    def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
+        """Rings may use either concrete ring slot."""
+        return (RingSlot.LEFT, RingSlot.RIGHT)
+
+    def default_equipment_slot(self) -> Optional[EquipmentSlot]:
+        """Do not guess which occupied ring slot a caller intended."""
+        return None
+
 
 class Cloak(Armor):
     """Equippable item for the cloak slot."""
@@ -249,6 +264,34 @@ class Shield(EquippableItem):
     ac_bonus: ModifiableValue = Field(
         description="Armor Class bonus provided by the shield"
     )
+
+    def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
+        """Shields occupy the melee off hand."""
+        return (WeaponSlot.MELEE_OFF,)
+
+    def equipment_event_type(self, *, equipping: bool) -> EventType:
+        """Classify shield transitions for public event routing."""
+        return EventType.SHIELD_EQUIP if equipping else EventType.SHIELD_UNEQUIP
+
+    def default_equipment_slot(self) -> Optional[EquipmentSlot]:
+        """Return the shield's sole compatible slot."""
+        return WeaponSlot.MELEE_OFF
+
+    def incompatible_equipment_slot_message(self, slot: EquipmentSlot) -> str:
+        """Preserve the domain-specific shield validation diagnostic."""
+        return "Shields can only be equipped in MELEE_OFF slot"
+
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add shield-owned presentation facts to the common item payload."""
+        state = super().to_item_presentation_state(stack_count=stack_count)
+        return state.model_copy(update={
+            "item_kind": ItemPresentationKind.SHIELD,
+            "shield_ac_bonus": self.ac_bonus.score,
+        })
 
 
 class Weapon(EquippableItem):
@@ -320,6 +363,72 @@ class Weapon(EquippableItem):
                 raise ValueError("All extra damage targets must be of the same length")
         return self
 
+    def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
+        """Return slots allowed by the weapon's ranged and light properties."""
+        if WeaponProperty.RANGED in self.properties:
+            slots: List[EquipmentSlot] = [WeaponSlot.RANGED_MAIN]
+            if WeaponProperty.LIGHT in self.properties:
+                slots.append(WeaponSlot.RANGED_OFF)
+            return tuple(slots)
+        slots = [WeaponSlot.MELEE_MAIN]
+        if WeaponProperty.LIGHT in self.properties:
+            slots.append(WeaponSlot.MELEE_OFF)
+        return tuple(slots)
+
+    def equipment_event_type(self, *, equipping: bool) -> EventType:
+        """Classify weapon transitions for public event routing."""
+        return EventType.WEAPON_EQUIP if equipping else EventType.WEAPON_UNEQUIP
+
+    def default_equipment_slot(self) -> Optional[EquipmentSlot]:
+        """Choose the matching main-hand loadout when no slot is supplied."""
+        if WeaponProperty.RANGED in self.properties:
+            return WeaponSlot.RANGED_MAIN
+        return WeaponSlot.MELEE_MAIN
+
+    def occupied_equipment_slots(
+        self,
+        selected_slot: EquipmentSlot,
+    ) -> frozenset[EquipmentSlot]:
+        """Declare that a two-handed melee main weapon also occupies its off hand."""
+        if (
+            selected_slot == WeaponSlot.MELEE_MAIN
+            and WeaponProperty.TWO_HANDED in self.properties
+            and WeaponProperty.RANGED not in self.properties
+        ):
+            return frozenset((WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF))
+        return super().occupied_equipment_slots(selected_slot)
+
+    def incompatible_equipment_slot_message(self, slot: EquipmentSlot) -> str:
+        """Return a precise weapon-slot validation diagnostic."""
+        if not isinstance(slot, WeaponSlot):
+            return f"Weapon cannot be equipped in non-weapon slot {slot}"
+        is_ranged = WeaponProperty.RANGED in self.properties
+        slot_is_ranged = slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
+        if is_ranged and not slot_is_ranged:
+            return f"Ranged weapon cannot be equipped in melee slot {slot}"
+        if not is_ranged and slot_is_ranged:
+            return f"Melee weapon cannot be equipped in ranged slot {slot}"
+        if (
+            slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
+            and WeaponProperty.LIGHT not in self.properties
+        ):
+            return f"Only LIGHT weapons can be equipped in off-hand slot {slot}"
+        return super().incompatible_equipment_slot_message(slot)
+
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add weapon-owned presentation facts to the common item payload."""
+        state = super().to_item_presentation_state(stack_count=stack_count)
+        return state.model_copy(update={
+            "item_kind": ItemPresentationKind.WEAPON,
+            "damage_dice": f"{self.dice_numbers}d{self.damage_dice}",
+            "damage_type": self.damage_type.value,
+            "weapon_properties": tuple(prop.value for prop in self.properties),
+        })
+
     def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
                         is_off_hand: bool = False,
                         off_hand_ability_bonus: Optional[ModifiableValue] = None,
@@ -386,15 +495,52 @@ class Weapon(EquippableItem):
         damages.extend(self.get_extra_damages())
         return damages
 
-slot_mapping = {
+_SLOT_ATTRIBUTE_BY_SLOT = {
+    WeaponSlot.MELEE_MAIN: "weapon_melee_main",
+    WeaponSlot.MELEE_OFF: "weapon_melee_off",
+    WeaponSlot.RANGED_MAIN: "weapon_ranged_main",
+    WeaponSlot.RANGED_OFF: "weapon_ranged_off",
     BodyPart.HEAD: "helmet",
     BodyPart.BODY: "body_armor",
     BodyPart.HANDS: "gauntlets",
     BodyPart.LEGS: "greaves",
     BodyPart.FEET: "boots",
     BodyPart.AMULET: "amulet",
+    RingSlot.LEFT: "ring_left",
+    RingSlot.RIGHT: "ring_right",
     BodyPart.CLOAK: "cloak",
 }
+_MELEE_WEAPON_SLOTS = (
+    WeaponSlot.MELEE_MAIN,
+    WeaponSlot.MELEE_OFF,
+)
+_RANGED_WEAPON_SLOTS = (
+    WeaponSlot.RANGED_MAIN,
+    WeaponSlot.RANGED_OFF,
+)
+
+
+@dataclass(frozen=True)
+class EquipmentEquipResult:
+    """Result of one atomic equipment-slot transaction."""
+
+    succeeded: bool
+    selected_slot: Optional[EquipmentSlot] = None
+    displaced_items: Tuple[EquippableItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class _PreparedEquipmentTransition:
+    """One accepted but unpublished gear transition."""
+
+    slot: EquipmentSlot
+    item: EquippableItem
+    equipping: bool
+    declaration: EquipmentEvent
+    execution: EquipmentEvent
+
+
+DamageProfileT = TypeVar("DamageProfileT")
 
 
 class EquipmentConfig(BaseModel):
@@ -430,6 +576,13 @@ class Equipment(BaseBlock):
     """Container for equipped items and equipment-derived combat values."""
 
     name: str = Field(default="Equipped", description="Equipment slots for an entity")
+    active_weapon_set: WeaponSet = Field(
+        default=WeaponSet.NONE,
+        description=(
+            "Persisted melee/ranged stance selected by accepted attack and "
+            "equipment transitions."
+        ),
+    )
     helmet: Optional[Helmet] = Field(default=None, description="Head slot armor")
     body_armor: Optional[BodyArmor] = Field(default=None, description="Body slot armor")
     gauntlets: Optional[Gauntlets] = Field(default=None, description="Hand slot armor")
@@ -586,40 +739,314 @@ class Equipment(BaseBlock):
         value_name="Ranged Critical Extra Dice"
     ), description="Extra dice added on ranged critical hits.")
 
-    def get_all_equipped_items(self) -> List[Union[Weapon, Shield, Armor]]:
-        """Return all equipped items across all slots."""
-        items: List[Union[Weapon, Shield, Armor]] = []
-        for slot_item in [self.weapon_melee_main, self.weapon_melee_off,
-                          self.weapon_ranged_main, self.weapon_ranged_off]:
-            if slot_item is not None:
-                items.append(slot_item)
-        for attr in ['helmet', 'body_armor', 'gauntlets', 'greaves', 'boots',
-                     'amulet', 'ring_left', 'ring_right', 'cloak']:
-            item = getattr(self, attr, None)
-            if item is not None:
-                items.append(item)
-        return items
+    def get_all_equipped_items(self) -> List[EquippableItem]:
+        """Return all equipped items across all slots in stable slot order."""
+        return [
+            item
+            for attribute_name in _SLOT_ATTRIBUTE_BY_SLOT.values()
+            if (item := getattr(self, attribute_name)) is not None
+        ]
+
+    @staticmethod
+    def weapon_set_for_slot(slot: WeaponSlot) -> WeaponSet:
+        """Return the stance selected when an accepted attack uses ``slot``."""
+        if slot in _MELEE_WEAPON_SLOTS:
+            return WeaponSet.MELEE
+        return WeaponSet.RANGED
+
+    def _weapon_set_has_equipment(self, weapon_set: WeaponSet) -> bool:
+        """Return whether a stance currently has at least one equipped layer."""
+        if weapon_set is WeaponSet.MELEE:
+            slots = _MELEE_WEAPON_SLOTS
+        elif weapon_set is WeaponSet.RANGED:
+            slots = _RANGED_WEAPON_SLOTS
+        else:
+            return False
+        return any(self.get_item_by_slot(slot) is not None for slot in slots)
+
+    def activate_weapon_slot(self, slot: WeaponSlot) -> None:
+        """Persist the stance used by an accepted weapon-attack effect."""
+        self.active_weapon_set = self.weapon_set_for_slot(slot)
+
+    def _reconcile_active_weapon_set(
+        self,
+        *,
+        preferred_slot: Optional[WeaponSlot] = None,
+    ) -> None:
+        """Keep stance valid after an accepted equipment transition.
+
+        Equipping a second, inactive loadout does not silently draw it.  The
+        first equipped set establishes a stance, while removal of the active
+        set falls back to the preferred surviving set, then melee, then ranged.
+        """
+        if self._weapon_set_has_equipment(self.active_weapon_set):
+            return
+        preferred_set = (
+            self.weapon_set_for_slot(preferred_slot)
+            if preferred_slot is not None
+            else WeaponSet.NONE
+        )
+        if self._weapon_set_has_equipment(preferred_set):
+            self.active_weapon_set = preferred_set
+        elif self._weapon_set_has_equipment(WeaponSet.MELEE):
+            self.active_weapon_set = WeaponSet.MELEE
+        elif self._weapon_set_has_equipment(WeaponSet.RANGED):
+            self.active_weapon_set = WeaponSet.RANGED
+        else:
+            self.active_weapon_set = WeaponSet.NONE
 
     def _get_weapon_by_slot(self, slot: WeaponSlot) -> Optional[Union[Weapon, Shield]]:
         """Helper to get weapon/shield by slot."""
-        return {
-            WeaponSlot.MELEE_MAIN: self.weapon_melee_main,
-            WeaponSlot.MELEE_OFF: self.weapon_melee_off,
-            WeaponSlot.RANGED_MAIN: self.weapon_ranged_main,
-            WeaponSlot.RANGED_OFF: self.weapon_ranged_off,
-        }.get(slot)
+        item = self.get_item_by_slot(slot)
+        return item if isinstance(item, (Weapon, Shield)) else None
 
-    def get_item_by_slot(self, slot: Union[BodyPart, RingSlot, WeaponSlot]) -> Optional[Union['Armor', 'Weapon', 'Shield']]:
+    def get_weapon(self, slot: WeaponSlot) -> Optional[Weapon]:
+        """Return the actual weapon in ``slot``; shields and empty slots are unarmed."""
+        item = self.get_item_by_slot(slot)
+        return item if isinstance(item, Weapon) else None
+
+    def get_item_by_slot(self, slot: EquipmentSlot) -> Optional[EquippableItem]:
         """Get the item in any equipment slot."""
-        if isinstance(slot, WeaponSlot):
-            return self._get_weapon_by_slot(slot)
-        elif isinstance(slot, RingSlot):
-            return self.ring_left if slot == RingSlot.LEFT else self.ring_right
-        elif isinstance(slot, BodyPart):
-            if slot not in slot_mapping:
-                return None
-            return getattr(self, slot_mapping[slot], None)
-        return None
+        attribute_name = _SLOT_ATTRIBUTE_BY_SLOT.get(slot)
+        return getattr(self, attribute_name) if attribute_name is not None else None
+
+    def get_weapon_range(self, slot: WeaponSlot) -> Range:
+        """Return a weapon's range or ordinary reach for an unarmed/shield slot."""
+        weapon = self.get_weapon(slot)
+        if weapon is None:
+            return Range(type=RangeType.REACH, normal=5)
+        return weapon.range
+
+    @staticmethod
+    def _select_weapon_attack_ability(
+        ability_block: AbilityScores,
+        weapon: Optional[Weapon],
+        override_ability: Optional[AbilityName],
+    ) -> Ability:
+        """Select the ability used by a weapon attack roll."""
+        if override_ability is not None:
+            return ability_block.get_ability(override_ability)
+        if weapon is None:
+            return ability_block.strength
+        if weapon.range.type == RangeType.RANGE:
+            return ability_block.dexterity
+        if WeaponProperty.FINESSE in weapon.properties:
+            strength = ability_block.strength
+            dexterity = ability_block.dexterity
+            return strength if strength.modifier >= dexterity.modifier else dexterity
+        return ability_block.strength
+
+    def _select_weapon_damage_ability(
+        self,
+        ability_block: AbilityScores,
+        weapon: Optional[Weapon],
+        override_ability: Optional[AbilityName],
+    ) -> Ability:
+        """Select the ability used by a weapon damage roll."""
+        if override_ability is not None:
+            return ability_block.get_ability(override_ability)
+        if weapon is None:
+            strength = ability_block.strength
+            if WeaponProperty.FINESSE in self.unarmed_properties:
+                dexterity = ability_block.dexterity
+                return strength if strength.modifier >= dexterity.modifier else dexterity
+            return strength
+        if WeaponProperty.RANGED in weapon.properties:
+            return ability_block.dexterity
+        if WeaponProperty.FINESSE in weapon.properties:
+            strength = ability_block.strength
+            dexterity = ability_block.dexterity
+            return strength if strength.modifier >= dexterity.modifier else dexterity
+        return ability_block.strength
+
+    def get_attack_bonus_components(
+        self,
+        ability_block: AbilityScores,
+        weapon_slot: WeaponSlot,
+        override_ability: Optional[AbilityName] = None,
+    ) -> Tuple[ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
+        """Return weapon, equipment, ability, and range attack components."""
+        weapon = self.get_weapon(weapon_slot)
+        ability_bonuses: List[ModifiableValue] = []
+        attack_bonuses = [self.attack_bonus]
+        if weapon is None:
+            weapon_bonus = self.unarmed_attack_bonus
+            attack_bonuses.append(self.melee_attack_bonus)
+            weapon_range = self.get_weapon_range(weapon_slot)
+        else:
+            weapon_bonus = weapon.attack_bonus
+            weapon_range = weapon.range
+            attack_bonuses.append(
+                self.ranged_attack_bonus
+                if weapon.range.type == RangeType.RANGE
+                else self.melee_attack_bonus
+            )
+        ability = self._select_weapon_attack_ability(
+            ability_block,
+            weapon,
+            override_ability,
+        )
+        ability_bonuses.append(ability.get_combined_values())
+        return weapon_bonus, attack_bonuses, ability_bonuses, weapon_range
+
+    def get_weapon_attack_baseline(
+        self,
+        ability_block: AbilityScores,
+        weapon_slot: WeaponSlot,
+        override_ability: Optional[AbilityName] = None,
+    ) -> Tuple[int, int]:
+        """Return actor-side attack bonus and advantage contributions."""
+        weapon = self.get_weapon(weapon_slot)
+        ability = self._select_weapon_attack_ability(
+            ability_block,
+            weapon,
+            override_ability,
+        )
+        weapon_bonus = weapon.attack_bonus if weapon is not None else self.unarmed_attack_bonus
+        typed_bonus = (
+            self.ranged_attack_bonus
+            if weapon is not None and weapon.range.type == RangeType.RANGE
+            else self.melee_attack_bonus
+        )
+        components = (weapon_bonus, self.attack_bonus, typed_bonus)
+        return (
+            ability.modifier + sum(component.normalized_score for component in components),
+            ability.modifier_bonus.advantage_sum
+            + sum(component.advantage_sum for component in components),
+        )
+
+    def get_weapon_damage_profiles(
+        self,
+        ability_block: AbilityScores,
+        weapon_slot: WeaponSlot,
+        profile_factory: Callable[..., DamageProfileT],
+        override_ability: Optional[AbilityName] = None,
+    ) -> List[DamageProfileT]:
+        """Build damage formulas without importing the higher-level action DTO."""
+        weapon = self.get_weapon(weapon_slot)
+        profiles: List[DamageProfileT] = []
+        if weapon is not None:
+            base_bonuses = [
+                value
+                for value in (weapon.damage_bonus, self.damage_bonus)
+                if value is not None
+            ]
+            ability_bonus = 0
+            if weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
+                base_bonuses.append(
+                    self.off_hand_ranged_ability_bonus
+                    if weapon_slot == WeaponSlot.RANGED_OFF
+                    else self.off_hand_melee_ability_bonus
+                )
+            else:
+                ability_bonus = self._select_weapon_damage_ability(
+                    ability_block,
+                    weapon,
+                    override_ability,
+                ).modifier
+            base_bonuses.append(
+                self.ranged_damage_bonus
+                if WeaponProperty.RANGED in weapon.properties
+                else self.melee_damage_bonus
+            )
+            profiles.append(profile_factory(
+                dice_count=weapon.dice_numbers,
+                die_size=weapon.damage_dice,
+                flat_bonus=(
+                    sum(value.normalized_score for value in base_bonuses)
+                    + ability_bonus
+                ),
+                damage_type=weapon.damage_type.value,
+            ))
+            profiles.extend(
+                profile_factory(
+                    dice_count=dice_count,
+                    die_size=die_size,
+                    flat_bonus=bonus.normalized_score,
+                    damage_type=damage_type.value,
+                )
+                for die_size, dice_count, bonus, damage_type in zip(
+                    weapon.extra_damage_dices,
+                    weapon.extra_damage_dices_numbers,
+                    weapon.extra_damage_bonus,
+                    weapon.extra_damage_type,
+                )
+            )
+        else:
+            ability = self._select_weapon_damage_ability(
+                ability_block,
+                None,
+                override_ability,
+            )
+            base_bonuses = (
+                self.unarmed_damage_bonus,
+                self.damage_bonus,
+                self.melee_damage_bonus,
+            )
+            profiles.append(profile_factory(
+                dice_count=self.unarmed_dice_numbers,
+                die_size=self.unarmed_damage_dice,
+                flat_bonus=(
+                    sum(value.normalized_score for value in base_bonuses)
+                    + ability.modifier
+                ),
+                damage_type=self.unarmed_damage_type.value,
+            ))
+        profiles.extend(
+            profile_factory(
+                dice_count=dice_count,
+                die_size=die_size,
+                flat_bonus=bonus.normalized_score,
+                damage_type=damage_type.value,
+            )
+            for die_size, dice_count, bonus, damage_type in zip(
+                self.extra_attack_damage_dices,
+                self.extra_attack_damage_dices_numbers,
+                self.extra_attack_damage_bonus,
+                self.extra_attack_damage_type,
+            )
+        )
+        return profiles
+
+    def snapshot_attack_event_metadata(
+        self,
+        slot: WeaponSlot,
+    ) -> Tuple[str, Tuple[DamageType, ...]]:
+        """Return immutable equipped or unarmed facts for an attack event.
+
+        The ordered damage categories mirror ``get_damages()``: the primary
+        weapon/unarmed component, temporary equipment-level components, then
+        weapon-owned components.  Declarations need the complete potential
+        palette because a miss has no damage packets from which to recover it.
+        """
+        weapon = self.get_weapon(slot)
+        if weapon is None:
+            weapon_name = "Unarmed"
+            damage_types = (
+                self.unarmed_damage_type,
+                *self.extra_attack_damage_type,
+            )
+        else:
+            weapon_name = weapon.name
+            damage_types = (
+                weapon.damage_type,
+                *self.extra_attack_damage_type,
+                *weapon.extra_damage_type,
+            )
+        return (
+            weapon_name,
+            tuple(dict.fromkeys(damage_types)),
+        )
+
+    def get_weapon_metadata(self, slot: WeaponSlot) -> Optional[Tuple[str, List[str]]]:
+        """Return equipped-weapon discovery metadata as transport strings."""
+        if self.get_weapon(slot) is None:
+            return None
+        weapon_name, damage_types = self.snapshot_attack_event_metadata(slot)
+        return weapon_name, [
+            damage_type.value
+            for damage_type in damage_types
+        ]
 
     def remove_contained_item(self, item_uuid: UUID) -> None:
         """Remove an equipped item by UUID during item-owned cleanup.
@@ -630,26 +1057,32 @@ class Equipment(BaseBlock):
         Args:
             item_uuid: UUID of the equipped item to remove.
         """
-        slots: List[Tuple[Union[BodyPart, RingSlot, WeaponSlot], str]] = [
-            (WeaponSlot.MELEE_MAIN, "weapon_melee_main"),
-            (WeaponSlot.MELEE_OFF, "weapon_melee_off"),
-            (WeaponSlot.RANGED_MAIN, "weapon_ranged_main"),
-            (WeaponSlot.RANGED_OFF, "weapon_ranged_off"),
-            (BodyPart.HEAD, "helmet"),
-            (BodyPart.BODY, "body_armor"),
-            (BodyPart.HANDS, "gauntlets"),
-            (BodyPart.LEGS, "greaves"),
-            (BodyPart.FEET, "boots"),
-            (BodyPart.AMULET, "amulet"),
-            (BodyPart.CLOAK, "cloak"),
-            (RingSlot.LEFT, "ring_left"),
-            (RingSlot.RIGHT, "ring_right"),
-        ]
-        for slot, attribute_name in slots:
+        for slot, attribute_name in _SLOT_ATTRIBUTE_BY_SLOT.items():
             item = getattr(self, attribute_name)
             if item is not None and item.uuid == item_uuid:
+                declaration = self._create_equipment_event(
+                    item,
+                    slot,
+                    equipping=False,
+                    use_register=False,
+                )
+                execution = declaration.phase_to(
+                    EventPhase.EXECUTION,
+                    status_message="Equipped item destruction committed",
+                )
                 item.unequip(slot, self.source_entity_uuid)
                 setattr(self, attribute_name, None)
+                if isinstance(slot, WeaponSlot):
+                    self._reconcile_active_weapon_set()
+                effect = execution.phase_to(
+                    EventPhase.EFFECT,
+                    status_message="Destroyed item removed from equipment",
+                )
+                effect.phase_to(
+                    EventPhase.COMPLETION,
+                    status_message="Destroyed item equipment state completed",
+                    use_register=True,
+                )
                 return
 
     def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> bool:
@@ -771,223 +1204,207 @@ class Equipment(BaseBlock):
             return self.body_armor.max_dex_bonus
         return None
 
-    @staticmethod
-    def _is_two_handed_melee_weapon(item: Optional[Union[Weapon, Shield]]) -> bool:
-        """Return whether an item occupies both melee hands."""
-        return (
-            isinstance(item, Weapon)
-            and WeaponProperty.TWO_HANDED in item.properties
-            and WeaponProperty.RANGED not in item.properties
-        )
-
-    def _get_melee_hand_conflict_slots(
+    def resolve_equipment_slot(
         self,
-        item: Union[Weapon, Shield],
-        slot: WeaponSlot,
-    ) -> List[WeaponSlot]:
-        """Return melee slots displaced by this equip operation.
+        item: EquippableItem,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> EquipmentSlot:
+        """Resolve an optional slot and validate it against item-owned policy."""
+        selected_slot = slot if slot is not None else item.default_equipment_slot()
+        if selected_slot is None:
+            raise ValueError(f"{item.name} requires an explicit equipment slot")
+        if selected_slot not in _SLOT_ATTRIBUTE_BY_SLOT:
+            raise ValueError(f"Invalid equipment slot: {selected_slot}")
+        if selected_slot not in item.compatible_equipment_slots():
+            raise ValueError(item.incompatible_equipment_slot_message(selected_slot))
+        return selected_slot
 
-        Args:
-            item: Weapon or shield being equipped.
-            slot: Weapon slot targeted by the equip operation.
-
-        Returns:
-            Slots that must be unequipped before the new item can be assigned.
-        """
-        conflicts: List[WeaponSlot] = []
-        if slot == WeaponSlot.MELEE_OFF and self._is_two_handed_melee_weapon(self.weapon_melee_main):
-            conflicts.append(WeaponSlot.MELEE_MAIN)
-        if (
-            slot == WeaponSlot.MELEE_MAIN
-            and self._is_two_handed_melee_weapon(item)
-            and self.weapon_melee_off is not None
-        ):
-            conflicts.append(WeaponSlot.MELEE_OFF)
+    def _get_conflicts(
+        self,
+        item: EquippableItem,
+        selected_slot: EquipmentSlot,
+    ) -> List[Tuple[EquipmentSlot, EquippableItem]]:
+        """Return occupied slots and items overlapping the proposed footprint."""
+        new_footprint = item.occupied_equipment_slots(selected_slot)
+        conflicts: List[Tuple[EquipmentSlot, EquippableItem]] = []
+        seen_item_uuids: set[UUID] = set()
+        for occupied_slot in _SLOT_ATTRIBUTE_BY_SLOT:
+            current_item = self.get_item_by_slot(occupied_slot)
+            if current_item is None or current_item.uuid in seen_item_uuids:
+                continue
+            current_footprint = current_item.occupied_equipment_slots(occupied_slot)
+            if new_footprint & current_footprint:
+                conflicts.append((occupied_slot, current_item))
+                seen_item_uuids.add(current_item.uuid)
         return conflicts
 
-    def equip(self, item: Union[Armor, Weapon, Shield], slot: Optional[Union[BodyPart, RingSlot, WeaponSlot]] = None) -> bool:
-        """Equip an item in an equipment slot.
-
-        Direct equipment calls validate and assign slots, fire equip events, and
-        call item hooks. They do not move replaced items into inventory, and a
-        canceled equip event returns `False` without assigning the slot.
-
-        Args:
-            item: The item to equip.
-            slot: Optional slot specification, required for rings and weapons.
-
-        Returns:
-            True when the item is assigned to the slot, False when an equip
-            event cancels before assignment.
-
-        Raises:
-            ValueError: If the slot is invalid or incompatible with the item.
-        """
+    def _reparent_equippable_item(self, item: EquippableItem) -> None:
+        """Update item-owned values and channels to this equipment owner."""
         item.source_entity_uuid = self.source_entity_uuid
+        for field_value in item.__dict__.values():
+            values = field_value if isinstance(field_value, list) else (field_value,)
+            for value in values:
+                if not isinstance(value, ModifiableValue):
+                    continue
+                value.source_entity_uuid = self.source_entity_uuid
+                value.self_static.source_entity_uuid = self.source_entity_uuid
+                value.to_target_static.source_entity_uuid = self.source_entity_uuid
+                value.self_contextual.source_entity_uuid = self.source_entity_uuid
+                value.to_target_contextual.source_entity_uuid = self.source_entity_uuid
 
-        def _reparent_modifiable_value(mv: ModifiableValue) -> None:
-            """Update a modifiable value and its channels to this equipment owner."""
-            mv.source_entity_uuid = self.source_entity_uuid
-            mv.self_static.source_entity_uuid = self.source_entity_uuid
-            mv.to_target_static.source_entity_uuid = self.source_entity_uuid
-            mv.self_contextual.source_entity_uuid = self.source_entity_uuid
-            mv.to_target_contextual.source_entity_uuid = self.source_entity_uuid
+    def _create_equipment_event(
+        self,
+        item: EquippableItem,
+        slot: EquipmentSlot,
+        *,
+        equipping: bool,
+        parent_event_uuid: Optional[UUID] = None,
+        use_register: bool = True,
+    ) -> EquipmentEvent:
+        """Create the concrete public event associated with a gear transition."""
+        common_fields = {
+            "name": item.name,
+            "source_entity_uuid": self.source_entity_uuid,
+            "target_entity_uuid": self.target_entity_uuid,
+            "item_uuid": item.uuid,
+            "slot": slot,
+            "parent_event": parent_event_uuid,
+            "use_register": use_register,
+        }
+        event_type = item.equipment_event_type(equipping=equipping)
+        event_class = _EQUIPMENT_EVENT_CLASS_BY_TYPE.get(event_type)
+        if event_class is None:
+            raise ValueError(f"Unsupported equipment event type: {event_type}")
+        return event_class(**common_fields)
 
-        for _, field_value in item.__dict__.items():
-            if isinstance(field_value, ModifiableValue):
-                _reparent_modifiable_value(field_value)
-            elif isinstance(field_value, list):
-                for value in field_value:
-                    if isinstance(value, ModifiableValue):
-                        _reparent_modifiable_value(value)
+    def _preflight_equipment_transition(
+        self,
+        item: EquippableItem,
+        slot: EquipmentSlot,
+        *,
+        equipping: bool,
+        parent_event_uuid: Optional[UUID] = None,
+    ) -> Optional[_PreparedEquipmentTransition]:
+        """Run pure declaration/execution validators without publishing events."""
+        declaration = self._create_equipment_event(
+            item,
+            slot,
+            equipping=equipping,
+            parent_event_uuid=parent_event_uuid,
+            use_register=False,
+        )
+        declaration = EventQueue.preflight(declaration)
+        if declaration.canceled:
+            return None
+        execution = EventQueue.preflight(declaration.phase_to(EventPhase.EXECUTION))
+        if execution.canceled:
+            return None
 
-        if isinstance(item, Ring):
-            if slot not in (RingSlot.LEFT, RingSlot.RIGHT):
-                raise ValueError("Must specify LEFT or RIGHT slot for rings")
-            assert slot is not None
-
-            event = ArmorEquipEvent(
-                name=item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=item.uuid,
-                slot=slot
-            )
-            if event.phase_to(EventPhase.EXECUTION).canceled:
-                return False
-
-            if slot == RingSlot.LEFT and self.ring_left is not None:
-                self.unequip(RingSlot.LEFT,)
-            elif slot == RingSlot.RIGHT and self.ring_right is not None:
-                self.unequip(RingSlot.RIGHT)
-
-            if slot == RingSlot.LEFT:
-                self.ring_left = item
-            else:
-                self.ring_right = item
-
-            item.owner_uuid = self.source_entity_uuid
-            item.stored_in_uuid = self.uuid
-            item.equip(slot, self.source_entity_uuid)
-            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
-            return True
-
-        if isinstance(item, Shield):
-            if slot is not None and slot != WeaponSlot.MELEE_OFF:
-                raise ValueError("Shields can only be equipped in MELEE_OFF slot")
-            slot = WeaponSlot.MELEE_OFF
-            conflict_slots = self._get_melee_hand_conflict_slots(item, slot)
-
-            event = ShieldEquipEvent(
-                name=item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=item.uuid,
-                slot=slot
-            )
-
-            if event.phase_to(EventPhase.EXECUTION).canceled:
-                return False
-
-            for conflict_slot in conflict_slots:
-                self.unequip(conflict_slot)
-
-            if self.weapon_melee_off is not None:
-                self.unequip(WeaponSlot.MELEE_OFF)
-
-            self.weapon_melee_off = item
-            item.owner_uuid = self.source_entity_uuid
-            item.stored_in_uuid = self.uuid
-            item.equip(slot, self.source_entity_uuid)
-            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
-            return True
-
-        if isinstance(item, Weapon):
-            is_ranged_weapon = WeaponProperty.RANGED in item.properties
-
-            is_light_weapon = WeaponProperty.LIGHT in item.properties
-
-            if slot is None:
-                slot = WeaponSlot.RANGED_MAIN if is_ranged_weapon else WeaponSlot.MELEE_MAIN
-            elif isinstance(slot, WeaponSlot):
-                slot_is_ranged = slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
-                if is_ranged_weapon and not slot_is_ranged:
-                    raise ValueError(f"Ranged weapon cannot be equipped in melee slot {slot}")
-                if not is_ranged_weapon and slot_is_ranged:
-                    raise ValueError(f"Melee weapon cannot be equipped in ranged slot {slot}")
-                if slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF) and not is_light_weapon:
-                    raise ValueError(f"Only LIGHT weapons can be equipped in off-hand slot {slot}")
-
-            assert isinstance(slot, WeaponSlot)
-            conflict_slots = self._get_melee_hand_conflict_slots(item, slot)
-            current_weapon = self._get_weapon_by_slot(slot)
-
-            event = WeaponEquipEvent(
-                name=item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=item.uuid,
-                slot=slot
-            )
-
-            if event.phase_to(EventPhase.EXECUTION).canceled:
-                return False
-
-            for conflict_slot in conflict_slots:
-                self.unequip(conflict_slot)
-
-            if current_weapon is not None:
-                self.unequip(slot)
-
-            if slot == WeaponSlot.MELEE_MAIN:
-                self.weapon_melee_main = item
-            elif slot == WeaponSlot.MELEE_OFF:
-                self.weapon_melee_off = item
-            elif slot == WeaponSlot.RANGED_MAIN:
-                self.weapon_ranged_main = item
-            elif slot == WeaponSlot.RANGED_OFF:
-                self.weapon_ranged_off = item
-
-            item.owner_uuid = self.source_entity_uuid
-            item.stored_in_uuid = self.uuid
-            item.equip(slot, self.source_entity_uuid)
-            event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
-            return True
-
-        if slot is None and isinstance(item, Armor):
-            slot = item.body_part
-
-        if slot not in slot_mapping:
-            raise ValueError(f"Invalid equipment slot: {slot}")
-        assert slot is not None
-
-        current_armor = self.get_item_by_slot(slot)
-
-        event = ArmorEquipEvent(
-            name=item.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            item_uuid=item.uuid,
-            slot=slot
+        for proposed in (declaration, execution):
+            if (
+                proposed.item_uuid != item.uuid
+                or proposed.slot != slot
+                or proposed.source_entity_uuid != self.source_entity_uuid
+            ):
+                raise RuntimeError(
+                    "Equipment validators may cancel or annotate a transition, "
+                    "but cannot replace its item, slot, or owner"
+                )
+        return _PreparedEquipmentTransition(
+            slot=slot,
+            item=item,
+            equipping=equipping,
+            declaration=declaration,
+            execution=execution,
         )
 
-        if event.phase_to(EventPhase.EXECUTION).canceled:
-            return False
+    @staticmethod
+    def _publish_prepared_transition(
+        transition: _PreparedEquipmentTransition,
+    ) -> _PreparedEquipmentTransition:
+        """Publish accepted declaration/execution versions without redispatch."""
+        declaration = EventQueue.publish_preflighted(transition.declaration)
+        execution = EventQueue.publish_preflighted(transition.execution)
+        return _PreparedEquipmentTransition(
+            slot=transition.slot,
+            item=transition.item,
+            equipping=transition.equipping,
+            declaration=declaration,
+            execution=execution,
+        )
 
-        if current_armor is not None:
-            self.unequip(slot)
+    def equip_transaction(
+        self,
+        item: EquippableItem,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> EquipmentEquipResult:
+        """Atomically validate, displace conflicts, and equip one item.
 
-        assert isinstance(slot, BodyPart)
-        attribute_name = slot_mapping[slot]
-        setattr(self, attribute_name, item)
+        All execution-phase events are accepted before any slot or hook state is
+        mutated.  This keeps canceled conflict removals from leaving a partially
+        changed loadout.
+        """
+        selected_slot = self.resolve_equipment_slot(item, slot)
+        conflicts = self._get_conflicts(item, selected_slot)
 
+        prepared_equip = self._preflight_equipment_transition(
+            item,
+            selected_slot,
+            equipping=True,
+        )
+        if prepared_equip is None:
+            return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+
+        prepared_unequips: List[_PreparedEquipmentTransition] = []
+        for conflict_slot, current_item in conflicts:
+            prepared_unequip = self._preflight_equipment_transition(
+                current_item,
+                conflict_slot,
+                equipping=False,
+            )
+            if prepared_unequip is None:
+                return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+            prepared_unequips.append(prepared_unequip)
+
+        published_unequips = [
+            self._publish_prepared_transition(transition)
+            for transition in prepared_unequips
+        ]
+        published_equip = self._publish_prepared_transition(prepared_equip)
+
+        displaced_items: List[EquippableItem] = []
+        for transition in published_unequips:
+            transition.item.unequip(transition.slot, self.source_entity_uuid)
+            setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[transition.slot], None)
+            if transition.item.uuid != item.uuid:
+                displaced_items.append(transition.item)
+
+        self._reparent_equippable_item(item)
+        setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[selected_slot], item)
         item.owner_uuid = self.source_entity_uuid
         item.stored_in_uuid = self.uuid
-        item.equip(slot, self.source_entity_uuid)
-        event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
-        return True
+        item.equip(selected_slot, self.source_entity_uuid)
+        if isinstance(selected_slot, WeaponSlot):
+            self._reconcile_active_weapon_set(preferred_slot=selected_slot)
 
-    def unequip(self, slot: Union[BodyPart, RingSlot, WeaponSlot], parent_event_uuid: Optional[UUID] = None) -> Optional[Union[Armor, Weapon, Shield]]:
+        for transition in published_unequips:
+            transition.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+        published_equip.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+        return EquipmentEquipResult(
+            succeeded=True,
+            selected_slot=selected_slot,
+            displaced_items=tuple(displaced_items),
+        )
+
+    def equip(
+        self,
+        item: EquippableItem,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> bool:
+        """Equip an item, preserving the historical boolean direct-call API."""
+        return self.equip_transaction(item, slot).succeeded
+
+    def unequip(self, slot: EquipmentSlot, parent_event_uuid: Optional[UUID] = None) -> Optional[EquippableItem]:
         """Unequip the item in the specified slot.
 
         Direct equipment calls clear the slot and call item hooks, but leave
@@ -1003,63 +1420,59 @@ class Equipment(BaseBlock):
         Raises:
             ValueError: If the slot is invalid
         """
-        if isinstance(slot, RingSlot):
-            attribute_name = "ring_left" if slot == RingSlot.LEFT else "ring_right"
-        elif isinstance(slot, WeaponSlot):
-            weapon_slot_mapping = {
-                WeaponSlot.MELEE_MAIN: "weapon_melee_main",
-                WeaponSlot.MELEE_OFF: "weapon_melee_off",
-                WeaponSlot.RANGED_MAIN: "weapon_ranged_main",
-                WeaponSlot.RANGED_OFF: "weapon_ranged_off",
-            }
-            attribute_name = weapon_slot_mapping[slot]
-        elif isinstance(slot, BodyPart):
-            if slot not in slot_mapping:
-                raise ValueError(f"Invalid equipment slot: {slot}")
-            attribute_name = slot_mapping[slot]
-        else:
+        attribute_name = _SLOT_ATTRIBUTE_BY_SLOT.get(slot)
+        if attribute_name is None:
             raise ValueError(f"Invalid equipment slot: {slot}")
 
         current_item = getattr(self, attribute_name)
         if current_item is None:
             return None
 
-        if isinstance(current_item, Weapon):
-            event = WeaponUnequipEvent(
-                name=current_item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=current_item.uuid,
-                slot=slot,
-                parent_event=parent_event_uuid
-            )
-        elif isinstance(current_item, Shield):
-            event = ShieldUnequipEvent(
-                name=current_item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=current_item.uuid,
-                slot=slot,
-                parent_event=parent_event_uuid
-            )
-        else:
-            event = ArmorUnequipEvent(
-                name=current_item.name,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                item_uuid=current_item.uuid,
-                slot=slot,
-                parent_event=parent_event_uuid
-            )
-
-        if event.phase_to(EventPhase.EXECUTION).canceled:
+        prepared = self._preflight_equipment_transition(
+            current_item,
+            slot,
+            equipping=False,
+            parent_event_uuid=parent_event_uuid,
+        )
+        if prepared is None:
             return None
+        published = self._publish_prepared_transition(prepared)
 
         current_item.unequip(slot, self.source_entity_uuid)
         setattr(self, attribute_name, None)
+        if isinstance(slot, WeaponSlot):
+            self._reconcile_active_weapon_set(preferred_slot=slot)
 
-        event.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+        published.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
         return current_item
+
+    def group_equippable_items(
+        self,
+        items: Iterable[object],
+    ) -> dict[str, list[dict[str, object]]]:
+        """Group candidates with every item their footprint would displace."""
+        result: dict[str, list[dict[str, object]]] = {}
+        for item in items:
+            if not isinstance(item, EquippableItem):
+                continue
+            for slot in item.compatible_equipment_slots():
+                attribute_name = _SLOT_ATTRIBUTE_BY_SLOT.get(slot)
+                if attribute_name is None:
+                    continue
+                conflicts = self._get_conflicts(item, slot)
+                result.setdefault(attribute_name, []).append({
+                    "item_uuid": str(item.uuid),
+                    "item_name": item.name,
+                    "displaced_items": [
+                        {
+                            "item_uuid": str(conflicting_item.uuid),
+                            "item_name": conflicting_item.name,
+                            "slot": conflicting_slot.value,
+                        }
+                        for conflicting_slot, conflicting_item in conflicts
+                    ],
+                })
+        return result
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "Equipped", source_entity_name: Optional[str] = None,

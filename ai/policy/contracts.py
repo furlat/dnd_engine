@@ -8,9 +8,9 @@ from typing import Any, Dict, Literal, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ai.knowledge.models import AgentFacts
-from ai.observation.models import SubjectiveWorldState
-from ai.protocol.immutable import FrozenDict
-from ai.protocol.semantics import (
+from server.agent_protocol.observation import SubjectiveWorldState
+from server.agent_protocol.immutable import FrozenDict
+from server.agent_protocol.semantics import (
     ActionTag,
     ConcentrationOperation,
     EffectDisposition,
@@ -21,7 +21,7 @@ from ai.protocol.semantics import (
     SelfSetupMaintenanceSemantics,
     TruthValue,
 )
-from ai.protocol.control import ActionAffordance, OpportunityAttackExposure
+from server.agent_protocol.control import ActionAffordance, OpportunityAttackExposure
 
 
 class PolicyModel(BaseModel):

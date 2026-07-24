@@ -8,7 +8,7 @@ from typing import Any, Deque, Dict, List, Optional
 
 from pydantic import BaseModel
 
-from ai.subjective.models import (
+from server.agent_protocol.telemetry import (
     AgentEvent,
     AgentEventPayload,
     AgentHeartbeatPayload,

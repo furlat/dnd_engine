@@ -14,6 +14,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     DamageRollResultEvent,
     DeathEvent,
@@ -21,9 +22,9 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     TakeDamageEvent,
-    WeaponSlot,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
@@ -287,7 +288,7 @@ def test_direct_damage_can_cause_death_as_a_child_event() -> None:
 
     assert actual_damage == 99
     assert enemy.get_hp() <= 0
-    assert "Dead" in enemy.active_conditions
+    assert enemy.health.life_state is LifeState.DEAD
     assert len(damage_completions) == 1
     assert len(death_completions) == 1
     assert damage_completions[0].event_type == EventType.TAKE_DAMAGE

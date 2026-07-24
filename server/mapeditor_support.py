@@ -13,16 +13,15 @@ from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_tiles import Tile, difficult_terrain_factory
-from dnd.core.events import EventQueue
-from dnd.core.gridmap import get_map, reset_map
-from dnd.controller import Controller
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.core.gridmap import get_map
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.items import ARMORS, SHIELDS, WEAPONS
 from dnd.items.test_items import (
     CookAction,
+    PullLeverAction,
     RestAction,
     StorageChest,
     TestDoorA,
@@ -51,9 +50,6 @@ from dnd.items.environment import DIRECTIONAL_CHANNELS, DIRECTIONS, DirectionalD
 from dnd.maps.arena_layout import DOOR_DIRECTIONS, build_standard_arena_environment
 from dnd.tiles import create_spike_zone
 from server.api_models import (
-    APIFloorObject,
-    APIGrid,
-    APITile,
     MapEditorCatalog,
     MapEditorCatalogEntry,
     MapEditorCreateMapRequest,
@@ -76,6 +72,8 @@ from server.api_models import (
 )
 from server.event_stream import event_stream
 from server.session import SessionManager
+from server.world_contracts import APIFloorObject, APITile
+from server.world_projection import project_grid
 
 _BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
     "use_register",
@@ -90,13 +88,8 @@ _SAVE_SCHEMA_VERSION = 1
 
 def reset_editor_world() -> None:
     """Reset spatial/combat registries for an entity-free editor map."""
-    reset_map()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Encounter.clear_registry()
-    Controller._controller_registry.clear()
+    reset_engine_runtime()
     SessionManager.reset()
-    EventQueue.reset()
     event_stream.ensure_attached()
 
 
@@ -139,7 +132,7 @@ def get_editor_snapshot() -> MapEditorMapSnapshot:
     """Serialize current GridMap as an entity-free editor snapshot."""
     grid = get_map()
     bounds = grid.bounds
-    api_grid = APIGrid.create(grid)
+    api_grid = project_grid(grid)
     return MapEditorMapSnapshot(
         grid_bounds=MapEditorGridBounds(min_x=bounds[0], min_y=bounds[1], max_x=bounds[2], max_y=bounds[3]),
         tiles=api_grid.tiles,
@@ -360,14 +353,14 @@ def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject
 
     if catalog_id == "door":
         item = TestDoorA(source_entity_uuid=owner)
-        grid.place_object(item.uuid, position)
+        item.place_on_grid(position)
     elif catalog_id == "directional_wall":
         item = DirectionalWall(
             source_entity_uuid=owner,
             blocked_directions=tuple(request.options.get("blocked_directions", DIRECTIONS)),
             blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
         )
-        grid.place_object(item.uuid, position)
+        item.place_on_grid(position)
     elif catalog_id == "directional_door":
         item = DirectionalDoor(
             source_entity_uuid=owner,
@@ -376,11 +369,32 @@ def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject
             blocked_directions=tuple(request.options.get("blocked_directions", DOOR_DIRECTIONS)),
             blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
         )
-        grid.place_object(item.uuid, position)
+        item.place_on_grid(position)
     elif catalog_id == "wall_torch":
         item = create_wall_torch(position=position, owner_uuid=owner, lit=bool(request.options.get("lit", True)))
     elif catalog_id == "trap_lever":
-        item = TrapLever(source_entity_uuid=owner, charges=1)
+        trap_handler_uuid = request.options.get("trap_handler_uuid")
+        trap_tile_uuids = request.options.get("trap_tile_uuids", [])
+        use_action_templates: List[BaseAction] = (
+            [
+                PullLeverAction(
+                    source_entity_uuid=uuid4(),
+                    trap_handler_uuid=UUID(str(trap_handler_uuid)),
+                    trap_tile_uuids=[
+                        UUID(str(tile_uuid))
+                        for tile_uuid in trap_tile_uuids
+                    ],
+                    template=True,
+                ),
+            ]
+            if trap_handler_uuid is not None
+            else []
+        )
+        item = TrapLever(
+            source_entity_uuid=owner,
+            charges=int(request.options.get("charges", 1)),
+            use_action_templates=use_action_templates,
+        )
         item.place_on_grid(position)
     elif catalog_id == "storage_chest":
         item = StorageChest(source_entity_uuid=owner)
@@ -486,6 +500,8 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
     reset_editor_world()
     grid = get_map()
     spike_light: Dict[Tuple[int, int], int] = {}
+    spike_handler_uuid: Optional[UUID] = None
+    spike_tile_uuids: List[UUID] = []
     for tile_data in snapshot.tiles:
         position = (tile_data.x, tile_data.y)
         if tile_data.is_hazardous or "Spike Trap" in tile_data.conditions:
@@ -509,7 +525,9 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
         _restore_directional_tile_state(grid, tile_data)
 
     if spike_light:
-        spike_tiles, _handler = create_spike_zone(set(spike_light))
+        spike_tiles, spike_handler = create_spike_zone(set(spike_light))
+        spike_handler_uuid = spike_handler.uuid
+        spike_tile_uuids = [tile.uuid for tile in spike_tiles]
         for tile in spike_tiles:
             tile.default_light = _light_level(spike_light[tile.position])
             grid.set_tile(tile.position[0], tile.position[1], tile=tile, fire_event=False)
@@ -519,11 +537,21 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
                     break
 
     for placement in object_placements:
+        options = dict(placement.state)
+        if (
+            placement.catalog_id == "trap_lever"
+            and spike_handler_uuid is not None
+        ):
+            options["trap_handler_uuid"] = str(spike_handler_uuid)
+            options["trap_tile_uuids"] = [
+                str(tile_uuid)
+                for tile_uuid in spike_tile_uuids
+            ]
         place_catalog_object(
             MapEditorObjectPlaceRequest(
                 catalog_id=placement.catalog_id,
                 position=placement.position,
-                options=placement.state,
+                options=options,
             )
         )
 
@@ -537,7 +565,7 @@ def _restore_directional_tile_state(grid: Any, tile_data: APITile) -> None:
         "propagation": tile_data.directional_blocks_propagation,
     }
     for channel, blocked_by_direction in channel_maps.items():
-        for direction, blocked in blocked_by_direction.items():
+        for direction, blocked in blocked_by_direction.model_dump().items():
             grid.set_tile_directional_border(
                 position,
                 channel,
@@ -567,11 +595,11 @@ def _floor_objects(grid: Any) -> List[APIFloorObject]:
 def _floor_object(obj_uuid: UUID, obj_pos: Tuple[int, int]) -> APIFloorObject:
     obj = BaseBlock.get(obj_uuid)
     if obj is None:
-        return APIFloorObject(uuid=str(obj_uuid), name="Object", position=list(obj_pos), map_char="?", state={})
+        return APIFloorObject(uuid=str(obj_uuid), name="Object", position=obj_pos, map_char="?", state={})
     return APIFloorObject(
         uuid=str(obj_uuid),
         name=obj.name or "Object",
-        position=list(obj_pos),
+        position=obj_pos,
         map_char=obj.get_map_char() or "?",
         state=_get_floor_object_state(obj),
     )

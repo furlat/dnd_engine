@@ -12,8 +12,8 @@ from ai.policy.contracts import (
     PolicyProposal,
     UtilityComponent,
 )
-from ai.protocol.control import ActionAffordance
-from ai.protocol.semantics import ActionSemantics, ActionTag, OutcomeKind
+from server.agent_protocol.control import ActionAffordance
+from server.agent_protocol.semantics import ActionSemantics, ActionTag, OutcomeKind
 
 SETUP_VALUE_HORIZON_TURNS = 2.0
 

@@ -777,13 +777,15 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
 
     sleep_event = assert_completed_spell(sleep_event)
     assert "Sleep" in low.active_conditions
-    assert "Unconscious" in low.active_conditions
+    assert "Unconscious" not in low.active_conditions
+    assert low.action_economy.action_permission.normalized_score == 0
+    assert low.senses.visual_access.normalized_score == 0
     assert "Sleep" not in mid.active_conditions
     assert sleep.hp_pool_remaining == 0
     readout_lines.append(
         (
             f"sleep apply: low_sleep={'Sleep' in low.active_conditions}, "
-            f"low_unconscious={'Unconscious' in low.active_conditions}, "
+            f"low_action_denied={low.action_economy.action_permission.normalized_score == 0}, "
             f"mid_sleep={'Sleep' in mid.active_conditions}, "
             f"remaining_pool={sleep.hp_pool_remaining}"
         )
@@ -793,10 +795,12 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
 
     assert "Sleep" not in low.active_conditions
     assert "Unconscious" not in low.active_conditions
+    assert low.action_economy.action_permission.normalized_score == 1
+    assert low.senses.visual_access.normalized_score == 1
     readout_lines.append(
         (
             f"wakeup: low_sleep={'Sleep' in low.active_conditions}, "
-            f"low_unconscious={'Unconscious' in low.active_conditions}"
+            f"low_action_allowed={low.action_economy.action_permission.normalized_score == 1}"
         )
     )
 
@@ -809,10 +813,10 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
             "remaining_pool=1, undead_selected=False"
         ),
         (
-            "sleep apply: low_sleep=True, low_unconscious=True, "
+            "sleep apply: low_sleep=True, low_action_denied=True, "
             "mid_sleep=False, remaining_pool=0"
         ),
-        "wakeup: low_sleep=False, low_unconscious=False",
+        "wakeup: low_sleep=False, low_action_allowed=True",
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"

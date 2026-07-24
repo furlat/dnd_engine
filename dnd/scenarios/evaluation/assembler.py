@@ -14,15 +14,12 @@ from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.conditions import Blinded, Poisoned
 from dnd.controller import Controller, PassController
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
-from dnd.core.gridmap import GridMap, get_map
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
-from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.items.test_items import (
     create_acid_flask,
     create_healing_potion,
@@ -114,22 +111,7 @@ class IncompatibleScenarioError(ValueError):
 
 def reset_composed_scenario_state(width: int = 15, height: int = 15) -> None:
     """Clear every global engine registry used by scenario construction."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def _build_class_actor(blueprint: ActorBlueprint, context: ActorBuildContext) -> Entity | None:

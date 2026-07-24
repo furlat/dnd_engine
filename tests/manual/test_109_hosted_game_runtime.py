@@ -5,30 +5,83 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import httpx
 import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
 
+from ai.game_server_profiles import ISOLATED_AI_WORKER_APPLICATION
 from server import event_server
+from server.agent_runtime.service import AgentExecutionMode, AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
-from server.hosted_worker import HostedWorkerManager, HostedWorkerState
+from server.hosted_worker import (
+    HostedWorkerAssignment,
+    HostedWorkerApplication,
+    HostedWorkerError,
+    HostedWorkerManager,
+    HostedWorkerState,
+)
+from server.game_directory.contracts import (
+    MembershipCapabilities,
+    MembershipRecord,
+    MembershipRole,
+)
+from server.game_gateway import _runtime_scopes
 from server.runtime_authority import (
     RuntimeAuthorityCache,
     RuntimeAuthorityError,
     RuntimeScope,
+    parse_runtime_projection_authority,
+    runtime_projection_headers,
     validate_session_binding,
 )
-from server.worker_proxy import ProxyRouteKind, _relay_response_body, classify_worker_route
+from server.worker_proxy import (
+    ProxyRouteKind,
+    _forward_request_headers,
+    _relay_response_body,
+    classify_worker_route,
+    proxy_runtime_request,
+)
 
 
 @pytest.fixture(autouse=True)
 def clean_direct_runtime() -> Iterator[None]:
     """Reset process-global direct-server state around every focused check."""
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
     reset_standard_arena_runtime()
     yield
     reset_standard_arena_runtime()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+
+
+def test_hosted_worker_configuration_rejection_is_structured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A public process rejects the private configure route with typed detail."""
+    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
+    assignment = HostedWorkerAssignment(
+        hosted_game_id=uuid4(),
+        public_game_base_url="http://gateway/games/example/runtime",
+    )
+
+    with pytest.raises(HTTPException) as rejected:
+        asyncio.run(event_server.configure_hosted_worker(assignment))
+
+    assert rejected.value.status_code == 404
+    assert rejected.value.detail == {
+        "code": "hosted_worker_configuration_unavailable",
+        "message": "Hosted worker configuration is unavailable",
+    }
 
 
 def test_hosted_worker_uses_private_socket_and_stops_process_group(tmp_path: Path) -> None:
@@ -50,11 +103,108 @@ def test_hosted_worker_uses_private_socket_and_stops_process_group(tmp_path: Pat
         async with manager.client(game_id) as client:
             status = await client.get("/game/status")
         assert status.status_code == 200
-        assert status.json() == {"active": False, "game": None, "sessions": []}
+        assert status.json() == {
+            "active": False,
+            "game_id": None,
+            "encounter_active": False,
+            "active_entity_uuid": None,
+            "sessions": [],
+            "creation": None,
+    }
 
         stopped = await manager.stop(game_id)
         assert stopped is not None
         assert stopped.state is HostedWorkerState.STOPPED
+        assert not Path(placement.socket_path).exists()
+
+    asyncio.run(exercise())
+
+
+def test_hosted_worker_rejects_mismatched_managed_agent_composition(
+    tmp_path: Path,
+) -> None:
+    """Warm readiness authenticates the declared managed-agent service."""
+
+    async def exercise() -> None:
+        manager = HostedWorkerManager(
+            tmp_path / "runtime",
+            worker_application=HostedWorkerApplication(
+                import_path="server.event_server:app",
+                expected_agent_service_id="ai.embedded-subjective-policy",
+                expected_agent_execution_mode=AgentExecutionMode.EMBEDDED_THREAD,
+            ),
+            startup_timeout_seconds=20.0,
+        )
+        game_id = uuid4()
+
+        with pytest.raises(HostedWorkerError, match="service mismatch"):
+            await manager.start(
+                game_id,
+                public_game_base_url=(
+                    f"http://gateway/games/{game_id}/runtime"
+                ),
+            )
+
+        assert manager.active_game_ids() == ()
+        await manager.stop_all()
+
+    asyncio.run(exercise())
+
+
+def test_hosted_worker_supports_explicit_double_isolated_ai(
+    tmp_path: Path,
+) -> None:
+    """Opt-in hosted composition owns one nested process per AI session."""
+
+    async def exercise() -> None:
+        manager = HostedWorkerManager(
+            tmp_path / "runtime",
+            worker_application=ISOLATED_AI_WORKER_APPLICATION,
+            startup_timeout_seconds=20.0,
+        )
+        game_id = uuid4()
+        placement = await manager.start(
+            game_id,
+            public_game_base_url=f"http://gateway/games/{game_id}/runtime",
+        )
+        try:
+            async with manager.client(game_id, timeout=30.0) as client:
+                creation = await client.post(
+                    "/game-creation/start",
+                    json={
+                        "scenario": {
+                            "kind": "preset",
+                            "arena_id": "standard_skeleton_doors",
+                        },
+                        "side_a": {
+                            "controller": "human",
+                            "name": "Human",
+                        },
+                        "side_b": {
+                            "controller": "ai",
+                            "name": "Isolated AI",
+                        },
+                        "opening_side": "side_a",
+                    },
+                )
+                service = await client.get("/ai/service")
+
+            assert creation.status_code == 200, creation.text
+            assert service.status_code == 200, service.text
+            service_payload = service.json()
+            assert service_payload["service_id"] == (
+                "ai.isolated-subjective-policy"
+            )
+            assert service_payload["execution_mode"] == "isolated_process"
+            assert len(service_payload["sessions"]) == 1
+            session = service_payload["sessions"][0]
+            assert session["ready"] is True
+            assert isinstance(session["process_id"], int)
+            assert session["process_id"] != placement.process_id
+        finally:
+            await manager.stop_all()
+
+        assert manager.active_game_ids() == ()
         assert not Path(placement.socket_path).exists()
 
     asyncio.run(exercise())
@@ -92,6 +242,12 @@ def test_runtime_capability_is_bound_to_game_session_and_entities() -> None:
             "entity_uuid": str(controlled_entity_id),
         },
     )
+    validate_session_binding(
+        authority,
+        path=f"entity/{controlled_entity_id}/available-actions",
+        query={"session_id": str(session_id)},
+        json_body=None,
+    )
 
     with pytest.raises(RuntimeAuthorityError, match="another game"):
         cache.validate(
@@ -114,11 +270,152 @@ def test_runtime_capability_is_bound_to_game_session_and_entities() -> None:
             query={},
             json_body={"session_id": str(session_id), "entity_uuid": str(uuid4())},
         )
+    with pytest.raises(RuntimeAuthorityError, match="uncontrolled entity"):
+        validate_session_binding(
+            authority,
+            path=f"entity/{uuid4()}/equippable-items",
+            query={"session_id": str(session_id)},
+            json_body=None,
+        )
+
+
+def test_runtime_projection_headers_preserve_trusted_subjective_authority() -> None:
+    """The private worker hop receives projection claims, never the bearer token."""
+    cache = RuntimeAuthorityCache()
+    game_id = uuid4()
+    session_id = uuid4()
+    membership_id = uuid4()
+    controlled_entity_id = uuid4()
+    issued = cache.issue(
+        hosted_game_id=game_id,
+        runtime_session_id=session_id,
+        membership_id=membership_id,
+        scopes=[RuntimeScope.OBSERVE, RuntimeScope.SUBJECTIVE_OBSERVE],
+        controlled_entity_uuids=[controlled_entity_id],
+        authority_epoch=7,
+    )
+
+    headers = runtime_projection_headers(issued.authority)
+    projected = parse_runtime_projection_authority(headers)
+
+    assert projected is not None
+    assert projected.hosted_game_id == game_id
+    assert projected.runtime_session_id == session_id
+    assert projected.membership_id == membership_id
+    assert projected.authority_epoch == 7
+    assert projected.scopes == frozenset({RuntimeScope.OBSERVE, RuntimeScope.SUBJECTIVE_OBSERVE})
+    assert projected.controlled_entity_uuids == frozenset({controlled_entity_id})
+    assert projected.observer_entity_uuids == frozenset({controlled_entity_id})
+    assert projected.active_observer_uuid == controlled_entity_id
+    assert "authorization" not in headers
+
+    request = Request({
+        "type": "http",
+        "method": "GET",
+        "path": "/replication/bootstrap",
+        "query_string": b"",
+        "headers": [
+            (b"authorization", b"Bearer secret"),
+            (b"x-dnd-runtime-session-id", b"spoofed"),
+            (b"x-client-header", b"preserved"),
+        ],
+    })
+    forwarded = _forward_request_headers(request, authority=issued.authority)
+    assert forwarded["x-dnd-runtime-session-id"] == str(session_id)
+    assert forwarded["x-client-header"] == "preserved"
+    assert "authorization" not in forwarded
+
+
+def test_runtime_scope_mapping_authorizes_explicit_subjective_observer_union() -> None:
+    """Public observers get subjective scope without gaining entity control."""
+    common = {
+        "game_id": uuid4(),
+        "principal_id": uuid4(),
+        "joined_at": datetime.now(UTC),
+    }
+    participant = MembershipRecord(
+        **common,
+        role=MembershipRole.PLAYER,
+        capabilities=MembershipCapabilities(
+            may_connect=True,
+            may_observe_public_state=True,
+            may_observe_subjective_state=True,
+            may_control_entities=True,
+        ),
+    )
+    observer = MembershipRecord(
+        **common,
+        role=MembershipRole.OBSERVER,
+        capabilities=MembershipCapabilities(
+            may_connect=True,
+            may_observe_public_state=True,
+            may_observe_subjective_state=True,
+        ),
+    )
+    administrator = MembershipRecord(
+        **common,
+        role=MembershipRole.REFEREE,
+        capabilities=MembershipCapabilities(
+            may_connect=True,
+            may_manage_game=True,
+        ),
+    )
+
+    assert RuntimeScope.SUBJECTIVE_OBSERVE in _runtime_scopes(participant)
+    assert RuntimeScope.SUBJECTIVE_OBSERVE in _runtime_scopes(observer)
+    assert RuntimeScope.CONTROL not in _runtime_scopes(observer)
+    assert RuntimeScope.ADMINISTER in _runtime_scopes(administrator)
+    assert RuntimeScope.ADMINISTER not in _runtime_scopes(observer)
 
 
 def test_public_runtime_route_classifier_blocks_worker_administration() -> None:
-    """Only observation, commands, and scoped agent routes can cross the proxy."""
-    assert classify_worker_route("GET", "events/subscribe") is ProxyRouteKind.OBSERVE
+    """Objective diagnostics cross only the explicit administration partition."""
+    assert classify_worker_route("GET", "events/subscribe") is ProxyRouteKind.DENIED
+    assert classify_worker_route("GET", "events") is ProxyRouteKind.DENIED
+    assert classify_worker_route("GET", "events/history") is ProxyRouteKind.DENIED
+    assert classify_worker_route("GET", "combat-log") is ProxyRouteKind.DENIED
+    for route in (
+        "replication/bootstrap",
+        "replication/frames",
+        "replication/combat-log",
+        "replication/subscribe",
+    ):
+        assert classify_worker_route("GET", route) is ProxyRouteKind.SUBJECTIVE
+        assert classify_worker_route("HEAD", route) is ProxyRouteKind.SUBJECTIVE
+        assert classify_worker_route("POST", route) is ProxyRouteKind.DENIED
+    for route in (
+        "diagnostics/objective/bootstrap",
+        "diagnostics/objective/events",
+        "diagnostics/objective/combat-log",
+        "diagnostics/objective/subscribe",
+        "diagnostics/subjective-parity",
+    ):
+        assert classify_worker_route("GET", route) is ProxyRouteKind.ADMINISTER
+        assert classify_worker_route("HEAD", route) is ProxyRouteKind.ADMINISTER
+        assert classify_worker_route("POST", route) is ProxyRouteKind.DENIED
+    assert classify_worker_route("GET", "diagnostics/objective/private") is ProxyRouteKind.DENIED
+    for raw_route in ("state", "visibility", "entities", "grid", "encounter", "entity/abc", "tile/1/2"):
+        assert classify_worker_route("GET", raw_route) is ProxyRouteKind.DENIED
+    for controlled_route in (
+        "entity/abc/available-actions",
+        "entity/abc/equippable-items",
+        "entity/abc/handlers",
+    ):
+        assert classify_worker_route("GET", controlled_route) is ProxyRouteKind.COMMAND
+        assert classify_worker_route("HEAD", controlled_route) is ProxyRouteKind.COMMAND
+    assert classify_worker_route("GET", "entity/abc/equipment") is ProxyRouteKind.DENIED
+    for forbidden_replication_route in (
+        "replication",
+        "replication/v2/bootstrap",
+        "replication/v2/combat-log",
+        "replication/v2/events/history",
+        "replication/v2/events/subscribe",
+        "replication/private",
+    ):
+        assert (
+            classify_worker_route("GET", forbidden_replication_route)
+            is ProxyRouteKind.DENIED
+        )
     assert classify_worker_route("POST", "action/execute") is ProxyRouteKind.COMMAND
     assert classify_worker_route("GET", "ai/sessions/abc/observation/subscribe") is ProxyRouteKind.AGENT
     assert classify_worker_route("POST", "game-creation/start") is ProxyRouteKind.DENIED
@@ -127,8 +424,51 @@ def test_public_runtime_route_classifier_blocks_worker_administration() -> None:
     assert classify_worker_route("POST", "simulation/resume") is ProxyRouteKind.DENIED
     assert classify_worker_route("POST", "simulation/step") is ProxyRouteKind.DENIED
     assert classify_worker_route("POST", "simulation/set-delay") is ProxyRouteKind.DENIED
-    assert classify_worker_route("GET", "simulation/status") is ProxyRouteKind.OBSERVE
+    assert classify_worker_route("GET", "simulation/status") is ProxyRouteKind.DENIED
+    assert classify_worker_route("GET", "game/status") is ProxyRouteKind.DENIED
     assert classify_worker_route("DELETE", "session/abc") is ProxyRouteKind.DENIED
+
+
+def test_objective_diagnostics_proxy_requires_administer_before_worker_io() -> None:
+    """An observe-only runtime token is rejected before opening the worker UDS."""
+    game_id = uuid4()
+    cache = RuntimeAuthorityCache()
+    issued = cache.issue(
+        hosted_game_id=game_id,
+        runtime_session_id=uuid4(),
+        membership_id=uuid4(),
+        scopes={RuntimeScope.OBSERVE},
+    )
+
+    class RejectWorkerIO:
+        def socket_path(self, _game_id: object) -> Path:
+            raise AssertionError("authorization failure reached worker I/O")
+
+    async def receive() -> dict[str, object]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/games/game/runtime/diagnostics/objective/bootstrap",
+            "query_string": b"",
+            "headers": [
+                (b"authorization", f"Bearer {issued.token}".encode("ascii")),
+            ],
+        },
+        receive=receive,
+    )
+    response = asyncio.run(proxy_runtime_request(
+        request,
+        hosted_game_id=game_id,
+        worker_path="diagnostics/objective/bootstrap",
+        worker_manager=cast(HostedWorkerManager, RejectWorkerIO()),
+        authority_cache=cache,
+    ))
+
+    assert response.status_code == 403
+    assert b"runtime_authority_rejected" in response.body
 
 
 def test_runtime_stream_stops_after_hot_capability_revocation() -> None:
@@ -179,14 +519,33 @@ def test_direct_single_game_server_never_requires_sqlite(
     def reject_sqlite(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("direct event_server attempted to open SQLite")
 
-    def capture_process_start(session_id: object, base_url: str) -> None:
-        process_starts.append((str(session_id), base_url))
+    class DirectRuntimeLauncher:
+        service_id = "tests.direct-runtime-agent"
+
+        def preflight(self, _required_agents: int) -> None:
+            return None
+
+        def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+            return AgentProcessSpec(
+                argv=("unused-direct-runtime-agent", request.session_id),
+                cwd=Path(__file__).resolve().parents[2],
+            )
+
+    async def capture_process_starts(
+        requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        process_starts.extend(
+            (request.session_id, request.base_url)
+            for request in requests
+        )
+        return ()
 
     monkeypatch.setattr(sqlite3, "connect", reject_sqlite)
+    event_server.agent_service_manager.register_service(SubprocessAgentService(DirectRuntimeLauncher()))
     monkeypatch.setattr(
-        event_server.ai_process_manager,
-        "start_external_agent",
-        capture_process_start,
+        event_server.agent_service_manager,
+        "start_agents",
+        capture_process_starts,
     )
 
     request = {
@@ -194,13 +553,17 @@ def test_direct_single_game_server_never_requires_sqlite(
         "side_a": {"controller": "human", "name": "Human"},
         "side_b": {"controller": "ai", "name": "AI"},
         "opening_side": "side_a",
-    }
+        }
     with ArenaApiClient() as client:
         start = client.post("/game-creation/start", json=request)
-        events = client.get("/events", params={"since": 0})
+        events = client.get(
+            "/diagnostics/objective/events",
+            params={"from_cursor": 0},
+        )
 
     assert start.status_code == 200
     assert start.json()["status"] == "waiting_for_human"
     assert events.status_code == 200
     assert events.json()["generation_id"]
+    assert events.json()["source_stream_id"]
     assert len(process_starts) == 1

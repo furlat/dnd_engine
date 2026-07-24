@@ -1,8 +1,13 @@
 """Concrete engine conditions and condition-related event handlers."""
 
 from pydantic import Field, PrivateAttr
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionTag, DurationType, ConditionApplicationEvent
-
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
+from dnd.core.condition_types import (
+    ConditionAgencyDenial,
+    ConditionCategory,
+    ConditionTag,
+    DurationType,
+)
 from dnd.entity import Entity
 from typing import Dict, Any, Optional, List, Literal, Tuple, Type
 from dnd.core.modifiers import (
@@ -13,9 +18,6 @@ from dnd.core.modifiers import (
     AutoHitStatus,
     ContextualNumericalModifier,
     NumericalModifier,
-    ContextualCriticalModifier,
-    CriticalModifier,
-    CriticalStatus,
     DamageType,
     ContextAwareNumerical,
     ContextAwareAutoHit,
@@ -29,12 +31,33 @@ from dnd.core.base_block import SensesType, LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
-from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SavingThrowEvent, DeathEvent, SpatialChangeEvent
+from dnd.core.events import (
+    DamageAppliedEvent,
+    DeathEvent,
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    ReviveEvent,
+    SavingThrowEvent,
+    SpatialChangeEvent,
+    Trigger,
+    EventQueue,
+)
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay, ModifierBreakdown
+from dnd.creature_transforms import (
+    apply_incapacitated_transform,
+    apply_opportunity_attack_immunity_transform,
+    apply_paralyzed_transform,
+    apply_prone_geometry_transform,
+    apply_stunned_transform,
+    apply_unconscious_transform,
+    apply_visual_denial_transform,
+)
 from enum import Enum
 
 UNDERWATER_MELEE_EXCEPTION_WEAPONS: Tuple[str, ...] = ("dagger", "javelin", "shortsword", "spear", "trident")
@@ -349,6 +372,13 @@ class Blinded(BaseCondition):
 
         elif isinstance(target_entity,Entity):
             outs = []
+            outs.extend(
+                apply_visual_denial_transform(
+                    target_entity,
+                    name=self.name,
+                    effect_source_uuid=self.source_entity_uuid,
+                )
+            )
             self_static_condition_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Blinded",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             to_target_static_condition_uuid =target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Blinded",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied attack advantage modifers from Blinded to {target_entity.name}")
@@ -497,6 +527,24 @@ class Deafened(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+def exhaustion_revive_processor(
+    event: Event,
+    source_entity_uuid: UUID,
+) -> Optional[Event]:
+    """Reduce the owning entity's Exhaustion when a revival permits it."""
+    if (
+        not isinstance(event, ReviveEvent)
+        or event.entity_uuid != source_entity_uuid
+        or not event.reduce_exhaustion
+    ):
+        return None
+
+    entity = Entity.get(source_entity_uuid)
+    if isinstance(entity, Entity):
+        entity.reduce_condition_level("Exhaustion", parent_event=event)
+    return None
+
+
 class Exhaustion(BaseCondition):
     """Cumulative exhaustion condition with SRD level effects."""
 
@@ -541,6 +589,18 @@ class Exhaustion(BaseCondition):
             tags=set(self.tags),
             level=next_level,
         )
+
+    def long_rest(self) -> None:
+        """Progress duration and reduce this condition by one owned level."""
+        super().long_rest()
+        if self.duration.is_expired or not self.target_entity_uuid:
+            return
+        target = Entity.get(self.target_entity_uuid)
+        if (
+            isinstance(target, Entity)
+            and target.active_conditions_by_uuid.get(self.uuid) is self
+        ):
+            target.reduce_condition_level(self.name)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply all exhaustion effects up to the current level.
@@ -676,7 +736,21 @@ class Exhaustion(BaseCondition):
                     parent_event=effect_event.uuid,
                 )
 
-            return outs, [], [], [], effect_event
+            revive_handler = EventHandler(
+                name="Exhaustion: Revival Reduction",
+                source_entity_uuid=target_uuid,
+                trigger_conditions=[
+                    Trigger(
+                        event_type=EventType.REVIVE,
+                        event_phase=EventPhase.EFFECT,
+                        event_source_entity_uuid=target_uuid,
+                    )
+                ],
+                event_processor=exhaustion_revive_processor,
+            )
+            target_entity.add_event_handler(revive_handler)
+
+            return outs, [revive_handler.uuid], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {target_uuid} is not an entity but {type(target_entity)}")
 
@@ -709,22 +783,28 @@ class Dodging(BaseCondition):
 
 
 class Disengaging(BaseCondition):
-    """Status condition checked by opportunity-attack logic.
-
-    Disengaging does not add modifiers. The opportunity-attack handler reads the
-    active condition by name.
-    """
+    """Status condition that owns immunity to opportunity-attack provocation."""
     name: str = Field(default="Disengaging", description="Condition name.")
     description: str = Field(default="Your movement doesn't provoke opportunity attacks for the rest of the turn.", description="Condition description.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Status-effect condition category.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(
+                status_message=f"Target entity {self.target_entity_uuid} not found"
+            )
+        outs = apply_opportunity_attack_immunity_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
+        )
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
             status_message=f"Applied Disengaging to {self.target_entity_uuid}"
         )
-        return [], [], [], [], effect_event
+        return outs, [], [], [], effect_event
 
 
 class Frightened(BaseCondition):
@@ -838,6 +918,10 @@ class Incapacitated(BaseCondition):
 
     name: str = Field(default="Incapacitated", description="Condition name.")
     description: str = Field(default="An incapacitated creature can't take actions.", description="Condition description.")
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Incapacitation removes the target's turn agency.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -846,20 +930,16 @@ class Incapacitated(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
-            action_max_constrain_uuid = target_entity.action_economy.actions.self_static.add_max_constraint(constraint=NumericalModifier(name="Incapacitated",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.action_economy.actions.uuid,action_max_constrain_uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated action max constraint to {target_entity.name}")
-            bonus_action_max_constrain_uuid = target_entity.action_economy.bonus_actions.self_static.add_max_constraint(constraint=NumericalModifier(name="Incapacitated",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.action_economy.bonus_actions.uuid,bonus_action_max_constrain_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated bonus action max constraint to {target_entity.name}")
-            reaction_max_constrain_uuid = target_entity.action_economy.reactions.self_static.add_max_constraint(constraint=NumericalModifier(name="Incapacitated",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.action_economy.reactions.uuid,reaction_max_constrain_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated reaction max constraint to {target_entity.name}")
-            speed_obj = target_entity.action_economy.movement
-            speed_max_constrain_uuid = speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Incapacitated",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((speed_obj.uuid,speed_max_constrain_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated movement max constraint to {target_entity.name}")
+            outs = apply_incapacitated_transform(
+                target_entity,
+                name=self.name,
+                effect_source_uuid=self.source_entity_uuid,
+            )
+            effect_event = declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Incapacitated transform to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -869,6 +949,11 @@ class Invisible(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="An invisible creature is impossible to see without the aid of magic or a special sense.", description="Condition description.")
+    obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
+
+    def format_application_log(self, target_name: str) -> str:
+        """Render the invisibility-specific application message."""
+        return f"{{cyan:{target_name}}} becomes **invisible**"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -939,12 +1024,16 @@ def unseen_target_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Opt
 
 
 class Paralyzed(BaseCondition):
-    """Severe condition that adds Incapacitated and save/critical effects."""
+    """Severe condition owning incapacitation, failed saves, and auto-crits."""
 
     name: str = Field(default="Paralyzed", description="Condition name.")
     description: str = Field(
         default="A paralyzed creature is incapacitated (see the condition) and can't move or speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage. Any attack that hits the creature is a critical hit if the attacker is within 5 feet of the creature.",
         description="Condition description.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Paralysis removes the target's turn agency.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -954,57 +1043,24 @@ class Paralyzed(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
-            sub_conditions_uuids:List[UUID] = []
-            execution_event = declaration_event.phase_to(EventPhase.EXECUTION,update={"condition":self},status_message=f"Applying Incapacitated sub-condition to {target_entity.name}")
-            incapacitated_condition = Incapacitated(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid,parent_condition=self.uuid)
-            sub_conditions_application_event = target_entity.add_condition(incapacitated_condition,parent_event=execution_event)
-            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
-                sub_condition_applied= True
-                sub_conditions_uuids.append(incapacitated_condition.uuid)
-            else:
-                sub_condition_applied= False
-
-            effect_event = execution_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated to {target_entity.name}" if sub_condition_applied else f"Failed to apply Incapacitated to {target_entity.name}")
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_auto_hit_uuid = dex_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Paralyzed",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((dex_save.bonus.uuid,dex_save_auto_hit_uuid))
-            str_save = target_entity.saving_throws.get_saving_throw("strength")
-            str_save_auto_hit_uuid = str_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Paralyzed",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((str_save.bonus.uuid,str_save_auto_hit_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Paralyzed STR and DEX saves auto hit modifiers to {target_entity.name}")
-
-            to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Paralyzed",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Paralyzed attacker advantage modifier to {target_entity.name}")
-
-            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_critical_modifier(modifier=ContextualCriticalModifier(name="Paralyzed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.paralyzed_distance_critical))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Paralyzed to target contextual critical modifier to {target_entity.name}")
-            return outs, [], sub_conditions_uuids, [], effect_event
+            execution_event = declaration_event.phase_to(
+                EventPhase.EXECUTION,
+                update={"condition": self},
+                status_message=f"Applying Paralyzed transform to {target_entity.name}",
+            )
+            outs = apply_paralyzed_transform(
+                target_entity,
+                name=self.name,
+                effect_source_uuid=self.source_entity_uuid,
+            )
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Paralyzed transform to {target_entity.name}",
+            )
+            return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-
-    @staticmethod
-    def paralyzed_distance_critical(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[CriticalModifier]:
-        """Return autocrit for attacks within five feet of the paralyzed target.
-
-        Args:
-            source_entity_uuid: UUID of the conditioned creature.
-            target_entity_uuid: UUID of the attacker, if known.
-            context: Optional contextual data from modifier evaluation.
-
-        Returns:
-            Autocrit modifier when the attacker is within five feet, otherwise None.
-        """
-        if target_entity_uuid:
-            target_entity = Entity.get(target_entity_uuid)
-            source_entity = Entity.get(source_entity_uuid)
-            if isinstance(source_entity,Entity) and isinstance(target_entity,Entity):
-                distance = source_entity.senses.get_feet_distance(target_entity.position)
-                if distance <= 5:
-                    return CriticalModifier(name="Paralyzed",value=CriticalStatus.AUTOCRIT,source_entity_uuid=source_entity_uuid,target_entity_uuid=target_entity_uuid)
-        return None
 
 
 class Petrified(BaseCondition):
@@ -1019,9 +1075,13 @@ class Petrified(BaseCondition):
         default_factory=lambda: {ConditionTag.PETRIFICATION},
         description="Condition tags used by Greater Restoration and petrification-aware effects.",
     )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Petrification removes the target's turn agency.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply petrification modifiers and its Incapacitated subcondition.
+        """Apply the directly owned severe-control and resistance transforms.
 
         Args:
             declaration_event: Condition-application declaration event.
@@ -1038,72 +1098,21 @@ class Petrified(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {target_uuid} not found")
         elif isinstance(target_entity, Entity):
-            outs: List[Tuple[UUID, UUID]] = []
-            sub_conditions_uuids: List[UUID] = []
-
             execution_event = declaration_event.phase_to(
                 EventPhase.EXECUTION,
                 update={"condition": self},
-                status_message=f"Applying Incapacitated sub-condition to {target_entity.name}",
+                status_message=f"Applying Petrified transform to {target_entity.name}",
             )
-            incapacitated_condition = Incapacitated(
-                source_entity_uuid=source_uuid,
-                target_entity_uuid=target_uuid,
-                parent_condition=self.uuid,
+            outs = apply_stunned_transform(
+                target_entity,
+                name=self.name,
+                effect_source_uuid=source_uuid,
             )
-            sub_conditions_application_event = target_entity.add_condition(
-                incapacitated_condition,
-                parent_event=execution_event,
-            )
-            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
-                sub_conditions_uuids.append(incapacitated_condition.uuid)
 
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 update={"condition": self},
-                status_message=f"Applied Incapacitated to {target_entity.name}",
-            )
-
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_auto_hit_uuid = dex_save.bonus.self_static.add_auto_hit_modifier(
-                AutoHitModifier(
-                    name="Petrified",
-                    value=AutoHitStatus.AUTOMISS,
-                    source_entity_uuid=target_uuid,
-                    target_entity_uuid=source_uuid,
-                )
-            )
-            outs.append((dex_save.bonus.uuid, dex_save_auto_hit_uuid))
-
-            str_save = target_entity.saving_throws.get_saving_throw("strength")
-            str_save_auto_hit_uuid = str_save.bonus.self_static.add_auto_hit_modifier(
-                AutoHitModifier(
-                    name="Petrified",
-                    value=AutoHitStatus.AUTOMISS,
-                    source_entity_uuid=target_uuid,
-                    target_entity_uuid=source_uuid,
-                )
-            )
-            outs.append((str_save.bonus.uuid, str_save_auto_hit_uuid))
-            effect_event = effect_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
-                status_message=f"Applied Petrified STR and DEX save failure modifiers to {target_entity.name}",
-            )
-
-            to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(
-                AdvantageModifier(
-                    name="Petrified",
-                    value=AdvantageStatus.ADVANTAGE,
-                    source_entity_uuid=target_uuid,
-                    target_entity_uuid=source_uuid,
-                )
-            )
-            outs.append((target_entity.equipment.ac_bonus.uuid, to_target_static_uuid))
-            effect_event = effect_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
-                status_message=f"Applied Petrified attacker advantage modifier to {target_entity.name}",
+                status_message=f"Applied Petrified severe-control transform to {target_entity.name}",
             )
 
             for damage_type in DamageType:
@@ -1122,7 +1131,7 @@ class Petrified(BaseCondition):
                 update={"condition": self},
                 status_message=f"Applied Petrified all-damage resistance and poison immunity to {target_entity.name}",
             )
-            return outs, [], sub_conditions_uuids, [], effect_event
+            return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {target_uuid} is not an entity but {type(target_entity)}")
 
@@ -1175,6 +1184,16 @@ class Prone(BaseCondition):
     """
     name: str = Field(default="Prone", description="Condition name.")
     description: str = Field(default="A prone creature has disadvantage on all attack rolls. Attack rolls against the creature have advantage if within 5ft, disadvantage otherwise. Automatically stands at turn start (costs half movement).", description="Condition description.")
+    _suppress_immediate_stand: bool = PrivateAttr(default=False)
+
+    def suppress_immediate_stand_for_application(self) -> None:
+        """Keep this application prone through the current turn.
+
+        Ordinary Prone applications during the target's turn still use the
+        immediate stand branch. Rules that explicitly require the creature to
+        remain prone for that turn may opt out before adding the condition.
+        """
+        self._suppress_immediate_stand = True
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1183,7 +1202,10 @@ class Prone(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity, Entity):
-            if target_entity.is_my_turn:
+            if (
+                target_entity.is_my_turn
+                and not self._suppress_immediate_stand
+            ):
                 base_movement = target_entity.action_economy.get_base_value("movement")
                 half_movement = base_movement // 2
                 current_movement = target_entity.action_economy.movement.normalized_score
@@ -1204,46 +1226,28 @@ class Prone(BaseCondition):
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
                                                        status_message=f"Applied Prone to {target_entity.name}")
 
-            to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(
-                modifier=ContextualAdvantageModifier(name="Prone", source_entity_uuid=self.target_entity_uuid,
-                                                     target_entity_uuid=self.source_entity_uuid, callable=self.prone_distance_advantage)
+            outs.extend(
+                apply_prone_geometry_transform(
+                    target_entity,
+                    name=self.name,
+                    effect_source_uuid=self.source_entity_uuid,
+                )
             )
-            outs.append((target_entity.equipment.ac_bonus.uuid, to_target_contextual_uuid))
             return outs, handler_uuids, [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
-    @staticmethod
-    def prone_distance_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
-        """Return attacker advantage or disadvantage based on distance to target.
-
-        Args:
-            source_entity_uuid: UUID of the prone creature.
-            target_entity_uuid: UUID of the attacker, if known.
-            context: Optional contextual data from modifier evaluation.
-
-        Returns:
-            Advantage within five feet, disadvantage beyond five feet, or None.
-        """
-        if target_entity_uuid:
-            target_entity = Entity.get(target_entity_uuid)
-            source_entity = Entity.get(source_entity_uuid)
-            if isinstance(source_entity, Entity) and isinstance(target_entity, Entity):
-                distance = source_entity.senses.get_feet_distance(target_entity.position)
-                if distance <= 5:
-                    return AdvantageModifier(name="Prone", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
-                else:
-                    return AdvantageModifier(name="Prone", value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
-        return None
-
-
 class Stunned(BaseCondition):
-    """Severe condition that adds Incapacitated, save failures, and attacker advantage."""
+    """Severe condition owning incapacitation, save failures, and vulnerability."""
 
     name: str = Field(default="Stunned", description="Condition name.")
     description: str = Field(
         default="A stunned creature is incapacitated (see the condition), can't move, and can't speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage.",
         description="Condition description.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Stunning removes the target's turn agency.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -1253,33 +1257,22 @@ class Stunned(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
-            sub_conditions_uuids: List[UUID] = []
-
-            execution_event = declaration_event.phase_to(EventPhase.EXECUTION,update={"condition":self},status_message=f"Applying Incapacitated sub-condition to {target_entity.name}")
-
-            incapacitated_condition = Incapacitated(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid,parent_condition=self.uuid)
-            sub_conditions_application_event = target_entity.add_condition(incapacitated_condition,parent_event=execution_event)
-            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
-                sub_condition_applied = True
-                sub_conditions_uuids.append(incapacitated_condition.uuid)
-            else:
-                sub_condition_applied = False
-
-            effect_event = execution_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated to {target_entity.name}" if sub_condition_applied else f"Failed to apply Incapacitated to {target_entity.name}")
-
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_auto_hit_uuid = dex_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Stunned",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((dex_save.bonus.uuid,dex_save_auto_hit_uuid))
-            str_save = target_entity.saving_throws.get_saving_throw("strength")
-            str_save_auto_hit_uuid = str_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Stunned",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((str_save.bonus.uuid,str_save_auto_hit_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Stunned STR and DEX saves auto hit modifiers to {target_entity.name}" if sub_condition_applied else f"Failed to apply Stunned STR and DEX saves auto hit modifiers to {target_entity.name}")
-
-            to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Stunned",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Stunned to target advantage modifier to {target_entity.name}" if sub_condition_applied else f"Failed to apply Stunned to target advantage modifier to {target_entity.name}")
-            return outs, [], sub_conditions_uuids, [], effect_event
+            execution_event = declaration_event.phase_to(
+                EventPhase.EXECUTION,
+                update={"condition": self},
+                status_message=f"Applying Stunned transform to {target_entity.name}",
+            )
+            outs = apply_stunned_transform(
+                target_entity,
+                name=self.name,
+                effect_source_uuid=self.source_entity_uuid,
+            )
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Stunned transform to {target_entity.name}",
+            )
+            return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
@@ -1317,12 +1310,16 @@ class Restrained(BaseCondition):
 
 
 class Unconscious(BaseCondition):
-    """Severe condition combining Incapacitated, save failures, and prone-like defense."""
+    """Severe condition owning the complete unconscious mechanical transform."""
 
     name: str = Field(default="Unconscious", description="Condition name.")
     description: str = Field(
         default="An unconscious creature is incapacitated (see the condition), can't move, and can't speak. The creature automatically fails Strength and Dexterity saving throws. Attack rolls against the creature have advantage.",
         description="Condition description.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Unconsciousness removes the target's turn agency.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -1332,134 +1329,24 @@ class Unconscious(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
-            sub_conditions_uuids = []
-            execution_event = declaration_event.phase_to(EventPhase.EXECUTION,update={"condition":self},status_message=f"Applying Incapacitated sub-condition to {target_entity.name}")
-            incapacitated_condition = Incapacitated(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid,parent_condition=self.uuid)
-            sub_conditions_application_event = target_entity.add_condition(incapacitated_condition,parent_event=execution_event)
-            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
-                sub_condition_applied= True
-                sub_conditions_uuids.append(incapacitated_condition.uuid)
-            else:
-                sub_condition_applied= False
-
-            effect_event = execution_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Incapacitated to {target_entity.name}" if sub_condition_applied else f"Failed to apply Incapacitated to {target_entity.name}")
-
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
-            dex_save_auto_hit_uuid = dex_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Unconscious",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((dex_save.bonus.uuid,dex_save_auto_hit_uuid))
-            str_save = target_entity.saving_throws.get_saving_throw("strength")
-            str_save_auto_hit_uuid = str_save.bonus.self_static.add_auto_hit_modifier(AutoHitModifier(name="Unconscious",value=AutoHitStatus.AUTOMISS,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((str_save.bonus.uuid,str_save_auto_hit_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Unconscious STR and DEX saves auto hit modifiers to {target_entity.name}" if sub_condition_applied else f"Failed to apply Unconscious STR and DEX saves auto hit modifiers to {target_entity.name}")
-
-            to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Unconscious",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Unconscious to target contextual advantage modifier to {target_entity.name}" if sub_condition_applied else f"Failed to apply Unconscious to target contextual advantage modifier to {target_entity.name}")
-            to_target_contextual_critical_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_critical_modifier(modifier=ContextualCriticalModifier(name="Unconscious",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=Paralyzed.paralyzed_distance_critical))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_critical_uuid))
-            to_target_contextual_advantage_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Unconscious",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=Prone.prone_distance_advantage))
-            outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_advantage_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Unconscious to target contextual advantage modifier to {target_entity.name}" if sub_condition_applied else f"Failed to apply Unconscious to target contextual advantage modifier to {target_entity.name}")
-            return outs, [], sub_conditions_uuids, [], effect_event
-        else:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-
-
-class Dead(BaseCondition):
-    """Death condition that prevents action and keeps the entity registered.
-
-    The condition adds Incapacitated as a subcondition and clears attached light
-    sources. Encounter death handling separately marks the entity non-blocking.
-    """
-    name: str = Field(default="Dead", description="Condition name.")
-    description: str = Field(default="The entity has died and cannot act.", description="Condition description.")
-
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        if not self.target_entity_uuid:
-            raise ValueError("Target entity UUID is not set")
-        target_entity = Entity.get(self.target_entity_uuid)
-        if not target_entity:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
-        elif isinstance(target_entity, Entity):
-            outs: List[Tuple[UUID,UUID]] = []
-            sub_conditions_uuids: List[UUID] = []
-
             execution_event = declaration_event.phase_to(
                 EventPhase.EXECUTION,
                 update={"condition": self},
-                status_message=f"Applying Incapacitated sub-condition to {target_entity.name}"
+                status_message=f"Applying Unconscious transform to {target_entity.name}",
             )
-            incapacitated_condition = Incapacitated(
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                parent_condition=self.uuid
+            outs = apply_unconscious_transform(
+                target_entity,
+                name=self.name,
+                effect_source_uuid=self.source_entity_uuid,
             )
-            sub_conditions_application_event = target_entity.add_condition(
-                incapacitated_condition,
-                parent_event=execution_event,
-                check_save_throw=False
-            )
-            if sub_conditions_application_event is not None and sub_conditions_application_event.phase == EventPhase.COMPLETION:
-                sub_conditions_uuids.append(incapacitated_condition.uuid)
-
-            grid = get_map()
-            grid.cleanup_block_light_sources(self.target_entity_uuid)
-
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 update={"condition": self},
-                status_message=f"Applied Dead condition to {target_entity.name}"
+                status_message=f"Applied Unconscious transform to {target_entity.name}",
             )
-            return outs, [], sub_conditions_uuids, [], effect_event
+            return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-
-
-def death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-    """Apply Dead condition when entity dies.
-
-    Args:
-        event: Candidate death event.
-        source_entity_uuid: Entity UUID that owns the death handler.
-
-    Returns:
-        None; the death event is not modified.
-    """
-
-    if not isinstance(event, DeathEvent) or event.entity_uuid != source_entity_uuid:
-        return None
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity or "Dead" in entity.active_conditions:
-        return None
-
-    dead_condition = Dead(
-        source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=source_entity_uuid
-    )
-    entity.add_condition(dead_condition, parent_event=event, check_save_throw=False)
-
-    entity.non_blocking = True
-    get_map().invalidate_occupancy_paths()
-
-    return None
-
-
-def create_death_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create handler that applies Dead condition on DEATH event.
-
-    This handler is registered for all entities via setup_standard_actions().
-    When a DEATH event fires for this entity, it applies the Dead condition.
-    """
-    return EventHandler(
-        name="Death Condition Handler",
-        source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[
-            Trigger(event_type=EventType.DEATH, event_phase=EventPhase.EXECUTION)
-        ],
-        event_processor=death_processor
-    )
 
 
 class ConcentrationSlot(BaseObject):
@@ -1742,7 +1629,7 @@ class ConcentrationActionMarker(BaseCondition):
     """
     name: str = "Concentration Action"
     description: str = "Tracking concentration on an action-grant spell"
-    condition_category: ConditionCategory = ConditionCategory.STATUS
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
     action_name: str = ""
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -1809,8 +1696,13 @@ class Hidden(BaseCondition):
     """
     name: str = Field(default="Hidden", description="Condition name.")
     description: str = Field(default="Hidden from observers via Stealth", description="Condition description.")
+    obscures_perceivability: bool = Field(default=True, description="Removing hidden status may reveal the target.")
     stealth_result: int = Field(default=0, description="Stealth check result used as perception DC.")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition.")
+
+    def format_application_log(self, target_name: str) -> str:
+        """Render the hidden-specific application message with its Stealth DC."""
+        return f"{{cyan:{target_name}}} gains **Hidden** (Stealth DC {self.stealth_result})"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1931,7 +1823,10 @@ def hidden_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[
         return None
 
     if event.event_type == EventType.CONDITION_APPLICATION:
-        if not isinstance(event, ConditionApplicationEvent) or event.condition.name != "Incapacitated":
+        if (
+            not isinstance(event, ConditionApplicationEvent)
+            or event.condition.agency_denial is not ConditionAgencyDenial.FULL_TURN
+        ):
             return None
 
     if event.event_type == EventType.BASE_ACTION:
@@ -1954,7 +1849,12 @@ class InvisibilityEffect(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="Invisible until attacking or casting a spell", description="Condition description.")
+    obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition.")
+
+    def format_application_log(self, target_name: str) -> str:
+        """Render the invisibility-specific application message."""
+        return f"{{cyan:{target_name}}} becomes **invisible**"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -2059,9 +1959,14 @@ class GreaterInvisibilityEffect(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="Greater Invisibility - Stealth check to maintain", description="Condition description.")
+    obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
     check_count: int = Field(default=0, description="Number of successful stealth checks")
     base_dc: int = Field(default=15, description="Starting DC for stealth check")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
+
+    def format_application_log(self, target_name: str) -> str:
+        """Render the invisibility-specific application message."""
+        return f"{{cyan:{target_name}}} becomes **invisible**"
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if self.duration.duration_type is DurationType.PERMANENT and self.duration.duration is None:
@@ -2245,7 +2150,6 @@ class ConditionType(str, Enum):
     BLINDED = "BLINDED"
     CHARMED = "CHARMED"
     DASHING = "DASHING"
-    DEAD = "DEAD"
     DEAFENED = "DEAFENED"
     DISENGAGING = "DISENGAGING"
     DODGING = "DODGING"
@@ -2267,7 +2171,6 @@ CONDITION_MAP: Dict[ConditionType, Type[BaseCondition]] = {
     ConditionType.BLINDED: Blinded,
     ConditionType.CHARMED: Charmed,
     ConditionType.DASHING: Dashing,
-    ConditionType.DEAD: Dead,
     ConditionType.DEAFENED: Deafened,
     ConditionType.DISENGAGING: Disengaging,
     ConditionType.DODGING: Dodging,

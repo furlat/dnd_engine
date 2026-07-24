@@ -35,8 +35,8 @@ from ai.policy.host import (
 from ai.policy.routines import RoutinePlan
 from ai.policy.source import POLICY_NAME
 from ai.policy.memory import PolicyMemoryStore
-from ai.protocol.control import CommandResult
-from ai.protocol.semantics import (
+from server.agent_protocol.control import CommandResult
+from server.agent_protocol.semantics import (
     ComparisonOperator,
     EffectOperation,
     FactExpression,

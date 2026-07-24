@@ -6,9 +6,8 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_actions import BaseAction, ActionEvent, TargetType, Cost
-from dnd.core.base_conditions import (
-    BaseCondition, ConditionCategory,
-)
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import (
     Event, EventPhase,
     RangeType, Range,
@@ -227,6 +226,11 @@ class MarkTargetAction(BaseAction):
 
         if not source or not target:
             return declaration_event.cancel(status_message="Source or target not found")
+
+        if "Mark Cooldown" in source.active_conditions:
+            return declaration_event.cancel(
+                status_message="Mark Target is unavailable until the cooldown ends"
+            )
 
         if target.uuid not in source.senses.entities:
             return declaration_event.cancel(status_message="Target not in line of sight")

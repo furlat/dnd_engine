@@ -20,10 +20,14 @@ from dnd.core.events import (
     EventType,
     Trigger,
 )
-from dnd.blocks.equipment import WeaponSlot, Weapon, WeaponEquipEvent, WeaponUnequipEvent
+from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
+from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
-from dnd.conditions import create_has_attacked_handler, create_has_taken_damage_handler, create_death_handler
+from dnd.conditions import (
+    create_has_attacked_handler,
+    create_has_taken_damage_handler,
+)
 from dnd.spells import ALL_SPELLS
 from dnd.blocks.base_item import UsableItem, consume_item_charge_before_action_completion
 from dnd.core.base_block import BaseBlock
@@ -31,7 +35,6 @@ from dnd.core.base_block import BaseBlock
 STANDARD_ENTITY_HANDLER_NAMES = {
     "HasAttacked Tracker",
     "HasTakenDamage Tracker",
-    "Death Condition Handler",
     "Prone Auto-Stand",
 }
 
@@ -97,7 +100,6 @@ def setup_standard_actions(entity: Entity) -> None:
 
     entity.add_event_handler(create_has_attacked_handler(entity.uuid))
     entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
-    entity.add_event_handler(create_death_handler(entity.uuid))
     entity.add_event_handler(_create_prone_auto_stand_handler(entity.uuid))
 
 
@@ -261,31 +263,34 @@ def _parse_spell_variant_template_name(template_name: str) -> Tuple[str, Optiona
 
 
 def _resolve_executable_template(entity: Entity, template_name: str) -> BaseAction:
-    """Resolve a registered template or generated spell variant.
+    """Resolve a registered template or generated discovery variant.
 
     Args:
         entity: Acting entity.
         template_name: Action name from discovery.
 
     Returns:
-        Registered template or generated non-template spell variant.
+        Registered template or generated non-template discovery variant.
 
     Raises:
         ValueError: If no matching template can be resolved.
     """
     base_name, cast_at_level = _parse_spell_variant_template_name(template_name)
     template = entity.get_action_template(base_name)
-    if template is None:
-        raise ValueError(f"No template named {template_name}")
+    if template is not None:
+        if cast_at_level is None:
+            return template
+        create_variant = getattr(template, "_create_variant", None)
+        if not template.is_spell or not callable(create_variant):
+            raise ValueError(f"Action {template_name} is not a spell variant")
+        variant_factory = cast(Callable[..., BaseAction], create_variant)
+        return variant_factory(cast_at_level=cast_at_level)
 
-    if cast_at_level is None:
-        return template
-
-    create_variant = getattr(template, "_create_variant", None)
-    if not template.is_spell or not callable(create_variant):
-        raise ValueError(f"Action {template_name} is not a spell variant")
-    variant_factory = cast(Callable[..., BaseAction], create_variant)
-    return variant_factory(cast_at_level=cast_at_level)
+    for registered_template in entity.registered_actions:
+        for variant in registered_template.get_discovery_variants(entity):
+            if variant.get_discovery_template_name() == template_name:
+                return variant
+    raise ValueError(f"No template named {template_name}")
 
 
 def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
@@ -638,7 +643,14 @@ def execute_use_action(
     clean_name = action_name.split("__item_")[0] if "__item_" in action_name else action_name
 
     templates = item.get_use_actions(entity.uuid)
-    template = next((a for a in templates if a.name == clean_name), None)
+    template = next(
+        (
+            action
+            for action in templates
+            if action.get_discovery_template_name() == clean_name
+        ),
+        None,
+    )
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
 

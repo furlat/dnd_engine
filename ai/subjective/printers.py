@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ai.observation.models import SubjectiveWorldState
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.subjective.models import AgentState
 
 

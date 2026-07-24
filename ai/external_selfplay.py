@@ -12,8 +12,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from ai.knowledge import AgentFacts, derive_agent_facts
-from ai.observation import ObservationAccessError, iter_observation_frames
-from ai.observation.models import SubjectiveWorldState
+from server.agent_runtime.observation_projector import (
+    ObservationAccessError,
+    iter_observation_frames,
+)
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.policy import (
     command_from_policy_decision,
     ExecuteIntent,
@@ -31,14 +34,14 @@ from ai.policy.generations.registry import (
     CANDIDATE_GENERATION_ID,
     get_policy_implementation,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionEconomyState,
     AgentEndTurnCommandRequest,
     AgentExecuteCommandRequest,
     CommandResult,
     CommandResultStatus,
 )
-from ai.runtime_performance import latency_sensitive_gc
+from server.runtime_performance import latency_sensitive_gc
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
 from dnd.controller import ExternalAIController
 from dnd.core.combat_log import CombatLogEntry

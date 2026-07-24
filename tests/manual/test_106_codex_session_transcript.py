@@ -16,15 +16,15 @@ from ai.codex_tools.representation.profiles import (
     BALANCED_V2_PROFILE_ID,
     build_builtin_representation_registry,
 )
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     ObservationFrame,
     ObservationFrameType,
     ObservationSessionState,
     ObservationSnapshot,
     ObservationSourceKind,
 )
-from ai.protocol.control import CommandResult, CommandResultStatus
-from ai.subjective.models import AgentEvent
+from server.agent_protocol.control import CommandResult, CommandResultStatus
+from server.agent_protocol.telemetry import AgentEvent
 
 
 def test_transcript_retains_complete_subjective_lifecycle_with_digest_chain(tmp_path) -> None:

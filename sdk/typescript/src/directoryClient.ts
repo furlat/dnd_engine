@@ -15,6 +15,7 @@ import type {
   HostedGameListResponse,
   ObserveHostedGameRequest,
   ObserveHostedGameResponse,
+  ObjectiveReplayBundle,
   PlayerIdentityRequest,
   PlayerIdentityResponse,
   PlayerProfileResponse,
@@ -24,6 +25,7 @@ import type {
   SdkModelName,
   StopHostedGameRequest,
   StopHostedGameResponse,
+  SubjectivePlayerReplayBundle,
 } from "./generated/contracts.generated.js";
 import { DndEngineClient, DndHttpError } from "./client.js";
 import {
@@ -32,6 +34,7 @@ import {
   type DirectorySseEnvelope,
 } from "./sse.js";
 import { decodeModel, parseJson } from "./validation.js";
+import { assertObjectiveReplay, assertSubjectivePlayerReplay } from "./replay.js";
 
 export interface DirectoryPrincipalCredential {
   readonly principalId: string;
@@ -222,6 +225,35 @@ export class GameDirectoryClient {
     );
   }
 
+  async getObjectiveReplay(
+    gameId: string,
+    credential: DirectoryPrincipalCredential,
+    signal?: AbortSignal,
+  ): Promise<ObjectiveReplayBundle> {
+    const replay = await this.requestModel(
+      "ObjectiveReplayBundle",
+      `/games/${encodeURIComponent(gameId)}/diagnostics/objective-replay`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+    assertObjectiveReplay(replay);
+    return replay;
+  }
+
+  async getSubjectiveReplay(
+    gameId: string,
+    membershipId: string,
+    credential: DirectoryPrincipalCredential,
+    signal?: AbortSignal,
+  ): Promise<SubjectivePlayerReplayBundle> {
+    const replay = await this.requestModel(
+      "SubjectivePlayerReplayBundle",
+      `/games/${encodeURIComponent(gameId)}/memberships/${encodeURIComponent(membershipId)}/replay`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+    assertSubjectivePlayerReplay(replay);
+    return replay;
+  }
+
   runtimeClient(connection: HostedGameConnection): DndEngineClient {
     return new DndEngineClient(connection.engine_base_url, {
       fetchImplementation: this.fetchImplementation,
@@ -259,10 +291,14 @@ export class GameDirectoryClient {
     const reader = response.body.getReader();
     const textDecoder = new TextDecoder();
     const sseDecoder = new SseDecoder();
+    let completed = false;
     try {
       while (true) {
         const chunk = await reader.read();
-        if (chunk.done) break;
+        if (chunk.done) {
+          completed = true;
+          break;
+        }
         const text = textDecoder.decode(chunk.value, { stream: true });
         for (const message of sseDecoder.feed(text)) {
           yield decodeDirectoryEnvelope(message);
@@ -273,6 +309,7 @@ export class GameDirectoryClient {
         yield decodeDirectoryEnvelope(message);
       }
     } finally {
+      if (!completed) await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }
@@ -293,14 +330,29 @@ export class GameDirectoryClient {
     let reconnectDelay = initialDelay;
     while (!options.signal?.aborted) {
       await options.onConnectionState?.("connecting");
+      const stream = this.events(
+        cursor,
+        options.credential,
+        options.signal,
+      );
+      const iterator = stream[Symbol.asyncIterator]();
       try {
-        for await (const envelope of this.events(
-          cursor,
-          options.credential,
-          options.signal,
-        )) {
+        while (true) {
+          let next: IteratorResult<DirectorySseEnvelope>;
+          try {
+            next = await iterator.next();
+          } catch (error) {
+            if (options.signal?.aborted) return;
+            if (!isRetryableDirectoryTransportError(error)) throw error;
+            break;
+          }
+          if (next.done) break;
+
+          const envelope = next.value;
           if (options.signal?.aborted) return;
           reconnectDelay = initialDelay;
+          // Consumer callbacks are not transport operations. In particular, a
+          // callback TypeError must propagate rather than trigger a reconnect.
           await options.onConnectionState?.("connected");
           if (envelope.event === "directory_event") {
             if (envelope.data.cursor <= cursor) continue;
@@ -311,9 +363,8 @@ export class GameDirectoryClient {
           await options.onEnvelope?.(envelope);
           if (envelope.event === "evicted") break;
         }
-      } catch (error) {
-        if (options.signal?.aborted) return;
-        if (!isRetryableDirectoryTransportError(error)) throw error;
+      } finally {
+        await iterator.return?.(undefined);
       }
 
       if (options.signal?.aborted) return;

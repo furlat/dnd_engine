@@ -26,6 +26,7 @@ from dnd.core import dice as dice_module
 from dnd.core.dice import AttackOutcome
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     DeathSaveEvent,
     DeathEvent,
@@ -38,9 +39,9 @@ from dnd.core.events import (
     SpatialChangeEvent,
     StepMovementEvent,
     TakeDamageEvent,
-    WeaponSlot,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import DamageType, NumericalModifier, Size
 from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
@@ -142,6 +143,7 @@ def strong_entity(
     weight: int = 120,
     size: Size = Size.MEDIUM,
     uses_death_saves: bool = False,
+    setup_actions: bool = True,
 ) -> Entity:
     """Create a deterministic configured entity for movement and shove cases."""
     config = EntityConfig(
@@ -166,7 +168,8 @@ def strong_entity(
         uses_death_saves=uses_death_saves,
     )
     entity = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
-    setup_standard_actions(entity)
+    if setup_actions:
+        setup_standard_actions(entity)
     return entity
 
 
@@ -393,7 +396,7 @@ def test_eb_10_017_lethal_opportunity_attack_stops_before_leaving_reach() -> Non
 
     assert move_event is not None
     assert move_event.phase == EventPhase.COMPLETION
-    assert "Dead" in mover.active_conditions
+    assert mover.health.life_state is LifeState.DEAD
     assert mover.get_hp() <= 0
     assert hp_before - mover.get_hp() >= hp_before
     assert mover.position == (5, 6)
@@ -698,7 +701,7 @@ def test_eb_10_008_dash_damage_healing_and_death_use_events() -> None:
         source_entity_uuid=hero.uuid,
     )
 
-    assert "Dead" in fatal_target.active_conditions
+    assert fatal_target.health.life_state is LifeState.DEAD
     assert EventQueue.get_events_by_type(EventType.DEATH)
 
 
@@ -724,9 +727,10 @@ def test_eb_10_023_default_zero_hp_uses_monster_style_death() -> None:
 
     assert damage_taken == hp_before
     assert monster_style.get_normal_hp() == 0
-    assert "Dead" in monster_style.active_conditions
-    assert "Incapacitated" in monster_style.active_conditions
+    assert monster_style.health.life_state is LifeState.DEAD
+    assert "Incapacitated" not in monster_style.active_conditions
     assert "Unconscious" not in monster_style.active_conditions
+    assert monster_style.action_economy.action_permission.normalized_score == 0
     assert death_events
     assert death_events[-1].final_hp == 0
     assert not monster_style.uses_death_saves
@@ -740,7 +744,7 @@ def test_eb_10_023_default_zero_hp_uses_monster_style_death() -> None:
     assert turn_start.phase == EventPhase.COMPLETION
     assert len(EventQueue.get_events_by_type(EventType.D20_ROLL_RESULT)) == d20_events_before
     assert monster_style.get_normal_hp() == 0
-    assert "Dead" in monster_style.active_conditions
+    assert monster_style.health.life_state is LifeState.DEAD
 
 
 def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
@@ -760,9 +764,11 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
     assert hero.get_normal_hp() == 0
     assert not hero.has_hp
     assert hero.is_dying
-    assert "Dead" not in hero.active_conditions
-    assert "Unconscious" in hero.active_conditions
-    assert "Incapacitated" in hero.active_conditions
+    assert hero.health.life_state is LifeState.DYING
+    assert "Unconscious" not in hero.active_conditions
+    assert "Incapacitated" not in hero.active_conditions
+    assert hero.action_economy.action_permission.normalized_score == 0
+    assert hero.senses.visual_access.normalized_score == 0
     assert not hero.is_stable
 
     with fixed_dice(9):
@@ -770,14 +776,14 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
 
     assert hero.death_save_failures == 1
     assert hero.death_save_successes == 0
-    assert "Dead" not in hero.active_conditions
+    assert hero.health.life_state is LifeState.DYING
 
     with fixed_dice(10):
         hero.on_turn_start(round_number=2, turn_index=0)
 
     assert hero.death_save_failures == 1
     assert hero.death_save_successes == 1
-    assert "Dead" not in hero.active_conditions
+    assert hero.health.life_state is LifeState.DYING
 
     with fixed_dice(1):
         hero.on_turn_start(round_number=3, turn_index=0)
@@ -792,7 +798,7 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
     assert death_save_events[-1].natural_roll == 1
     assert death_save_events[-1].failures == 3
     assert death_save_events[-1].died
-    assert "Dead" in hero.active_conditions
+    assert hero.health.life_state is LifeState.DEAD
     assert "Unconscious" not in hero.active_conditions
 
 
@@ -811,6 +817,7 @@ def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> No
         natural_twenty.on_turn_start(round_number=1, turn_index=0)
     assert natural_twenty.get_normal_hp() == 1
     assert natural_twenty.has_hp
+    assert natural_twenty.health.life_state is LifeState.ALIVE
     assert "Unconscious" not in natural_twenty.active_conditions
     assert natural_twenty.death_save_successes == 0
     assert natural_twenty.death_save_failures == 0
@@ -828,7 +835,9 @@ def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> No
     assert stable_hero.is_stable
     assert stable_hero.death_save_successes == 0
     assert stable_hero.death_save_failures == 0
-    assert "Unconscious" in stable_hero.active_conditions
+    assert stable_hero.health.life_state is LifeState.STABLE
+    assert "Unconscious" not in stable_hero.active_conditions
+    assert stable_hero.action_economy.action_permission.normalized_score == 0
 
     death_save_count = len(EventQueue.get_events_by_type(EventType.DEATH_SAVE))
     with fixed_dice(1):
@@ -843,11 +852,12 @@ def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> No
     )
     assert not stable_hero.is_stable
     assert stable_hero.death_save_failures == 2
-    assert "Dead" not in stable_hero.active_conditions
+    assert stable_hero.health.life_state is LifeState.DYING
 
     healed = stable_hero.receive_healing(1, source_entity_uuid=stable_hero.uuid)
     assert healed == 1
     assert stable_hero.get_normal_hp() == 1
+    assert stable_hero.health.life_state is LifeState.ALIVE
     assert "Unconscious" not in stable_hero.active_conditions
     assert stable_hero.death_save_successes == 0
     assert stable_hero.death_save_failures == 0
@@ -858,7 +868,7 @@ def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> No
         damage_type=DamageType.SLASHING,
         source_entity_uuid=enemy.uuid,
     )
-    assert "Dead" in massive_target.active_conditions
+    assert massive_target.health.life_state is LifeState.DEAD
     assert "Unconscious" not in massive_target.active_conditions
 
 
@@ -1296,7 +1306,7 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
     assert isinstance(jump_event, JumpEvent)
     assert jump_event.phase == EventPhase.COMPLETION
     assert "partial" in (jump_event.status_message or "").lower()
-    assert "Dead" in jumper.active_conditions
+    assert jumper.health.life_state is LifeState.DEAD
     assert jumper.get_hp() <= 0
     assert hp_before - jumper.get_hp() >= hp_before
     assert jumper.position == (5, 6)

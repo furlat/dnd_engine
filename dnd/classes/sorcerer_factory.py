@@ -16,7 +16,8 @@ from dnd.actions_functional import setup_standard_actions, register_spells_by_na
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig, WeaponSlot, UnarmoredAc
+from dnd.blocks.equipment import EquipmentConfig
+from dnd.core.equipment_types import UnarmoredAc, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.blocks.appearance import AppearanceConfig

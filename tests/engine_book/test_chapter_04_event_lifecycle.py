@@ -1,6 +1,6 @@
 """Engine book parity tests for event lifecycle behavior."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
@@ -585,7 +585,7 @@ def test_eb_04_013_event_stream_cursors_are_append_stable_not_timestamp_sorted()
     late_backdated = Event(
         source_entity_uuid=uuid4(),
         event_type=EventType.BASE_ACTION,
-        timestamp=datetime.now() - timedelta(days=1),
+        timestamp=datetime.now(UTC) - timedelta(days=1),
         use_register=False,
     )
     EventQueue.register(late_backdated)

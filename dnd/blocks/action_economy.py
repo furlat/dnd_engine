@@ -3,10 +3,11 @@
 from typing import Optional, List, Tuple, Dict
 from uuid import UUID, uuid4
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
+from dnd.core.action_types import RestrictedActionGrant
 
 from dnd.core.base_block import BaseBlock
 
@@ -113,6 +114,22 @@ class ActionEconomy(BaseBlock):
         ),
         description="Movement budget in feet.",
     )
+    action_permission: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=1,
+            value_name="Action Permission",
+        ),
+        description="Neutral 1/0 gate for whether this entity may take actions.",
+    )
+    provokes_opportunity_attacks: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=uuid4(),
+            base_value=1,
+            value_name="Provokes Opportunity Attacks",
+        ),
+        description="Neutral 1/0 gate for voluntary-movement opportunity attacks.",
+    )
     spell_slot_1: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Spell Slot 1"),
         description="Available level 1 spell slots.",
@@ -153,6 +170,86 @@ class ActionEconomy(BaseBlock):
         default_factory=dict,
         description="Named limited-use resources keyed by resource name.",
     )
+    _restricted_action_grants: Dict[str, RestrictedActionGrant] = PrivateAttr(
+        default_factory=dict,
+    )
+
+    def add_restricted_action_grant(
+        self,
+        grant: RestrictedActionGrant,
+    ) -> None:
+        """Install one owned restricted budget at full turn uses."""
+        existing = self._restricted_action_grants.get(grant.grant_id)
+        if existing is not None:
+            existing_contract = (
+                existing.resource_name,
+                existing.display_name,
+                existing.allowed_kinds,
+                existing.replaced_cost_types,
+                existing.uses_per_turn,
+            )
+            incoming_contract = (
+                grant.resource_name,
+                grant.display_name,
+                grant.allowed_kinds,
+                grant.replaced_cost_types,
+                grant.uses_per_turn,
+            )
+            if existing_contract != incoming_contract:
+                raise ValueError(
+                    f"restricted action grant {grant.grant_id!r} "
+                    "already exists with a different contract"
+                )
+        elif grant.resource_name in self.resources:
+            raise ValueError(
+                f"restricted action resource {grant.resource_name!r} "
+                "already exists without this grant"
+            )
+        resource_owner = next(
+            (
+                item
+                for item in self._restricted_action_grants.values()
+                if item.grant_id != grant.grant_id
+                and item.resource_name == grant.resource_name
+            ),
+            None,
+        )
+        if resource_owner is not None:
+            raise ValueError(
+                f"restricted action resource {grant.resource_name!r} "
+                f"is owned by {resource_owner.grant_id!r}"
+            )
+        self._restricted_action_grants[grant.grant_id] = grant
+        self.add_resource(
+            grant.resource_name,
+            grant.uses_per_turn,
+            RechargeType.TURN_START,
+        )
+
+    def remove_restricted_action_grant(
+        self,
+        grant_id: str,
+        owner_uuid: UUID,
+    ) -> None:
+        """Remove a grant only when the requesting condition still owns it."""
+        grant = self._restricted_action_grants.get(grant_id)
+        if grant is None or grant.owner_uuid != owner_uuid:
+            return
+        del self._restricted_action_grants[grant_id]
+        if not any(
+            item.resource_name == grant.resource_name
+            for item in self._restricted_action_grants.values()
+        ):
+            self.remove_resource(grant.resource_name)
+
+    def get_restricted_action_grants(
+        self,
+    ) -> tuple[RestrictedActionGrant, ...]:
+        """Return current grants in deterministic identity order."""
+        return tuple(
+            self._restricted_action_grants[grant_id]
+            for grant_id in sorted(self._restricted_action_grants)
+        )
 
     def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None:
         """Add a named resource at full uses."""

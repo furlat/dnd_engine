@@ -5,7 +5,7 @@ import logging
 import httpx
 import pytest
 
-from ai.subjective.models import AgentEvent
+from server.agent_protocol.telemetry import AgentEvent
 from ai.subjective.runtime import HttpAgentEventSink
 from server import event_server
 from server.agent_event_stream import AgentEventStream

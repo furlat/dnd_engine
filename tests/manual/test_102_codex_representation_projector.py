@@ -39,7 +39,7 @@ from ai.codex_tools.representation.projector import (
     RepresentationProjectionInput,
 )
 from ai.knowledge.deriver import derive_agent_facts
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -48,7 +48,7 @@ from ai.observation.models import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionBucket,
     ActionAffordance,
     ActionCapability,

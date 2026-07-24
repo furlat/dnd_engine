@@ -24,7 +24,7 @@ from ai.codex_tools.representation.inspection import (
     JsonValueType,
     capture_inspection_document,
 )
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,

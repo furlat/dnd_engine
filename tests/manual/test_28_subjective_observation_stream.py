@@ -6,20 +6,22 @@ import json
 
 from fastapi.testclient import TestClient
 
-import ai.observation.projector as observation_projector
+import server.agent_runtime.observation_projector as observation_projector
 from ai.knowledge import derive_agent_facts
-from ai.observation import apply_observation_frame, materialize_snapshot
-from ai.observation.models import ObservationFrame
+from server.agent_protocol.observation_replay import (
+    apply_observation_frame,
+    materialize_snapshot,
+)
+from server.agent_protocol.observation import ObservationFrame
 from dnd.actions_functional import execute_use_action
 from dnd.conditions import Invisible
 from dnd.controller import Controller, HumanController, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import (
     BaseCondition,
-    ConditionAgencyDenial,
-    ConditionRemovalTrigger,
     SpellProtectionRegistry,
 )
+from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
@@ -36,6 +38,7 @@ from dnd.core.events import (
     _enrich_multi_entity_log_from_children,
 )
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import AutoHitModifier, AutoHitStatus, DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
@@ -50,14 +53,14 @@ from dnd.spells.abjuration import ShieldBuff
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 from dnd.utils import set_hp
 from dnd.tiles import create_spike_zone
-from ai.observation.projector import (
+from server.agent_runtime.observation_projector import (
     _projection_cache,
     _completion_sequence_needs_immediate_projection,
     _event_should_patch_entity_hit_points,
     _event_should_patch_referenced_entities,
-    _sanitize_multi_entity_log_summary,
     observation_wakeup_stream,
 )
+from server.combat_log_projection import _sanitize_multi_entity_log_summary
 from dnd.actions import MovementEvent
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
 from server.event_server import app, sim
@@ -126,6 +129,45 @@ def create_observation_game(
         game.assign_entity(extra_hero.uuid, session.session_id)
 
     return TestClient(app), str(session.session_id), hero, monster, encounter
+
+
+def bootstrap_player_replication(client: TestClient, session_id: str) -> dict:
+    """Bind one canonical subjective partition and return its exact identities."""
+    response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def get_player_combat_log_window(
+    client: TestClient,
+    session_id: str,
+    bootstrap: dict,
+    *,
+    from_cursor: int,
+) -> dict:
+    """Read one exact identity-bound subjective combat-log cursor window."""
+    protocol = bootstrap["protocol"]
+    perspective = bootstrap["perspective"]
+    response = client.get(
+        "/replication/combat-log",
+        params={
+            "session_id": session_id,
+            "expected_source_stream_id": protocol["source_stream_id"],
+            "expected_generation_id": protocol["generation_id"],
+            "expected_perspective_epoch_id": perspective["perspective_epoch_id"],
+            "from_combat_log_cursor": from_cursor,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["source_stream_id"] == protocol["source_stream_id"]
+    assert payload["generation_id"] == protocol["generation_id"]
+    assert payload["perspective_epoch_id"] == perspective["perspective_epoch_id"]
+    assert payload["from_cursor"] == from_cursor
+    return payload
 
 
 def add_auto_hit(entity: Entity) -> UUID:
@@ -581,7 +623,7 @@ def test_condition_application_frame_matches_post_application_snapshot() -> None
         client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     )
 
-    expected = {"Incapacitated", "Paralyzed", "Hold Person"}
+    expected = {"Paralyzed", "Hold Person"}
     expected_semantic_keys = {
         f"{type(condition).__module__}.{type(condition).__qualname__}"
         for condition in monster.active_conditions.values()
@@ -590,7 +632,9 @@ def test_condition_application_frame_matches_post_application_snapshot() -> None
     assert application is not None
     assert application.phase == EventPhase.COMPLETION
     assert expected <= set(monster.active_conditions)
+    assert "Incapacitated" not in monster.active_conditions
     assert expected <= set(replayed.known_entities[str(monster.uuid)].conditions)
+    assert "Incapacitated" not in replayed.known_entities[str(monster.uuid)].conditions
     assert expected_semantic_keys <= set(
         replayed.known_entities[str(monster.uuid)].condition_semantic_keys or []
     )
@@ -950,6 +994,26 @@ def test_hidden_enemy_is_not_leaked_in_strict_snapshot() -> None:
     assert str(monster.uuid) not in initiative_uuids
 
 
+def test_current_senses_do_not_retroactively_authorize_legacy_combat_logs() -> None:
+    """Current visibility cannot supply missing event-time perception evidence."""
+    client, session_id, hero, monster, encounter = create_observation_game()
+    assert monster.uuid in hero.senses.entities
+    encounter.combat_log.append(CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name=monster.name,
+        source_uuid=str(monster.uuid),
+        compact="RETROACTIVE-LEGACY-LOG",
+        verbose="RETROACTIVE-LEGACY-LOG",
+        detailed="RETROACTIVE-LEGACY-LOG",
+    ))
+
+    snapshot = client.get(
+        f"/ai/sessions/{session_id}/observation/snapshot"
+    ).json()
+
+    assert "RETROACTIVE-LEGACY-LOG" not in json.dumps(snapshot["combat_logs"])
+
+
 def test_multi_entity_session_uses_one_stream_with_observer_tags() -> None:
     """A multi-entity controller receives one stream tagged by observer."""
     client, session_id, hero, monster, _encounter = create_observation_game(second_hero=True)
@@ -1183,7 +1247,10 @@ def test_snapshot_plus_frames_replays_to_fresh_subjective_state() -> None:
     client, session_id, hero, monster, _encounter = create_observation_game()
     before_snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     state = materialize_snapshot(before_snapshot)
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = attack_target_index(actions, monster.uuid)
     modifier_uuid = add_auto_hit(hero)
     try:
@@ -1481,7 +1548,10 @@ def test_damage_ending_control_semantics_replay_and_redact_with_visibility() -> 
     for visible in (state.known_entities[str(monster.uuid)], fresh.known_entities[str(monster.uuid)]):
         assert visible.condition_facts is not None
         fact = next(row for row in visible.condition_facts if row.semantic_key == semantic_key)
-        assert fact.removal_triggers == [ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED]
+        assert fact.removal_triggers == [
+            ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED,
+            ConditionRemovalTrigger.SHAKE_AWAKE,
+        ]
         assert fact.agency_denial is ConditionAgencyDenial.FULL_TURN
         assert fact.applied_source_event_cursor is not None
         assert encounter.current_turn_started_source_event_cursor is not None
@@ -1516,7 +1586,10 @@ def test_movement_projection_skips_redundant_child_breadcrumbs() -> None:
     client, session_id, hero, _monster, _encounter = create_observation_game()
     before_snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     state = materialize_snapshot(before_snapshot)
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = move_target_with_long_path(actions)
 
     execute = client.post(
@@ -1530,7 +1603,7 @@ def test_movement_projection_skips_redundant_child_breadcrumbs() -> None:
     )
 
     assert execute.status_code == 200
-    assert execute.json()["event_data"]["path"]
+    assert "event_data" not in execute.json()
 
     frames_payload = client.get(
         f"/ai/sessions/{session_id}/observation/frames",
@@ -1589,8 +1662,16 @@ def test_unseen_enemy_movement_does_not_leak_live_position_or_identity() -> None
     before_logs_text = json.dumps(state.combat_logs)
     assert str(hero.uuid) not in before_logs_text
     assert "Hidden Observation Hero" not in before_logs_text
+    replication_bootstrap = bootstrap_player_replication(
+        client,
+        str(monster_session.session_id),
+    )
+    combat_log_cursor = replication_bootstrap["combat_log_frames"]["through_cursor"]
 
-    hero_actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    hero_actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": str(hero_session.session_id)},
+    ).json()
     target_index = move_target_for_position(hero_actions, (1, 2))
     execute = client.post(
         "/action/execute",
@@ -1603,8 +1684,28 @@ def test_unseen_enemy_movement_does_not_leak_live_position_or_identity() -> None
     )
     assert execute.status_code == 200
 
-    raw_logs = client.get("/combat-log", params={"since": 0}).json()["entries"]
-    assert str(hero.uuid) in json.dumps(raw_logs)
+    subjective_logs = get_player_combat_log_window(
+        client,
+        str(monster_session.session_id),
+        replication_bootstrap,
+        from_cursor=combat_log_cursor,
+    )
+    assert subjective_logs["through_cursor"] > combat_log_cursor
+    movement_entries = [
+        frame["entry"]
+        for frame in subjective_logs["frames"]
+        if frame["entry"] is not None
+        and frame["entry"]["entry_type"] == CombatLogEntryType.MOVEMENT.value
+    ]
+    assert movement_entries
+    for entry in movement_entries:
+        assert entry["source_uuid"] == ""
+        assert entry["source_name"] == "Unknown"
+        assert entry["compact"] == "Something moves nearby"
+        assert entry["data"] == {"type": "movement", "observed": True}
+    subjective_logs_text = json.dumps(subjective_logs["frames"])
+    assert str(hero.uuid) not in subjective_logs_text
+    assert "Hidden Observation Hero" not in subjective_logs_text
 
     frames_payload = client.get(
         f"/ai/sessions/{monster_session.session_id}/observation/frames",
@@ -1704,15 +1805,28 @@ def test_known_enemy_movement_log_stops_at_last_perceived_step() -> None:
 
     assert len(movement["sub_entries"]) == 1
     assert movement["data"]["observation_complete"] is False
-    assert movement["data"]["observed_path_segments"] == [[[2, 1], [3, 1]]]
-    assert movement["data"]["end_position"] == [3, 1]
-    assert "(5, 1)" not in movement_text
-    assert "[5, 1]" not in movement_text
+    assert movement["data"]["observed_path_segments"] == []
+    assert "start_position" not in movement["data"]
+    assert "end_position" not in movement["data"]
+    assert "path" not in movement["data"]
+    safe_step = movement["sub_entries"][0]
+    assert safe_step["entry_type"] == CombatLogEntryType.MOVEMENT.value
+    assert safe_step["source_uuid"] == str(monster.uuid)
+    assert safe_step["data"] == {
+        "type": "movement",
+        "observation_complete": False,
+    }
+    for hidden_position in ("(2, 1)", "(3, 1)", "(4, 1)", "(5, 1)"):
+        assert hidden_position not in movement_text
+    for hidden_position in ("[2, 1]", "[3, 1]", "[4, 1]", "[5, 1]"):
+        assert hidden_position not in movement_text
 
 
 def test_subjective_combat_logs_scrub_nested_hidden_identity_payloads() -> None:
     """Nested combat-log data cannot smuggle unknown entity identities."""
-    client, session_id, hero, monster, encounter = create_observation_game(hidden_monster=True)
+    client, session_id, hero, monster, _encounter = create_observation_game(hidden_monster=True)
+    replication_bootstrap = bootstrap_player_replication(client, session_id)
+    combat_log_cursor = replication_bootstrap["combat_log_frames"]["through_cursor"]
     child_log = CombatLogEntry(
         entry_type=CombatLogEntryType.SPELL_DAMAGE,
         source_name=monster.name,
@@ -1762,14 +1876,25 @@ def test_subjective_combat_logs_scrub_nested_hidden_identity_payloads() -> None:
         sub_entries=[child_log],
         perceiver_uuids={str(hero.uuid)},
     )
-    encounter.combat_log.append(parent_log)
+    raw_log_text = parent_log.model_dump_json()
+    assert str(monster.uuid) in raw_log_text
+    assert monster.name in raw_log_text
+    EventQueue.push_combat_log(parent_log, monster.uuid)
 
-    raw_logs = client.get("/combat-log", params={"since": 0}).json()["entries"]
+    subjective_logs = get_player_combat_log_window(
+        client,
+        session_id,
+        replication_bootstrap,
+        from_cursor=combat_log_cursor,
+    )
+    assert subjective_logs["through_cursor"] == combat_log_cursor + 1
+    canonical_logs_text = json.dumps(subjective_logs["frames"])
     snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     logs_text = json.dumps(snapshot["combat_logs"])
 
-    assert str(monster.uuid) in json.dumps(raw_logs)
-    assert monster.name in json.dumps(raw_logs)
+    assert str(monster.uuid) not in canonical_logs_text
+    assert monster.name not in canonical_logs_text
+    assert "Unknown" in canonical_logs_text
     assert str(monster.uuid) not in logs_text
     assert monster.name not in logs_text
     assert "Unknown" in logs_text
@@ -1799,7 +1924,7 @@ def test_repeated_projectile_keeps_declared_target_identity_after_lethal_hit() -
         ).apply()
 
     assert event is not None
-    assert "Dead" in goblin.active_conditions
+    assert goblin.health.life_state is LifeState.DEAD
     frames = client.get(
         f"/ai/sessions/{session.session_id}/observation/frames",
         params={"since": snapshot["observation_cursor"], "limit": 0},
@@ -1908,7 +2033,10 @@ def test_multi_projectile_summary_ignores_non_target_causal_descendants() -> Non
 def test_ai_observation_snapshot_includes_visible_combat_logs() -> None:
     """Fresh snapshots include visible combat logs for Codex briefs and turns."""
     client, session_id, hero, monster, _encounter = create_observation_game()
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = attack_target_index(actions, monster.uuid)
     modifier_uuid = add_auto_hit(hero)
 
@@ -1964,7 +2092,7 @@ def test_subjective_blocked_damage_log_exposes_exact_effect_id() -> None:
 
     assert monster.uuid in hero.senses.entities
     assert actual_damage == 0
-    assert str(hero.uuid) in damage_log["perceiver_uuids"]
+    assert damage_log["perceiver_uuids"] == []
     assert damage_log["success"] is False
     assert damage_log["data"]["blocked"] is True
     assert damage_log["data"]["effect_id"] == MAGIC_MISSILE_DAMAGE_EFFECT_ID
@@ -2053,7 +2181,10 @@ def test_subjective_damage_evidence_respects_sanitization_and_perception() -> No
 def test_lethal_log_retains_identity_known_when_event_started() -> None:
     """A visible victim remains identified throughout its lethal log tree."""
     client, session_id, hero, monster, _encounter = create_observation_game()
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = attack_target_index(actions, monster.uuid)
     modifier_uuid = add_auto_hit(hero)
     set_hp(monster, 1)
@@ -2104,7 +2235,10 @@ def test_observed_death_survives_visibility_loss_replay_and_snapshot_resync() ->
     client, session_id, hero, monster, _encounter = create_observation_game()
     before = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     state = materialize_snapshot(before)
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = attack_target_index(actions, monster.uuid)
     modifier_uuid = add_auto_hit(hero)
     set_hp(monster, 1)
@@ -2141,9 +2275,11 @@ def test_observed_death_survives_visibility_loss_replay_and_snapshot_resync() ->
     assert monster.uuid not in hero.senses.entities
     assert replayed.knowledge_state.value == "remembered"
     assert replayed.position == monster.position
+    assert replayed.life_state is LifeState.DEAD
     assert replayed.is_dead is True
     assert resynced.knowledge_state.value == "remembered"
     assert resynced.position == monster.position
+    assert resynced.life_state is LifeState.DEAD
     assert resynced.is_dead is True
     assert contacts.known_dead_entity_uuids == (str(monster.uuid),)
     assert str(monster.uuid) not in contacts.remembered_hostile_uuids

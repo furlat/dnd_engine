@@ -62,6 +62,7 @@ class GridMap:
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
 
         self._light_sources: Dict[UUID, LightSourceData] = {}
+        self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
 
         self._events_enabled: bool = True
         self._pending_events: List['SpatialChangeEvent'] = []
@@ -117,6 +118,11 @@ class GridMap:
                 Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]],
             ],
         ] = OrderedDict()
+        EventQueue.add_on_event_callback(
+            self._on_perceivability_changed,
+            event_types={EventType.SPATIAL_PERCEIVABILITY_CHANGED},
+            phases={EventPhase.DECLARATION},
+        )
 
     @classmethod
     def get_instance(cls) -> 'GridMap':
@@ -243,6 +249,21 @@ class GridMap:
         """Invalidate cached paths after entity blocking state changes."""
         self._occupancy_revision += 1
         self._path_cache.clear()
+
+    def _on_perceivability_changed(self, event: Event) -> None:
+        """Invalidate subjective occupancy paths when a blocker can appear or vanish.
+
+        Perceivability is observer-relative, so a Hidden or Invisible transition
+        can change which occupied cells a subjective path query may traverse
+        even though authoritative occupancy did not move. The map consumes the
+        spatial fact emitted by the block rather than making lower-level blocks
+        import the spatial registry.
+        """
+        if (
+            event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED
+            and event.phase == EventPhase.DECLARATION
+        ):
+            self.invalidate_occupancy_paths()
 
     def _bump_spatial_revisions(self, channels: Set[str]) -> None:
         """Advance channel revisions and clear dependent query caches."""
@@ -615,6 +636,55 @@ class GridMap:
         for channel in DIRECTIONAL_CHANNELS:
             for direction in DIRECTIONS:
                 result[channel][direction] = not tile.allows_direction(direction, channel)
+        return result
+
+    def get_subjective_directional_block_map(
+        self,
+        position: Tuple[int, int],
+        requesting_entity_uuid: UUID,
+        movement_mode: MovementMode = MovementMode.WALKING,
+    ) -> Dict[str, Dict[str, bool]]:
+        """Return intrinsic plus perceivable directional blockers for one observer.
+
+        The tile's cached derived borders are objective.  Subjective transports
+        must instead rebuild the derived contribution from blocks the requesting
+        observer can actually perceive, or hidden directional blockers leak.
+        """
+        if BaseBlock.get(requesting_entity_uuid) is None:
+            raise ValueError("subjective directional projection requires a known observer")
+        tile = self._tiles.get(position)
+        result: Dict[str, Dict[str, bool]] = {
+            channel: {direction: False for direction in DIRECTIONS}
+            for channel in DIRECTIONAL_CHANNELS
+        }
+        if tile is None:
+            return result
+
+        for channel in DIRECTIONAL_CHANNELS:
+            for direction in DIRECTIONS:
+                result[channel][direction] = not tile.allows_direction(
+                    direction,
+                    channel,
+                    include_derived=False,
+                )
+
+        block_uuids = set(self._objects_by_position.get(position, set()))
+        block_uuids.update(self._entities_by_position.get(position, set()))
+        for block_uuid in block_uuids:
+            block = BaseBlock.get(block_uuid)
+            if block is None or not block.is_perceivable_by(requesting_entity_uuid):
+                continue
+            for channel in DIRECTIONAL_CHANNELS:
+                for direction in DIRECTIONS:
+                    if self._block_blocks_direction(
+                        block,
+                        channel,
+                        direction,
+                        requesting_entity_uuid,
+                        movement_mode,
+                        subjective=True,
+                    ):
+                        result[channel][direction] = True
         return result
 
     def _directional_metadata_from_delta(self, position: Tuple[int, int],
@@ -1726,6 +1796,23 @@ class GridMap:
             get_tile_cost = cached_get_tile_cost
             can_enter_tile = cached_can_enter_tile
 
+        start_tile = self.get_tile(*start)
+        if (
+            start_tile is None
+            or start_tile.get_movement_cost(movement_mode) <= 0
+        ):
+            sentinel_result = ({start: 0}, {start: [start]})
+            self._path_cache[cache_key] = (
+                dict(sentinel_result[0]),
+                {
+                    position: tuple(path)
+                    for position, path in sentinel_result[1].items()
+                },
+            )
+            if len(self._path_cache) > 128:
+                self._path_cache.popitem(last=False)
+            return sentinel_result
+
         started = time.perf_counter() if timing else 0.0
         use_unit_pathfinder = unit_movement_costs()
         if use_unit_pathfinder:
@@ -1827,7 +1914,8 @@ class GridMap:
             if anchor:
                 anchor.attach_light_source(source.uuid)
 
-        self._apply_light_source(source, parent_event=parent_event)
+        if self._is_light_effectively_active(source):
+            self._apply_light_source(source, parent_event=parent_event)
 
         self._ensure_light_callback()
 
@@ -1848,13 +1936,60 @@ class GridMap:
                 anchor.detach_light_source(light_uuid)
 
     def cleanup_block_light_sources(self, block_uuid: UUID) -> None:
-        """Remove all light sources attached to a block (entity or item).
-        Called on entity death and item destruction."""
+        """Permanently remove all light sources attached to a destroyed block."""
         block = BaseBlock.get(block_uuid)
         if block is None:
             return
         for light_uuid in block.get_attached_light_sources():
             self.remove_light_source(light_uuid)
+        self._block_light_suppressions.pop(block_uuid, None)
+
+    def _is_light_effectively_active(self, source: LightSourceData) -> bool:
+        """Return desired activation after anchor-owned suppressions."""
+        return bool(
+            source.is_active
+            and (
+                source.anchor_uuid is None
+                or not self._block_light_suppressions.get(source.anchor_uuid)
+            )
+        )
+
+    def set_block_light_suppressed(
+        self,
+        block_uuid: UUID,
+        token: str,
+        suppressed: bool,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Add or remove one owner's reversible suppression of anchored lights.
+
+        Suppressions compose by token. Illumination changes only when the first
+        token is added or the last token is removed, so independent rules never
+        restore light that another rule still suppresses.
+        """
+        tokens = self._block_light_suppressions[block_uuid]
+        was_suppressed = bool(tokens)
+        if suppressed:
+            tokens.add(token)
+        else:
+            tokens.discard(token)
+            if not tokens:
+                self._block_light_suppressions.pop(block_uuid, None)
+        is_suppressed = bool(self._block_light_suppressions.get(block_uuid))
+        if was_suppressed == is_suppressed:
+            return
+
+        block = BaseBlock.get(block_uuid)
+        if block is None:
+            return
+        for light_uuid in block.get_attached_light_sources():
+            source = self._light_sources.get(light_uuid)
+            if source is None or not source.is_active:
+                continue
+            if is_suppressed:
+                self._remove_light_source_tiles(source, parent_event=parent_event)
+            else:
+                self._apply_light_source(source, parent_event=parent_event)
 
     def move_light_source(self, light_uuid: UUID, new_position: Tuple[int, int],
                           parent_event: Optional[UUID] = None) -> None:
@@ -1866,6 +2001,11 @@ class GridMap:
         """
         source = self._light_sources.get(light_uuid)
         if source is None:
+            return
+
+        if not self._is_light_effectively_active(source):
+            source.position = new_position
+            source.affected_tiles.clear()
             return
 
         timing = action_timing_enabled()
@@ -1905,7 +2045,12 @@ class GridMap:
         if timing:
             record_action_timing("grid.move_light_source.publish_batch_ms", started)
 
-    def toggle_light_source(self, light_uuid: UUID, active: bool) -> None:
+    def toggle_light_source(
+        self,
+        light_uuid: UUID,
+        active: bool,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
         """Toggle a light source on/off without destroying it."""
         source = self._light_sources.get(light_uuid)
         if source is None:
@@ -1913,12 +2058,11 @@ class GridMap:
         if source.is_active == active:
             return
 
-        if active:
-            source.is_active = True
-            self._apply_light_source(source)
+        source.is_active = active
+        if self._is_light_effectively_active(source):
+            self._apply_light_source(source, parent_event=parent_event)
         else:
-            self._remove_light_source_tiles(source)
-            source.is_active = False
+            self._remove_light_source_tiles(source, parent_event=parent_event)
 
     def _compute_light_tiles(self, source: LightSourceData,
                              position: Optional[Tuple[int, int]] = None) -> Dict[Tuple[int, int], LightLevel]:
@@ -1953,6 +2097,8 @@ class GridMap:
                             parent_event: Optional[UUID] = None) -> None:
         """Compute and apply illumination from a light source to tiles.
         Suppresses per-tile events and fires a single senses update after."""
+        if not self._is_light_effectively_active(source):
+            return
         source.affected_tiles = self._compute_light_tiles(source)
         changed_positions: List[Tuple[int, int]] = []
         for pos, level in source.affected_tiles.items():
@@ -2111,7 +2257,7 @@ class GridMap:
         removed the position from affected_tiles (e.g. remove_tile + set_tile).
         """
         for source in self._light_sources.values():
-            if not source.is_active:
+            if not self._is_light_effectively_active(source):
                 continue
             total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
             dx = position[0] - source.position[0]
@@ -2348,6 +2494,11 @@ class GridMap:
 
     def clear(self) -> None:
         """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
+        registered_objects = tuple(self._object_positions.items())
+        for object_uuid, position in registered_objects:
+            obj = BaseBlock.get(object_uuid)
+            if obj is not None:
+                obj.on_grid_object_removed(position, clear_location=True)
         self._tiles.clear()
         self._tiles_by_uuid.clear()
         self._entities_by_position.clear()
@@ -2357,6 +2508,7 @@ class GridMap:
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
         self._light_sources.clear()
+        self._block_light_suppressions.clear()
         self._pending_events.clear()
         self._bounds_dirty = True
         self._spatial_revision = 0

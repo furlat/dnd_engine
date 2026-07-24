@@ -15,6 +15,14 @@ from dnd.core.geometry import (
     rectangle_positions,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.presentation_geometry import (
+    AoEPresentationGeometry,
+    ConePresentationGeometry,
+    CubePresentationGeometry,
+    CylinderPresentationGeometry,
+    LinePresentationGeometry,
+    SpherePresentationGeometry,
+)
 from dnd.blocks.sensory import Senses
 
 
@@ -410,3 +418,75 @@ class Cylinder(AoEShape):
                 self.affected_entity_uuids.add(uuid)
 
         return self
+
+
+def snapshot_aoe_presentation_geometry(
+    shape: AoEShape,
+    caster_position: Tuple[int, int],
+    *,
+    target_override: Optional[Tuple[int, int]] = None,
+) -> AoEPresentationGeometry:
+    """Return the exact immutable presentation geometry for one declared AoE.
+
+    Position-targeted action instances keep their selected cell separately
+    from the reusable shape template. ``target_override`` therefore takes the
+    declared action target without mutating or copying the runtime shape.
+
+    Args:
+        shape: Runtime area shape owned by the action definition.
+        caster_position: Caster position at declaration time.
+        target_override: Selected action position, when different from the
+            reusable shape template's default target.
+
+    Returns:
+        A strict shape-specific cold geometry fact.
+
+    Raises:
+        TypeError: If a new runtime shape has no presentation contract.
+    """
+    target = shape.target if target_override is None else target_override
+    if shape.origin_override is not None:
+        origin = shape.origin_override
+    elif isinstance(shape, (Sphere, Cylinder)):
+        origin = target
+    elif isinstance(shape, Cube) and shape.centered:
+        origin = target
+    else:
+        origin = caster_position
+
+    direction = (target[0] - origin[0], target[1] - origin[1])
+    if isinstance(shape, Sphere):
+        return SpherePresentationGeometry(
+            center=origin,
+            radius_feet=shape.radius_feet,
+        )
+    if isinstance(shape, Cone):
+        return ConePresentationGeometry(
+            origin=origin,
+            direction=direction,
+            length_feet=shape.length_feet,
+            angle_degrees=shape.angle_degrees,
+        )
+    if isinstance(shape, Line):
+        return LinePresentationGeometry(
+            origin=origin,
+            direction=direction,
+            length_feet=shape.length_feet,
+            width_feet=shape.width_feet,
+        )
+    if isinstance(shape, Cube):
+        return CubePresentationGeometry(
+            origin=origin,
+            direction=None if shape.centered else direction,
+            size_feet=shape.size_feet,
+            centered=shape.centered,
+        )
+    if isinstance(shape, Cylinder):
+        return CylinderPresentationGeometry(
+            center=origin,
+            radius_feet=shape.radius_feet,
+            height_feet=shape.height_feet,
+        )
+    raise TypeError(
+        f"AoE shape {type(shape).__name__} has no presentation geometry contract"
+    )

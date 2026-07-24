@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import TypedDict
 from uuid import UUID, uuid4
 
+import pytest
+
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, SpellEvent
 from dnd.analytics import (
     EntitySnapshotV1,
@@ -22,6 +24,7 @@ from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.dice import AttackOutcome, DiceRoll, RollType
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     AttackD20RollResultEvent,
     Damage,
@@ -38,8 +41,8 @@ from dnd.core.events import (
     TakeDamageEvent,
     TurnEndEvent,
     TurnStartEvent,
-    WeaponSlot,
 )
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import (
     AdvantageStatus,
     AutoHitStatus,
@@ -96,6 +99,7 @@ def _snapshots() -> tuple[
             normal_hit_points=18,
             maximum_hit_points=24,
             temporary_hit_points=0,
+            life_state=LifeState.ALIVE,
             is_defeated=False,
             position=(1, 1),
             resources={"spell_slot_1": 2},
@@ -107,6 +111,7 @@ def _snapshots() -> tuple[
             normal_hit_points=8,
             maximum_hit_points=16,
             temporary_hit_points=3,
+            life_state=LifeState.ALIVE,
             is_defeated=False,
             position=(6, 1),
         ),
@@ -119,6 +124,7 @@ def _snapshots() -> tuple[
             normal_hit_points=22,
             maximum_hit_points=24,
             temporary_hit_points=0,
+            life_state=LifeState.ALIVE,
             is_defeated=False,
             position=(4, 1),
             resources={"spell_slot_1": 1},
@@ -130,12 +136,37 @@ def _snapshots() -> tuple[
             normal_hit_points=0,
             maximum_hit_points=16,
             temporary_hit_points=0,
+            life_state=LifeState.DEAD,
             is_defeated=True,
             position=(8, 1),
             condition_semantic_keys=("dnd.conditions.Prone",),
         ),
     )
     return initial, final
+
+
+def test_entity_snapshot_life_state_owns_defeated_projection_when_present() -> None:
+    """New snapshots retain LifeState while legacy v1 rows remain readable."""
+    legacy = EntitySnapshotV1(
+        entity_uuid=GOBLIN_UUID,
+        name="Legacy Goblin",
+        side_id="monsters",
+        normal_hit_points=0,
+        maximum_hit_points=16,
+        is_defeated=True,
+    )
+    assert legacy.life_state is None
+
+    with pytest.raises(ValueError, match="is_defeated must equal"):
+        EntitySnapshotV1(
+            entity_uuid=GOBLIN_UUID,
+            name="Impossible Goblin",
+            side_id="monsters",
+            normal_hit_points=0,
+            maximum_hit_points=16,
+            life_state=LifeState.ALIVE,
+            is_defeated=True,
+        )
 
 
 def _completed_event_kwargs(

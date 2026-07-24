@@ -3,15 +3,11 @@
 from uuid import uuid4
 
 from dnd.controller import Controller, TurnContext
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
-from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.equipment_types import WeaponSlot
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.runtime_reset import reset_engine_runtime
 
 
 def reset_controller_catalogue_state(width: int = 10, height: int = 8) -> None:
@@ -21,22 +17,7 @@ def reset_controller_catalogue_state(width: int = 10, height: int = 8) -> None:
         width: Arena width in tiles.
         height: Arena height in tiles.
     """
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def create_controller_pair(

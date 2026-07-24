@@ -5,10 +5,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from ai.observation.models import ObservationFrame, ObservationFrameType
-from ai.protocol.control import (
+from server.agent_protocol.observation import ObservationFrame, ObservationFrameType
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionEconomyState,
+    ActionSourceDefinition,
     AffordanceSet,
     CommandResult,
     CommandResultStatus,
@@ -24,12 +25,15 @@ def test_control_protocol_embeds_in_subjective_event_envelopes() -> None:
     """Observation envelopes carry neutral epochs and command results."""
     affordance = ActionAffordance(
         row_id="entity|Attack|uuid=target",
-        bucket="entity_actions",
-        template_name="Attack",
-        display_name="Attack",
-        action_category="attack",
-        target_type="entity",
-        can_afford=True,
+        source=ActionSourceDefinition(
+            source_action_id="entity|Attack",
+            bucket="entity_actions",
+            template_name="Attack",
+            display_name="Attack",
+            action_category="attack",
+            target_type="entity",
+            can_afford=True,
+        ),
     )
     epoch = DecisionEpoch(
         epoch_id="epoch-1",
@@ -74,14 +78,12 @@ def test_control_protocol_embeds_in_subjective_event_envelopes() -> None:
 
 def test_protocol_modules_do_not_import_engine_runtime_or_policy_layers() -> None:
     """Neutral protocol contracts remain below engine and controller adapters."""
-    protocol_root = REPOSITORY_ROOT / "ai" / "protocol"
+    protocol_root = REPOSITORY_ROOT / "server" / "agent_protocol"
     forbidden_prefixes = (
-        "dnd",
-        "server",
-        "ai.observation",
-        "ai.subjective",
-        "ai.external",
-        "ai.policy",
+        "ai",
+        "server.agent_runtime",
+        "server.event_server",
+        "server.session",
     )
 
     for path in protocol_root.glob("*.py"):
@@ -96,10 +98,10 @@ def test_protocol_modules_do_not_import_engine_runtime_or_policy_layers() -> Non
 
 def test_observation_models_do_not_import_subjective_runtime_models() -> None:
     """Observation wire models depend downward on protocol contracts only."""
-    path = REPOSITORY_ROOT / "ai" / "observation" / "models.py"
+    path = REPOSITORY_ROOT / "server" / "agent_protocol" / "observation.py"
 
     assert not any(
-        module == "ai.subjective" or module.startswith("ai.subjective.")
+        module == "ai" or module.startswith("ai.")
         for module in _imported_modules(path)
     )
 

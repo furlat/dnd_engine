@@ -4,11 +4,12 @@ import random
 from typing import Optional
 from uuid import UUID, uuid4
 
-from dnd.blocks.equipment import Weapon, WeaponProperty, Range
+from dnd.blocks.equipment import Weapon, Range
+from dnd.core.equipment_types import EquipmentSlot, WeaponProperty
 from dnd.core.dice import DiceRoll, RollType, AdvantageStatus, CriticalStatus, AutoHitStatus
 from dnd.core.events import (
     RangeType, Event, EventType, EventPhase, EventHandler, Trigger,
-    DamageRollResultEvent, EquipmentSlot
+    DamageRollResultEvent,
 )
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import ModifiableValue

@@ -16,15 +16,17 @@ from dnd.core.base_actions import (
     ActionSetupMaintenanceFailure,
     ActionSetupMaintenanceProfile,
     ActionSetupMaintenanceTrigger,
-    ActionPresentationKind,
     BaseAction,
     ActionEvent,
     TargetType,
     Cost,
 )
+from dnd.core.action_types import ActionPresentationKind
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType
-from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent, WeaponSlot, SkillName, RangeType, Range, Damage
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import ConditionTag, DurationType
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent, SkillName, RangeType, Range, Damage
 from dnd.core.modifiers import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.core.gridmap import get_map
@@ -342,21 +344,21 @@ class StorageChest(UsableItem):
         description="Inventory block containing nested chest contents.",
     )
 
+    def get_storage_block(self) -> BaseBlock:
+        """Expose contained items through the canonical item-storage capability."""
+        return self.chest_inventory
+
     def _on_destroy(self) -> None:
         """Spill all contents onto the ground at chest's position."""
         pos = self.position
         if pos is None:
             return
-        grid = get_map()
         for item_uuid in list(self.chest_inventory.items.keys()):
             item = self.chest_inventory.remove_item(item_uuid)
             if item:
                 item.owner_uuid = None
                 item.stored_in_uuid = None
-                tile = grid.get_tile(pos[0], pos[1])
-                item.tile_uuid = tile.uuid if tile else None
-                item.position = pos
-                grid.place_object(item.uuid, pos)
+                item.place_on_grid(pos)
 
 
 class RestAction(BaseAction):
@@ -436,17 +438,21 @@ class SpellScroll(UsableItem):
         if self.charges == 0 or not self.use_action_templates:
             return []
         result = []
+        source_item_presentation = self.to_item_presentation_state()
         for template in self.use_action_templates:
             template_charge_cost = template.charge_cost
             if self.charges != -1 and self.charges < template_charge_cost:
                 continue
 
             if isinstance(template, SpellAction):
-                cast_level = template.spell_level
-                if cast_level == 0:
+                if template.spell_level == 0:
                     cast_level = 0
                 else:
-                    cast_level = max(cast_level, self.scroll_cast_level)
+                    cast_level = max(
+                        template.spell_level,
+                        template.cast_at_level,
+                        self.scroll_cast_level,
+                    )
                 scroll_costs = [Cost(
                     name="Use Item", cost_type="actions", cost=1,
                     evaluator=entity_action_economy_cost_evaluator
@@ -455,6 +461,7 @@ class SpellScroll(UsableItem):
                     cast_at_level=cast_level,
                     costs=scroll_costs,
                     source_item_uuid=self.uuid,
+                    source_item_presentation=source_item_presentation,
                     source_entity_uuid=user_entity_uuid,
                     template=True,
                     charge_cost=template_charge_cost,
@@ -465,6 +472,7 @@ class SpellScroll(UsableItem):
                     'uuid': uuid4(),
                     'source_entity_uuid': user_entity_uuid,
                     'source_item_uuid': self.uuid,
+                    'source_item_presentation': source_item_presentation,
                     'charge_cost': template_charge_cost,
                 })
                 result.append(action)
@@ -524,7 +532,13 @@ def create_wand_of_fire(owner_uuid: UUID, charges: int = 7) -> SpellScroll:
     """Wand with Burning Hands (1 charge), Fireball (3 charges), Fireball L4 (4 charges)."""
     burning = BurningHands(source_entity_uuid=uuid4(), caster_level=1, template=True, charge_cost=1)
     fireball = Fireball(source_entity_uuid=uuid4(), caster_level=5, template=True, charge_cost=3)
-    fireball_l4 = Fireball(source_entity_uuid=uuid4(), caster_level=7, template=True, charge_cost=4)
+    fireball_l4 = Fireball(
+        source_entity_uuid=uuid4(),
+        caster_level=7,
+        cast_at_level=4,
+        template=True,
+        charge_cost=4,
+    )
     return SpellScroll(
         source_entity_uuid=owner_uuid, name="Wand of Fire",
         scroll_cast_level=1, charges=charges, max_charges=charges,
@@ -688,8 +702,7 @@ def create_arcane_machine_gun(owner_uuid: UUID, position: Tuple[int, int] = (0, 
         is_pickable=False, is_consumable=False,
         use_action_templates=[spell],
     )
-    grid = get_map()
-    grid.place_object(item.uuid, position)
+    item.place_on_grid(position)
     return item
 
 
@@ -702,8 +715,7 @@ def create_fireball_cannon(owner_uuid: UUID, position: Tuple[int, int] = (0, 0),
         is_pickable=False, is_consumable=False,
         use_action_templates=[spell],
     )
-    grid = get_map()
-    grid.place_object(item.uuid, position)
+    item.place_on_grid(position)
     return item
 
 
@@ -807,6 +819,10 @@ class WeaponCoatCondition(BaseCondition):
     """
 
     name: str = Field(default="Weapon Coat", description="Condition name for the active weapon coat.")
+    description: str = Field(
+        default="The coated weapon deals an extra 1d6 damage of the coat's type on a hit.",
+        description="Rules-facing summary for the active weapon coat.",
+    )
     coated_weapon_uuid: Optional[UUID] = Field(
         default=None,
         description="Weapon UUID that received the extra damage packet.",
@@ -922,6 +938,14 @@ class ApplyCoatAction(BaseAction):
 
         coat = WeaponCoatCondition(
             name=coat_name,
+            description=(
+                f"The coated weapon deals an extra 1d6 "
+                f"{self.coat_damage_type.value} damage on a hit."
+            ),
+            semantic_key=(
+                f"dnd.items.test_items.WeaponCoatCondition."
+                f"{self.coat_damage_type.value}"
+            ),
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             coated_weapon_uuid=weapon.uuid,
@@ -1061,8 +1085,7 @@ def create_arcane_device(owner_uuid: UUID, position: Tuple[int, int] = (0, 0)) -
         source_entity_uuid=owner_uuid,
         use_action_templates=[action],
     )
-    grid = get_map()
-    grid.place_object(device.uuid, position)
+    device.place_on_grid(position)
     return device
 
 
@@ -1114,7 +1137,8 @@ class DrinkGreaterInvisibilityPotionAction(PotionDrinkAction):
 
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=entity.uuid,
-            target_entity_uuid=entity.uuid
+            target_entity_uuid=entity.uuid,
+            tags={ConditionTag.MAGICAL},
         )
         entity.add_condition(invis_effect, parent_event=execution_event)
 
@@ -1482,19 +1506,21 @@ def create_wall_torch(position: Tuple[int, int], owner_uuid: UUID, lit: bool = T
     """Create a wall torch at a fixed position and optionally light it."""
     torch = WallTorch(source_entity_uuid=owner_uuid)
     torch._wall_torch_position = position
-    grid = get_map()
-    grid.place_object(torch.uuid, position)
+    torch.place_on_grid(position)
     if lit:
         torch.light()
     return torch
 
 
 class DrinkHastePotionAction(PotionDrinkAction):
-    """Drink a potion to gain Haste (no concentration, no lethargy)."""
+    """Drink a potion to gain Haste without concentration."""
 
     name: str = Field(default="Drink Haste Potion", description="Action name for drinking this potion.")
     description: str = Field(
-        default="Drink to gain doubled speed, +2 AC, DEX advantage, +1 action for 10 rounds",
+        default=(
+            "Drink to gain doubled speed, +2 AC, DEX advantage, and one "
+            "restricted Haste action for 10 rounds; suffer lethargy when it ends"
+        ),
         description="Action description shown for haste potions.",
     )
     target_type: TargetType = Field(default=TargetType.SELF, description="Haste potions target the user.")
@@ -1531,6 +1557,7 @@ class DrinkHastePotionAction(PotionDrinkAction):
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             caster_uuid=entity.uuid,
+            tags={ConditionTag.MAGICAL},
         )
         haste.duration.duration_type = DurationType.ROUNDS
         haste.duration.duration = 10

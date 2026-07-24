@@ -18,10 +18,11 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_conditions import (
     BaseCondition,
+)
+from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
     ConditionTag,
-    DurationType,
 )
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
@@ -31,10 +32,13 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, CreatureType,
 from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
-from dnd.conditions import Paralyzed, Charmed, Unconscious, Stunned, Prone, Incapacitated
+from dnd.actions import Move, SpellAction, SpellEvent
+from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
+from dnd.creature_transforms import (
+    apply_turn_spent_transform,
+    apply_unconscious_transform,
+)
 from dnd.spells.spell_utils import validate_line_of_sight
-from dnd.core.gridmap import get_map
 
 
 class CharmPerson(SpellAction):
@@ -793,7 +797,7 @@ class TestBless(SpellAction):
 
 
 class SleepEffect(BaseCondition):
-    """Apply Sleep's Unconscious sub-condition and wake-on-damage handler."""
+    """Own Sleep's unconscious transform and wake-on-damage handler."""
     name: str = Field(default="Sleep", description="Condition name.")
     description: str = Field(default="Magically asleep", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -801,8 +805,11 @@ class SleepEffect(BaseCondition):
         description="Condition tags used by cleanup and spell interactions.",
     )
     removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
-        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
-        description="Positive applied damage wakes this target.",
+        default_factory=lambda: frozenset({
+            ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED,
+            ConditionRemovalTrigger.SHAKE_AWAKE,
+        }),
+        description="Positive damage or external assistance wakes this target.",
     )
     agency_denial: ConditionAgencyDenial = Field(
         default=ConditionAgencyDenial.FULL_TURN,
@@ -810,26 +817,20 @@ class SleepEffect(BaseCondition):
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply Unconscious and register wake-on-damage cleanup."""
+        """Apply the unconscious transform and register damage cleanup."""
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
-        if not target:
+        if not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
-
-        unconscious = Unconscious(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
+        outs = apply_unconscious_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
         )
-        sub_event = target.add_condition(unconscious, parent_event=declaration_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(unconscious.uuid)
 
         handler = self._create_wake_on_damage_handler()
         target.add_event_handler(handler)
@@ -839,7 +840,7 @@ class SleepEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Sleep effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, [], effect_event
+        return outs, handler_uuids, [], [], effect_event
 
     def _create_wake_on_damage_handler(self) -> EventHandler:
         """Create the damage-triggered wake handler."""
@@ -929,7 +930,6 @@ class Sleep(SpellAction):
                     condition_fact_ids=("selected_target.condition.sleep",),
                     condition_semantic_keys=frozenset({
                         "dnd.spells.enchantment.SleepEffect",
-                        "dnd.conditions.Unconscious",
                     }),
                 ),
             ),
@@ -958,7 +958,10 @@ class Sleep(SpellAction):
             if not entity or not entity.has_hp:
                 continue
 
-            if "Unconscious" in entity.active_conditions:
+            if (
+                entity.senses.visual_access.normalized_score == 0
+                and entity.action_economy.action_permission.normalized_score == 0
+            ):
                 continue
 
             if entity.creature_type == CreatureType.UNDEAD:
@@ -1528,8 +1531,170 @@ class Bless(SpellAction):
         )
 
 
-class CommandGrovelEffect(BaseCondition):
-    """Apply Command: Grovel's Prone sub-condition."""
+class CommandNextTurnEffect(BaseCondition):
+    """Own one Command branch from application through its commanded turn."""
+
+    name: str = Field(default="Command", description="Condition name.")
+    description: str = Field(
+        default=(
+            "Must follow the named command on its next turn and spend that turn "
+            "as specified by the command."
+        ),
+        description="Rules-facing summary for a pending Command effect.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="The target's next commanded turn is fully spent.",
+    )
+    _commanded_turn_started: bool = PrivateAttr(default=False)
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        """Register exact next-turn activation and turn-end cleanup handlers."""
+        target = self._target_if_active()
+        if target is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Target not found"
+            )
+
+        turn_start_handler = self._create_turn_start_handler()
+        turn_end_handler = self._create_turn_end_handler()
+        target.add_event_handler(turn_start_handler)
+        target.add_event_handler(turn_end_handler)
+
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message=self._application_status(target),
+        )
+        return (
+            [],
+            [turn_start_handler.uuid, turn_end_handler.uuid],
+            [],
+            [],
+            effect_event,
+        )
+
+    def _target_if_active(self) -> Optional[Entity]:
+        """Resolve the exact target while this condition remains authoritative."""
+        if self.target_entity_uuid is None:
+            return None
+        target = Entity.get(self.target_entity_uuid)
+        if not isinstance(target, Entity):
+            return None
+        command_name = self._canonical_name()
+        active = target.active_conditions.get(command_name)
+        if self.applied and (active is None or active.uuid != self.uuid):
+            return None
+        return target
+
+    def _canonical_name(self) -> str:
+        """Return the required stable key used to own this command branch."""
+        command_name = self.name
+        if command_name is None:
+            raise ValueError(
+                f"{type(self).__name__} requires a canonical condition name"
+            )
+        return command_name
+
+    def _create_turn_start_handler(self) -> EventHandler:
+        """Create the one-shot next-turn branch activator."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        condition_uuid = self.uuid
+        command_name = self._canonical_name()
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if (
+                event.source_entity_uuid != target_uuid
+                or self._commanded_turn_started
+            ):
+                return None
+
+            target = Entity.get(target_uuid)
+            if not isinstance(target, Entity):
+                return None
+            active = target.active_conditions.get(command_name)
+            if active is None or active.uuid != condition_uuid:
+                return None
+
+            self._commanded_turn_started = True
+            self._activate_commanded_turn(event, target)
+            return None
+
+        return EventHandler(
+            name=f"{command_name} Turn Start ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=target_uuid,
+                )
+            ],
+            event_processor=processor,
+        )
+
+    def _create_turn_end_handler(self) -> EventHandler:
+        """Remove this branch only after the commanded turn has completed."""
+        assert self.target_entity_uuid is not None
+        target_uuid = self.target_entity_uuid
+        condition_uuid = self.uuid
+        command_name = self._canonical_name()
+
+        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if (
+                event.source_entity_uuid != target_uuid
+                or not self._commanded_turn_started
+            ):
+                return None
+
+            target = Entity.get(target_uuid)
+            if not isinstance(target, Entity):
+                return None
+            active = target.active_conditions.get(command_name)
+            if active is None or active.uuid != condition_uuid:
+                return None
+
+            target.remove_condition_by_uuid(condition_uuid, parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"{command_name} Turn End ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_END,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=target_uuid,
+                )
+            ],
+            event_processor=processor,
+        )
+
+    def _spend_commanded_turn(self, target: Entity) -> None:
+        """Install and record this condition's reaction-preserving turn caps."""
+        command_name = self._canonical_name()
+        ownership = apply_turn_spent_transform(
+            target,
+            name=command_name,
+            effect_source_uuid=self.source_entity_uuid,
+        )
+        for value_uuid, modifier_uuid in ownership:
+            self.modifers_uuids.setdefault(value_uuid, []).append(modifier_uuid)
+
+    def _activate_commanded_turn(self, event: Event, target: Entity) -> None:
+        """Apply branch-specific behavior at the target's next turn start."""
+        _ = event
+        self._spend_commanded_turn(target)
+
+    def _application_status(self, target: Entity) -> str:
+        """Describe the pending next-turn command."""
+        return f"{target.name} is commanded"
+
+
+class CommandGrovelEffect(CommandNextTurnEffect):
+    """Make the target fall prone and spend its next turn."""
     name: str = Field(default="Command: Grovel", description="Condition name.")
     description: str = Field(default="Commanded to grovel - falls prone", description="Rules-facing condition summary.")
     tags: Set[ConditionTag] = Field(
@@ -1537,37 +1702,24 @@ class CommandGrovelEffect(BaseCondition):
         description="Condition tags used by cleanup and spell interactions.",
     )
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        """Apply Prone as a sub-condition."""
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(status_message="No target")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        sub_conditions_uuids: List[UUID] = []
-
+    def _activate_commanded_turn(self, event: Event, target: Entity) -> None:
+        """Apply an independent Prone condition after normal auto-stand timing."""
         prone = Prone(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
+            tags={ConditionTag.MAGICAL},
         )
-        target.add_condition(prone, parent_event=declaration_event)
-        sub_conditions_uuids.append(prone.uuid)
+        prone.suppress_immediate_stand_for_application()
+        target.add_condition(prone, parent_event=event)
+        self._spend_commanded_turn(target)
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"{target.name} grovels on the ground"
-        )
-        return [], [], sub_conditions_uuids, [], effect_event
+    def _application_status(self, target: Entity) -> str:
+        """Describe the pending grovel command."""
+        return f"{target.name} is commanded to grovel"
 
 
-class CommandHaltEffect(BaseCondition):
-    """Apply Command: Halt's Incapacitated sub-condition."""
+class CommandHaltEffect(CommandNextTurnEffect):
+    """Spend the target's next turn without suppressing reactions."""
     name: str = Field(default="Command: Halt", description="Condition name.")
     description: str = Field(
         default="Commanded to halt - can take no actions",
@@ -1578,37 +1730,13 @@ class CommandHaltEffect(BaseCondition):
         description="Condition tags used by cleanup and spell interactions.",
     )
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        """Apply Incapacitated as a sub-condition."""
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(status_message="No target")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        sub_conditions_uuids: List[UUID] = []
-
-        incap = Incapacitated(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=target.uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        target.add_condition(incap, parent_event=declaration_event)
-        sub_conditions_uuids.append(incap.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"{target.name} halts in place"
-        )
-        return [], [], sub_conditions_uuids, [], effect_event
+    def _application_status(self, target: Entity) -> str:
+        """Describe the pending halt command."""
+        return f"{target.name} is commanded to halt"
 
 
-class CommandFleeEffect(BaseCondition):
-    """Register Command: Flee's turn-start movement handler."""
+class CommandFleeEffect(CommandNextTurnEffect):
+    """Move away voluntarily and spend the rest of the target's next turn."""
     name: str = Field(default="Command: Flee", description="Condition name.")
     description: str = Field(
         default="Commanded to flee - must move away from caster",
@@ -1620,82 +1748,58 @@ class CommandFleeEffect(BaseCondition):
     )
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster the target must flee from.")
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        """Register the flee handler on the target."""
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(status_message="No target")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        handler = self._create_flee_handler()
-        target.add_event_handler(handler)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"{target.name} is commanded to flee"
-        )
-        return [], [handler.uuid], [], [], effect_event
-
-    def _create_flee_handler(self) -> EventHandler:
-        """Create the turn-start flee handler."""
-        assert self.target_entity_uuid is not None
-        target_uuid = self.target_entity_uuid
+    def _activate_commanded_turn(self, event: Event, target: Entity) -> None:
+        """Use ordinary voluntary movement before closing the remaining turn."""
         caster_uuid = self.caster_uuid or self.source_entity_uuid
-        condition_uuid = self.uuid
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            target = Entity.get(target_uuid)
-            if not target:
-                return None
-
-            if "Command: Flee" not in target.active_conditions:
-                return None
-            active = target.active_conditions.get("Command: Flee")
-            if not active or active.uuid != condition_uuid:
-                return None
-
-            caster = Entity.get(caster_uuid)
-            if not caster:
-                target.remove_condition("Command: Flee", parent_event=event)
-                return None
-
+        caster = Entity.get(caster_uuid)
+        if isinstance(caster, Entity):
+            path_distance = max(
+                0,
+                (target.action_economy.movement.normalized_score + 4) // 5,
+            )
+            target.update_entity_senses(
+                max_distance=20,
+                path_max_distance=path_distance,
+            )
             caster_pos = caster.position
-            best_pos = target.position
-            best_dist = abs(best_pos[0] - caster_pos[0]) + abs(best_pos[1] - caster_pos[1])
+            original_distance = (
+                abs(target.position[0] - caster_pos[0])
+                + abs(target.position[1] - caster_pos[1])
+            )
+            farther_positions = [
+                position
+                for position, path in target.senses.paths.items()
+                if (
+                    len(path) > 1
+                    and (
+                        abs(position[0] - caster_pos[0])
+                        + abs(position[1] - caster_pos[1])
+                    )
+                    > original_distance
+                )
+            ]
+            if farther_positions:
+                best_position = max(
+                    farther_positions,
+                    key=lambda position: (
+                        abs(position[0] - caster_pos[0])
+                        + abs(position[1] - caster_pos[1]),
+                        position[0],
+                        position[1],
+                    ),
+                )
+                path = list(target.senses.paths[best_position])
+                Move(
+                    source_entity_uuid=target.uuid,
+                    end_position=best_position,
+                    path=path,
+                ).apply(parent_event=event)
 
-            for pos in target.senses.paths:
-                dist = abs(pos[0] - caster_pos[0]) + abs(pos[1] - caster_pos[1])
-                if dist > best_dist:
-                    best_dist = dist
-                    best_pos = pos
+        self._spend_commanded_turn(target)
 
-            if best_pos != target.position:
-                grid = get_map()
-                path = target.senses.paths.get(best_pos, [])
-                if path:
-                    for step in path:
-                        grid.move_entity(target.uuid, step)
-
-            target.remove_condition("Command: Flee", parent_event=event)
-            return None
-
-        return EventHandler(
-            name=f"Command: Flee ({target_uuid})",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.TURN_START,
-                event_phase=EventPhase.EFFECT,
-                event_source_entity_uuid=target_uuid
-            )],
-            event_processor=processor
-        )
+    def _application_status(self, target: Entity) -> str:
+        """Describe the pending flee command."""
+        return f"{target.name} is commanded to flee"
 
 
 class Command(SpellAction):
@@ -1724,7 +1828,7 @@ class Command(SpellAction):
         condition_fact, condition_keys = {
             "halt": (
                 "selected_target.condition.command_halt",
-                frozenset({"dnd.spells.enchantment.CommandHaltEffect", "dnd.conditions.Incapacitated"}),
+                frozenset({"dnd.spells.enchantment.CommandHaltEffect"}),
             ),
             "flee": (
                 "selected_target.condition.command_flee",
@@ -1812,16 +1916,12 @@ class Command(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            effect.duration.duration_type = DurationType.ROUNDS
-            effect.duration.duration = 1
             target.add_condition(effect, parent_event=effect_event)
         elif word == "halt":
             effect = CommandHaltEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            effect.duration.duration_type = DurationType.ROUNDS
-            effect.duration.duration = 1
             target.add_condition(effect, parent_event=effect_event)
         elif word == "flee":
             flee_effect = CommandFleeEffect(
@@ -1829,8 +1929,6 @@ class Command(SpellAction):
                 target_entity_uuid=target.uuid,
                 caster_uuid=caster.uuid
             )
-            flee_effect.duration.duration_type = DurationType.ROUNDS
-            flee_effect.duration.duration = 1
             target.add_condition(flee_effect, parent_event=effect_event)
 
         return effect_event.phase_to(

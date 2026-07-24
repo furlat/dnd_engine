@@ -5,7 +5,7 @@ from __future__ import annotations
 import gc
 import json
 import logging
-from queue import Queue
+import socket
 from threading import Condition, Event as ThreadEvent, RLock, Thread
 import time
 from dataclasses import dataclass, field
@@ -14,27 +14,42 @@ from uuid import uuid4
 
 import httpx
 
-from ai.observation.models import ObservationFrame, ObservationFrameType, ObservationSnapshot
+from ai.ordered_delivery import OrderedDeliveryWorker
+from server.agent_protocol.observation import ObservationFrame, ObservationFrameType, ObservationSnapshot
 from ai.policy.contracts import PolicyDecisionTelemetry
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,
     DecisionEpoch,
+    END_TURN_ROW_ID,
 )
 from ai.subjective.hooks import HookContext, HookPoint, HookRegistry
-from ai.subjective.models import AgentEvent
+from server.agent_protocol.telemetry import AgentEvent
 from ai.subjective.processors import default_processors
 from ai.subjective.queries import SubjectiveQueries
-from ai.subjective.runtime_gc import AutomaticGcLease, automatic_gc_suspended
+from ai.subjective.runtime_gc import (
+    RuntimeGcPolicy,
+    SUSPEND_AUTOMATIC_GC,
+    automatic_gc_suspended,
+)
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
+from server.agent_protocol.service import (
+    AgentServiceReadyRequest,
+    MANAGED_AGENT_READY_ROUTE_TEMPLATE,
+)
 
 logger = logging.getLogger(__name__)
-_AGENT_EVENT_CLOSE = object()
+DEFAULT_CONTROL_REQUEST_TIMEOUT_SECONDS = 10.0
+DEFAULT_RUNTIME_CLOSE_TIMEOUT_SECONDS = 4.0
 
 
 class SubjectiveEncounterEndedError(RuntimeError):
     """Raised when an epoch wait reaches a terminal subjective encounter."""
+
+
+class SubjectiveRuntimeClosedError(RuntimeError):
+    """Raised when cooperative runtime shutdown interrupts a pending operation."""
 
 
 class SubjectiveObservationGapError(RuntimeError):
@@ -269,7 +284,13 @@ class CompositeAgentEventSink:
 class QueuedAgentEventSink:
     """Deliver ordered agent telemetry without blocking gameplay reduction."""
 
-    def __init__(self, destination: AgentEventSink, *, max_depth: int = 1024) -> None:
+    def __init__(
+        self,
+        destination: AgentEventSink,
+        *,
+        max_depth: int = 1024,
+        session_id: Optional[str] = None,
+    ) -> None:
         """Create one bounded telemetry delivery worker.
 
         Args:
@@ -279,14 +300,14 @@ class QueuedAgentEventSink:
         if max_depth < 1:
             raise ValueError("max_depth must be positive")
         self.destination = destination
-        self._queue: Queue[list[AgentEvent] | object] = Queue(max_depth)
-        self._closed = False
-        self._worker = Thread(
-            target=self._deliver,
-            name="agent-event-delivery",
-            daemon=True,
+        worker_session_id = session_id or str(
+            getattr(destination, "session_id", "unscoped")
         )
-        self._worker.start()
+        self._delivery = OrderedDeliveryWorker(
+            destination.emit_many,
+            name=f"agent-events-{worker_session_id}",
+            max_depth=max_depth,
+        )
 
     def emit(self, event: AgentEvent) -> None:
         """Enqueue one immutable event in source order."""
@@ -294,37 +315,27 @@ class QueuedAgentEventSink:
 
     def emit_many(self, events: list[AgentEvent]) -> None:
         """Enqueue one ordered event batch."""
-        if self._closed:
-            raise RuntimeError("agent event sink is closed")
         if events:
-            self._queue.put(list(events))
+            self._delivery.submit(list(events))
 
-    def flush(self) -> None:
+    def flush(
+        self,
+        timeout_seconds: float = DEFAULT_RUNTIME_CLOSE_TIMEOUT_SECONDS,
+    ) -> None:
         """Wait until every previously queued event is delivered."""
-        self._queue.join()
+        self._delivery.flush(timeout_seconds)
 
-    def close(self) -> None:
+    def close(
+        self,
+        timeout_seconds: float = DEFAULT_RUNTIME_CLOSE_TIMEOUT_SECONDS,
+    ) -> None:
         """Flush and stop the delivery worker exactly once."""
-        if self._closed:
-            return
-        self._closed = True
-        self._queue.put(_AGENT_EVENT_CLOSE)
-        self._worker.join()
+        self._delivery.close(timeout_seconds)
 
-    def _deliver(self) -> None:
-        """Run synchronous telemetry transport outside gameplay threads."""
-        while True:
-            queued = self._queue.get()
-            try:
-                if queued is _AGENT_EVENT_CLOSE:
-                    return
-                assert isinstance(queued, list)
-                try:
-                    self.destination.emit_many(queued)
-                except Exception:
-                    logger.exception("agent event delivery failed")
-            finally:
-                self._queue.task_done()
+    @property
+    def worker_alive(self) -> bool:
+        """Return whether the delivery worker remains alive."""
+        return self._delivery.worker_alive
 
 
 class SubjectiveRuntime:
@@ -342,8 +353,12 @@ class SubjectiveRuntime:
         include_command_diagnostics: bool = False,
         unix_socket_path: Optional[str] = None,
         runtime_token: Optional[str] = None,
+        gc_policy: RuntimeGcPolicy = SUSPEND_AUTOMATIC_GC,
+        control_request_timeout: float = DEFAULT_CONTROL_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         """Create a runtime client."""
+        if control_request_timeout <= 0:
+            raise ValueError("control_request_timeout must be positive")
         self.base_url = base_url.rstrip("/")
         self.session_id = session_id
         transport = httpx.HTTPTransport(uds=unix_socket_path) if unix_socket_path else None
@@ -356,7 +371,12 @@ class SubjectiveRuntime:
         )
         self.client = httpx.Client(
             base_url=transport_base_url,
-            timeout=httpx.Timeout(connect=5.0, read=None, write=10.0, pool=5.0),
+            timeout=httpx.Timeout(
+                connect=control_request_timeout,
+                read=control_request_timeout,
+                write=control_request_timeout,
+                pool=control_request_timeout,
+            ),
             transport=transport,
             headers=headers,
         )
@@ -366,12 +386,15 @@ class SubjectiveRuntime:
             transport=stream_transport,
             headers=headers,
         )
+        self._telemetry_client: Optional[httpx.Client] = None
         self.store = SubjectiveStore()
         self.state_lock = RLock()
+        self._cleanup_lock = RLock()
         self._state_changed = Condition(self.state_lock)
         self._stream_stop = ThreadEvent()
         self._stream_ready = ThreadEvent()
         self._stream_thread: Optional[Thread] = None
+        self._active_stream_response: Optional[httpx.Response] = None
         self._stream_error: Optional[BaseException] = None
         self._stream_event_count = 0
         self._stream_frame_count = 0
@@ -385,18 +408,41 @@ class SubjectiveRuntime:
         self._resync_generation = 0
         self._command_stream_baselines: dict[str, _CommandStreamBaseline] = {}
         self._closed = False
+        self._resources_closed = False
         self.command_followup_timeout = command_followup_timeout
         self.include_command_diagnostics = include_command_diagnostics
         self.hooks = HookRegistry(processors if processors is not None else default_processors())
         self.evidence_recorder = evidence_recorder
-        self.event_sink = event_sink or QueuedAgentEventSink(
-            CompositeAgentEventSink([
-                LoggingAgentEventSink(),
-                HttpAgentEventSink(self.client, session_id),
-            ])
-        )
+        if event_sink is None:
+            # Cooperative stop must be able to interrupt control and SSE reads
+            # without invalidating telemetry that the FIFO worker already owns.
+            telemetry_transport = (
+                httpx.HTTPTransport(uds=unix_socket_path)
+                if unix_socket_path
+                else None
+            )
+            self._telemetry_client = httpx.Client(
+                base_url=transport_base_url,
+                timeout=httpx.Timeout(
+                    connect=control_request_timeout,
+                    read=control_request_timeout,
+                    write=control_request_timeout,
+                    pool=control_request_timeout,
+                ),
+                transport=telemetry_transport,
+                headers=headers,
+            )
+            self.event_sink = QueuedAgentEventSink(
+                CompositeAgentEventSink([
+                    LoggingAgentEventSink(),
+                    HttpAgentEventSink(self._telemetry_client, session_id),
+                ]),
+                session_id=session_id,
+            )
+        else:
+            self.event_sink = event_sink
         self.last_command_timing: Optional[dict[str, Any]] = None
-        self._gc_lease = AutomaticGcLease.acquire()
+        self._gc_lease = gc_policy.acquire()
 
     @property
     def query(self) -> SubjectiveQueries:
@@ -406,23 +452,93 @@ class SubjectiveRuntime:
                 raise RuntimeError("SubjectiveRuntime.bootstrap() must be called before query access.")
             return SubjectiveQueries(self.store.world, self.store.agent_state)
 
-    def close(self) -> None:
-        """Close network resources."""
-        if self._closed:
-            return
-        self._closed = True
-        try:
+    def request_close(self) -> None:
+        """Wake cooperative waiters without blocking the requesting thread."""
+        with self._state_changed:
+            if self._closed:
+                return
+            self._closed = True
             self._stream_stop.set()
-            self.stream_client.close()
-            stream_thread = self._stream_thread
+            self._stream_ready.set()
+            self._state_changed.notify_all()
+            active_stream_response = self._active_stream_response
+        if active_stream_response is not None:
+            try:
+                _interrupt_httpx_response_read(active_stream_response)
+            except Exception:
+                logger.exception(
+                    "failed to interrupt subjective observation stream for session %s",
+                    self.session_id,
+                )
+        for client in (self.stream_client, self.client):
+            try:
+                client.close()
+            except Exception:
+                logger.exception(
+                    "failed to interrupt subjective runtime transport for session %s",
+                    self.session_id,
+                )
+
+    def close(
+        self,
+        timeout_seconds: float = DEFAULT_RUNTIME_CLOSE_TIMEOUT_SECONDS,
+    ) -> None:
+        """Close every runtime resource within one aggregate deadline."""
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        self.request_close()
+        deadline = time.monotonic() + timeout_seconds
+        with self._cleanup_lock:
+            with self._state_changed:
+                if self._resources_closed:
+                    return
+                stream_thread = self._stream_thread
+            failures: list[BaseException] = []
+            for client in (self.stream_client, self.client):
+                try:
+                    client.close()
+                except BaseException as exc:
+                    failures.append(exc)
             if stream_thread is not None and stream_thread.is_alive():
-                stream_thread.join(timeout=2.0)
+                remaining = max(0.0, deadline - time.monotonic())
+                stream_thread.join(timeout=remaining)
+                if stream_thread.is_alive():
+                    failures.append(TimeoutError(
+                        "subjective observation worker did not stop for session "
+                        f"{self.session_id}"
+                    ))
             close_sink = getattr(self.event_sink, "close", None)
+            telemetry_sink_closed = not callable(close_sink)
             if callable(close_sink):
-                close_sink()
-            self.client.close()
-        finally:
+                try:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError(
+                            "runtime telemetry cleanup exhausted its deadline"
+                        )
+                    if isinstance(self.event_sink, QueuedAgentEventSink):
+                        self.event_sink.close(remaining)
+                    else:
+                        close_sink()
+                    telemetry_sink_closed = True
+                except BaseException as exc:
+                    failures.append(exc)
+            if telemetry_sink_closed and self._telemetry_client is not None:
+                try:
+                    self._telemetry_client.close()
+                except BaseException as exc:
+                    failures.append(exc)
             self._gc_lease.release()
+            if failures:
+                details = "; ".join(
+                    f"{type(exc).__name__}: {exc}"
+                    for exc in failures
+                )
+                raise RuntimeError(
+                    f"Subjective runtime cleanup failed: {details}"
+                ) from failures[0]
+            with self._state_changed:
+                self._resources_closed = True
 
     def flush_agent_events(self) -> None:
         """Wait until queued runtime telemetry reaches its destination."""
@@ -437,11 +553,21 @@ class SubjectiveRuntime:
 
     def bootstrap(self) -> None:
         """Fetch snapshot and initialize local state."""
+        with self._state_changed:
+            self._raise_if_closed()
         self._emit("runtime.bootstrap_started", "Bootstrapping subjective runtime.")
-        response = self.client.get(f"/ai/sessions/{self.session_id}/observation/snapshot")
-        response.raise_for_status()
+        try:
+            response = self.client.get(
+                f"/ai/sessions/{self.session_id}/observation/snapshot"
+            )
+            response.raise_for_status()
+        except Exception:
+            with self._state_changed:
+                self._raise_if_closed()
+            raise
         snapshot = ObservationSnapshot.model_validate(response.json())
         with self._state_changed:
+            self._raise_if_closed()
             world = self.store.load_snapshot(snapshot)
             if self.evidence_recorder is not None:
                 self.evidence_recorder.record_snapshot(snapshot, reason="bootstrap")
@@ -462,21 +588,67 @@ class SubjectiveRuntime:
         )
         self._start_observation_pump()
 
+    def wait_until_stream_synced(self, timeout: float = 10.0) -> None:
+        """Wait until the live observation transport proves one valid sync."""
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
+        if not self._stream_ready.wait(timeout=timeout):
+            raise TimeoutError(
+                "Subjective observation stream did not synchronize before timeout"
+            )
+        with self._state_changed:
+            self._raise_if_closed()
+            stream_error = self._stream_error
+            stream_sync_count = self._stream_sync_count
+        if stream_error is not None:
+            raise RuntimeError(
+                "Subjective observation stream failed before synchronization"
+            ) from stream_error
+        if stream_sync_count < 1:
+            raise RuntimeError(
+                "Subjective observation stream signaled readiness without a sync"
+            )
+
+    def acknowledge_managed_service_ready(self, readiness_token: str) -> None:
+        """Prove snapshot and stream readiness to the owning server process."""
+        payload = AgentServiceReadyRequest(
+            readiness_token=readiness_token,
+        )
+        try:
+            response = self.client.post(
+                MANAGED_AGENT_READY_ROUTE_TEMPLATE.format(
+                    session_id=self.session_id,
+                ),
+                json=payload.model_dump(mode="json"),
+            )
+            response.raise_for_status()
+        except Exception:
+            with self._state_changed:
+                self._raise_if_closed()
+            raise
+
     def wait_for_epoch(self) -> DecisionEpoch:
         """Wait on the single stream reducer until a controlled epoch exists."""
+        with self._state_changed:
+            self._raise_if_closed()
         if self.store.world is None:
             self.bootstrap()
         self._start_observation_pump()
         with self._state_changed:
             while True:
+                self._raise_if_closed()
                 self._raise_if_encounter_ended()
                 if self.store.world is not None and self.store.world.current_epoch is not None:
                     return self.store.world.current_epoch
                 self._raise_stream_error()
                 self._state_changed.wait()
-            self._raise_if_encounter_ended()
-            if self.store.world and self.store.world.current_epoch is not None:
-                return self.store.world.current_epoch
+
+    def _raise_if_closed(self) -> None:
+        """Stop cooperative waiters after the runtime lifecycle ends."""
+        if self._closed:
+            raise SubjectiveRuntimeClosedError(
+                f"Subjective runtime for session {self.session_id} is closed."
+            )
 
     def _raise_if_encounter_ended(self) -> None:
         """Stop an epoch wait when the subjective encounter is terminal."""
@@ -510,7 +682,7 @@ class SubjectiveRuntime:
         """Start the runtime's sole subjective-stream consumer exactly once."""
         with self._state_changed:
             if self._closed:
-                raise RuntimeError("Subjective runtime is closed")
+                self._raise_if_closed()
             if self._stream_thread is not None:
                 return
             self._stream_thread = Thread(
@@ -716,7 +888,7 @@ class SubjectiveRuntime:
 
     def end_turn(self, *, command_id: Optional[str] = None) -> CommandResult:
         """End the current controlled actor turn."""
-        timing = CommandTimingProbe(command_type="end_turn", row_id="special|End Turn|index=0")
+        timing = CommandTimingProbe(command_type="end_turn", row_id=END_TURN_ROW_ID)
         wait_started = time.perf_counter()
         epoch = self.wait_for_epoch()
         timing.wait_for_epoch_ms += _elapsed_ms_float(wait_started)
@@ -735,7 +907,7 @@ class SubjectiveRuntime:
                 command_id,
                 actor_uuid=epoch.actor_uuid,
                 requested_epoch_id=epoch.epoch_id,
-                row_id="special|End Turn|index=0",
+                row_id=END_TURN_ROW_ID,
             )
         if self.evidence_recorder is not None:
             self.evidence_recorder.record_command_intent(payload)
@@ -786,6 +958,7 @@ class SubjectiveRuntime:
             with self._state_changed:
                 self._discard_pending_command(command_id)
                 self._state_changed.notify_all()
+                self._raise_if_closed()
             if self.evidence_recorder is not None:
                 self.evidence_recorder.record_command_transport_failure(
                     command_id,
@@ -861,6 +1034,7 @@ class SubjectiveRuntime:
             )
             deadline = time.monotonic() + self.command_followup_timeout
             while True:
+                self._raise_if_closed()
                 if self._resync_generation != baseline.resync_generation:
                     self._command_stream_baselines.pop(command_id, None)
                     return ack.model_copy(update={"resync_required": True})
@@ -902,6 +1076,8 @@ class SubjectiveRuntime:
                     self._discard_pending_command(command_id)
                     break
                 self._state_changed.wait(timeout=remaining)
+        with self._state_changed:
+            self._raise_if_closed()
         if timing is not None:
             timing.sse_wait_ms += _elapsed_ms_float(sse_started)
         self._resync_timed(timing)
@@ -992,11 +1168,21 @@ class SubjectiveRuntime:
 
     def resync(self) -> None:
         """Reload a fresh snapshot."""
+        with self._state_changed:
+            self._raise_if_closed()
         self._emit("stream.resync_started", "Resyncing subjective runtime.")
-        response = self.client.get(f"/ai/sessions/{self.session_id}/observation/snapshot")
-        response.raise_for_status()
+        try:
+            response = self.client.get(
+                f"/ai/sessions/{self.session_id}/observation/snapshot"
+            )
+            response.raise_for_status()
+        except Exception:
+            with self._state_changed:
+                self._raise_if_closed()
+            raise
         snapshot = ObservationSnapshot.model_validate(response.json())
         with self._state_changed:
+            self._raise_if_closed()
             self.store.load_snapshot(snapshot)
             if self.evidence_recorder is not None:
                 self.evidence_recorder.record_snapshot(snapshot, reason="resync")
@@ -1081,20 +1267,34 @@ class SubjectiveRuntime:
             f"/ai/sessions/{self.session_id}/observation/subscribe",
             params={"since": since},
         ) as response:
-            response.raise_for_status()
-            event_name = "message"
-            data_lines: list[str] = []
-            for line in response.iter_lines():
-                if line == "":
-                    if data_lines:
-                        yield event_name, json.loads("\n".join(data_lines))
-                    event_name = "message"
-                    data_lines = []
-                    continue
-                if line.startswith("event:"):
-                    event_name = line[6:].strip()
-                elif line.startswith("data:"):
-                    data_lines.append(line[5:].strip())
+            with self._state_changed:
+                if self._closed:
+                    interrupt_immediately = True
+                else:
+                    interrupt_immediately = False
+                    self._active_stream_response = response
+            if interrupt_immediately:
+                _interrupt_httpx_response_read(response)
+                return
+            try:
+                response.raise_for_status()
+                event_name = "message"
+                data_lines: list[str] = []
+                for line in response.iter_lines():
+                    if line == "":
+                        if data_lines:
+                            yield event_name, json.loads("\n".join(data_lines))
+                        event_name = "message"
+                        data_lines = []
+                        continue
+                    if line.startswith("event:"):
+                        event_name = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data_lines.append(line[5:].strip())
+            finally:
+                with self._state_changed:
+                    if self._active_stream_response is response:
+                        self._active_stream_response = None
 
     def _run_hooks(self, hook: HookPoint, previous_world: Any = None) -> None:
         """Run hook processors and update AgentState."""
@@ -1153,6 +1353,26 @@ def _server_timing_from_ack(ack: CommandResult) -> Optional[dict[str, Any]]:
         return None
     timing = ack.payload.get("server_timing")
     return timing if isinstance(timing, dict) else None
+
+
+def _interrupt_httpx_response_read(response: httpx.Response) -> None:
+    """Close the transport stream that owns an active blocking response read."""
+    network_stream = response.extensions.get("network_stream")
+    get_extra_info = getattr(network_stream, "get_extra_info", None)
+    if callable(get_extra_info):
+        transport_socket = get_extra_info("socket")
+        shutdown_socket = getattr(transport_socket, "shutdown", None)
+        if callable(shutdown_socket):
+            try:
+                shutdown_socket(socket.SHUT_RDWR)
+            except OSError:
+                # The peer or observation worker may have won the close race.
+                pass
+    close_network_stream = getattr(network_stream, "close", None)
+    if callable(close_network_stream):
+        close_network_stream()
+        return
+    response.close()
 
 
 def _elapsed_ms_float(started: float) -> float:

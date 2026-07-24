@@ -27,7 +27,7 @@ from ai.codex_tools.local_client import HotCodexClientError, HotCodexLocalClient
 from ai.codex_tools.representation.geometry import GeometryOperation, GeometryQuery
 from ai.codex_tools.representation.inspection import InspectionGetRequest, InspectionSearchRequest
 from ai.codex_tools.representation.profiles import BALANCED_V2_PROFILE_ID
-from ai.runtime_performance import latency_sensitive_gc
+from server.runtime_performance import latency_sensitive_gc
 
 app = typer.Typer(help="Persistent typed Codex control of D&D engine sessions.")
 

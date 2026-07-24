@@ -8,8 +8,9 @@ from uuid import UUID
 from dnd.core.base_actions import spell_slot_cost_type
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
-    WeaponSlot, Damage, DamageRollResultEvent,
+    Damage, DamageRollResultEvent,
 )
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
 from dnd.core.modifiers import CreatureType, DamageType
 from dnd.core.values import ModifiableValue

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import logging
-from queue import Queue
-from threading import Lock, Thread
 from typing import Protocol
 
+from ai.ordered_delivery import OrderedDeliveryWorker
 from ai.policy.contracts import PolicyDecisionTelemetry
 
 
-logger = logging.getLogger(__name__)
-_CLOSE = object()
+DEFAULT_TELEMETRY_CLOSE_TIMEOUT_SECONDS = 4.0
 
 
 class PolicyTelemetryDestination(Protocol):
@@ -45,47 +42,32 @@ class QueuedPolicyTelemetrySink:
         if max_depth < 1:
             raise ValueError("max_depth must be positive")
         self.destination = destination
-        self._queue: Queue[PolicyDecisionTelemetry | object] = Queue(max_depth)
-        self._state_lock = Lock()
-        self._closed = False
-        self._worker = Thread(
-            target=self._deliver,
-            name="policy-telemetry-delivery",
-            daemon=True,
+        session_id = str(getattr(destination, "session_id", "unscoped"))
+        self._delivery = OrderedDeliveryWorker(
+            destination.emit_policy_decision,
+            name=f"policy-telemetry-{session_id}",
+            max_depth=max_depth,
         )
-        self._worker.start()
 
     def emit_policy_decision(self, event: PolicyDecisionTelemetry) -> None:
         """Enqueue one immutable decision without serializing its payload."""
-        with self._state_lock:
-            if self._closed:
-                raise RuntimeError("policy telemetry sink is closed")
-            self._queue.put(event)
+        self._delivery.submit(event)
 
-    def flush(self) -> None:
+    def flush(
+        self,
+        timeout_seconds: float = DEFAULT_TELEMETRY_CLOSE_TIMEOUT_SECONDS,
+    ) -> None:
         """Wait until every previously enqueued decision is delivered."""
-        self._queue.join()
+        self._delivery.flush(timeout_seconds)
 
-    def close(self) -> None:
+    def close(
+        self,
+        timeout_seconds: float = DEFAULT_TELEMETRY_CLOSE_TIMEOUT_SECONDS,
+    ) -> None:
         """Flush pending decisions and stop the delivery worker once."""
-        with self._state_lock:
-            if self._closed:
-                return
-            self._closed = True
-            self._queue.put(_CLOSE)
-        self._worker.join()
+        self._delivery.close(timeout_seconds)
 
-    def _deliver(self) -> None:
-        """Deliver queued decisions in strict source order."""
-        while True:
-            queued = self._queue.get()
-            try:
-                if queued is _CLOSE:
-                    return
-                assert isinstance(queued, PolicyDecisionTelemetry)
-                try:
-                    self.destination.emit_policy_decision(queued)
-                except Exception:
-                    logger.exception("policy telemetry delivery failed")
-            finally:
-                self._queue.task_done()
+    @property
+    def worker_alive(self) -> bool:
+        """Return whether the delivery worker remains alive."""
+        return self._delivery.worker_alive

@@ -14,17 +14,17 @@ from dnd.core.action_execution import (
 )
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationTileFact,
 )
-from ai.observation.projector import build_observation_snapshot
-from ai.subjective.movement_revalidation import (
+from server.agent_protocol.observation_replay import materialize_snapshot
+from server.agent_runtime.observation_projector import build_observation_snapshot
+from server.agent_runtime.movement_revalidation import (
     MovementRevalidationCause,
     _movement_revalidation_cause,
 )
-from ai.subjective.store import SubjectiveStore
 from tests.manual.test_09_action_discovery_and_costs import (
     create_tutorial_actor,
     reset_action_state,
@@ -148,7 +148,7 @@ def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() ->
         hidden_monster=True,
     )
     snapshot = build_observation_snapshot(session_id)
-    before = SubjectiveStore().load_snapshot(snapshot)
+    before = materialize_snapshot(snapshot)
     enemy = ObservationEntityFact(
         uuid=str(monster.uuid),
         name=monster.name,
@@ -192,7 +192,7 @@ def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() ->
 def test_subjective_revalidator_interrupts_for_hazard_or_actor_change() -> None:
     """New hazards and material actor changes invalidate the remaining path."""
     _client, session_id, hero, _monster, _encounter = create_observation_game()
-    before = SubjectiveStore().load_snapshot(
+    before = materialize_snapshot(
         build_observation_snapshot(session_id)
     )
     hazard = ObservationTileFact(

@@ -7,13 +7,14 @@ from typing import Mapping, Sequence
 
 from ai.planning.composition import compose_option
 from ai.planning.contracts import LogicalStep, RegressionCandidate
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ComparisonOperator,
     EffectOperation,
     FactExpression,
     FactOperator,
     FactPredicate,
     FactValue,
+    LogicalEffect,
     TruthValue,
     evaluate_fact_expression,
 )
@@ -118,8 +119,6 @@ def _step_establishes(step: LogicalStep, expression: FactExpression) -> bool:
 
 def _effect_establishes_predicate(effect: object, predicate: FactPredicate) -> bool:
     """Match one literal guaranteed effect to one requested predicate."""
-    from ai.protocol.semantics import LogicalEffect
-
     if not isinstance(effect, LogicalEffect) or effect.fact_id != predicate.fact_id:
         return False
     if effect.operation is not EffectOperation.SET or effect.value_ref is not None:
@@ -182,4 +181,3 @@ def _expressions_identity(expressions: tuple[FactExpression, ...]) -> str:
         for expression in expressions
     ]
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
-

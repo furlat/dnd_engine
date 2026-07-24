@@ -2,7 +2,8 @@
 
 from uuid import uuid4
 
-from ai.observation.models import (
+from dnd.core.life_types import LifeState
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationFrame,
@@ -12,8 +13,8 @@ from ai.observation.models import (
     ObservationSessionState,
     SubjectiveWorldState,
 )
-from ai.protocol.control import CommandResult, CommandResultStatus
-from ai.protocol.semantics import ActionSemantics, action_semantics_ref
+from server.agent_protocol.control import CommandResult, CommandResultStatus
+from server.agent_protocol.semantics import ActionSemantics, action_semantics_ref
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 
@@ -281,14 +282,21 @@ def test_known_death_survives_redaction_but_not_visible_resurrection() -> None:
     visible = ObservationEntityFact.model_validate(
         next(entity for entity in snapshot["known_entities"] if entity["uuid"] == entity_uuid)
     )
-    known_dead = visible.model_copy(update={"is_dead": True})
+    known_dead = visible.model_copy(update={
+        "life_state": LifeState.DEAD,
+        "is_dead": True,
+    })
     remembered_unknown = known_dead.model_copy(update={
         "knowledge_state": KnowledgeState.REMEMBERED,
         "hp": None,
         "max_hp": None,
+        "life_state": None,
         "is_dead": None,
     })
-    resurrected = visible.model_copy(update={"is_dead": False})
+    resurrected = visible.model_copy(update={
+        "life_state": LifeState.ALIVE,
+        "is_dead": False,
+    })
 
     for offset, fact in enumerate((known_dead, remembered_unknown, resurrected), start=1):
         result = store.apply_frame(ObservationFrame(
@@ -304,8 +312,10 @@ def test_known_death_survives_redaction_but_not_visible_resurrection() -> None:
 
         assert store.world is not None
         if offset < 3:
+            assert store.world.known_entities[entity_uuid].life_state is LifeState.DEAD
             assert store.world.known_entities[entity_uuid].is_dead is True
 
     assert store.world is not None
     assert store.world.known_entities[entity_uuid].knowledge_state is KnowledgeState.VISIBLE
+    assert store.world.known_entities[entity_uuid].life_state is LifeState.ALIVE
     assert store.world.known_entities[entity_uuid].is_dead is False

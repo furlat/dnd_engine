@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -11,26 +12,66 @@ from fastapi.testclient import TestClient
 
 from ai.codex_tools import commands as codex_commands
 from ai.codex_tools.client import CodexToolClient, CodexToolHTTPError
-from ai.observation import (
-    ObservationFrame,
+from ai.policy.source import policy_source_snapshot
+from server.agent_protocol.observation import ObservationFrame
+from server.agent_protocol.observation_replay import (
     apply_observation_frame,
     materialize_snapshot,
 )
-from ai.protocol.control import DecisionEpoch
+from server.agent_protocol.control import DecisionEpoch
 from dnd.controller import CodexController
 from dnd.core.events import EventPhase, SensoryUpdateEvent, SensoryUpdateReason
 from dnd.entity import Entity
 from server import event_server
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.arena_mode import reset_standard_arena_runtime
 from server.session import PlayerType
 from tests.manual.test_28_subjective_observation_stream import complete_event, create_observation_game
 
 
+class _TakeoverTestAgentLauncher:
+    """Registered managed-agent capability for takeover route checks."""
+
+    service_id = "tests.takeover-agent"
+
+    def preflight(self, required_agents: int) -> None:
+        del required_agents
+
+    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+        return AgentProcessSpec(
+            argv=("unused-takeover-agent", request.session_id),
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+
 @pytest.fixture(autouse=True)
-def stop_test_external_ai_processes() -> Generator[None, None, None]:
+def stop_test_external_ai_processes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[None, None, None]:
     """Stop external agents started against the in-process test server."""
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_TakeoverTestAgentLauncher()))
+
+    async def accept_batch(
+        _requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        return ()
+
+    monkeypatch.setattr(
+        event_server.agent_service_manager,
+        "start_agents",
+        accept_batch,
+    )
+    event_server.configure_policy_source_manifest(None)
     yield
-    event_server.ai_process_manager.stop_all()
+    event_server.agent_service_manager.stop_all_blocking()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    event_server.configure_policy_source_manifest(None)
 
 
 def test_codex_takeover_claims_monsters_and_stops_at_codex_turn() -> None:
@@ -183,10 +224,23 @@ def test_codex_takeover_conflict_and_force_replace() -> None:
     ]
 
 
-def test_policy_source_endpoint_returns_hashable_shared_policy() -> None:
-    """The server exposes the exact shared policy source for observability."""
-    payload = TestClient(event_server.app).get("/ai/policy/source").json()
+def test_policy_source_endpoint_requires_an_explicit_client_manifest() -> None:
+    """A server-only deployment does not discover or read client source."""
+    response = TestClient(event_server.app).get("/ai/policy/source")
 
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "policy_source_unavailable"
+
+
+def test_policy_source_endpoint_returns_supplied_client_manifest() -> None:
+    """The server exposes opaque policy diagnostics supplied by a client root."""
+    manifest = policy_source_snapshot()
+    event_server.configure_policy_source_manifest(manifest)
+
+    response = TestClient(event_server.app).get("/ai/policy/source")
+    payload = response.json()
+
+    assert response.status_code == 200
     assert payload["policy_name"] == "shared_subjective_hierarchical_policy"
     assert len(payload["source_sha256"]) == 64
     assert payload["line_count"] > 1_000
@@ -206,17 +260,26 @@ def test_ai_command_advances_when_accepted_action_ends_actor_turn(monkeypatch: p
     )
     row = next(row for row in epoch.affordances.position_actions if row.can_afford)
 
-    async def fake_execute_action_by_index(_request: object) -> event_server.ActionResult:
-        return event_server.ActionResult(
-            success=True,
-            message="Actor cannot continue.",
-            event_type="test_action",
-            entity_hp=0,
-            turn_continues=False,
-            encounter_ended=False,
+    async def fake_execute_action_by_index(
+        _request: object,
+        execution_binding: object = None,
+    ) -> event_server._ActionExecutionResult:
+        del execution_binding
+        return event_server._ActionExecutionResult(
+            response=event_server.ActionResult(
+                success=True,
+                message="Actor cannot continue.",
+                event_type="test_action",
+                turn_continues=False,
+                encounter_ended=False,
+            ),
         )
 
-    monkeypatch.setattr(event_server, "execute_action_by_index", fake_execute_action_by_index)
+    monkeypatch.setattr(
+        event_server,
+        "_execute_action_by_index_impl",
+        fake_execute_action_by_index,
+    )
     response = client.post(
         f"/ai/sessions/{session_id}/commands/execute",
         json={

@@ -13,7 +13,7 @@ from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.srd_roster import create_srd_monster, list_srd_monster_specs
-from server.api_models import APIEntitySummary, APIEquipmentOverview
+from server.world_projection import project_entity_summary, project_equipment_overview
 
 
 VISUAL_SCALE_BY_SIZE = {
@@ -61,8 +61,8 @@ def test_preset_goblin_and_skeleton_keep_layered_presentation() -> None:
     goblin = create_goblin(position=(2, 2), faction="monsters")
     skeleton = create_skeleton(position=(4, 2), faction="monsters")
 
-    goblin_api = APIEntitySummary.create(goblin)
-    skeleton_api = APIEntitySummary.create(skeleton)
+    goblin_api = project_entity_summary(goblin)
+    skeleton_api = project_entity_summary(skeleton)
 
     assert goblin_api.creature_type == CreatureType.HUMANOID.value
     assert goblin_api.size == Size.SMALL.value
@@ -78,7 +78,7 @@ def test_srd_roster_uses_explicit_type_driven_presentation() -> None:
     for spec in list_srd_monster_specs():
         _reset_state()
         entity = create_srd_monster(spec.monster_id, position=(2, 2), faction="monsters")
-        summary = APIEntitySummary.create(entity)
+        summary = project_entity_summary(entity)
         expected_kind = "layered" if entity.creature_type == CreatureType.HUMANOID else "placeholder"
 
         assert summary.creature_type == entity.creature_type.value
@@ -97,7 +97,7 @@ def test_srd_equipment_exposes_a_complete_visual_contract() -> None:
     for spec in list_srd_monster_specs():
         _reset_state()
         entity = create_srd_monster(spec.monster_id, position=(2, 2), faction="monsters")
-        overview = APIEquipmentOverview.create(entity)
+        overview = project_equipment_overview(entity)
 
         for slot in overview.slots:
             item = slot.item

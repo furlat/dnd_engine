@@ -11,7 +11,8 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_actions import AvailableActionInfo, TargetType
-from dnd.core.base_conditions import BaseCondition, ConditionCategory
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import Event, EventPhase, Range, RangeType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig

@@ -11,10 +11,12 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import AdvantageStatus, AutoHitStatus, CriticalStatus, DamageType, ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
@@ -232,8 +234,8 @@ def test_eb_08_005_prone_uses_distance_context_for_incoming_attacks() -> None:
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
 
 
-def test_eb_08_006_paralyzed_stunned_and_unconscious_add_incapacitated_trees() -> None:
-    """EB-08-006: severe conditions compose Incapacitated and save failures."""
+def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
+    """EB-08-006: severe conditions directly own denial and save transforms."""
     reset_condition_state()
     source = configured_entity("Source", (1, 1), "heroes")
     target = configured_entity("Target", (2, 1), "monsters")
@@ -241,8 +243,10 @@ def test_eb_08_006_paralyzed_stunned_and_unconscious_add_incapacitated_trees() -
     distant_attacker = configured_entity("Distant", (8, 8), "heroes")
 
     paralyzed = apply_to_target(Paralyzed, source, target)
-    assert len(paralyzed.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert paralyzed.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
+    assert target.action_economy.movement.normalized_score == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -260,21 +264,92 @@ def test_eb_08_006_paralyzed_stunned_and_unconscious_add_incapacitated_trees() -
 
     target.remove_condition("Paralyzed")
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
 
     stunned = apply_to_target(Stunned, source, target)
-    assert len(stunned.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert stunned.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
+    assert target.action_economy.actions.normalized_score == 0
+    assert target.action_economy.bonus_actions.normalized_score == 0
+    assert target.action_economy.reactions.normalized_score == 0
+    assert target.action_economy.movement.normalized_score == 0
+    assert (
+        target.saving_throws.get_saving_throw("strength").bonus.auto_hit
+        == AutoHitStatus.AUTOMISS
+    )
+    assert (
+        target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
+        == AutoHitStatus.AUTOMISS
+    )
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
+
     target.remove_condition("Stunned")
 
+    assert stunned.applied is False
+    assert "Stunned" not in target.active_conditions
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+    assert (
+        target.saving_throws.get_saving_throw("strength").bonus.auto_hit
+        == AutoHitStatus.NONE
+    )
+    assert (
+        target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
+        == AutoHitStatus.NONE
+    )
+    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+
     unconscious = apply_to_target(Unconscious, source, target)
-    assert len(unconscious.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert unconscious.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
+    assert target.action_economy.actions.normalized_score == 0
+    assert target.action_economy.bonus_actions.normalized_score == 0
+    assert target.action_economy.reactions.normalized_score == 0
+    assert target.action_economy.movement.normalized_score == 0
+    assert target.senses.visual_access.normalized_score == 0
+    assert (
+        target.saving_throws.get_saving_throw("strength").bonus.auto_hit
+        == AutoHitStatus.AUTOMISS
+    )
+    assert (
+        target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
+        == AutoHitStatus.AUTOMISS
+    )
     target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
     assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.AUTOCRIT
     target.equipment.ac_bonus.set_target_entity(distant_attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
+
+    target.remove_condition("Unconscious")
+
+    assert unconscious.applied is False
+    assert "Unconscious" not in target.active_conditions
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+    assert target.senses.visual_access.normalized_score == 1
+    assert (
+        target.saving_throws.get_saving_throw("strength").bonus.auto_hit
+        == AutoHitStatus.NONE
+    )
+    assert (
+        target.saving_throws.get_saving_throw("dexterity").bonus.auto_hit
+        == AutoHitStatus.NONE
+    )
+    assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
+    assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.NONE
 
 
 def test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers() -> None:
@@ -433,7 +508,7 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         Stunned,
         Unconscious,
     ]
-    subcondition_parents = {Paralyzed, Petrified, Stunned, Unconscious}
+    severe_conditions = {Paralyzed, Petrified, Stunned, Unconscious}
 
     for condition_type in condition_types:
         reset_condition_state()
@@ -443,8 +518,10 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
 
         target.senses.entities[source.uuid] = source.position
         condition = apply_to_target(condition_type, source, target)
-        if condition_type in subcondition_parents:
-            assert "Incapacitated" in target.active_conditions
+        if condition_type in severe_conditions:
+            assert condition.sub_conditions == []
+            assert "Incapacitated" not in target.active_conditions
+            assert target.action_economy.action_permission.normalized_score == 0
 
         target.equipment.attack_bonus.set_target_entity(source.uuid)
         target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
@@ -469,6 +546,8 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         assert target.action_economy.bonus_actions.normalized_score == 1
         assert target.action_economy.reactions.normalized_score == 1
         assert target.action_economy.movement.normalized_score == 30
+        assert target.action_economy.action_permission.normalized_score == 1
+        assert target.senses.visual_access.normalized_score == 1
 
         target.equipment.attack_bonus.set_target_entity(source.uuid)
         assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
@@ -601,8 +680,9 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
     petrified = apply_to_target(Petrified, source, target)
 
     assert ConditionTag.PETRIFICATION in petrified.tags
-    assert len(petrified.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert petrified.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
@@ -632,6 +712,7 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
 
     assert "Petrified" not in target.active_conditions
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.movement.normalized_score == 30
     assert not target.check_condition_immunity("Poisoned")
@@ -682,7 +763,7 @@ def test_eb_08_015_exhaustion_levels_are_cumulative_and_removable() -> None:
     target.remove_condition("Exhaustion")
 
     apply_to_target(lambda **kwargs: Exhaustion(level=6, **kwargs), source, target)
-    assert "Dead" in target.active_conditions
+    assert target.health.life_state is LifeState.DEAD
     assert not target.has_hp
 
 
@@ -692,7 +773,7 @@ if __name__ == "__main__":
     test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks()
     test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions()
     test_eb_08_005_prone_uses_distance_context_for_incoming_attacks()
-    test_eb_08_006_paralyzed_stunned_and_unconscious_add_incapacitated_trees()
+    test_eb_08_006_severe_conditions_own_direct_denial_transforms()
     test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers()
     test_eb_08_008_srd_condition_gaps_are_explicit()
     test_eb_08_009_prone_immediate_stand_on_own_turn_cancels_indexing()

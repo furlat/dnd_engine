@@ -6,7 +6,7 @@ from ai.policy.contracts import ExecuteIntent, PolicyGoal
 from ai.policy.generations.current_commitments import CurrentCandidatePolicyHost, create_generation_policy_host
 from ai.policy.generations.registry import CANDIDATE_GENERATION_ID, get_policy_implementation
 from ai.policy.host import PolicyResultDisposition
-from ai.protocol.control import ActionResolutionStatus, CommandResult, CommandResultStatus
+from server.agent_protocol.control import ActionResolutionStatus, CommandResult, CommandResultStatus
 from tests.manual.test_44_typed_agent_policy import _world
 
 

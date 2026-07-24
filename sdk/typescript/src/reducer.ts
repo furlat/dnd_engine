@@ -1,436 +1,357 @@
 import type {
-  APIDirectionalBlockMap,
   APIEntitySummary,
-  APIEntityVisibility,
-  APIFloorObject,
-  APIGameState,
   APITile,
-  APIVisibilityResponse,
-  ServerEvent,
+  EntityVisualLoadout,
+  SubjectiveEncounter,
+  SubjectiveFloorObject,
+  SubjectivePerspective,
+  SubjectiveReplicatedWorld,
+  SubjectiveWorldPatch,
 } from "./generated/contracts.generated.js";
+import { ContractValidationError } from "./validation.js";
 
-export interface ReplicatedWorld {
-  readonly state: APIGameState;
-  readonly visibility: APIVisibilityResponse;
-}
+/** Apply one complete observation-frame patch transaction. */
+export function reduceSubjectiveWorld(
+  world: SubjectiveReplicatedWorld,
+  patches: ReadonlyArray<SubjectiveWorldPatch>,
+): SubjectiveReplicatedWorld {
+  const entities = keyed(world.state.entities, (entity) => entity.uuid);
+  const tiles = keyed(world.state.grid.tiles, tileKey);
+  const floorObjects = keyed(world.state.floor_objects, (object) => object.uuid);
+  const visibility = { ...world.visibility };
+  const equipment = { ...world.equipment_by_entity };
+  const visualLoadouts = { ...world.visual_loadout_by_entity };
+  let encounter = world.state.encounter;
 
-function terminalEffect(event: ServerEvent): boolean {
-  return event.phase === "completion" && !event.canceled;
-}
-
-function replaceEntity(
-  state: APIGameState,
-  entityUuid: string | null,
-  update: (entity: APIEntitySummary) => APIEntitySummary,
-): APIGameState {
-  if (entityUuid === null) {
-    return state;
+  for (const patch of patches) {
+    assertSubjectiveWorldPatch(patch);
+    switch (patch.kind) {
+      case "entity_upsert":
+        entities.set(patch.entity.uuid, patch.entity);
+        break;
+      case "entity_remove":
+        entities.delete(patch.entity_uuid);
+        delete equipment[patch.entity_uuid];
+        delete visualLoadouts[patch.entity_uuid];
+        break;
+      case "tile_upsert":
+        assertTileInsideGrid(patch.tile, world);
+        tiles.set(tileKey(patch.tile), patch.tile);
+        break;
+      case "floor_object_upsert":
+        floorObjects.set(patch.object.uuid, patch.object);
+        break;
+      case "floor_object_remove":
+        floorObjects.delete(patch.object_uuid);
+        break;
+      case "encounter_replace":
+        encounter = patch.encounter;
+        break;
+      case "observer_visibility_replace":
+        visibility[patch.observer_uuid] = patch.visibility;
+        break;
+      case "observer_visibility_remove":
+        delete visibility[patch.observer_uuid];
+        break;
+      case "controlled_equipment_replace":
+        equipment[patch.entity_uuid] = patch.equipment;
+        break;
+      case "visual_loadout_replace":
+        visualLoadouts[patch.loadout.entity_uuid] = patch.loadout;
+        break;
+      case "door_state":
+        applyDoorState(floorObjects, patch);
+        break;
+      default:
+        assertNever(patch);
+    }
   }
-  let changed = false;
-  const entities = state.entities.map((entity) => {
-    if (entity.uuid !== entityUuid) {
-      return entity;
-    }
-    changed = true;
-    return update(entity);
-  });
-  return changed ? { ...state, entities } : state;
-}
 
-function replaceTile(
-  state: APIGameState,
-  position: readonly [number, number],
-  update: (tile: APITile) => APITile,
-): APIGameState {
-  let changed = false;
-  const tiles = state.grid.tiles.map((tile) => {
-    if (tile.x !== position[0] || tile.y !== position[1]) {
-      return tile;
-    }
-    changed = true;
-    return update(tile);
-  });
-  return changed ? { ...state, grid: { ...state.grid, tiles } } : state;
-}
-
-function replaceTileLightLevels(
-  state: APIGameState,
-  lightLevels: Readonly<Record<string, number>>,
-): APIGameState {
-  let changed = false;
-  const tiles = state.grid.tiles.map((tile) => {
-    const lightLevel = lightLevels[`${tile.x},${tile.y}`];
-    if (lightLevel === undefined || lightLevel === tile.light_level) {
-      return tile;
-    }
-    changed = true;
-    return { ...tile, light_level: lightLevel };
-  });
-  return changed ? { ...state, grid: { ...state.grid, tiles } } : state;
-}
-
-function mergeDirectionalMap(
-  current: APIDirectionalBlockMap,
-  patch: Readonly<Record<string, boolean>> | null,
-): APIDirectionalBlockMap {
-  if (patch === null) {
-    return current;
-  }
   return {
-    north: patch.north ?? current.north,
-    south: patch.south ?? current.south,
-    east: patch.east ?? current.east,
-    west: patch.west ?? current.west,
+    state: {
+      ...world.state,
+      entities: [...entities.values()],
+      grid: { ...world.state.grid, tiles: [...tiles.values()] },
+      encounter,
+      floor_objects: [...floorObjects.values()],
+    },
+    visibility,
+    equipment_by_entity: equipment,
+    visual_loadout_by_entity: visualLoadouts,
   };
 }
 
-function reduceSpatialChange(state: APIGameState, event: Extract<ServerEvent, { wire_type: "dnd.core.events.SpatialChangeEvent" }>): APIGameState {
-  if (event.event_type === "spatial_object_removed" && event.object_uuid !== null) {
-    return {
-      ...state,
-      floor_objects: state.floor_objects.filter((object) => object.uuid !== event.object_uuid),
-    };
+/** Validate the cross-field invariants needed by every renderer seed. */
+export function assertSubjectiveWorld(
+  world: SubjectiveReplicatedWorld,
+  perspective: SubjectivePerspective,
+  path = "$subjective.world",
+): void {
+  const entities = uniqueValues(
+    world.state.entities.map((entity) => entity.uuid),
+    `${path}.state.entities`,
+  );
+  uniqueValues(
+    world.state.floor_objects.map((object) => object.uuid),
+    `${path}.state.floor_objects`,
+  );
+  world.state.floor_objects.forEach((object, index) => {
+    assertSubjectiveFloorObject(object, `${path}.state.floor_objects[${index}]`);
+  });
+  if (world.state.encounter !== null) {
+    assertSubjectiveEncounter(world.state.encounter, `${path}.state.encounter`);
   }
-  if (event.event_type === "spatial_object_placed" && event.object_uuid !== null) {
-    const floorObject: APIFloorObject = {
-      uuid: event.object_uuid,
-      name: event.object_name ?? "Object",
-      position: [event.position[0], event.position[1]],
-      map_char: event.object_map_char ?? "φ",
-      state: {
-        ...(event.object_blocks_movement === null ? {} : { blocks_movement: event.object_blocks_movement }),
-        ...(event.object_blocks_vision === null ? {} : { blocks_vision: event.object_blocks_vision }),
-        ...(event.object_is_open === null ? {} : { is_open: event.object_is_open }),
-      },
-    };
-    return {
-      ...state,
-      floor_objects: [
-        ...state.floor_objects.filter((object) => object.uuid !== event.object_uuid),
-        floorObject,
-      ],
-    };
-  }
-  if (event.event_type === "spatial_object_changed" && event.object_uuid !== null) {
-    const position: [number, number] = [event.position[0], event.position[1]];
-    const floorObjects: APIFloorObject[] = state.floor_objects.map((object) => {
-      if (object.uuid !== event.object_uuid) {
-        return object;
-      }
-      return {
-        ...object,
-        position,
-        name: event.object_name ?? object.name,
-        map_char: event.object_map_char ?? object.map_char,
-        state: {
-          ...object.state,
-          ...(event.object_blocks_movement === null ? {} : { blocks_movement: event.object_blocks_movement }),
-          ...(event.object_blocks_vision === null ? {} : { blocks_vision: event.object_blocks_vision }),
-          ...(event.object_is_open === null ? {} : { is_open: event.object_is_open }),
-        },
-      };
-    });
-    return { ...state, floor_objects: floorObjects };
-  }
-  if (
-    event.event_type === "spatial_tile_changed"
-    || event.event_type === "spatial_light_changed"
-  ) {
-    const stateWithBatchLight = event.event_type === "spatial_light_changed"
-      && event.light_level_map !== null
-      ? replaceTileLightLevels(state, event.light_level_map)
-      : state;
-    return replaceTile(stateWithBatchLight, event.position, (tile) => ({
-      ...tile,
-      walkable: event.tile_walkable ?? tile.walkable,
-      visible: event.tile_visible ?? tile.visible,
-      light_level: event.new_light_level ?? tile.light_level,
-      directional_blocks_movement: mergeDirectionalMap(
-        tile.directional_blocks_movement,
-        event.directional_blocks_movement,
-      ),
-      directional_blocks_vision: mergeDirectionalMap(
-        tile.directional_blocks_vision,
-        event.directional_blocks_vision,
-      ),
-      directional_blocks_light: mergeDirectionalMap(
-        tile.directional_blocks_light,
-        event.directional_blocks_light,
-      ),
-      directional_blocks_propagation: mergeDirectionalMap(
-        tile.directional_blocks_propagation,
-        event.directional_blocks_propagation,
-      ),
-    }));
-  }
-  return state;
-}
+  uniqueValues(
+    world.state.grid.tiles.map(tileKey),
+    `${path}.state.grid.tiles`,
+  );
 
-export function reduceGameState(state: APIGameState, event: ServerEvent): APIGameState {
-  if (!terminalEffect(event)) {
-    return state;
+  const controlled = uniqueValues(
+    perspective.controlled_entity_uuids,
+    "$subjective.perspective.controlled_entity_uuids",
+  );
+  const observers = uniqueValues(
+    perspective.observer_entity_uuids,
+    "$subjective.perspective.observer_entity_uuids",
+  );
+  if (observers.size === 0 || !observers.has(perspective.active_observer_uuid)) {
+    throw new ContractValidationError(
+      "$subjective.perspective.active_observer_uuid",
+      "active observer must belong to a non-empty observer union",
+    );
   }
-  switch (event.wire_type) {
-    case "dnd.core.events.StepMovementEvent":
-      return event.committed
-        ? replaceEntity(state, event.source_entity_uuid, (entity) => ({
-            ...entity,
-            position: [event.to_position[0], event.to_position[1]],
-          }))
-        : state;
-    case "dnd.actions.MovementEvent":
-    case "dnd.actions.JumpEvent":
-      return replaceEntity(state, event.source_entity_uuid, (entity) => ({
-        ...entity,
-        position: [event.end_position[0], event.end_position[1]],
-      }));
-    case "dnd.core.events.ForcedMovementEvent":
-      return replaceEntity(state, event.target_entity_uuid, (entity) => ({
-        ...entity,
-        position: [event.end_position[0], event.end_position[1]],
-      }));
-    case "dnd.core.events.DamageAppliedEvent":
-      return replaceEntity(state, event.target_entity_uuid, (entity) => ({
-        ...entity,
-        hp: event.resulting_normal_hp + event.resulting_temporary_hp,
-      }));
-    case "dnd.core.events.HealEvent":
-      return event.resulting_normal_hp === null
-        ? state
-        : replaceEntity(state, event.target_entity_uuid, (entity) => ({
-            ...entity,
-            hp: event.resulting_normal_hp ?? entity.hp,
-          }));
-    case "dnd.core.base_conditions.ConditionApplicationEvent": {
-      const conditionName = event.condition.name;
-      return replaceEntity(state, event.target_entity_uuid, (entity) => ({
-        ...entity,
-        hp: event.resulting_max_hp === null
-          ? entity.hp
-          : entity.hp + event.resulting_max_hp - entity.max_hp,
-        conditions: conditionName === null || entity.conditions.includes(conditionName)
-          ? entity.conditions
-          : [...entity.conditions, conditionName],
-        condition_details: conditionName === null || entity.condition_details.some(
-          (condition) => condition.name === conditionName,
-        )
-          ? entity.condition_details
-          : [
-              ...entity.condition_details,
-              {
-                name: conditionName,
-                category: event.condition.condition_category,
-              },
-            ],
-        ac: event.resulting_ac ?? entity.ac,
-        max_hp: event.resulting_max_hp ?? entity.max_hp,
-      }));
+  if (perspective.kind === "controlled_knowledge_union") {
+    if (controlled.size === 0 || !sameSet(controlled, observers)) {
+      throw new ContractValidationError(
+        "$subjective.perspective",
+        "controlled knowledge requires identical non-empty controlled and observer sets",
+      );
     }
-    case "dnd.core.base_conditions.ConditionRemovalEvent": {
-      const conditionName = event.condition.name;
-      return replaceEntity(state, event.target_entity_uuid, (entity) => ({
-        ...entity,
-        hp: event.resulting_max_hp === null
-          ? entity.hp
-          : entity.hp + event.resulting_max_hp - entity.max_hp,
-        conditions: conditionName === null
-          ? entity.conditions
-          : entity.conditions.filter((name) => name !== conditionName),
-        condition_details: entity.condition_details.filter(
-          (condition) => condition.name !== conditionName,
-        ),
-        ac: event.resulting_ac ?? entity.ac,
-        max_hp: event.resulting_max_hp ?? entity.max_hp,
-      }));
+  } else if (controlled.size !== 0) {
+    throw new ContractValidationError(
+      "$subjective.perspective.controlled_entity_uuids",
+      "spectator knowledge cannot control entities",
+    );
+  }
+  if (!isSubset(controlled, entities) || !isSubset(observers, entities)) {
+    throw new ContractValidationError(
+      path,
+      "controlled and observer entities must exist in projected state",
+    );
+  }
+  assertExactKeys(world.visibility, observers, `${path}.visibility`);
+  assertExactKeys(world.equipment_by_entity, controlled, `${path}.equipment_by_entity`);
+  assertExactKeys(world.visual_loadout_by_entity, entities, `${path}.visual_loadout_by_entity`);
+
+  for (const [entityUuid, loadout] of Object.entries(world.visual_loadout_by_entity)) {
+    if (loadout.entity_uuid !== entityUuid) {
+      throw new ContractValidationError(
+        `${path}.visual_loadout_by_entity.${entityUuid}.entity_uuid`,
+        "visual loadout key and entity UUID differ",
+      );
     }
-    case "dnd.core.events.DeathEvent": {
-      let next = replaceEntity(state, event.entity_uuid, (entity) => ({
-        ...entity,
-        hp: event.final_hp,
-        is_dead: true,
-      }));
-      if (next.encounter !== null) {
-        next = {
-          ...next,
-          encounter: {
-            ...next.encounter,
-            initiative_order: next.encounter.initiative_order.map((combatant) =>
-              combatant.uuid === event.entity_uuid
-                ? { ...combatant, is_dead: true }
-                : combatant,
-            ),
-          },
-        };
-      }
-      return next;
+    assertEntityVisualLoadout(loadout, `${path}.visual_loadout_by_entity.${entityUuid}`);
+  }
+
+  const grid = world.state.grid;
+  if (grid.min_x > grid.max_x || grid.min_y > grid.max_y) {
+    throw new ContractValidationError(`${path}.state.grid`, "grid bounds are reversed");
+  }
+  for (const tile of grid.tiles) {
+    assertTileInsideGrid(tile, world, `${path}.state.grid.tiles`);
+  }
+  for (const [observerUuid, row] of Object.entries(world.visibility)) {
+    const visibleKeys = new Set(row.visible_cells.map(([x, y]) => `${x},${y}`));
+    assertExactKeys(
+      row.effective_light_levels,
+      visibleKeys,
+      `${path}.visibility.${observerUuid}.effective_light_levels`,
+    );
+  }
+}
+
+/** Validate nested model semantics before a frame is accepted or reduced. */
+export function assertSubjectiveWorldPatch(
+  patch: SubjectiveWorldPatch,
+  path = "$subjective.patch",
+): void {
+  switch (patch.kind) {
+    case "floor_object_upsert":
+      assertSubjectiveFloorObject(patch.object, `${path}.object`);
+      return;
+    case "encounter_replace":
+      if (patch.encounter !== null) assertSubjectiveEncounter(patch.encounter, `${path}.encounter`);
+      return;
+    case "observer_visibility_replace": {
+      const visible = new Set(
+        patch.visibility.visible_cells.map(([x, y]) => `${x},${y}`),
+      );
+      assertExactKeys(
+        patch.visibility.effective_light_levels,
+        visible,
+        `${path}.visibility.effective_light_levels`,
+      );
+      return;
     }
-    case "dnd.core.events.TurnStartEvent":
-      return state.encounter === null
-        ? state
-        : {
-            ...state,
-            encounter: {
-              ...state.encounter,
-              state: "active",
-              round_number: event.round_number,
-              current_turn_index: event.turn_index,
-              current_entity_uuid: event.entity_uuid,
-            },
-          };
-    case "dnd.core.events.TurnEndEvent":
-      return state.encounter === null
-        ? state
-        : {
-            ...state,
-            encounter: {
-              ...state.encounter,
-              round_number: event.round_number,
-              current_turn_index: event.turn_index,
-            },
-          };
-    case "dnd.core.events.RoundStartEvent":
-    case "dnd.core.events.RoundEndEvent":
-      return state.encounter === null
-        ? state
-        : {
-            ...state,
-            encounter: { ...state.encounter, round_number: event.round_number },
-          };
-    case "dnd.core.events.EncounterStartEvent":
-      return state.encounter === null
-        ? state
-        : { ...state, encounter: { ...state.encounter, state: "active" } };
-    case "dnd.core.events.EncounterEndEvent":
-      return state.encounter === null
-        ? state
-        : {
-            ...state,
-            encounter: {
-              ...state.encounter,
-              state: "ended",
-              current_entity_uuid: null,
-            },
-          };
-    case "dnd.core.events.SpatialChangeEvent":
-      return reduceSpatialChange(state, event);
+    case "visual_loadout_replace":
+      assertEntityVisualLoadout(patch.loadout, `${path}.loadout`);
+      return;
+    case "entity_upsert":
+    case "entity_remove":
+    case "tile_upsert":
+    case "floor_object_remove":
+    case "observer_visibility_remove":
+    case "controlled_equipment_replace":
+    case "door_state":
+      return;
+    default:
+      assertNever(patch);
+  }
+}
 
-    // These events either describe an attempt/roll, or their state mutation is
-    // carried by a factual child event handled above. Keeping every generated
-    // wire class explicit makes a newly added backend event fail compilation
-    // until its replication behavior is deliberately classified.
-    case "dnd.actions.AttackEvent":
-    case "dnd.actions.ShoveEvent":
-    case "dnd.actions.SpellEvent":
-    case "dnd.blocks.base_item.ItemChargeConsumptionEvent":
-    case "dnd.blocks.equipment.ArmorEquipEvent":
-    case "dnd.blocks.equipment.ArmorUnequipEvent":
-    case "dnd.blocks.equipment.ShieldEquipEvent":
-    case "dnd.blocks.equipment.ShieldUnequipEvent":
-    case "dnd.blocks.equipment.WeaponEquipEvent":
-    case "dnd.blocks.equipment.WeaponUnequipEvent":
-    case "dnd.core.base_actions.ActionEvent":
-    case "dnd.core.events.AttackD20RollResultEvent":
-    case "dnd.core.events.D20RollResultEvent":
-    case "dnd.core.events.DamageRollResultEvent":
-    case "dnd.core.events.DamageRolledEvent":
-    case "dnd.core.events.DeathSaveEvent":
-    case "dnd.core.events.DiceRollResultEvent":
-    case "dnd.core.events.ExposedFlameEvent":
-    case "dnd.core.events.FireExposureEvent":
-    case "dnd.core.events.HealRollResultEvent":
-    case "dnd.core.events.InstantDeathEvent":
-    case "dnd.core.events.SavingThrowD20RollResultEvent":
-    case "dnd.core.events.SavingThrowEvent":
-    case "dnd.core.events.SensoryUpdateEvent":
-    case "dnd.core.events.SkillCheckD20RollResultEvent":
-    case "dnd.core.events.SkillCheckEvent":
-    case "dnd.core.events.TakeDamageEvent":
-    case "dnd.core.events.WindExposureEvent":
-    case "dnd.spells.abjuration.CounterspellReactionEvent":
-    case "dnd.core.events.Event":
-      return state;
-    default: {
-      const unhandledEvent: never = event;
-      return unhandledEvent;
+export function assertSubjectiveFloorObject(
+  object: SubjectiveFloorObject,
+  path = "$subjective.floor_object",
+): void {
+  uniqueValues(object.blocked_directions, `${path}.blocked_directions`);
+  uniqueValues(object.blocked_channels, `${path}.blocked_channels`);
+  const hasDirections = object.blocked_directions.length > 0;
+  const hasChannels = object.blocked_channels.length > 0;
+  if (hasDirections !== hasChannels) {
+    throw new ContractValidationError(path, "directional state requires directions and channels together");
+  }
+  if (object.object_kind === "directional_structure") {
+    if (!hasDirections) {
+      throw new ContractValidationError(path, "directional structure requires blocking state");
     }
+  } else if (object.object_kind !== "door" && hasDirections) {
+    throw new ContractValidationError(path, "directional state belongs only to doors and structures");
+  }
+  if (object.object_kind === "door") {
+    if (object.is_open === null) {
+      throw new ContractValidationError(`${path}.is_open`, "door requires explicit open state");
+    }
+  } else if (object.is_open !== null) {
+    throw new ContractValidationError(`${path}.is_open`, "open state belongs only to doors");
+  }
+  const radii = [
+    object.very_bright_radius_feet,
+    object.bright_radius_feet,
+    object.dim_radius_feet,
+  ];
+  if (object.object_kind === "light_source") {
+    if (object.is_lit === null || radii.some((radius) => radius === null)) {
+      throw new ContractValidationError(path, "light source requires lit state and all radii");
+    }
+  } else if (object.is_lit !== null || radii.some((radius) => radius !== null)) {
+    throw new ContractValidationError(path, "light state belongs only to light sources");
   }
 }
 
-function coordinateKey(position: readonly [number, number]): string {
-  return `${position[0]},${position[1]}`;
+export function assertSubjectiveEncounter(
+  encounter: SubjectiveEncounter,
+  path = "$subjective.encounter",
+): void {
+  const combatants = encounter.initiative_order.map((combatant) => combatant.uuid);
+  uniqueValues(combatants, `${path}.initiative_order`);
+  if (encounter.current_entity_uuid === null) {
+    if (encounter.current_turn_index !== null) {
+      throw new ContractValidationError(
+        `${path}.current_turn_index`,
+        "hidden current combatant cannot expose a turn index",
+      );
+    }
+    return;
+  }
+  const expected = combatants.indexOf(encounter.current_entity_uuid);
+  if (expected < 0 || encounter.current_turn_index !== expected) {
+    throw new ContractValidationError(path, "current turn must address the visible current combatant");
+  }
 }
 
-function updateCoordinates(
-  current: ReadonlyArray<readonly [number, number]>,
-  added: ReadonlyArray<readonly [number, number]>,
-  removed: ReadonlyArray<readonly [number, number]>,
-): Array<[number, number]> {
-  const values = new Map<string, [number, number]>();
-  for (const position of current) {
-    values.set(coordinateKey(position), [position[0], position[1]]);
-  }
-  for (const position of removed) {
-    values.delete(coordinateKey(position));
-  }
-  for (const position of added) {
-    values.set(coordinateKey(position), [position[0], position[1]]);
-  }
-  return [...values.values()];
+function assertEntityVisualLoadout(loadout: EntityVisualLoadout, path: string): void {
+  uniqueValues(loadout.layers.map((layer) => layer.slot), `${path}.layers`);
 }
 
-function updateIds(
-  current: ReadonlyArray<string>,
-  added: ReadonlyArray<string>,
-  removed: ReadonlyArray<string>,
-): string[] {
-  const values = new Set(current);
-  removed.forEach((value) => values.delete(value));
-  added.forEach((value) => values.add(value));
-  return [...values];
+function applyDoorState(
+  objects: Map<string, SubjectiveFloorObject>,
+  patch: Extract<SubjectiveWorldPatch, { readonly kind: "door_state" }>,
+): void {
+  const existing = objects.get(patch.object_uuid);
+  if (existing === undefined || existing.object_kind !== "door") {
+    throw new ContractValidationError(
+      "$subjective.patch.door_state.object_uuid",
+      "door-state patch must address an existing projected door",
+    );
+  }
+  if (existing.position[0] !== patch.position[0] || existing.position[1] !== patch.position[1]) {
+    throw new ContractValidationError(
+      "$subjective.patch.door_state.position",
+      "door-state patch position differs from the projected door",
+    );
+  }
+  objects.set(patch.object_uuid, {
+    ...existing,
+    is_open: patch.is_open,
+    blocks_movement: patch.blocks_movement,
+    blocks_vision: patch.blocks_vision,
+  });
 }
 
-export function reduceVisibility(
-  visibility: APIVisibilityResponse,
-  event: ServerEvent,
-): APIVisibilityResponse {
-  if (!terminalEffect(event) || event.wire_type !== "dnd.core.events.SensoryUpdateEvent") {
-    return visibility;
+function assertTileInsideGrid(
+  tile: APITile,
+  world: SubjectiveReplicatedWorld,
+  path = "$subjective.patch.tile_upsert.tile",
+): void {
+  const grid = world.state.grid;
+  if (tile.x < grid.min_x || tile.x > grid.max_x || tile.y < grid.min_y || tile.y > grid.max_y) {
+    throw new ContractValidationError(path, "tile lies outside projected grid bounds");
   }
-  const observer = visibility[event.observer_uuid];
-  if (observer === undefined) {
-    return visibility;
-  }
-  const updated: APIEntityVisibility = {
-    ...observer,
-    position: [event.observer_position[0], event.observer_position[1]],
-    visible_cells: updateCoordinates(
-      observer.visible_cells,
-      event.visible_cells_added,
-      event.visible_cells_removed,
-    ),
-    seen_cells: updateCoordinates(observer.seen_cells, event.seen_cells_added, []),
-    visible_entities: updateIds(
-      observer.visible_entities,
-      Object.keys(event.visible_entities_added),
-      Object.keys(event.visible_entities_removed),
-    ),
-    visible_objects: updateIds(
-      observer.visible_objects,
-      Object.keys(event.visible_objects_added),
-      Object.keys(event.visible_objects_removed),
-    ),
-    sense_modes: event.sense_modes_changed && event.sense_modes !== null
-      ? event.sense_modes
-      : observer.sense_modes,
-    effective_light_levels: event.effective_light_levels,
-  };
-  return { ...visibility, [event.observer_uuid]: updated };
 }
 
-export function reduceWorld(world: ReplicatedWorld, event: ServerEvent): ReplicatedWorld {
-  const state = reduceGameState(world.state, event);
-  const visibility = reduceVisibility(world.visibility, event);
-  return state === world.state && visibility === world.visibility
-    ? world
-    : { state, visibility };
+function keyed<Value>(
+  values: ReadonlyArray<Value>,
+  key: (value: Value) => string,
+): Map<string, Value> {
+  return new Map(values.map((value) => [key(value), value]));
 }
+
+function tileKey(tile: Pick<APITile, "x" | "y">): string {
+  return `${tile.x},${tile.y}`;
+}
+
+function uniqueValues(values: ReadonlyArray<string>, path: string): Set<string> {
+  const result = new Set(values);
+  if (result.size !== values.length) {
+    throw new ContractValidationError(path, "values must be unique");
+  }
+  return result;
+}
+
+function assertExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  expected: ReadonlySet<string>,
+  path: string,
+): void {
+  const actual = new Set(Object.keys(record));
+  if (!sameSet(actual, expected)) {
+    throw new ContractValidationError(path, "record keys do not match the required entity set");
+  }
+}
+
+function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && isSubset(left, right);
+}
+
+function isSubset(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
+}
+
+function assertNever(value: never): never {
+  throw new ContractValidationError("$subjective.patch.kind", `unsupported patch ${String(value)}`);
+}
+
+export type { APIEntitySummary, SubjectiveReplicatedWorld };

@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 import httpx
 from pydantic import BaseModel, Field
 
+from server.agent_runtime.service import AgentExecutionMode
+
 
 class HostedWorkerError(RuntimeError):
     """Raised when a hosted game worker cannot be started or contacted."""
@@ -64,6 +66,53 @@ class _HostedWorkerHandle:
     placement: HostedWorkerPlacement
 
 
+@dataclass(frozen=True)
+class HostedWorkerApplication:
+    """Dependency-neutral ASGI composition selected by a deployment root."""
+
+    import_path: str
+    expected_agent_service_id: str | None = None
+    expected_agent_execution_mode: AgentExecutionMode | None = None
+
+    def __post_init__(self) -> None:
+        module_name, separator, attribute_name = self.import_path.partition(":")
+        if (
+            not separator
+            or not module_name
+            or not attribute_name
+            or any(
+                not segment.isidentifier()
+                for segment in module_name.split(".")
+            )
+            or not attribute_name.isidentifier()
+        ):
+            raise ValueError(
+                "Hosted worker application must use a Python module:attribute "
+                f"import path, received {self.import_path!r}"
+            )
+        if (
+            self.expected_agent_service_id is None
+        ) is not (
+            self.expected_agent_execution_mode is None
+        ):
+            raise ValueError(
+                "Hosted worker expected service id and execution mode must "
+                "either both be set or both be absent"
+            )
+        if (
+            self.expected_agent_service_id is not None
+            and not self.expected_agent_service_id.strip()
+        ):
+            raise ValueError(
+                "Hosted worker expected agent service id must not be blank"
+            )
+
+
+CORE_HOSTED_WORKER_APPLICATION = HostedWorkerApplication(
+    import_path="server.event_server:app",
+)
+
+
 class HostedWorkerManager:
     """Spawn and supervise one unchanged event-server process per game."""
 
@@ -73,6 +122,7 @@ class HostedWorkerManager:
         *,
         socket_root: Path | None = None,
         worker_cwd: Path | None = None,
+        worker_application: HostedWorkerApplication = CORE_HOSTED_WORKER_APPLICATION,
         startup_timeout_seconds: float = 20.0,
         terminate_grace_seconds: float = 2.0,
         warm_pool_size: int = 0,
@@ -84,6 +134,8 @@ class HostedWorkerManager:
             socket_root: Short local directory for Unix-domain sockets. Linux
                 limits the complete socket path to approximately 108 bytes.
             worker_cwd: Repository root used as the worker working directory.
+            worker_application: Explicit ASGI composition imported by each
+                worker process.
             startup_timeout_seconds: Maximum wait for worker readiness.
             terminate_grace_seconds: Grace period before forced process-group kill.
             warm_pool_size: Number of imported, unclaimed workers kept ready.
@@ -93,6 +145,7 @@ class HostedWorkerManager:
             socket_root or Path(f"/tmp/dnd-engine-workers-{os.getuid()}")
         ).resolve()
         self._worker_cwd = (worker_cwd or Path(__file__).resolve().parents[1]).resolve()
+        self._worker_application = worker_application
         self._startup_timeout_seconds = startup_timeout_seconds
         self._terminate_grace_seconds = terminate_grace_seconds
         self._warm_pool_size = max(0, warm_pool_size)
@@ -102,6 +155,16 @@ class HostedWorkerManager:
         self._prewarm_lock = asyncio.Lock()
         self._replenishment_task: asyncio.Task[None] | None = None
         self._closing = False
+
+    @property
+    def managed_agent_service_available(self) -> bool:
+        """Return whether spawned workers register a managed-agent service."""
+        return self._worker_application.expected_agent_service_id is not None
+
+    @property
+    def application_import_path(self) -> str:
+        """Return the exact ASGI application imported by worker processes."""
+        return self._worker_application.import_path
 
     async def prewarm(self) -> None:
         """Fill the configured warm-worker pool before games are requested."""
@@ -288,7 +351,7 @@ class HostedWorkerManager:
             sys.executable,
             "-m",
             "uvicorn",
-            "server.event_server:app",
+            self._worker_application.import_path,
             "--uds",
             str(socket_path),
             "--log-level",
@@ -404,18 +467,56 @@ class HostedWorkerManager:
             if socket_path.exists():
                 try:
                     async with self._client_for_handle(handle, timeout=0.5) as client:
-                        response = await client.get("/game/status")
-                    if response.status_code == 200:
+                        status_response = await client.get("/game/status")
+                        service_response = await client.get("/ai/service")
+                    if (
+                        status_response.status_code == 200
+                        and service_response.status_code == 200
+                    ):
+                        self._validate_worker_agent_service(
+                            service_response.json()
+                        )
                         handle.placement.state = HostedWorkerState.READY
                         handle.placement.ready_at = time.time()
                         return
-                except (httpx.HTTPError, OSError) as exc:
+                except (httpx.HTTPError, OSError, ValueError) as exc:
                     last_error = exc
             await asyncio.sleep(0.025)
 
         handle.placement.state = HostedWorkerState.FAILED
         detail = f": {last_error}" if last_error is not None else ""
         raise HostedWorkerError(f"Worker readiness timed out{detail}")
+
+    def _validate_worker_agent_service(self, payload: object) -> None:
+        """Authenticate the worker composition before entering the warm pool."""
+        if not isinstance(payload, dict):
+            raise ValueError("Worker /ai/service response is not an object")
+        registered = payload.get("service_registered")
+        service_id = payload.get("service_id")
+        execution_mode = payload.get("execution_mode")
+        expected_service_id = (
+            self._worker_application.expected_agent_service_id
+        )
+        expected_execution_mode = (
+            self._worker_application.expected_agent_execution_mode
+        )
+        if expected_service_id is None:
+            if registered is not False or service_id is not None:
+                raise HostedWorkerError(
+                    "Core worker unexpectedly registered a managed-agent service"
+                )
+            return
+        assert expected_execution_mode is not None
+        if (
+            registered is not True
+            or service_id != expected_service_id
+            or execution_mode != expected_execution_mode.value
+        ):
+            raise HostedWorkerError(
+                "Worker managed-agent service mismatch: expected "
+                f"{expected_service_id!r}/{expected_execution_mode.value!r}, "
+                f"received {service_id!r}/{execution_mode!r}"
+            )
 
 
 def _process_group_exists(process_group_id: int) -> bool:

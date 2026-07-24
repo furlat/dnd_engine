@@ -64,7 +64,7 @@ def run_command(
         help="Maximum commands per match. Defaults by gauntlet mode.",
     ),
     runs_output_directory: Path = typer.Option(Path("ai/evidence/runs"), "--runs-output-directory"),
-    gauntlet_output_directory: Path = typer.Option(Path("ai/evidence/gauntlets"), "--gauntlet-output-directory"),
+    gauntlet_output_directory: Path = typer.Option(Path("evidence/gauntlets"), "--gauntlet-output-directory"),
     no_run_artifacts: bool = typer.Option(False, "--no-run-artifacts"),
     no_summary_file: bool = typer.Option(False, "--no-summary-file"),
     watcher_base_url: Optional[str] = typer.Option(None, "--watcher-base-url", help="Backend URL that should receive live gauntlet watcher events."),

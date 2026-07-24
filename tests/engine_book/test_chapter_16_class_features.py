@@ -28,8 +28,10 @@ from dnd.conditions import Blinded, Charmed, Frightened, Poisoned
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, DiceRoll, RollType
-from dnd.core.events import BodyPart, D20RollResultEvent, DamageRollResultEvent, EventPhase, EventQueue, EventType, SkillCheckEvent, WeaponSlot
+from dnd.core.equipment_types import BodyPart, WeaponSlot
+from dnd.core.events import D20RollResultEvent, DamageRollResultEvent, EventPhase, EventQueue, EventType, SkillCheckEvent
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import CreatureType, DamageType, ResistanceStatus
 from dnd.core.values import AdvantageStatus, AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
@@ -1262,7 +1264,7 @@ def test_eb_16_020_barbarian_relentless_and_persistent_rage_events() -> None:
     assert survival_damage == 4
     assert get_hp(relentless) == 1
     assert relentless_resource.current == 4
-    assert "Dead" not in relentless.active_conditions
+    assert relentless.health.life_state is LifeState.ALIVE
 
     set_hp(relentless, 5)
 
@@ -1277,7 +1279,7 @@ def test_eb_16_020_barbarian_relentless_and_persistent_rage_events() -> None:
     assert failed_save_damage == 20
     assert get_hp(relentless) <= 0
     assert relentless_resource.current == 4
-    assert "Dead" in relentless.active_conditions
+    assert relentless.health.life_state is LifeState.DEAD
 
     reset_class_feature_state(width=20, height=8)
 

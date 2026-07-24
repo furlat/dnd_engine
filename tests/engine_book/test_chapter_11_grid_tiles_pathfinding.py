@@ -8,7 +8,8 @@ import dnd.core.gridmap as gridmap_module
 from dnd.blocks.base_item import BaseItem
 from dnd.core.aoe import Cone, Cylinder, Line, Sphere
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory, HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import (
     difficult_terrain_factory,
@@ -19,6 +20,7 @@ from dnd.core.base_tiles import (
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.geometry import circle_positions, supercover_line
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.actions import Jump, Move, Shove
@@ -308,8 +310,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
 
     blocker.receive_damage(blocker.get_hp() + 5, DamageType.BLUDGEONING, mover.uuid)
 
-    assert "Dead" in blocker.active_conditions
-    assert blocker.non_blocking is True
+    assert blocker.health.life_state is LifeState.DEAD
+    assert blocker.non_blocking is False
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is False
     assert grid.is_walkable_for(2, 0, mover.uuid)
     assert blocker.uuid not in mover.senses.entities
@@ -669,7 +671,7 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
 
 def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() -> None:
     """EB-11-020: removing a ZoneControlCondition clears spatial, terrain, and marker state."""
-    reset_grid_state(width=5, height=3)
+    reset_grid_state(width=6, height=3)
     grid = get_map()
     caster = create_skeleton(name="Zone Caster", position=(0, 1), faction="heroes")
     zone = EntryCleanupZone(
@@ -693,12 +695,25 @@ def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() ->
         assert "Entry Cleanup Marker" in tile.active_conditions
         assert EventQueue.get_spatial_handlers_at(pos)
 
+    assert zone.move_zone((4, 1))
+    moved_positions = set(zone.affected_positions)
+    moved_center = grid.get_tile(4, 1)
+    assert moved_center is not None
+    assert zone.zone_center == (4, 1)
+    assert moved_positions != affected_positions
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
+    assert "Entry Cleanup Marker" not in center_tile.active_conditions
+    assert moved_center.get_movement_cost(MovementMode.WALKING) == 2
+    assert "Entry Cleanup Marker" in moved_center.active_conditions
+    assert EventQueue.get_spatial_handlers_at((4, 1))
+
     caster.remove_condition(zone.name)
 
     assert zone.name not in caster.active_conditions
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
+    assert moved_center.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
-    for pos in affected_positions:
+    for pos in affected_positions | moved_positions:
         tile = grid.get_tile(*pos)
         assert tile is not None
         assert "Entry Cleanup Marker" not in tile.active_conditions

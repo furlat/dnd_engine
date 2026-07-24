@@ -14,9 +14,9 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from ai.codex_tools.representation.models import ResolvedRepresentationManifest
-from ai.observation.models import ObservationFrame, ObservationSnapshot
-from ai.protocol.control import CommandResult
-from ai.subjective.models import AgentEvent
+from server.agent_protocol.observation import ObservationFrame, ObservationSnapshot
+from server.agent_protocol.control import CommandResult
+from server.agent_protocol.telemetry import AgentEvent
 
 
 _JSON_VALUE_ADAPTER = TypeAdapter(JsonValue)

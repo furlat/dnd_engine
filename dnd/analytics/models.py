@@ -9,7 +9,9 @@ import json
 from typing import Annotated, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from dnd.core.life_types import LifeState
 
 
 class FrozenSummaryModel(BaseModel):
@@ -51,6 +53,13 @@ class EntitySnapshotV1(FrozenSummaryModel):
     normal_hit_points: int = Field(description="Normal hit points at the snapshot boundary.")
     maximum_hit_points: int = Field(ge=0, description="Maximum normal hit points at the snapshot boundary.")
     temporary_hit_points: int = Field(default=0, ge=0, description="Temporary hit points at the snapshot boundary.")
+    life_state: Optional[LifeState] = Field(
+        default=None,
+        description=(
+            "Authoritative entity lifecycle state. None is reserved for legacy v1 "
+            "snapshots written before lifecycle state was retained."
+        ),
+    )
     is_defeated: bool = Field(description="Whether the engine considers the combatant defeated.")
     position: Optional[tuple[int, int]] = Field(default=None, description="Objective grid position when retained.")
     condition_semantic_keys: tuple[str, ...] = Field(
@@ -61,6 +70,16 @@ class EntitySnapshotV1(FrozenSummaryModel):
         default_factory=dict,
         description="Named resource balances retained at the snapshot boundary.",
     )
+
+    @model_validator(mode="after")
+    def validate_lifecycle_projection(self) -> EntitySnapshotV1:
+        """Keep the legacy defeated projection consistent with LifeState."""
+        if (
+            self.life_state is not None
+            and self.is_defeated != (self.life_state is LifeState.DEAD)
+        ):
+            raise ValueError("is_defeated must equal whether life_state is dead")
+        return self
 
 
 class TerminalCursorV1(FrozenSummaryModel):

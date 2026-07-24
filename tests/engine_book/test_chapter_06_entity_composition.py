@@ -10,13 +10,14 @@ from dnd.actions import Attack
 from dnd.actions_functional import register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
-from dnd.blocks.equipment import WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, RollType
 from dnd.core.events import (
@@ -29,6 +30,7 @@ from dnd.core.events import (
     SkillCheckEvent,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import CreatureType, DamageType, NumericalModifier, Size
 from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
 from dnd.conditions import Exhaustion
@@ -309,7 +311,7 @@ def test_eb_06_007_standard_actions_register_templates_and_handlers() -> None:
     }.issubset(template_names)
     assert entity.get_action_template("Dash") is not None
     assert entity.get_event_handler_by_name("Prone Auto-Stand") is not None
-    assert entity.get_event_handler_by_name("Death Condition Handler") is not None
+    assert entity.get_event_handler_by_name("Death Condition Handler") is None
 
     available = entity.get_available_actions()
     self_action_names = {action.template_name for action in available.self_actions}
@@ -568,18 +570,18 @@ def test_eb_06_014_repeated_standard_action_setup_replaces_handlers() -> None:
     )
     second_global_handler_names = sorted(handler.name for handler in second_global_handlers)
 
-    assert len(first_global_handlers) == 6
-    assert len(first_local_handler_names) == 4
+    assert len(first_global_handlers) == 5
+    assert len(first_local_handler_names) == 3
     assert first_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert first_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
 
-    assert len(second_global_handlers) == 6
-    assert len(second_local_handler_names) == 4
+    assert len(second_global_handlers) == 5
+    assert len(second_local_handler_names) == 3
     assert second_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert second_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
     assert second_local_handler_names.count("HasAttacked Tracker") == 1
     assert second_local_handler_names.count("HasTakenDamage Tracker") == 1
-    assert second_local_handler_names.count("Death Condition Handler") == 1
+    assert second_local_handler_names.count("Death Condition Handler") == 0
     assert second_local_handler_names.count("Prone Auto-Stand") == 1
     assert second_global_handler_names == first_global_handler_names
     assert second_local_handler_names == first_local_handler_names
@@ -634,17 +636,17 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
 
     damage_to_zero = entity.get_hp()
     entity.receive_damage(damage_to_zero, DamageType.SLASHING, source.uuid)
-    assert "Dead" in entity.active_conditions
-    assert entity.non_blocking is True
+    assert entity.health.life_state is LifeState.DEAD
+    assert entity.blocks_walking() is False
 
     assert entity.revive(hit_points=1) is True
 
     active_exhaustion = entity.active_conditions["Exhaustion"]
     assert isinstance(active_exhaustion, Exhaustion)
     assert active_exhaustion.level == 1
-    assert "Dead" not in entity.active_conditions
+    assert entity.health.life_state is LifeState.ALIVE
     assert "Incapacitated" not in entity.active_conditions
-    assert entity.non_blocking is False
+    assert entity.blocks_walking() is True
     assert entity.get_hp() == 1
 
 
@@ -680,9 +682,9 @@ def test_eb_06_016_long_rest_restores_hp_and_expires_temporary_hp() -> None:
     dead_entity.action_economy.consume("spell_slot_1", 1)
     dead_entity.receive_damage(dead_entity.get_hp(), DamageType.SLASHING, source.uuid)
 
-    assert "Dead" in dead_entity.active_conditions
+    assert dead_entity.health.life_state is LifeState.DEAD
     assert dead_entity.on_long_rest() is False
-    assert "Dead" in dead_entity.active_conditions
+    assert dead_entity.health.life_state is LifeState.DEAD
     assert dead_entity.action_economy.spell_slot_1.normalized_score == 1
     assert dead_entity.get_hp() <= 0
 

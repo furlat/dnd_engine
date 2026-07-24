@@ -150,6 +150,7 @@ class ArtifactKind(str, Enum):
     AGENT_TELEMETRY = "agent_telemetry"
     TERMINAL_SUMMARY = "terminal_summary"
     REPLAY_BUNDLE = "replay_bundle"
+    SUBJECTIVE_REPLAY_BUNDLE = "subjective_replay_bundle"
     RATING_OUTPUT = "rating_output"
 
 

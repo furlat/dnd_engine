@@ -14,7 +14,7 @@ __all__ = [
 ]
 from uuid import UUID
 from datetime import UTC, datetime
-from pydantic import Field
+from pydantic import Field, computed_field
 from enum import Enum
 
 from dnd.core.base_object import BaseObject
@@ -30,17 +30,17 @@ from dnd.core.events import (
 from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.entity import Entity
 from dnd.controller import Controller, TurnContext
 from dnd.actions_functional import execute_by_index
 
 
 def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> None:
-    """Recursively scan combat log tree for Hidden/Invisible condition removals."""
+    """Recursively scan condition-owned perceivability removals."""
     for log in logs:
         if log.entry_type == CombatLogEntryType.CONDITION_REMOVED:
-            cond_name = log.data.get("condition_name", "")
-            if cond_name in ("Hidden", "Invisible") and log.target_uuid:
+            if log.data.get("reveals_target") and log.target_uuid:
                 target = Entity.get(UUID(log.target_uuid))
                 if target and not target.stealth_dc and not target.is_invisible:
                     revealed.add(log.target_uuid)
@@ -168,7 +168,7 @@ class CombatantState(BaseObject):
         turn_count: Number of turns this entity has taken in the encounter.
         surprised: Whether the entity is surprised during round one.
         delaying: Whether the entity is currently delaying.
-        is_dead: Whether the combatant is dead at the encounter layer.
+        is_dead: Computed view of the entity's authoritative life state.
     """
 
     entity_uuid: UUID = Field(description="UUID of the entity in the encounter.")
@@ -186,7 +186,6 @@ class CombatantState(BaseObject):
     )
     surprised: bool = Field(default=False, description="Whether the entity is surprised during round one.")
     delaying: bool = Field(default=False, description="Whether the entity is currently delaying.")
-    is_dead: bool = Field(default=False, description="Whether the combatant is dead at the encounter layer.")
 
     @property
     def entity(self) -> Optional[Entity]:
@@ -198,11 +197,16 @@ class CombatantState(BaseObject):
         """Get the controller for this combatant."""
         return Controller.get(self.controller_uuid)
 
+    @computed_field
+    @property
+    def is_dead(self) -> bool:
+        """Return whether the entity's authoritative life state is DEAD."""
+        entity = self.entity
+        return entity is None or entity.health.life_state is LifeState.DEAD
+
     @property
     def is_alive(self) -> bool:
         """Check if combatant is alive (not dead and has HP > 0)."""
-        if self.is_dead:
-            return False
         entity = self.entity
         if entity is None:
             return False
@@ -223,6 +227,7 @@ class Encounter(BaseObject):
         started_at: Wall-clock timestamp when the encounter started.
         ended_at: Wall-clock timestamp when the encounter ended.
         combat_log: Unified combat-log entries captured for the encounter.
+        current_turn_started_source_event_cursor: Objective cursor of turn start.
     """
 
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
@@ -885,77 +890,48 @@ class Encounter(BaseObject):
         Check all combatants for death and handle any that died.
 
         Called after actions to detect and handle deaths.
-        Note: Death is now primarily handled by Entity.receive_damage() which
-        applies Dead condition and fires DeathEvent. This method handles
+        Note: Death is now primarily handled by Entity.receive_damage(), which
+        commits LifeState.DEAD and fires DeathEvent. This method handles
         deaths that occur outside of receive_damage (e.g., HP set directly).
 
         Returns:
             List of DeathEvent for any combatants that died
         """
         death_events = []
-        any_new_deaths = False
-
         for combatant in self.combatants.values():
-            if combatant.is_dead:
-                continue
-
             entity = combatant.entity
             if entity is None:
                 continue
 
+            if entity.health.life_state is LifeState.DEAD:
+                continue
+
             if not entity.has_hp:
-                if entity.uses_death_saves and "Dead" not in entity.active_conditions:
-                    if "Unconscious" not in entity.active_conditions:
+                if entity.uses_death_saves:
+                    if entity.health.life_state is LifeState.ALIVE:
                         entity.enter_dying_state()
                     continue
-                any_new_deaths = True
                 event = self._handle_death(combatant)
                 if event:
                     death_events.append(event)
 
-        if any_new_deaths:
+        if self.state is EncounterState.ACTIVE:
             self._check_encounter_end()
 
         return death_events
 
     def _handle_death(self, combatant: CombatantState) -> Optional[DeathEvent]:
-        """
-        Handle the death of a combatant using the Dead condition.
-
-        Uses condition-based approach for clean resurrection support:
-        1. Marks combatant as dead (encounter-level flag)
-        2. Marks entity as non-blocking in GridMap (stays registered for resurrection/looting)
-        3. Applies Dead condition (includes Incapacitated, disables all action economy)
-
-        Event handlers are PRESERVED - Incapacitated sets reactions=0 so OA won't fire.
-        Resurrection can simply: remove Dead condition, set blocking, set HP, mark alive.
-
-        Note: If Dead condition is already applied (by receive_damage), this method
-        only marks combatant.is_dead and returns None (no duplicate DeathEvent).
-        """
+        """Emit the standard death lifecycle for an unhandled zero-HP entity."""
         entity = combatant.entity
         if entity is None:
             return None
-
-        combatant.is_dead = True
-
-        if "Dead" in entity.active_conditions:
+        if entity.health.life_state is LifeState.DEAD:
             return None
-
-        event = DeathEvent(
+        return entity._fire_death_event(
             source_entity_uuid=entity.uuid,
-            target_entity_uuid=entity.uuid,
-            entity_uuid=entity.uuid,
-            entity_name=entity.name,
-            final_hp=entity.get_hp(),
             encounter_uuid=self.uuid,
-            phase=EventPhase.DECLARATION
+            reason=LifeStateChangeReason.DIRECT_STATE_CHECK,
         )
-        event = event.phase_to(EventPhase.EXECUTION)
-        event = event.phase_to(EventPhase.EFFECT)
-        event = event.phase_to(EventPhase.COMPLETION)
-
-        return event
 
     def _check_encounter_end(self) -> bool:
         """

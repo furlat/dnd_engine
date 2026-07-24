@@ -112,7 +112,7 @@ def test_immediate_damage_spells_disclose_execution_honest_outcomes() -> None:
     assert chill.damage_rolls[0].die_size == 8
     assert chill.damage_rolls[0].flat_bonus == 3
     assert chill.damage_rolls[0].damage_type == "Necrotic"
-    assert chill.critical_threshold == 20
+    assert chill.critical_threshold == 19
     assert chill.critical_extra_dice == 2
 
     assert finger is not None
@@ -124,6 +124,44 @@ def test_immediate_damage_spells_disclose_execution_honest_outcomes() -> None:
     assert finger.save_dc == caster.spell_save_dc()
     assert finger.save_ability == "constitution"
     assert finger.half_damage_on_save is True
+
+
+def test_chill_touch_profile_and_execution_share_spell_critical_threshold() -> None:
+    """A natural 19 crit is both advertised and executed for Spell Sniper."""
+    reset_spell_tutorial_state()
+    caster = create_spell_actor(
+        "Critical Chill Mage",
+        (1, 1),
+        "heroes",
+        spellcasting=SpellcastingConfig(
+            spellcasting_ability="intelligence",
+            spell_crit_threshold_modifiers=[("Spell Sniper", 1)],
+        ),
+    )
+    target = create_spell_actor(
+        "Critical Chill Target",
+        (4, 1),
+        "monsters",
+    )
+    Entity.update_all_entities_senses(max_distance=40)
+    spell = ChillTouch(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
+        caster_level=5,
+    )
+
+    profile = spell.get_outcome_profile(caster)
+    with fixed_dice_faces(19, 4, 4, 4, 4):
+        result = spell.apply()
+
+    assert profile is not None
+    assert profile.critical_threshold == 19
+    assert isinstance(result, SpellEvent)
+    assert not result.canceled
+    assert result.attack_outcome is AttackOutcome.CRIT
+    damage_rolls = result.damage_rolls
+    assert damage_rolls is not None
+    assert damage_rolls[0].effective_dice_count == 4
 
 
 def test_spell_outcome_profiles_declare_target_application_scope() -> None:
@@ -433,7 +471,7 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
     actions_before = caster.action_economy.actions.normalized_score
     slot_before = caster.action_economy.spell_slot_1.normalized_score
 
-    with fixed_dice_faces(12, 5, 6):
+    with fixed_dice_faces(14, 12, 5, 6):
         event = execute_by_index(
             caster,
             fire_bolt.template_name,
@@ -499,7 +537,7 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
         "magic missile row: cast_at=1, projectiles=3, slot before=1",
         "selected target: Training Target, distance=5",
         "event: fire_bolt, phase=completion, outcome=Hit",
-        "attack roll: [12] + 7 = 19",
+        "attack roll: [14, 12] + 7 = 19",
         "damage roll: [5, 6] = 11",
         "target hp: 27 -> 16",
         "actions: 1 -> 0",
@@ -754,14 +792,14 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
 
 
 def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
-    """A cantrip spell attack rolls d20, scales damage dice, and costs an action."""
+    """A threatened cantrip rolls disadvantage, scales damage, and costs an action."""
     reset_spell_tutorial_state()
     caster = create_spell_actor("Pyromancer", (0, 0), "heroes")
     enemy = create_spell_actor("Training Target", (1, 0), "monsters")
     Entity.update_all_entities_senses(max_distance=30)
     hp_before = enemy.get_hp()
 
-    with fixed_dice_faces(12, 5, 6):
+    with fixed_dice_faces(14, 12, 5, 6):
         event = FireBolt(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=enemy.uuid,
@@ -772,7 +810,7 @@ def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
     assert not event.canceled
     assert event.attack_outcome == AttackOutcome.HIT
     assert event.dice_roll is not None
-    assert event.dice_roll.results == [12]
+    assert event.dice_roll.results == [14, 12]
     assert event.dice_roll.total == 19
     assert event.damage_rolls is not None
     assert event.damage_rolls[0].results == [5, 6]
@@ -803,7 +841,7 @@ def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
 
     expected_fire_lines = [
         "event phase: completion, canceled=False, outcome=Hit",
-        "attack roll: [12] -> 19",
+        "attack roll: [14, 12] -> 19",
         "damage roll: [5, 6] -> 11",
         "target hp: 27->16",
         "actions after cast: 0",
@@ -900,7 +938,8 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
     assert "Concentrating" in caster.active_conditions
     assert "Haste" in ally.active_conditions
     assert ally.action_economy.movement.normalized_score == movement_before * 2
-    assert ally.action_economy.actions.normalized_score == actions_before + 1
+    assert ally.action_economy.actions.normalized_score == actions_before
+    assert ally.action_economy.resources["haste_action"].current == 1
     assert ally.ac_bonus().normalized_score == ac_before + 2
     assert caster.action_economy.spell_slot_3.normalized_score == 0
 
@@ -915,6 +954,7 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
         "Haste" in ally.active_conditions,
         ally.action_economy.movement.normalized_score,
         ally.action_economy.actions.normalized_score,
+        ally.action_economy.resources["haste_action"].current,
         ally.ac_bonus().normalized_score,
         caster.action_economy.spell_slot_3.normalized_score,
         concentrating.linked_conditions
@@ -925,12 +965,15 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
 
     assert "Concentrating" not in caster.active_conditions
     assert "Haste" not in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "haste_action" not in ally.action_economy.resources
+    assert "Haste Lethargy" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
     assert ally.ac_bonus().normalized_score == ac_before
     after_cleanup = (
         "Concentrating" in caster.active_conditions,
         "Haste" in ally.active_conditions,
-        "Incapacitated" in ally.active_conditions,
+        "Haste Lethargy" in ally.active_conditions,
         ally.ac_bonus().normalized_score,
     )
 
@@ -942,18 +985,19 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
             f"ally_haste={after_apply[3]}"
         ),
         (
-            "ally movement/actions/ac: "
+            "ally movement/actions/haste/ac: "
             f"{movement_before}->{after_apply[4]}, "
             f"{actions_before}->{after_apply[5]}, "
-            f"{ac_before}->{after_apply[6]}"
+            f"haste={after_apply[6]}, "
+            f"{ac_before}->{after_apply[7]}"
         ),
-        f"level 3 slots after cast: {after_apply[7]}",
-        f"concentration linked to haste: {after_apply[8]}",
+        f"level 3 slots after cast: {after_apply[8]}",
+        f"concentration linked to haste: {after_apply[9]}",
         (
             "after concentration cleanup: "
             f"caster_concentrating={after_cleanup[0]}, "
             f"ally_haste={after_cleanup[1]}, "
-            f"ally_incapacitated={after_cleanup[2]}, "
+            f"ally_haste_lethargy={after_cleanup[2]}, "
             f"ally_ac={after_cleanup[3]}"
         ),
     ]
@@ -963,10 +1007,10 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
     expected_haste_lines = [
         "event phase: completion, canceled=False",
         "conditions after cast: caster_concentrating=True, ally_haste=True",
-        "ally movement/actions/ac: 30->60, 1->2, 10->12",
+        "ally movement/actions/haste/ac: 30->60, 1->1, haste=1, 10->12",
         "level 3 slots after cast: 0",
         "concentration linked to haste: True",
-        "after concentration cleanup: caster_concentrating=False, ally_haste=False, ally_incapacitated=True, ally_ac=10",
+        "after concentration cleanup: caster_concentrating=False, ally_haste=False, ally_haste_lethargy=True, ally_ac=10",
     ]
     assert haste_lines == expected_haste_lines
     assert capsys.readouterr().out.splitlines() == expected_haste_lines

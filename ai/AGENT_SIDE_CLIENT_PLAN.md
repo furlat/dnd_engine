@@ -36,8 +36,10 @@ game mutations. The agent client is the local subjective control environment.
 The implementation uses `ai.subjective` plus `ai.policy.PolicyHost` as one
 controller stack. Its enforced boundaries are:
 
-- `ai.observation` projects session-subjective snapshots and frames.
-- `ai.observation.materializer` can replay frames into a materialized state.
+- `server.agent_protocol` owns the dependency-neutral observation, epoch,
+  semantics, command, telemetry, and replay contracts.
+- `server.agent_runtime` projects session-subjective snapshots and frames,
+  builds legal decision epochs, and revalidates submitted commands.
 - `ai.subjective` materializes the complete stream and derives typed facts.
 - `ai.external_agent` consumes streamed decision epochs through the
   shared policy host without polling `/available-actions`.
@@ -255,9 +257,30 @@ The architecture has three streams:
 
 Those streams must not be confused.
 
-## 7. Package Layout
+## 7. Current Package Layout
 
-Create a new module:
+Server-owned controller core:
+
+```text
+server/agent_protocol/
+  immutable.py
+  control.py
+  observation.py
+  observation_replay.py
+  semantics.py
+  telemetry.py
+
+server/agent_runtime/
+  observation_projector.py
+  action_semantics.py
+  epochs.py
+  movement_revalidation.py
+  service.py
+  service_manager.py
+  subprocess_service.py
+```
+
+Client-facing runtime:
 
 ```text
 ai/subjective/
@@ -265,43 +288,47 @@ ai/subjective/
   models.py
   store.py
   runtime.py
+  runtime_gc.py
   hooks.py
   processors.py
-  indexes.py
   queries.py
   printers.py
-  README.md
+  semantic_pool.py
 ```
 
 Responsibilities:
 
-- `models.py`: Pydantic contracts for `SubjectiveWorldState`, `AgentState`,
-  `DecisionEpoch`, `AffordanceSet`, action economy, commands, command results,
-  hook contexts, processor outputs, and agent events.
+- `server.agent_protocol`: immutable Pydantic transport contracts and pure
+  observation replay. These modules do not import AI policy or client runtime.
+- `server.agent_runtime`: engine-aware projection, semantic enrichment, epoch
+  construction, movement revalidation, and optional external-client lifecycle.
+- `ai.subjective.models`: client-only derived workspace, hook context, and
+  processor models. Canonical `SubjectiveWorldState`, `DecisionEpoch`,
+  `AffordanceSet`, commands, and command results come from
+  `server.agent_protocol`.
 - `store.py`: deterministic materialization and replay.
 - `runtime.py`: hot client runtime for bootstrap, subscribe, command execution,
   resync, and event sinks.
 - `hooks.py`: hook registry and processor protocol.
 - `processors.py`: built-in post-processors.
-- `indexes.py`: map, path, threat, object, resource, and affordance indexes.
 - `queries.py`: local query facade over `SubjectiveWorldState + AgentState`.
 - `printers.py`: text/JSON renderers for Codex, logs, and debug UI.
-- `README.md`: theory, runtime usage, examples, and safety rules.
-
-Keep `ai.observation` as the lower-level projector/materializer package. The new
-module can build on it, but the new module is responsible for policy-ready
-client state.
+- `runtime_gc.py`: client-side latency-sensitive garbage-collection policy.
+- `semantic_pool.py`: local interning for repeated immutable semantics.
 
 Dependency direction:
 
 ```text
-dnd/server -> emit authoritative and subjective data
-ai.observation -> low-level subjective projection
+dnd -> engine mechanisms and dependency-neutral domain types
+server.agent_protocol -> controller-facing transport and replay contracts
+server.agent_runtime -> engine-aware projection, epochs, and revalidation
 ai.subjective -> client-side materialization, hooks, queries, telemetry
-ai.external_agent / ai.external_selfplay / ai.codex_tools -> consume ai.subjective through ai.policy.PolicyHost
+ai.external_agent / ai.external_selfplay / ai.codex_tools -> consume server protocol and ai.subjective through ai.policy.PolicyHost
 ```
 
-The engine must not import `ai.subjective`.
+Neither the engine nor any server package may import `ai`. In-process
+evaluation can compose both sides, but that dependency stays inside the
+client-facing `ai` package.
 
 ## 8. SubjectiveWorldState Model
 

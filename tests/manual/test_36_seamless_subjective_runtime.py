@@ -5,28 +5,46 @@ from collections.abc import AsyncGenerator
 import gc
 import json
 from queue import Empty, Queue
+import socket
+from threading import Event as ThreadEvent, Thread
 import time
-from typing import Sequence, cast
+from typing import Any, Sequence, cast
 from uuid import UUID
 from uuid import uuid4
 
+import httpx
 import pytest
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import uvicorn
 
-import ai.observation.projector as observation_projector
-from ai.observation.models import ObservationFrame, ObservationFrameType, ObservationSourceKind
-from ai.observation.projector import (
+import server.agent_runtime.observation_projector as observation_projector
+from ai.ordered_delivery import OrderedDeliveryTimeoutError
+from server.agent_protocol.observation import ObservationFrame, ObservationFrameType, ObservationSourceKind
+from server.agent_runtime.observation_projector import (
     append_observation_control_frame,
     observation_wakeup_stream,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,
     DecisionEpoch,
+    END_TURN_ROW_ID,
 )
 from ai.subjective.hooks import HookContext, HookPoint, ProcessorOutput
-from ai.subjective.runtime import CommandTimingProbe, MemoryAgentEventSink, SubjectiveRuntime
-from ai.subjective.runtime_gc import AutomaticGcLease, automatic_gc_suspended
+from ai.subjective.runtime import (
+    CommandTimingProbe,
+    MemoryAgentEventSink,
+    QueuedAgentEventSink,
+    SubjectiveRuntime,
+    SubjectiveRuntimeClosedError,
+)
+from ai.subjective.runtime_gc import (
+    AutomaticGcLease,
+    PRESERVE_AUTOMATIC_GC,
+    automatic_gc_suspended,
+)
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.actions_functional import execute_by_index
 from dnd.core.events import (
@@ -41,6 +59,7 @@ from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
 from server.session import PlayerType
 from server import event_server
 from server.api_models import ActionResult
+from server.agent_protocol.telemetry import AgentEvent
 from server.event_stream import BoundedSubscription
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 
@@ -108,6 +127,529 @@ def _start_queue_backed_observation_pump(
     runtime._start_observation_pump()
     assert runtime._stream_ready.wait(timeout=1.0)
     return events, connection_cursors
+
+
+def test_runtime_service_readiness_requires_successful_stream_sync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Managed readiness succeeds only after the pump consumes a sync."""
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "readiness-session",
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+    )
+    try:
+        _start_queue_backed_observation_pump(
+            monkeypatch,
+            runtime,
+            sync_cursor=0,
+        )
+        runtime.wait_until_stream_synced(timeout=0.5)
+    finally:
+        runtime.close()
+
+
+def test_runtime_service_readiness_surfaces_stream_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pump's error wake-up cannot be mistaken for a valid sync."""
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "readiness-error-session",
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+    )
+
+    def fail_stream(_since: int):
+        raise RuntimeError("stream refused")
+        yield
+
+    monkeypatch.setattr(runtime, "iter_observation_events", fail_stream)
+    runtime._start_observation_pump()
+    try:
+        with pytest.raises(
+            RuntimeError,
+            match="failed before synchronization",
+        ):
+            runtime.wait_until_stream_synced(timeout=0.5)
+    finally:
+        runtime.close()
+
+
+def test_runtime_close_cooperatively_interrupts_epoch_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Embedded owners can stop a policy waiter without a transport failure."""
+    client, session_id, _hero, _monster, _encounter = create_observation_game()
+    snapshot = client.get(
+        f"/ai/sessions/{session_id}/observation/snapshot"
+    ).json()
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        session_id,
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    runtime.store.load_snapshot(snapshot)
+    assert runtime.store.world is not None
+    runtime.store.world = runtime.store.world.model_copy(
+        update={"current_epoch": None}
+    )
+    monkeypatch.setattr(runtime, "_start_observation_pump", lambda: None)
+    failures: Queue[BaseException] = Queue()
+
+    def wait_for_epoch() -> None:
+        try:
+            runtime.wait_for_epoch()
+        except BaseException as exc:
+            failures.put(exc)
+
+    waiter = Thread(target=wait_for_epoch)
+    waiter.start()
+    try:
+        deadline = time.monotonic() + 1.0
+        while not waiter.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.001)
+        runtime.close()
+        waiter.join(timeout=1.0)
+    finally:
+        runtime.close()
+
+    assert not waiter.is_alive()
+    assert isinstance(failures.get_nowait(), SubjectiveRuntimeClosedError)
+
+
+def test_runtime_close_interrupts_command_followup_without_resync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shutdown cannot wait for the command timeout or start recovery work."""
+    client, session_id, _hero, _monster, _encounter = create_observation_game()
+    snapshot = client.get(
+        f"/ai/sessions/{session_id}/observation/snapshot"
+    ).json()
+    epoch = snapshot["current_epoch"]
+    command_id = str(uuid4())
+    ack = CommandResult(
+        status=CommandResultStatus.ACCEPTED,
+        command_id=command_id,
+        session_id=session_id,
+        actor_uuid=epoch["actor_uuid"],
+        requested_epoch_id=epoch["epoch_id"],
+        row_id="position|Move|pos=1,1",
+        message="http ack",
+        resync_required=False,
+    )
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        session_id,
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+        command_followup_timeout=10.0,
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    runtime.store.load_snapshot(snapshot)
+    with runtime._state_changed:
+        runtime.store.register_pending_command(command_id, ack)
+    resync_calls: list[bool] = []
+    monkeypatch.setattr(
+        runtime,
+        "resync",
+        lambda: resync_calls.append(True),
+    )
+    failures: Queue[BaseException] = Queue()
+
+    def wait_for_followup() -> None:
+        try:
+            runtime._wait_for_command_followup(command_id, ack)
+        except BaseException as exc:
+            failures.put(exc)
+
+    waiter = Thread(target=wait_for_followup)
+    waiter.start()
+    try:
+        deadline = time.monotonic() + 1.0
+        while not waiter.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.001)
+        runtime.request_close()
+        waiter.join(timeout=1.0)
+    finally:
+        runtime.close()
+
+    assert not waiter.is_alive()
+    assert isinstance(failures.get_nowait(), SubjectiveRuntimeClosedError)
+    assert resync_calls == []
+
+
+def test_runtime_close_aborts_blocked_control_request() -> None:
+    """Embedded shutdown interrupts a blocked snapshot transport promptly."""
+
+    class _BlockingClient:
+        def __init__(self) -> None:
+            self.entered = ThreadEvent()
+            self.closed = ThreadEvent()
+
+        def get(self, _path: str) -> None:
+            self.entered.set()
+            self.closed.wait()
+            raise httpx.ReadError("transport closed")
+
+        def close(self) -> None:
+            self.closed.set()
+
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "blocked-control-session",
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    blocking_client = _BlockingClient()
+    runtime.client.close()
+    runtime.client = cast(Any, blocking_client)
+    failures: Queue[BaseException] = Queue()
+
+    def bootstrap() -> None:
+        try:
+            runtime.bootstrap()
+        except BaseException as exc:
+            failures.put(exc)
+
+    worker = Thread(target=bootstrap)
+    worker.start()
+    assert blocking_client.entered.wait(timeout=1.0)
+    started = time.monotonic()
+    try:
+        runtime.request_close()
+        worker.join(timeout=1.0)
+    finally:
+        runtime.close()
+
+    assert time.monotonic() - started < 1.0
+    assert not worker.is_alive()
+    assert isinstance(failures.get_nowait(), SubjectiveRuntimeClosedError)
+
+
+def test_runtime_shutdown_drains_telemetry_before_closing_its_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cooperative stop must not close the destination of accepted telemetry."""
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _LifecycleClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            self.closed = False
+            self.post_started = ThreadEvent()
+            self.release_post = ThreadEvent()
+            self.posts: list[str] = []
+
+        def post(self, path: str, **kwargs: object) -> _Response:
+            del kwargs
+            self.post_started.set()
+            self.release_post.wait(timeout=1.0)
+            if self.closed:
+                raise RuntimeError("client has been closed")
+            self.posts.append(path)
+            return _Response()
+
+        def close(self) -> None:
+            self.closed = True
+            self.release_post.set()
+
+    monkeypatch.setattr(
+        "ai.subjective.runtime.httpx.Client",
+        _LifecycleClient,
+    )
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "telemetry-shutdown-session",
+        processors=[],
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    queued_sink = cast(QueuedAgentEventSink, runtime.event_sink)
+    composite = cast(Any, queued_sink.destination)
+    telemetry_client = composite.sinks[1].client
+
+    runtime.emit_event("runtime.test", "accepted before shutdown")
+    assert telemetry_client.post_started.wait(timeout=1.0)
+    try:
+        runtime.request_close()
+
+        assert runtime.client.closed is True
+        assert runtime.stream_client.closed is True
+        assert telemetry_client.closed is False
+    finally:
+        telemetry_client.release_post.set()
+        runtime.close()
+
+    assert telemetry_client.posts == [
+        "/ai/sessions/telemetry-shutdown-session/agent-events"
+    ]
+    assert telemetry_client.closed is True
+    assert queued_sink.worker_alive is False
+
+
+def test_runtime_close_interrupts_active_httpx_stream_before_joining_worker() -> None:
+    """The owner closes an active SSE network stream, not only its idle client pool."""
+
+    class _BlockingSocket:
+        def __init__(self) -> None:
+            self.shutdown_called = ThreadEvent()
+
+        def shutdown(self, how: int) -> None:
+            assert how == socket.SHUT_RDWR
+            self.shutdown_called.set()
+
+    class _BlockingNetworkStream:
+        def __init__(self) -> None:
+            self.socket = _BlockingSocket()
+            self.closed = ThreadEvent()
+
+        def get_extra_info(self, key: str) -> object | None:
+            return self.socket if key == "socket" else None
+
+        def close(self) -> None:
+            self.closed.set()
+
+    class _BlockingResponse:
+        def __init__(self) -> None:
+            self.network_stream = _BlockingNetworkStream()
+            self.extensions = {"network_stream": self.network_stream}
+            self.read_started = ThreadEvent()
+            self.response_closed = False
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_lines(self):
+            yield "event: sync"
+            yield "data: {\"observation_cursor\": 0}"
+            yield ""
+            self.read_started.set()
+            assert self.network_stream.socket.shutdown_called.wait(timeout=1.0)
+            raise httpx.ReadError("active network stream interrupted")
+
+        def close(self) -> None:
+            # This mirrors HTTPX's active response behavior: Response.close()
+            # does not interrupt a concurrent blocking socket read.
+            self.response_closed = True
+
+    class _BlockingStreamContext:
+        def __init__(self, response: _BlockingResponse) -> None:
+            self.response = response
+
+        def __enter__(self) -> _BlockingResponse:
+            return self.response
+
+        def __exit__(self, *_args: object) -> None:
+            self.response.close()
+
+    class _ActiveStreamClient:
+        def __init__(self) -> None:
+            self.response = _BlockingResponse()
+            self.client_closed = False
+
+        def stream(self, *_args: object, **_kwargs: object) -> _BlockingStreamContext:
+            return _BlockingStreamContext(self.response)
+
+        def close(self) -> None:
+            # Closing an HTTPX client closes idle pool connections, not the
+            # response stream currently checked out by another thread.
+            self.client_closed = True
+
+    class _CloseTrackingSink(MemoryAgentEventSink):
+        def __init__(self) -> None:
+            super().__init__()
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    sink = _CloseTrackingSink()
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "active-stream-close-session",
+        event_sink=sink,
+        processors=[],
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    stream_client = _ActiveStreamClient()
+    runtime.stream_client.close()
+    runtime.stream_client = cast(Any, stream_client)
+    runtime._start_observation_pump()
+    assert stream_client.response.read_started.wait(timeout=1.0)
+
+    runtime.close(timeout_seconds=0.5)
+
+    assert stream_client.client_closed is True
+    assert stream_client.response.network_stream.socket.shutdown_called.is_set()
+    assert stream_client.response.network_stream.closed.is_set()
+    assert stream_client.response.response_closed is True
+    assert runtime._stream_thread is not None
+    assert runtime._stream_thread.is_alive() is False
+    assert sink.closed is True
+
+
+def test_runtime_close_interrupts_real_uvicorn_sse_socket() -> None:
+    """A real unbounded HTTPX read exits inside the runtime close deadline."""
+    app = FastAPI()
+
+    @app.get("/ai/sessions/{session_id}/observation/subscribe")
+    async def subscribe(session_id: str, since: int = 0) -> StreamingResponse:
+        del session_id, since
+
+        async def events() -> AsyncGenerator[str, None]:
+            yield "event: sync\ndata: {\"observation_cursor\": 0}\n\n"
+            while True:
+                await asyncio.sleep(10.0)
+                yield "event: heartbeat\ndata: {}\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listen_socket.bind(("127.0.0.1", 0))
+    port = int(listen_socket.getsockname()[1])
+    server = uvicorn.Server(uvicorn.Config(
+        app,
+        log_level="critical",
+        timeout_graceful_shutdown=1,
+    ))
+    server_thread = Thread(
+        target=server.run,
+        kwargs={"sockets": [listen_socket]},
+        daemon=True,
+    )
+    server_thread.start()
+    runtime: SubjectiveRuntime | None = None
+    try:
+        startup_deadline = time.monotonic() + 2.0
+        while not server.started and time.monotonic() < startup_deadline:
+            time.sleep(0.01)
+        assert server.started
+
+        runtime = SubjectiveRuntime(
+            f"http://127.0.0.1:{port}",
+            "real-uvicorn-stream-session",
+            event_sink=MemoryAgentEventSink(),
+            processors=[],
+            gc_policy=PRESERVE_AUTOMATIC_GC,
+        )
+        runtime._start_observation_pump()
+        assert runtime._stream_ready.wait(timeout=2.0)
+        assert runtime._active_stream_response is not None
+        assert (
+            runtime._active_stream_response.extensions.get("network_stream")
+            is not None
+        )
+
+        runtime.close(timeout_seconds=1.0)
+
+        assert runtime._stream_thread is not None
+        assert runtime._stream_thread.is_alive() is False
+        assert runtime._active_stream_response is None
+    finally:
+        server.should_exit = True
+        server_thread.join(timeout=3.0)
+        listen_socket.close()
+        if runtime is not None and (
+            runtime._stream_thread is None
+            or not runtime._stream_thread.is_alive()
+        ):
+            runtime.close(timeout_seconds=1.0)
+
+    assert server_thread.is_alive() is False
+
+
+def test_agent_event_delivery_close_is_bounded_and_retryable() -> None:
+    """A blocked telemetry destination cannot hide an immortal worker."""
+
+    class _BlockingDestination:
+        def __init__(self) -> None:
+            self.started = ThreadEvent()
+            self.release = ThreadEvent()
+            self.events: list[AgentEvent] = []
+
+        def emit(self, event: AgentEvent) -> None:
+            self.emit_many([event])
+
+        def emit_many(self, events: list[AgentEvent]) -> None:
+            self.started.set()
+            self.release.wait()
+            self.events.extend(events)
+
+    destination = _BlockingDestination()
+    sink = QueuedAgentEventSink(
+        destination,
+        max_depth=1,
+        session_id="blocked-events",
+    )
+    event = AgentEvent(
+        event_id=str(uuid4()),
+        session_id="blocked-events",
+        event_type="runtime.test",
+        level="info",
+        source="tests",
+        summary="blocked delivery",
+    )
+    sink.emit(event)
+    assert destination.started.wait(timeout=1.0)
+
+    with pytest.raises(
+        OrderedDeliveryTimeoutError,
+        match="did not stop",
+    ):
+        sink.close(timeout_seconds=0.01)
+    assert sink.worker_alive is True
+    with pytest.raises(RuntimeError, match="closed"):
+        sink.emit(event)
+
+    destination.release.set()
+    sink.close(timeout_seconds=1.0)
+
+    assert sink.worker_alive is False
+    assert destination.events == [event]
+
+
+def test_runtime_close_reports_uncooperative_observation_worker_and_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Partial cleanup remains visible until the observation worker exits."""
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "blocked-observation-session",
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+    )
+    entered = ThreadEvent()
+    release = ThreadEvent()
+
+    def blocked_events(_since: int):
+        entered.set()
+        release.wait()
+        yield "heartbeat", {}
+
+    monkeypatch.setattr(runtime, "iter_observation_events", blocked_events)
+    runtime._start_observation_pump()
+    assert entered.wait(timeout=1.0)
+    assert automatic_gc_suspended()
+
+    with pytest.raises(
+        RuntimeError,
+        match="observation worker did not stop",
+    ):
+        runtime.close(timeout_seconds=0.01)
+
+    assert not automatic_gc_suspended()
+    release.set()
+    runtime.close(timeout_seconds=1.0)
+
+    assert runtime._stream_thread is not None
+    assert runtime._stream_thread.is_alive() is False
 
 
 class _ConnectedRequest:
@@ -838,7 +1380,7 @@ def test_accepted_command_publishes_result_then_followup_epoch() -> None:
     assert action_result["server_timing"]["command_type"] == "execute"
     assert action_result["action_server_timing"]["command_type"] == "action_execute"
     assert "execute_by_index_ms" in action_result["action_server_timing"]["phases"]
-    assert "final.entity_hp_ms" in action_result["action_server_timing"]["phases"]
+    assert "final.entity_hp_ms" not in action_result["action_server_timing"]["phases"]
     assert "final.action_cursor_fields_ms" in action_result["action_server_timing"]["phases"]
     assert "build_action_result_model_ms" in action_result["action_server_timing"]["phases"]
     assert "execute_by_index.grid.compute_paths.dijkstra_total_ms" in action_result["action_server_timing"]["phases"]
@@ -1557,6 +2099,24 @@ def test_automatic_gc_lease_is_nested_and_restores_process_setting() -> None:
     assert gc.isenabled() is originally_enabled
 
 
+def test_runtime_can_preserve_embedding_process_gc_policy() -> None:
+    """An embedded runtime does not mutate its host process's GC policy."""
+    originally_enabled = gc.isenabled()
+    runtime = SubjectiveRuntime(
+        "http://testserver",
+        "embedded-session",
+        event_sink=MemoryAgentEventSink(),
+        processors=[],
+        gc_policy=PRESERVE_AUTOMATIC_GC,
+    )
+    try:
+        assert gc.isenabled() is originally_enabled
+    finally:
+        runtime.close()
+
+    assert gc.isenabled() is originally_enabled
+
+
 def test_canceled_engine_action_remains_an_accepted_command_with_detail(monkeypatch) -> None:
     """A legal command canceled by gameplay is distinct from protocol rejection."""
     client, session_id, _hero, _monster, _encounter = create_observation_game()
@@ -1567,14 +2127,15 @@ def test_canceled_engine_action_remains_an_accepted_command_with_detail(monkeypa
 
     async def fake_execute_action_by_index(_request, execution_binding=None):
         assert execution_binding is not None
-        return ActionResult(
-            success=False,
-            message="The spell was interrupted.",
-            event_type="spell",
-            event_data={"end_position": [5, 8]},
-            outcome_code="spell.counterspell.interrupted",
-            turn_continues=True,
-            encounter_ended=False,
+        return event_server._ActionExecutionResult(
+            response=ActionResult(
+                success=False,
+                message="The spell was interrupted.",
+                event_type="spell",
+                outcome_code="spell.counterspell.interrupted",
+                turn_continues=True,
+                encounter_ended=False,
+            ),
         )
 
     monkeypatch.setattr(event_server, "_execute_action_by_index_impl", fake_execute_action_by_index)
@@ -1634,7 +2195,6 @@ def test_action_adapter_reports_missing_engine_event_as_failure(monkeypatch) -> 
             "template_name": row["template_name"],
             "target_index": row["targets"][0]["index"],
             "return_available_actions": False,
-            "include_state": False,
         },
     )
 
@@ -1666,6 +2226,7 @@ def test_snapshot_current_epoch_is_bootstrap_only_not_frame_decoration() -> None
 
     assert end_response.status_code == 200
     assert end_response.json()["status"] == "accepted"
+    assert end_response.json()["row_id"] == END_TURN_ROW_ID
     assert end_response.json()["payload"]["server_timing"]["command_type"] == "end_turn"
     assert "end_turn.advance_encounter_ms" in end_response.json()["payload"]["server_timing"]["phases"]
     assert any(frame["frame_type"] == "command_result" for frame in frames)

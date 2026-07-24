@@ -1,42 +1,51 @@
 """
-WebSocket server for broadcasting game events + REST API for game state.
+Canonical HTTP/SSE server for game control, replication, and diagnostics.
 
 This server:
 1. Hooks into EventQueue to capture all events
-2. Broadcasts events to connected WebSocket clients
-3. Provides REST endpoints for game state queries
+2. Projects private player replication journals
+3. Exposes authorized objective diagnostics separately
 4. Controls simulation (start/pause/resume/step)
 
 Usage:
-    # Start server
+    # Start the core server without a managed-agent provider
     uv run python -m server.event_server
 
-    # Or import and run programmatically
+    # Or import the same core app programmatically
     from server.event_server import run_server
     run_server(host="0.0.0.0", port=8000)
+
+Managed-agent compositions register a launcher service before running this app.
 """
 
+import argparse
 import asyncio
 import logging
 import os
+import signal
+import subprocess
+import sys
 import time
 import traceback
+from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Set, Optional
+from types import FrameType
+from typing import Any, Callable, Dict, Literal, Optional, Sequence
 from uuid import UUID, uuid4
 from contextlib import asynccontextmanager, nullcontext
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 logger = logging.getLogger("dnd_server")
 
-from dnd.core.events import BodyPart, Event, EventQueue, EventType, EventPhase, RingSlot
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.gridmap import get_map, reset_map
+from dnd.core.equipment_types import BodyPart, RingSlot, WeaponSlot
+from dnd.core.events import EventQueue, EventType, EventPhase
+from dnd.core.gridmap import get_map
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.monsters.bestiary import (
@@ -72,38 +81,38 @@ from dnd.scenarios.evaluation.wardrobes import (
     BESTIARY_WARDROBES,
     equip_wardrobe,
 )
-from dnd.blocks.equipment import WeaponSlot
-from dnd.controller import Controller, HumanController, CodexController, ExternalAIController
-from dnd.actions_functional import execute_available_action, get_available_actions, execute_action, execute_use_action
-from ai.runtime_performance import latency_sensitive_gc
+from dnd.controller import (
+    CodexController,
+    Controller,
+    ExternalAIController,
+    HumanController,
+    PassController,
+)
+from dnd.actions_functional import execute_available_action, get_available_actions
+from server.runtime_performance import latency_sensitive_gc
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
-from dnd.actions import MovementEvent, JumpEvent
+from dnd.actions import MovementEvent
 from dnd.core.base_actions import (
     AvailableActionsResult,
     AvailableHandlerInfo,
-    AvailableTarget,
     TargetType,
 )
-from dnd.core.base_block import BaseBlock
 from dnd.core.action_execution import movement_continuation_scope
 from dnd.reactions import add_opportunity_attack_handler
 
 from server.api_models import (
-    APIEntitySummary, APIEntityFull, APIGrid, APIEncounter, APIFloorObject,
-    APIAvailableActions, APIEntityListResponse, APIEntityVisibility, APIServerTiming,
-    APIVisibilityResponse,
-    APIGameState, APISimulationStatus,
-    APICurrentTurn, SimpleActionRequest, ActionResult, AoEPreviewResult,
+    APIAvailableActions, APIServerTiming,
+    SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
     GameCreationCatalogResponse, GameCreationComposedScenario,
     GameCreationPreflightRequest, GameCreationPresetScenario,
-    GameCreationSideRequest, GameCreationSideResult,
+    GameCreationEntityAssignment, GameCreationSideRequest, GameCreationSideResult,
     GameCreationStartRequest, GameCreationStartResponse,
-    EventContractSummary, EventHistoryResponse, CombatLogHistoryResponse,
-    SelfActionRequest, EntityActionRequest, PositionActionRequest, ExecuteByIndexRequest,
+    EventContractSummary,
+    PositionPreviewRequest, ExecuteByIndexRequest,
     ToggleHandlerRequest,
-    APIEquipmentOverview, APIItemSummary, APIEquippableItems, APIEntityHandlersResponse,
+    APIEquippableItems, APIEntityHandlersResponse,
     EquipRequest, UnequipRequest, EquipmentMutationResult, ToggleHandlerResponse,
     AdvanceEncounterResult, StartHumanSimulationResponse,
     AgentSessionEntityRow, AgentSessionListResponse, AgentSessionRow,
@@ -114,10 +123,10 @@ from server.api_models import (
     MapEditorObjectDeleteRequest, MapEditorObjectPlaceRequest, MapEditorTilePatchRequest, MapEditorVisibilityResponse,
     MapEditorWalkabilityResponse, MapEditorSaveMapRequest, MapEditorSavedMapDocument,
     MapEditorSavedMapList, MapEditorSavedMapMetadata,
-    ReplicationBootstrapResponse, ReplicationProtocolIdentity,
     ServerCapabilitiesResponse,
     StandaloneGameSessionSummary, StandaloneGameStatusResponse,
 )
+from server.world_contracts import APIFloorObject
 from server.mapeditor_support import (
     apply_tile_patches,
     build_catalog,
@@ -145,42 +154,111 @@ from server.game_creation_catalog import (
 from server.event_stream import (
     BoundedSubscription,
     EvictedPayload,
-    GameEventHistoryResponse,
-    HeartbeatPayload,
-    StreamSyncPayload,
+    ObjectiveSourceSnapshot,
     event_stream,
     format_sse,
     make_stream_id,
 )
 from server.event_contract import (
-    EVENT_CONTRACT_HASH,
-    EVENT_CONTRACT_VERSION,
     event_contract_summary,
-    serialize_event,
 )
 from server.agent_event_stream import agent_event_stream
 from server.gauntlet_event_stream import gauntlet_event_stream
 from server.game_summary_store import WorkerSummaryEvidence, game_summary_store
+from server.objective_replay import ObjectiveReplayBundle
+from server.player_replay import SubjectivePlayerReplayArchive
+from server.player_replay_capture import subjective_replay_capture_store
+from server.worker_player_replay import (
+    WorkerPlayerReplayError,
+    WorkerPlayerReplayNotReady,
+    build_worker_subjective_replays,
+)
+from server.worker_replay import WorkerReplayError, build_worker_objective_replay
 from server.action_serialization import serialize_available_actions
 from server.session import (
     SessionManager, GameSession,
-    PlayerSession, PlayerType, ConnectionStatus, get_session_manager
+    PlayerSession, PlayerType, get_session_manager
 )
-from ai.evaluation.gauntlet_contract import (
+from server.replication_perspective import perspective_epoch_registry
+from server.agent_protocol.objective_diagnostics import (
+    ObjectiveDiagnosticsBootstrap,
+    ObjectiveDiagnosticsSync,
+    SubjectiveRenderParityDiagnosticsResponse,
+)
+from server.combat_log_source import (
+    CombatLogSourceError,
+    CombatLogSourceSlot,
+    CombatLogSourceWindow,
+)
+from server.objective_state import build_current_objective_world
+from server.subjective_parity_diagnostics import (
+    SubjectiveParityDiagnosticsError,
+    build_subjective_render_parity_diagnostics,
+)
+from server.objective_timeline import (
+    ObjectiveTimelineError,
+    build_objective_combat_log_frames,
+    build_objective_game_event_frames,
+)
+from server.runtime_authority import (
+    RuntimeAuthorityError,
+    RuntimeProjectionAuthority,
+    RuntimeScope,
+    parse_runtime_projection_authority,
+)
+from server.timeline_contracts import (
+    GameEventFrame,
+    GameEventFramesResponse,
+    ObjectiveCombatLogFramesResponse,
+)
+from server.subjective_authority import (
+    ResolvedSubjectiveAuthority,
+    SubjectiveAuthorityError,
+    resolve_subjective_authority,
+)
+from server.player_replication.journal import (
+    SubjectiveJournalError,
+    SubjectiveJournalResyncRequired,
+    SubjectiveSubscriptionClosedError,
+)
+from server.player_replication.runtime import (
+    CanonicalSubjectiveReplicationContext,
+    SubjectiveRuntimeError,
+    SubjectiveRuntimeIdentityError,
+    canonical_subjective_replication_runtime,
+)
+from server.player_replication_contract import (
+    PlayerReplicationWatermarks,
+    SubjectiveCombatLogFramesResponse,
+    SubjectiveCombatLogDelivery,
+    SubjectiveFrameDelivery,
+    SubjectiveFramesResponse,
+    SubjectiveReplicationBootstrap,
+    SubjectiveSyncDelivery,
+)
+from server.agent_protocol.gauntlet import (
     GauntletEventIngestRequest,
     GauntletSummary,
     apply_gauntlet_latency_audit,
     project_live_watcher_state,
     project_watcher_state,
 )
-from server.ai_process_manager import AIProcessStartError, ExternalAIProcessManager
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.service_manager import (
+    AgentServiceStartError,
+    AgentServiceUnavailableError,
+    ManagedAgentServiceManager,
+)
+from server.agent_protocol.service import AgentServiceReadyRequest
 from server.ai_takeover_manager import AITakeoverManager, TakeoverClaim, TakeoverError
-from ai.observation import (
-    ObservationAccessError,
+from server.agent_protocol.observation import (
     ObservationFrame,
     ObservationFramesResponse,
-    ObservationOwnershipBoundary,
     ObservationSnapshot,
+)
+from server.agent_runtime.observation_projector import (
+    ObservationAccessError,
+    ObservationOwnershipBoundary,
     append_command_result_frame,
     append_decision_epoch_frame,
     append_epoch_clear_frame,
@@ -193,8 +271,8 @@ from ai.observation import (
     prepare_observation_ownership_change,
     publish_observation_ownership_changes,
 )
-from ai.policy.source import PolicySourceSnapshot, policy_source_snapshot
-from ai.protocol.control import (
+from server.agent_protocol.telemetry import PolicySourceManifest
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionResolutionStatus,
     AgentEndTurnCommandRequest,
@@ -203,18 +281,19 @@ from ai.protocol.control import (
     CommandResultStatus,
     DecisionEpoch,
     DecisionEpochReason,
+    END_TURN_ROW_ID,
 )
-from ai.protocol.semantics import ActionTag
-from ai.subjective.movement_revalidation import (
+from server.agent_protocol.semantics import ActionTag
+from server.agent_runtime.movement_revalidation import (
     SessionMovementContinuationGuard,
 )
-from ai.subjective.epochs import (
+from server.agent_runtime.epochs import (
     ActionExecutionBinding,
     DecisionEpochExecutionAuthority,
     build_decision_epoch as build_subjective_decision_epoch,
     clear_epoch_value_caches,
 )
-from ai.subjective.models import (
+from server.agent_protocol.telemetry import (
     AgentEventHistoryResponse,
     AgentEventIngestRequest,
 )
@@ -223,8 +302,36 @@ _available_actions_cache: Dict[str, AvailableActionsResult] = {}
 _last_published_epoch_by_session: Dict[str, str] = {}
 _current_epoch_by_session: Dict[str, DecisionEpoch] = {}
 _execution_authority_by_epoch_id: Dict[str, DecisionEpochExecutionAuthority] = {}
-ai_process_manager = ExternalAIProcessManager()
+agent_service_manager = ManagedAgentServiceManager()
 ai_takeover_manager = AITakeoverManager()
+
+
+def _evict_managed_agent_observation_streams(
+    session_ids: Optional[Sequence[str]] = None,
+) -> None:
+    """Wake managed agent SSE readers before waiting for their shutdown."""
+    targets = (
+        tuple(session_ids)
+        if session_ids is not None
+        else tuple(agent_service_manager.running_session_ids())
+    )
+    for session_id in targets:
+        observation_wakeup_stream.evict_session(
+            str(session_id),
+            reason="managed_agent_stopping",
+        )
+
+
+async def _stop_all_managed_agents() -> None:
+    """Evict live reads, then stop and join every managed agent."""
+    _evict_managed_agent_observation_streams()
+    await agent_service_manager.stop_all()
+
+
+def _stop_all_managed_agents_blocking() -> None:
+    """Synchronous equivalent used by reset/test composition boundaries."""
+    _evict_managed_agent_observation_streams()
+    agent_service_manager.stop_all_blocking()
 
 
 @dataclass
@@ -266,6 +373,15 @@ class _ServerCommandTiming:
         }
 
 
+@dataclass(frozen=True)
+class _ActionExecutionResult:
+    """Private engine result plus the minimal public command acknowledgement."""
+
+    response: ActionResult
+    movement_termination_reason: Optional[str] = None
+    movement_revalidation_reason: Optional[str] = None
+
+
 def _prefixed_timing_recorder(
     timing: Optional[_ServerCommandTiming],
     prefix: str,
@@ -305,9 +421,12 @@ async def _first_subscription_envelope(
 
 
 def clear_subjective_projection_state() -> None:
-    """Clear subjective projection and epoch publication caches."""
+    """Clear all process-local subjective projection and replay identity state."""
     clear_observation_projection_cache()
     clear_epoch_value_caches()
+    perspective_epoch_registry.clear_all()
+    canonical_subjective_replication_runtime.clear_all()
+    subjective_replay_capture_store.clear()
     _last_published_epoch_by_session.clear()
     _current_epoch_by_session.clear()
     _execution_authority_by_epoch_id.clear()
@@ -327,83 +446,6 @@ def _forget_current_epoch(session_id: str) -> Optional[DecisionEpoch]:
     if epoch is not None:
         _execution_authority_by_epoch_id.pop(epoch.epoch_id, None)
     return epoch
-
-
-class EventMonitor:
-    """Monitor EventQueue and broadcast serialized events to listeners.
-
-    Attributes:
-        _listeners: Listener queues that receive serialized event payloads.
-        _running: Whether the monitor callback is registered with EventQueue.
-    """
-
-    def __init__(self) -> None:
-        self._listeners: Set[asyncio.Queue] = set()
-        self._running = False
-
-    def add_listener(self, queue: asyncio.Queue) -> None:
-        """Add a listener queue that will receive events."""
-        self._listeners.add(queue)
-
-    def remove_listener(self, queue: asyncio.Queue) -> None:
-        """Remove a listener queue."""
-        self._listeners.discard(queue)
-
-    @property
-    def listener_count(self) -> int:
-        """Number of active listeners."""
-        return len(self._listeners)
-
-    def _on_event(self, event: Event) -> None:
-        """Callback invoked for every event in EventQueue."""
-        if not self._listeners:
-            return
-
-        if event.event_type.value == "attack":
-            attack_outcome = getattr(event, 'attack_outcome', None)
-            dice_roll = getattr(event, 'dice_roll', None)
-            logger.debug(
-                "Broadcasting attack event phase=%s outcome=%s dice=%s",
-                event.phase.value,
-                attack_outcome,
-                dice_roll,
-            )
-
-        try:
-            event_data = serialize_event(event)
-
-            for queue in self._listeners:
-                try:
-                    queue.put_nowait(event_data)
-                except asyncio.QueueFull:
-                    continue
-        except Exception:
-            logger.exception("Error serializing event for websocket broadcast")
-
-    def start(self) -> None:
-        """Start monitoring events."""
-        if self._running:
-            return
-
-        EventQueue.add_on_event_callback(self._on_event)
-        self._running = True
-        logger.info("EventMonitor started")
-
-    def ensure_attached(self) -> None:
-        """Restore the EventQueue callback after a queue generation reset."""
-        EventQueue.add_on_event_callback(self._on_event)
-        self._running = True
-
-    def stop(self) -> None:
-        """Stop monitoring events."""
-        if not self._running:
-            return
-
-        EventQueue.remove_on_event_callback(self._on_event)
-        self._running = False
-        logger.info("EventMonitor stopped")
-
-event_monitor = EventMonitor()
 
 
 class SimulationState:
@@ -463,7 +505,7 @@ class SimulationState:
     def reset(self) -> None:
         """Reset mutable server session state for a fresh game scene."""
         ai_takeover_manager.clear(self.encounter, self._game_session)
-        ai_process_manager.stop_all()
+        _stop_all_managed_agents_blocking()
         clear_subjective_projection_state()
         agent_event_stream.clear_all()
         self.encounter = None
@@ -480,23 +522,77 @@ class SimulationState:
 sim = SimulationState()
 
 
+@dataclass(frozen=True)
+class _SubjectiveSessionAuthorityFingerprint:
+    """Session-owned facts that define one canonical player perspective."""
+
+    player_type: PlayerType
+    controlled_entity_uuids: tuple[str, ...]
+    observer_entity_uuids: tuple[str, ...]
+    active_observer_uuid: Optional[str]
+
+
+def _capture_subjective_session_authority(
+    manager: SessionManager,
+) -> dict[str, _SubjectiveSessionAuthorityFingerprint]:
+    """Freeze session perspective facts before an ownership mutation."""
+    return {
+        str(session.session_id): _SubjectiveSessionAuthorityFingerprint(
+            player_type=session.player_type,
+            controlled_entity_uuids=tuple(
+                sorted(str(entity_uuid) for entity_uuid in session.controlled_entities)
+            ),
+            observer_entity_uuids=tuple(
+                sorted(str(entity_uuid) for entity_uuid in session.observer_entities)
+            ),
+            active_observer_uuid=(
+                str(session.active_observer_uuid)
+                if session.active_observer_uuid is not None
+                else None
+            ),
+        )
+        for session in manager.sessions.values()
+    }
+
+
+def _retire_changed_subjective_sessions(
+    manager: SessionManager,
+    before: dict[str, _SubjectiveSessionAuthorityFingerprint],
+) -> None:
+    """Close old journals immediately after a session authority mutation."""
+    after = _capture_subjective_session_authority(manager)
+    for session_id in set(before) | set(after):
+        if before.get(session_id) != after.get(session_id):
+            canonical_subjective_replication_runtime.retire_session(session_id)
+
+_policy_source_manifest: Optional[PolicySourceManifest] = None
+
+
+def configure_policy_source_manifest(
+    manifest: Optional[PolicySourceManifest],
+) -> None:
+    """Install opaque client-owned policy diagnostics for the read-only API.
+
+    The server deliberately does not discover or read client source files. A
+    composition root that includes an AI client may build this manifest and
+    supply it explicitly; a server-only deployment leaves it unset.
+
+    Args:
+        manifest: Validated client manifest, or ``None`` to remove it.
+    """
+    global _policy_source_manifest
+    _policy_source_manifest = manifest
+
+
 def setup_combat() -> Encounter:
-    """Initialize the default two-combatant demo encounter.
+    """Initialize the passive two-combatant step/debug encounter.
 
     Returns:
-        Encounter containing one goblin and one skeleton with external AI controllers.
+        Encounter containing one goblin and one skeleton with pass controllers.
     """
-    reset_map()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Encounter.clear_registry()
-    EventQueue.reset()
+    reset_engine_runtime(grid_size=(15, 15))
     game_summary_store.reset()
     event_stream.ensure_attached()
-    event_monitor.ensure_attached()
-
-    grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
 
     goblin = equip_wardrobe(
         create_goblin(name="Goblin Scout", position=(2, 7)),
@@ -506,8 +602,8 @@ def setup_combat() -> Encounter:
     Entity.update_all_entities_senses()
 
     encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
-    encounter.add_combatant(goblin, ExternalAIController(source_entity_uuid=goblin.uuid))
-    encounter.add_combatant(skeleton, ExternalAIController(source_entity_uuid=skeleton.uuid))
+    encounter.add_combatant(goblin, PassController(source_entity_uuid=goblin.uuid))
+    encounter.add_combatant(skeleton, PassController(source_entity_uuid=skeleton.uuid))
 
     return encounter
 
@@ -527,18 +623,10 @@ def setup_arena_combat(
     Returns:
         Encounter configured with the hero and skeleton combatants.
     """
-    reset_map()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Encounter.clear_registry()
-    Controller._controller_registry.clear()
+    grid = reset_engine_runtime()
     SessionManager.reset()
-    EventQueue.reset()
     game_summary_store.reset()
     event_stream.ensure_attached()
-    event_monitor.ensure_attached()
-
-    grid = get_map()
     build_standard_arena_environment(grid)
 
     if character_class == "barbarian":
@@ -631,7 +719,7 @@ async def prepare_new_simulation_start() -> None:
         except asyncio.CancelledError:
             pass
 
-    ai_process_manager.stop_all()
+    await _stop_all_managed_agents()
     ai_takeover_manager.clear(sim.encounter, sim.game)
     clear_subjective_projection_state()
     agent_event_stream.clear_all()
@@ -639,9 +727,129 @@ async def prepare_new_simulation_start() -> None:
     sim._session_manager.sessions.clear()
     sim._session_manager.games.clear()
     sim._session_manager.active_game = None
+    sim.encounter = None
+    sim.combat_task = None
     sim.current_creation = None
     _available_actions_cache.clear()
-    sim.paused = False
+    sim.paused = True
+
+
+def _require_managed_agent_service(required_agents: int) -> None:
+    """Preflight managed AI before a start route mutates live game state."""
+    if required_agents == 0:
+        return
+    try:
+        agent_service_manager.require_service(required_agents)
+    except AgentServiceUnavailableError as exc:
+        raise _api_http_exception(
+            status_code=503,
+            code="agent_service_unavailable",
+            message="This server has no registered managed-agent service",
+            required_agents=required_agents,
+        ) from exc
+    except (RuntimeError, ValueError) as exc:
+        raise _api_http_exception(
+            status_code=503,
+            code="agent_service_preflight_failed",
+            message="The registered managed-agent service is unavailable",
+            required_agents=required_agents,
+            error=str(exc),
+        ) from exc
+
+
+def _managed_agent_attachment_base_url(request: Request) -> str:
+    """Return the server-owned endpoint used by managed agent transports."""
+    worker_socket = os.environ.get("DND_WORKER_UNIX_SOCKET")
+    if worker_socket:
+        return "http://game-worker"
+    configured = os.environ.get("DND_AGENT_INTERNAL_BASE_URL")
+    if configured is not None:
+        normalized = configured.strip().rstrip("/")
+        if not normalized.startswith(("http://", "https://")):
+            raise RuntimeError(
+                "DND_AGENT_INTERNAL_BASE_URL must be an absolute HTTP(S) URL"
+            )
+        return normalized
+    scope_server = request.scope.get("server")
+    if (
+        not isinstance(scope_server, (tuple, list))
+        or len(scope_server) != 2
+        or not scope_server[0]
+    ):
+        raise RuntimeError(
+            "ASGI server address is unavailable; configure "
+            "DND_AGENT_INTERNAL_BASE_URL"
+        )
+    host = str(scope_server[0])
+    port = int(scope_server[1]) if scope_server[1] is not None else None
+    if host in {"0.0.0.0", "::"}:
+        host = "127.0.0.1"
+    elif ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    scheme = str(request.scope.get("scheme") or "http")
+    default_port = 443 if scheme == "https" else 80
+    port_suffix = f":{port}" if port is not None and port != default_port else ""
+    return f"{scheme}://{host}{port_suffix}"
+
+
+async def _start_managed_agent_sessions(
+    sessions: tuple[PlayerSession, ...],
+    request: Request,
+) -> None:
+    """Launch and authenticate one atomic batch of AI session services."""
+    worker_socket = os.environ.get("DND_WORKER_UNIX_SOCKET")
+    base_url = _managed_agent_attachment_base_url(request)
+    requests = tuple(
+        AgentLaunchRequest(
+            session_id=str(session.session_id),
+            base_url=base_url.rstrip("/"),
+            spawned_at=time.time(),
+            unix_socket_path=worker_socket,
+        )
+        for session in sessions
+    )
+    try:
+        await agent_service_manager.start_agents(requests)
+    except BaseException:
+        await _abort_failed_simulation_start()
+        raise
+
+
+async def _abort_failed_simulation_start() -> None:
+    """Tear down every engine and server fact from a failed start transaction."""
+    if sim.combat_task and not sim.combat_task.done():
+        sim.combat_task.cancel()
+        try:
+            await sim.combat_task
+        except asyncio.CancelledError:
+            pass
+
+    await _stop_all_managed_agents()
+    ai_takeover_manager.clear(sim.encounter, sim.game)
+    clear_subjective_projection_state()
+    agent_event_stream.clear_all()
+    manager = sim.get_session_manager()
+    manager.sessions.clear()
+    manager.games.clear()
+    manager.active_game = None
+    sim.encounter = None
+    sim._game_session = None
+    sim.current_creation = None
+    sim.combat_task = None
+    sim.paused = True
+    _available_actions_cache.clear()
+    reset_engine_runtime()
+    game_summary_store.reset()
+    event_stream.ensure_attached()
+
+
+async def _advance_managed_start_or_abort() -> AdvanceEncounterResult:
+    """Run initial advancement without leaking a partially started service."""
+    try:
+        return await advance_encounter()
+    except BaseException:
+        await _abort_failed_simulation_start()
+        raise
 
 
 def apply_validation_arena_controllers(encounter: Encounter, mode: str) -> None:
@@ -686,19 +894,10 @@ def setup_aoe_test_arena(
     Returns:
         Encounter with an open grid and three clustered goblins.
     """
-    reset_map()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Encounter.clear_registry()
-    Controller._controller_registry.clear()
+    reset_engine_runtime(grid_size=(15, 15))
     SessionManager.reset()
-    EventQueue.reset()
     game_summary_store.reset()
     event_stream.ensure_attached()
-    event_monitor.ensure_attached()
-
-    grid = get_map()
-    grid.create_rectangle(0, 0, 15, 15)
 
     if character_class == "sorcerer":
         config = SorcererConfig(
@@ -837,9 +1036,13 @@ async def advance_encounter(
 ) -> AdvanceEncounterResult:
     """Advance the encounter until a player-controlled turn or terminal state.
 
+    Args:
+        timing: Optional phase recorder for command diagnostics.
+        publish_decision_epoch: Whether to publish the resulting AI decision epoch.
+
     Returns:
-        Structured advancement result with AI combat-log entries and replication
-        cursors.
+        Control acknowledgement with the resulting turn boundary and canonical
+        replication cursor barriers.
     """
     if sim.encounter is None:
         return AdvanceEncounterResult(status="no_encounter")
@@ -860,8 +1063,6 @@ async def advance_encounter(
             **action_cursor_fields(),
         )
 
-    log_start = len(sim.encounter.combat_log)
-
     started = time.perf_counter()
     result = sim.encounter.advance_until_player()
     if timing is not None:
@@ -876,20 +1077,12 @@ async def advance_encounter(
         if timing is not None:
             timing.add("advance.publish_active_epoch_ms", started)
 
-    started = time.perf_counter()
-    new_entries = sim.encounter.get_combat_log(log_start)
-    ai_actions = list(new_entries)
-    if timing is not None:
-        timing.add("advance.serialize_logs_ms", started)
-
     return AdvanceEncounterResult(
         status=result.status,
         entity_uuid=str(result.entity_uuid) if result.entity_uuid else None,
         entity_name=result.entity_name,
         round=result.round_number,
         turn_index=result.turn_index,
-        ai_actions=ai_actions,
-        new_log_since=log_start,
         **action_cursor_fields(),
     )
 
@@ -942,18 +1135,33 @@ def serialize_takeover_claim(claim: TakeoverClaim) -> TakeoverClaimResponse:
 
 def restore_expired_takeovers() -> list[TakeoverClaim]:
     """Restore expired claims while preserving append-only subjective history."""
-    boundary = prepare_observation_ownership_change(sim.get_session_manager())
+    manager = sim.get_session_manager()
+    subjective_authority_before = _capture_subjective_session_authority(manager)
+    boundary = prepare_observation_ownership_change(manager)
     expired = ai_takeover_manager.restore_expired(sim.encounter, sim.game)
     if expired:
-        _publish_takeover_ownership_changes(boundary, "takeover_expired")
+        _publish_takeover_ownership_changes(
+            boundary,
+            "takeover_expired",
+            subjective_authority_before=subjective_authority_before,
+        )
     return expired
 
 
 def _publish_takeover_ownership_changes(
     boundary: ObservationOwnershipBoundary,
     reason: str,
+    *,
+    subjective_authority_before: dict[
+        str,
+        _SubjectiveSessionAuthorityFingerprint,
+    ],
 ) -> list[str]:
     """Publish ownership replacements and reconcile affected decision epochs."""
+    _retire_changed_subjective_sessions(
+        sim.get_session_manager(),
+        subjective_authority_before,
+    )
     changed_session_ids = publish_observation_ownership_changes(
         boundary,
         reason=reason,
@@ -1031,39 +1239,6 @@ def _api_http_exception(
     return HTTPException(status_code=status_code, detail=detail)
 
 
-def _known_entity_summaries() -> list[dict]:
-    """Return compact correction context for currently registered entities.
-
-    Returns:
-        Serialized summaries for all entities in the global registry.
-    """
-    return [
-        APIEntitySummary.create(entity).model_dump(mode="json")
-        for entity in Entity.get_all_entities()
-    ]
-
-
-def _grid_state_context() -> dict[str, Any]:
-    """Return compact correction context for the current grid.
-
-    Returns:
-        Grid bounds and object/entity counts for structured API errors.
-    """
-    grid = get_map()
-    min_x, min_y, max_x, max_y = grid.bounds
-    return {
-        "grid_bounds": {
-            "min_x": min_x,
-            "min_y": min_y,
-            "max_x": max_x,
-            "max_y": max_y,
-        },
-        "tile_count": grid.tile_count(),
-        "entity_count": grid.entity_count(),
-        "object_count": len(grid._object_positions),
-    }
-
-
 def _entity_lookup_exception(entity_uuid: str, status_code: int, code: str, message: str) -> HTTPException:
     """Create a structured entity lookup error.
 
@@ -1074,48 +1249,14 @@ def _entity_lookup_exception(entity_uuid: str, status_code: int, code: str, mess
         message: Human-readable error message.
 
     Returns:
-        HTTP exception with known-entity correction context.
+        HTTP exception with only the rejected entity identity.
     """
     return _api_http_exception(
         status_code=status_code,
         code=code,
         message=message,
         entity_uuid=entity_uuid,
-        known_entities=_known_entity_summaries(),
     )
-
-
-def _resolve_entity_or_raise(entity_uuid: str) -> Entity:
-    """Resolve an entity UUID string or raise a structured API error.
-
-    Args:
-        entity_uuid: Entity UUID string from a route path or request body.
-
-    Returns:
-        Resolved entity.
-
-    Raises:
-        HTTPException: If the UUID is malformed or no entity exists.
-    """
-    try:
-        uuid_obj = UUID(entity_uuid)
-    except ValueError:
-        raise _entity_lookup_exception(
-            entity_uuid=entity_uuid,
-            status_code=400,
-            code="invalid_entity_uuid",
-            message="Invalid entity UUID format",
-        )
-
-    entity = Entity.get(uuid_obj)
-    if not entity:
-        raise _entity_lookup_exception(
-            entity_uuid=entity_uuid,
-            status_code=404,
-            code="entity_not_found",
-            message="Entity not found",
-        )
-    return entity
 
 
 def _serialize_entity_handlers(entity: Entity) -> list[AvailableHandlerInfo]:
@@ -1199,22 +1340,18 @@ def _equipment_slot_map() -> dict[str, Any]:
 
 
 def _equipment_context(entity: Entity) -> dict:
-    """Build correction context for equipment and inventory endpoints.
+    """Build correction metadata for equipment commands.
 
     Args:
-        entity: Entity whose inventory and equipment state should be exposed.
+        entity: Entity receiving the equipment command.
 
     Returns:
-        Structured equipment context for mutation error responses.
+        Stable correction metadata without a parallel state snapshot.
     """
-    equipped_items = entity.equipment.get_all_equipped_items()
     return {
         "entity_uuid": str(entity.uuid),
         "entity_name": entity.name,
         "valid_slots": list(_equipment_slot_map().keys()),
-        "inventory_item_uuids": [str(uuid) for uuid in entity.inventory.items.keys()],
-        "equipped_item_uuids": [str(item.uuid) for item in equipped_items],
-        "equipment": APIEquipmentOverview.create(entity).model_dump(mode="json"),
     }
 
 
@@ -1265,7 +1402,6 @@ def _session_context() -> dict:
         ],
         "active_game_id": str(game.game_id) if game else None,
         "active_entity_uuid": str(game.active_entity_uuid) if game and game.active_entity_uuid else None,
-        "known_entities": _known_entity_summaries(),
     }
 
 
@@ -1288,13 +1424,347 @@ def _session_http_exception(
     Returns:
         HTTP exception with session and active-game context.
     """
+    correction_context = _session_context()
+    correction_context.update(context)
     return _api_http_exception(
         status_code=status_code,
         code=code,
         message=message,
         session_id=session_id,
-        **_session_context(),
-        **context,
+        **correction_context,
+    )
+
+
+@dataclass(frozen=True)
+class _ReplicationRequestContext:
+    """Trusted player session and its resolved subjective authority."""
+
+    session_id: UUID
+    session: PlayerSession
+    projection_authority: Optional[RuntimeProjectionAuthority]
+    subjective_authority: ResolvedSubjectiveAuthority
+
+
+def _resolve_replication_request(
+    request: Request,
+    session_id: str,
+) -> _ReplicationRequestContext:
+    """Resolve one canonical request from private claims or standalone mode."""
+    try:
+        sid = UUID(session_id)
+    except ValueError:
+        raise _api_http_exception(
+            status_code=400,
+            code="invalid_session_uuid",
+            message="Invalid session ID format",
+            session_id=session_id,
+        )
+
+    session = sim.get_session_manager().get_session(sid)
+    if session is None:
+        raise _api_http_exception(
+            status_code=404,
+            code="session_not_found",
+            message="Session not found",
+            session_id=session_id,
+        )
+
+    is_worker = os.environ.get("DND_GAME_WORKER") == "1"
+    try:
+        projection_authority = parse_runtime_projection_authority(request.headers)
+        if is_worker and projection_authority is None:
+            raise RuntimeAuthorityError("trusted runtime authority is required")
+        if not is_worker and projection_authority is not None:
+            raise RuntimeAuthorityError(
+                "runtime projection headers are only accepted by a private game worker"
+            )
+
+        configured_game_id = os.environ.get("DND_HOSTED_GAME_ID")
+        if is_worker and configured_game_id is None:
+            raise RuntimeAuthorityError("worker hosted-game identity is unavailable")
+        if projection_authority is not None and configured_game_id is not None:
+            try:
+                matches_worker = projection_authority.hosted_game_id == UUID(configured_game_id)
+            except ValueError as exc:
+                raise RuntimeAuthorityError("worker hosted-game identity is malformed") from exc
+            if not matches_worker:
+                raise RuntimeAuthorityError("runtime authority belongs to another hosted game")
+
+        subjective_authority = resolve_subjective_authority(
+            session,
+            projection_authority,
+            allow_standalone=not is_worker,
+        )
+    except (RuntimeAuthorityError, SubjectiveAuthorityError) as exc:
+        raise _api_http_exception(
+            status_code=403,
+            code="replication_authority_rejected",
+            message=str(exc),
+            session_id=session_id,
+        )
+
+    return _ReplicationRequestContext(
+        session_id=sid,
+        session=session,
+        projection_authority=projection_authority,
+        subjective_authority=subjective_authority,
+    )
+
+
+def _replication_runtime_context(
+    request_context: _ReplicationRequestContext,
+    *,
+    expected_source_stream_id: Optional[str] = None,
+    expected_generation_id: Optional[str],
+    expected_perspective_epoch_id: Optional[str],
+) -> CanonicalSubjectiveReplicationContext:
+    """Bind and identity-check one canonical journal partition."""
+    if sim.encounter is None:
+        raise _api_http_exception(
+            status_code=409,
+            code="replication_source_unavailable",
+            message="An active encounter is required for player replication",
+        )
+    try:
+        context = canonical_subjective_replication_runtime.bind(
+            request_context.subjective_authority,
+            encounter=sim.encounter,
+        )
+        context.validate_identity(
+            expected_source_stream_id=expected_source_stream_id,
+            expected_generation_id=expected_generation_id,
+            expected_perspective_epoch_id=expected_perspective_epoch_id,
+        )
+        return context
+    except SubjectiveRuntimeIdentityError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="replication_identity_changed",
+            message=str(exc),
+            expected_source_stream_id=expected_source_stream_id,
+            expected_generation_id=expected_generation_id,
+            expected_perspective_epoch_id=expected_perspective_epoch_id,
+        ) from exc
+    except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="replication_partition_unavailable",
+            message=str(exc),
+        ) from exc
+
+
+def _replication_window_http_exception(
+    exc: SubjectiveJournalError | SubjectiveRuntimeError,
+) -> HTTPException:
+    """Map an exact journal read failure to one structured recovery response."""
+    if isinstance(exc, SubjectiveJournalResyncRequired):
+        return _api_http_exception(
+            status_code=409,
+            code="replication_resync_required",
+            message=str(exc),
+            requested_cursor=exc.requested_cursor,
+            retained_from_cursor=exc.retained_from_cursor,
+        )
+    if isinstance(exc, SubjectiveRuntimeIdentityError):
+        return _api_http_exception(
+            status_code=409,
+            code="replication_identity_changed",
+            message=str(exc),
+        )
+    return _api_http_exception(
+        status_code=409,
+        code="replication_partition_unavailable",
+        message=str(exc),
+    )
+
+
+def _replication_delivery_watermarks(
+    delivery: (
+        SubjectiveSyncDelivery
+        | SubjectiveFrameDelivery
+        | SubjectiveCombatLogDelivery
+    ),
+) -> PlayerReplicationWatermarks:
+    """Return the four-cursor boundary represented by one stream delivery."""
+    if isinstance(delivery, SubjectiveFrameDelivery):
+        return delivery.frame.watermarks
+    return delivery.watermarks
+
+
+def _replication_stream_id(
+    delivery: (
+        SubjectiveSyncDelivery
+        | SubjectiveFrameDelivery
+        | SubjectiveCombatLogDelivery
+    ),
+) -> str:
+    """Encode all independent player cursors into one diagnostic SSE ID."""
+    watermarks = _replication_delivery_watermarks(delivery)
+    return (
+        f"s={watermarks.source_event_cursor};"
+        f"o={watermarks.observation_cursor};"
+        f"p={watermarks.presentation_cursor};"
+        f"l={watermarks.combat_log_cursor}"
+    )
+
+
+def _assert_objective_diagnostics_access(request: Request) -> None:
+    """Require hosted administration authority or explicit standalone access.
+
+    Public hosted requests always arrive with gateway-authenticated projection
+    headers. Header-free calls are accepted only by the standalone server.
+    Worker-internal terminal evidence uses its distinct private route family.
+    """
+    try:
+        is_worker = os.environ.get("DND_GAME_WORKER") == "1"
+        if request.url.path == "/game/evidence/objective-subscribe":
+            if not is_worker:
+                raise RuntimeAuthorityError(
+                    "worker-internal objective evidence is unavailable"
+                )
+            return
+        authority = parse_runtime_projection_authority(request.headers)
+        if authority is None:
+            if is_worker:
+                raise RuntimeAuthorityError(
+                    "trusted runtime administration authority is required"
+                )
+            return
+        if not is_worker:
+            raise RuntimeAuthorityError(
+                "runtime projection headers are only accepted by a private game worker"
+            )
+        configured_game_id = os.environ.get("DND_HOSTED_GAME_ID")
+        if configured_game_id is None:
+            raise RuntimeAuthorityError("worker hosted-game identity is unavailable")
+        try:
+            hosted_game_id = UUID(configured_game_id)
+        except ValueError as exc:
+            raise RuntimeAuthorityError(
+                "worker hosted-game identity is malformed"
+            ) from exc
+        if authority.hosted_game_id != hosted_game_id:
+            raise RuntimeAuthorityError(
+                "runtime authority belongs to another hosted game"
+            )
+        if RuntimeScope.ADMINISTER not in authority.scopes:
+            raise RuntimeAuthorityError(
+                "objective diagnostics require runtime administration authority"
+            )
+    except RuntimeAuthorityError as exc:
+        raise _api_http_exception(
+            status_code=403,
+            code="objective_diagnostics_authority_rejected",
+            message=str(exc),
+        ) from exc
+
+
+def _build_objective_event_window(
+    *,
+    source: ObjectiveSourceSnapshot,
+) -> GameEventFramesResponse:
+    """Build one all-phase window from a previously locked source boundary."""
+    try:
+        return build_objective_game_event_frames(
+            source.event_source_slots,
+            source_stream_id=source.source_stream_id,
+            generation_id=source.generation_id,
+            combat_log_source=source.complete_combat_log_source,
+            retained_from_cursor=0,
+            from_cursor=source.event_from_cursor,
+            through_cursor=source.event_through_cursor,
+            total=source.event_cursor,
+        )
+    except ObjectiveTimelineError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="objective_diagnostics_window_unavailable",
+            message=str(exc),
+            from_cursor=source.event_from_cursor,
+            through_cursor=source.event_through_cursor,
+        ) from exc
+
+
+def _capture_objective_source_snapshot(
+    *,
+    from_event_cursor: Optional[int] = None,
+    through_event_cursor: Optional[int] = None,
+    event_limit: Optional[int] = None,
+    from_combat_log_cursor: Optional[int] = None,
+    through_combat_log_cursor: Optional[int] = None,
+    combat_log_limit: Optional[int] = None,
+    expected_source_stream_id: Optional[str] = None,
+    expected_generation_id: Optional[str] = None,
+) -> ObjectiveSourceSnapshot:
+    """Capture one locked objective event/log boundary or fail closed."""
+    encounter = sim.encounter
+    if encounter is None:
+        raise _api_http_exception(
+            status_code=409,
+            code="objective_diagnostics_source_unavailable",
+            message="Objective diagnostics require an encounter",
+        )
+    event_stream.ensure_attached()
+    try:
+        return event_stream.capture_objective_source_snapshot(
+            encounter,
+            from_event_cursor=from_event_cursor,
+            through_event_cursor=through_event_cursor,
+            event_limit=event_limit,
+            from_combat_log_cursor=from_combat_log_cursor,
+            through_combat_log_cursor=through_combat_log_cursor,
+            combat_log_limit=combat_log_limit,
+            expected_source_stream_id=expected_source_stream_id,
+            expected_generation_id=expected_generation_id,
+        )
+    except CombatLogSourceError as exc:
+        code = (
+            "objective_diagnostics_source_changed"
+            if "changed" in str(exc)
+            else "objective_diagnostics_window_unavailable"
+        )
+        raise _api_http_exception(
+            status_code=409,
+            code=code,
+            message=str(exc),
+            from_event_cursor=from_event_cursor,
+            through_event_cursor=through_event_cursor,
+            from_combat_log_cursor=from_combat_log_cursor,
+            through_combat_log_cursor=through_combat_log_cursor,
+        ) from exc
+
+
+def _objective_backfill_deliveries(
+    events: GameEventFramesResponse,
+    logs: ObjectiveCombatLogFramesResponse,
+) -> tuple[tuple[str, Any], ...]:
+    """Merge exact event/log backfill in causal cursor order."""
+    deliveries: list[tuple[int, int, int, str, Any]] = []
+    deliveries.extend(
+        (
+            frame.event_cursor,
+            0,
+            frame.event_cursor,
+            "game_event",
+            frame,
+        )
+        for frame in events.frames
+    )
+    deliveries.extend(
+        (
+            frame.event_cursor,
+            1,
+            frame.combat_log_cursor,
+            "combat_log",
+            frame,
+        )
+        for frame in logs.frames
+    )
+    deliveries.sort(key=lambda row: row[:3])
+    return tuple(
+        (event_name, frame)
+        for _event_cursor, _channel_order, _channel_cursor, event_name, frame
+        in deliveries
     )
 
 
@@ -1517,21 +1987,35 @@ async def lifespan(app: FastAPI):
         None while the application is running.
     """
     with latency_sensitive_gc():
-        event_monitor.start()
         event_stream.start()
+        canonical_subjective_replication_runtime.ensure_attached()
         game_summary_store.ensure_attached()
-        yield
-        event_stream.stop()
-        event_monitor.stop()
-        ai_process_manager.stop_all()
-        if sim.combat_task and not sim.combat_task.done():
-            sim.combat_task.cancel()
+        try:
+            yield
+        finally:
+            try:
+                await _stop_all_managed_agents()
+            finally:
+                try:
+                    canonical_subjective_replication_runtime.stop()
+                finally:
+                    event_stream.stop()
+                    if sim.combat_task and not sim.combat_task.done():
+                        sim.combat_task.cancel()
 
 app = FastAPI(
     title="D&D Engine Event Server",
-    description="WebSocket server for real-time game events + REST API",
+    description="Event-driven game engine with canonical player replication and objective diagnostics",
     lifespan=lifespan
 )
+
+_world_replacement_lock = asyncio.Lock()
+
+
+async def _serialize_world_replacement() -> AsyncIterator[None]:
+    """Serialize every route that can replace session or engine ownership."""
+    async with _world_replacement_lock:
+        yield
 
 app.add_middleware(
     CORSMiddleware,
@@ -1575,30 +2059,41 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 async def root():
-    """Return a compact server health payload.
+    """Return a state-free process health acknowledgement.
 
     Returns:
-        Server status, listener count, event count, encounter presence, and
-        pause state.
+        Process health payload without game or session state.
     """
-    return {
-        "status": "running",
-        "listeners": event_monitor.listener_count,
-        "event_count": len(EventQueue._all_events),
-        "has_encounter": sim.encounter is not None,
-        "paused": sim.paused
-    }
+    return {"status": "running"}
 
 
 @app.post("/hosted/configure")
 async def configure_hosted_worker(
     assignment: HostedWorkerAssignment,
 ) -> dict[str, str]:
-    """Assign a ready worker to one hosted game before simulation creation."""
+    """Assign a ready worker to one hosted game before simulation creation.
+
+    Args:
+        assignment: Trusted hosted-game identity and public routing metadata.
+
+    Returns:
+        Configuration acknowledgement.
+
+    Raises:
+        HTTPException: If the process is not a worker or already owns game state.
+    """
     if os.environ.get("DND_GAME_WORKER") != "1":
-        raise HTTPException(status_code=404, detail="Hosted worker configuration is unavailable")
+        raise _api_http_exception(
+            status_code=404,
+            code="hosted_worker_configuration_unavailable",
+            message="Hosted worker configuration is unavailable",
+        )
     if sim.encounter is not None or sim.game is not None:
-        raise HTTPException(status_code=409, detail="Hosted worker already owns a game")
+        raise _api_http_exception(
+            status_code=409,
+            code="hosted_worker_already_initialized",
+            message="Hosted worker already owns a game",
+        )
     os.environ["DND_HOSTED_GAME_ID"] = str(assignment.hosted_game_id)
     os.environ["DND_PUBLIC_GAME_BASE_URL"] = assignment.public_game_base_url.rstrip("/")
     return {"status": "configured"}
@@ -1613,84 +2108,6 @@ async def get_server_capabilities() -> ServerCapabilitiesResponse:
         persistent_game_history=False,
         isolated_game_workers=False,
     )
-
-_BASE_BLOCK_INTERNAL_FIELDS = set(BaseBlock.model_fields.keys()) | {
-    'use_register', 'blocks_dict_name_uuid', 'blocks_dict_uuid_name',
-    'values_dict_name_uuid', 'values_dict_uuid_name',
-}
-_FLOOR_OBJECT_TOP_LEVEL_FIELDS = {'uuid', 'name', 'map_char'}
-
-
-def _get_floor_object_state(obj: BaseBlock) -> dict:
-    """Extract object-specific state fields for API serialization.
-
-    Args:
-        obj: Floor object block being serialized.
-
-    Returns:
-        JSON-compatible state fields not already represented by APIFloorObject
-        top-level fields.
-    """
-    all_fields = set(type(obj).model_fields.keys())
-    state_fields = all_fields - _BASE_BLOCK_INTERNAL_FIELDS - _FLOOR_OBJECT_TOP_LEVEL_FIELDS
-    return obj.model_dump(mode='json', include=state_fields)
-
-
-def _build_public_state() -> APIGameState:
-    """Build the canonical public state snapshot used by every client route."""
-    grid = get_map()
-
-    encounter_data = None
-    if sim.encounter:
-        encounter_data = APIEncounter.create(sim.encounter)
-
-    floor_objects = []
-    for obj_uuid, obj_pos in grid._object_positions.items():
-        obj = BaseBlock.get(obj_uuid)
-        if obj:
-            map_char = getattr(obj, 'map_char', '\u03c6')
-            floor_objects.append(APIFloorObject(
-                uuid=str(obj_uuid),
-                name=obj.name or "Object",
-                position=obj_pos,
-                map_char=map_char,
-                state=_get_floor_object_state(obj),
-            ))
-
-    return APIGameState(
-        grid=APIGrid.create(grid),
-        entities=[APIEntitySummary.create(e) for e in Entity.get_all_entities()],
-        encounter=encounter_data,
-        floor_objects=floor_objects,
-    )
-
-
-def _build_visibility_state() -> APIVisibilityResponse:
-    """Build the canonical observer-indexed visibility snapshot."""
-    result: Dict[str, APIEntityVisibility] = {}
-    for entity in Entity.get_all_entities():
-        result[str(entity.uuid)] = APIEntityVisibility(
-            name=entity.name,
-            position=entity.position,
-            visible_cells=[
-                position
-                for position, is_visible in entity.senses.visible.items()
-                if is_visible
-            ],
-            visible_entities=[str(uuid) for uuid in entity.senses.entities],
-            visible_objects=[str(uuid) for uuid in entity.senses.objects],
-            seen_cells=list(entity.senses.seen),
-            sense_modes=list(entity.senses.get_sense_modes()),
-            effective_light_levels=entity.senses.get_effective_light_levels(entity.uuid),
-        )
-    return APIVisibilityResponse(root=result)
-
-
-@app.get("/state", response_model=APIGameState)
-async def get_state():
-    """Return the canonical public game-state snapshot."""
-    return _build_public_state()
-
 
 @app.get("/mapeditor/catalog", response_model=MapEditorCatalog)
 async def get_mapeditor_catalog():
@@ -1712,7 +2129,11 @@ async def get_spell_catalog():
     return build_spell_catalog()
 
 
-@app.post("/mapeditor/maps", response_model=MapEditorMapSnapshot)
+@app.post(
+    "/mapeditor/maps",
+    response_model=MapEditorMapSnapshot,
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def create_mapeditor_map(request: MapEditorCreateMapRequest):
     """Create or reset an entity-free map-editor map.
 
@@ -1726,8 +2147,7 @@ async def create_mapeditor_map(request: MapEditorCreateMapRequest):
         HTTPException: If the requested map source, preset, or size is invalid.
     """
     try:
-        sim.encounter = None
-        sim.combat_task = None
+        await prepare_new_simulation_start()
         return create_editor_map(request)
     except ValueError as exc:
         raise _mapeditor_http_exception(
@@ -1812,7 +2232,11 @@ async def get_mapeditor_save(map_id: str):
         )
 
 
-@app.post("/mapeditor/saves/{map_id}/load", response_model=MapEditorMapSnapshot)
+@app.post(
+    "/mapeditor/saves/{map_id}/load",
+    response_model=MapEditorMapSnapshot,
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def load_mapeditor_save(map_id: str):
     """Load a saved editor map into the entity-free editor world.
 
@@ -1826,6 +2250,7 @@ async def load_mapeditor_save(map_id: str):
         HTTPException: If the saved map cannot be loaded.
     """
     try:
+        await prepare_new_simulation_start()
         return load_saved_editor_map(map_id)
     except ValueError as exc:
         raise _mapeditor_http_exception(
@@ -1966,192 +2391,17 @@ async def get_mapeditor_light():
     return get_objective_light()
 
 
-@app.get("/entities", response_model=APIEntityListResponse)
-async def get_entities():
-    """Return lightweight summaries for all registered entities.
-
-    Returns:
-        Mapping with serialized entity summaries.
-    """
-    return APIEntityListResponse(
-        entities=[APIEntitySummary.create(entity) for entity in Entity.get_all_entities()]
-    )
-
-
-@app.get("/visibility", response_model=APIVisibilityResponse)
-async def get_visibility():
-    """Return visibility data for all registered entities.
-
-    Returns:
-        Mapping from entity UUID to visible cells, seen cells, visible objects,
-        visible entities, and active sense modes.
-    """
-    return _build_visibility_state()
-
-
-@app.get("/entity/{entity_uuid}", response_model=APIEntityFull)
-async def get_entity(entity_uuid: str):
-    """Return full details for one entity.
-
-    Args:
-        entity_uuid: Entity UUID string from the route path.
-
-    Returns:
-        Full entity DTO.
-
-    Raises:
-        HTTPException: If the entity UUID is malformed or unknown.
-    """
-    entity = _resolve_entity_or_raise(entity_uuid)
-    return APIEntityFull.create(entity)
-
-
-@app.get("/grid", response_model=APIGrid)
-async def get_grid():
-    """Return public grid/map data.
-
-    Returns:
-        Grid DTO for the active map.
-    """
-    return APIGrid.create(get_map())
-
-
-@app.get("/tile/{x}/{y}")
-async def get_tile_info(x: int, y: int):
-    """Return detailed information for one tile.
-
-    Args:
-        x: Tile x-coordinate.
-        y: Tile y-coordinate.
-
-    Returns:
-        Tile state, co-located entities and objects, handlers, and light data.
-
-    Raises:
-        HTTPException: If the requested tile does not exist.
-    """
-    grid = get_map()
-    tile = grid.get_tile(x, y)
-
-    if not tile:
-        raise _api_http_exception(
-            status_code=404,
-            code="tile_not_found",
-            message=f"No tile at ({x}, {y})",
-            requested_position=[x, y],
-            **_grid_state_context(),
-        )
-
-    entity_uuids = grid.get_entities_at((x, y))
-    entities_at = []
-    for uuid in entity_uuids:
-        entity = Entity.get(uuid)
-        if entity:
-            entities_at.append({
-                "uuid": str(entity.uuid),
-                "name": entity.name,
-                "hp": entity.get_hp(),
-                "is_dead": not entity.has_hp
-            })
-
-    object_uuids = grid.get_objects_at((x, y))
-    objects_at = []
-    for obj_uuid in object_uuids:
-        obj = BaseBlock.get(obj_uuid)
-        if obj:
-            objects_at.append({
-                "uuid": str(obj.uuid),
-                "name": obj.name,
-                "is_pickable": getattr(obj, 'is_pickable', False),
-                "is_usable": getattr(obj, 'is_usable', False),
-                "map_char": getattr(obj, 'map_char', '\u03c6'),
-            })
-
-    handler_names = [h.name for h in tile.event_handlers.values()]
-
-    light_level = tile.resolved_light_level
-    light_level_names = {0: "Magical Darkness", 1: "Darkness", 2: "Dim Light", 3: "Bright Light", 4: "Very Bright"}
-
-    return {
-        "position": (x, y),
-        "name": tile.name,
-        "walkable": tile.walkable,
-        "visible": tile.visible,
-        "walking_cost": int(tile.walking_cost.normalized_score),
-        "conditions": list(tile.active_conditions.keys()),
-        "handlers": handler_names,
-        "entities": entities_at,
-        "objects": objects_at,
-        "height": tile.height,
-        "light_level": light_level.value,
-        "light_level_name": light_level_names.get(light_level.value, "Unknown"),
-        "default_light": tile.default_light.value,
-        "illumination_count": len(tile._illuminations),
-    }
-
-
-@app.get("/encounter")
-async def get_encounter():
-    """Return the current encounter wrapper payload.
-
-    Returns:
-        Active flag plus the serialized encounter DTO when one exists.
-    """
-    if not sim.encounter:
-        return {"active": False, "encounter": None}
-    return {
-        "active": True,
-        "encounter": APIEncounter.create(sim.encounter).model_dump(mode='json')
-    }
-
-
-@app.get("/combat-log", response_model=CombatLogHistoryResponse)
-async def get_combat_log(since: int = 0):
-    """Return combat-log entries from the current encounter.
-
-    Args:
-        since: Only return entries with index greater than or equal to this
-            cursor.
-
-    Returns:
-        Combat-log history response with entries, delta count, and total count.
-    """
-    if not sim.encounter:
-        return CombatLogHistoryResponse(
-            generation_id=str(EventQueue.generation_id()),
-            entries=[],
-            count=0,
-            total=0,
-        )
-
-    entries = sim.encounter.get_combat_log(since)
-    return CombatLogHistoryResponse(
-        generation_id=str(EventQueue.generation_id()),
-        entries=entries,
-        count=len(entries),
-        total=len(sim.encounter.combat_log),
-    )
-
-
-@app.post("/simulation/start")
+@app.post(
+    "/simulation/start",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_simulation():
     """Reset the demo encounter and start the continuous combat loop.
 
     Returns:
         Status payload with the new encounter UUID.
     """
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
-
-    ai_process_manager.stop_all()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
-    clear_subjective_projection_state()
-    agent_event_stream.clear_all()
-
+    await prepare_new_simulation_start()
     sim.encounter = setup_combat()
     sim.paused = False
     sim.combat_task = asyncio.create_task(run_combat_loop())
@@ -2162,25 +2412,17 @@ async def start_simulation():
     }
 
 
-@app.post("/simulation/reset")
+@app.post(
+    "/simulation/reset",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def reset_simulation():
     """Stop current combat and reset to a paused demo encounter.
 
     Returns:
         Status payload with the reset encounter UUID.
     """
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
-
-    ai_process_manager.stop_all()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
-    clear_subjective_projection_state()
-    agent_event_stream.clear_all()
-
+    await prepare_new_simulation_start()
     sim.encounter = setup_combat()
     sim.paused = True
 
@@ -2259,22 +2501,6 @@ async def step_simulation():
     }
 
 
-@app.get("/simulation/status", response_model=APISimulationStatus)
-async def get_simulation_status():
-    """Return current simulation status.
-
-    Returns:
-        Simulation status DTO.
-    """
-    return APISimulationStatus(
-        has_encounter=sim.encounter is not None,
-        paused=sim.paused,
-        encounter_state=sim.encounter.state.value if sim.encounter else None,
-        round_number=sim.encounter.round_number if sim.encounter else None,
-        turn_delay=sim.turn_delay
-    )
-
-
 @app.post("/simulation/set-delay")
 async def set_turn_delay(delay: float):
     """Set the delay between automated turns.
@@ -2327,7 +2553,6 @@ async def create_session(request: CreateSessionRequest):
             code="invalid_player_type",
             message=f"Invalid player_type: {request.player_type}",
             player_type=request.player_type,
-            valid_player_types=[player_type.value for player_type in PlayerType],
         )
 
     mgr = sim.get_session_manager()
@@ -2391,51 +2616,91 @@ def build_session_status(sid: UUID, ping: bool = False) -> SessionPingResponse:
     )
 
 
-@app.get("/replication/bootstrap", response_model=ReplicationBootstrapResponse)
+@app.get(
+    "/replication/bootstrap",
+    response_model=SubjectiveReplicationBootstrap,
+)
 async def get_replication_bootstrap(
-    session_id: Optional[str] = None,
-) -> ReplicationBootstrapResponse:
-    """Return one coherent replication base state and its following cursors.
-
-    Args:
-        session_id: Optional player session whose status should be included.
-
-    Returns:
-        Snapshot, visibility, session status, protocol identity, and cursors
-        captured without yielding control to another server request.
-
-    Raises:
-        HTTPException: If the optional session UUID is invalid or unknown.
-    """
-    session_status: Optional[SessionPingResponse] = None
-    if session_id is not None:
-        try:
-            sid = UUID(session_id)
-        except ValueError:
-            raise _session_http_exception(
-                status_code=400,
-                code="invalid_session_uuid",
-                message="Invalid session ID format",
-                session_id=session_id,
-            )
-        session_status = build_session_status(sid, ping=False)
-
-    state = _build_public_state()
-    visibility = _build_visibility_state()
-    generation_id = str(EventQueue.generation_id())
-    return ReplicationBootstrapResponse(
-        protocol=ReplicationProtocolIdentity(
-            generation_id=generation_id,
-            event_contract_version=EVENT_CONTRACT_VERSION,
-            event_contract_hash=EVENT_CONTRACT_HASH,
-        ),
-        event_cursor=EventQueue.event_cursor(),
-        combat_log_cursor=len(sim.encounter.combat_log) if sim.encounter else 0,
-        state=state,
-        visibility=visibility,
-        combat_log=list(sim.encounter.combat_log) if sim.encounter else [],
-        session=session_status,
+    request: Request,
+    response: Response,
+    session_id: str,
+) -> SubjectiveReplicationBootstrap:
+    """Return one atomic renderer-complete subjective reducer seed."""
+    response.headers["Cache-Control"] = "private, no-store"
+    request_context = _resolve_replication_request(request, session_id)
+    context = _replication_runtime_context(
+        request_context,
+        expected_generation_id=None,
+        expected_perspective_epoch_id=None,
     )
+    try:
+        return context.bootstrap()
+    except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+        raise _replication_window_http_exception(exc) from exc
+
+
+@app.get(
+    "/replication/frames",
+    response_model=SubjectiveFramesResponse,
+)
+async def get_replication_frames(
+    request: Request,
+    response: Response,
+    session_id: str,
+    expected_source_stream_id: str,
+    expected_generation_id: str,
+    expected_perspective_epoch_id: str,
+    from_observation_cursor: int = Query(default=0, ge=0),
+    limit: Optional[int] = Query(default=None, ge=1),
+) -> SubjectiveFramesResponse:
+    """Return one exact retained page of reducer and presentation frames."""
+    response.headers["Cache-Control"] = "private, no-store"
+    request_context = _resolve_replication_request(request, session_id)
+    context = _replication_runtime_context(
+        request_context,
+        expected_source_stream_id=expected_source_stream_id,
+        expected_generation_id=expected_generation_id,
+        expected_perspective_epoch_id=expected_perspective_epoch_id,
+    )
+    try:
+        return context.frames(
+            from_observation_cursor=from_observation_cursor,
+            limit=limit,
+        )
+    except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+        raise _replication_window_http_exception(exc) from exc
+
+
+@app.get(
+    "/replication/combat-log",
+    response_model=SubjectiveCombatLogFramesResponse,
+)
+async def get_replication_combat_log(
+    request: Request,
+    response: Response,
+    session_id: str,
+    expected_source_stream_id: str,
+    expected_generation_id: str,
+    expected_perspective_epoch_id: str,
+    from_combat_log_cursor: int = Query(default=0, ge=0),
+    limit: Optional[int] = Query(default=None, ge=1),
+) -> SubjectiveCombatLogFramesResponse:
+    """Return one exact nullable source-cursor window for a player perspective."""
+    response.headers["Cache-Control"] = "private, no-store"
+    request_context = _resolve_replication_request(request, session_id)
+    context = _replication_runtime_context(
+        request_context,
+        expected_source_stream_id=expected_source_stream_id,
+        expected_generation_id=expected_generation_id,
+        expected_perspective_epoch_id=expected_perspective_epoch_id,
+    )
+    try:
+        return context.combat_log(
+            from_combat_log_cursor=from_combat_log_cursor,
+            limit=limit,
+        )
+    except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+        raise _replication_window_http_exception(exc) from exc
 
 
 @app.post("/session/{session_id}/ping", response_model=SessionPingResponse)
@@ -2464,7 +2729,10 @@ async def ping_session(session_id: str):
     return build_session_status(sid, ping=True)
 
 
-@app.delete("/session/{session_id}")
+@app.delete(
+    "/session/{session_id}",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def delete_session(session_id: str):
     """Delete a session and remove its game associations.
 
@@ -2498,7 +2766,11 @@ async def delete_session(session_id: str):
             session_id=session_id,
         )
 
+    _evict_managed_agent_observation_streams((session_id,))
+    await agent_service_manager.stop_session(session_id)
+    canonical_subjective_replication_runtime.retire_session(session_id)
     mgr.remove_session(sid)
+    perspective_epoch_registry.clear_session(session_id)
 
     return {"status": "deleted", "session_id": session_id}
 
@@ -2523,6 +2795,7 @@ async def join_game(request: JoinGameRequest):
             or no active game exists.
     """
     requested_entity_uuids = request.requested_entity_uuids()
+    requested_observer_entity_uuids = request.requested_observer_entity_uuids()
     try:
         sid = UUID(request.session_id)
     except ValueError:
@@ -2559,6 +2832,7 @@ async def join_game(request: JoinGameRequest):
             requested_faction=request.faction,
         )
 
+    subjective_authority_before = _capture_subjective_session_authority(mgr)
     if session.session_id not in game.players:
         game.add_player(session)
 
@@ -2570,6 +2844,62 @@ async def join_game(request: JoinGameRequest):
             session_id=request.session_id,
             requested_entity_uuids=requested_entity_uuids,
             requested_faction=request.faction,
+        )
+
+    if session.player_type == PlayerType.OBSERVER:
+        if not requested_observer_entity_uuids:
+            raise _session_http_exception(
+                status_code=400,
+                code="observer_perspective_required",
+                message="Observer sessions require an explicit subjective observer set",
+                session_id=request.session_id,
+            )
+        try:
+            observer_entities = frozenset(
+                UUID(value) for value in requested_observer_entity_uuids
+            )
+            active_observer_uuid = (
+                UUID(request.active_observer_uuid)
+                if request.active_observer_uuid is not None
+                else min(observer_entities, key=str)
+            )
+        except ValueError:
+            raise _session_http_exception(
+                status_code=400,
+                code="invalid_observer_uuid",
+                message="Observer perspective contains an invalid entity UUID",
+                session_id=request.session_id,
+            )
+        if active_observer_uuid not in observer_entities:
+            raise _session_http_exception(
+                status_code=400,
+                code="active_observer_outside_perspective",
+                message="Active observer must belong to the observer set",
+                session_id=request.session_id,
+            )
+        missing_observers = [
+            str(entity_uuid)
+            for entity_uuid in observer_entities
+            if Entity.get(entity_uuid) is None
+        ]
+        if missing_observers:
+            raise _session_http_exception(
+                status_code=400,
+                code="observer_entity_not_found",
+                message="Observer perspective references an unknown entity",
+                session_id=request.session_id,
+                observer_entity_uuids=missing_observers,
+            )
+        session.configure_subjective_observers(
+            observer_entities,
+            active_observer_uuid=active_observer_uuid,
+        )
+    elif requested_observer_entity_uuids or request.active_observer_uuid is not None:
+        raise _session_http_exception(
+            status_code=400,
+            code="participant_observer_override_rejected",
+            message="Participant observer knowledge is derived exactly from controlled entities",
+            session_id=request.session_id,
         )
 
     ownership_boundary = prepare_observation_ownership_change(mgr)
@@ -2596,7 +2926,11 @@ async def join_game(request: JoinGameRequest):
                 if game.assign_entity(entity.uuid, session.session_id):
                     assigned.append(str(entity.uuid))
 
-    _publish_takeover_ownership_changes(ownership_boundary, "game_join_assignment")
+    _publish_takeover_ownership_changes(
+        ownership_boundary,
+        "game_join_assignment",
+        subjective_authority_before=subjective_authority_before,
+    )
 
     observer_join = session.player_type == PlayerType.OBSERVER
     return JoinGameResponse(
@@ -2604,6 +2938,14 @@ async def join_game(request: JoinGameRequest):
         game_id=str(game.game_id),
         session_id=str(session.session_id),
         controlled_entities=assigned,
+        observer_entities=[
+            str(entity_uuid) for entity_uuid in sorted(session.observer_entities, key=str)
+        ],
+        active_observer_uuid=(
+            str(session.active_observer_uuid)
+            if session.active_observer_uuid is not None
+            else None
+        ),
         message=(
             "Joined game as observer"
             if observer_join
@@ -2669,190 +3011,258 @@ async def get_worker_terminal_summary() -> WorkerSummaryEvidence:
     return evidence
 
 
-@app.get("/session/{session_id}/entities")
-async def get_session_entities(session_id: str):
-    """Return entity details controlled by a session.
-
-    Args:
-        session_id: Session UUID string from the route path.
-
-    Returns:
-        Session ID plus controlled entity summaries.
-
-    Raises:
-        HTTPException: If the session UUID is malformed or unknown.
-    """
-    try:
-        sid = UUID(session_id)
-    except ValueError:
-        raise _session_http_exception(
-            status_code=400,
-            code="invalid_session_uuid",
-            message="Invalid session ID format",
-            session_id=session_id,
-        )
-
-    mgr = sim.get_session_manager()
-    session = mgr.get_session(sid)
-
-    if not session:
-        raise _session_http_exception(
+@app.get("/game/evidence/objective-replay", response_model=ObjectiveReplayBundle)
+async def get_worker_terminal_objective_replay() -> ObjectiveReplayBundle:
+    """Materialize the private immutable replay after terminal journals close."""
+    capture = game_summary_store.get_replay_capture(
+        os.environ.get("DND_HOSTED_GAME_ID")
+    )
+    if capture is None:
+        raise _api_http_exception(
             status_code=404,
-            code="session_not_found",
-            message="Session not found",
-            session_id=session_id,
+            code="terminal_objective_replay_not_ready",
+            message="The active game has no terminal objective replay yet",
         )
-
-    entities_info = []
-    for entity_uuid in session.controlled_entities:
-        entity = Entity.get(entity_uuid)
-        if entity:
-            entities_info.append({
-                "uuid": str(entity.uuid),
-                "name": entity.name,
-                "faction": entity.faction,
-                "hp": entity.get_hp(),
-                "position": entity.position
-            })
-
-    return {
-        "session_id": str(session.session_id),
-        "controlled_entities": entities_info
-    }
-
-
-@app.get("/events", response_model=EventHistoryResponse)
-async def get_events(
-    since: int = 0,
-    limit: int = 50,
-    event_type: Optional[str] = None,
-    phase: Optional[str] = None
-):
-    """
-    Get events with cursor-based pagination.
-
-    Args:
-        since: Return events starting from this index (0-based). Use the
-               total from a previous response or WebSocket handshake event_count.
-               Default 0 returns the last `limit` events (backwards-compatible).
-        limit: Max events to return (0 = unlimited, default 50).
-        event_type: Filter by event type (e.g. "attack", "movement").
-        phase: Filter by event phase (e.g. "completion").
-    """
-    all_events = EventQueue._all_events
-
-    if since > 0:
-        events = all_events[since:]
-    else:
-        events = all_events[-limit:] if limit > 0 else all_events
-
-    if since > 0 and limit > 0:
-        events = events[:limit]
-
-    if event_type:
-        try:
-            et = EventType(event_type)
-            events = [e for e in events if e.event_type == et]
-        except ValueError:
-            raise _event_filter_http_exception(
-                code="unknown_event_type",
-                message=f"Unknown event_type: {event_type}",
-                event_type=event_type,
-                phase=phase,
-            )
-
-    if phase:
-        try:
-            ep = EventPhase(phase)
-            events = [e for e in events if e.phase == ep]
-        except ValueError:
-            raise _event_filter_http_exception(
-                code="unknown_event_phase",
-                message=f"Unknown phase: {phase}",
-                event_type=event_type,
-                phase=phase,
-            )
-
-    return EventHistoryResponse(
-        generation_id=str(EventQueue.generation_id()),
-        events=events,
-        count=len(events),
-        total=len(all_events),
-    )
-
-
-@app.get("/events/history", response_model=GameEventHistoryResponse)
-async def get_game_event_history(
-    from_cursor: int = 0,
-    through_cursor: Optional[int] = None,
-    event_type: Optional[str] = None,
-    phase: Optional[str] = None,
-) -> GameEventHistoryResponse:
-    """Return an exact, typed event-frame window for transcript hydration.
-
-    The exclusive `through_cursor` lets reconnecting clients request history
-    represented by an already-captured replication bootstrap. Events emitted
-    after that boundary remain the responsibility of the live SSE stream.
-
-    Args:
-        from_cursor: Inclusive source event cursor.
-        through_cursor: Exclusive source cursor, or the current cursor.
-        event_type: Optional semantic event-type filter.
-        phase: Optional event-phase filter.
-
-    Returns:
-        Typed event frames in authoritative storage order with exact bounds.
-
-    Raises:
-        HTTPException: If cursor bounds or event filters are invalid.
-    """
-    current_cursor = EventQueue.event_cursor()
-    if from_cursor < 0:
-        raise HTTPException(status_code=400, detail="from_cursor must be non-negative")
-    requested_through = current_cursor if through_cursor is None else through_cursor
-    if requested_through < from_cursor:
-        raise HTTPException(
-            status_code=400,
-            detail="through_cursor must be greater than or equal to from_cursor",
+    encounter = Encounter.get(UUID(capture.encounter_uuid))
+    if encounter is None:
+        raise _api_http_exception(
+            status_code=500,
+            code="terminal_objective_replay_encounter_missing",
+            message="The terminal encounter is no longer retained",
         )
-    bounded_through = min(requested_through, current_cursor)
-    frames = event_stream.iter_game_events_window(
-        from_cursor,
-        bounded_through,
-        sim.encounter,
+    try:
+        return build_worker_objective_replay(
+            capture,
+            encounter=encounter,
+            stream=event_stream,
+        )
+    except WorkerReplayError as exc:
+        raise _api_http_exception(
+            status_code=500,
+            code="terminal_objective_replay_invalid",
+            message=str(exc),
+        ) from exc
+
+
+@app.get(
+    "/game/evidence/subjective-replay",
+    response_model=SubjectivePlayerReplayArchive,
+)
+async def get_worker_terminal_subjective_replay() -> SubjectivePlayerReplayArchive:
+    """Freeze the exact canonical player reducer inputs retained during play."""
+
+    capture = game_summary_store.get_replay_capture(
+        os.environ.get("DND_HOSTED_GAME_ID")
+    )
+    if capture is None:
+        raise _api_http_exception(
+            status_code=404,
+            code="terminal_subjective_replay_not_ready",
+            message="The active game has no terminal player replay yet",
+        )
+    try:
+        return build_worker_subjective_replays(capture)
+    except WorkerPlayerReplayNotReady as exc:
+        raise _api_http_exception(
+            status_code=404,
+            code="terminal_subjective_replay_not_ready",
+            message=str(exc),
+        ) from exc
+    except WorkerPlayerReplayError as exc:
+        raise _api_http_exception(
+            status_code=500,
+            code="terminal_subjective_replay_invalid",
+            message=str(exc),
+        ) from exc
+
+
+@app.get(
+    "/diagnostics/subjective-parity",
+    response_model=SubjectiveRenderParityDiagnosticsResponse,
+)
+async def get_subjective_render_parity_diagnostics(
+    request: Request,
+    response: Response,
+    session_id: str,
+) -> SubjectiveRenderParityDiagnosticsResponse:
+    """Compare an open player reducer with objective state plus independent censorship."""
+
+    _assert_objective_diagnostics_access(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    request_context = _resolve_replication_request(request, session_id)
+    for _attempt in range(3):
+        with event_stream.source_boundary():
+            encounter = sim.encounter
+            if encounter is None:
+                raise _api_http_exception(
+                    status_code=409,
+                    code="objective_diagnostics_source_unavailable",
+                    message="Subjective parity diagnostics require an encounter",
+                )
+            source = _capture_objective_source_snapshot()
+            objective = build_current_objective_world(encounter=encounter)
+            try:
+                subjective = (
+                    canonical_subjective_replication_runtime.diagnostic_snapshot(
+                        request_context.subjective_authority,
+                        encounter=encounter,
+                    )
+                )
+            except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+                raise _api_http_exception(
+                    status_code=409,
+                    code="subjective_parity_partition_unavailable",
+                    message=str(exc),
+                    session_id=session_id,
+                ) from exc
+            same_boundary = (
+                subjective.protocol.source_stream_id == source.source_stream_id
+                and subjective.protocol.generation_id == source.generation_id
+                and subjective.watermarks.source_event_cursor == source.event_cursor
+            )
+            if (
+                same_boundary
+                and sim.encounter is encounter
+                and event_stream.objective_source_snapshot_is_current(
+                    source,
+                    encounter,
+                )
+            ):
+                try:
+                    return build_subjective_render_parity_diagnostics(
+                        objective=objective,
+                        subjective=subjective.world,
+                        perspective=subjective.perspective,
+                        watermarks=subjective.watermarks,
+                        source_stream_id=source.source_stream_id,
+                        generation_id=source.generation_id,
+                        grid=get_map(),
+                    )
+                except SubjectiveParityDiagnosticsError as exc:
+                    raise _api_http_exception(
+                        status_code=409,
+                        code="subjective_parity_comparison_unavailable",
+                        message=str(exc),
+                        session_id=session_id,
+                    ) from exc
+    raise _api_http_exception(
+        status_code=409,
+        code="subjective_parity_source_changed",
+        message=(
+            "Objective and subjective reducers did not share one current source boundary"
+        ),
+        session_id=session_id,
     )
 
-    if event_type is not None:
-        try:
-            typed_event = EventType(event_type)
-        except ValueError:
-            raise _event_filter_http_exception(
-                code="unknown_event_type",
-                message=f"Unknown event_type: {event_type}",
-                event_type=event_type,
-                phase=phase,
-            )
-        frames = [frame for frame in frames if frame.event.event_type == typed_event]
 
-    if phase is not None:
-        try:
-            typed_phase = EventPhase(phase)
-        except ValueError:
-            raise _event_filter_http_exception(
-                code="unknown_event_phase",
-                message=f"Unknown phase: {phase}",
-                event_type=event_type,
-                phase=phase,
-            )
-        frames = [frame for frame in frames if frame.event.phase == typed_phase]
-
-    return GameEventHistoryResponse(
-        generation_id=str(EventQueue.generation_id()),
-        from_cursor=from_cursor,
-        through_cursor=bounded_through,
-        frames=frames,
-        total=current_cursor,
+@app.get(
+    "/diagnostics/objective/bootstrap",
+    response_model=ObjectiveDiagnosticsBootstrap,
+)
+async def get_objective_diagnostics_bootstrap(
+    request: Request,
+    response: Response,
+) -> ObjectiveDiagnosticsBootstrap:
+    """Return one atomic objective reducer seed and its exact source cursors."""
+    _assert_objective_diagnostics_access(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    for _attempt in range(3):
+        with event_stream.source_boundary():
+            encounter = sim.encounter
+            if encounter is None:
+                raise _api_http_exception(
+                    status_code=409,
+                    code="objective_diagnostics_source_unavailable",
+                    message="Objective diagnostics require an encounter",
+                )
+            source = _capture_objective_source_snapshot()
+            world = build_current_objective_world(encounter=encounter)
+            if (
+                sim.encounter is encounter
+                and event_stream.objective_source_snapshot_is_current(
+                    source,
+                    encounter,
+                )
+            ):
+                return ObjectiveDiagnosticsBootstrap(
+                    source_stream_id=source.source_stream_id,
+                    generation_id=source.generation_id,
+                    event_cursor=source.event_cursor,
+                    combat_log_cursor=source.combat_log_cursor,
+                    world=world,
+                )
+    raise _api_http_exception(
+        status_code=409,
+        code="objective_diagnostics_source_changed",
+        message="Objective runtime changed while capturing its reducer seed",
     )
+
+
+@app.get(
+    "/diagnostics/objective/events",
+    response_model=GameEventFramesResponse,
+)
+async def get_objective_diagnostics_events(
+    request: Request,
+    response: Response,
+    from_cursor: int = Query(default=0, ge=0),
+    through_cursor: Optional[int] = Query(default=None, ge=0),
+    limit: Optional[int] = Query(default=None, ge=0),
+    expected_source_stream_id: Optional[str] = None,
+    expected_generation_id: Optional[str] = None,
+) -> GameEventFramesResponse:
+    """Return one exact contiguous all-phase objective event window."""
+    _assert_objective_diagnostics_access(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    source = _capture_objective_source_snapshot(
+        from_event_cursor=from_cursor,
+        through_event_cursor=through_cursor,
+        event_limit=limit,
+        expected_source_stream_id=expected_source_stream_id,
+        expected_generation_id=expected_generation_id,
+    )
+    return _build_objective_event_window(
+        source=source,
+    )
+
+
+@app.get(
+    "/diagnostics/objective/combat-log",
+    response_model=ObjectiveCombatLogFramesResponse,
+)
+async def get_objective_diagnostics_combat_log(
+    request: Request,
+    response: Response,
+    from_cursor: int = Query(default=0, ge=0),
+    through_cursor: Optional[int] = Query(default=None, ge=0),
+    limit: Optional[int] = Query(default=None, ge=0),
+    expected_source_stream_id: Optional[str] = None,
+    expected_generation_id: Optional[str] = None,
+) -> ObjectiveCombatLogFramesResponse:
+    """Return one exact non-null objective combat-log source window."""
+    _assert_objective_diagnostics_access(request)
+    response.headers["Cache-Control"] = "private, no-store"
+    source = _capture_objective_source_snapshot(
+        from_combat_log_cursor=from_cursor,
+        through_combat_log_cursor=through_cursor,
+        combat_log_limit=limit,
+        expected_source_stream_id=expected_source_stream_id,
+        expected_generation_id=expected_generation_id,
+    )
+    try:
+        return build_objective_combat_log_frames(
+            source.combat_log_backfill_source,
+            expected_source_stream_id=expected_source_stream_id,
+            expected_generation_id=expected_generation_id,
+        )
+    except ObjectiveTimelineError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="objective_diagnostics_window_unavailable",
+            message=str(exc),
+            from_cursor=from_cursor,
+            through_cursor=through_cursor,
+        ) from exc
 
 
 @app.get("/event-contract", response_model=EventContractSummary)
@@ -2861,122 +3271,189 @@ async def get_event_contract() -> EventContractSummary:
     return EventContractSummary.model_validate(event_contract_summary())
 
 
-@app.get("/events/subscribe")
-async def subscribe_events(
+@app.get(
+    "/game/evidence/objective-subscribe",
+    include_in_schema=False,
+)
+@app.get("/diagnostics/objective/subscribe")
+async def subscribe_objective_diagnostics(
     request: Request,
-    session_id: Optional[str] = None,
-    since_event: int = 0,
-    since_log: int = 0,
-):
-    """Resumable SSE stream for game events, combat log, and session status."""
+    since_event: int = Query(default=0, ge=0),
+    since_log: int = Query(default=0, ge=0),
+    expected_source_stream_id: Optional[str] = None,
+    expected_generation_id: Optional[str] = None,
+) -> StreamingResponse:
+    """Stream only cold objective sync, event, and combat-log frames."""
+    _assert_objective_diagnostics_access(request)
     event_stream.ensure_attached()
-
-    sid: Optional[UUID] = None
-    if session_id:
-        try:
-            sid = UUID(session_id)
-        except ValueError:
-            raise _session_http_exception(
-                status_code=400,
-                code="invalid_session_uuid",
-                message="Invalid session ID format",
-                session_id=session_id,
-            )
-
-    subscription = event_stream.subscribe()
-    heartbeat_seconds = 10.0
-
-    def session_status_payload() -> Optional[SessionPingResponse]:
-        if sid is None:
-            return None
-        return build_session_status(sid, ping=True)
-
-    def should_emit_session_after_game_event(payload) -> bool:
-        event_type = payload.event.event_type
-        event_type_value = event_type.value if hasattr(event_type, "value") else str(event_type)
-        return event_type_value in {
-            "encounter_start",
-            "encounter_end",
-            "round_start",
-            "round_end",
-            "turn_start",
-            "turn_end",
-        }
+    encounter = sim.encounter
+    if encounter is None:
+        raise _api_http_exception(
+            status_code=409,
+            code="objective_diagnostics_source_unavailable",
+            message="Objective diagnostics require an encounter",
+        )
+    try:
+        subscribed = event_stream.subscribe_with_objective_backfill(
+            encounter,
+            from_event_cursor=since_event,
+            from_combat_log_cursor=since_log,
+            expected_source_stream_id=expected_source_stream_id,
+            expected_generation_id=expected_generation_id,
+        )
+        subscription = subscribed.subscription
+        source = subscribed.source
+        source_stream_id = source.source_stream_id
+        generation_id = source.generation_id
+        initial_events = _build_objective_event_window(
+            source=source,
+        )
+        initial_logs = build_objective_combat_log_frames(
+            source.combat_log_backfill_source,
+            expected_source_stream_id=source_stream_id,
+            expected_generation_id=generation_id,
+        )
+        sync = ObjectiveDiagnosticsSync(
+            source_stream_id=source_stream_id,
+            generation_id=generation_id,
+            event_cursor=source.event_cursor,
+            combat_log_cursor=source.combat_log_cursor,
+        )
+        initial_deliveries = _objective_backfill_deliveries(
+            initial_events,
+            initial_logs,
+        )
+    except CombatLogSourceError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code=(
+                "objective_diagnostics_source_changed"
+                if "changed" in str(exc)
+                else "objective_diagnostics_window_unavailable"
+            ),
+            message=str(exc),
+            since_event=since_event,
+            since_log=since_log,
+        ) from exc
+    except Exception:
+        if "subscription" in locals():
+            event_stream.unsubscribe(subscription)
+        raise
 
     async def event_generator():
+        last_event_cursor = sync.event_cursor
+        last_combat_log_cursor = sync.combat_log_cursor
         try:
-            sync_payload = StreamSyncPayload(
-                generation_id=str(EventQueue.generation_id()),
-                event_cursor=event_stream.current_event_cursor(),
-                combat_log_cursor=event_stream.current_combat_log_cursor(sim.encounter),
-                session=session_status_payload(),
-            )
             yield format_sse(
                 "sync",
-                sync_payload,
-                event_stream.current_stream_id(sim.encounter),
+                sync,
+                make_stream_id(sync.event_cursor, sync.combat_log_cursor),
             )
-
-            for payload in event_stream.iter_game_events_since(since_event, sim.encounter):
+            for event_name, frame in initial_deliveries:
                 yield format_sse(
-                    "game_event",
-                    payload,
-                    make_stream_id(payload.event_cursor, payload.combat_log_cursor),
-                )
-                if sid is not None and should_emit_session_after_game_event(payload):
-                    yield format_sse(
-                        "session",
-                        session_status_payload() or {},
-                        event_stream.current_stream_id(sim.encounter),
-                    )
-
-            for payload in event_stream.iter_combat_logs_since(sim.encounter, since_log):
-                yield format_sse(
-                    "combat_log",
-                    payload,
-                    make_stream_id(payload.event_cursor, payload.combat_log_cursor),
+                    event_name,
+                    frame,
+                    make_stream_id(frame.event_cursor, frame.combat_log_cursor),
                 )
 
             while True:
-                if await request.is_disconnected():
+                current_encounter = sim.encounter
+                if (
+                    current_encounter is None
+                    or str(current_encounter.uuid) != source_stream_id
+                    or str(EventQueue.generation_id()) != generation_id
+                ):
                     break
                 try:
-                    envelope = await asyncio.wait_for(
-                        subscription.get(),
-                        timeout=heartbeat_seconds,
-                    )
+                    envelope = await asyncio.wait_for(subscription.get(), timeout=10.0)
                 except asyncio.TimeoutError:
-                    heartbeat = HeartbeatPayload(
-                        generation_id=str(EventQueue.generation_id()),
-                        server_time=time.time(),
-                        event_cursor=event_stream.current_event_cursor(),
-                        combat_log_cursor=event_stream.current_combat_log_cursor(sim.encounter),
-                        session=session_status_payload(),
-                    )
-                    yield format_sse(
-                        "heartbeat",
-                        heartbeat,
-                        event_stream.current_stream_id(sim.encounter),
-                    )
+                    if await request.is_disconnected():
+                        break
                     continue
 
-                yield format_sse(
-                    envelope["event"],
-                    envelope["data"],
-                    envelope.get("id"),
-                )
-                if envelope["event"] == "evicted":
+                envelope_type = envelope["event"]
+                if envelope_type == "evicted":
                     break
-                if (
-                    sid is not None
-                    and envelope["event"] == "game_event"
-                    and should_emit_session_after_game_event(envelope["data"])
-                ):
-                    yield format_sse(
-                        "session",
-                        session_status_payload() or {},
-                        event_stream.current_stream_id(sim.encounter),
-                    )
+                try:
+                    if envelope_type == "game_event":
+                        payload = envelope["data"]
+                        if (
+                            payload.source_stream_id != source_stream_id
+                            or payload.generation_id != generation_id
+                        ):
+                            break
+                        if payload.event_cursor <= last_event_cursor:
+                            continue
+                        if payload.event_cursor != last_event_cursor + 1:
+                            break
+                        frame = GameEventFrame(
+                            source_stream_id=source_stream_id,
+                            generation_id=generation_id,
+                            event_index=payload.event_index,
+                            event_cursor=payload.event_cursor,
+                            combat_log_cursor=payload.combat_log_cursor,
+                            event=payload.event.model_copy(deep=True),
+                        )
+                        last_event_cursor = frame.event_cursor
+                        yield format_sse(
+                            "game_event",
+                            frame,
+                            make_stream_id(
+                                frame.event_cursor,
+                                frame.combat_log_cursor,
+                            ),
+                        )
+                    elif envelope_type == "combat_log":
+                        payload = envelope["data"]
+                        if (
+                            payload.source_stream_id != source_stream_id
+                            or payload.generation_id != generation_id
+                        ):
+                            break
+                        if payload.combat_log_cursor <= last_combat_log_cursor:
+                            continue
+                        if (
+                            payload.combat_log_cursor
+                            != last_combat_log_cursor + 1
+                            or payload.event_cursor > last_event_cursor
+                        ):
+                            break
+                        live_source = CombatLogSourceWindow(
+                            source_stream_id=source_stream_id,
+                            generation_id=generation_id,
+                            retained_from_cursor=0,
+                            from_cursor=payload.combat_log_cursor - 1,
+                            through_cursor=payload.combat_log_cursor,
+                            total=payload.combat_log_cursor,
+                            slots=(
+                                CombatLogSourceSlot(
+                                    source_stream_id=source_stream_id,
+                                    generation_id=generation_id,
+                                    combat_log_cursor=payload.combat_log_cursor,
+                                    event_cursor=payload.event_cursor,
+                                    entry=payload.entry,
+                                    finalized=True,
+                                    causal_cursor_exact=True,
+                                ),
+                            ),
+                        )
+                        frames = build_objective_combat_log_frames(
+                            live_source,
+                            expected_source_stream_id=source_stream_id,
+                            expected_generation_id=generation_id,
+                        )
+                        frame = frames.frames[0]
+                        last_combat_log_cursor = frame.combat_log_cursor
+                        yield format_sse(
+                            "combat_log",
+                            frame,
+                            make_stream_id(
+                                frame.event_cursor,
+                                frame.combat_log_cursor,
+                            ),
+                        )
+                except (HTTPException, ObjectiveTimelineError):
+                    break
         finally:
             event_stream.unsubscribe(subscription)
 
@@ -2984,63 +3461,123 @@ async def subscribe_events(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "private, no-store",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
     )
 
 
-@app.get("/event-types")
-async def get_event_types():
-    """List all available event types."""
-    return {
-        "event_types": [et.value for et in EventType],
-        "phases": [ep.value for ep in EventPhase]
-    }
-
-
-@app.get("/encounter/current-turn", response_model=APICurrentTurn)
-async def get_current_turn():
-    """Get current turn information - who's turn is it, is it human?"""
-    if sim.encounter is None:
-        return APICurrentTurn(
-            encounter_active=False,
-            round_number=0,
-            turn_index=0,
-            current_entity_uuid=None,
-            current_entity_name=None,
-            is_human_turn=False,
-            waiting_for_input=False,
-            controller_type=None
+@app.get("/replication/subscribe")
+async def subscribe_replication(
+    request: Request,
+    session_id: str,
+    expected_source_stream_id: str,
+    expected_generation_id: str,
+    expected_perspective_epoch_id: str,
+    from_observation_cursor: int = Query(default=0, ge=0),
+    from_combat_log_cursor: int = Query(default=0, ge=0),
+):
+    """Stream only canonical subjective sync, frame, and combat-log deliveries."""
+    request_context = _resolve_replication_request(request, session_id)
+    context = _replication_runtime_context(
+        request_context,
+        expected_source_stream_id=expected_source_stream_id,
+        expected_generation_id=expected_generation_id,
+        expected_perspective_epoch_id=expected_perspective_epoch_id,
+    )
+    try:
+        snapshot = context.subscribe_with_backfill(
+            from_observation_cursor=from_observation_cursor,
+            from_combat_log_cursor=from_combat_log_cursor,
         )
+    except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
+        raise _replication_window_http_exception(exc) from exc
+    subscription = snapshot.subscription
+    initial_sync = snapshot.sync
+    backfill_deliveries = snapshot.backfill_deliveries
 
-    entity = sim.encounter.get_current_entity()
-    controller = sim.encounter.get_current_controller()
+    heartbeat_seconds = 10.0
 
-    actions = bonus = reactions = movement = 0
-    if entity:
-        ae = entity.action_economy
-        actions = ae.actions.normalized_score
-        bonus = ae.bonus_actions.normalized_score
-        reactions = ae.reactions.normalized_score
-        movement = ae.movement.normalized_score
+    async def event_generator():
+        try:
+            queued_sync = await subscription.get()
+            if not isinstance(queued_sync, SubjectiveSyncDelivery):
+                return
+            if queued_sync != initial_sync:
+                return
+            yield format_sse(
+                "sync",
+                queued_sync,
+                _replication_stream_id(queued_sync),
+            )
 
-    needs_input = controller.controller_type in ("human", "codex") if controller else False
+            for delivery in backfill_deliveries:
+                event_name = (
+                    "frame"
+                    if isinstance(delivery, SubjectiveFrameDelivery)
+                    else "combat_log"
+                )
+                yield format_sse(
+                    event_name,
+                    delivery,
+                    _replication_stream_id(delivery),
+                )
 
-    return APICurrentTurn(
-        encounter_active=sim.encounter.state == EncounterState.ACTIVE,
-        round_number=sim.encounter.round_number,
-        turn_index=sim.encounter.current_turn_index,
-        current_entity_uuid=str(entity.uuid) if entity else None,
-        current_entity_name=entity.name if entity else None,
-        is_human_turn=needs_input,
-        waiting_for_input=sim.waiting_for_human,
-        controller_type=controller.controller_type if controller else None,
-        actions_remaining=actions,
-        bonus_actions_remaining=bonus,
-        reactions_remaining=reactions,
-        movement_remaining=movement
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    delivery = await asyncio.wait_for(
+                        subscription.get(),
+                        timeout=heartbeat_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    try:
+                        refreshed_request = _resolve_replication_request(
+                            request,
+                            session_id,
+                        )
+                        refreshed = _replication_runtime_context(
+                            refreshed_request,
+                            expected_source_stream_id=context.protocol.source_stream_id,
+                            expected_generation_id=context.protocol.generation_id,
+                            expected_perspective_epoch_id=(
+                                context.perspective.perspective_epoch_id
+                            ),
+                        )
+                        if refreshed.partition_key != context.partition_key:
+                            break
+                    except HTTPException:
+                        break
+                    continue
+                except SubjectiveSubscriptionClosedError:
+                    break
+
+                if not isinstance(
+                    delivery,
+                    (
+                        SubjectiveFrameDelivery,
+                        SubjectiveCombatLogDelivery,
+                    ),
+                ):
+                    break
+                yield format_sse(
+                    delivery.kind,
+                    delivery,
+                    _replication_stream_id(delivery),
+                )
+        finally:
+            context.unsubscribe(subscription)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "private, no-store",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -3117,7 +3654,8 @@ def _current_decision_epoch(session_id: str, session: Any) -> Optional[DecisionE
         return None
     active_uuid = sim.game.active_entity_uuid
     if (
-        active_uuid is None
+        sim.encounter.turn_state != TurnState.IN_PROGRESS
+        or active_uuid is None
         or str(active_uuid) != epoch.actor_uuid
         or active_uuid not in session.controlled_entities
         or sim.encounter.round_number != epoch.round_number
@@ -3275,10 +3813,7 @@ def _compact_command_failure_payload(result: CommandResult) -> dict[str, Any]:
                 "success",
                 "message",
                 "event_type",
-                "event_data",
-                "entity_hp",
-                "target_hp",
-                "deaths",
+                "outcome_code",
                 "turn_continues",
                 "encounter_ended",
                 "event_cursor_after",
@@ -3465,50 +4000,18 @@ def _action_error_detail(
         "message": message,
         "entity_uuid": str(entity.uuid),
         "entity_name": entity.name,
-        "action_economy": {
-            "actions": entity.action_economy.actions.normalized_score,
-            "bonus_actions": entity.action_economy.bonus_actions.normalized_score,
-            "reactions": entity.action_economy.reactions.normalized_score,
-            "movement": entity.action_economy.movement.normalized_score,
-            "extra_attacks": entity.action_economy.get_resource_current("extra_attacks"),
-        },
         "valid_action_names": [
             action.template_name for action in available.all_actions
         ],
-        "available_actions": serialize_available_actions(entity, available).model_dump(mode="json"),
     }
     detail.update(context)
     return detail
 
 
-def _action_http_exception(
-    entity: Entity,
-    entity_uuid: str,
-    code: str,
-    message: str,
-    status_code: int = 400,
-    **context: Any,
-) -> HTTPException:
-    """Create an action error with available correction context."""
-    available = _available_actions_cache.get(entity_uuid)
-    if available is None:
-        available = get_available_actions(entity)
-    return HTTPException(
-        status_code=status_code,
-        detail=_action_error_detail(
-            entity=entity,
-            available=available,
-            code=code,
-            message=message,
-            **context,
-        ),
-    )
-
-
 @app.get("/entity/{entity_uuid}/available-actions", response_model=APIAvailableActions)
-async def get_entity_available_actions(entity_uuid: str):
-    """Get all available actions for an entity."""
-    entity = _resolve_entity_or_raise(entity_uuid)
+async def get_entity_available_actions(entity_uuid: str, session_id: str):
+    """Get action affordances for an entity controlled by the session."""
+    entity = validate_session_action(session_id, entity_uuid)
 
     actions = get_available_actions(entity)
 
@@ -3529,7 +4032,9 @@ async def create_ai_takeover(request: TakeoverRequest):
 
     session_id = _parse_optional_uuid(request.session_id, "session_id")
     entity_uuids = _parse_uuid_list(request.entity_uuids, "entity_uuid")
-    ownership_boundary = prepare_observation_ownership_change(sim.get_session_manager())
+    manager = sim.get_session_manager()
+    subjective_authority_before = _capture_subjective_session_authority(manager)
+    ownership_boundary = prepare_observation_ownership_change(manager)
     try:
         claim = ai_takeover_manager.claim(
             encounter=sim.encounter,
@@ -3545,7 +4050,11 @@ async def create_ai_takeover(request: TakeoverRequest):
     except TakeoverError as error:
         raise _takeover_http_exception(error, faction=request.faction, entity_uuids=request.entity_uuids)
 
-    _publish_takeover_ownership_changes(ownership_boundary, "takeover_claimed")
+    _publish_takeover_ownership_changes(
+        ownership_boundary,
+        "takeover_claimed",
+        subjective_authority_before=subjective_authority_before,
+    )
     return serialize_takeover_claim(claim)
 
 
@@ -3561,10 +4070,16 @@ async def list_ai_takeovers():
     )
 
 
-@app.get("/ai/policy/source", response_model=PolicySourceSnapshot)
+@app.get("/ai/policy/source", response_model=PolicySourceManifest)
 async def get_policy_source():
-    """Return the exact shared policy source manifest and hash."""
-    return policy_source_snapshot()
+    """Return explicitly supplied client policy diagnostics."""
+    if _policy_source_manifest is None:
+        raise _api_http_exception(
+            status_code=503,
+            code="policy_source_unavailable",
+            message="No client policy source manifest is configured",
+        )
+    return _policy_source_manifest
 
 
 @app.post("/ai/takeover/{claim_id}/heartbeat", response_model=TakeoverHeartbeatResponse)
@@ -3591,7 +4106,9 @@ async def release_ai_takeover(claim_id: str):
     parsed_claim_id = _parse_optional_uuid(claim_id, "claim_id")
     if parsed_claim_id is None:
         raise _api_http_exception(status_code=400, code="invalid_claim_id", message="Invalid claim UUID")
-    ownership_boundary = prepare_observation_ownership_change(sim.get_session_manager())
+    manager = sim.get_session_manager()
+    subjective_authority_before = _capture_subjective_session_authority(manager)
+    ownership_boundary = prepare_observation_ownership_change(manager)
     claim = ai_takeover_manager.release(parsed_claim_id, sim.encounter, sim.game)
     if claim is None:
         raise _api_http_exception(
@@ -3600,7 +4117,11 @@ async def release_ai_takeover(claim_id: str):
             message="Takeover claim not found",
             claim_id=claim_id,
         )
-    _publish_takeover_ownership_changes(ownership_boundary, "takeover_released")
+    _publish_takeover_ownership_changes(
+        ownership_boundary,
+        "takeover_released",
+        subjective_authority_before=subjective_authority_before,
+    )
     advance_result = await advance_encounter() if sim.encounter is not None else None
     return TakeoverReleaseResponse(
         status="released",
@@ -4025,7 +4546,7 @@ async def execute_ai_session_command(
             else nullcontext()
         )
         with execution_scope:
-            result = await _execute_action_by_index_impl(
+            execution = await _execute_action_by_index_impl(
                 ExecuteByIndexRequest(
                     session_id=session_id,
                     entity_uuid=request.actor_uuid,
@@ -4036,11 +4557,11 @@ async def execute_ai_session_command(
                     else None,
                     prefer_safe=request.prefer_safe,
                     return_available_actions=False,
-                    include_state=False,
                     include_timing=request.include_diagnostics,
                 ),
                 execution_binding=execution_binding,
             )
+            result = execution.response
         if movement_guard is not None:
             for sample_ms in movement_guard.processing_samples_ms:
                 timing.add_elapsed(
@@ -4087,8 +4608,8 @@ async def execute_ai_session_command(
         if advance_result is not None:
             result_payload["encounter_ended"] = advance_result.status == "encounter_ended"
 
-    action_resolution = _command_action_resolution(result)
-    revalidation_reason = _command_revalidation_reason(result)
+    action_resolution = _command_action_resolution(execution)
+    revalidation_reason = _command_revalidation_reason(execution)
     result = _command_result(
         CommandResultStatus.ACCEPTED,
         session_id,
@@ -4132,11 +4653,11 @@ async def execute_ai_session_command(
     return _command_ack_with_timing(published, timing)
 
 
-def _command_action_resolution(result: ActionResult) -> ActionResolutionStatus:
+def _command_action_resolution(execution: _ActionExecutionResult) -> ActionResolutionStatus:
     """Map one engine action response to the controller protocol result."""
+    result = execution.response
     if result.outcome_code == "movement.subjective_revalidation":
-        event_data = result.event_data or {}
-        if event_data.get("termination_reason") == "completed":
+        if execution.movement_termination_reason == "completed":
             return ActionResolutionStatus.COMPLETED
         return ActionResolutionStatus.INTERRUPTED
     if result.success:
@@ -4159,12 +4680,12 @@ def _followup_epoch_reason(
     return DecisionEpochReason.ACTION_COMPLETED
 
 
-def _command_revalidation_reason(result: ActionResult) -> Optional[str]:
+def _command_revalidation_reason(execution: _ActionExecutionResult) -> Optional[str]:
     """Return the typed controller revalidation cause from movement data."""
+    result = execution.response
     if result.outcome_code != "movement.subjective_revalidation":
         return None
-    event_data = result.event_data or {}
-    reason = event_data.get("controller_revalidation_reason")
+    reason = execution.movement_revalidation_reason
     return reason if isinstance(reason, str) and reason else None
 
 
@@ -4242,6 +4763,7 @@ async def _end_ai_session_turn_from_epoch(
             command_id=command_id,
             actor_uuid=actor_uuid,
             requested_epoch_id=basis_epoch_id,
+            row_id=END_TURN_ROW_ID,
             message="Session does not currently control an active actor.",
             resync_required=False,
         )
@@ -4263,6 +4785,7 @@ async def _end_ai_session_turn_from_epoch(
             actor_uuid=actor_uuid,
             requested_epoch_id=basis_epoch_id,
             current_epoch_id=epoch.epoch_id,
+            row_id=END_TURN_ROW_ID,
             message="End-turn command was based on a stale decision epoch.",
             resync_required=False,
         )
@@ -4294,6 +4817,7 @@ async def _end_ai_session_turn_from_epoch(
             actor_uuid=actor_uuid,
             requested_epoch_id=basis_epoch_id,
             current_epoch_id=epoch.epoch_id,
+            row_id=END_TURN_ROW_ID,
             message="End-turn command was rejected by the engine.",
             payload={"detail": exc.detail},
             resync_required=False,
@@ -4320,7 +4844,7 @@ async def _end_ai_session_turn_from_epoch(
         actor_uuid=actor_uuid,
         requested_epoch_id=basis_epoch_id,
         current_epoch_id=None,
-        row_id="special|End Turn|index=0",
+        row_id=END_TURN_ROW_ID,
         message="Turn ended.",
         payload=payload,
         resync_required=False,
@@ -4498,7 +5022,9 @@ async def subscribe_agent_events(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-GAUNTLET_SUMMARY_DIRECTORY = Path("ai/evidence/gauntlets")
+GAUNTLET_SUMMARY_DIRECTORY = Path(
+    os.environ.get("DND_GAUNTLET_SUMMARY_DIRECTORY", "evidence/gauntlets")
+)
 
 
 @app.get("/ai/gauntlets/latest")
@@ -4745,19 +5271,48 @@ def _agent_stream_session_payload(session_id: str) -> Optional[dict[str, Any]]:
     return session.to_dict() if session else None
 
 
-@app.get("/ai/processes")
-async def get_ai_processes():
-    """Return tracked external AI subprocess state."""
+@app.get("/ai/service")
+async def get_managed_ai_service():
+    """Return registered service and session-runtime diagnostics."""
     return {
-        "processes": ai_process_manager.process_statuses(),
-        "running_session_ids": ai_process_manager.running_session_ids(),
+        "service_registered": agent_service_manager.has_service,
+        "service_id": agent_service_manager.service_id,
+        "execution_mode": agent_service_manager.execution_mode,
+        "sessions": agent_service_manager.session_statuses(),
+        "running_session_ids": agent_service_manager.running_session_ids(),
+    }
+
+
+@app.post(
+    "/ai/sessions/{session_id}/service-ready",
+    include_in_schema=False,
+)
+async def acknowledge_agent_service_ready(
+    session_id: str,
+    request: AgentServiceReadyRequest,
+):
+    """Accept one manager-issued readiness proof after subjective sync."""
+    _require_agent_stream_session(session_id)
+    if not agent_service_manager.acknowledge_ready(
+        session_id,
+        request.readiness_token,
+    ):
+        raise _api_http_exception(
+            status_code=409,
+            code="agent_service_readiness_rejected",
+            message="The agent service readiness proof is stale or invalid",
+            session_id=session_id,
+        )
+    return {
+        "status": "ready",
+        "session_id": session_id,
     }
 
 
 @app.get("/entity/{entity_uuid}/handlers", response_model=APIEntityHandlersResponse)
-async def get_entity_handlers(entity_uuid: str) -> APIEntityHandlersResponse:
-    """Get all event handlers for an entity with their enabled state."""
-    entity = _resolve_entity_or_raise(entity_uuid)
+async def get_entity_handlers(entity_uuid: str, session_id: str) -> APIEntityHandlersResponse:
+    """Get toggleable handlers for an entity controlled by the session."""
+    entity = validate_session_action(session_id, entity_uuid)
     handlers = _serialize_entity_handlers(entity)
     return APIEntityHandlersResponse(entity_uuid=entity_uuid, handlers=handlers)
 
@@ -4775,16 +5330,7 @@ async def toggle_entity_handler(
 
     Validates that the session owns the entity and it's their turn.
     """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    if entity_uuid != request.entity_uuid:
-        raise _handler_http_exception(
-            entity=entity,
-            status_code=400,
-            code="entity_uuid_mismatch",
-            message="Entity UUID mismatch",
-            handler_name=handler_name,
-        )
+    entity = validate_session_action(request.session_id, entity_uuid)
 
     found = entity.set_handler_enabled(handler_name, request.enabled)
     if not found:
@@ -4803,49 +5349,10 @@ async def toggle_entity_handler(
     )
 
 
-@app.get("/entity/{entity_uuid}/equipment", response_model=APIEquipmentOverview)
-async def get_entity_equipment(entity_uuid: str):
-    """Get full equipment and inventory state for an entity."""
-    entity = _resolve_entity_or_raise(entity_uuid)
-    return APIEquipmentOverview.create(entity)
-
-
-@app.get("/entity/{entity_uuid}/equipment/item/{item_uuid}", response_model=APIItemSummary)
-async def get_entity_item_detail(entity_uuid: str, item_uuid: str) -> APIItemSummary:
-    """Get full detail for a single item (equipped or in inventory)."""
-    entity = _resolve_entity_or_raise(entity_uuid)
-    try:
-        item_uuid_obj = UUID(item_uuid)
-    except ValueError:
-        raise _equipment_http_exception(
-            entity=entity,
-            status_code=400,
-            code="invalid_item_uuid",
-            message="Invalid item UUID format",
-            item_uuid=item_uuid,
-        )
-
-    for equipped_item in entity.equipment.get_all_equipped_items():
-        if equipped_item.uuid == item_uuid_obj:
-            return APIItemSummary.create(equipped_item)
-
-    if entity.inventory.has_item(item_uuid_obj):
-        item = entity.inventory.items[item_uuid_obj]
-        return APIItemSummary.create(item)
-
-    raise _equipment_http_exception(
-        entity=entity,
-        status_code=404,
-        code="item_not_found",
-        message="Item not found on entity",
-        item_uuid=item_uuid,
-    )
-
-
 @app.get("/entity/{entity_uuid}/equippable-items", response_model=APIEquippableItems)
-async def get_equippable_items(entity_uuid: str) -> APIEquippableItems:
-    """Get inventory items that can be equipped, grouped by valid slots."""
-    entity = _resolve_entity_or_raise(entity_uuid)
+async def get_equippable_items(entity_uuid: str, session_id: str) -> APIEquippableItems:
+    """Get controlled inventory equip affordances grouped by valid slots."""
+    entity = validate_session_action(session_id, entity_uuid)
     return APIEquippableItems(
         entity_uuid=entity_uuid,
         equippable=entity.get_equippable_items(),
@@ -4859,15 +5366,7 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
     Removes item from inventory, equips it. If slot is occupied, the old item
     goes to inventory (swap). Validates session ownership and turn.
     """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    if entity_uuid != request.entity_uuid:
-        raise _equipment_http_exception(
-            entity=entity,
-            status_code=400,
-            code="entity_uuid_mismatch",
-            message="Entity UUID mismatch",
-        )
+    entity = validate_session_action(request.session_id, entity_uuid)
 
     try:
         item_uuid_obj = UUID(request.item_uuid)
@@ -4889,10 +5388,7 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
             item_uuid=request.item_uuid,
         )
 
-    item = entity.inventory.items[item_uuid_obj]
-
-    from dnd.blocks.base_item import EquippableItem
-    if not isinstance(item, EquippableItem):
+    if not entity.is_inventory_item_equippable(item_uuid_obj):
         raise _equipment_http_exception(
             entity=entity,
             status_code=400,
@@ -4900,8 +5396,6 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
             message="Item is not equippable",
             item_uuid=request.item_uuid,
         )
-
-    from dnd.blocks.equipment import Armor, Weapon, Shield, Ring, WeaponProperty
 
     parsed_slot = None
     if request.slot is not None:
@@ -4917,26 +5411,8 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
                 slot=request.slot,
             )
 
-    effective_slot = parsed_slot
-    if effective_slot is None:
-        if isinstance(item, Weapon):
-            is_ranged = WeaponProperty.RANGED in item.properties
-            effective_slot = WeaponSlot.RANGED_MAIN if is_ranged else WeaponSlot.MELEE_MAIN
-        elif isinstance(item, Shield):
-            effective_slot = WeaponSlot.MELEE_OFF
-        elif isinstance(item, Ring):
-            raise _equipment_http_exception(
-                entity=entity,
-                status_code=400,
-                code="missing_slot",
-                message="Rings require an explicit slot",
-                item_uuid=request.item_uuid,
-            )
-        elif isinstance(item, Armor):
-            effective_slot = item.body_part
-
     try:
-        if effective_slot is None or not entity.equip_item(item_uuid_obj, effective_slot):
+        if not entity.equip_item(item_uuid_obj, parsed_slot):
             raise ValueError("Item could not be equipped")
     except ValueError as e:
         raise _equipment_http_exception(
@@ -4950,8 +5426,7 @@ async def equip_item(entity_uuid: str, request: EquipRequest):
 
     return EquipmentMutationResult(
         success=True,
-        message=f"Equipped {item.name}",
-        equipment=APIEquipmentOverview.create(entity),
+        message=f"Equipped item {request.item_uuid}",
         **action_cursor_fields(),
     )
 
@@ -4962,16 +5437,7 @@ async def unequip_item(entity_uuid: str, request: UnequipRequest):
 
     Validates session ownership and turn.
     """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    if entity_uuid != request.entity_uuid:
-        raise _equipment_http_exception(
-            entity=entity,
-            status_code=400,
-            code="entity_uuid_mismatch",
-            message="Entity UUID mismatch",
-            slot=request.slot,
-        )
+    entity = validate_session_action(request.session_id, entity_uuid)
 
     slot_str_map = _equipment_slot_map()
     parsed_slot = slot_str_map.get(request.slot)
@@ -4984,7 +5450,7 @@ async def unequip_item(entity_uuid: str, request: UnequipRequest):
             slot=request.slot,
         )
 
-    unequipped = entity.equipment.unequip(parsed_slot)
+    unequipped = entity.unequip_item(parsed_slot)
     if unequipped is None:
         raise _equipment_http_exception(
             entity=entity,
@@ -4994,14 +5460,9 @@ async def unequip_item(entity_uuid: str, request: UnequipRequest):
             slot=request.slot,
         )
 
-    unequipped.owner_uuid = entity.uuid
-    unequipped.stored_in_uuid = entity.inventory.uuid
-    entity.inventory.add_item(unequipped)
-
     return EquipmentMutationResult(
         success=True,
         message=f"Unequipped {unequipped.name}",
-        equipment=APIEquipmentOverview.create(entity),
         **action_cursor_fields(),
     )
 
@@ -5062,323 +5523,17 @@ async def _end_turn_and_advance(
 
     return result
 
-@app.post("/action/self", response_model=ActionResult)
-async def execute_self_action(request: SelfActionRequest):
-    """Execute a self-targeting action (Dash, Dodge, Disengage, StandUp).
-
-    Uses the new functional action API.
-    """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    template = entity.get_action_template(request.action_name)
-    if template is None:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="unknown_action",
-            message=f"Unknown action: {request.action_name}",
-        )
-
-    if template.target_type != TargetType.SELF:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_type",
-            message=f"Action {request.action_name} is not a SELF action (is {template.target_type.value})",
-        )
-
-    target = AvailableTarget(index=0)
-    try:
-        event = execute_action(entity, request.action_name, target)
-    except ValueError as e:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_target",
-            message=str(e),
-        )
-
-    action_log_entries: list = []
-    if event and event.combat_log:
-        action_log_entries.append(event.combat_log.to_dict())
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or f"{request.action_name} executed",
-        event_type=request.action_name.lower(),
-        outcome_code=event.outcome_code if event else None,
-        entity_hp=entity.get_hp(),
-        turn_continues=True,
-        encounter_ended=False,
-        combat_log_entries=action_log_entries,
-        **action_cursor_fields(),
-    )
-
-
-@app.post("/action/entity", response_model=ActionResult)
-async def execute_entity_action(request: EntityActionRequest):
-    """Execute an entity-targeting action (Attack).
-
-    Uses the new functional action API. Captures opportunity attacks.
-    """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    try:
-        target_uuid = UUID(request.target_uuid)
-    except ValueError:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_target_uuid",
-            message="Invalid target UUID format",
-            target_uuid=request.target_uuid,
-            known_entities=_known_entity_summaries(),
-        )
-
-    target = Entity.get(target_uuid)
-    if not target:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            status_code=404,
-            code="target_not_found",
-            message="Target not found",
-            target_uuid=str(target_uuid),
-            known_entities=_known_entity_summaries(),
-        )
-
-    template = entity.get_action_template(request.action_name)
-    if template is None:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="unknown_action",
-            message=f"Unknown action: {request.action_name}",
-        )
-
-    if template.target_type != TargetType.ENTITY:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_type",
-            message=f"Action {request.action_name} is not an ENTITY action (is {template.target_type.value})",
-        )
-
-    action_target = AvailableTarget(index=0, target_uuid=target_uuid, target_name=target.name)
-    try:
-        event = execute_action(entity, request.action_name, action_target)
-    except ValueError as e:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_target",
-            message=str(e),
-        )
-
-    deaths = sim.encounter.check_deaths() if sim.encounter else []
-    death_names = [d.entity_name for d in deaths]
-
-    encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
-
-    action_log_entries: list = []
-
-    event_data: Optional[dict[str, Any]] = None
-    if event and hasattr(event, 'attack_outcome') and event.combat_log:
-        action_log_entries.append(event.combat_log.to_dict())
-
-        event_data = {
-            **event.combat_log.to_dict()["data"],
-            "target_hp": target.get_hp(),
-        }
-
-    for death_event in deaths:
-        if death_event.combat_log:
-            action_log_entries.append(death_event.combat_log.to_dict())
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or "Action executed",
-        event_type=request.action_name.lower().replace("_", " "),
-        outcome_code=event.outcome_code if event else None,
-        event_data=event_data,
-        entity_hp=entity.get_hp(),
-        target_hp=target.get_hp(),
-        deaths=death_names,
-        turn_continues=not encounter_ended and entity.has_hp,
-        encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries,
-        **action_cursor_fields(),
-    )
-
-
-@app.post("/action/position", response_model=ActionResult)
-async def execute_position_action(request: PositionActionRequest):
-    """Execute a position-targeting action (Move).
-
-    Uses the new functional action API. Captures opportunity attacks.
-    """
-    entity = validate_session_action(request.session_id, request.entity_uuid)
-
-    template = entity.get_action_template(request.action_name)
-    if template is None:
-
-        if "__item_" in request.action_name:
-            item_uuid_str = request.action_name.split("__item_")[1]
-            item_uuid = UUID(item_uuid_str)
-            action_name = request.action_name.split("__item_")[0]
-            pos = (request.position[0], request.position[1])
-            action_target = AvailableTarget(index=0, position=pos)
-
-            log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
-
-            try:
-                event = execute_use_action(entity, item_uuid, action_name, action_target)
-            except ValueError as e:
-                raise _action_http_exception(
-                    entity=entity,
-                    entity_uuid=request.entity_uuid,
-                    code="invalid_action_target",
-                    message=str(e),
-                )
-
-            _available_actions_cache.pop(request.entity_uuid, None)
-
-            deaths = sim.encounter.check_deaths() if sim.encounter else []
-            death_names = [d.entity_name for d in deaths]
-            encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
-
-            event_data = None
-            if event and event.combat_log:
-                event_data = event.combat_log.to_dict()["data"]
-
-            action_log_entries: list = []
-            if sim.encounter:
-                for entry in sim.encounter.combat_log[log_start_index:]:
-                    action_log_entries.append(entry.to_dict())
-            if not action_log_entries and event and event.combat_log:
-                action_log_entries.append(event.combat_log.to_dict())
-
-            return ActionResult(
-                success=not event.canceled if event else False,
-                message=(event.status_message if event else None) or "Action executed",
-                event_type=action_name.lower().replace("_", " "),
-                outcome_code=event.outcome_code if event else None,
-                event_data=event_data,
-                entity_hp=entity.get_hp(),
-                deaths=death_names,
-                turn_continues=not encounter_ended and entity.has_hp,
-                encounter_ended=encounter_ended,
-                combat_log_entries=action_log_entries,
-                **action_cursor_fields(),
-            )
-        else:
-            raise _action_http_exception(
-                entity=entity,
-                entity_uuid=request.entity_uuid,
-                code="unknown_action",
-                message=f"Unknown action: {request.action_name}",
-            )
-
-    if template.target_type not in (TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE):
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_type",
-            message=f"Action {request.action_name} is not a position action (is {template.target_type.value})",
-        )
-
-    log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
-
-    try:
-
-        pos = (request.position[0], request.position[1])
-        action_target = AvailableTarget(index=0, position=pos)
-        event = execute_action(entity, request.action_name, action_target)
-    except ValueError as e:
-        raise _action_http_exception(
-            entity=entity,
-            entity_uuid=request.entity_uuid,
-            code="invalid_action_target",
-            message=str(e),
-        )
-
-    deaths = sim.encounter.check_deaths() if sim.encounter else []
-    death_names = [d.entity_name for d in deaths]
-
-    encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
-
-    event_data = None
-    if isinstance(event, (MovementEvent, JumpEvent)):
-        if event.combat_log:
-            event_data = event.combat_log.to_dict()["data"]
-        else:
-
-            event_data = {
-                "entity_name": entity.name,
-                "start_position": list(event.start_position),
-                "end_position": list(event.end_position),
-                "path": [list(p) for p in event.path] if event.path else []
-            }
-    elif template.target_type == TargetType.POSITION_AOE and event:
-
-        if event.combat_log:
-            event_data = event.combat_log.to_dict()["data"]
-
-    action_log_entries: list = []
-    triggered_reactions: list = []
-    if sim.encounter:
-        new_entries = sim.encounter.combat_log[log_start_index:]
-        for entry in new_entries:
-            entry_dict = entry.to_dict()
-            action_log_entries.append(entry_dict)
-
-            if entry.entry_type.value == "attack" and entry.target_uuid and str(entry.target_uuid) == str(entity.uuid):
-                oa_data = entry.to_dict()["data"]
-                oa_data["type"] = "opportunity_attack"
-                oa_data["is_opportunity_attack"] = True
-                triggered_reactions.append(oa_data)
-
-    if not action_log_entries and event and event.combat_log:
-        action_log_entries.append(event.combat_log.to_dict())
-
-    return ActionResult(
-        success=not event.canceled if event else False,
-        message=(event.status_message if event else None) or ("Moved successfully" if event and not event.canceled else "Move failed"),
-        event_type="movement",
-        outcome_code=event.outcome_code if event else None,
-        event_data=event_data,
-        entity_hp=entity.get_hp(),
-        deaths=death_names,
-        triggered_reactions=triggered_reactions,
-        turn_continues=not encounter_ended and entity.has_hp,
-        encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries,
-        **action_cursor_fields(),
-    )
-
-
-def _causal_death_rows(combat_log: Optional[CombatLogEntry]) -> list[tuple[str, str]]:
-    """Return deduplicated entity identities from one causal log subtree."""
-    if combat_log is None:
-        return []
-    rows: list[tuple[str, str]] = []
-    if combat_log.entry_type is CombatLogEntryType.DEATH:
-        rows.append((combat_log.source_uuid, combat_log.source_name))
-    for child in combat_log.sub_entries:
-        rows.extend(_causal_death_rows(child))
-    return rows
-
-
 @app.post("/action/execute", response_model=ActionResult)
 async def execute_action_by_index(request: ExecuteByIndexRequest):
     """Execute one public template-name and target-index request."""
-    return await _execute_action_by_index_impl(request)
+    execution = await _execute_action_by_index_impl(request)
+    return execution.response
 
 
 async def _execute_action_by_index_impl(
     request: ExecuteByIndexRequest,
     execution_binding: Optional[ActionExecutionBinding] = None,
-):
+) -> _ActionExecutionResult:
     """Execute action by template name and target index.
 
     Enables 'attack 0', 'move 3' style commands from the available actions list.
@@ -5444,10 +5599,6 @@ async def _execute_action_by_index_impl(
             ),
         )
 
-    target_type = action_info.target_type
-
-    log_start_index = len(sim.encounter.combat_log) if sim.encounter else 0
-
     try:
         started = time.perf_counter()
         timing_token = None
@@ -5487,19 +5638,8 @@ async def _execute_action_by_index_impl(
         timing.add("clear_available_actions_cache_ms", started)
 
     started = time.perf_counter()
-    deaths = sim.encounter.check_deaths() if sim.encounter else []
-    death_rows = [
-        (str(death.entity_uuid), death.entity_name)
-        for death in deaths
-    ]
-    death_rows.extend(_causal_death_rows(event.combat_log if event else None))
-    death_names = []
-    seen_death_uuids: set[str] = set()
-    for death_uuid, death_name in death_rows:
-        if death_uuid in seen_death_uuids:
-            continue
-        seen_death_uuids.add(death_uuid)
-        death_names.append(death_name)
+    if sim.encounter:
+        sim.encounter.check_deaths()
     if timing is not None:
         timing.add("check_deaths_ms", started)
 
@@ -5517,104 +5657,11 @@ async def _execute_action_by_index_impl(
         if timing is not None:
             timing.add("serialize_available_actions_ms", started)
 
-    started = time.perf_counter()
-    event_data: Optional[dict[str, Any]] = None
-    target_hp = None
-
-    if target_type == TargetType.ENTITY and event and event.combat_log:
-
-        event_data = event.combat_log.to_dict()["data"]
-
-    elif target_type in (TargetType.POSITION_PATH, TargetType.POSITION_LOS):
-
-        if event and isinstance(event, (MovementEvent, JumpEvent)):
-            if event.combat_log:
-                event_data = event.combat_log.to_dict()["data"]
-            else:
-                event_data = {
-                    "entity_name": entity.name,
-                    "start_position": list(event.start_position),
-                    "end_position": list(event.end_position),
-                    "path": [list(p) for p in event.path] if event.path else []
-                }
-
-    elif target_type == TargetType.POSITION_AOE:
-
-        if event and event.combat_log:
-            event_data = event.combat_log.to_dict()["data"]
-
-    elif target_type == TargetType.MULTI_ENTITY:
-
-        if event and event.combat_log:
-            event_data = event.combat_log.to_dict()["data"]
-
-    elif target_type == TargetType.SELF:
-
-        if event and event.combat_log:
-            event_data = event.combat_log.to_dict()["data"]
-        elif event:
-            event_data = {
-                "entity_name": entity.name,
-                "action_name": request.template_name,
-            }
-
-    if event and event.target_entity_uuid:
-        target = Entity.get(event.target_entity_uuid)
-        target_hp = target.get_hp() if target else None
-        if event_data is not None and target_hp is not None:
-            event_data["target_hp"] = target_hp
-    if timing is not None:
-        timing.add("build_event_data_ms", started)
-
-    started = time.perf_counter()
-    action_log_entries: list = []
-    triggered_reactions: list = []
-    if sim.encounter:
-        new_entries = sim.encounter.combat_log[log_start_index:]
-        for entry in new_entries:
-            entry_dict = entry.to_dict()
-            action_log_entries.append(entry_dict)
-
-            if entry.entry_type.value == "attack" and entry.target_uuid and str(entry.target_uuid) == str(entity.uuid):
-                oa_data = entry.to_dict()["data"]
-                oa_data["type"] = "opportunity_attack"
-                oa_data["is_opportunity_attack"] = True
-                triggered_reactions.append(oa_data)
-
-    if not action_log_entries and event and event.combat_log:
-        action_log_entries.append(event.combat_log.to_dict())
-    if timing is not None:
-        timing.add("collect_combat_logs_ms", started)
-
-    game_state = None
-    if request.include_state:
-        started = time.perf_counter()
-        grid = get_map()
-        floor_objects = []
-        for obj_uuid, obj_pos in grid._object_positions.items():
-            obj = BaseBlock.get(obj_uuid)
-            if obj:
-                map_char = getattr(obj, 'map_char', '\u03c6')
-                floor_objects.append(APIFloorObject(
-                    uuid=str(obj_uuid),
-                    name=obj.name or "Object",
-                    position=obj_pos,
-                    map_char=map_char,
-                    state=_get_floor_object_state(obj),
-                ))
-        game_state = APIGameState(
-            grid=APIGrid.create(grid, requesting_entity_uuid=entity.uuid),
-            entities=[APIEntitySummary.create(e) for e in Entity.get_all_entities()],
-            encounter=APIEncounter.create(sim.encounter) if sim.encounter else None,
-            floor_objects=floor_objects,
-        )
-        if timing is not None:
-            timing.add("build_game_state_ms", started)
-
-    started = time.perf_counter()
-    final_entity_hp = entity.get_hp()
-    if timing is not None:
-        timing.add("final.entity_hp_ms", started)
+    movement_termination_reason = None
+    movement_revalidation_reason = None
+    if isinstance(event, MovementEvent):
+        movement_termination_reason = event.termination_reason.value
+        movement_revalidation_reason = event.controller_revalidation_reason
 
     started = time.perf_counter()
     cursor_fields = action_cursor_fields()
@@ -5636,27 +5683,24 @@ async def _execute_action_by_index_impl(
         message=action_message,
         event_type=request.template_name.lower(),
         outcome_code=event.outcome_code if event else None,
-        event_data=event_data,
-        entity_hp=final_entity_hp,
-        target_hp=target_hp,
-        deaths=death_names,
-        triggered_reactions=triggered_reactions,
         turn_continues=not encounter_ended and entity.has_hp,
         encounter_ended=encounter_ended,
-        combat_log_entries=action_log_entries,
         available_actions=updated_actions,
-        state=game_state,
         server_timing=None,
         **cursor_fields,
     )
     if timing is not None:
         timing.add("build_action_result_model_ms", started)
         action_result.server_timing = APIServerTiming.model_validate(timing.payload())
-    return action_result
+    return _ActionExecutionResult(
+        response=action_result,
+        movement_termination_reason=movement_termination_reason,
+        movement_revalidation_reason=movement_revalidation_reason,
+    )
 
 
 @app.post("/action/position/preview")
-async def preview_position_action(request: PositionActionRequest) -> AoEPreviewResult:
+async def preview_position_action(request: PositionPreviewRequest) -> AoEPreviewResult:
     """Preview AoE at a position: returns affected cells and entities without executing."""
     entity = validate_session_action(request.session_id, request.entity_uuid)
 
@@ -5828,12 +5872,14 @@ def _game_creation_side_result(
         title=title,
         controller=participant.controller,
         participant_name=participant.name,
-        entities=[APIEntitySummary.create(entity) for entity in entities],
-        human_entity_uuids=(
-            [str(entity.uuid) for entity in entities]
-            if participant.controller == "human"
-            else []
-        ),
+        entity_assignments=[
+            GameCreationEntityAssignment(
+                entity_uuid=str(entity.uuid),
+                entity_name=entity.name,
+                faction=entity.faction,
+            )
+            for entity in entities
+        ],
         fallback_ai_session_id=(
             str(fallback_session.session_id)
             if fallback_session is not None
@@ -5860,7 +5906,12 @@ def _game_creation_side_result(
 @app.get("/game-creation/catalog", response_model=GameCreationCatalogResponse)
 async def get_game_creation_catalog() -> GameCreationCatalogResponse:
     """Return canonical scenarios, formations, and controller choices."""
-    return build_game_creation_catalog()
+    controllers: tuple[Literal["human", "ai", "codex"], ...] = (
+        ("human", "ai", "codex")
+        if agent_service_manager.has_service
+        else ("human",)
+    )
+    return build_game_creation_catalog(controllers)
 
 
 @app.post("/game-creation/preflight", response_model=CompatibilityReport)
@@ -5871,7 +5922,11 @@ async def preflight_game_creation(
     return _game_creation_preflight(request)
 
 
-@app.post("/game-creation/start", response_model=GameCreationStartResponse)
+@app.post(
+    "/game-creation/start",
+    response_model=GameCreationStartResponse,
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_created_game(
     request: Request,
     creation: GameCreationStartRequest,
@@ -5887,6 +5942,11 @@ async def start_created_game(
             compatibility=static_report.model_dump(mode="json"),
         )
 
+    required_agents = sum(
+        participant.controller != "human"
+        for participant in (creation.side_a, creation.side_b)
+    )
+    _require_managed_agent_service(required_agents)
     await prepare_new_simulation_start()
     opening_faction = {
         "initiative": None,
@@ -5918,14 +5978,12 @@ async def start_created_game(
             selection=selection.model_dump(mode="json"),
         ) from exc
 
-    game_summary_store.reset()
-    game_summary_store.capture_active_encounter(arena.encounter)
-    event_stream.ensure_attached()
-    event_monitor.ensure_attached()
-
     sim.encounter = arena.encounter
     sim.paused = False
     sim.encounter.clear_combat_log()
+    game_summary_store.reset()
+    game_summary_store.capture_active_encounter(arena.encounter)
+    event_stream.ensure_attached()
     side_a = tuple(arena.side_a)
     side_b = tuple(arena.side_b)
     _set_game_creation_side_controllers(sim.encounter, side_a, creation.side_a.controller)
@@ -5946,7 +6004,9 @@ async def start_created_game(
     )
 
     claims: dict[str, TakeoverClaim] = {}
-    ownership_boundary = prepare_observation_ownership_change(sim.get_session_manager())
+    manager = sim.get_session_manager()
+    subjective_authority_before = _capture_subjective_session_authority(manager)
+    ownership_boundary = prepare_observation_ownership_change(manager)
     try:
         for side_id, entities, participant in (
             ("side_a", side_a, creation.side_a),
@@ -5966,27 +6026,30 @@ async def start_created_game(
     except TakeoverError as exc:
         ai_takeover_manager.clear(sim.encounter, game)
         raise _takeover_http_exception(exc, faction=None) from exc
-    _publish_takeover_ownership_changes(ownership_boundary, "game_creation_claimed")
+    _publish_takeover_ownership_changes(
+        ownership_boundary,
+        "game_creation_claimed",
+        subjective_authority_before=subjective_authority_before,
+    )
 
-    base_url = os.environ.get(
-        "DND_PUBLIC_GAME_BASE_URL",
-        str(request.base_url).rstrip("/"),
-    ).rstrip("/")
     try:
-        for session in (side_a_fallback, side_b_fallback):
-            if session is not None:
-                ai_process_manager.start_external_agent(session.session_id, base_url)
-    except AIProcessStartError as exc:
-        ai_process_manager.stop_all()
-        ai_takeover_manager.clear(sim.encounter, game)
+        await _start_managed_agent_sessions(
+            tuple(
+                session
+                for session in (side_a_fallback, side_b_fallback)
+                if session is not None
+            ),
+            request,
+        )
+    except AgentServiceStartError as exc:
         raise _api_http_exception(
             status_code=500,
-            code="ai_process_start_failed",
+            code="agent_service_start_failed",
             message="Failed to start a configured AI side",
             error=str(exc),
         ) from exc
 
-    advance = await advance_encounter()
+    advance = await _advance_managed_start_or_abort()
     hero_spec = get_combatant_configuration(selection.hero_configuration_id)
     monster_spec = get_combatant_configuration(selection.monster_configuration_id)
     response = GameCreationStartResponse(
@@ -6019,7 +6082,11 @@ async def start_created_game(
     return response
 
 
-@app.post("/simulation/start-human", response_model=StartHumanSimulationResponse)
+@app.post(
+    "/simulation/start-human",
+    response_model=StartHumanSimulationResponse,
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_human_simulation(
     request: Request,
     character_class: str = "fighter",
@@ -6034,17 +6101,8 @@ async def start_human_simulation(
     Args:
         character_class: "fighter", "barbarian", or "sorcerer" - the hero's class.
     """
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
-
-    ai_process_manager.stop_all()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
-    clear_subjective_projection_state()
-    agent_event_stream.clear_all()
+    _require_managed_agent_service(1)
+    await prepare_new_simulation_start()
 
     sim.encounter = setup_arena_combat(
         pvp_mode=False,
@@ -6065,20 +6123,20 @@ async def start_human_simulation(
             game.assign_entity(entity.uuid, ai_session.session_id)
 
     try:
-        ai_process_manager.start_external_agent(
-            ai_session.session_id,
-            str(request.base_url).rstrip("/"),
+        await _start_managed_agent_sessions(
+            (ai_session,),
+            request,
         )
-    except AIProcessStartError as exc:
+    except AgentServiceStartError as exc:
         raise _api_http_exception(
             status_code=500,
-            code="ai_process_start_failed",
-            message="Failed to start external AI subprocess",
+            code="agent_service_start_failed",
+            message="Failed to start the managed AI service",
             session_id=str(ai_session.session_id),
             error=str(exc),
         )
 
-    result = await advance_encounter()
+    result = await _advance_managed_start_or_abort()
 
     hero_uuid = None
     for entity in Entity.get_all_entities():
@@ -6087,7 +6145,7 @@ async def start_human_simulation(
             break
 
     return StartHumanSimulationResponse(
-        **{**result.model_dump(mode="python"), "status": "started"},
+        **result.model_dump(mode="python"),
         ai_session_id=str(ai_session.session_id),
         encounter_uuid=str(sim.encounter.uuid),
         hero_uuid=hero_uuid,
@@ -6106,7 +6164,10 @@ async def list_ai_validation_arenas():
     }
 
 
-@app.post("/simulation/start-ai-validation")
+@app.post(
+    "/simulation/start-ai-validation",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_ai_validation_simulation(
     request: Request,
     arena_id: str = "standard_skeleton_doors",
@@ -6131,6 +6192,17 @@ async def start_ai_validation_simulation(
             valid_modes=["human_hero", "codex_monsters"],
         )
 
+    validation_specs = list_ai_validation_arena_specs()
+    valid_arena_ids = [spec.arena_id for spec in validation_specs]
+    if arena_id not in valid_arena_ids:
+        raise _api_http_exception(
+            status_code=400,
+            code="invalid_validation_arena",
+            message=f"Unknown AI validation arena: {arena_id}",
+            arena_id=arena_id,
+            valid_arena_ids=valid_arena_ids,
+        )
+    _require_managed_agent_service(1)
     await prepare_new_simulation_start()
 
     try:
@@ -6141,7 +6213,7 @@ async def start_ai_validation_simulation(
             code="invalid_validation_arena",
             message=str(exc),
             arena_id=arena_id,
-            valid_arena_ids=[spec.arena_id for spec in list_ai_validation_arena_specs()],
+            valid_arena_ids=valid_arena_ids,
         )
 
     sim.encounter = arena.encounter
@@ -6166,6 +6238,7 @@ async def start_ai_validation_simulation(
             game.assign_entity(entity.uuid, ai_session.session_id)
 
     if mode == "codex_monsters":
+        subjective_authority_before = _capture_subjective_session_authority(mgr)
         ownership_boundary = prepare_observation_ownership_change(mgr)
         try:
             takeover_claim = ai_takeover_manager.claim(
@@ -6181,23 +6254,24 @@ async def start_ai_validation_simulation(
         _publish_takeover_ownership_changes(
             ownership_boundary,
             "validation_takeover_claimed",
+            subjective_authority_before=subjective_authority_before,
         )
 
     try:
-        ai_process_manager.start_external_agent(
-            ai_session.session_id,
-            str(request.base_url).rstrip("/"),
+        await _start_managed_agent_sessions(
+            (ai_session,),
+            request,
         )
-    except AIProcessStartError as exc:
+    except AgentServiceStartError as exc:
         raise _api_http_exception(
             status_code=500,
-            code="ai_process_start_failed",
-            message="Failed to start external AI subprocess",
+            code="agent_service_start_failed",
+            message="Failed to start the managed AI service",
             session_id=str(ai_session.session_id),
             error=str(exc),
         )
 
-    result = await advance_encounter()
+    result = await _advance_managed_start_or_abort()
     hero_rows = [
         {
             "entity_uuid": str(entity.uuid),
@@ -6232,7 +6306,10 @@ async def start_ai_validation_simulation(
     }
 
 
-@app.post("/simulation/start-codex-monsters")
+@app.post(
+    "/simulation/start-codex-monsters",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_codex_monsters_simulation(
     request: Request,
     character_class: str = "fighter",
@@ -6249,17 +6326,8 @@ async def start_codex_monsters_simulation(
     Returns:
         Arena bootstrap payload with the AI hero session and monster UUIDs.
     """
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
-
-    ai_process_manager.stop_all()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
-    clear_subjective_projection_state()
-    agent_event_stream.clear_all()
+    _require_managed_agent_service(1)
+    await prepare_new_simulation_start()
 
     sim.encounter = setup_arena_combat(
         pvp_mode=True,
@@ -6285,20 +6353,20 @@ async def start_codex_monsters_simulation(
     game.assign_entity(hero.uuid, ai_session.session_id)
 
     try:
-        ai_process_manager.start_external_agent(
-            ai_session.session_id,
-            str(request.base_url).rstrip("/"),
+        await _start_managed_agent_sessions(
+            (ai_session,),
+            request,
         )
-    except AIProcessStartError as exc:
+    except AgentServiceStartError as exc:
         raise _api_http_exception(
             status_code=500,
-            code="ai_process_start_failed",
-            message="Failed to start external AI subprocess",
+            code="agent_service_start_failed",
+            message="Failed to start the managed AI service",
             session_id=str(ai_session.session_id),
             error=str(exc),
         )
 
-    result = await advance_encounter()
+    result = await _advance_managed_start_or_abort()
     monster_rows = [
         {
             "entity_uuid": str(entity.uuid),
@@ -6320,8 +6388,11 @@ async def start_codex_monsters_simulation(
     }
 
 
-@app.post("/simulation/start-aoe-test")
-async def start_aoe_test():
+@app.post(
+    "/simulation/start-aoe-test",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
+async def start_aoe_test(request: Request):
     """
     Start arena configured for AoE spell testing.
 
@@ -6331,12 +6402,8 @@ async def start_aoe_test():
     - 3 Goblins clustered at (12, 4), (12, 5), (12, 6) - within Fireball radius
     """
 
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
+    _require_managed_agent_service(1)
+    await prepare_new_simulation_start()
 
     sim.encounter = setup_aoe_test_arena(character_class="sorcerer")
     prioritize_hero_opening_turn(sim.encounter)
@@ -6353,7 +6420,21 @@ async def start_aoe_test():
         if entity.faction == "monsters":
             game.assign_entity(entity.uuid, ai_session.session_id)
 
-    result = await advance_encounter()
+    try:
+        await _start_managed_agent_sessions(
+            (ai_session,),
+            request,
+        )
+    except AgentServiceStartError as exc:
+        raise _api_http_exception(
+            status_code=500,
+            code="agent_service_start_failed",
+            message="Failed to start the managed AI service",
+            session_id=str(ai_session.session_id),
+            error=str(exc),
+        ) from exc
+
+    result = await _advance_managed_start_or_abort()
 
     hero_uuid = None
     for entity in Entity.get_all_entities():
@@ -6371,7 +6452,10 @@ async def start_aoe_test():
     }
 
 
-@app.post("/simulation/start-pvp")
+@app.post(
+    "/simulation/start-pvp",
+    dependencies=[Depends(_serialize_world_replacement)],
+)
 async def start_pvp_simulation(character_class: str = "fighter"):
     """
     Start PvP combat where both entities are human-controlled.
@@ -6385,13 +6469,7 @@ async def start_pvp_simulation(character_class: str = "fighter"):
         character_class: "fighter", "barbarian", or "sorcerer" - the hero's class.
     """
 
-    if sim.combat_task and not sim.combat_task.done():
-        sim.combat_task.cancel()
-        try:
-            await sim.combat_task
-        except asyncio.CancelledError:
-            pass
-
+    await prepare_new_simulation_start()
     sim.encounter = setup_arena_combat(pvp_mode=True, character_class=character_class)
     sim.paused = False
     sim.encounter.clear_combat_log()
@@ -6419,221 +6497,110 @@ async def start_pvp_simulation(character_class: str = "fighter"):
     }
 
 
-@app.get("/pvp/status")
-async def get_pvp_status():
-    """
-    Get PvP game status including session connections and faction info.
-
-    Used by CLIs to check game state and who's connected.
-    """
-    game = sim.game
-
-    current_turn = None
-    is_hero_turn = False
-    is_skeleton_turn = False
-    hero_uuid = None
-    skeleton_uuid = None
-
-    factions: dict = {}
-    for entity in Entity.get_all_entities():
-        if entity.name == "Hero":
-            hero_uuid = entity.uuid
-        elif entity.name == "Skeleton":
-            skeleton_uuid = entity.uuid
-
-        faction_key = entity.faction if entity.faction else "(no faction)"
-        if faction_key not in factions:
-            factions[faction_key] = {"total": 0, "alive": 0}
-        factions[faction_key]["total"] += 1
-        if entity.has_hp:
-            factions[faction_key]["alive"] += 1
-
-    if sim.encounter:
-        current_entity = sim.encounter.get_current_entity()
-        if current_entity:
-            current_turn = current_entity.name
-            is_hero_turn = hero_uuid and current_entity.uuid == hero_uuid
-            is_skeleton_turn = skeleton_uuid and current_entity.uuid == skeleton_uuid
-
-    ACTIVITY_TIMEOUT = 5.0
-
-    human_connected = False
-    codex_connected = False
-
-    if game:
-        for session in game.players.values():
-            if session.player_type == PlayerType.HUMAN:
-                human_connected = session.connection_status == ConnectionStatus.CONNECTED
-            elif session.player_type == PlayerType.CODEX:
-
-                time_since_activity = time.time() - session.last_activity
-                codex_connected = time_since_activity < ACTIVITY_TIMEOUT
-
-    return {
-        "pvp_mode": game is not None,
-        "human_connected": human_connected,
-        "codex_connected": codex_connected,
-        "current_turn": current_turn,
-        "is_hero_turn": is_hero_turn,
-        "is_skeleton_turn": is_skeleton_turn,
-        "hero_uuid": str(hero_uuid) if hero_uuid else None,
-        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None,
-        "factions": factions
-    }
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time event streaming.
-
-    Connect and receive events as JSON messages.
-    Send {"type": "ping"} to check connection.
-    Send {"type": "filter", "event_types": ["attack", "movement"]} to filter events.
-    """
-    await websocket.accept()
-
-    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-    event_monitor.add_listener(queue)
-
-    event_type_filter: Optional[Set[str]] = None
-
-    try:
-
-        await websocket.send_json({
-            "type": "connected",
-            "message": "Connected to D&D Engine Event Server",
-            "event_count": len(EventQueue._all_events)
-        })
-
-        async def receive_commands():
-            nonlocal event_type_filter
-            while True:
-                try:
-                    data = await websocket.receive_json()
-                    msg_type = data.get("type", "")
-
-                    if msg_type == "ping":
-                        await websocket.send_json({"type": "pong"})
-
-                    elif msg_type == "filter":
-
-                        types = data.get("event_types")
-                        if types:
-                            event_type_filter = set(types)
-                            await websocket.send_json({
-                                "type": "filter_set",
-                                "event_types": list(event_type_filter)
-                            })
-                        else:
-                            event_type_filter = None
-                            await websocket.send_json({
-                                "type": "filter_cleared"
-                            })
-
-                    elif msg_type == "get_history":
-
-                        limit = data.get("limit", 50)
-                        events = EventQueue._all_events[-limit:]
-                        for event in events:
-                            event_data = serialize_event(event)
-                            if event_type_filter is None or event_data.get("event_type") in event_type_filter:
-                                await websocket.send_json({
-                                    "type": "event",
-                                    "event": event_data
-                                })
-
-                except WebSocketDisconnect:
-                    break
-                except Exception as e:
-                    print(f"Error receiving command: {e}")
-                    break
-
-        async def send_events():
-            while True:
-                try:
-                    event_data = await queue.get()
-
-                    if event_type_filter is not None:
-                        if event_data.get("event_type") not in event_type_filter:
-                            continue
-
-                    await websocket.send_json({
-                        "type": "event",
-                        "event": event_data
-                    })
-                except Exception as e:
-                    print(f"Error sending event: {e}")
-                    break
-
-        receive_task = asyncio.create_task(receive_commands())
-        send_task = asyncio.create_task(send_events())
-
-        _, pending = await asyncio.wait(
-            [receive_task, send_task],
-            return_when=asyncio.FIRST_COMPLETED
+def kill_process_on_port(port: int) -> bool:
+    """Gracefully stop listeners so they can retire their owned children."""
+    if sys.platform == "win32":
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        pids = {
+            int(parts[-1])
+            for line in result.stdout.splitlines()
+            if f":{port}" in line and "LISTENING" in line
+            for parts in [line.split()]
+            if parts and parts[-1].isdigit()
+        }
+    else:
+        result = subprocess.run(
+            ["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        pids = {
+            int(line)
+            for line in result.stdout.splitlines()
+            if line.strip().isdigit()
+        }
+    if not pids:
+        return False
+    if os.getpid() in pids:
+        raise RuntimeError(
+            f"Refusing to stop the current server process on port {port}"
         )
 
-        for task in pending:
-            task.cancel()
-
-    except WebSocketDisconnect:
-        pass
-    finally:
-        event_monitor.remove_listener(queue)
-        print(f"WebSocket client disconnected. Active listeners: {event_monitor.listener_count}")
-
-
-def kill_process_on_port(port: int) -> bool:
-    """Kill any process using the specified port. Returns True if killed something."""
-    import subprocess
-    import sys
-
-    try:
+    for pid in pids:
         if sys.platform == "win32":
-
-            result = subprocess.run(
-                f"netstat -ano | findstr :{port}",
-                shell=True, capture_output=True, text=True
+            subprocess.run(
+                ["taskkill", "/PID", str(pid)],
+                capture_output=True,
+                text=True,
+                check=False,
             )
-            for line in result.stdout.strip().split('\n'):
-                if line and 'LISTENING' in line:
-                    parts = line.split()
-                    pid = parts[-1]
-                    subprocess.run(f"taskkill /F /PID {pid}", shell=True)
-                    print(f"Killed process {pid} on port {port}")
-                    return True
         else:
+            os.kill(pid, signal.SIGTERM)
 
-            result = subprocess.run(
-                f"lsof -ti:{port}",
-                shell=True, capture_output=True, text=True
-            )
-            if result.stdout.strip():
-                pids = result.stdout.strip().split('\n')
-                for pid in pids:
-                    subprocess.run(f"kill -9 {pid}", shell=True)
-                    print(f"Killed process {pid} on port {port}")
-                return True
-    except Exception as e:
-        print(f"Error killing process: {e}")
-    return False
+    deadline = time.monotonic() + 5.0
+    remaining = set(pids)
+    while remaining and time.monotonic() < deadline:
+        for pid in tuple(remaining):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                remaining.discard(pid)
+            except PermissionError:
+                pass
+        if remaining:
+            time.sleep(0.05)
+    if remaining:
+        raise RuntimeError(
+            "Listener did not shut down gracefully; refusing to orphan owned "
+            f"agent processes for PID(s): {sorted(remaining)}"
+        )
+    print(f"Stopped listener(s) {sorted(pids)} on port {port}")
+    return True
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False):
+class _ManagedAgentUvicornServer(uvicorn.Server):
+    """Signal owned agent clients before waiting on their live SSE requests."""
+
+    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
+        _evict_managed_agent_observation_streams()
+        agent_service_manager.request_stop_all()
+        super().handle_exit(sig, frame)
+
+
+def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False) -> None:
     """Run the event server."""
     if force:
         kill_process_on_port(port)
         time.sleep(0.5)
 
-    uvicorn.run(app, host=host, port=port)
+    config = uvicorn.Config(
+        app=app,
+        host=host,
+        port=port,
+        timeout_graceful_shutdown=2,
+    )
+    try:
+        _ManagedAgentUvicornServer(config).run()
+    except KeyboardInterrupt:
+        pass
 
-if __name__ == "__main__":
-    import argparse
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Parse the shared server CLI and run the currently composed application."""
     parser = argparse.ArgumentParser(description="D&D Engine Event Server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", "-p", type=int, default=8000, help="Port to bind to")
     parser.add_argument("--force", "-f", action="store_true", help="Kill existing process on port")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_server(host=args.host, port=args.port, force=args.force)
+
+
+if __name__ == "__main__":
+    main()

@@ -78,7 +78,7 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
             blocked_directions=WALL_DIRECTIONS,
             blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
-        grid.place_object(wall.uuid, position)
+        wall.place_on_grid(position)
         walls.append(wall)
 
     grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, visible=True, name="Floor")
@@ -89,7 +89,7 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
         blocked_channels=STANDARD_BLOCKING_CHANNELS,
         is_open=False,
     )
-    grid.place_object(door.uuid, DOOR_POSITION)
+    door.place_on_grid(DOOR_POSITION)
 
     return StandardBarrierObjects(door=door, walls=tuple(walls))
 
@@ -134,7 +134,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     healing_potion_uuids = []
     for position in HEALING_POTION_POSITIONS:
         potion = create_healing_potion(uuid4(), heal_amount=10)
-        grid.place_object(potion.uuid, position)
+        potion.place_on_grid(position)
         healing_potion_uuids.append(potion.uuid)
 
     lever_action = PullLeverAction(
@@ -148,7 +148,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         use_action_templates=[lever_action],
         charges=1,
     )
-    grid.place_object(lever.uuid, TRAP_LEVER_POSITION)
+    lever.place_on_grid(TRAP_LEVER_POSITION)
 
     return StandardArenaObjects(
         barrier=barrier,

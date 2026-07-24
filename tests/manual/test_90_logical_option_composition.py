@@ -14,7 +14,7 @@ from ai.planning.registry import (
     registered_policy_method_contracts,
 )
 from ai.planning.regression import regress_options
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ComparisonOperator,
     EffectCertainty,
     EffectOperation,

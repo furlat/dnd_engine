@@ -1,66 +1,31 @@
 from uuid import UUID, uuid4
-from pydantic import ConfigDict, Field, computed_field, BaseModel, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    computed_field,
+    field_serializer,
+    model_serializer,
+    model_validator,
+)
 from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Literal, Set
 
-from enum import Enum
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import BaseHandler, Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.content import ContentKind
-
-
-class HazardFilter(str, Enum):
-    """Pathfinding hazard targeting policy for condition-bearing blocks."""
-
-    ALL = "all"
-    ENEMIES = "enemies"
-    NON_SOURCE = "non_source"
-
-
-class ConditionTag(str, Enum):
-    """Tags used by spell and restoration effects to classify conditions."""
-
-    MAGICAL = "magical"
-    CURSE = "curse"
-    DISEASE = "disease"
-    POISON = "poison"
-    EXHAUSTION = "exhaustion"
-    PETRIFICATION = "petrification"
-    ABILITY_SCORE_REDUCTION = "ability_score_reduction"
-    HIT_POINT_MAXIMUM_REDUCTION = "hit_point_maximum_reduction"
-    CONCENTRATION = "concentration"
-
-
-class ConditionCategory(str, Enum):
-    """Broad condition category used by logs, reducers, and cleanup policy."""
-
-    CONDITION = "condition"
-    STATUS = "status"
-    INTERNAL = "internal"
-
-
-class ConditionRemovalTrigger(str, Enum):
-    """Observable state transition that removes a condition."""
-
-    POSITIVE_DAMAGE_APPLIED = "positive_damage_applied"
-
-
-class ConditionAgencyDenial(str, Enum):
-    """Degree of turn agency denied while a condition remains active."""
-
-    NONE = "none"
-    FULL_TURN = "full_turn"
-
-
-class DurationType(str, Enum):
-    """Supported duration progression modes for conditions."""
-
-    ROUNDS = "rounds"
-    PERMANENT = "permanent"
-    UNTIL_LONG_REST = "until_long_rest"
-    ON_CONDITION = "on_condition"
+from dnd.core.effect_types import EffectOrigin
+from dnd.core.condition_types import (
+    ConditionAgencyDenial,
+    ConditionCategory,
+    ConditionRemovalTrigger,
+    ConditionTag,
+    DurationType,
+    HazardFilter,
+)
 
 
 class OutcomeProtection(BaseModel):
@@ -72,7 +37,13 @@ class OutcomeProtection(BaseModel):
     blocked_effect_ids: frozenset[str] = Field(
         default_factory=frozenset,
         description="Stable effect identities fully blocked by this protection.",
+        json_schema_extra={"uniqueItems": True},
     )
+
+    @field_serializer("blocked_effect_ids", when_used="json")
+    def serialize_blocked_effect_ids(self, value: frozenset[str]) -> List[str]:
+        """Emit protection identities in canonical wire order."""
+        return sorted(value)
 
 
 class Duration(BaseObject):
@@ -190,10 +161,13 @@ class ConditionApplicationEvent(Event):
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition application for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition application for frontend reducers.")
 
+    def get_effect_origin(self) -> Optional[EffectOrigin]:
+        """Return the immutable origin inherited by the applied condition."""
+        return self.condition.effect_origin
+
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition application."""
         cond = self.condition
-        condition_name = cond.name or "Unknown"
 
         if cond.condition_category == ConditionCategory.INTERNAL:
             return None
@@ -201,13 +175,7 @@ class ConditionApplicationEvent(Event):
         target_name = self.target_entity_name or "Unknown"
         source_name = self.source_entity_name or "Unknown"
 
-        if condition_name == "Hidden":
-            stealth_dc = getattr(cond, 'stealth_result', 0)
-            compact = f"{{cyan:{target_name}}} gains **Hidden** (Stealth DC {stealth_dc})"
-        elif condition_name == "Invisible":
-            compact = f"{{cyan:{target_name}}} becomes **invisible**"
-        else:
-            compact = f"{{cyan:{target_name}}} gains **{condition_name}**"
+        compact = cond.format_application_log(target_name)
 
         verbose = compact
         if self.source_entity_uuid != self.target_entity_uuid and source_name != target_name:
@@ -239,6 +207,10 @@ class ConditionRemovalEvent(Event):
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")
 
+    def get_effect_origin(self) -> Optional[EffectOrigin]:
+        """Return the immutable origin owned by the removed condition."""
+        return self.condition.effect_origin
+
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition removal."""
         cond = self.condition
@@ -266,13 +238,20 @@ class ConditionRemovalEvent(Event):
             verbose=verbose,
             detailed=verbose,
             success=True,
-            data={"condition_name": condition_name},
+            data={
+                "condition_name": condition_name,
+                "reveals_target": cond.obscures_perceivability,
+            },
         )
 
 
 class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
 
+    description: str = Field(
+        default="",
+        description="Player-facing rules summary for this condition.",
+    )
     semantic_key: Optional[str] = Field(
         default=None,
         description="Stable rules-content identity; defaults to the condition class identity.",
@@ -281,6 +260,18 @@ class BaseCondition(BaseObject):
         default=ContentKind.CONDITION,
         description="Rules-content family represented by this condition.",
     )
+    effect_origin: Optional[EffectOrigin] = Field(
+        default=None,
+        description="Dependency-neutral provenance inherited from the applying effect.",
+    )
+    obscures_perceivability: bool = Field(
+        default=False,
+        description="Whether removing this condition may reveal its target.",
+    )
+
+    def format_application_log(self, target_name: str) -> str:
+        """Return condition-owned compact presentation for application."""
+        return f"{{cyan:{target_name}}} gains **{self.name or 'Unknown'}**"
 
     def get_semantic_key(self) -> str:
         """Return an explicit key or the stable condition class identity."""
@@ -359,7 +350,7 @@ class BaseCondition(BaseObject):
     )
     tags: Set[ConditionTag] = Field(
         default_factory=set,
-        description="Condition tags such as MAGICAL, CURSE, DISEASE, POISON, EXHAUSTION, PETRIFICATION, ability-score reduction, and hit-point-maximum reduction."
+        description="Condition tags such as MAGICAL, CURSE, DISEASE, POISON, EXHAUSTION, PETRIFICATION, ability-score reduction, and hit-point-maximum reduction.",
     )
     outcome_protections: Tuple[OutcomeProtection, ...] = Field(
         default_factory=tuple,
@@ -378,6 +369,21 @@ class BaseCondition(BaseObject):
         ge=0,
         description="Objective event cursor of the completed application boundary.",
     )
+
+    @model_serializer(mode="wrap", when_used="json")
+    def serialize_unordered_wire_fields(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ):
+        """Sort set-backed fields without replacing concrete subclass schemas."""
+        payload = handler(self)
+        if not isinstance(payload, dict):
+            return payload
+        for field_name in ("tags", "removal_triggers"):
+            values = payload.get(field_name)
+            if isinstance(values, list):
+                payload[field_name] = sorted(values)
+        return payload
 
     def get_action_target_effect_profile(self, action: Any, actor: Any) -> Optional[Any]:
         """Return target-effect metadata this condition adds to an action.
@@ -483,6 +489,8 @@ class BaseCondition(BaseObject):
         """
         if not self.name:
             raise ValueError("Condition name is not set")
+        if self.effect_origin is None and parent_event is not None:
+            self.effect_origin = parent_event.get_effect_origin()
         return ConditionApplicationEvent(
             name=self.name,
             condition=self,
@@ -551,8 +559,8 @@ class BaseCondition(BaseObject):
     def _post_removal_stats(self) -> Dict[str, Any]:
         """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
 
-        Override in conditions that modify AC or max_hp so the frontend reducer
-        can update entity stats without waiting for the next /state resync.
+        Override in conditions that modify AC or max_hp so canonical projection
+        can publish the resulting reducer patch at the same causal boundary.
         Called after `remove_condition_modifiers()` in `cleanup_own_state()`.
 
         Returns:

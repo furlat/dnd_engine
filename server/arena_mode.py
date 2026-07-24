@@ -7,15 +7,9 @@ from uuid import UUID
 
 import httpx
 
-from dnd.controller import Controller
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
-from dnd.core.gridmap import GridMap
-from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
+from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity
+from dnd.runtime_reset import reset_engine_runtime
 from server.event_server import app, sim
 
 
@@ -36,7 +30,7 @@ class ArenaApiClient:
         """Issue a GET request to the arena API.
 
         Args:
-            path: Route path, such as `/state`.
+            path: Route path, such as `/diagnostics/objective/bootstrap`.
             **kwargs: Request options forwarded to HTTPX.
 
         Returns:
@@ -112,21 +106,7 @@ class JoinedHumanArena:
 
 def reset_standard_arena_runtime() -> None:
     """Clear engine and server state for a fresh standard arena scene."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    GridMap.reset()
+    reset_engine_runtime()
     sim.reset()
 
 
@@ -160,9 +140,10 @@ def floor_object_names(client: ArenaApiClient) -> list[str]:
     Returns:
         Object display names currently present on the map floor.
     """
-    response = client.get("/state")
+    response = client.get("/diagnostics/objective/bootstrap")
     response.raise_for_status()
-    return [obj["name"] for obj in response.json()["floor_objects"]]
+    state = response.json()["world"]["state"]
+    return [obj["name"] for obj in state["floor_objects"]]
 
 
 def action_template_names(entity: Entity) -> set[str]:

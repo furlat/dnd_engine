@@ -17,8 +17,8 @@ from ai.policy.contracts import (
     WaitIntent,
 )
 from ai.policy.routines import RoutinePlan, RoutinePlanStatus, RoutinePurpose
-from ai.protocol.control import ActionAffordance, ActionTarget
-from ai.protocol.semantics import ActionSemantics, ActionTag, EffectDisposition
+from server.agent_protocol.control import ActionAffordance, ActionTarget
+from server.agent_protocol.semantics import ActionSemantics, ActionTag, EffectDisposition
 
 
 class AgentCommandType(str, Enum):

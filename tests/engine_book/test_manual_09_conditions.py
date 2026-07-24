@@ -10,8 +10,8 @@ from dnd.core.base_conditions import (
     BaseCondition,
     ConditionApplicationEvent,
     Duration,
-    DurationType,
 )
+from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.modifiers import NumericalModifier

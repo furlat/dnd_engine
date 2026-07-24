@@ -71,14 +71,14 @@ from ai.codex_tools.representation.models import (
     ResolvedRepresentationManifest,
 )
 from ai.codex_tools.representation.predicates import PredicateLedgerSnapshot
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationFrame,
     SubjectiveWorldState,
 )
-from ai.protocol.control import ActionAffordance
-from ai.protocol.semantics import SemanticProvenanceKind
+from server.agent_protocol.control import ActionAffordance
+from server.agent_protocol.semantics import SemanticProvenanceKind
 from ai.subjective.models import AgentState
 
 

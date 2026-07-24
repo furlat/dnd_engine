@@ -7,15 +7,15 @@ from functools import lru_cache
 from typing import Optional, Sequence
 
 from ai.knowledge.models import TargetEffectBlockHypothesis
-from ai.observation.models import ObservationEntityFact
+from server.agent_protocol.observation import ObservationEntityFact
 from ai.policy.contracts import EffectBlockHypothesisEvidence
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionOutcomeProfile,
     DamageRollProfile,
     OutcomeAdvantage,
     OutcomeResolution,
 )
-from ai.protocol.semantics import CapabilityOutcomeAdjustment
+from server.agent_protocol.semantics import CapabilityOutcomeAdjustment
 
 
 DamageDistribution = dict[int, float]

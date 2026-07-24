@@ -1,14 +1,9 @@
 import type {
-  CombatLogPayload,
   DirectoryEventRecord,
   DirectoryStreamHeartbeat,
   DirectoryStreamSync,
   EvictedPayload,
-  GameEventPayload,
-  HeartbeatPayload,
   JsonValue,
-  SessionPingResponse,
-  StreamSyncPayload,
 } from "./generated/contracts.generated.js";
 import { ContractValidationError, decodeModel, parseJson } from "./validation.js";
 
@@ -18,14 +13,6 @@ export interface SseMessage {
   readonly data: JsonValue;
 }
 
-export type ReplicationSseEnvelope =
-  | { readonly event: "sync"; readonly id: string | null; readonly data: StreamSyncPayload }
-  | { readonly event: "game_event"; readonly id: string | null; readonly data: GameEventPayload }
-  | { readonly event: "combat_log"; readonly id: string | null; readonly data: CombatLogPayload }
-  | { readonly event: "heartbeat"; readonly id: string | null; readonly data: HeartbeatPayload }
-  | { readonly event: "session"; readonly id: string | null; readonly data: SessionPingResponse }
-  | { readonly event: "evicted"; readonly id: string | null; readonly data: EvictedPayload };
-
 export type DirectorySseEnvelope =
   | { readonly event: "sync"; readonly id: string | null; readonly data: DirectoryStreamSync }
   | { readonly event: "directory_event"; readonly id: string | null; readonly data: DirectoryEventRecord }
@@ -34,30 +21,41 @@ export type DirectorySseEnvelope =
 
 export class SseDecoder {
   private buffer = "";
+  private pendingCarriageReturn = false;
   private eventName = "message";
   private eventId: string | null = null;
   private dataLines: string[] = [];
 
   feed(chunk: string): SseMessage[] {
-    this.buffer += chunk.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    this.buffer += this.normalizeChunk(chunk);
+    return this.drainCompleteLines();
+  }
+
+  private drainCompleteLines(): SseMessage[] {
     const messages: SseMessage[] = [];
+    let start = 0;
     while (true) {
-      const newline = this.buffer.indexOf("\n");
+      const newline = this.buffer.indexOf("\n", start);
       if (newline < 0) {
         break;
       }
-      const line = this.buffer.slice(0, newline);
-      this.buffer = this.buffer.slice(newline + 1);
+      const line = this.buffer.slice(start, newline);
+      start = newline + 1;
       const message = this.consumeLine(line);
       if (message !== null) {
         messages.push(message);
       }
     }
+    this.buffer = this.buffer.slice(start);
     return messages;
   }
 
   finish(): SseMessage[] {
-    const messages: SseMessage[] = [];
+    if (this.pendingCarriageReturn) {
+      this.buffer += "\n";
+      this.pendingCarriageReturn = false;
+    }
+    const messages = this.drainCompleteLines();
     if (this.buffer.length > 0) {
       const message = this.consumeLine(this.buffer);
       this.buffer = "";
@@ -70,6 +68,21 @@ export class SseDecoder {
       messages.push(finalMessage);
     }
     return messages;
+  }
+
+  private normalizeChunk(chunk: string): string {
+    let value = chunk;
+    let prefix = "";
+    if (this.pendingCarriageReturn) {
+      prefix = "\n";
+      this.pendingCarriageReturn = false;
+      if (value.startsWith("\n")) value = value.slice(1);
+    }
+    if (value.endsWith("\r")) {
+      value = value.slice(0, -1);
+      this.pendingCarriageReturn = true;
+    }
+    return prefix + value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
   }
 
   private consumeLine(line: string): SseMessage | null {
@@ -115,25 +128,6 @@ export class SseDecoder {
     this.eventName = "message";
     this.eventId = null;
     this.dataLines = [];
-  }
-}
-
-export function decodeReplicationEnvelope(message: SseMessage): ReplicationSseEnvelope {
-  switch (message.event) {
-    case "sync":
-      return { event: "sync", id: message.id, data: decodeModel("StreamSyncPayload", message.data) };
-    case "game_event":
-      return { event: "game_event", id: message.id, data: decodeModel("GameEventPayload", message.data) };
-    case "combat_log":
-      return { event: "combat_log", id: message.id, data: decodeModel("CombatLogPayload", message.data) };
-    case "heartbeat":
-      return { event: "heartbeat", id: message.id, data: decodeModel("HeartbeatPayload", message.data) };
-    case "session":
-      return { event: "session", id: message.id, data: decodeModel("SessionPingResponse", message.data) };
-    case "evicted":
-      return { event: "evicted", id: message.id, data: decodeModel("EvictedPayload", message.data) };
-    default:
-      throw new ContractValidationError("$sse.event", `unsupported event ${message.event}`);
   }
 }
 

@@ -140,23 +140,67 @@ def test_static_compatibility_reports_missing_capabilities_without_silent_skip()
     assert [issue.code for issue in report.issues if issue.severity == "hard"] == ["missing_capability"]
 
 
-def test_one_seed_neutral_schedule_has_all_9180_matches_and_zero_exclusions() -> None:
+def test_one_seed_neutral_schedule_covers_every_eligible_catalog_cell() -> None:
+    eligible_heroes = tuple(row for row in HERO_CONFIGURATIONS if row.rating_eligible)
+    eligible_monsters = tuple(
+        row for row in MONSTER_PARTY_CONFIGURATIONS if row.rating_eligible
+    )
+    portable_battlefields = tuple(row for row in BATTLEFIELDS if row.portable)
+    deployment_by_id = {row.deployment_id: row for row in DEPLOYMENTS}
+    eligible_contexts = {
+        (battlefield.battlefield_id, deployment_id)
+        for battlefield in portable_battlefields
+        for deployment_id in battlefield.deployment_ids
+        if deployment_by_id[deployment_id].portable
+        and deployment_by_id[deployment_id].rating_eligible
+    }
+    seed = 20260717
     schedule = build_connected_schedule(
-        heroes=HERO_CONFIGURATIONS,
-        monster_parties=MONSTER_PARTY_CONFIGURATIONS,
-        battlefields=BATTLEFIELDS,
+        heroes=eligible_heroes,
+        monster_parties=eligible_monsters,
+        battlefields=portable_battlefields,
         deployments=DEPLOYMENTS,
-        seeds=(20260717,),
+        seeds=(seed,),
         experiment_id="one-seed-neutral-baseline",
         created_at="2026-07-17T00:00:00+00:00",
     )
 
-    assert len(schedule.entries) == 15 * 34 * 9 * 2 == 9180
+    expected_cells = {
+        (
+            hero.configuration_id,
+            monsters.configuration_id,
+            battlefield_id,
+            deployment_id,
+            seed,
+        )
+        for hero in eligible_heroes
+        for monsters in eligible_monsters
+        for battlefield_id, deployment_id in eligible_contexts
+    }
+    openings_by_cell: dict[tuple[str, str, str, str, int], set[str]] = {}
+    for row in schedule.entries:
+        cell = (
+            row.hero_configuration_id,
+            row.monster_configuration_id,
+            row.battlefield_id,
+            row.deployment_id,
+            row.simulation_seed,
+        )
+        openings_by_cell.setdefault(cell, set()).add(row.opening_treatment)
+
     assert schedule.exclusions == ()
-    assert set(Counter(row.hero_configuration_id for row in schedule.entries).values()) == {612}
-    assert set(Counter(row.monster_configuration_id for row in schedule.entries).values()) == {270}
-    assert {row.battlefield_id for row in schedule.entries} == {
-        row.battlefield_id for row in BATTLEFIELDS
+    assert set(openings_by_cell) == expected_cells
+    assert set(map(frozenset, openings_by_cell.values())) == {
+        frozenset({"hero_first", "monster_first"})
+    }
+    assert len(schedule.entries) == len(expected_cells) * 2
+    assert Counter(row.hero_configuration_id for row in schedule.entries) == {
+        hero.configuration_id: len(eligible_monsters) * len(eligible_contexts) * 2
+        for hero in eligible_heroes
+    }
+    assert Counter(row.monster_configuration_id for row in schedule.entries) == {
+        monsters.configuration_id: len(eligible_heroes) * len(eligible_contexts) * 2
+        for monsters in eligible_monsters
     }
 
 

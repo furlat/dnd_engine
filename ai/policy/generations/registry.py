@@ -58,7 +58,7 @@ _CURRENT_BEHAVIOR_PATHS = tuple(
         "ai/policy/utility.py",
     )
 )
-EXPECTED_V31_BEHAVIOR_SHA256 = "db506b7ed271dae4b47540d7ec0dc2cffdc1d070dec6c7639b16ce690075073a"
+EXPECTED_V31_BEHAVIOR_SHA256 = "ab39b8c9a64ba37decd54f5a8e89af67eee4681de83377d199e56bea8f875cc6"
 
 
 def _build_registry() -> dict[str, PolicyImplementation]:

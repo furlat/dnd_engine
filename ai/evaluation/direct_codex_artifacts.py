@@ -17,15 +17,15 @@ from ai.validation_harness import (
     ValidationScheduleEntry,
     ValidationStartResult,
 )
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     ObservationFramesResponse,
     ObservationSnapshot,
 )
-from ai.observation.legacy_semantics import (
+from server.agent_protocol.observation_legacy import (
     migrate_legacy_frame_semantics as _migrate_legacy_frame_semantics,
     migrate_legacy_snapshot_semantics as _migrate_legacy_snapshot_semantics,
 )
-from ai.subjective.models import AgentEventHistoryResponse
+from server.agent_protocol.telemetry import AgentEventHistoryResponse
 
 
 class DirectCodexFrictionCategory(str, Enum):
