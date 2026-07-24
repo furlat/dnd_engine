@@ -8,6 +8,7 @@ import random
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     AttackD20RollResultEvent,
     D20RollResultEvent,
@@ -23,7 +24,6 @@ from dnd.core.events import (
     SavingThrowD20RollResultEvent,
     SkillCheckD20RollResultEvent,
     Trigger,
-    WeaponSlot,
 )
 from dnd.actions import Attack
 from dnd.blocks.health import HealthConfig, HitDiceConfig

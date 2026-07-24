@@ -8,13 +8,15 @@ from dnd.core.base_tiles import Tile
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
 
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, HazardFilter, SpellProtectionRegistry
-from dnd.core.base_object import BaseObject
+from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
+from dnd.core.condition_types import ConditionCategory, HazardFilter
+from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import Event, EventPhase, EventType, EventHandler, EventQueue, SpatialChangeEvent, SensesUpdateHint
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import Sphere, Cone, Line, Cube, Cylinder
+from dnd.entity import Entity
 
 
 def parse_dice_string(dice_str: str) -> Tuple[int, int]:
@@ -158,26 +160,14 @@ class ZoneControlCondition(BaseCondition):
         """Create a normal event handler for turn starts inside the zone."""
         raise NotImplementedError("Subclass must implement _create_zone_turn_start_handler")
 
-    def _find_source_spell_level(self, event: Optional[Event]) -> Optional[int]:
-        """Walk parent_event chain to find the originating SpellEvent's base level.
-
-        Returns the spell_level (base, not upcast) or None if no SpellEvent found.
-        """
-        from dnd.actions import SpellEvent
-        current_uuid = event.uuid if event else None
-        visited = 0
-        while current_uuid and visited < 20:
-            obj = BaseObject.get(current_uuid)
-            if obj is None:
-                break
-            if isinstance(obj, SpellEvent):
-                return obj.spell_level
-            if isinstance(obj, Event):
-                current_uuid = obj.parent_event
-            else:
-                break
-            visited += 1
-        return None
+    def _protection_spell_level(self) -> Optional[int]:
+        """Return the explicit base spell level used by globe protection."""
+        if (
+            self.effect_origin is None
+            or self.effect_origin.kind is not EffectOriginKind.SPELL
+        ):
+            return None
+        return self.effect_origin.base_spell_level
 
     @staticmethod
     def _wrap_processor_with_protection(
@@ -190,8 +180,6 @@ class ZoneControlCondition(BaseCondition):
         At fire time, checks if the target entity's position is protected by a
         globe-like effect. If protected, skips the effect (returns None).
         """
-        from dnd.entity import Entity
-
         def wrapped(event: Event, src_uuid: UUID) -> Optional[Event]:
             if event.target_entity_uuid:
                 target = Entity.get(event.target_entity_uuid)
@@ -245,8 +233,14 @@ class ZoneControlCondition(BaseCondition):
         shape.compute_objective(self.zone_center)
         return set(shape.affected_positions)
 
-    def _apply_terrain_modifiers(self) -> List[Tuple[UUID, UUID]]:
+    def _apply_terrain_modifiers(
+        self,
+        positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> List[Tuple[UUID, UUID]]:
         """Apply difficult terrain modifiers to affected tiles.
+
+        Args:
+            positions: Optional position subset. Defaults to the whole zone.
 
         Returns:
             List of (value_uuid, modifier_uuid) pairs for tracking in modifers_uuids.
@@ -257,7 +251,10 @@ class ZoneControlCondition(BaseCondition):
 
         grid = get_map()
         modified_positions: List[Tuple[int, int]] = []
-        for pos in self.affected_positions:
+        target_positions = (
+            positions if positions is not None else self.affected_positions
+        )
+        for pos in target_positions:
             tile = grid.get_tile(*pos)
             if tile:
                 mod = NumericalModifier.create(
@@ -271,6 +268,7 @@ class ZoneControlCondition(BaseCondition):
                 modified_positions.append(pos)
 
         if modified_positions:
+            grid.invalidate_spatial_caches({"movement"})
             hint = SensesUpdateHint(requires_paths=True)
             representative_pos = modified_positions[0]
             tile = grid.get_tile(*representative_pos)
@@ -284,31 +282,81 @@ class ZoneControlCondition(BaseCondition):
 
         return outs
 
-    def _remove_terrain_modifiers(self) -> None:
-        """Remove terrain modifiers before zone move or removal."""
-        had_modifiers = bool(self._terrain_modifier_uuids)
-        for value_uuid, mod_uuids in self._terrain_modifier_uuids.items():
+    def _remove_terrain_modifiers_from_positions(
+        self,
+        positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> bool:
+        """Remove terrain modifiers through one batched invalidation path.
+
+        Args:
+            positions: Position subset to remove. ``None`` removes every
+                modifier still owned by this zone.
+
+        Returns:
+            True when at least one owned modifier was removed.
+        """
+        grid = get_map()
+        representative_positions = (
+            set(self.affected_positions) if positions is None else positions
+        )
+        owned_modifiers: List[Tuple[UUID, List[UUID]]]
+        if positions is None:
+            owned_modifiers = list(self._terrain_modifier_uuids.items())
+            self._terrain_modifier_uuids.clear()
+        else:
+            owned_modifiers = []
+            for position in positions:
+                tile = grid.get_tile(*position)
+                if tile is None:
+                    continue
+                value_uuid = tile.walking_cost.uuid
+                modifier_uuids = self._terrain_modifier_uuids.pop(
+                    value_uuid,
+                    [],
+                )
+                if modifier_uuids:
+                    owned_modifiers.append((value_uuid, modifier_uuids))
+
+        removed_any = bool(owned_modifiers)
+        for value_uuid, modifier_uuids in owned_modifiers:
             value = ModifiableValue.get(value_uuid)
             if value is not None:
-                for mod_uuid in mod_uuids:
+                for modifier_uuid in modifier_uuids:
                     try:
-                        value.self_static.remove_modifier(mod_uuid)
+                        value.remove_modifier(modifier_uuid)
                     except (ValueError, KeyError):
-                        pass
-        self._terrain_modifier_uuids.clear()
+                        continue
+            tracked_modifiers = self.modifers_uuids.get(value_uuid)
+            if tracked_modifiers is not None:
+                self.modifers_uuids[value_uuid] = [
+                    modifier_uuid
+                    for modifier_uuid in tracked_modifiers
+                    if modifier_uuid not in modifier_uuids
+                ]
+                if not self.modifers_uuids[value_uuid]:
+                    del self.modifers_uuids[value_uuid]
 
-        if had_modifiers and self.affected_positions:
-            hint = SensesUpdateHint(requires_paths=True)
-            representative_pos = next(iter(self.affected_positions))
-            grid = get_map()
-            tile = grid.get_tile(*representative_pos)
-            if tile:
+        if not removed_any:
+            return False
+        grid.invalidate_spatial_caches({"movement"})
+        hint = SensesUpdateHint(requires_paths=True)
+        representative_position = next(iter(representative_positions), None)
+        if representative_position is not None:
+            tile = grid.get_tile(*representative_position)
+            if tile is not None:
                 event = SpatialChangeEvent.tile_changed(
-                    representative_pos, walkable=True, visible=True,
+                    representative_position,
+                    walkable=True,
+                    visible=True,
                     senses_hint=hint,
                 )
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
+        return True
+
+    def _remove_terrain_modifiers(self) -> None:
+        """Remove every terrain modifier through the batched primitive."""
+        self._remove_terrain_modifiers_from_positions()
 
     def _remove_terrain_modifier_at(self, position: Tuple[int, int]) -> bool:
         """Remove this zone's difficult-terrain modifier from one tile.
@@ -319,50 +367,29 @@ class ZoneControlCondition(BaseCondition):
         Returns:
             True if a modifier was removed from the tile.
         """
-        grid = get_map()
-        tile = grid.get_tile(*position)
-        if tile is None:
-            return False
+        return self._remove_terrain_modifiers_from_positions({position})
 
-        value_uuid = tile.walking_cost.uuid
-        mod_uuids = self._terrain_modifier_uuids.pop(value_uuid, [])
-        if not mod_uuids:
-            return False
-
-        value = ModifiableValue.get(value_uuid)
-        if value is not None:
-            for mod_uuid in mod_uuids:
-                value.remove_modifier(mod_uuid)
-
-        tracked_modifiers = self.modifers_uuids.get(value_uuid)
-        if tracked_modifiers is not None:
-            for mod_uuid in mod_uuids:
-                if mod_uuid in tracked_modifiers:
-                    tracked_modifiers.remove(mod_uuid)
-            if not tracked_modifiers:
-                del self.modifers_uuids[value_uuid]
-
-        hint = SensesUpdateHint(requires_paths=True)
-        event = SpatialChangeEvent.tile_changed(
-            position, walkable=True, visible=True,
-            senses_hint=hint,
-        )
-        event = event.phase_to(EventPhase.COMPLETION)
-        EventQueue.register(event)
-        return True
-
-    def _apply_tile_markers(self, parent_event: Optional[Event] = None) -> None:
+    def _apply_tile_markers(
+        self,
+        parent_event: Optional[Event] = None,
+        positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> None:
         """Apply linked `ZoneMarkerCondition` records to affected tiles."""
         if self.marker_name is None:
             return
 
         grid = get_map()
-        for pos in self.affected_positions:
+        target_positions = (
+            positions if positions is not None else self.affected_positions
+        )
+        for pos in target_positions:
             tile = grid.get_tile(*pos)
             if tile is None:
                 continue
             marker = ZoneMarkerCondition(
                 name=self.marker_name,
+                description=self.description,
+                semantic_key=f"{self.get_semantic_key()}.tile",
                 hazard_filter=self.marker_hazard_filter,
                 condition_stealth_dc=self.marker_stealth_dc,
                 source_entity_uuid=self.source_entity_uuid,
@@ -372,9 +399,9 @@ class ZoneControlCondition(BaseCondition):
             tile.add_condition(marker, event=parent_event)
             self.add_linked_condition(tile.uuid, marker.uuid)
 
-        if self.affected_positions and self.marker_hazard_filter is not None:
+        if target_positions and self.marker_hazard_filter is not None:
             hint = SensesUpdateHint(requires_paths=True)
-            representative_pos = next(iter(self.affected_positions))
+            representative_pos = next(iter(target_positions))
             tile = grid.get_tile(*representative_pos)
             if tile:
                 event = SpatialChangeEvent.tile_changed(
@@ -384,7 +411,10 @@ class ZoneControlCondition(BaseCondition):
                 event = event.phase_to(EventPhase.COMPLETION)
                 EventQueue.register(event)
 
-    def _apply_light_modifiers(self) -> None:
+    def _apply_light_modifiers(
+        self,
+        positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> None:
         """Apply light level modifiers to affected tiles.
 
         Uses fire_event=False per tile + batch event after, same pattern
@@ -396,7 +426,10 @@ class ZoneControlCondition(BaseCondition):
         grid = get_map()
         changed_positions: List[Tuple[int, int]] = []
         requires_fov = False
-        for pos in self.affected_positions:
+        target_positions = (
+            positions if positions is not None else self.affected_positions
+        )
+        for pos in target_positions:
             tile = grid.get_tile(*pos)
             if tile:
                 modifier_uuid = uuid4()
@@ -416,28 +449,52 @@ class ZoneControlCondition(BaseCondition):
 
         grid._fire_light_batch_events(changed_positions, requires_fov=requires_fov)
 
-    def _remove_light_modifiers(self) -> None:
-        """Remove light level modifiers from affected tiles.
+    def _remove_light_modifiers_from_positions(
+        self,
+        positions: Optional[Set[Tuple[int, int]]] = None,
+    ) -> bool:
+        """Remove light modifiers through one batched event path.
 
-        Uses fire_event=False per tile + batch event after.
+        Args:
+            positions: Position subset to remove. ``None`` removes every
+                modifier still owned by this zone.
+
+        Returns:
+            True when at least one tile's resolved light state changed.
         """
         grid = get_map()
         changed_positions: List[Tuple[int, int]] = []
         requires_fov = False
-        for pos, modifier_uuid in self._light_modifier_uuids.items():
-            tile = grid.get_tile(*pos)
-            if tile:
-                old_light_level = tile.resolved_light_level
-                if tile.remove_light_modifier(modifier_uuid, fire_event=False):
-                    changed_positions.append(pos)
-                    if (
-                        old_light_level == LightLevel.MAGICAL_DARKNESS
-                        or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-                    ):
-                        requires_fov = True
-        self._light_modifier_uuids.clear()
+        target_positions = (
+            set(self._light_modifier_uuids)
+            if positions is None
+            else positions
+        )
+        for position in target_positions:
+            modifier_uuid = self._light_modifier_uuids.pop(position, None)
+            if modifier_uuid is None:
+                continue
+            tile = grid.get_tile(*position)
+            if tile is None:
+                continue
+            old_light_level = tile.resolved_light_level
+            if tile.remove_light_modifier(modifier_uuid, fire_event=False):
+                changed_positions.append(position)
+                if (
+                    old_light_level == LightLevel.MAGICAL_DARKNESS
+                    or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+                ):
+                    requires_fov = True
 
-        grid._fire_light_batch_events(changed_positions, requires_fov=requires_fov)
+        grid._fire_light_batch_events(
+            changed_positions,
+            requires_fov=requires_fov,
+        )
+        return bool(changed_positions)
+
+    def _remove_light_modifiers(self) -> None:
+        """Remove every light modifier through the batched primitive."""
+        self._remove_light_modifiers_from_positions()
 
     def _remove_light_modifier_at(self, position: Tuple[int, int]) -> bool:
         """Remove this zone's light or obscurement modifier from one tile.
@@ -448,24 +505,7 @@ class ZoneControlCondition(BaseCondition):
         Returns:
             True if a tile light state changed.
         """
-        modifier_uuid = self._light_modifier_uuids.pop(position, None)
-        if modifier_uuid is None:
-            return False
-
-        grid = get_map()
-        tile = grid.get_tile(*position)
-        if tile is None:
-            return False
-
-        old_light_level = tile.resolved_light_level
-        changed = tile.remove_light_modifier(modifier_uuid, fire_event=False)
-        requires_fov = (
-            old_light_level == LightLevel.MAGICAL_DARKNESS
-            or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-        )
-        if changed:
-            grid._fire_light_batch_events([position], requires_fov=requires_fov)
-        return changed
+        return self._remove_light_modifiers_from_positions({position})
 
     def _remove_tile_marker_at(
         self,
@@ -550,14 +590,12 @@ class ZoneControlCondition(BaseCondition):
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply zone control by computing positions and registering handlers."""
-        from dnd.entity import Entity
-
         handler_uuids: List[UUID] = []
         spatial_handler_uuids: List[UUID] = []
 
         self.affected_positions = self._compute_affected_positions()
 
-        spell_level = self._find_source_spell_level(declaration_event)
+        spell_level = self._protection_spell_level()
         if spell_level is not None and self.magical_origin:
             source = Entity.get(self.source_entity_uuid)
             if source:
@@ -631,21 +669,26 @@ class ZoneControlCondition(BaseCondition):
         return super()._remove(event)
 
     def move_zone(self, new_center: Tuple[int, int]) -> bool:
-        """Move the zone to a new position using efficient batch update.
+        """Move every zone-owned spatial fact using one position delta.
 
         This method:
-        1. Removes terrain modifiers from old positions
-        2. Computes new affected positions
-        3. Uses batch position update for handlers (O(delta) not O(total))
-        4. Applies terrain modifiers to new positions
+        1. Computes removed, retained, and added positions
+        2. Removes terrain, light, and marker facts only from removed cells
+        3. Updates shared spatial handler indices once
+        4. Applies terrain, light, and marker facts only to added cells
 
         Returns True on success.
         """
-        self._remove_terrain_modifiers()
-        self._remove_light_modifiers()
-
+        old_positions = set(self.affected_positions)
         self.zone_center = new_center
         new_positions = self._compute_affected_positions()
+        removed_positions = old_positions - new_positions
+        added_positions = new_positions - old_positions
+
+        self._remove_terrain_modifiers_from_positions(removed_positions)
+        self._remove_light_modifiers_from_positions(removed_positions)
+        for position in removed_positions:
+            self._remove_tile_marker_at(position)
 
         if self._entry_handler_uuid:
             EventQueue.update_spatial_handler_positions(
@@ -665,8 +708,9 @@ class ZoneControlCondition(BaseCondition):
 
         self.affected_positions = new_positions
 
-        self._apply_terrain_modifiers()
-        self._apply_light_modifiers()
+        self._apply_terrain_modifiers(added_positions)
+        self._apply_light_modifiers(added_positions)
+        self._apply_tile_markers(positions=added_positions)
 
         return True
 

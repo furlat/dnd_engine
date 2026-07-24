@@ -3,8 +3,9 @@ import test from "node:test";
 
 import { DndEngineClient } from "../client.js";
 import { GameDirectoryClient } from "../directoryClient.js";
+import { SubjectiveReplicationClient } from "../subjectiveClient.js";
+import { ContractValidationError } from "../validation.js";
 import { bootstrap } from "./fixtures.js";
-import { stepEvent } from "./fixtures.js";
 
 test("server capability probe distinguishes hosted and standalone topology", async () => {
   const urls: string[] = [];
@@ -53,7 +54,48 @@ test("standalone status uses the typed single-game directory route", async () =>
   assert.deepEqual(urls, ["/api/game/status"]);
 });
 
-test("game-scoped engine client prefixes routes and sends runtime authority", async () => {
+test("controlled affordance reads carry the session in an encoded query", async () => {
+  const urls: string[] = [];
+  const fetchImplementation: typeof fetch = async (input) => {
+    const url = String(input);
+    urls.push(url);
+    const payload = url.includes("/available-actions?")
+      ? {
+        entity_uuid: "entity/a",
+        entity_actions: [],
+        position_actions: [],
+        self_actions: [],
+        object_actions: [],
+        remaining_movement: 0,
+        handler_details: [],
+        actions_remaining: 0,
+        bonus_actions_remaining: 0,
+        reactions_remaining: 0,
+        extra_attacks_remaining: 0,
+        spell_slots: {},
+        resources: {},
+      }
+      : url.includes("/equippable-items?")
+        ? { entity_uuid: "entity/a", equippable: {} }
+        : { entity_uuid: "entity/a", handlers: [] };
+    return new Response(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const client = new DndEngineClient("/api", { fetchImplementation });
+
+  await client.getAvailableActions("entity/a", "session/a b");
+  await client.getEquippableItems("entity/a", "session/a b");
+  await client.getEntityHandlers("entity/a", "session/a b");
+
+  assert.deepEqual(urls, [
+    "/api/entity/entity%2Fa/available-actions?session_id=session%2Fa+b",
+    "/api/entity/entity%2Fa/equippable-items?session_id=session%2Fa+b",
+    "/api/entity/entity%2Fa/handlers?session_id=session%2Fa+b",
+  ]);
+});
+
+test("game-scoped subjective client uses the one unversioned bootstrap route", async () => {
   const requests: Array<{ url: string; authorization: string | null }> = [];
   const fetchImplementation: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
@@ -66,7 +108,7 @@ test("game-scoped engine client prefixes routes and sends runtime authority", as
       headers: { "Content-Type": "application/json" },
     });
   };
-  const client = new DndEngineClient("/api/games/game-a/runtime/", {
+  const client = new SubjectiveReplicationClient("/api/games/game-a/runtime/", {
     fetchImplementation,
     headers: { Authorization: "Bearer runtime-secret" },
   });
@@ -79,73 +121,124 @@ test("game-scoped engine client prefixes routes and sends runtime authority", as
   }]);
 });
 
-test("game event history requests an exact typed transcript window", async () => {
+test("subjective frames require all three hot identities", async () => {
   const urls: string[] = [];
-  const frame = stepEvent(7, [5, 0], [6, 0]);
   const fetchImplementation: typeof fetch = async (input) => {
     urls.push(String(input));
     return new Response(JSON.stringify({
-      generation_id: frame.generation_id,
-      from_cursor: 0,
-      through_cursor: 7,
-      frames: [frame],
-      total: 9,
+      source_stream_id: "stream-a",
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-a",
+      retained_from_observation_cursor: 0,
+      from_watermarks: { source_event_cursor: 0, observation_cursor: 0, presentation_cursor: 0, combat_log_cursor: 0 },
+      through_watermarks: { source_event_cursor: 0, observation_cursor: 0, presentation_cursor: 0, combat_log_cursor: 0 },
+      captured_watermarks: { source_event_cursor: 0, observation_cursor: 0, presentation_cursor: 0, combat_log_cursor: 0 },
+      frames: [],
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   };
-  const client = new DndEngineClient("/api", { fetchImplementation });
+  const client = new SubjectiveReplicationClient("/api", { fetchImplementation });
 
-  const history = await client.getGameEventHistory({
-    fromCursor: 0,
-    throughCursor: 7,
-    phase: "completion",
+  const history = await client.frames("session-a", {
+    sourceStreamId: "stream-a",
+    generationId: "generation-a",
+    perspectiveEpochId: "perspective-a",
+    fromObservationCursor: 0,
   });
 
-  assert.equal(history.frames[0]?.event_cursor, 7);
+  assert.equal(history.through_watermarks.observation_cursor, 0);
   assert.deepEqual(urls, [
-    "/api/events/history?from_cursor=0&through_cursor=7&phase=completion",
+    "/api/replication/frames?session_id=session-a&expected_source_stream_id=stream-a&expected_generation_id=generation-a&expected_perspective_epoch_id=perspective-a&from_observation_cursor=0",
   ]);
 });
 
-test("raw event history remains a typed rolling-worker compatibility surface", async () => {
+test("subjective combat-log history uses an exact cursor window", async () => {
   const urls: string[] = [];
-  const frame = stepEvent(1, [0, 0], [1, 0]);
   const fetchImplementation: typeof fetch = async (input) => {
     urls.push(String(input));
     return new Response(JSON.stringify({
-      generation_id: frame.generation_id,
-      events: [frame.event],
-      count: 1,
-      total: 1,
+      source_stream_id: "stream-a",
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-a",
+      projection: "subjective",
+      retained_from_cursor: 0,
+      from_cursor: 3,
+      through_cursor: 3,
+      frames: [],
+      total: 3,
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   };
-  const client = new DndEngineClient("/api", { fetchImplementation });
+  const client = new SubjectiveReplicationClient("/api", { fetchImplementation });
 
-  const history = await client.getEventHistory({ since: 0, limit: 0 });
+  const history = await client.combatLog("session-a", {
+    sourceStreamId: "stream-a",
+    generationId: "generation-a",
+    perspectiveEpochId: "perspective-a",
+    fromCombatLogCursor: 3,
+  });
 
-  assert.equal(history.events.length, 1);
-  assert.deepEqual(urls, ["/api/events?since=0&limit=0"]);
+  assert.equal(history.through_cursor, 3);
+  assert.deepEqual(urls, [
+    "/api/replication/combat-log?session_id=session-a&expected_source_stream_id=stream-a&expected_generation_id=generation-a&expected_perspective_epoch_id=perspective-a&from_combat_log_cursor=3",
+  ]);
 });
 
-test("legacy fetch constructor remains supported", async () => {
-  const urls: string[] = [];
+test("subjective REST pages must start at the exact requested cursor", async () => {
   const fetchImplementation: typeof fetch = async (input) => {
-    urls.push(String(input));
-    return new Response(JSON.stringify(bootstrap()), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    const url = String(input);
+    if (url.includes("/replication/frames?")) {
+      return new Response(JSON.stringify({
+        source_stream_id: "stream-a",
+        generation_id: "generation-a",
+        perspective_epoch_id: "perspective-a",
+        retained_from_observation_cursor: 0,
+        from_watermarks: { source_event_cursor: 1, observation_cursor: 1, presentation_cursor: 1, combat_log_cursor: 0 },
+        through_watermarks: { source_event_cursor: 1, observation_cursor: 1, presentation_cursor: 1, combat_log_cursor: 0 },
+        captured_watermarks: { source_event_cursor: 1, observation_cursor: 1, presentation_cursor: 1, combat_log_cursor: 0 },
+        frames: [],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
+      source_stream_id: "stream-a",
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-a",
+      projection: "subjective",
+      retained_from_cursor: 0,
+      from_cursor: 2,
+      through_cursor: 2,
+      frames: [],
+      total: 2,
+    }), { headers: { "Content-Type": "application/json" } });
   };
-  const client = new DndEngineClient("/api", fetchImplementation);
+  const client = new SubjectiveReplicationClient("/api", { fetchImplementation });
+  const identity = {
+    sourceStreamId: "stream-a",
+    generationId: "generation-a",
+    perspectiveEpochId: "perspective-a",
+  } as const;
 
-  await client.bootstrap();
+  await assert.rejects(
+    () => client.frames("session-a", { ...identity, fromObservationCursor: 0 }),
+    ContractValidationError,
+  );
+  await assert.rejects(
+    () => client.combatLog("session-a", { ...identity, fromCombatLogCursor: 3 }),
+    ContractValidationError,
+  );
+});
 
-  assert.deepEqual(urls, ["/api/replication/bootstrap"]);
+test("general engine client has no player or legacy objective replication methods", () => {
+  const client = new DndEngineClient("/api");
+  assert.equal("bootstrap" in client, false);
+  assert.equal("getState" in client, false);
+  assert.equal("getVisibility" in client, false);
+  assert.equal("getEquipment" in client, false);
+  assert.equal("getItem" in client, false);
 });
 
 test("terminal summary uses the typed worker evidence route", async () => {
@@ -335,6 +428,63 @@ test("directory lifecycle stream is typed, resumable, and capability-scoped", as
   }]);
 });
 
+test("directory event iteration cancels and unlocks the response body on early exit", async () => {
+  let cancellations = 0;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(directoryEventStreamBody()));
+    },
+    cancel() {
+      cancellations += 1;
+    },
+  });
+  const directory = new GameDirectoryClient("/gateway-api", {
+    fetchImplementation: async () => new Response(body, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  });
+
+  for await (const envelope of directory.events(0)) {
+    assert.equal(envelope.event, "directory_event");
+    break;
+  }
+
+  assert.equal(cancellations, 1);
+  assert.equal(body.locked, false);
+});
+
+test("directory follower propagates consumer TypeErrors without retrying transport", async () => {
+  for (const callback of ["connection", "envelope"] as const) {
+    const failure = new TypeError(`${callback} callback failed`);
+    let requests = 0;
+    const directory = new GameDirectoryClient("/gateway-api", {
+      fetchImplementation: async () => {
+        requests += 1;
+        return new Response(directoryEventStreamBody(), {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    });
+
+    await assert.rejects(
+      () => directory.followGames({
+        initialReconnectDelayMs: 0,
+        maximumReconnectDelayMs: 0,
+        onConnectionState: async (state) => {
+          if (callback === "connection" && state === "connected") throw failure;
+        },
+        onEnvelope: async () => {
+          if (callback === "envelope") throw failure;
+        },
+      }),
+      (error: unknown) => error === failure,
+    );
+    assert.equal(requests, 1);
+  }
+});
+
 test("directory follower stops cleanly after the caller aborts", async () => {
   const streamBody = [
     "id: 1",
@@ -371,3 +521,21 @@ test("directory follower stops cleanly after the caller aborts", async () => {
 
   assert.deepEqual(seen, ["directory_event"]);
 });
+
+function directoryEventStreamBody(): string {
+  return [
+    "id: 1",
+    "event: directory_event",
+    "data: " + JSON.stringify({
+      cursor: 1,
+      event_id: "00000000-0000-0000-0000-000000000001",
+      game_id: null,
+      event_type: "principal_created",
+      payload: {},
+      payload_digest: "digest-1",
+      created_at: "2026-07-21T18:00:00Z",
+    }),
+    "",
+    "",
+  ].join("\n");
+}

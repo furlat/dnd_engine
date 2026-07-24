@@ -1,4 +1,4 @@
-"""Integrity checks for the engine-book documentation/test contract."""
+"""Repository source and test-harness integrity checks."""
 
 import ast
 import io
@@ -9,11 +9,6 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ENGINE_BOOK = ROOT / "engine_book"
-NOTES = ENGINE_BOOK / "notes"
-CHAPTERS = ENGINE_BOOK / "chapters"
-OUTLINE = ENGINE_BOOK / "outline.md"
-PARITY_MATRIX = ENGINE_BOOK / "parity_matrix.md"
 PYPROJECT = ROOT / "pyproject.toml"
 SERVER_API_FILES = [
     ROOT / "server" / "event_server.py",
@@ -21,7 +16,6 @@ SERVER_API_FILES = [
 ]
 EVENT_SERVER_CLEAN_NODES = {
     ROOT / "server" / "event_server.py": {
-        "EventMonitor",
         "SimulationState",
         "_api_http_exception",
         "_entity_lookup_exception",
@@ -29,13 +23,9 @@ EVENT_SERVER_CLEAN_NODES = {
         "_equipment_http_exception",
         "_equipment_slot_map",
         "_event_filter_http_exception",
-        "_get_floor_object_state",
-        "_grid_state_context",
         "_handler_http_exception",
-        "_known_entity_summaries",
         "_mapeditor_context",
         "_mapeditor_http_exception",
-        "_resolve_entity_or_raise",
         "_serialize_entity_handlers",
         "_session_context",
         "_session_http_exception",
@@ -56,11 +46,6 @@ EVENT_SERVER_CLEAN_NODES = {
         "create_mapeditor_map",
         "delete_mapeditor_object",
         "delete_mapeditor_save",
-        "get_combat_log",
-        "get_encounter",
-        "get_entities",
-        "get_entity",
-        "get_grid",
         "get_game_status",
         "get_mapeditor_catalog",
         "get_mapeditor_light",
@@ -68,12 +53,7 @@ EVENT_SERVER_CLEAN_NODES = {
         "get_mapeditor_save",
         "get_mapeditor_visibility",
         "get_mapeditor_walkability",
-        "get_simulation_status",
         "get_spell_catalog",
-        "get_state",
-        "get_tile_info",
-        "get_visibility",
-        "get_session_entities",
         "join_game",
         "list_mapeditor_saves",
         "load_mapeditor_save",
@@ -89,14 +69,12 @@ EVENT_SERVER_CLEAN_NODES = {
         "set_turn_delay",
         "start_simulation",
         "step_simulation",
-        "timing_middleware",
         "unhandled_exception_handler",
         "validate_session_action",
     },
 }
 EVENT_SERVER_GOOGLE_DOCSTRING_CLASSES = {
     ROOT / "server" / "event_server.py": {
-        "EventMonitor",
         "SimulationState",
     },
 }
@@ -108,13 +86,9 @@ EVENT_SERVER_GOOGLE_DOCSTRING_FUNCTIONS = {
         "_equipment_http_exception",
         "_equipment_slot_map",
         "_event_filter_http_exception",
-        "_get_floor_object_state",
-        "_grid_state_context",
         "_handler_http_exception",
-        "_known_entity_summaries",
         "_mapeditor_context",
         "_mapeditor_http_exception",
-        "_resolve_entity_or_raise",
         "_serialize_entity_handlers",
         "_session_context",
         "_session_http_exception",
@@ -135,11 +109,6 @@ EVENT_SERVER_GOOGLE_DOCSTRING_FUNCTIONS = {
         "create_mapeditor_map",
         "delete_mapeditor_object",
         "delete_mapeditor_save",
-        "get_combat_log",
-        "get_encounter",
-        "get_entities",
-        "get_entity",
-        "get_grid",
         "get_game_status",
         "get_mapeditor_catalog",
         "get_mapeditor_light",
@@ -147,12 +116,7 @@ EVENT_SERVER_GOOGLE_DOCSTRING_FUNCTIONS = {
         "get_mapeditor_save",
         "get_mapeditor_visibility",
         "get_mapeditor_walkability",
-        "get_simulation_status",
         "get_spell_catalog",
-        "get_state",
-        "get_tile_info",
-        "get_visibility",
-        "get_session_entities",
         "join_game",
         "list_mapeditor_saves",
         "load_mapeditor_save",
@@ -168,7 +132,6 @@ EVENT_SERVER_GOOGLE_DOCSTRING_FUNCTIONS = {
         "set_turn_delay",
         "start_simulation",
         "step_simulation",
-        "timing_middleware",
         "unhandled_exception_handler",
         "validate_session_action",
     },
@@ -351,27 +314,8 @@ SERVER_API_DESCRIBED_MODEL_CLASSES = {
         "ActionResult",
         "AdvanceEncounterResult",
         "AoEPreviewResult",
-        "APIAppearance",
-        "APICombatant",
-        "APICurrentTurn",
-        "APIEntityFull",
-        "APIEntitySummary",
-        "APIEncounter",
-        "APIEquipmentOverview",
-        "APIEquipmentSlot",
-        "APIFloorObject",
-        "APIGameState",
-        "APIGrid",
-        "APIItemSummary",
-        "APISimulationStatus",
-        "APITile",
-        "AttackRequest",
-        "CombatLogHistoryResponse",
-        "ControlledEntitiesResponse",
         "CreateSessionRequest",
         "CreateSessionResponse",
-        "EntityActionRequest",
-        "EventHistoryResponse",
         "ExecuteByIndexRequest",
         "EquipRequest",
         "EquipmentMutationResult",
@@ -397,9 +341,7 @@ SERVER_API_DESCRIBED_MODEL_CLASSES = {
         "MapEditorVisibilityResponse",
         "MapEditorWalkabilityCell",
         "MapEditorWalkabilityResponse",
-        "MoveRequest",
-        "PositionActionRequest",
-        "SelfActionRequest",
+        "PositionPreviewRequest",
         "SessionPingResponse",
         "SimpleActionRequest",
         "SpellCatalogEntry",
@@ -409,6 +351,23 @@ SERVER_API_DESCRIBED_MODEL_CLASSES = {
         "SpellCatalogVfx",
         "ToggleHandlerRequest",
         "UnequipRequest",
+    },
+    ROOT / "server" / "world_contracts.py": {
+        "APIAppearance",
+        "APICombatant",
+        "APIConditionSummary",
+        "APIDirectionalBlockMap",
+        "APIEncounter",
+        "APIEntitySummary",
+        "APIEntityVisibility",
+        "APIEquipmentOverview",
+        "APIEquipmentSlot",
+        "APIFloorObject",
+        "APIGameState",
+        "APIGrid",
+        "APIItemSummary",
+        "APITile",
+        "APIVisibilityResponse",
     },
     ROOT / "server" / "event_stream.py": {
         "StreamSyncPayload",
@@ -423,27 +382,8 @@ SERVER_API_GOOGLE_DOCSTRING_CLASSES = {
         "ActionResult",
         "AdvanceEncounterResult",
         "AoEPreviewResult",
-        "APIAppearance",
-        "APICombatant",
-        "APICurrentTurn",
-        "APIEntityFull",
-        "APIEntitySummary",
-        "APIEncounter",
-        "APIEquipmentOverview",
-        "APIEquipmentSlot",
-        "APIFloorObject",
-        "APIGameState",
-        "APIGrid",
-        "APIItemSummary",
-        "APISimulationStatus",
-        "APITile",
-        "AttackRequest",
-        "CombatLogHistoryResponse",
-        "ControlledEntitiesResponse",
         "CreateSessionRequest",
         "CreateSessionResponse",
-        "EntityActionRequest",
-        "EventHistoryResponse",
         "ExecuteByIndexRequest",
         "EquipRequest",
         "EquipmentMutationResult",
@@ -469,9 +409,7 @@ SERVER_API_GOOGLE_DOCSTRING_CLASSES = {
         "MapEditorVisibilityResponse",
         "MapEditorWalkabilityCell",
         "MapEditorWalkabilityResponse",
-        "MoveRequest",
-        "PositionActionRequest",
-        "SelfActionRequest",
+        "PositionPreviewRequest",
         "SessionPingResponse",
         "SimpleActionRequest",
         "SpellCatalogEntry",
@@ -502,84 +440,9 @@ SERVER_SESSION_GOOGLE_DOCSTRING_CLASSES = {
         "GameSession",
     },
 }
-RULE_RELATIONSHIP_LABELS = [
-    "SRD-aligned",
-    "Engine adaptation",
-    "Not implemented",
-    "Engine extension",
-]
-LOCAL_REFERENCE_PREFIXES = (
-    "cli/",
-    "dnd/",
-    "engine_book/",
-    "examples/",
-    "interactive_ruleset/",
-    "server/",
-    "tests/",
-)
-
-
 def read_text(path: Path) -> str:
     """Read repository text with a consistent encoding."""
     return path.read_text(encoding="utf-8")
-
-
-def markdown_section(text: str, heading: str) -> str:
-    """Return a markdown section body starting at a level-two heading."""
-    start = text.find(heading)
-    if start == -1:
-        return ""
-
-    end = text.find("\n## ", start + 1)
-    return text[start:end if end != -1 else len(text)]
-
-
-def local_backtick_references(text: str) -> list[str]:
-    """Return backticked local paths or globs from markdown text."""
-    references: list[str] = []
-
-    for match in re.finditer(r"`([^`]+)`", text):
-        value = match.group(1)
-        if value.startswith(LOCAL_REFERENCE_PREFIXES):
-            references.append(value)
-
-    return references
-
-
-def local_reference_exists(reference: str) -> bool:
-    """Return whether a local backticked path or glob resolves in the repo."""
-    if "*" in reference:
-        return any(ROOT.glob(reference))
-
-    normalized = reference.rstrip("/")
-    return (ROOT / normalized).exists()
-
-
-def collect_engine_book_test_functions() -> dict[str, set[str]]:
-    """Return executable engine-book test functions by pytest filename."""
-    functions_by_file: dict[str, set[str]] = {}
-
-    for test_path in sorted((ROOT / "tests" / "engine_book").glob("test_chapter_*.py")):
-        text = read_text(test_path)
-        functions_by_file[test_path.name] = set(
-            re.findall(r"^def (test_eb_\d{2}_\d{3}_[a-zA-Z0-9_]+)\(", text, re.MULTILINE)
-        )
-
-    return functions_by_file
-
-
-def is_main_guard(test: ast.expr) -> bool:
-    """Return whether an AST expression is an executable script guard."""
-    return (
-        isinstance(test, ast.Compare)
-        and isinstance(test.left, ast.Name)
-        and test.left.id == "__name__"
-        and len(test.ops) == 1
-        and isinstance(test.ops[0], ast.Eq)
-        and len(test.comparators) == 1
-        and isinstance(test.comparators[0], ast.Constant)
-        and test.comparators[0].value == "__main__"
-    )
 
 
 def is_field_call(value: ast.expr | None) -> bool:
@@ -644,206 +507,6 @@ def named_top_level_nodes(
             nodes[node.name] = node
 
     return nodes
-
-
-def collect_engine_book_test_ranges() -> dict[int, tuple[int, int, str]]:
-    """Return chapter example ranges from executable engine-book tests."""
-    ranges: dict[int, tuple[int, int, str]] = {}
-
-    for test_path in sorted((ROOT / "tests" / "engine_book").glob("test_chapter_*.py")):
-        text = read_text(test_path)
-        ids = [
-            (int(match.group(1)), int(match.group(2)))
-            for match in re.finditer(r"^def test_eb_(\d{2})_(\d{3})_", text, re.MULTILINE)
-        ]
-        if not ids:
-            continue
-
-        chapters = {chapter for chapter, _ in ids}
-        assert len(chapters) == 1, f"Mixed EB chapter IDs in {test_path.name}: {chapters}"
-
-        chapter = chapters.pop()
-        numbers = [number for _, number in ids]
-        ranges[chapter] = (min(numbers), max(numbers), test_path.name)
-
-    return ranges
-
-
-def test_engine_book_required_files_exist() -> None:
-    """The book has the required root files and bottom-up note files."""
-    required_root_files = [
-        ENGINE_BOOK / "goal.md",
-        ENGINE_BOOK / "outline.md",
-        PARITY_MATRIX,
-        ENGINE_BOOK / "glossary.md",
-    ]
-
-    for path in required_root_files:
-        assert path.exists(), f"Missing required engine_book file: {path}"
-
-    chapter_numbers = {
-        int(match.group(1))
-        for path in NOTES.glob("*.md")
-        if (match := re.match(r"(\d{2})_", path.name))
-    }
-    assert set(range(1, 19)) <= chapter_numbers
-
-
-def test_every_engine_book_test_function_has_a_parity_matrix_row() -> None:
-    """Every executable EB pytest function is represented in the parity matrix."""
-    matrix = read_text(PARITY_MATRIX)
-    functions_by_file = collect_engine_book_test_functions()
-    missing: list[str] = []
-
-    for test_filename, function_names in sorted(functions_by_file.items()):
-        for function_name in sorted(function_names):
-            example_id = function_name.removeprefix("test_").split("_", 3)
-            eb_id = f"{example_id[0].upper()}-{example_id[1]}-{example_id[2]}"
-            if function_name not in matrix or eb_id not in matrix:
-                missing.append(f"{test_filename}::{function_name}")
-
-    assert not missing, "Missing parity rows:\n" + "\n".join(missing)
-
-
-def test_parity_matrix_rows_reference_existing_engine_book_tests() -> None:
-    """Parity rows that cite engine-book tests should point to live tests."""
-    functions_by_file = collect_engine_book_test_functions()
-    stale: list[str] = []
-
-    for line in read_text(PARITY_MATRIX).splitlines():
-        if not line.startswith("| EB-"):
-            continue
-
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) < 5:
-            stale.append(f"Malformed parity row: {line}")
-            continue
-
-        test_path = cells[3].strip("`")
-        function_name = cells[4].strip("`")
-        if not test_path.startswith("tests/engine_book/test_chapter_"):
-            continue
-
-        test_filename = Path(test_path).name
-        if test_filename not in functions_by_file:
-            stale.append(f"{test_path}::{function_name} references missing test file")
-        elif function_name not in functions_by_file[test_filename]:
-            stale.append(f"{test_path}::{function_name} references missing function")
-
-    assert not stale, "Stale parity rows:\n" + "\n".join(stale)
-
-
-def test_no_engine_book_tests_remain_in_examples() -> None:
-    """Engine-book tests live in tests/engine_book, not examples."""
-    stale_examples = sorted((ROOT / "examples").glob("test_engine_book_*.py"))
-    assert not stale_examples, "Engine-book tests still in examples:\n" + "\n".join(str(path) for path in stale_examples)
-
-
-def test_outline_book_example_ranges_match_executable_tests() -> None:
-    """Outline chapter summaries should not drift behind executable EB tests."""
-    outline = read_text(OUTLINE)
-    test_ranges = collect_engine_book_test_ranges()
-    missing_or_stale: list[str] = []
-
-    for chapter, (first, last, filename) in sorted(test_ranges.items()):
-        expected = (first, last)
-        range_lines = [
-            line
-            for line in outline.splitlines()
-            if f"`tests/engine_book/{filename}`" in line and f"EB-{chapter:02d}-" in line
-        ]
-        parsed_ranges = []
-        for line in range_lines:
-            match = re.search(
-                rf"EB-{chapter:02d}-(\d{{3}}) through EB-{chapter:02d}-(\d{{3}})",
-                line,
-            )
-            if match:
-                parsed_ranges.append((int(match.group(1)), int(match.group(2))))
-
-        if parsed_ranges != [expected]:
-            expected_text = f"EB-{chapter:02d}-{first:03d} through EB-{chapter:02d}-{last:03d}"
-            found_text = ", ".join(
-                f"EB-{chapter:02d}-{start:03d} through EB-{chapter:02d}-{end:03d}"
-                for start, end in parsed_ranges
-            ) or "no range"
-            missing_or_stale.append(f"Chapter {chapter:02d} {filename}: expected {expected_text}; found {found_text}")
-
-    assert not missing_or_stale, "Stale outline EB ranges:\n" + "\n".join(missing_or_stale)
-
-
-def test_chapter_matrix_has_no_tbd_or_missing_for_written_chapters() -> None:
-    """Written chapter rows should not advertise missing parity in the matrix."""
-    matrix = read_text(PARITY_MATRIX)
-    chapter_rows = [
-        line for line in matrix.splitlines()
-        if re.match(r"\| \d{2}\. ", line)
-    ]
-    assert len(chapter_rows) >= 18
-
-    bad_rows = [
-        line for line in chapter_rows
-        if "TBD" in line or "| missing |" in line or "| Not started |" in line
-    ]
-    assert not bad_rows, "Incomplete chapter rows:\n" + "\n".join(bad_rows)
-
-
-def test_written_chapters_keep_required_contract_sections() -> None:
-    """Each written chapter should keep source, rules, parity, and hygiene sections."""
-    missing: list[str] = []
-    chapter_paths = sorted(CHAPTERS.glob("*.md"))
-    if not chapter_paths:
-        return
-
-    for path in chapter_paths:
-        text = read_text(path)
-        required_headings = [
-            "## Purpose",
-            "## Source Files Studied",
-            "## Rules Relationship",
-        ]
-
-        for heading in required_headings:
-            if heading not in text:
-                missing.append(f"{path.name}: missing {heading}")
-
-        if "Parity test:" not in text and "Parity tests:" not in text and "Coverage Status" not in text and "Coverage Added" not in text:
-            missing.append(f"{path.name}: missing parity coverage references")
-
-        if "Hygiene" not in text and "Documentation Hygiene" not in text:
-            missing.append(f"{path.name}: missing documentation hygiene notes")
-
-    assert not missing, "Chapter contract gaps:\n" + "\n".join(missing)
-
-
-def test_written_chapter_source_and_rules_references_are_valid() -> None:
-    """Chapter source and rules sections should cite valid local evidence."""
-    failures: list[str] = []
-    chapter_paths = sorted(CHAPTERS.glob("*.md"))
-    if not chapter_paths:
-        return
-
-    for path in chapter_paths:
-        text = read_text(path)
-        source_section = markdown_section(text, "## Source Files Studied")
-        rule_section = markdown_section(text, "## Rules Relationship")
-
-        source_references = local_backtick_references(source_section)
-        if not source_references:
-            failures.append(f"{path.name}: source section has no local path references")
-
-        for reference in source_references:
-            if not local_reference_exists(reference):
-                failures.append(f"{path.name}: source reference does not resolve: {reference}")
-
-        if not any(label in rule_section for label in RULE_RELATIONSHIP_LABELS):
-            failures.append(f"{path.name}: rules section lacks required relationship label")
-
-        for reference in local_backtick_references(rule_section):
-            if reference.startswith("interactive_ruleset/") and not local_reference_exists(reference):
-                failures.append(f"{path.name}: SRD reference does not resolve: {reference}")
-
-    assert not failures, "Chapter reference gaps:\n" + "\n".join(failures)
 
 
 def test_combat_log_models_use_described_pydantic_fields() -> None:
@@ -1398,17 +1061,8 @@ def test_event_server_cleaned_functions_use_google_style_docstrings() -> None:
     assert not failures, "Event-server function docstring regressions:\n" + "\n".join(failures)
 
 
-def test_goal_records_uv_pytest_parity_requirement() -> None:
-    """The goal file preserves the user's uv-driven pytest requirement."""
-    goal = read_text(ENGINE_BOOK / "goal.md")
-
-    assert "uv" in goal
-    assert "tests/engine_book/" in goal
-    assert "1:1 parity" in goal
-
-
 def test_pyproject_defines_uv_pytest_contract() -> None:
-    """The repository exposes engine-book parity through uv-driven pytest."""
+    """The repository exposes its tests through uv-driven pytest."""
     config = tomllib.loads(read_text(PYPROJECT))
 
     dev_dependencies = config["dependency-groups"]["dev"]

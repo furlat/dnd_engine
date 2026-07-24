@@ -1,5 +1,6 @@
 """Inventory block for entity item storage."""
 
+from dataclasses import dataclass
 from typing import Optional, List, Dict
 from uuid import UUID
 from pydantic import Field
@@ -7,6 +8,15 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.gridmap import get_map
+
+
+@dataclass(frozen=True)
+class InventoryAddResult:
+    """Exact result of accepting one item stack into an inventory."""
+
+    succeeded: bool
+    inserted_item: Optional[BaseItem] = None
+    merged_into_item: Optional[BaseItem] = None
 
 
 class Inventory(BaseBlock):
@@ -107,14 +117,16 @@ class Inventory(BaseBlock):
                 return False
         return True
 
-    def add_item(self, item: BaseItem) -> bool:
-        """Add an item stack atomically.
+    def add_item_with_result(self, item: BaseItem) -> InventoryAddResult:
+        """Add an item stack atomically and return every changed stack.
 
-        Returns False if capacity exceeded. If fully merged, the consumed item
-        is unregistered from BaseBlock._registry.
+        If fully merged, the consumed item is unregistered and
+        ``inserted_item`` is ``None``. A partial merge returns both the updated
+        existing stack and the surviving incoming stack, allowing a high-level
+        owner to publish exact post-commit facts without scanning the inventory.
         """
         if not self.can_add(item):
-            return False
+            return InventoryAddResult(succeeded=False)
 
         self._detach_item_from_previous_location(item)
         existing = self._find_compatible_stack(item)
@@ -126,11 +138,22 @@ class Inventory(BaseBlock):
             if item.stack_count == 0:
                 self._clear_consumed_item_location(item)
                 BaseBlock._registry.pop(item.uuid, None)
-                return True
+                return InventoryAddResult(
+                    succeeded=True,
+                    merged_into_item=existing,
+                )
 
         self.items[item.uuid] = item
         self._stamp_item_location(item)
-        return True
+        return InventoryAddResult(
+            succeeded=True,
+            inserted_item=item,
+            merged_into_item=existing,
+        )
+
+    def add_item(self, item: BaseItem) -> bool:
+        """Add an item stack while preserving the historical boolean API."""
+        return self.add_item_with_result(item).succeeded
 
     def remove_item(self, item_uuid: UUID) -> Optional[BaseItem]:
         """Remove and return item by UUID, or None if not found."""

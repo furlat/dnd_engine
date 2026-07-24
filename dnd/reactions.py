@@ -1,6 +1,7 @@
 """Reaction handlers for combat movement triggers."""
 
-from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, WeaponSlot, StepMovementEvent
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
 from dnd.core.content import ContentKind

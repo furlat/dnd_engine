@@ -3,7 +3,8 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.blocks.equipment import Weapon, WeaponProperty
+from dnd.blocks.equipment import Weapon
+from dnd.core.equipment_types import WeaponProperty
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import (

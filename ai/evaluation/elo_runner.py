@@ -38,7 +38,7 @@ from ai.evaluation.elo_contract import (
     EloMatchFailureArtifact,
     EloMatchRecord,
 )
-from ai.evaluation.gauntlet_contract import GauntletEvent, GauntletEventType
+from server.agent_protocol.gauntlet import GauntletEvent, GauntletEventType
 from ai.evaluation.elo_dashboard_projection import project_elo_dashboard
 from ai.evaluation.elo_matrix import DEFAULT_SIDE_ORDERS, build_elo_matrix_schedule
 from ai.evaluation.elo_performance import analyze_elo_performance

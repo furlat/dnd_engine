@@ -14,19 +14,21 @@ Level 18: Champion - Survivor (DEFERRED)
 """
 
 from typing import Any, Dict
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
 from dnd.core.content import ContentKind
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
-    Trigger, EventHandler, DamageRollResultEvent, RangeType, WeaponSlot, SavingThrowEvent
+    Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
 )
+from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.blocks.equipment import WeaponProperty, Weapon, Shield, ArmorType
+from dnd.blocks.equipment import Weapon, Shield
 from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import (
@@ -36,6 +38,7 @@ from dnd.actions import (
     AttackEvent,
     Attack,
     build_weapon_attack_outcome_profile,
+    create_weapon_attack_declaration_event,
 )
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
@@ -1287,31 +1290,15 @@ class ExtraAttack(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        source_name = source_entity.name if source_entity else None
-        target_name = target_entity.name if target_entity else None
-
-        weapon_name = None
-        if source_entity:
-            weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
-            weapon_name = weapon.name if weapon else "Unarmed"
-
-        display_name = f"Extra Attack ({weapon_name})" if weapon_name else "Extra Attack"
-
-        return AttackEvent(
-            name=display_name,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
+        return create_weapon_attack_declaration_event(
+            action_name="Extra Attack",
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=self.costs,
+            parent_event=parent_event,
             use_register=use_register,
-            source_entity_name=source_name,
-            target_entity_name=target_name,
-            weapon_name=weapon_name
+            append_weapon_to_name=True,
         )
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:

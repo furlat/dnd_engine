@@ -28,8 +28,11 @@ from dnd.controller import (
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, EventType, SpatialChangeEvent, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue, EventType
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
+from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
@@ -44,8 +47,8 @@ from dnd.utils import (
     reset_combat_state,
     set_hp,
 )
-from server.event_server import app, event_monitor, sim, _available_actions_cache
-from server.event_stream import event_stream, format_sse, make_stream_id
+from server.event_server import app, sim, _available_actions_cache
+from server.event_stream import event_stream, make_stream_id
 from server.spell_catalog import build_spell_catalog
 
 
@@ -113,6 +116,8 @@ def reset_chapter_18_state(width: int = 16, height: int = 10) -> None:
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
+    event_stream.ensure_attached()
+    event_stream._clear_source_journal()
     _available_actions_cache.clear()
     session_manager = sim.get_session_manager()
     session_manager.sessions.clear()
@@ -187,6 +192,52 @@ def create_action_api_session() -> tuple[TestClient, str, Entity, Entity]:
     assert join_response.json()["controlled_entities"] == [str(hero.uuid)]
 
     return client, session_id, hero, monster
+
+
+def player_replication_seed(client: TestClient, session_id: str) -> dict:
+    """Open the sole expectation-free player replication entry point."""
+    response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def player_replication_after(
+    client: TestClient,
+    session_id: str,
+    bootstrap: dict,
+) -> tuple[dict, dict, dict]:
+    """Read exact player reducer and combat-log windows after one seed."""
+    identity = {
+        "session_id": session_id,
+        "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
+        "expected_generation_id": bootstrap["protocol"]["generation_id"],
+        "expected_perspective_epoch_id": bootstrap["perspective"]["perspective_epoch_id"],
+    }
+    frames_response = client.get(
+        "/replication/frames",
+        params={
+            **identity,
+            "from_observation_cursor": bootstrap["watermarks"]["observation_cursor"],
+        },
+    )
+    logs_response = client.get(
+        "/replication/combat-log",
+        params={
+            **identity,
+            "from_combat_log_cursor": bootstrap["watermarks"]["combat_log_cursor"],
+        },
+    )
+    current_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert frames_response.status_code == 200
+    assert logs_response.status_code == 200
+    assert current_response.status_code == 200
+    return current_response.json(), frames_response.json(), logs_response.json()
 
 
 async def drain_stream_subscription(subscription, limit: int = 32, timeout: float = 0.05) -> list[dict]:
@@ -514,11 +565,35 @@ def test_eb_18_005_check_deaths_marks_dead_and_ends_single_faction_encounter() -
 
     assert death_events
     assert encounter.combatants[monster.uuid].is_dead
-    assert "Dead" in monster.active_conditions
+    assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED
     assert Encounter.get_active() is None
     assert len(encounter.get_alive_combatants()) == 1
     assert encounter.get_dead_combatants()[0].entity_uuid == monster.uuid
+
+
+def test_check_deaths_ends_encounter_after_entity_already_committed_death() -> None:
+    """An authoritative death still triggers encounter-end reconciliation."""
+    reset_chapter_18_state()
+    hero, monster = create_book_pair()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+
+    monster.receive_damage(
+        monster.get_normal_hp(),
+        DamageType.SLASHING,
+        hero.uuid,
+    )
+    assert monster.health.life_state is LifeState.DEAD
+
+    assert encounter.check_deaths() == []
+    assert encounter.state is EncounterState.ENDED
+    assert Encounter.get_active() is None
 
 
 def test_eb_18_006_serialization_and_spell_catalog_api_do_not_mutate_registry() -> None:
@@ -557,20 +632,14 @@ def test_eb_18_006_serialization_and_spell_catalog_api_do_not_mutate_registry() 
     assert {"fire_bolt", "magic_missile", "fireball"} <= spell_ids
 
 
-def test_eb_18_030_health_endpoint_reports_scalar_listener_count() -> None:
-    """EB-18-030: root health reports listener count as a scalar."""
+def test_eb_18_030_health_endpoint_is_state_free() -> None:
+    """EB-18-030: root health is a process acknowledgement, not game state."""
     reset_chapter_18_state(width=2, height=2)
 
     response = TestClient(app).get("/")
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "running"
-    assert payload["listeners"] == event_monitor.listener_count
-    assert isinstance(payload["listeners"], int)
-    assert isinstance(payload["event_count"], int)
-    assert payload["has_encounter"] is False
-    assert payload["paused"] is True
+    assert response.json() == {"status": "running"}
 
 
 def test_eb_18_031_simulation_reset_status_delay_and_step_are_stateful() -> None:
@@ -578,32 +647,18 @@ def test_eb_18_031_simulation_reset_status_delay_and_step_are_stateful() -> None
     reset_chapter_18_state(width=2, height=2)
     client = TestClient(app)
 
-    empty_encounter = client.get("/encounter")
-    assert empty_encounter.status_code == 200
-    assert empty_encounter.json() == {"active": False, "encounter": None}
-
-    empty_log = client.get("/combat-log")
-    assert empty_log.status_code == 200
-    assert empty_log.json() == {"entries": [], "count": 0, "total": 0}
+    assert sim.encounter is None
+    assert sim.paused is True
 
     reset_response = client.post("/simulation/reset")
     assert reset_response.status_code == 200
     reset_payload = reset_response.json()
     assert reset_payload["status"] == "reset"
 
-    status_response = client.get("/simulation/status")
-    assert status_response.status_code == 200
-    status_payload = status_response.json()
-    assert status_payload["has_encounter"] is True
-    assert status_payload["paused"] is True
-    assert status_payload["encounter_state"] == EncounterState.NOT_STARTED.value
-
-    encounter_response = client.get("/encounter")
-    assert encounter_response.status_code == 200
-    encounter_payload = encounter_response.json()
-    assert encounter_payload["active"] is True
-    assert encounter_payload["encounter"]["uuid"] == reset_payload["encounter_uuid"]
-    assert encounter_payload["encounter"]["state"] == EncounterState.NOT_STARTED.value
+    assert sim.encounter is not None
+    assert str(sim.encounter.uuid) == reset_payload["encounter_uuid"]
+    assert sim.paused is True
+    assert sim.encounter.state == EncounterState.NOT_STARTED
 
     delay_response = client.post("/simulation/set-delay", params={"delay": 0.25})
     assert delay_response.status_code == 200
@@ -623,53 +678,37 @@ def test_eb_18_031_simulation_reset_status_delay_and_step_are_stateful() -> None
     assert sim.encounter.state != EncounterState.NOT_STARTED
 
 
-def test_eb_18_007_event_history_and_sse_payloads_preserve_directional_spatial_fields() -> None:
-    """EB-18-007: event API and SSE payloads serialize directional spatial metadata."""
+def test_eb_18_007_objective_event_frames_preserve_directional_spatial_fields() -> None:
+    """EB-18-007: exact objective frames preserve directional spatial metadata."""
     reset_chapter_18_state(width=4, height=4)
+    encounter = Encounter(name="Objective Frame Encounter", source_entity_uuid=uuid4())
+    sim.encounter = encounter
+    event_stream.ensure_attached()
     cursor = EventQueue.event_cursor()
     changed = get_map().set_tile_directional_border((1, 1), "vision", "east", False)
 
     assert changed
 
-    response = TestClient(app).get(f"/events?since={cursor}&limit=0")
+    response = TestClient(app).get(
+        "/diagnostics/objective/events",
+        params={"from_cursor": cursor},
+    )
 
     assert response.status_code == 200
-    events = [
-        event for event in response.json()["events"]
-        if event["event_type"] == "spatial_tile_changed"
+    payload = response.json()
+    frames = [
+        frame for frame in payload["frames"]
+        if frame["event"]["event_type"] == "spatial_tile_changed"
     ]
-    assert events
-    event_payload = events[-1]
+    assert frames
+    assert payload["from_cursor"] == cursor
+    assert payload["through_cursor"] == payload["total"]
+    assert len(payload["frames"]) == payload["through_cursor"] - cursor
+    event_payload = frames[-1]["event"]
     assert event_payload["directional_position"] == [1, 1]
     assert event_payload["directional_directions"] == ["east"]
     assert event_payload["directional_channels"] == ["vision"]
     assert event_payload["directional_blocks_vision"]["east"] is True
-
-    event_stream.ensure_attached()
-    payloads = [
-        payload for payload in event_stream.iter_game_events_since(cursor, None)
-        if isinstance(payload.event, SpatialChangeEvent)
-        and payload.event.event_type == EventType.SPATIAL_TILE_CHANGED
-    ]
-    assert payloads
-
-    frame = format_sse(
-        "game_event",
-        payloads[-1],
-        make_stream_id(payloads[-1].event_cursor, payloads[-1].combat_log_cursor),
-    )
-    data_lines = [
-        line.removeprefix("data: ")
-        for line in frame.splitlines()
-        if line.startswith("data: ")
-    ]
-    sse_data = json.loads("\n".join(data_lines))
-
-    assert "event: game_event" in frame
-    assert sse_data["event"]["directional_position"] == [1, 1]
-    assert sse_data["event"]["directional_directions"] == ["east"]
-    assert sse_data["event"]["directional_channels"] == ["vision"]
-    assert sse_data["event"]["directional_blocks_vision"]["east"] is True
 
 
 def test_eb_18_008_mapeditor_api_saves_map_state_without_entities_or_encounter() -> None:
@@ -700,8 +739,8 @@ def test_eb_18_008_mapeditor_api_saves_map_state_without_entities_or_encounter()
     assert response.status_code == 200
     assert response.json()["name"] == "Door"
 
-    entities = client.get("/entities").json()["entities"]
-    assert entities == []
+    assert Entity.get_all_entities() == []
+    assert sim.encounter is None
 
 
 def test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state() -> None:
@@ -776,12 +815,9 @@ def test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state() ->
             assert loaded["floor_objects"][0]["position"] == [2, 1]
             assert loaded["floor_objects"][0]["uuid"] != placed_door_uuid
 
-            state_response = client.get("/state")
-            assert state_response.status_code == 200
-            state = state_response.json()
-            assert state["entities"] == []
-            assert state["encounter"] is None
-            assert state["floor_objects"][0]["name"] == "Door"
+            assert Entity.get_all_entities() == []
+            assert sim.encounter is None
+            assert loaded["floor_objects"][0]["name"] == "Door"
         finally:
             if old_save_dir is None:
                 os.environ.pop("DND_MAPEDITOR_SAVE_DIR", None)
@@ -789,34 +825,42 @@ def test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state() ->
                 os.environ["DND_MAPEDITOR_SAVE_DIR"] = old_save_dir
 
 
-def test_eb_18_024_tile_lookup_error_reports_grid_context() -> None:
-    """EB-18-024: /tile missing-tile errors include grid correction context."""
+def test_eb_18_024_mapeditor_tile_snapshot_preserves_grid_context() -> None:
+    """EB-18-024: editor tile snapshots are bounded, complete, and unique."""
     reset_chapter_18_state(width=2, height=2)
     client = TestClient(app)
 
-    existing_response = client.get("/tile/1/1")
-    assert existing_response.status_code == 200
-    existing_tile = existing_response.json()
-    assert existing_tile["position"] == [1, 1]
-    assert existing_tile["name"] == "Floor"
+    response = client.post(
+        "/mapeditor/maps",
+        json={"source": "scratch", "width": 2, "height": 2, "origin": [0, 0]},
+    )
+    assert response.status_code == 200
+    snapshot = response.json()
+    positions = {(tile["x"], tile["y"]) for tile in snapshot["tiles"]}
+    existing_tile = next(
+        tile for tile in snapshot["tiles"] if (tile["x"], tile["y"]) == (1, 1)
+    )
 
-    missing_response = client.get("/tile/9/9")
-    assert missing_response.status_code == 404
-    detail = missing_response.json()["detail"]
-    assert detail["code"] == "tile_not_found"
-    assert detail["message"] == "No tile at (9, 9)"
-    assert detail["requested_position"] == [9, 9]
-    assert detail["grid_bounds"] == {"min_x": 0, "min_y": 0, "max_x": 1, "max_y": 1}
-    assert detail["tile_count"] == 4
-    assert detail["entity_count"] == 0
-    assert detail["object_count"] == 0
+    assert snapshot["grid_bounds"] == {
+        "min_x": 0,
+        "min_y": 0,
+        "max_x": 1,
+        "max_y": 1,
+    }
+    assert positions == {(0, 0), (0, 1), (1, 0), (1, 1)}
+    assert existing_tile["name"] == "Floor"
+    assert Entity.get_all_entities() == []
+    assert sim.encounter is None
 
 
 def test_eb_18_009_action_execute_error_payload_reports_available_corrections() -> None:
     """EB-18-009: action execution errors include correction context."""
     client, session_id, hero, _monster = create_action_api_session()
 
-    available_response = client.get(f"/entity/{hero.uuid}/available-actions")
+    available_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
     assert available_response.status_code == 200
     available_payload = available_response.json()
     assert "Attack_MELEE_MAIN" in {
@@ -838,11 +882,8 @@ def test_eb_18_009_action_execute_error_payload_reports_available_corrections() 
     assert detail["code"] == "unknown_action"
     assert detail["message"] == "Unknown action: NotARealAction"
     assert detail["entity_uuid"] == str(hero.uuid)
-    assert detail["action_economy"]["actions"] == 1
-    assert detail["action_economy"]["movement"] == hero.action_economy.movement.normalized_score
     assert "Attack_MELEE_MAIN" in detail["valid_action_names"]
-    assert detail["available_actions"]["entity_uuid"] == str(hero.uuid)
-    assert detail["available_actions"]["actions_remaining"] == 1
+    assert "available_actions" not in detail
 
     bad_target_response = client.post(
         "/action/execute",
@@ -868,8 +909,32 @@ def test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata() ->
     caster = create_caster(name="Book Caster", position=(1, 1), faction="heroes")
     target = create_skeleton(name="Book Target", position=(3, 1), faction="monsters")
     Entity.update_all_entities_senses()
+    encounter = start_ordered_encounter(
+        caster,
+        target,
+        HumanController(source_entity_uuid=caster.uuid),
+        PassController(source_entity_uuid=target.uuid),
+        caster,
+    )
+    encounter.start_turn()
+    sim.encounter = encounter
+    sim.create_game_session(encounter)
+    session_response = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Book Caster Player"},
+    )
+    assert session_response.status_code == 200
+    session_id = session_response.json()["session_id"]
+    join_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [str(caster.uuid)]},
+    )
+    assert join_response.status_code == 200
 
-    response = client.get(f"/entity/{caster.uuid}/available-actions")
+    response = client.get(
+        f"/entity/{caster.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -912,116 +977,89 @@ def test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata() ->
     assert fireball_level_3["is_spell_variant"] is True
 
 
-def test_eb_18_010_named_action_endpoints_share_structured_error_payloads() -> None:
-    """EB-18-010: named action endpoints return structured correction details."""
-    client, session_id, hero, monster = create_action_api_session()
-    available_response = client.get(f"/entity/{hero.uuid}/available-actions")
+def test_eb_18_010_one_action_endpoint_shares_structured_errors_across_kinds() -> None:
+    """EB-18-010: one action endpoint reports corrections for every action kind."""
+    client, session_id, hero, _monster = create_action_api_session()
+    available_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
     assert available_response.status_code == 200
 
-    unknown_self_response = client.post(
-        "/action/self",
+    unknown_response = client.post(
+        "/action/execute",
         json={
             "session_id": session_id,
             "entity_uuid": str(hero.uuid),
-            "action_name": "NotARealAction",
+            "template_name": "NotARealAction",
+            "target_index": 0,
         },
     )
-    assert unknown_self_response.status_code == 400
-    unknown_self = unknown_self_response.json()["detail"]
-    assert unknown_self["code"] == "unknown_action"
-    assert unknown_self["message"] == "Unknown action: NotARealAction"
-    assert "Dash" in unknown_self["valid_action_names"]
-    assert unknown_self["action_economy"]["actions"] == 1
-
-    wrong_self_response = client.post(
-        "/action/self",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
-            "action_name": "Attack_MELEE_MAIN",
-        },
+    assert unknown_response.status_code == 400
+    unknown = unknown_response.json()["detail"]
+    assert unknown["code"] == "unknown_action"
+    assert unknown["message"] == "Unknown action: NotARealAction"
+    assert {"Dash", "Attack_MELEE_MAIN", "Move"} <= set(
+        unknown["valid_action_names"]
     )
-    assert wrong_self_response.status_code == 400
-    wrong_self = wrong_self_response.json()["detail"]
-    assert wrong_self["code"] == "invalid_action_type"
-    assert "not a SELF action" in wrong_self["message"]
-    assert "Attack_MELEE_MAIN" in wrong_self["valid_action_names"]
 
-    wrong_entity_response = client.post(
-        "/action/entity",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
-            "action_name": "Dash",
-            "target_uuid": str(monster.uuid),
-        },
-    )
-    assert wrong_entity_response.status_code == 400
-    wrong_entity = wrong_entity_response.json()["detail"]
-    assert wrong_entity["code"] == "invalid_action_type"
-    assert "not an ENTITY action" in wrong_entity["message"]
-    assert wrong_entity["available_actions"]["entity_uuid"] == str(hero.uuid)
-
-    wrong_position_response = client.post(
-        "/action/position",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
-            "action_name": "Dash",
-            "position": [1, 2],
-        },
-    )
-    assert wrong_position_response.status_code == 400
-    wrong_position = wrong_position_response.json()["detail"]
-    assert wrong_position["code"] == "invalid_action_type"
-    assert "not a position action" in wrong_position["message"]
-    assert wrong_position["action_economy"]["actions"] == 1
+    for template_name in ("Dash", "Attack_MELEE_MAIN", "Move"):
+        response = client.post(
+            "/action/execute",
+            json={
+                "session_id": session_id,
+                "entity_uuid": str(hero.uuid),
+                "template_name": template_name,
+                "target_index": 999,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_action_target"
+        assert detail["entity_uuid"] == str(hero.uuid)
+        assert template_name in detail["message"]
+        assert template_name in detail["valid_action_names"]
 
 
-def test_eb_18_023_entity_action_target_errors_report_current_choices() -> None:
-    """EB-18-023: /action/entity target errors include correction context."""
+def test_eb_18_023_action_target_indices_are_bound_to_current_affordances() -> None:
+    """EB-18-023: action target indices come only from current affordances."""
     client, session_id, hero, monster = create_action_api_session()
-    available_response = client.get(f"/entity/{hero.uuid}/available-actions")
+    available_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
     assert available_response.status_code == 200
+    attack = next(
+        action
+        for action in available_response.json()["entity_actions"]
+        if action["template_name"] == "Attack_MELEE_MAIN"
+    )
+    monster_target = next(
+        target
+        for target in attack["valid_targets"]
+        if target["target_uuid"] == str(monster.uuid)
+    )
+    assert monster_target["target_name"] == "Book Skeleton"
+    assert isinstance(monster_target["index"], int)
 
     invalid_target_response = client.post(
-        "/action/entity",
+        "/action/execute",
         json={
             "session_id": session_id,
             "entity_uuid": str(hero.uuid),
-            "action_name": "Attack_MELEE_MAIN",
-            "target_uuid": "not-a-uuid",
+            "template_name": "Attack_MELEE_MAIN",
+            "target_index": max(
+                target["index"] for target in attack["valid_targets"]
+            ) + 1,
         },
     )
     assert invalid_target_response.status_code == 400
     invalid_target = invalid_target_response.json()["detail"]
-    assert invalid_target["code"] == "invalid_target_uuid"
-    assert invalid_target["target_uuid"] == "not-a-uuid"
+    assert invalid_target["code"] == "invalid_action_target"
     assert invalid_target["entity_uuid"] == str(hero.uuid)
     assert "Attack_MELEE_MAIN" in invalid_target["valid_action_names"]
-    assert invalid_target["available_actions"]["entity_uuid"] == str(hero.uuid)
-    assert {entity["uuid"] for entity in invalid_target["known_entities"]} >= {
-        str(hero.uuid),
-        str(monster.uuid),
-    }
-
-    missing_target_uuid = uuid4()
-    missing_target_response = client.post(
-        "/action/entity",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
-            "action_name": "Attack_MELEE_MAIN",
-            "target_uuid": str(missing_target_uuid),
-        },
-    )
-    assert missing_target_response.status_code == 404
-    missing_target = missing_target_response.json()["detail"]
-    assert missing_target["code"] == "target_not_found"
-    assert missing_target["target_uuid"] == str(missing_target_uuid)
-    assert "Book Hero" in {entity["name"] for entity in missing_target["known_entities"]}
-    assert missing_target["action_economy"]["actions"] == 1
-    assert "Attack_MELEE_MAIN" in missing_target["valid_action_names"]
+    assert "available_actions" not in invalid_target
+    assert "known_entities" not in invalid_target
 
 
 def test_eb_18_011_entity_and_handler_errors_report_current_choices() -> None:
@@ -1029,32 +1067,38 @@ def test_eb_18_011_entity_and_handler_errors_report_current_choices() -> None:
     client, session_id, hero, monster = create_action_api_session()
     add_opportunity_attack_handler(hero)
 
-    invalid_entity_response = client.get("/entity/not-a-uuid")
+    invalid_entity_response = client.get(
+        "/entity/not-a-uuid/handlers",
+        params={"session_id": session_id},
+    )
     assert invalid_entity_response.status_code == 400
     invalid_entity = invalid_entity_response.json()["detail"]
     assert invalid_entity["code"] == "invalid_entity_uuid"
     assert invalid_entity["entity_uuid"] == "not-a-uuid"
-    assert {entity["uuid"] for entity in invalid_entity["known_entities"]} >= {
-        str(hero.uuid),
-        str(monster.uuid),
-    }
+    assert "known_entities" not in invalid_entity
 
     missing_uuid = uuid4()
-    missing_entity_response = client.get(f"/entity/{missing_uuid}")
-    assert missing_entity_response.status_code == 404
+    missing_entity_response = client.get(
+        f"/entity/{missing_uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    assert missing_entity_response.status_code == 403
     missing_entity = missing_entity_response.json()["detail"]
-    assert missing_entity["code"] == "entity_not_found"
+    assert missing_entity["code"] == "entity_not_controlled"
     assert missing_entity["entity_uuid"] == str(missing_uuid)
-    assert any(entity["name"] == "Book Hero" for entity in missing_entity["known_entities"])
+    assert missing_entity["controlled_entities"] == [str(hero.uuid)]
 
-    handlers_response = client.get(f"/entity/{hero.uuid}/handlers")
+    handlers_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
     assert handlers_response.status_code == 200
     handler_names = {handler["name"] for handler in handlers_response.json()["handlers"]}
     assert "Opportunity Attack Handler" in handler_names
 
     missing_handler_response = client.post(
         f"/entity/{hero.uuid}/handlers/NotAHandler/toggle",
-        json={"session_id": session_id, "entity_uuid": str(hero.uuid), "enabled": False},
+        json={"session_id": session_id, "enabled": False},
     )
     assert missing_handler_response.status_code == 404
     missing_handler = missing_handler_response.json()["detail"]
@@ -1063,16 +1107,15 @@ def test_eb_18_011_entity_and_handler_errors_report_current_choices() -> None:
     assert "Opportunity Attack Handler" in missing_handler["valid_handler_names"]
     assert any(handler["enabled"] for handler in missing_handler["handlers"])
 
-    mismatch_response = client.post(
+    unowned_response = client.post(
         f"/entity/{monster.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
-        json={"session_id": session_id, "entity_uuid": str(hero.uuid), "enabled": False},
+        json={"session_id": session_id, "enabled": False},
     )
-    assert mismatch_response.status_code == 400
-    mismatch = mismatch_response.json()["detail"]
-    assert mismatch["code"] == "entity_uuid_mismatch"
-    assert mismatch["entity_uuid"] == str(hero.uuid)
-    assert mismatch["handler_name"] == "Opportunity Attack Handler"
-    assert "Opportunity Attack Handler" in mismatch["valid_handler_names"]
+    assert unowned_response.status_code == 403
+    unowned = unowned_response.json()["detail"]
+    assert unowned["code"] == "entity_not_controlled"
+    assert unowned["entity_uuid"] == str(monster.uuid)
+    assert unowned["controlled_entities"] == [str(hero.uuid)]
 
 
 def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None:
@@ -1083,26 +1126,72 @@ def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None
     assert hero.inventory.add_item(potion)
     assert hero.inventory.add_item(dagger)
 
-    equipment_response = client.get(f"/entity/{hero.uuid}/equipment")
-    assert equipment_response.status_code == 200
-    assert {item["uuid"] for item in equipment_response.json()["inventory"]} == {
+    bootstrap = player_replication_seed(client, session_id)
+    equipment = bootstrap["world"]["equipment_by_entity"][str(hero.uuid)]
+    assert {item["uuid"] for item in equipment["inventory"]} == {
         str(potion.uuid),
         str(dagger.uuid),
     }
+    equippable_response = client.get(
+        f"/entity/{hero.uuid}/equippable-items",
+        params={"session_id": session_id},
+    )
+    assert equippable_response.status_code == 200
+    melee_main = hero.equipment.weapon_melee_main
+    melee_off = hero.equipment.weapon_melee_off
+    assert melee_main is not None
+    assert melee_off is not None
+    assert equippable_response.json() == {
+        "entity_uuid": str(hero.uuid),
+        "equippable": {
+            "weapon_melee_main": [
+                {
+                    "item_uuid": str(dagger.uuid),
+                    "item_name": dagger.name,
+                    "displaced_items": [
+                        {
+                            "item_uuid": str(melee_main.uuid),
+                            "item_name": melee_main.name,
+                            "slot": WeaponSlot.MELEE_MAIN.value,
+                        }
+                    ],
+                }
+            ],
+            "weapon_melee_off": [
+                {
+                    "item_uuid": str(dagger.uuid),
+                    "item_name": dagger.name,
+                    "displaced_items": [
+                        {
+                            "item_uuid": str(melee_off.uuid),
+                            "item_name": melee_off.name,
+                            "slot": WeaponSlot.MELEE_OFF.value,
+                        }
+                    ],
+                }
+            ],
+        },
+    }
 
-    missing_item_response = client.get(f"/entity/{hero.uuid}/equipment/item/{uuid4()}")
+    missing_item_uuid = uuid4()
+    missing_item_response = client.post(
+        f"/entity/{hero.uuid}/equip",
+        json={
+            "session_id": session_id,
+            "item_uuid": str(missing_item_uuid),
+        },
+    )
     assert missing_item_response.status_code == 404
     missing_item = missing_item_response.json()["detail"]
-    assert missing_item["code"] == "item_not_found"
+    assert missing_item["code"] == "inventory_item_not_found"
+    assert missing_item["item_uuid"] == str(missing_item_uuid)
     assert "weapon_melee_main" in missing_item["valid_slots"]
-    assert str(potion.uuid) in missing_item["inventory_item_uuids"]
-    assert missing_item["equipment"]["ac"] == hero.ac_bonus().normalized_score
+    assert "inventory_item_uuids" not in missing_item
 
     invalid_slot_response = client.post(
         f"/entity/{hero.uuid}/equip",
         json={
             "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
             "item_uuid": str(dagger.uuid),
             "slot": "not_a_slot",
         },
@@ -1111,14 +1200,12 @@ def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None
     invalid_slot = invalid_slot_response.json()["detail"]
     assert invalid_slot["code"] == "invalid_slot"
     assert invalid_slot["slot"] == "not_a_slot"
-    assert str(dagger.uuid) in invalid_slot["inventory_item_uuids"]
     assert "ring_left" in invalid_slot["valid_slots"]
 
     potion_equip_response = client.post(
         f"/entity/{hero.uuid}/equip",
         json={
             "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
             "item_uuid": str(potion.uuid),
         },
     )
@@ -1126,13 +1213,11 @@ def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None
     potion_equip = potion_equip_response.json()["detail"]
     assert potion_equip["code"] == "item_not_equippable"
     assert potion_equip["item_uuid"] == str(potion.uuid)
-    assert str(potion.uuid) in potion_equip["inventory_item_uuids"]
 
     empty_slot_response = client.post(
         f"/entity/{hero.uuid}/unequip",
         json={
             "session_id": session_id,
-            "entity_uuid": str(hero.uuid),
             "slot": "weapon_ranged_off",
         },
     )
@@ -1141,13 +1226,12 @@ def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None
     assert empty_slot["code"] == "empty_or_canceled_slot"
     assert empty_slot["slot"] == "weapon_ranged_off"
     assert "weapon_ranged_off" in empty_slot["valid_slots"]
-    assert empty_slot["equipped_item_uuids"]
 
 
 def test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities() -> None:
     """EB-18-013: session and game errors expose current session/game context."""
     reset_chapter_18_state()
-    hero, monster = create_book_pair()
+    hero, _monster = create_book_pair()
     client = TestClient(app)
 
     invalid_player_response = client.post(
@@ -1159,10 +1243,7 @@ def test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities() 
     assert invalid_player["code"] == "invalid_player_type"
     assert invalid_player["player_type"] == "dragon"
     assert {"human", "codex", "ai"} <= set(invalid_player["valid_player_types"])
-    assert {entity["uuid"] for entity in invalid_player["known_entities"]} >= {
-        str(hero.uuid),
-        str(monster.uuid),
-    }
+    assert "known_entities" not in invalid_player
 
     session_response = client.post(
         "/session/create",
@@ -1191,12 +1272,15 @@ def test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities() 
     assert missing_ping["session_id"] == str(missing_session_uuid)
     assert any(session["session_id"] == session_id for session in missing_ping["known_sessions"])
 
-    bad_entities_response = client.get("/session/not-a-session/entities")
+    bad_entities_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": "not-a-session"},
+    )
     assert bad_entities_response.status_code == 400
     bad_entities = bad_entities_response.json()["detail"]
     assert bad_entities["code"] == "invalid_session_uuid"
     assert bad_entities["session_id"] == "not-a-session"
-    assert bad_entities["known_entities"]
+    assert "known_entities" not in bad_entities
 
 
 def test_eb_18_032_session_create_ping_and_delete_are_stateful() -> None:
@@ -1298,50 +1382,68 @@ def test_eb_18_033_game_join_status_and_session_entities_are_stateful() -> None:
     assert sessions_by_id[monster_session_id]["controlled_entities"] == [str(monster.uuid)]
     assert sessions_by_id[monster_session_id]["is_their_turn"] is False
 
-    entities_response = client.get(f"/session/{hero_session_id}/entities")
-    assert entities_response.status_code == 200
-    entities_payload = entities_response.json()
-    assert entities_payload["session_id"] == hero_session_id
-    assert entities_payload["controlled_entities"] == [
-        {
-            "uuid": str(hero.uuid),
-            "name": hero.name,
-            "faction": "heroes",
-            "hp": hero.get_hp(),
-            "position": list(hero.position),
-        }
-    ]
+    bootstrap = player_replication_seed(client, hero_session_id)
+    assert bootstrap["perspective"]["controlled_entity_uuids"] == [str(hero.uuid)]
+    replicated_hero = next(
+        entity
+        for entity in bootstrap["world"]["state"]["entities"]
+        if entity["uuid"] == str(hero.uuid)
+    )
+    assert replicated_hero["name"] == hero.name
+    assert replicated_hero["faction"] == "heroes"
+    assert replicated_hero["hp"] == hero.get_hp()
+    assert replicated_hero["position"] == list(hero.position)
 
 
-def test_eb_18_014_event_filter_and_simulation_errors_report_valid_ranges() -> None:
-    """EB-18-014: event and simulation errors expose valid filters and ranges."""
-    reset_chapter_18_state()
-    client = TestClient(app)
+def test_eb_18_014_replication_identity_and_simulation_errors_are_explicit() -> None:
+    """EB-18-014: player windows require identity; controls report valid ranges."""
+    client, session_id, _hero, _monster = create_action_api_session()
+    bootstrap = player_replication_seed(client, session_id)
 
-    invalid_event_response = client.get("/events", params={"event_type": "not_an_event"})
-    assert invalid_event_response.status_code == 400
-    invalid_event = invalid_event_response.json()["detail"]
-    assert invalid_event["code"] == "unknown_event_type"
-    assert invalid_event["event_type"] == "not_an_event"
-    assert "attack" in invalid_event["valid_event_types"]
-    assert invalid_event["event_count"] == EventQueue.event_cursor()
+    missing_identity_response = client.get(
+        "/replication/frames",
+        params={"session_id": session_id},
+    )
+    assert missing_identity_response.status_code == 422
+    missing_fields = {
+        error["loc"][-1] for error in missing_identity_response.json()["detail"]
+    }
+    assert {
+        "expected_source_stream_id",
+        "expected_generation_id",
+        "expected_perspective_epoch_id",
+    } <= missing_fields
 
-    invalid_phase_response = client.get("/events", params={"phase": "not_a_phase"})
-    assert invalid_phase_response.status_code == 400
-    invalid_phase = invalid_phase_response.json()["detail"]
-    assert invalid_phase["code"] == "unknown_event_phase"
-    assert invalid_phase["phase"] == "not_a_phase"
-    assert "completion" in invalid_phase["valid_phases"]
+    changed_identity_response = client.get(
+        "/replication/frames",
+        params={
+            "session_id": session_id,
+            "expected_source_stream_id": "another-stream",
+            "expected_generation_id": bootstrap["protocol"]["generation_id"],
+            "expected_perspective_epoch_id": bootstrap["perspective"]["perspective_epoch_id"],
+        },
+    )
+    assert changed_identity_response.status_code == 409
+    changed_identity = changed_identity_response.json()["detail"]
+    assert changed_identity["code"] == "replication_identity_changed"
+    assert changed_identity["expected_source_stream_id"] == "another-stream"
 
     bad_sse_session_response = client.get(
-        "/events/subscribe",
-        params={"session_id": "not-a-session"},
+        "/replication/subscribe",
+        params={
+            "session_id": "not-a-session",
+            "expected_source_stream_id": "source",
+            "expected_generation_id": "generation",
+            "expected_perspective_epoch_id": "perspective",
+        },
     )
     assert bad_sse_session_response.status_code == 400
     bad_sse_session = bad_sse_session_response.json()["detail"]
     assert bad_sse_session["code"] == "invalid_session_uuid"
     assert bad_sse_session["session_id"] == "not-a-session"
 
+    reset_chapter_18_state()
+    client = TestClient(app)
     resume_response = client.post("/simulation/resume")
     assert resume_response.status_code == 400
     resume_detail = resume_response.json()["detail"]
@@ -1367,7 +1469,7 @@ def test_eb_18_014_event_filter_and_simulation_errors_report_valid_ranges() -> N
 
 def test_eb_18_025_end_turn_without_active_encounter_reports_state_context() -> None:
     """EB-18-025: /action/end-turn reports structured encounter-state drift."""
-    client, session_id, hero, monster = create_action_api_session()
+    client, session_id, hero, _monster = create_action_api_session()
     active_game_id = str(sim.game.game_id) if sim.game else None
     sim.encounter = None
 
@@ -1386,10 +1488,10 @@ def test_eb_18_025_end_turn_without_active_encounter_reports_state_context() -> 
     assert detail["active_entity_uuid"] == str(hero.uuid)
     assert detail["has_encounter"] is False
     assert detail["encounter_state"] is None
-    assert {entity["uuid"] for entity in detail["known_entities"]} >= {
-        str(hero.uuid),
-        str(monster.uuid),
-    }
+    assert any(
+        session["session_id"] == session_id for session in detail["known_sessions"]
+    )
+    assert "known_entities" not in detail
 
 
 def test_eb_18_026_session_authority_errors_report_action_context() -> None:
@@ -1399,11 +1501,21 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
     hero_session_uuid = UUID(session_id)
     hero_session = mgr.get_session(hero_session_uuid)
     assert hero_session is not None
+    available_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert available_response.status_code == 200
 
     invalid_session_uuid = uuid4()
     invalid_session_response = client.post(
-        "/action/self",
-        json={"session_id": str(invalid_session_uuid), "entity_uuid": str(hero.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": str(invalid_session_uuid),
+            "entity_uuid": str(hero.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert invalid_session_response.status_code == 401
     invalid_session = invalid_session_response.json()["detail"]
@@ -1414,8 +1526,13 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
     assert invalid_session["active_entity_uuid"] == str(hero.uuid)
 
     unowned_response = client.post(
-        "/action/self",
-        json={"session_id": session_id, "entity_uuid": str(monster.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(monster.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert unowned_response.status_code == 403
     unowned = unowned_response.json()["detail"]
@@ -1436,8 +1553,13 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
     assert join_response.status_code == 200
 
     wrong_turn_response = client.post(
-        "/action/self",
-        json={"session_id": monster_session_id, "entity_uuid": str(monster.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": monster_session_id,
+            "entity_uuid": str(monster.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert wrong_turn_response.status_code == 403
     wrong_turn = wrong_turn_response.json()["detail"]
@@ -1449,8 +1571,13 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
     assert sim.encounter is not None
     sim.encounter.turn_state = TurnState.NOT_STARTED
     stopped_turn_response = client.post(
-        "/action/self",
-        json={"session_id": session_id, "entity_uuid": str(hero.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(hero.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert stopped_turn_response.status_code == 400
     stopped_turn = stopped_turn_response.json()["detail"]
@@ -1459,8 +1586,13 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
 
     hero_session.disconnect()
     disconnected_response = client.post(
-        "/action/self",
-        json={"session_id": session_id, "entity_uuid": str(hero.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(hero.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert disconnected_response.status_code == 401
     disconnected = disconnected_response.json()["detail"]
@@ -1470,8 +1602,13 @@ def test_eb_18_026_session_authority_errors_report_action_context() -> None:
     mgr.active_game = None
     sim._game_session = None
     no_game_response = client.post(
-        "/action/self",
-        json={"session_id": monster_session_id, "entity_uuid": str(monster.uuid), "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": monster_session_id,
+            "entity_uuid": str(monster.uuid),
+            "template_name": "Dash",
+            "target_index": 0,
+        },
     )
     assert no_game_response.status_code == 400
     no_game = no_game_response.json()["detail"]
@@ -1569,20 +1706,23 @@ def test_eb_18_015_mapeditor_errors_report_catalog_map_and_save_context() -> Non
                 os.environ["DND_MAPEDITOR_SAVE_DIR"] = old_save_dir
 
 
-def test_eb_18_016_state_endpoint_serializes_editor_and_active_encounter_state() -> None:
-    """EB-18-016: /state serializes grid, objects, entities, and encounter DTOs."""
+def test_eb_18_016_editor_and_player_seeds_serialize_their_own_state() -> None:
+    """EB-18-016: editor and player state use their distinct canonical seeds."""
     reset_chapter_18_state(width=2, height=2)
     client = TestClient(app)
 
-    empty_response = client.get("/state")
-    assert empty_response.status_code == 200
-    empty_state = empty_response.json()
-    assert empty_state["grid"]["min_x"] == 0
-    assert empty_state["grid"]["max_x"] == 1
-    assert len(empty_state["grid"]["tiles"]) == 4
-    assert empty_state["entities"] == []
-    assert empty_state["encounter"] is None
-    assert empty_state["floor_objects"] == []
+    editor_response = client.post(
+        "/mapeditor/maps",
+        json={"source": "scratch", "width": 2, "height": 2, "origin": [0, 0]},
+    )
+    assert editor_response.status_code == 200
+    editor_state = editor_response.json()
+    assert editor_state["grid_bounds"]["min_x"] == 0
+    assert editor_state["grid_bounds"]["max_x"] == 1
+    assert len(editor_state["tiles"]) == 4
+    assert editor_state["floor_objects"] == []
+    assert Entity.get_all_entities() == []
+    assert sim.encounter is None
 
     object_response = client.post(
         "/mapeditor/map/objects",
@@ -1590,30 +1730,23 @@ def test_eb_18_016_state_endpoint_serializes_editor_and_active_encounter_state()
     )
     assert object_response.status_code == 200
 
-    editor_state = client.get("/state").json()
-    assert editor_state["entities"] == []
-    assert editor_state["encounter"] is None
+    editor_state_response = client.get("/mapeditor/map")
+    assert editor_state_response.status_code == 200
+    editor_state = editor_state_response.json()
     assert editor_state["floor_objects"][0]["name"] == "Door"
     assert editor_state["floor_objects"][0]["position"] == [1, 1]
     assert "is_open" in editor_state["floor_objects"][0]["state"]
+    assert Entity.get_all_entities() == []
+    assert sim.encounter is None
 
-    reset_chapter_18_state(width=4, height=4)
-    hero, monster = create_book_pair()
-    encounter = start_ordered_encounter(
-        hero,
-        monster,
-        HumanController(source_entity_uuid=hero.uuid),
-        PassController(source_entity_uuid=monster.uuid),
-        hero,
-    )
-    sim.encounter = encounter
-
-    active_state = client.get("/state").json()
+    client, session_id, hero, monster = create_action_api_session()
+    bootstrap = player_replication_seed(client, session_id)
+    active_state = bootstrap["world"]["state"]
     assert {entity["uuid"] for entity in active_state["entities"]} == {
         str(hero.uuid),
         str(monster.uuid),
     }
-    assert active_state["encounter"]["uuid"] == str(encounter.uuid)
+    assert active_state["encounter"]["uuid"] == bootstrap["protocol"]["source_stream_id"]
     assert active_state["encounter"]["state"] == EncounterState.ACTIVE.value
     assert active_state["encounter"]["current_entity_uuid"] == str(hero.uuid)
     assert [combatant["uuid"] for combatant in active_state["encounter"]["initiative_order"]] == [
@@ -1622,63 +1755,109 @@ def test_eb_18_016_state_endpoint_serializes_editor_and_active_encounter_state()
     ]
 
 
-def test_eb_18_017_combat_log_endpoint_uses_since_cursor_without_duplication() -> None:
-    """EB-18-017: /combat-log returns cursor-addressed combat log entries."""
+def test_eb_18_017_player_combat_log_window_has_no_cursor_duplication() -> None:
+    """EB-18-017: player combat-log windows are exact and cursor-addressed."""
     client, session_id, hero, _monster = create_action_api_session()
 
-    before_response = client.get("/combat-log")
-    assert before_response.status_code == 200
-    before = before_response.json()
-    before_total = before["total"]
-    assert before["count"] == before_total
-    assert client.get("/combat-log", params={"since": before_total}).json()["entries"] == []
+    before = player_replication_seed(client, session_id)
+    before_total = before["watermarks"]["combat_log_cursor"]
+    identity = {
+        "session_id": session_id,
+        "expected_source_stream_id": before["protocol"]["source_stream_id"],
+        "expected_generation_id": before["protocol"]["generation_id"],
+        "expected_perspective_epoch_id": before["perspective"]["perspective_epoch_id"],
+    }
+    empty_response = client.get(
+        "/replication/combat-log",
+        params={**identity, "from_combat_log_cursor": before_total},
+    )
+    assert empty_response.status_code == 200
+    assert empty_response.json()["frames"] == []
 
+    actions_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert actions_response.status_code == 200
+    dash = next(
+        action
+        for action in actions_response.json()["self_actions"]
+        if action["template_name"] == "Dash"
+    )
     dash_response = client.post(
-        "/action/self",
+        "/action/execute",
         json={
             "session_id": session_id,
             "entity_uuid": str(hero.uuid),
-            "action_name": "Dash",
+            "template_name": dash["template_name"],
+            "target_index": dash["valid_targets"][0]["index"],
         },
     )
     assert dash_response.status_code == 200
     assert dash_response.json()["combat_log_cursor_after"] == before_total + 1
 
-    new_logs_response = client.get("/combat-log", params={"since": before_total})
+    _current, _frames, new_logs = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    new_logs_response = client.get(
+        "/replication/combat-log",
+        params={**identity, "from_combat_log_cursor": before_total},
+    )
     assert new_logs_response.status_code == 200
-    new_logs = new_logs_response.json()
-    assert new_logs["count"] == 1
+    assert new_logs_response.json() == new_logs
     assert new_logs["total"] == before_total + 1
-    assert new_logs["entries"][0]["entry_type"] == "action"
-    assert new_logs["entries"][0]["data"]["action_name"] == "Dash"
-    assert new_logs["entries"][0]["source_uuid"] == str(hero.uuid)
+    assert len(new_logs["frames"]) == 1
+    assert new_logs["frames"][0]["entry"]["entry_type"] == "action"
+    assert new_logs["frames"][0]["entry"]["data"]["action_name"] == "Dash"
+    assert new_logs["frames"][0]["entry"]["source_uuid"] == str(hero.uuid)
 
-    repeated_response = client.get("/combat-log", params={"since": new_logs["total"]})
+    repeated_response = client.get(
+        "/replication/combat-log",
+        params={**identity, "from_combat_log_cursor": new_logs["total"]},
+    )
     assert repeated_response.status_code == 200
     repeated = repeated_response.json()
-    assert repeated["entries"] == []
-    assert repeated["count"] == 0
+    assert repeated["frames"] == []
     assert repeated["total"] == new_logs["total"]
 
-    replay_last_response = client.get("/combat-log", params={"since": new_logs["total"] - 1})
+    replay_last_response = client.get(
+        "/replication/combat-log",
+        params={
+            **identity,
+            "from_combat_log_cursor": new_logs["total"] - 1,
+        },
+    )
     assert replay_last_response.status_code == 200
     replay_last = replay_last_response.json()
-    assert replay_last["count"] == 1
-    assert replay_last["entries"][0]["data"]["action_name"] == "Dash"
+    assert len(replay_last["frames"]) == 1
+    assert replay_last["frames"][0]["entry"]["data"]["action_name"] == "Dash"
 
 
 def test_eb_18_018_combat_log_sse_follows_matching_completion_event() -> None:
     """EB-18-018: SSE emits an action combat log after its completion event."""
     client, session_id, hero, _monster = create_action_api_session()
+    actions_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert actions_response.status_code == 200
+    dash = next(
+        action
+        for action in actions_response.json()["self_actions"]
+        if action["template_name"] == "Dash"
+    )
     event_stream.ensure_attached()
     subscription = event_stream.subscribe()
     try:
         dash_response = client.post(
-            "/action/self",
+            "/action/execute",
             json={
                 "session_id": session_id,
                 "entity_uuid": str(hero.uuid),
-                "action_name": "Dash",
+                "template_name": dash["template_name"],
+                "target_index": dash["valid_targets"][0]["index"],
             },
         )
         envelopes = asyncio.run(drain_stream_subscription(subscription))
@@ -1700,8 +1879,8 @@ def test_eb_18_018_combat_log_sse_follows_matching_completion_event() -> None:
     assert prior_envelope["event"] == "game_event"
 
     completion_payload = prior_envelope["data"]
-    assert completion_payload.event.event_type == EventType.BASE_ACTION
-    assert completion_payload.event.phase.value == "completion"
+    assert completion_payload.event.event_type == EventType.BASE_ACTION.value
+    assert completion_payload.event.phase == "completion"
     assert completion_payload.event.name == "Dash"
 
     log_envelope = envelopes[dash_log_index]
@@ -1714,6 +1893,248 @@ def test_eb_18_018_combat_log_sse_follows_matching_completion_event() -> None:
         completion_payload.event_cursor,
         log_payload.combat_log_cursor,
     )
+
+
+def test_eb_18_035_handler_toggle_round_trip_exposes_only_player_choices() -> None:
+    """EB-18-035: handler reads and toggles preserve the player-only surface."""
+    client, session_id, hero, _monster = create_action_api_session()
+    add_opportunity_attack_handler(hero)
+
+    handlers_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    assert handlers_response.status_code == 200
+    handlers = handlers_response.json()["handlers"]
+    assert [handler["name"] for handler in handlers] == [
+        "Opportunity Attack Handler"
+    ]
+    assert handlers[0]["enabled"] is True
+    assert handlers[0]["trigger_event"] == EventType.STEP_MOVEMENT.value
+
+    disabled_response = client.post(
+        f"/entity/{hero.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
+        json={"session_id": session_id, "enabled": False},
+    )
+    assert disabled_response.status_code == 200
+    assert disabled_response.json() == {
+        "success": True,
+        "handler_name": "Opportunity Attack Handler",
+        "enabled": False,
+    }
+
+    disabled_handlers_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    assert disabled_handlers_response.status_code == 200
+    assert disabled_handlers_response.json()["handlers"][0]["enabled"] is False
+
+    actions_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert actions_response.status_code == 200
+    assert actions_response.json()["handler_details"] == (
+        disabled_handlers_response.json()["handlers"]
+    )
+
+    internal_response = client.post(
+        f"/entity/{hero.uuid}/handlers/HasAttacked%20Tracker/toggle",
+        json={"session_id": session_id, "enabled": False},
+    )
+    assert internal_response.status_code == 404
+    assert internal_response.json()["detail"]["code"] == "handler_not_found"
+    assert internal_response.json()["detail"]["valid_handler_names"] == [
+        "Opportunity Attack Handler"
+    ]
+
+    enabled_response = client.post(
+        f"/entity/{hero.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
+        json={"session_id": session_id, "enabled": True},
+    )
+    assert enabled_response.status_code == 200
+    assert enabled_response.json()["enabled"] is True
+
+
+def test_eb_18_036_equipment_mutations_acknowledge_and_replicate_loadout() -> None:
+    """EB-18-036: equipment commands acknowledge; replication owns state."""
+    client, session_id, hero, _monster = create_action_api_session()
+    dagger = create_dagger(hero.uuid)
+    assert hero.inventory.add_item(dagger)
+
+    before_equip = player_replication_seed(client, session_id)
+    equip_response = client.post(
+        f"/entity/{hero.uuid}/equip",
+        json={
+            "session_id": session_id,
+            "item_uuid": str(dagger.uuid),
+            "slot": "weapon_melee_off",
+        },
+    )
+    assert equip_response.status_code == 200
+    equip_ack = equip_response.json()
+    assert set(equip_ack) == {
+        "success",
+        "message",
+        "event_cursor_after",
+        "combat_log_cursor_after",
+    }
+    assert equip_ack["success"] is True
+    assert equip_ack["message"] == f"Equipped item {dagger.uuid}"
+    assert isinstance(equip_ack["event_cursor_after"], int)
+    assert isinstance(equip_ack["combat_log_cursor_after"], int)
+
+    equipped, equip_frames, _equip_logs = player_replication_after(
+        client,
+        session_id,
+        before_equip,
+    )
+    equip_patches = [
+        patch
+        for frame in equip_frames["frames"]
+        for patch in frame["patches"]
+    ]
+    assert any(
+        patch["kind"] == "controlled_equipment_replace"
+        and patch["entity_uuid"] == str(hero.uuid)
+        for patch in equip_patches
+    )
+    assert any(
+        patch["kind"] == "visual_loadout_replace"
+        and patch["loadout"]["entity_uuid"] == str(hero.uuid)
+        for patch in equip_patches
+    )
+    equipped_overview = equipped["world"]["equipment_by_entity"][str(hero.uuid)]
+    equipped_slots = {
+        row["slot"]: row["item"] for row in equipped_overview["slots"]
+    }
+    assert equipped_slots["weapon_melee_off"]["uuid"] == str(dagger.uuid)
+    assert str(dagger.uuid) not in {
+        item["uuid"] for item in equipped_overview["inventory"]
+    }
+
+    before_unequip = player_replication_seed(client, session_id)
+    unequip_response = client.post(
+        f"/entity/{hero.uuid}/unequip",
+        json={
+            "session_id": session_id,
+            "slot": "weapon_melee_off",
+        },
+    )
+    assert unequip_response.status_code == 200
+    unequip_ack = unequip_response.json()
+    assert set(unequip_ack) == set(equip_ack)
+    assert unequip_ack["success"] is True
+    assert unequip_ack["message"] == f"Unequipped {dagger.name}"
+
+    unequipped, unequip_frames, _unequip_logs = player_replication_after(
+        client,
+        session_id,
+        before_unequip,
+    )
+    unequip_patches = [
+        patch
+        for frame in unequip_frames["frames"]
+        for patch in frame["patches"]
+    ]
+    assert any(
+        patch["kind"] == "controlled_equipment_replace"
+        and patch["entity_uuid"] == str(hero.uuid)
+        for patch in unequip_patches
+    )
+    unequipped_overview = unequipped["world"]["equipment_by_entity"][str(hero.uuid)]
+    unequipped_slots = {
+        row["slot"]: row["item"] for row in unequipped_overview["slots"]
+    }
+    assert unequipped_slots["weapon_melee_off"] is None
+    assert str(dagger.uuid) in {
+        item["uuid"] for item in unequipped_overview["inventory"]
+    }
+
+
+def test_eb_18_037_turn_switch_updates_session_authority() -> None:
+    """EB-18-037: derived session turn authority follows encounter advancement."""
+    reset_chapter_18_state()
+    hero, monster = create_book_pair()
+    encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        HumanController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+    encounter.start_turn()
+    sim.encounter = encounter
+    game = sim.create_game_session(encounter)
+    client = TestClient(app)
+
+    session_ids: dict[UUID, str] = {}
+    for entity, name in ((hero, "Hero Player"), (monster, "Monster Player")):
+        create_response = client.post(
+            "/session/create",
+            json={"player_type": "human", "name": name},
+        )
+        assert create_response.status_code == 200
+        session_id = create_response.json()["session_id"]
+        join_response = client.post(
+            "/game/join",
+            json={
+                "session_id": session_id,
+                "entity_uuids": [str(entity.uuid)],
+            },
+        )
+        assert join_response.status_code == 200
+        session_ids[entity.uuid] = session_id
+
+    assert game.active_entity_uuid == hero.uuid
+    initial_status = client.get("/game/status")
+    assert initial_status.status_code == 200
+    initial_sessions = {
+        row["session_id"]: row for row in initial_status.json()["sessions"]
+    }
+    assert initial_sessions[session_ids[hero.uuid]]["is_their_turn"] is True
+    assert initial_sessions[session_ids[monster.uuid]]["is_their_turn"] is False
+
+    end_turn_response = client.post(
+        "/action/end-turn",
+        json={
+            "session_id": session_ids[hero.uuid],
+            "entity_uuid": str(hero.uuid),
+        },
+    )
+    assert end_turn_response.status_code == 200
+    assert end_turn_response.json()["status"] == "waiting_for_human"
+    assert end_turn_response.json()["entity_uuid"] == str(monster.uuid)
+    assert game.active_entity_uuid == monster.uuid
+
+    switched_status = client.get("/game/status")
+    assert switched_status.status_code == 200
+    assert switched_status.json()["active_entity_uuid"] == str(monster.uuid)
+    switched_sessions = {
+        row["session_id"]: row for row in switched_status.json()["sessions"]
+    }
+    assert switched_sessions[session_ids[hero.uuid]]["is_their_turn"] is False
+    assert switched_sessions[session_ids[monster.uuid]]["is_their_turn"] is True
+
+    hero_ping = client.post(f"/session/{session_ids[hero.uuid]}/ping")
+    monster_ping = client.post(f"/session/{session_ids[monster.uuid]}/ping")
+    assert hero_ping.status_code == 200
+    assert monster_ping.status_code == 200
+    assert hero_ping.json()["is_my_turn"] is False
+    assert monster_ping.json()["is_my_turn"] is True
+
+    new_actor_actions = client.get(
+        f"/entity/{monster.uuid}/available-actions",
+        params={"session_id": session_ids[monster.uuid]},
+    )
+    old_actor_actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_ids[hero.uuid]},
+    )
+    assert new_actor_actions.status_code == 200
+    assert old_actor_actions.status_code == 403
+    assert old_actor_actions.json()["detail"]["code"] == "not_entity_turn"
 
 
 def run_all_tests() -> None:
@@ -1729,28 +2150,31 @@ def run_all_tests() -> None:
         test_eb_18_004_execute_action_captures_combat_log_and_listener_payload,
         test_eb_18_005_check_deaths_marks_dead_and_ends_single_faction_encounter,
         test_eb_18_006_serialization_and_spell_catalog_api_do_not_mutate_registry,
-        test_eb_18_030_health_endpoint_reports_scalar_listener_count,
+        test_eb_18_030_health_endpoint_is_state_free,
         test_eb_18_031_simulation_reset_status_delay_and_step_are_stateful,
-        test_eb_18_007_event_history_and_sse_payloads_preserve_directional_spatial_fields,
+        test_eb_18_007_objective_event_frames_preserve_directional_spatial_fields,
         test_eb_18_008_mapeditor_api_saves_map_state_without_entities_or_encounter,
         test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state,
-        test_eb_18_024_tile_lookup_error_reports_grid_context,
+        test_eb_18_024_mapeditor_tile_snapshot_preserves_grid_context,
         test_eb_18_009_action_execute_error_payload_reports_available_corrections,
         test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata,
-        test_eb_18_010_named_action_endpoints_share_structured_error_payloads,
+        test_eb_18_010_one_action_endpoint_shares_structured_errors_across_kinds,
         test_eb_18_011_entity_and_handler_errors_report_current_choices,
         test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout,
         test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities,
         test_eb_18_032_session_create_ping_and_delete_are_stateful,
         test_eb_18_033_game_join_status_and_session_entities_are_stateful,
-        test_eb_18_014_event_filter_and_simulation_errors_report_valid_ranges,
+        test_eb_18_014_replication_identity_and_simulation_errors_are_explicit,
         test_eb_18_025_end_turn_without_active_encounter_reports_state_context,
         test_eb_18_026_session_authority_errors_report_action_context,
         test_eb_18_015_mapeditor_errors_report_catalog_map_and_save_context,
-        test_eb_18_023_entity_action_target_errors_report_current_choices,
-        test_eb_18_016_state_endpoint_serializes_editor_and_active_encounter_state,
-        test_eb_18_017_combat_log_endpoint_uses_since_cursor_without_duplication,
+        test_eb_18_023_action_target_indices_are_bound_to_current_affordances,
+        test_eb_18_016_editor_and_player_seeds_serialize_their_own_state,
+        test_eb_18_017_player_combat_log_window_has_no_cursor_duplication,
         test_eb_18_018_combat_log_sse_follows_matching_completion_event,
+        test_eb_18_035_handler_toggle_round_trip_exposes_only_player_choices,
+        test_eb_18_036_equipment_mutations_acknowledge_and_replicate_loadout,
+        test_eb_18_037_turn_switch_updates_session_authority,
     ]
     for test in tests:
         test()

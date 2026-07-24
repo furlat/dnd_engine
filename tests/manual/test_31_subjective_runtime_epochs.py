@@ -3,18 +3,18 @@
 from collections import Counter
 from uuid import uuid4
 
-import ai.subjective.epochs as subjective_epochs_module
-from ai.observation.projector import _combat_log_cursor
-from ai.observation.models import ObservationSnapshot
-from ai.subjective.epochs import (
+import server.agent_runtime.epochs as subjective_epochs_module
+from server.agent_runtime.observation_projector import _combat_log_cursor
+from server.agent_protocol.observation import ObservationSnapshot
+from server.agent_runtime.epochs import (
     _action_cost_profile_from_cost_rows,
     _build_action_economy_state_from_actor,
     _build_action_capabilities,
     _build_affordance_set_and_execution_authority_from_actions,
     _build_affordance_set_from_actions,
 )
-from ai.protocol.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
-from ai.protocol.control import AffordanceSet
+from server.agent_protocol.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
+from server.agent_protocol.control import AffordanceSet
 from server.action_serialization import serialize_available_actions
 from dnd.actions_functional import execute_by_index, register_spell
 from dnd.core.base_object import BaseObject
@@ -25,7 +25,7 @@ from dnd.core.base_actions import AvailableTarget
 from dnd.core.base_actions import OutcomeResolution
 from dnd.core.base_actions import TargetType
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.events import WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
 from dnd.classes.fighter import ExtraAttack
 from dnd.classes.rage import FrenziedStrike
 from dnd.blocks.base_item import BaseItem
@@ -33,7 +33,7 @@ from dnd.core.aoe import Cone, Cube, Line, Sphere
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
-from dnd.encounter import Encounter
+from dnd.encounter import Encounter, TurnState
 from dnd.items.test_items import TrapLever, create_healing_potion, create_scroll_of_fireball
 from dnd.monsters.srd_roster import create_srd_monster
 from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
@@ -104,6 +104,35 @@ def test_snapshot_has_no_epoch_when_session_is_inactive() -> None:
     assert payload["current_epoch"] is None
 
 
+def test_snapshot_has_no_epoch_before_opening_turn_starts() -> None:
+    """An assigned opening actor has no executable authority before turn start."""
+    client, session_id, _hero, _monster, encounter = create_observation_game()
+    encounter.turn_state = TurnState.NOT_STARTED
+
+    response = client.get(f"/ai/sessions/{session_id}/observation/snapshot")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["session"]["is_my_turn"] is True
+    assert payload["current_epoch"] is None
+
+
+def test_snapshot_retires_cached_epoch_when_turn_stops() -> None:
+    """A cached executable epoch cannot survive a non-actionable turn state."""
+    client, session_id, _hero, _monster, encounter = create_observation_game()
+    active_snapshot = client.get(
+        f"/ai/sessions/{session_id}/observation/snapshot"
+    ).json()
+    assert active_snapshot["current_epoch"] is not None
+
+    encounter.turn_state = TurnState.NOT_STARTED
+    stopped_snapshot = client.get(
+        f"/ai/sessions/{session_id}/observation/snapshot"
+    ).json()
+
+    assert stopped_snapshot["current_epoch"] is None
+
+
 def test_epoch_rows_have_stable_row_ids_and_action_economy() -> None:
     """Epoch rows are already executable rows, not raw template-only hints."""
     client, session_id, hero, monster, _encounter = create_observation_game()
@@ -116,8 +145,22 @@ def test_epoch_rows_have_stable_row_ids_and_action_economy() -> None:
         for row in epoch["affordances"][bucket]
     ]
 
-    assert epoch["economy"]["actions"] >= 0
-    assert epoch["economy"]["movement_remaining"] >= 0
+    assert epoch["economy"]["actor_uuid"] == str(hero.uuid)
+    assert epoch["economy"]["actions"] == 1
+    assert epoch["economy"]["bonus_actions"] == 1
+    assert epoch["economy"]["reactions"] == 1
+    assert epoch["economy"]["movement_remaining"] == 30
+    assert epoch["economy"]["meaningful_commands_remaining"] is True
+    assert epoch["affordances"]["entity_actions"]
+    assert epoch["affordances"]["position_actions"]
+    assert any(
+        row["row_id"].startswith("entity|Attack_MELEE_MAIN|uuid=")
+        for row in epoch["affordances"]["entity_actions"]
+    )
+    assert any(
+        row["row_id"].startswith("position|Move|pos=")
+        for row in epoch["affordances"]["position_actions"]
+    )
     assert any(row_id.startswith("entity|Attack_MELEE_MAIN|uuid=") for row_id in row_ids)
     assert any(str(monster.uuid) in row_id for row_id in row_ids)
     assert all("|" in row_id for row_id in row_ids)
@@ -238,7 +281,7 @@ def test_epoch_row_descriptor_cache_reuses_semantic_derivation(monkeypatch) -> N
 
 def test_epoch_row_id_falls_back_to_semantic_key_not_display_name() -> None:
     """Localized labels should not become command identity when template names are absent."""
-    actor = Entity(name="Actor", source_entity_uuid=uuid4())
+    actor = Entity.create(name="Actor", source_entity_uuid=uuid4())
     first = AvailableActionInfo(
         template_name="",
         semantic_key="rules.localized.semantic_action",
@@ -635,7 +678,6 @@ def test_condition_lock_control_spells_expose_target_effects() -> None:
     assert hypnotic_semantics.target_effects[0].condition_semantic_keys == frozenset({
         "dnd.spells.illusion.HypnoticPatternEffect",
         "dnd.conditions.Charmed",
-        "dnd.conditions.Incapacitated",
     })
 
 
@@ -665,7 +707,6 @@ def test_sleep_epoch_exposes_hp_pool_agency_denial() -> None:
     assert sleep_effect.outcome_kind is OutcomeKind.GUARANTEED
     assert sleep_effect.condition_semantic_keys == frozenset({
         "dnd.spells.enchantment.SleepEffect",
-        "dnd.conditions.Unconscious",
     })
     assert evaluate_fact_expression(
         sleep_effect.applicability,
@@ -924,7 +965,6 @@ def test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches() ->
     assert eyebite_profile.branches[0].save_dc == 15
     assert eyebite_profile.branches[0].condition_semantic_keys == frozenset({
         "dnd.spells.necromancy.EyebiteAsleepEffect",
-        "dnd.conditions.Unconscious",
     })
 
 
@@ -1161,11 +1201,18 @@ def test_spell_epoch_rows_expose_full_spell_slot_costs() -> None:
     serialized = serialize_available_actions(support, actions)
     direct_affordances = _build_affordance_set_from_actions(support, actions, 42)
     direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
-    serialized_bless = next(row for row in serialized["entity_actions"] if row["template_name"] == "Bless__slot_1")
+    serialized_bless = next(
+        row
+        for row in serialized.entity_actions
+        if row.template_name == "Bless__slot_1"
+    )
 
     assert direct_bless.cost.action_cost == 1
     assert direct_bless.cost.spell_slot_cost == 1
-    assert any(cost["cost_type"] == "spell_slot_1" for cost in serialized_bless["costs"])
+    assert any(
+        cost.cost_type == "spell_slot_1"
+        for cost in serialized_bless.costs
+    )
 
 
 def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
@@ -1180,12 +1227,12 @@ def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
     direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
     serialized_bless = next(
         row
-        for row in serialized["entity_actions"]
-        if row["template_name"] == "Bless__slot_1"
+        for row in serialized.entity_actions
+        if row.template_name == "Bless__slot_1"
     )
 
     assert direct_bless.requires_concentration is True
-    assert serialized_bless["requires_concentration"] is True
+    assert serialized_bless.requires_concentration is True
     assert direct_bless.semantic_key == "dnd.spells.enchantment.Bless"
     assert direct_affordances.semantics_for(direct_bless).semantic_id == "support.bless"
     assert direct_affordances.semantics_for(direct_bless).concentration_effect is not None

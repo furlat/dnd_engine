@@ -17,6 +17,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
@@ -121,6 +122,7 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     )
     monster.health.add_temporary_hit_points(3, monster.uuid)
     encounter = _start_encounter(hero=hero, monster=monster, name="Terminal Summary")
+    store.capture_active_encounter(encounter)
 
     initial_event_cursor = EventQueue.event_cursor()
     damage = monster.get_max_hp() + 6
@@ -129,7 +131,10 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
 
     summary = store.get("hosted-summary-game")
     assert summary is not None
+    replay_capture = store.get_replay_capture("hosted-summary-game")
+    assert replay_capture is not None
     assert store.get(encounter.uuid) == summary
+    assert store.get_replay_capture(encounter.uuid) == replay_capture
     assert summary.game_id == "hosted-summary-game"
     assert summary.encounter_uuid == encounter.uuid
     assert summary.terminal_cursor.event_cursor > initial_event_cursor
@@ -154,7 +159,8 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     assert monster_summary.initial.resources["spell_slot_2"] == 1
     assert monster_summary.final.temporary_hit_points == 0
     assert monster_summary.final.is_defeated is True
-    assert "dnd.conditions.Dead" in monster_summary.final.condition_semantic_keys
+    assert monster_summary.final.life_state is LifeState.DEAD
+    assert "dnd.conditions.Dead" not in monster_summary.final.condition_semantic_keys
     assert hero_summary.statistics.damage_dealt.applied > 0
     assert monster_summary.statistics.damage_taken.applied == (
         hero_summary.statistics.damage_dealt.applied
@@ -162,6 +168,15 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     assert hero_summary.statistics.kills == 1
     assert monster_summary.statistics.deaths == 1
     assert summary_digest_is_valid(summary)
+    assert replay_capture.encounter_uuid == str(encounter.uuid)
+    assert replay_capture.generation_id == str(EventQueue.generation_id())
+    assert replay_capture.seed.event_cursor == initial_event_cursor
+    assert replay_capture.seed.world.equipment_by_entity
+    assert replay_capture.terminal_event_cursor == summary.terminal_cursor.event_cursor
+    assert (
+        replay_capture.terminal_combat_log_cursor
+        == summary.terminal_cursor.combat_log_cursor
+    )
 
     caller_view_final = summary.entities[0].final
     assert caller_view_final is not None
@@ -184,7 +199,9 @@ def test_store_is_bounded_and_has_no_database_imports() -> None:
     third = _run_empty_encounter("Third", 7)
 
     assert store.get(first.uuid) is None
+    assert store.get_replay_capture(first.uuid) is None
     assert store.get(second.uuid) is not None
+    assert store.get_replay_capture(second.uuid) is not None
     assert store.get(third.uuid) is not None
     latest = store.get()
     assert latest is not None

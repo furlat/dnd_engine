@@ -11,16 +11,23 @@ interpret a 404.
 
 ## Standalone Game Server
 
-`server.event_server` hosts one hot game in one process. It has no database
-dependency and remains the shortest path for local development:
+`server.event_server` hosts one hot game in one process and has no database
+dependency. For a playable local server with the bundled managed AI service,
+use the explicit AI-owned composition root:
 
 ```bash
-uv run uvicorn server.event_server:app --host 127.0.0.1 --port 8000
+uv run python -m ai.local_game_server --host 127.0.0.1 --port 8000
 ```
 
 All state, event execution, sessions, subjective observations, and controller
-commands remain in memory. Importing or running this module does not open the
-game-directory SQLite database.
+commands remain in memory. The core-only
+`uv run python -m server.event_server ...` entry point imports no client
+package and intentionally exposes no managed AI controller choice. The local
+composition imports the policy once at backend boot and gives each AI session
+an independently owned managed thread. It returns a successful managed start
+only after every runtime completes snapshot bootstrap and its first
+subjective-stream sync. For process isolation with the same protocol, use
+`uv run python -m ai.isolated_game_server ...`.
 
 ## Multi-Game Gateway
 
@@ -28,13 +35,28 @@ game-directory SQLite database.
 
 ```bash
 export DND_DIRECTORY_CAPABILITY_PEPPER="replace-with-a-private-random-secret"
-uv run uvicorn server.game_gateway:app --host 127.0.0.1 --port 8000
+export DND_HOSTED_WARM_WORKERS=1
+uv run uvicorn ai.game_gateway:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 By default it stores cold directory data at
 `.runtime/game-directory.sqlite3` and worker files under
-`.runtime/hosted-games/`. Each active game runs in an isolated, unchanged
-`server.event_server` worker reached over a Unix-domain socket.
+`.runtime/hosted-games/`. Each active game runs in an isolated
+`ai.local_game_server` worker reached over a Unix-domain socket. The worker
+imports the bundled policy once during prewarm, then starts lightweight
+per-session policy threads. This retains process isolation between games
+without nesting another Python interpreter for every AI side.
+
+The core-only `server.game_gateway:app` composition remains available for
+human-only hosting and advertises only the human controller. For explicit
+double isolation—one game-worker process plus one process per AI session—use
+`ai.isolated_game_gateway:app`. The embedded composition is the normal hosted
+default because the game worker already provides the process boundary.
+
+Worker readiness verifies the exact declared managed-agent service ID and
+execution mode before a process enters the warm pool. A gateway therefore
+cannot advertise AI or Codex controllers on the strength of an unchecked
+configuration hint.
 
 SQLite is used for identities, memberships, grants, attachments, game
 lifecycle, immutable summaries, and rating evidence. It is not consulted while
@@ -53,21 +75,21 @@ or Codex client:
    and side.
 4. The remote process redeems the returned grant through
    `POST /games/{game_id}/attachments` with `client_kind="external_ai"`.
-5. Start the policy process from any host that can reach the gateway. It
-   redeems the grant itself and receives `engine_base_url`,
-   `runtime_session_id`, `runtime_token`, and its controller lease:
+5. The remote host redeems the grant with the typed
+   `ai.remote_connection.redeem_remote_agent_grant()` helper. That returns
+   `engine_base_url`, `runtime_session_id`, `runtime_token`, and the controller
+   lease. Start the policy process with those exact connection facts:
 
 ```bash
-export DND_AGENT_GRANT_ID='<grant_id>'
-export DND_AGENT_GRANT_CAPABILITY='<grant_capability>'
 uv run python -m ai.external_agent \
-  --gateway-url 'https://games.example.test' \
-  --game-id '<game_id>'
+  --base-url '<engine_base_url>' \
+  --session-id '<runtime_session_id>' \
+  --runtime-token '<runtime_token>' \
+  --takeover-claim-id '<takeover_claim_id>'
 ```
 
-For local worker management and low-level diagnostics, the same executable can
-still be started directly with `--base-url`, `--session-id`,
-`--runtime-token`, and optional `--takeover-claim-id`.
+Grant redemption and the hot policy runtime remain separate operations so a
+durable cold capability is never passed into the long-lived gameplay process.
 
 The process bootstraps one subjective snapshot, consumes its ordered
 observation and decision-epoch SSE stream, reduces that stream locally, and

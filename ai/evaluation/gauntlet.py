@@ -13,7 +13,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from ai.evaluation.artifacts import build_external_selfplay_artifact, write_validation_run_artifact
-from ai.evaluation.gauntlet_contract import (
+from server.agent_protocol.gauntlet import (
     GauntletEvent,
     GauntletEventIngestRequest,
     GauntletEventSink,
@@ -226,7 +226,7 @@ def run_ai_gauntlet(
     max_commands: int = 80,
     elo_config: Optional[EloConfig] = None,
     runs_output_directory: Optional[Path | str] = None,
-    gauntlet_output_directory: Optional[Path | str] = "ai/evidence/gauntlets",
+    gauntlet_output_directory: Optional[Path | str] = "evidence/gauntlets",
     event_stream: Optional[GauntletEventSink] = None,
 ) -> GauntletSummary:
     """Run exactly the rows in a gauntlet schedule."""

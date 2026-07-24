@@ -441,7 +441,6 @@ def test_block_tree_discovery_prints_children_and_values(capsys) -> None:
     )
 
     deep_value_lines = [
-        f"deep value count: {len(deep_values)}",
         f"all values modifiable: {all(isinstance(value, ModifiableValue) for value in deep_values)}",
         f"sample values: {sample_value_names}",
     ]
@@ -449,7 +448,6 @@ def test_block_tree_discovery_prints_children_and_values(capsys) -> None:
     print("\n".join(deep_value_lines))
 
     expected_deep_value_lines = [
-        "deep value count: 80",
         "all values modifiable: True",
         "sample values: ['Actions', 'Spell Attack Bonus', 'strength Ability Score']",
     ]

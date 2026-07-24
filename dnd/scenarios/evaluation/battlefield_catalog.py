@@ -414,7 +414,7 @@ def _place_directional_barrier(
                 blocked_channels=STANDARD_BLOCKING_CHANNELS,
                 is_open=False,
             )
-            grid.place_object(door.uuid, position)
+            door.place_on_grid(position)
         else:
             wall = DirectionalWall(
                 source_entity_uuid=uuid4(),
@@ -422,7 +422,7 @@ def _place_directional_barrier(
                 blocked_directions=("west",),
                 blocked_channels=STANDARD_BLOCKING_CHANNELS,
             )
-            grid.place_object(wall.uuid, position)
+            wall.place_on_grid(position)
             walls.append(wall)
     if door is None:
         raise ValueError("Directional barrier requires a door within rows 3 through 11.")
@@ -467,7 +467,7 @@ def _build_arcane_device_bright(spec: BattlefieldSpec, grid: GridMap) -> BuiltBa
     create_standard_arena_floor(grid)
     cannon = create_fireball_cannon(uuid4(), position=(7, 7), charges=2)
     potion = create_healing_potion(uuid4(), heal_amount=12)
-    grid.place_object(potion.uuid, (6, 7))
+    potion.place_on_grid((6, 7))
     return BuiltBattlefield(
         spec=spec,
         environment=None,
@@ -497,7 +497,7 @@ def _build_field_cache_bright(spec: BattlefieldSpec, grid: GridMap) -> BuiltBatt
     """Build the bright floor with the complete field-cache chest."""
     create_standard_arena_floor(grid)
     chest = _create_cache("Validation Field Cache", heal_amount=14, include_full_loadout=True)
-    grid.place_object(chest.uuid, (5, 7))
+    chest.place_on_grid((5, 7))
     return BuiltBattlefield(
         spec=spec,
         environment=None,
@@ -513,7 +513,7 @@ def _build_multi_object_dark(spec: BattlefieldSpec, grid: GridMap) -> BuiltBattl
     wall_torch = create_wall_torch(position=(4, 10), owner_uuid=uuid4(), lit=True)
     cannon = create_fireball_cannon(uuid4(), position=(6, 11), charges=2)
     chest = _create_cache("Validation Control Cache", heal_amount=12, include_full_loadout=False)
-    grid.place_object(chest.uuid, (5, 10))
+    chest.place_on_grid((5, 10))
     return BuiltBattlefield(
         spec=spec,
         environment=environment,

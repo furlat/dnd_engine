@@ -13,15 +13,12 @@ from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.controller import Controller, PassController
 from dnd.conditions import Blinded, Poisoned
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
-from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.maps.arena_layout import (
     ARENA_HEIGHT,
     ARENA_WIDTH,
@@ -713,7 +710,14 @@ SRD_UNDEAD_CRYPT = ValidationArenaSpec(
     arena_id="srd_undead_crypt",
     title="SRD Undead Crypt",
     hero_role="level 5 shield fighter",
-    tags=("srd-roster", "undead", "darkvision", "condition-immunity", "bruiser"),
+    tags=(
+        "srd-roster",
+        "undead",
+        "skeletons",
+        "darkvision",
+        "condition-immunity",
+        "bruiser",
+    ),
     expected_pressure=(
         "exercise undead poison immunity and low-speed pursuit facts",
         "compare ghoul pressure against slow zombie bodies",
@@ -895,22 +899,7 @@ def reset_ai_validation_arena_state(width: int = ARENA_WIDTH, height: int = AREN
         width: Arena width in grid cells.
         height: Arena height in grid cells.
     """
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def create_standard_skeleton_door_arena() -> ValidationArena:
@@ -1133,7 +1122,7 @@ def create_arcane_device_control_arena() -> ValidationArena:
     create_standard_arena_floor(grid)
     cannon = create_fireball_cannon(uuid4(), position=(7, 7), charges=2)
     potion = create_healing_potion(uuid4(), heal_amount=12)
-    grid.place_object(potion.uuid, (6, 7))
+    potion.place_on_grid((6, 7))
 
     hero = _create_level_5_sorcerer("Validation Device Sorcerer", (3, 7))
     monsters = (
@@ -2128,7 +2117,7 @@ def create_field_cache_loot_race_arena() -> ValidationArena:
     chest.chest_inventory.add_item(create_acid_flask(chest.uuid))
     chest.chest_inventory.add_item(create_healing_potion(chest.uuid, heal_amount=14))
     chest.chest_inventory.add_item(create_weapon_coat(chest.uuid))
-    grid.place_object(chest.uuid, (5, 7))
+    chest.place_on_grid((5, 7))
 
     monsters = (
         create_skeleton_warrior(name="Validation Cache Bruiser", position=(9, 7), faction="monsters", darkvision=True),
@@ -2435,7 +2424,7 @@ def create_multi_object_control_room_arena() -> ValidationArena:
     chest.chest_inventory.add_item(create_scroll_of_magic_missile(chest.uuid))
     chest.chest_inventory.add_item(create_acid_flask(chest.uuid))
     chest.chest_inventory.add_item(create_healing_potion(chest.uuid, heal_amount=12))
-    grid.place_object(chest.uuid, (5, 10))
+    chest.place_on_grid((5, 10))
 
     monsters = (
         create_skeleton_warrior(name="Validation Object Guard", position=(9, 11), faction="monsters", darkvision=True),
@@ -2839,7 +2828,7 @@ def _place_validation_directional_barrier(
                 blocked_channels=STANDARD_BLOCKING_CHANNELS,
                 is_open=False,
             )
-            grid.place_object(door.uuid, position)
+            door.place_on_grid(position)
             continue
         wall = DirectionalWall(
             source_entity_uuid=uuid4(),
@@ -2847,7 +2836,7 @@ def _place_validation_directional_barrier(
             blocked_directions=("west",),
             blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
-        grid.place_object(wall.uuid, position)
+        wall.place_on_grid(position)
         walls.append(wall)
 
     if door is None:

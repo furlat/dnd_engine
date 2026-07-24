@@ -9,7 +9,7 @@ from ai.policy.routines import (
     REGISTERED_ROUTINES,
     RoutineContract,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     FactExpression,
     FactOperator,
 )

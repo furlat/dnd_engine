@@ -6,7 +6,8 @@ from dnd.actions_functional import get_available_actions
 from dnd.conditions import Exhaustion, Poisoned
 from dnd.core.base_block import BaseBlock, SensesType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import AdvantageStatus, CreatureType, DamageType, ResistanceStatus
 from dnd.core.values import BaseValue
@@ -227,7 +228,8 @@ def test_generic_caster_preset_wires_spellcasting_reactions_and_item_actions() -
     assert caster.spell_save_dc() == 15
     assert caster.get_hp() == 40
     assert caster.action_economy.spell_slot_1.normalized_score == 4
-    assert caster.action_economy.spell_slot_3.normalized_score == 3
+    assert caster.action_economy.spell_slot_2.normalized_score == 3
+    assert caster.action_economy.spell_slot_3.normalized_score == 2
     assert equipped_item_name(caster, WeaponSlot.MELEE_MAIN) == "Dagger"
     assert {"Fire Bolt", "Magic Missile", "Fireball", "Invisibility", "Greater Invisibility"} <= action_template_names(caster)
 

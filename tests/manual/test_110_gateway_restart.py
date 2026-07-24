@@ -15,6 +15,7 @@ from server.game_directory.contracts import (
     WorkerTransportKind,
 )
 from server.game_directory.repository import GameDirectoryRepository
+from server.game_artifact_store import GameArtifactStore
 from server.game_gateway import GameGatewayService
 from server.hosted_worker import HostedWorkerManager
 from server.runtime_authority import RuntimeAuthorityCache
@@ -64,6 +65,7 @@ def test_gateway_start_interrupts_active_game_without_owned_worker(tmp_path: Pat
         repository,
         HostedWorkerManager(tmp_path / "runtime"),
         RuntimeAuthorityCache(),
+        GameArtifactStore(tmp_path / "artifacts"),
         capability_pepper=b"restart-test-pepper",
     )
 

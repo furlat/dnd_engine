@@ -10,7 +10,8 @@ from dnd.core.base_actions import (
     ActionSetupMaintenanceTrigger,
 )
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import (
     AdvantageStatus,

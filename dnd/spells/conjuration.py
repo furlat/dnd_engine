@@ -30,7 +30,13 @@ from dnd.core.base_actions import (
     TargetType,
     TopologyEffectProfile,
 )
-from dnd.core.base_conditions import BaseCondition, HazardFilter, DurationType, ConditionTag
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import (
+    ConditionCategory,
+    ConditionTag,
+    DurationType,
+    HazardFilter,
+)
 from dnd.blocks.base_item import BaseItem, UsableItem
 import random
 from dnd.core.dice import AttackOutcome
@@ -155,6 +161,13 @@ class CallLightningStrike(BaseAction):
             damages=[lightning_damage],
             damage_rolls=[damage_roll],
             status_message=f"{self.name} dealt {final_damage} lightning damage{save_text}"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Spend the action declared by the granted strike."""
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
         )
 
 
@@ -835,7 +848,8 @@ class Grease(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            spell_dc=dc
+            spell_dc=dc,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -1456,6 +1470,7 @@ class Web(SpellAction):
             zone_center=target_pos,
             spell_dc=dc,
             anchored_or_layered=self.anchored_or_layered,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -1786,7 +1801,8 @@ class Cloudkill(SpellAction):
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
             spell_dc=dc,
-            upcast_dice=upcast_bonus
+            upcast_dice=upcast_bonus,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -1839,6 +1855,10 @@ class SpiritGuardiansTriggered(BaseCondition):
     """
     name: str = Field(default="Spirit Guardians Triggered", description="Display name for the spirit guardians triggered condition.")
     description: str = Field(default="Already damaged by Spirit Guardians this turn", description="Rules-facing summary for the spirit guardians triggered condition.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Internal once-per-turn marker category.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -2251,7 +2271,8 @@ class SpiritGuardians(SpellAction):
             zone_center=caster.senses.position,
             spell_dc=dc,
             damage_type=self.damage_type,
-            upcast_dice=upcast_bonus
+            upcast_dice=upcast_bonus,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -2437,7 +2458,8 @@ class FogCloud(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            zone_radius_feet=radius
+            zone_radius_feet=radius,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -2572,7 +2594,8 @@ class Darkness(SpellAction):
         zone = DarknessZone(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            zone_center=target_pos
+            zone_center=target_pos,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -2741,7 +2764,8 @@ class Daylight(SpellAction):
         zone = DaylightZone(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            zone_center=target_pos
+            zone_center=target_pos,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
         removed_darkness = _remove_overlapping_darkness_zones(zone, effect_event)
@@ -2938,7 +2962,8 @@ class InsectPlague(SpellAction):
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
             spell_dc=dc,
-            upcast_dice=upcast_bonus
+            upcast_dice=upcast_bonus,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -3191,7 +3216,8 @@ class IncendiaryCloud(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            spell_dc=dc
+            spell_dc=dc,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -3489,7 +3515,8 @@ class StinkingCloud(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            spell_dc=dc
+            spell_dc=dc,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -3794,7 +3821,8 @@ class SleetStorm(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            spell_dc=dc
+            spell_dc=dc,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
         concentration = self.ensure_concentration(effect_event)
@@ -3907,6 +3935,10 @@ class GuardianWarded(BaseCondition):
     """
     name: str = Field(default="Guardian Warded", description="Display name for the guardian warded condition.")
     description: str = Field(default="Already triggered Guardian of Faith this turn", description="Rules-facing summary for the guardian warded condition.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Internal once-per-turn marker category.",
+    )
     guardian_uuid: Optional[UUID] = Field(default=None, description="Guardian object UUID associated with guardian warded.")
 
     def _apply(self, declaration_event: Event) -> Tuple[
@@ -3980,8 +4012,7 @@ class GuardianOfFaithObject(BaseItem):
         self.caster_uuid = caster_uuid
         self.spell_dc = spell_dc
 
-        grid = get_map()
-        grid.place_object(self.uuid, position)
+        self.place_on_grid(position)
 
         aura_positions: set[Tuple[int, int]] = set()
         for dx in range(-2, 3):
@@ -4344,8 +4375,7 @@ class HeroesFeast(SpellAction):
             source_entity_uuid=caster.uuid,
             caster_uuid=caster.uuid,
         )
-        grid = get_map()
-        grid.place_object(feast.uuid, position)
+        feast.place_on_grid(position)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

@@ -20,7 +20,8 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_actions import ActionCategory, TargetType
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, HazardFilter
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map

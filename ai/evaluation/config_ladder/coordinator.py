@@ -16,6 +16,7 @@ import signal
 import sys
 import time
 import traceback as traceback_module
+from types import MappingProxyType
 from pydantic import ValidationError
 
 from ai.evaluation.config_ladder.artifact_store import (
@@ -41,12 +42,14 @@ from ai.evaluation.config_ladder.worker_contracts import (
     AttemptOutcome,
     AttemptReceipt,
     CanonicalMatchRecord,
+    CONNECTED_MATCH_ENTRYPOINT,
     CoordinatorCheckpoint,
     CoordinatorSummary,
     MatchWorkerRequest,
     MatchWorkerResponse,
     ProbeOperation,
     ProbeTask,
+    PROMOTION_MATCH_ENTRYPOINT,
     RequestFactory,
     WorkerArtifactEnvelope,
     WorkerError,
@@ -56,6 +59,10 @@ from ai.evaluation.config_ladder.worker_contracts import (
 
 
 _WORKER_MODULE = "ai.evaluation.config_ladder.worker"
+_REAL_MATCH_WORKER_MODULES = MappingProxyType({
+    CONNECTED_MATCH_ENTRYPOINT: "ai.evaluation.config_ladder.connected_worker",
+    PROMOTION_MATCH_ENTRYPOINT: "ai.evaluation.promotion.worker",
+})
 _EXPECTED_EXIT_CODES = {
     WorkerStatus.COMPLETED: 0,
     WorkerStatus.SOFT_TIMEOUT: 20,
@@ -513,6 +520,11 @@ async def _execute_attempt(
         request_factory(entry, attempt_number, dispatch_id)
     )
     _validate_request(request, schedule, entry, attempt_number, dispatch_id)
+    selected_worker_module = (
+        _REAL_MATCH_WORKER_MODULES.get(request.real_match_entrypoint, worker_module)
+        if request.real_match_entrypoint is not None
+        else worker_module
+    )
     paths = _attempt_paths(
         experiment_dir,
         spool_experiment_dir,
@@ -546,7 +558,7 @@ async def _execute_attempt(
             process = await asyncio.create_subprocess_exec(
                 worker_python,
                 "-m",
-                worker_module,
+                selected_worker_module,
                 "--request",
                 str(paths.spool_request),
                 "--response",

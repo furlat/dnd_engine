@@ -158,4 +158,6 @@ def _trace(
         subjective_known_entity_uuids=[f"{actor_faction}-{command_index}"],
         subjective_known_entity_positions=[],
         subjective_known_tile_positions=[],
+        audit_controlled_entity_uuids=[f"{actor_faction}-{command_index}"],
+        audit_authorized_entity_uuids=[f"{actor_faction}-{command_index}"],
     )

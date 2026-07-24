@@ -7,39 +7,68 @@ UsableItem provides actions via get_use_actions() with charge tracking.
 
 from typing import Iterable, Optional, List, Literal, Tuple, cast
 from uuid import UUID, uuid4
-from enum import Enum
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.events import (
-    EquipmentSlot,
     Event,
     EventPhase,
     EventType,
     SpatialChangeEvent,
+)
+from dnd.core.equipment_types import EquipmentSlot
+from dnd.core.item_types import (
+    EquippedVisualPolicy,
+    ItemLocation,
+    ItemPresentationKind,
+    ItemPresentationState,
+    ItemRarity,
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import ActionEvent, BaseAction
 from dnd.core.content import ContentKind
 
 
-class ItemRarity(str, Enum):
-    """Rarity labels used by item data."""
+class ItemLocationStateEvent(Event):
+    """Post-commit, idempotent item placement and presentation fact."""
 
-    COMMON = "common"
-    UNCOMMON = "uncommon"
-    RARE = "rare"
-    VERY_RARE = "very_rare"
-    LEGENDARY = "legendary"
-
-
-class EquippedVisualPolicy(str, Enum):
-    """Describe whether equipped gear contributes a separate actor layer."""
-
-    VISIBLE = "visible"
-    HIDDEN = "hidden"
+    name: str = Field(default="Item Location State", description="Item location-state fact label.")
+    event_type: EventType = Field(
+        default=EventType.ITEM_LOCATION_STATE,
+        description="Event category for authoritative item location snapshots.",
+    )
+    item_state: ItemPresentationState = Field(
+        description="Cold item presentation/state required to materialize this item."
+    )
+    location: ItemLocation = Field(description="Authoritative item placement after the mutation.")
+    owner_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Owning entity or container item UUID after the mutation.",
+    )
+    container_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Inventory or equipment block UUID after the mutation.",
+    )
+    tile_uuid: Optional[UUID] = Field(default=None, description="Floor tile UUID after the mutation.")
+    position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Floor position after the mutation.",
+    )
+    equipment_slot: Optional[EquipmentSlot] = Field(
+        default=None,
+        description="Occupied equipment slot when location is equipment.",
+    )
+    merged_into_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Surviving stack UUID when this item was fully merged.",
+    )
+    entity_armor_class_after: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Exact aggregate owner AC after an entity-owned mutation.",
+    )
 
 
 class BaseItem(BaseBlock):
@@ -143,6 +172,69 @@ class BaseItem(BaseBlock):
             return self.semantic_key
         return f"{type(self).__module__}.{type(self).__name__}"
 
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Return a cold presentation/state payload owned by this item.
+
+        Concrete item families extend this common payload with their own
+        weapon, armor, shield, or finite-use facts. No transport/server model
+        participates in this engine contract.
+        """
+        return ItemPresentationState(
+            item_uuid=self.uuid,
+            semantic_key=self.get_semantic_key(),
+            name=self.name,
+            description=self.description,
+            item_kind=ItemPresentationKind.ITEM,
+            rarity=self.rarity,
+            weight=self.weight,
+            visual_item_name=self.visual_item_name or self.name,
+            visual_variant_id=self.visual_variant_id,
+            equipped_visual_policy=self.equipped_visual_policy,
+            stack_count=self.stack_count if stack_count is None else stack_count,
+            max_stack=self.max_stack,
+            is_consumable=self.is_consumable,
+        )
+
+    def publish_location_state(
+        self,
+        location: ItemLocation,
+        *,
+        owner_uuid: Optional[UUID] = None,
+        container_uuid: Optional[UUID] = None,
+        tile_uuid: Optional[UUID] = None,
+        position: Optional[Tuple[int, int]] = None,
+        equipment_slot: Optional[EquipmentSlot] = None,
+        merged_into_item_uuid: Optional[UUID] = None,
+        entity_armor_class_after: Optional[int] = None,
+        stack_count: Optional[int] = None,
+        source_entity_uuid: Optional[UUID] = None,
+        parent_event: Optional[Event] = None,
+    ) -> ItemLocationStateEvent:
+        """Publish one non-vetoable completion fact after location has committed."""
+        source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
+        declaration = ItemLocationStateEvent(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=owner_uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            item_state=self.to_item_presentation_state(stack_count=stack_count),
+            location=location,
+            owner_uuid=owner_uuid,
+            container_uuid=container_uuid,
+            tile_uuid=tile_uuid,
+            position=position,
+            equipment_slot=equipment_slot,
+            merged_into_item_uuid=merged_into_item_uuid,
+            entity_armor_class_after=entity_armor_class_after,
+            use_register=False,
+        )
+        execution = declaration.phase_to(EventPhase.EXECUTION)
+        effect = execution.phase_to(EventPhase.EFFECT)
+        return effect.phase_to(EventPhase.COMPLETION, use_register=True)
+
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
         """Whether this item blocks walking through its grid position."""
@@ -167,6 +259,10 @@ class BaseItem(BaseBlock):
     def should_include_in_available_object_actions(self) -> bool:
         """Return whether object/action discovery may expose this item."""
         return self.include_in_available_object_actions
+
+    def get_storage_block(self) -> Optional[BaseBlock]:
+        """Return this item's canonical contained-item storage, when present."""
+        return None
 
     def is_exposed_flame(self) -> bool:
         """Return whether this item currently presents an exposed flame."""
@@ -428,7 +524,7 @@ class BaseItem(BaseBlock):
         """Subclass override hook for drop behavior."""
         pass
 
-    def destroy(self) -> None:
+    def destroy(self, parent_event: Optional[Event] = None) -> None:
         """Destroy this item and remove every owned runtime registration.
 
         The destruction hook runs before cleanup while subclasses can still
@@ -436,6 +532,12 @@ class BaseItem(BaseBlock):
         removes attached light, active conditions, container membership, floor
         placement, equipment flags, and registry state.
         """
+        previous_owner_uuid = self.owner_uuid
+        previous_owner = (
+            BaseBlock.get(previous_owner_uuid)
+            if previous_owner_uuid is not None
+            else None
+        )
         self._on_destroy()
         gridmap = get_map()
         gridmap.cleanup_block_light_sources(self.uuid)
@@ -453,6 +555,18 @@ class BaseItem(BaseBlock):
         gridmap = get_map()
         if gridmap.get_object_position(self.uuid) is not None:
             gridmap.remove_object(self.uuid)
+        owner_published = (
+            previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
+            if previous_owner is not None
+            else False
+        )
+        if not owner_published:
+            self.publish_location_state(
+                ItemLocation.DESTROYED,
+                owner_uuid=previous_owner_uuid,
+                stack_count=0,
+                parent_event=parent_event,
+            )
         BaseBlock._registry.pop(self.uuid, None)
 
     def _on_destroy(self) -> None:
@@ -539,10 +653,58 @@ class BaseItem(BaseBlock):
 
 
 class EquippableItem(BaseItem):
-    """Base class for equippable items. Provides equip/unequip lifecycle hooks."""
+    """Base class for equippable items.
+
+    Concrete gear declares its compatible and default slots here.  The
+    :class:`Equipment` aggregate consumes that policy to validate and execute
+    slot transactions; callers never need to identify concrete item classes.
+    """
 
     is_equippable: bool = Field(default=True, description="Whether this item can be equipped.")
     is_pickable: bool = Field(default=True, description="Whether this item can be picked up.")
+
+    def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
+        """Return every slot this concrete item may occupy.
+
+        Equippable subclasses must make the policy explicit.  An empty default
+        is deliberately invalid for equipment assignment rather than silently
+        accepting an arbitrary slot.
+        """
+        return ()
+
+    def default_equipment_slot(self) -> Optional[EquipmentSlot]:
+        """Return the unambiguous slot selected when a caller omits one."""
+        return None
+
+    def occupied_equipment_slots(
+        self,
+        selected_slot: EquipmentSlot,
+    ) -> frozenset[EquipmentSlot]:
+        """Declare the physical slot footprint for conflict resolution.
+
+        Most gear occupies only its selected storage slot.  Concrete gear may
+        widen the footprint (for example a two-handed melee weapon) while the
+        Equipment aggregate remains responsible for resolving conflicts.
+        """
+        return frozenset((selected_slot,))
+
+    def equipment_event_type(self, *, equipping: bool) -> EventType:
+        """Return the public event category for this concrete gear family.
+
+        Concrete equippable families own this classification alongside their
+        slot policy, keeping the Equipment aggregate free of type switching.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must declare its equipment event type"
+        )
+
+    def incompatible_equipment_slot_message(self, slot: EquipmentSlot) -> str:
+        """Describe why ``slot`` is outside this item's declared policy."""
+        compatible = ", ".join(candidate.value for candidate in self.compatible_equipment_slots())
+        return (
+            f"{self.name} cannot be equipped in {slot.value}; "
+            f"compatible slots: {compatible or 'none'}"
+        )
 
     def equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         """Called by Equipment.equip() after slot assignment.
@@ -598,6 +760,19 @@ class UsableItem(BaseItem):
         description="Action templates cloned and rebound when this item is used.",
     )
 
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add finite-use state to the common cold item presentation."""
+        state = super().to_item_presentation_state(stack_count=stack_count)
+        return state.model_copy(update={
+            "item_kind": ItemPresentationKind.USABLE,
+            "charges": self.charges,
+            "max_charges": self.max_charges,
+        })
+
     def remaining_finite_uses(self) -> Optional[int]:
         """Return total currently available uses represented by this stack.
 
@@ -636,6 +811,7 @@ class UsableItem(BaseItem):
         if self.charges == 0:
             return []
         result = []
+        source_item_presentation = self.to_item_presentation_state()
         for template in self.use_action_templates:
             if self.charges != -1 and self.charges < template.charge_cost:
                 continue
@@ -643,11 +819,16 @@ class UsableItem(BaseItem):
                 'uuid': uuid4(),
                 'source_entity_uuid': user_entity_uuid,
                 'source_item_uuid': self.uuid,
+                'source_item_presentation': source_item_presentation,
             })
             result.append(action)
         return result
 
-    def consume_charge(self, amount: int = 1) -> bool:
+    def consume_charge(
+        self,
+        amount: int = 1,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
         """Consume charges. Returns False if not enough charges remain.
 
         Stack-aware: when stack_count > 1 and charges deplete, pops one from
@@ -664,7 +845,7 @@ class UsableItem(BaseItem):
                 self.stack_count -= 1
                 self.charges = self.max_charges
             else:
-                self.destroy()
+                self.destroy(parent_event=parent_event)
         return True
 
     def consume_charge_with_event(
@@ -710,7 +891,7 @@ class UsableItem(BaseItem):
         )
         if effect.canceled:
             return effect
-        if not self.consume_charge(amount):
+        if not self.consume_charge(amount, parent_event=effect):
             effect.cancel(status_message="Finite item resource changed after validation")
             raise RuntimeError(
                 f"Item {self.uuid} could not consume {amount} charge after successful action"

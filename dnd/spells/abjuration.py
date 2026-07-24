@@ -24,20 +24,28 @@ from dnd.core.base_actions import (
     spell_slot_cost_type,
     Cost,
 )
-from dnd.core.base_conditions import BaseCondition, ConditionCategory, ConditionApplicationEvent, ConditionTag, OutcomeProtection, SpellProtectionRegistry, SpellProtection, DurationType
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
+from dnd.core.condition_types import (
+    ConditionAgencyDenial,
+    ConditionCategory,
+    ConditionTag,
+    DurationType,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.content import ContentKind
+from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
-from dnd.blocks.equipment import UnarmoredAc, ArmorEquipEvent
+from dnd.blocks.equipment import ArmorEquipEvent
+from dnd.core.equipment_types import UnarmoredAc
 
 from dnd.core.dice import AttackOutcome, Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
-from dnd.conditions import Incapacitated
+from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.effect_ids import (
@@ -397,7 +405,7 @@ class MageArmorCondition(BaseCondition):
             trigger_conditions=[
                 Trigger(
                     event_type=EventType.ARMOR_EQUIP,
-                    event_phase=EventPhase.EXECUTION
+                    event_phase=EventPhase.EFFECT
                 )
             ],
             event_processor=mage_armor_equip_processor
@@ -1057,8 +1065,8 @@ class GlobeZone(BaseCondition):
     def _create_condition_blocker(self) -> EventHandler:
         """Block low-level magical conditions applied inside the globe.
 
-        Zone spell side effects and spatial-handler effects are traced back
-        through their parent-event chain to the originating `SpellEvent`.
+        Conditions inherit immutable spell provenance when declared, so this
+        rule never searches event registries or reconstructs ancestry.
         """
         globe = self
 
@@ -1083,28 +1091,17 @@ class GlobeZone(BaseCondition):
             if target_pos is None or target_pos not in globe.affected_positions:
                 return None
 
-            spell_level: Optional[int] = None
-            source_pos: Optional[Tuple[int, int]] = None
-            current_uuid = event.parent_event
-            visited = 0
-            while current_uuid and visited < 20:
-                parent = BaseObject.get(current_uuid)
-                if parent is None:
-                    break
-                if isinstance(parent, SpellEvent):
-                    spell_level = parent.spell_level
-                    source = Entity.get(parent.source_entity_uuid)
-                    if source:
-                        source_pos = source.position
-                    break
-                if isinstance(parent, Event):
-                    current_uuid = parent.parent_event
-                else:
-                    break
-                visited += 1
-
-            if spell_level is None or source_pos is None:
+            origin = condition.effect_origin
+            if (
+                origin is None
+                or origin.kind is not EffectOriginKind.SPELL
+                or origin.base_spell_level is None
+                or origin.source_position is None
+            ):
                 return None
+
+            spell_level = origin.base_spell_level
+            source_pos = origin.source_position
 
             if spell_level > globe.max_blocked_level:
                 return None
@@ -1186,9 +1183,8 @@ class GlobeOfInvulnerability(SpellAction):
 class BanishedCondition(BaseCondition):
     """Remove a banished entity from spatial play until cleanup.
 
-    The condition stores the original position, applies Incapacitated as a
-    sub-condition, removes the target from grid and entity position registries,
-    and restores the target when removed.
+    The condition stores the original position, owns incapacitation directly,
+    removes the target from spatial registries, and restores it when removed.
     """
     name: str = Field(default="Banished", description="Condition name.")
     description: str = Field(default="Banished to another plane - removed from play", description="Rules-facing condition summary.")
@@ -1197,24 +1193,23 @@ class BanishedCondition(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup, suppression, and rules filters.",
     )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Banishment removes the target's turn agency.",
+    )
     original_position: Tuple[int, int] = Field(default=(0, 0), description="Grid position restored when banishment ends.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not target:
+        if not isinstance(target, Entity):
             return [], [], [], [], None
 
         self.original_position = target.position
-
-        sub_conditions_uuids = []
-        incap = Incapacitated(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
+        outs = apply_incapacitated_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
         )
-        target.add_condition(incap, parent_event=declaration_event)
-        sub_conditions_uuids.append(incap.uuid)
 
         grid = get_map()
         pos = self.original_position
@@ -1233,7 +1228,7 @@ class BanishedCondition(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"{target.name} banished from the battlefield"
         )
-        return [], [], sub_conditions_uuids, [], effect_event
+        return outs, [], [], [], effect_event
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
         """Return entity to original position when banishment ends."""

@@ -26,13 +26,15 @@ from ai.codex_tools.session_transcript import (
     CodexSessionTranscript,
     SessionReleasePayload,
     SessionTranscript,
+    TranscriptRecordType,
 )
 from ai.codex_tools.representation.profiles import (
     BALANCED_V2_PROFILE_ID,
     build_builtin_representation_registry,
 )
 from ai.codex_tools.contracts import TakeoverClaimInfo, TakeoverEntityInfo
-from ai.observation.models import (
+from ai.ordered_delivery import OrderedDeliveryTimeoutError
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -41,10 +43,11 @@ from ai.observation.models import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from ai.protocol.semantics import ActionSemantics, ActionTag, action_semantics_ref
+from server.agent_protocol.semantics import ActionSemantics, ActionTag, action_semantics_ref
 from ai.policy import PolicyDecisionCorrelation, PolicyDecisionTelemetry, PolicyHost
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
-from ai.protocol.control import (
+from server.agent_protocol.telemetry import AgentEvent
+from server.agent_protocol.control import (
     ActionResolutionStatus,
     ActionAffordance,
     ActionEconomyState,
@@ -55,7 +58,7 @@ from ai.protocol.control import (
     DecisionEpoch,
     DecisionEpochReason,
 )
-from ai.subjective.runtime import SubjectiveEncounterEndedError
+from ai.subjective.runtime import QueuedAgentEventSink, SubjectiveEncounterEndedError
 from ai.subjective.queries import (
     SubjectiveActionFilter,
     SubjectiveAreaQuery,
@@ -275,6 +278,112 @@ def test_hot_release_finalizes_local_transcript_when_upstream_is_unavailable(
     )
 
 
+def test_hot_release_drains_actor_telemetry_before_relinquishing_ownership(
+    tmp_path: Path,
+) -> None:
+    """Queued actor telemetry drains before release, even if local close fails."""
+    order: list[str] = []
+    delivery_started = Event()
+    allow_delivery = Event()
+    runtime_closed = Event()
+    delivered: list[AgentEvent] = []
+
+    class OwnershipCheckingSink:
+        def emit(self, event: AgentEvent) -> None:
+            self.emit_many([event])
+
+        def emit_many(self, events: list[AgentEvent]) -> None:
+            delivery_started.set()
+            assert allow_delivery.wait(timeout=1.0)
+            assert control.ownership_held is True
+            order.append("actor_telemetry.delivered")
+            delivered.extend(events)
+
+    actor_telemetry = QueuedAgentEventSink(
+        OwnershipCheckingSink(),
+        session_id="session",
+    )
+
+    class ActorTelemetryRuntime(_FakeRuntime):
+        def close(self) -> None:
+            order.append("runtime.close.started")
+            allow_delivery.set()
+            actor_telemetry.close(timeout_seconds=1.0)
+            runtime_closed.set()
+            order.append("runtime.close.finished")
+            raise RuntimeError("runtime cleanup failed after telemetry flush")
+
+    class OwnershipControlClient:
+        def __init__(self) -> None:
+            self.ownership_held = True
+
+        def release(self, _claim_id: str) -> dict[str, object]:
+            assert runtime_closed.is_set()
+            assert delivered == [actor_event]
+            order.append("upstream.release")
+            self.ownership_held = False
+            return {"status": "released"}
+
+        def close(self) -> None:
+            order.append("control.close")
+
+    control = OwnershipControlClient()
+    runtime = ActorTelemetryRuntime(_world())
+    transcript = CodexSessionTranscript(
+        runtime_id="runtime-ordered-release",
+        session_id="session",
+        claim_id="claim-ordered-release",
+        faction="monsters",
+        controlled_entity_uuids=("actor",),
+        representation_manifest=build_builtin_representation_registry().resolve_profile(
+            BALANCED_V2_PROFILE_ID
+        ),
+        directory=tmp_path,
+    )
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-ordered-release",
+        faction="monsters",
+        controlled_entity_uuids=("actor",),
+        control_client=cast(CodexToolClient, control),
+        runtime_id="runtime-ordered-release",
+        transcript=transcript,
+    )
+    actor_event = AgentEvent(
+        session_id="session",
+        actor_uuid="actor",
+        epoch_id="epoch-1",
+        observation_cursor=5,
+        event_type="command.stream_result.accepted",
+        source="test.release",
+        summary="Actor-scoped telemetry queued before release.",
+    )
+    actor_telemetry.emit(actor_event)
+    assert delivery_started.wait(timeout=1.0)
+
+    released = session.release()
+    exported = SessionTranscript.model_validate_json(
+        transcript.final_json_path.read_text(encoding="utf-8")
+    )
+
+    assert released.status == "released"
+    assert released.upstream_status == "released"
+    assert control.ownership_held is False
+    assert actor_telemetry.worker_alive is False
+    assert order == [
+        "runtime.close.started",
+        "actor_telemetry.delivered",
+        "runtime.close.finished",
+        "upstream.release",
+        "control.close",
+    ]
+    release_payload = SessionReleasePayload.model_validate(exported.records[-1].payload)
+    assert release_payload.shutdown_failures == (
+        "subjective runtime close: RuntimeError: "
+        "runtime cleanup failed after telemetry flush",
+    )
+
+
 def test_hot_execute_requires_exact_viewed_revision_and_uses_runtime_command_flow() -> None:
     """A direct write is revision fenced and never rediscovers rows upstream."""
     runtime = _FakeRuntime(_world())
@@ -453,6 +562,59 @@ def test_hot_wait_returns_a_terminal_view_when_no_future_epoch_can_exist() -> No
     assert runtime.snapshot_fetch_calls == 1
 
 
+def test_hot_watch_records_opponent_terminal_state_once_without_command(
+    tmp_path: Path,
+) -> None:
+    """A terminal stream observation seals evidence without inventing a write."""
+    runtime = _TerminalFakeRuntime(_world(current_epoch=None, cursor=4))
+    transcript = CodexSessionTranscript(
+        runtime_id="runtime-opponent-terminal",
+        session_id="session",
+        claim_id="claim-opponent-terminal",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+        representation_manifest=build_builtin_representation_registry().resolve_profile(
+            BALANCED_V2_PROFILE_ID
+        ),
+        directory=tmp_path,
+    )
+    session = HotCodexSession(
+        runtime=runtime,
+        claim_id="claim-opponent-terminal",
+        faction="heroes",
+        controlled_entity_uuids=("actor",),
+        runtime_id="runtime-opponent-terminal",
+        transcript=transcript,
+    )
+    session.bootstrap()
+    app = create_hot_codex_app(session, bearer_token="secret-token")
+
+    with TestClient(app) as client:
+        brief_response = client.post(
+            "/v1/watch/brief",
+            headers={"Authorization": "Bearer secret-token"},
+        )
+        repeated_response = client.post(
+            "/v1/watch",
+            headers={"Authorization": "Bearer secret-token"},
+        )
+    exported = transcript.export()
+
+    assert brief_response.status_code == 200
+    brief = brief_response.json()
+    assert brief["is_terminal"] is True
+    assert brief["transcript"]["terminal"] is True
+    assert brief["transcript"]["finalized"] is True
+    assert repeated_response.status_code == 200
+    assert repeated_response.json()["is_terminal"] is True
+    assert transcript.status().terminal is True
+    record_types = [record.record_type for record in exported.records]
+    assert record_types.count(TranscriptRecordType.TERMINAL_SUMMARY) == 1
+    assert TranscriptRecordType.COMMAND not in record_types
+    assert TranscriptRecordType.COMMAND_INTENT not in record_types
+    assert TranscriptRecordType.COMMAND_ACKNOWLEDGEMENT not in record_types
+
+
 def test_hot_wait_does_not_block_health_reads_while_stream_is_idle() -> None:
     """An idle stream waiter must not monopolize the task-local state lock."""
     runtime = _BlockingFakeRuntime(_world(current_epoch=None, cursor=4))
@@ -576,6 +738,28 @@ def test_queued_policy_telemetry_sink_preserves_order_and_flushes() -> None:
     queued.close()
 
     assert runtime.policy_events == [first, second]
+    assert queued.worker_alive is False
+
+
+def test_queued_policy_telemetry_close_is_bounded_and_retryable() -> None:
+    """A blocked destination is explicit and can finish after it recovers."""
+    runtime = _BlockingPolicyTelemetryRuntime(_world())
+    queued = QueuedPolicyTelemetrySink(runtime, max_depth=1)
+
+    queued.emit_policy_decision(_policy_telemetry("blocked"))
+    assert runtime.telemetry_started.wait(timeout=1.0)
+    with pytest.raises(
+        OrderedDeliveryTimeoutError,
+        match="did not stop",
+    ):
+        queued.close(timeout_seconds=0.01)
+    assert queued.worker_alive is True
+
+    runtime.release_telemetry.set()
+    queued.close(timeout_seconds=1.0)
+
+    assert queued.worker_alive is False
+    assert len(runtime.policy_events) == 1
 
 
 def test_hot_session_can_end_turn_from_correlated_rejection_epoch() -> None:

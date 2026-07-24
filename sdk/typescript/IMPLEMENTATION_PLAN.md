@@ -1,5 +1,13 @@
 # D&D Engine TypeScript SDK Implementation Plan
 
+> **Superseded design record (2026-07-23).** This document describes the
+> abandoned raw-engine-event replication design and is not normative. The live
+> player transport now uses generated `SubjectiveWorldPatch` transactions and a
+> closed `SubjectivePresentationCue` graph over the four unversioned
+> `/replication/**` routes. Engine events remain available only through the
+> separate privileged objective-diagnostics surface. See
+> [`README.md`](./README.md) for the canonical SDK boundary and stable exports.
+
 ## Status
 
 This document defines the implementation plan for an engine-owned, framework-independent TypeScript SDK. The SDK becomes the canonical browser and Node.js boundary for the D&D engine. NeuroClient will consume this SDK as a game client and will stop owning wire types, SSE replication, cursor management, event assembly, authoritative reduction, and presentation synchronization.

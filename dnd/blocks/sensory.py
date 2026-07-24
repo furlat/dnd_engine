@@ -13,6 +13,7 @@ from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import get_map
+from dnd.core.values import ModifiableValue
 from dnd.core.events import (
     Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
     DeathEvent, EventQueue, SensoryUpdateEvent, SensoryUpdateReason
@@ -48,6 +49,14 @@ class VisibilityComputationCache:
 class Senses(BaseBlock):
     """Per-observer cache of visible cells, objects, entities, and paths."""
 
+    visual_access: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(
+            source_entity_uuid=UUID(int=0),
+            base_value=1,
+            value_name="Visual Access",
+        ),
+        description="Neutral 1/0 gate for whether visual perception is available.",
+    )
     entities: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict, description="Visible entities by UUID and position.")
     objects: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict, description="Visible objects by UUID and position.")
     visible: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Cells visible after light and sense-mode filtering.")
@@ -81,6 +90,7 @@ class Senses(BaseBlock):
     _paths_dirty: bool = PrivateAttr(default=False)
     _last_passive_perception: int = PrivateAttr(default=0)
     _last_sense_modes_hash: int = PrivateAttr(default=0)
+    _last_visual_access: int = PrivateAttr(default=1)
     _visibility_cache: Optional[VisibilityComputationCache] = PrivateAttr(default=None)
     _path_revision: int = PrivateAttr(default=0)
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
@@ -113,6 +123,7 @@ class Senses(BaseBlock):
         """Store current perception state for change detection."""
         self._last_passive_perception = passive_perception
         self._last_sense_modes_hash = self.compute_sense_modes_hash()
+        self._last_visual_access = self.visual_access.normalized_score
 
     def clear_visibility_cache(self) -> None:
         """Discard the one-shot visibility result used by movement refreshes."""
@@ -316,6 +327,7 @@ class SensesSnapshot:
     paths_dirty: bool
     passive_perception: int
     sense_modes_hash: int
+    visual_access: int
 
 
 def _sorted_positions(positions: Set[Tuple[int, int]]) -> List[Tuple[int, int]]:
@@ -358,6 +370,7 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
+        visual_access=senses._last_visual_access,
     )
 
 
@@ -410,11 +423,12 @@ def emit_sensory_update_delta(
 
     passive_changed = before.passive_perception != after.passive_perception
     sense_modes_changed = before.sense_modes_hash != after.sense_modes_hash
+    visual_access_changed = before.visual_access != after.visual_access
     position_changed = before.position != after.position
     light_changed = reason == SensoryUpdateReason.LIGHT
     perception_capability_changed = (
-        reason == SensoryUpdateReason.CONDITION
-        and (passive_changed or sense_modes_changed)
+        reason in {SensoryUpdateReason.CONDITION, SensoryUpdateReason.LIFE_STATE}
+        and (passive_changed or sense_modes_changed or visual_access_changed)
     )
     paths_refresh_needed = (
         ((not before.paths_dirty) and after.paths_dirty)
@@ -434,6 +448,7 @@ def emit_sensory_update_delta(
         paths_refresh_needed,
         passive_changed,
         sense_modes_changed,
+        visual_access_changed,
         position_changed,
         light_changed,
     ))
@@ -577,7 +592,11 @@ class SpatialSensesCallback:
                     record_action_timing("sensory_callback.handle_death_ms", started)
                 reason = SensoryUpdateReason.DEATH
 
-            elif event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL):
+            elif event.event_type in (
+                EventType.CONDITION_APPLICATION,
+                EventType.CONDITION_REMOVAL,
+                EventType.LIFE_STATE_CHANGE,
+            ):
                 if event.target_entity_uuid != self.owner_uuid:
                     return
                 started = time.perf_counter() if timing else 0.0
@@ -588,7 +607,11 @@ class SpatialSensesCallback:
                 self._handle_own_perception_change()
                 if timing:
                     record_action_timing("sensory_callback.handle_perception_change_ms", started)
-                reason = SensoryUpdateReason.CONDITION
+                reason = (
+                    SensoryUpdateReason.LIFE_STATE
+                    if event.event_type == EventType.LIFE_STATE_CHANGE
+                    else SensoryUpdateReason.CONDITION
+                )
 
             elif event.event_type in self.SPATIAL_EVENTS:
                 started = time.perf_counter() if timing else 0.0
@@ -1128,19 +1151,22 @@ class SpatialSensesCallback:
 
         current_perception = owner.get_passive_perception()
         current_modes_hash = self.senses.compute_sense_modes_hash()
+        current_visual_access = self.senses.visual_access.normalized_score
 
         perception_changed = current_perception != self.senses._last_passive_perception
         modes_changed = current_modes_hash != self.senses._last_sense_modes_hash
+        visual_access_changed = current_visual_access != self.senses._last_visual_access
 
-        if not perception_changed and not modes_changed:
+        if not perception_changed and not modes_changed and not visual_access_changed:
             return
 
         old_perception = self.senses._last_passive_perception
 
         self.senses._last_passive_perception = current_perception
         self.senses._last_sense_modes_hash = current_modes_hash
+        self.senses._last_visual_access = current_visual_access
 
-        if modes_changed:
+        if modes_changed or visual_access_changed:
             if self.update_visibility_func:
                 self.update_visibility_func()
             self.senses._paths_dirty = True
@@ -1259,6 +1285,7 @@ class SpatialSensesSystem:
         EventType.DEATH,
         EventType.CONDITION_APPLICATION,
         EventType.CONDITION_REMOVAL,
+        EventType.LIFE_STATE_CHANGE,
         *SpatialSensesCallback.SPATIAL_EVENTS,
     }
 
@@ -1333,6 +1360,7 @@ class SpatialSensesSystem:
         if event.event_type in (
             EventType.CONDITION_APPLICATION,
             EventType.CONDITION_REMOVAL,
+            EventType.LIFE_STATE_CHANGE,
         ):
             target = event.target_entity_uuid
             return {target} if target is not None and target in registered else set()

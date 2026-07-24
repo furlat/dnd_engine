@@ -9,17 +9,30 @@ from dnd.core.combat_log import AttackLogData, DiceRollDisplay
 from fastapi.routing import APIRoute
 from server.api_models import (
     APIAvailableActions,
-    APIEntityVisibility,
     APIEntityHandlersResponse,
-    APIEquipmentOverview,
     APIEquippableItems,
-    APIItemSummary,
     EquipmentMutationResult,
-    ReplicationBootstrapResponse,
     StartHumanSimulationResponse,
     ToggleHandlerResponse,
 )
+from server.world_contracts import APIEntityVisibility
 from server.event_server import app
+from server.objective_replay import ObjectiveReplayBundle
+from server.player_replay import (
+    SubjectivePlayerReplayArchive,
+    SubjectivePlayerReplayBundle,
+    SubjectiveReplaySegment,
+)
+from server.player_replication_contract import (
+    MovementPresentationCue,
+    PLAYER_REPLICATION_CONTRACT_HASH,
+    PLAYER_REPLICATION_CONTRACT_VERSION,
+    SpellPresentationCue,
+    SubjectiveFloorObject,
+    SubjectiveCombatLogFramesResponse,
+    SubjectiveFramesResponse,
+    SubjectiveReplicationBootstrap,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,13 +65,20 @@ def test_checked_in_sdk_contract_equals_backend_model_graph() -> None:
     assert "unknown" not in _descriptor_kinds(fresh)
 
 
-def test_sdk_reuses_canonical_action_and_bootstrap_models() -> None:
-    """The client contract preserves engine action rows and one atomic base state."""
+def test_sdk_uses_only_the_canonical_subjective_replication_roots() -> None:
+    """The generated player surface is the patch/cue journal, never raw events."""
     manifest = build_sdk_manifest()
     models = manifest["models"]
     actions = models[f"{APIAvailableActions.__module__}.{APIAvailableActions.__qualname__}"]
     bootstrap = models[
-        f"{ReplicationBootstrapResponse.__module__}.{ReplicationBootstrapResponse.__qualname__}"
+        f"{SubjectiveReplicationBootstrap.__module__}.{SubjectiveReplicationBootstrap.__qualname__}"
+    ]
+    frames = models[
+        f"{SubjectiveFramesResponse.__module__}.{SubjectiveFramesResponse.__qualname__}"
+    ]
+    combat_log = models[
+        f"{SubjectiveCombatLogFramesResponse.__module__}."
+        f"{SubjectiveCombatLogFramesResponse.__qualname__}"
     ]
 
     assert {
@@ -70,15 +90,51 @@ def test_sdk_reuses_canonical_action_and_bootstrap_models() -> None:
         "spell_slots",
         "resources",
     } <= set(actions["fields"])
-    assert {
+    assert set(bootstrap["fields"]) == {
         "protocol",
-        "event_cursor",
-        "combat_log_cursor",
-        "state",
-        "visibility",
-        "combat_log",
-        "session",
-    } == set(bootstrap["fields"])
+        "perspective",
+        "watermarks",
+        "world",
+        "combat_log_frames",
+    }
+    assert set(frames["fields"]) == {
+        "source_stream_id",
+        "generation_id",
+        "perspective_epoch_id",
+        "retained_from_observation_cursor",
+        "from_watermarks",
+        "through_watermarks",
+        "captured_watermarks",
+        "frames",
+    }
+    assert "frames" in combat_log["fields"]
+    assert manifest["aliases"].keys() == {
+        "SubjectiveWorldPatch",
+        "SubjectivePresentationCue",
+        "SubjectiveStreamDelivery",
+        "SubjectiveReplayDelivery",
+    }
+    assert (
+        manifest["player_replication_contract_version"]
+        == PLAYER_REPLICATION_CONTRACT_VERSION
+    )
+    assert (
+        manifest["player_replication_contract_hash"]
+        == PLAYER_REPLICATION_CONTRACT_HASH
+    )
+    generated_names = {
+        row["typescript"] for row in models.values()
+    }
+    assert not {
+        "ReplicationBootstrapResponse",
+        "ReplicationBootstrapResponseV2",
+        "ReplicationV2HeartbeatPayload",
+        "ReplicationV2StreamSyncPayload",
+        "EventHistoryResponse",
+        "CombatLogHistoryResponse",
+        "GameEventHistoryResponse",
+        "GameEventPayload",
+    } & generated_names
     visibility = models[
         f"{APIEntityVisibility.__module__}.{APIEntityVisibility.__qualname__}"
     ]
@@ -89,6 +145,73 @@ def test_sdk_reuses_canonical_action_and_bootstrap_models() -> None:
     assert {"observer_position", "effective_light_levels"} <= set(
         sensory_update["fields"]
     )
+
+
+def test_sdk_exports_public_replays_but_not_the_all_memberships_archive() -> None:
+    """Public replay routes expose one objective game or one exact membership only."""
+    manifest = build_sdk_manifest()
+    models = manifest["models"]
+    roots = set(manifest["roots"])
+    objective_path = (
+        f"{ObjectiveReplayBundle.__module__}.{ObjectiveReplayBundle.__qualname__}"
+    )
+    player_path = (
+        f"{SubjectivePlayerReplayBundle.__module__}."
+        f"{SubjectivePlayerReplayBundle.__qualname__}"
+    )
+    segment_path = (
+        f"{SubjectiveReplaySegment.__module__}.{SubjectiveReplaySegment.__qualname__}"
+    )
+    archive_path = (
+        f"{SubjectivePlayerReplayArchive.__module__}."
+        f"{SubjectivePlayerReplayArchive.__qualname__}"
+    )
+
+    assert {objective_path, player_path} <= roots
+    assert {objective_path, player_path, segment_path} <= set(models)
+    assert archive_path not in roots
+    assert archive_path not in models
+
+
+def test_sdk_descriptors_preserve_player_field_constraints() -> None:
+    """The browser decoder enforces Pydantic integer, length, and range bounds."""
+    models = build_sdk_manifest()["models"]
+    movement = models[
+        f"{MovementPresentationCue.__module__}.{MovementPresentationCue.__qualname__}"
+    ]["fields"]
+    spell = models[
+        f"{SpellPresentationCue.__module__}.{SpellPresentationCue.__qualname__}"
+    ]["fields"]
+
+    assert movement["presentation_cursor"] == {
+        "kind": "integer",
+        "minimum": 1,
+    }
+    assert movement["presentation_id"] == {
+        "kind": "string",
+        "min_length": 1,
+    }
+    assert movement["trajectory"]["kind"] == "array"
+    assert movement["trajectory"]["min_length"] == 2
+    assert movement["trajectory"]["items"] == {
+        "kind": "tuple",
+        "items": [{"kind": "integer"}, {"kind": "integer"}],
+    }
+    assert spell["spell_level"] == {
+        "kind": "integer",
+        "minimum": 0,
+        "maximum": 9,
+    }
+    floor_object = models[
+        f"{SubjectiveFloorObject.__module__}.{SubjectiveFloorObject.__qualname__}"
+    ]["fields"]
+    assert floor_object["bright_radius_feet"] == {
+        "kind": "union",
+        "items": [
+            {"kind": "integer", "minimum": 0},
+            {"kind": "null"},
+        ],
+    }
 
 
 def test_event_queue_reset_changes_generation_even_when_cursor_restarts() -> None:
@@ -116,8 +239,6 @@ def test_neuroclient_routes_publish_concrete_backend_response_models() -> None:
         ("/simulation/start-human", "POST"): StartHumanSimulationResponse,
         ("/entity/{entity_uuid}/handlers", "GET"): APIEntityHandlersResponse,
         ("/entity/{entity_uuid}/handlers/{handler_name}/toggle", "POST"): ToggleHandlerResponse,
-        ("/entity/{entity_uuid}/equipment", "GET"): APIEquipmentOverview,
-        ("/entity/{entity_uuid}/equipment/item/{item_uuid}", "GET"): APIItemSummary,
         ("/entity/{entity_uuid}/equippable-items", "GET"): APIEquippableItems,
         ("/entity/{entity_uuid}/equip", "POST"): EquipmentMutationResult,
         ("/entity/{entity_uuid}/unequip", "POST"): EquipmentMutationResult,
@@ -131,3 +252,5 @@ def test_neuroclient_routes_publish_concrete_backend_response_models() -> None:
 
     for key, response_model in expected.items():
         assert routes[key] is response_model
+    assert ("/entity/{entity_uuid}/equipment", "GET") not in routes
+    assert ("/entity/{entity_uuid}/equipment/item/{item_uuid}", "GET") not in routes

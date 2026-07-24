@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionEconomyState,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     CapabilityAmountFormula,
     CapabilityAmountSource,

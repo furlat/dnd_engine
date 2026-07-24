@@ -19,7 +19,7 @@ from ai.evaluation.direct_codex_artifacts import (
     start_direct_codex_validation_run,
     write_direct_codex_run_artifact,
 )
-from ai.protocol.semantics import EffectCertainty, WorldEffectAnchor, WorldEffectScope
+from server.agent_protocol.semantics import EffectCertainty, WorldEffectAnchor, WorldEffectScope
 
 
 def test_direct_codex_artifact_round_trip_preserves_raw_subjective_evidence(

@@ -1,7 +1,7 @@
 """Session-based player authority and active-game ownership."""
 
 from enum import Enum
-from typing import Any, Dict, Set, Optional, List
+from typing import Any, Dict, Iterable, Set, Optional, List
 from uuid import UUID, uuid4
 from dataclasses import dataclass, field
 import time
@@ -38,6 +38,8 @@ class PlayerSession:
         connection_status: Current connection state.
         last_activity: Timestamp of last activity for timeout detection.
         controlled_entities: Entity UUIDs this player can control.
+        observer_entities: Entity UUIDs authorized for subjective observation.
+        active_observer_uuid: Observer selected for observer-relative presentation.
     """
 
     session_id: UUID = field(metadata={"description": "Unique identifier for this connected player session."})
@@ -55,6 +57,42 @@ class PlayerSession:
         default_factory=set,
         metadata={"description": "Entity UUIDs this player can control."},
     )
+    observer_entities: Set[UUID] = field(
+        default_factory=set,
+        metadata={"description": "Explicit entity senses authorized for subjective replication."},
+    )
+    active_observer_uuid: Optional[UUID] = field(
+        default=None,
+        metadata={"description": "Observer selected for observer-relative presentation."},
+    )
+
+    def configure_subjective_observers(
+        self,
+        observer_entity_uuids: Iterable[UUID],
+        *,
+        active_observer_uuid: Optional[UUID] = None,
+    ) -> None:
+        """Install one explicit observer union without any objective fallback."""
+        observers = set(observer_entity_uuids)
+        active = active_observer_uuid
+        if active is None and observers:
+            active = min(observers, key=str)
+        if active is not None and active not in observers:
+            raise ValueError("Active observer must belong to the observer union")
+        self.observer_entities = observers
+        self.active_observer_uuid = active
+
+    def synchronize_controlled_observers(self) -> None:
+        """Keep participant knowledge exactly equal to its owned entities."""
+        if self.player_type is PlayerType.OBSERVER:
+            return
+        active = self.active_observer_uuid
+        if active not in self.controlled_entities:
+            active = min(self.controlled_entities, key=str) if self.controlled_entities else None
+        self.configure_subjective_observers(
+            self.controlled_entities,
+            active_observer_uuid=active,
+        )
 
     def ping(self) -> None:
         """Update last activity timestamp."""
@@ -82,7 +120,11 @@ class PlayerSession:
             "name": self.name,
             "connection_status": self.connection_status.value,
             "last_activity": self.last_activity,
-            "controlled_entities": [str(e) for e in self.controlled_entities]
+            "controlled_entities": [str(e) for e in self.controlled_entities],
+            "observer_entities": [str(e) for e in sorted(self.observer_entities, key=str)],
+            "active_observer_uuid": (
+                str(self.active_observer_uuid) if self.active_observer_uuid is not None else None
+            ),
         }
 
 
@@ -160,9 +202,11 @@ class GameSession:
         old_owner = self.entity_to_player.get(entity_uuid)
         if old_owner and old_owner in self.players:
             self.players[old_owner].controlled_entities.discard(entity_uuid)
+            self.players[old_owner].synchronize_controlled_observers()
 
         self.entity_to_player[entity_uuid] = session_id
         self.players[session_id].controlled_entities.add(entity_uuid)
+        self.players[session_id].synchronize_controlled_observers()
         return True
 
     def unassign_entity(self, entity_uuid: UUID) -> None:
@@ -170,6 +214,7 @@ class GameSession:
         old_owner = self.entity_to_player.pop(entity_uuid, None)
         if old_owner and old_owner in self.players:
             self.players[old_owner].controlled_entities.discard(entity_uuid)
+            self.players[old_owner].synchronize_controlled_observers()
 
     def get_entity_owner(self, entity_uuid: UUID) -> Optional[PlayerSession]:
         """Get the player who owns an entity."""

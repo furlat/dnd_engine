@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import NumericalModifier

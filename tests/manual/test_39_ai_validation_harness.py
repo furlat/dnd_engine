@@ -18,7 +18,7 @@ from ai.validation_harness import (
     build_validation_schedule,
 )
 from ai.external_selfplay import run_external_selfplay
-from ai.protocol.control import ActionResolutionStatus
+from server.agent_protocol.control import ActionResolutionStatus
 from dnd.core.dice import fixed_dice_faces
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
 from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
@@ -79,8 +79,14 @@ def test_validation_schedule_reaches_all_validation_arenas_when_extended() -> No
     """A longer schedule samples the full current arena catalog."""
     catalog = validation_catalog_rows()
     schedule = build_validation_schedule(catalog, rounds=len(catalog) * 2)
+    scheduled_ids = {entry.arena_id for entry in schedule}
+    crypt_entries = [
+        entry for entry in schedule if entry.arena_id == "srd_undead_crypt"
+    ]
 
-    assert {entry.arena_id for entry in schedule} == {str(row["arena_id"]) for row in catalog}
+    assert crypt_entries
+    assert {entry.focus for entry in crypt_entries} == {"skeleton_side"}
+    assert scheduled_ids == {str(row["arena_id"]) for row in catalog}
     assert all(a.arena_id != b.arena_id for a, b in zip(schedule, schedule[1:]))
 
 
@@ -272,88 +278,114 @@ def test_validation_harness_reports_finished_encounter_as_boundary_not_timeout()
 
 def test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands() -> None:
     """The fast local runner drives both sides through subjective AI commands."""
-    with fixed_dice_faces(*([1] * 200)):
-        result = run_external_selfplay("sorcerer_barbarian_duel", max_commands=5)
+    with fixed_dice_faces(*([1] * 400)):
+        result = run_external_selfplay("sorcerer_barbarian_duel", max_commands=10)
 
     assert result.arena_id == "sorcerer_barbarian_duel"
-    assert result.command_count == 5
+    assert result.command_count == 10
     assert result.session_ids_by_faction.keys() == {"heroes", "monsters"}
     assert sum(1 for trace in result.traces if trace.snapshot_loaded) <= len(result.session_ids_by_faction)
     assert any(not trace.snapshot_loaded for trace in result.traces[1:])
-    assert result.traces[0].actor_name == "Validation Duel Sorcerer"
-    assert [trace.template_name for trace in result.traces[:2]] == [
-        "Quickened Spell",
-        "Hold Person__slot_2",
-    ]
-    assert result.traces[0].command_status == "accepted"
-    assert result.traces[0].affordance_timing == {}
-    assert result.traces[0].reduction_timing == {}
-    assert result.traces[0].reduce_ms == 0
+    first_trace, transformed_followup = result.traces[:2]
+    assert first_trace.actor_name == "Validation Duel Sorcerer"
+    assert first_trace.routine_id == transformed_followup.routine_id == (
+        "routine.transform_then_act"
+    )
+    assert first_trace.routine_step_id == "transform"
+    assert transformed_followup.routine_step_id == "act"
+    assert transformed_followup.action_category == "spell"
+    assert {"pressure", "control_effect"}.intersection(
+        transformed_followup.logical_tags
+    )
+    assert first_trace.command_status == "accepted"
+    assert first_trace.affordance_timing == {}
+    assert first_trace.reduction_timing == {}
+    assert first_trace.reduce_ms == 0
     assert any(
         step.node_path.endswith("Control/HostileControl")
-        for step in result.traces[0].policy_trace
+        for step in first_trace.policy_trace
     )
     assert any(
         step.node_path.endswith("Pressure/DirectDamage")
-        for step in result.traces[0].policy_trace
+        for step in first_trace.policy_trace
     )
     assert any(
         step.node_path.endswith("Routines/TransformThenAct")
-        for step in result.traces[0].policy_trace
+        for step in first_trace.policy_trace
     )
     assert any(
         "TransformThenAct/Revalidate" in step.node_path
-        for step in result.traces[1].policy_trace
+        for step in transformed_followup.policy_trace
     )
-    assert result.traces[0].server_timing
-    assert result.traces[0].deep_diagnostics_enabled is True
+    assert first_trace.server_timing
+    assert first_trace.deep_diagnostics_enabled is True
     assert all(
         trace.deep_diagnostics_enabled is False
         for trace in result.traces[1:]
     )
-    server_phases = result.traces[0].server_timing.get("phases")
+    server_phases = first_trace.server_timing.get("phases")
     assert isinstance(server_phases, dict)
     assert "build.current_epoch_ms" in server_phases
-    action_phases = result.traces[0].action_server_timing.get("phases")
-    assert isinstance(action_phases, dict)
-    assert "execute_by_index_ms" in action_phases
-    assert all(not trace.action_server_timing for trace in result.traces[1:])
-    assert result.traces[0].command_http_ms is not None
-    assert result.traces[0].command_followup_sync_ms is not None
-    assert result.traces[0].command_submit_ms is not None
-    assert result.traces[0].command_submit_ms >= (
-        result.traces[0].command_http_ms
-        + result.traces[0].command_followup_sync_ms
+    assert "execute.action_by_index_ms" in server_phases
+    assert first_trace.command_http_ms is not None
+    assert first_trace.command_followup_sync_ms is not None
+    assert first_trace.command_submit_ms is not None
+    assert first_trace.command_submit_ms >= (
+        first_trace.command_http_ms
+        + first_trace.command_followup_sync_ms
     )
-    assert result.traces[0].pre_command_sync_ms is not None
-    assert result.traces[0].pre_command_frame_fetch_ms is not None
-    assert result.traces[0].pre_command_frame_apply_ms is not None
-    assert result.traces[0].followup_frame_fetch_ms is not None
-    assert result.traces[0].followup_frame_apply_ms is not None
-    assert result.traces[0].frame_fetch_ms == pytest.approx(
-        result.traces[0].pre_command_frame_fetch_ms
-        + result.traces[0].followup_frame_fetch_ms,
+    assert first_trace.pre_command_sync_ms is not None
+    assert first_trace.pre_command_frame_fetch_ms is not None
+    assert first_trace.pre_command_frame_apply_ms is not None
+    assert first_trace.followup_frame_fetch_ms is not None
+    assert first_trace.followup_frame_apply_ms is not None
+    assert first_trace.frame_fetch_ms == pytest.approx(
+        first_trace.pre_command_frame_fetch_ms
+        + first_trace.followup_frame_fetch_ms,
         abs=0.002,
     )
-    assert result.traces[0].frame_apply_ms == pytest.approx(
-        result.traces[0].pre_command_frame_apply_ms
-        + result.traces[0].followup_frame_apply_ms,
+    assert first_trace.frame_apply_ms == pytest.approx(
+        first_trace.pre_command_frame_apply_ms
+        + first_trace.followup_frame_apply_ms,
         abs=0.002,
     )
-    assert result.traces[0].frame_count == (
-        result.traces[0].pre_command_frame_count
-        + result.traces[0].followup_frame_count
+    assert first_trace.frame_count == (
+        first_trace.pre_command_frame_count
+        + first_trace.followup_frame_count
     )
 
-    held_barbarian = next(trace for trace in result.traces if trace.actor_name == "Validation Duel Barbarian")
-    reckless_rows = [row for row in held_barbarian.self_actions if row.template_name == "Reckless Attack"]
-
-    assert "Incapacitated" in held_barbarian.actor_conditions
-    assert held_barbarian.entity_action_count == 0
-    assert reckless_rows
-    assert all(not row.can_afford and row.target_count == 0 for row in reckless_rows)
-    assert held_barbarian.command_type == "end_turn"
-    assert held_barbarian.command_status == "accepted"
+    sorcerer_traces = [
+        trace for trace in result.traces if trace.actor_faction == "heroes"
+    ]
+    barbarian_traces = [
+        trace for trace in result.traces if trace.actor_faction == "monsters"
+    ]
+    assert [trace.command_index for trace in result.traces] == list(range(10))
+    assert all(trace.command_status == "accepted" for trace in result.traces)
+    assert all(
+        trace.action_resolution == "completed"
+        for trace in result.traces
+        if trace.command_type == "execute"
+    )
+    assert sorcerer_traces[-1].command_type == "end_turn"
+    assert barbarian_traces
+    assert barbarian_traces[0].turn_index != sorcerer_traces[0].turn_index
+    assert barbarian_traces[0].session_id != sorcerer_traces[0].session_id
+    assert any(
+        trace.action_category == "movement"
+        for trace in barbarian_traces
+    )
+    assert any(
+        trace.actor_previous_position is not None
+        for trace in barbarian_traces
+    )
+    barbarian_attacks = [
+        trace
+        for trace in barbarian_traces
+        if trace.action_category == "attack"
+    ]
+    assert len(barbarian_attacks) >= 2
+    assert all("pressure" in trace.logical_tags for trace in barbarian_attacks)
 
 
 def test_external_selfplay_uses_only_the_shared_policy_host() -> None:

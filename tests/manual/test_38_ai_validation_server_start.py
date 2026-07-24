@@ -1,8 +1,44 @@
 """Manual checks for server-side AI validation arena starts."""
 
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
 from dnd.entity import Entity
+from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
 from server import event_server
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
+
+
+class _ValidationRouteLauncher:
+    """Minimal registered capability for in-process validation-route checks."""
+
+    service_id = "tests.validation-route-agent"
+
+    def preflight(self, _required_agents: int) -> None:
+        return None
+
+    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+        return AgentProcessSpec(
+            argv=("unused-validation-agent", request.session_id),
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+
+@pytest.fixture(autouse=True)
+def isolate_validation_launcher() -> Iterator[None]:
+    """Keep explicit agent-service registration local to each test."""
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    yield
+    event_server.agent_service_manager.stop_all_blocking()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
 
 
 def test_ai_validation_arena_list_endpoint_exposes_catalog_metadata() -> None:
@@ -14,42 +50,20 @@ def test_ai_validation_arena_list_endpoint_exposes_catalog_metadata() -> None:
     payload = response.json()
     arena_ids = [arena["arena_id"] for arena in payload["arenas"]]
     all_tags = {tag for arena in payload["arenas"] for tag in arena["tags"]}
+    expected_specs = list_ai_validation_arena_specs()
 
     assert response.status_code == 200
-    assert arena_ids == [
-        "standard_skeleton_doors",
-        "goblin_water_skirmish",
-        "skeleton_anti_aoe_split",
-        "caster_crossfire",
-        "item_resource_gauntlet",
-        "double_door_dark_hunt",
-        "arcane_device_control",
-        "skeleton_mark_focus_fire",
-        "buff_consumable_ambush",
-        "forced_movement_hazard_bridge",
-        "line_aoe_corridor",
-        "zone_control_web_gauntlet",
-        "support_attrition_cache",
-        "high_level_spell_resource_duel",
-        "sorcerer_barbarian_duel",
-        "class_party_mirror_scramble",
-        "ranged_loadout_kiting_ring",
-        "concentration_control_crossroads",
-        "teleport_escape_skirmish",
-        "darkness_reveal_labyrinth",
-        "guardian_zone_shrine",
-        "trap_lever_killzone",
-        "condition_lock_sanctum",
-        "necrotic_anti_healing_duel",
-        "damage_affinity_weapon_lab",
-        "resistance_weapon_counterplay",
-        "field_cache_loot_race",
-        "cleanse_support_triage",
-        "multi_target_missile_allocation",
-        "multi_projectile_no_aoe_lab",
-        "reaction_counterspell_lab",
-        "guardian_choke_body_block",
-        "multi_object_control_room",
+    assert arena_ids == [spec.arena_id for spec in expected_specs]
+    assert payload["arenas"] == [
+        {
+            "arena_id": spec.arena_id,
+            "title": spec.title,
+            "hero_role": spec.hero_role,
+            "tags": list(spec.tags),
+            "expected_pressure": list(spec.expected_pressure),
+            "map_notes": list(spec.map_notes),
+        }
+        for spec in expected_specs
     ]
     assert {
         "door",
@@ -104,15 +118,22 @@ def test_ai_validation_arena_list_endpoint_exposes_catalog_metadata() -> None:
 def test_start_ai_validation_human_hero_mode_spawns_external_monsters(monkeypatch) -> None:
     """Human-hero validation mode mirrors the player-vs-external-AI flow."""
     reset_standard_arena_runtime()
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_ValidationRouteLauncher()))
     starts: list[tuple[str, str]] = []
 
-    def fake_start_external_agent(session_id, base_url: str) -> None:
-        starts.append((str(session_id), base_url))
+    async def fake_start_agents(
+        requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        starts.extend(
+            (request.session_id, request.base_url)
+            for request in requests
+        )
+        return ()
 
     monkeypatch.setattr(
-        event_server.ai_process_manager,
-        "start_external_agent",
-        fake_start_external_agent,
+        event_server.agent_service_manager,
+        "start_agents",
+        fake_start_agents,
     )
 
     client = ArenaApiClient()
@@ -154,15 +175,22 @@ def test_start_ai_validation_human_hero_mode_spawns_external_monsters(monkeypatc
 def test_start_ai_validation_codex_monsters_mode_spawns_external_hero(monkeypatch) -> None:
     """Codex-monsters validation mode gives the hero to the external AI."""
     reset_standard_arena_runtime()
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_ValidationRouteLauncher()))
     starts: list[tuple[str, str]] = []
 
-    def fake_start_external_agent(session_id, base_url: str) -> None:
-        starts.append((str(session_id), base_url))
+    async def fake_start_agents(
+        requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        starts.extend(
+            (request.session_id, request.base_url)
+            for request in requests
+        )
+        return ()
 
     monkeypatch.setattr(
-        event_server.ai_process_manager,
-        "start_external_agent",
-        fake_start_external_agent,
+        event_server.agent_service_manager,
+        "start_agents",
+        fake_start_agents,
     )
 
     client = ArenaApiClient()

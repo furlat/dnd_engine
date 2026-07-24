@@ -13,7 +13,7 @@ import ai.policy.candidates as candidate_module
 import ai.policy.outcomes as outcomes_module
 from ai.knowledge import TargetEffectBlockHypothesis, derive_agent_facts
 from ai.knowledge.topology import KnownLineOfSightWorkspace, known_line_of_sight
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     AdjacentOffset,
     KnowledgeState,
     ObservationConditionFact,
@@ -27,7 +27,7 @@ from ai.observation.models import (
     SubjectiveWorldState,
     SpatialDomainKnowledge,
 )
-from dnd.core.base_conditions import ConditionAgencyDenial, ConditionRemovalTrigger
+from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from ai.policy import (
     ExecuteIntent,
     PolicyContext,
@@ -65,7 +65,7 @@ from ai.policy.tree import (
     SequenceNode,
     UtilitySelectorNode,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -80,7 +80,7 @@ from ai.protocol.control import (
     OutcomeResolution,
     ResourcePool,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,

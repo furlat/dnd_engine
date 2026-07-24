@@ -1,6 +1,11 @@
 """Manual Chapter 23 checks for standard arena game modes."""
 
-from dnd.core.events import WeaponSlot
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from dnd.core.equipment_types import WeaponSlot
 from dnd.encounter import EncounterState, TurnState
 from dnd.entity import Entity
 from server.arena_mode import (
@@ -13,7 +18,52 @@ from server.arena_mode import (
     reset_standard_arena_runtime,
     start_joined_human_arena,
 )
+from server import event_server
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.event_server import setup_arena_combat, sim
+
+
+class _ArenaModeTestLauncher:
+    """Registered managed-agent capability for in-process arena checks."""
+
+    service_id = "tests.arena-mode-agent"
+
+    def preflight(self, _required_agents: int) -> None:
+        return None
+
+    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+        return AgentProcessSpec(
+            argv=("unused-arena-mode-agent", request.session_id),
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+
+@pytest.fixture(autouse=True)
+def stub_arena_mode_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
+    """Expose a managed service without spawning subprocesses in API checks."""
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_ArenaModeTestLauncher()))
+
+    async def accept_batch(
+        _requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        return ()
+
+    monkeypatch.setattr(
+        event_server.agent_service_manager,
+        "start_agents",
+        accept_batch,
+    )
+    yield
+    event_server.agent_service_manager.stop_all_blocking()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
 
 
 def test_arena_mode_exposes_local_client_readers_and_joined_start(capsys) -> None:
@@ -23,7 +73,7 @@ def test_arena_mode_exposes_local_client_readers_and_joined_start(capsys) -> Non
     status = client.get("/game/status").json()
 
     assert status["active"] is False
-    assert status["game"] is None
+    assert status["game_id"] is None
     assert status["sessions"] == []
     assert callable(setup_arena_combat)
     assert callable(entity_by_name)
@@ -34,7 +84,7 @@ def test_arena_mode_exposes_local_client_readers_and_joined_start(capsys) -> Non
     assert callable(start_joined_human_arena)
 
     readout_lines = [
-        f"status: active={status['active']}, game={status['game']}, sessions={len(status['sessions'])}",
+        f"status: active={status['active']}, game_id={status['game_id']}, sessions={len(status['sessions'])}",
         (
             "surfaces: "
             f"client={ArenaApiClient.__name__}, reset=yes, "
@@ -51,7 +101,7 @@ def test_arena_mode_exposes_local_client_readers_and_joined_start(capsys) -> Non
         ),
     ]
     expected_lines = [
-        "status: active=False, game=None, sessions=0",
+        "status: active=False, game_id=None, sessions=0",
         "surfaces: client=ArenaApiClient, reset=yes, setup=True, joined=True",
         "readers: entity=True, objects=True, actions=True, inventory=True, equipment=True",
     ]
@@ -60,6 +110,37 @@ def test_arena_mode_exposes_local_client_readers_and_joined_start(capsys) -> Non
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_pvp_world_replacement_stops_existing_managed_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replacing an AI arena with PvP cannot retain the old child."""
+    reset_standard_arena_runtime()
+    client = ArenaApiClient()
+    started = client.post(
+        "/simulation/start-human",
+        params={"character_class": "fighter"},
+    )
+    assert started.status_code == 200
+    stop_calls: list[str] = []
+
+    async def capture_stop_all() -> None:
+        stop_calls.append("stop")
+
+    monkeypatch.setattr(
+        event_server.agent_service_manager,
+        "stop_all",
+        capture_stop_all,
+    )
+
+    replaced = client.post(
+        "/simulation/start-pvp",
+        params={"character_class": "fighter"},
+    )
+
+    assert replaced.status_code == 200
+    assert stop_calls == ["stop"]
 
 
 def test_standard_arena_composes_environment_actors_and_ai_controllers(capsys) -> None:
@@ -85,10 +166,18 @@ def test_standard_arena_composes_environment_actors_and_ai_controllers(capsys) -
     assert archer.position == (12, 7)
     assert warlock.position == (12, 9)
 
-    assert encounter.get_controller_for(hero.uuid).controller_type == "human"
-    assert encounter.get_controller_for(warrior.uuid).controller_type == "external_ai"
-    assert encounter.get_controller_for(archer.uuid).controller_type == "external_ai"
-    assert encounter.get_controller_for(warlock.uuid).controller_type == "external_ai"
+    hero_controller = encounter.get_controller_for(hero.uuid)
+    warrior_controller = encounter.get_controller_for(warrior.uuid)
+    archer_controller = encounter.get_controller_for(archer.uuid)
+    warlock_controller = encounter.get_controller_for(warlock.uuid)
+    assert hero_controller is not None
+    assert warrior_controller is not None
+    assert archer_controller is not None
+    assert warlock_controller is not None
+    assert hero_controller.controller_type == "human"
+    assert warrior_controller.controller_type == "external_ai"
+    assert archer_controller.controller_type == "external_ai"
+    assert warlock_controller.controller_type == "external_ai"
 
     assert object_names.count("Directional Wall") == 8
     assert object_names.count("Door") == 1
@@ -110,10 +199,10 @@ def test_standard_arena_composes_environment_actors_and_ai_controllers(capsys) -
         ),
         (
             "controllers: "
-            f"hero={encounter.get_controller_for(hero.uuid).controller_type}, "
-            f"warrior={encounter.get_controller_for(warrior.uuid).controller_type}, "
-            f"archer={encounter.get_controller_for(archer.uuid).controller_type}, "
-            f"warlock={encounter.get_controller_for(warlock.uuid).controller_type}"
+            f"hero={hero_controller.controller_type}, "
+            f"warrior={warrior_controller.controller_type}, "
+            f"archer={archer_controller.controller_type}, "
+            f"warlock={warlock_controller.controller_type}"
         ),
         (
             "floor objects: "
@@ -236,16 +325,26 @@ def test_pvp_arena_swaps_monster_side_to_codex_controllers(capsys) -> None:
     monsters = [entity for entity in Entity.get_all_entities() if entity.faction == "monsters"]
 
     assert encounter.name == "PvP Arena"
-    assert encounter.get_controller_for(hero.uuid).controller_type == "human"
+    hero_controller = encounter.get_controller_for(hero.uuid)
+    assert hero_controller is not None
+    assert hero_controller.controller_type == "human"
     assert len(monsters) == 3
-    assert {encounter.get_controller_for(monster.uuid).controller_type for monster in monsters} == {"codex"}
+    monster_controllers = []
+    for monster in monsters:
+        controller = encounter.get_controller_for(monster.uuid)
+        assert controller is not None
+        monster_controllers.append(controller)
+    monster_controller_types = {
+        controller.controller_type for controller in monster_controllers
+    }
+    assert monster_controller_types == {"codex"}
 
     readout_lines = [
         f"encounter: name={encounter.name}, monsters={len(monsters)}",
         (
             "controllers: "
-            f"hero={encounter.get_controller_for(hero.uuid).controller_type}, "
-            f"monsters={sorted({encounter.get_controller_for(monster.uuid).controller_type for monster in monsters})}"
+            f"hero={hero_controller.controller_type}, "
+            f"monsters={sorted(monster_controller_types)}"
         ),
         f"monster names: {sorted(monster.name for monster in monsters)}",
     ]
@@ -348,32 +447,46 @@ def test_start_human_mode_creates_ai_session_and_waits_for_player_join(capsys) -
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_live_arena_payloads_describe_grid_entities_visibility_and_hero_detail(capsys) -> None:
-    """Client-facing payloads describe the running standard arena."""
+def test_live_arena_player_seed_describes_subjective_world_and_hero_detail(capsys) -> None:
+    """The canonical player seed describes only the hero's known arena."""
     arena = start_joined_human_arena()
     client = arena.client
     session_id = arena.session_id
     hero_uuid = arena.hero_uuid
 
-    state = client.get("/state").json()
-    visibility = client.get("/visibility").json()
-    controlled = client.get(f"/session/{session_id}/entities").json()
-    hero_detail = client.get(f"/entity/{hero_uuid}").json()
+    bootstrap_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert bootstrap_response.status_code == 200
+    bootstrap = bootstrap_response.json()
+    state = bootstrap["world"]["state"]
+    visibility = bootstrap["world"]["visibility"]
+    controlled = bootstrap["perspective"]["controlled_entity_uuids"]
+    hero_detail = next(
+        entity for entity in state["entities"] if entity["uuid"] == hero_uuid
+    )
+    hero_equipment = bootstrap["world"]["equipment_by_entity"][hero_uuid]
 
     assert state["grid"]["min_x"] == 0
     assert state["grid"]["min_y"] == 0
     assert state["grid"]["max_x"] == 14
     assert state["grid"]["max_y"] == 14
-    assert len(state["grid"]["tiles"]) == 225
-    assert {entity["name"] for entity in state["entities"]} == {
-        "Hero",
-        "Skeleton Warrior",
-        "Skeleton Archer",
-        "Skeleton Warlock",
+    assert {
+        (tile["x"], tile["y"])
+        for tile in state["grid"]["tiles"]
+    } == {
+        tuple(position)
+        for position in visibility[hero_uuid]["seen_cells"]
     }
+    assert {entity["name"] for entity in state["entities"]} == {"Hero"}
     assert state["encounter"]["name"] == "Arena Combat"
     assert state["encounter"]["state"] == "active"
-    assert {obj["name"] for obj in state["floor_objects"]} >= {"Door", "Trap Lever", "Potion of Healing"}
+    assert {obj["name"] for obj in state["floor_objects"]} >= {
+        "Trap Lever",
+        "Potion of Healing",
+    }
+    assert "Door" not in {obj["name"] for obj in state["floor_objects"]}
 
     assert hero_uuid in visibility
     assert visibility[hero_uuid]["name"] == "Hero"
@@ -381,10 +494,9 @@ def test_live_arena_payloads_describe_grid_entities_visibility_and_hero_detail(c
     assert visibility[hero_uuid]["visible_cells"]
     assert isinstance(visibility[hero_uuid]["sense_modes"], list)
 
-    assert controlled["controlled_entities"][0]["uuid"] == hero_uuid
-    assert controlled["controlled_entities"][0]["name"] == "Hero"
+    assert controlled == [hero_uuid]
     assert hero_detail["name"] == "Hero"
-    assert hero_detail["equipment"]["ac"] == hero_detail["ac"]
+    assert hero_equipment["ac"] == hero_detail["ac"]
 
     floor_names = {obj["name"] for obj in state["floor_objects"]}
     readout_lines = [
@@ -414,18 +526,15 @@ def test_live_arena_payloads_describe_grid_entities_visibility_and_hero_detail(c
         ),
         (
             "hero detail: "
-            f"controlled={controlled['controlled_entities'][0]['name']}, "
+            f"controlled={hero_detail['name'] if controlled == [hero_uuid] else 'unknown'}, "
             f"name={hero_detail['name']}, "
-            f"ac_matches={hero_detail['equipment']['ac'] == hero_detail['ac']}"
+            f"ac_matches={hero_equipment['ac'] == hero_detail['ac']}"
         ),
     ]
     expected_lines = [
-        "grid: bounds=(0,0)-(14,14), tiles=225",
-        (
-            "state: encounter=Arena Combat/active, entities=['Hero', "
-            "'Skeleton Archer', 'Skeleton Warlock', 'Skeleton Warrior']"
-        ),
-        "floor objects: has_door=True, has_trap=True, has_potion=True",
+        "grid: bounds=(0,0)-(14,14), tiles=107",
+        "state: encounter=Arena Combat/active, entities=['Hero']",
+        "floor objects: has_door=False, has_trap=True, has_potion=True",
         "visibility: hero_known=True, position=[2, 7], visible_cells=107, sense_modes=[]",
         "hero detail: controlled=Hero, name=Hero, ac_matches=True",
     ]

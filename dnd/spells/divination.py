@@ -16,7 +16,8 @@ from dnd.core.base_actions import (
     InformationEffectProfile,
     TargetType,
 )
-from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity

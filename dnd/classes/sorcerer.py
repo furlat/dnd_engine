@@ -13,7 +13,8 @@ from typing import Any, Optional, List, Tuple, Dict
 from uuid import UUID
 from pydantic import Field
 
-from dnd.core.base_conditions import BaseCondition, ConditionCategory
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
     ActionEvent, spell_slot_cost_type,

@@ -331,144 +331,129 @@ it already observed and learns only through later subjective frames.
 
 ## 7. Dependency Direction
 
-The package direction should be explicit:
+The package direction is explicit and enforced by architecture tests:
 
 ```text
 dnd/*
     no dependency on ai
+    owns engine mechanisms and dependency-neutral domain types
 
-ai/protocol/base.py
-    leaf JSON values, identifiers, cursors, and shared enums
+server/agent_protocol/immutable.py and semantics.py
+    dependency-neutral values and controller-facing semantic contracts
 
-ai/protocol/control.py
-    imports only protocol.base
+server/agent_protocol/control.py
+    imports only lower agent-protocol modules
     decision epochs, affordances, commands, and command results
 
-ai/protocol/observation.py
-    imports protocol.base and protocol.control
+server/agent_protocol/observation.py
+    imports lower agent-protocol modules and safe domain enums
     subjective facts, snapshots, and event envelopes
 
-ai/protocol/semantics.py and telemetry.py
-    import only lower protocol modules
+server/agent_protocol/observation_replay.py and telemetry.py
+    replay immutable transport data and describe controller telemetry
 
-ai/observation/*
-    imports dnd and ai.protocol
-    projects engine truth into session truth
+server/agent_runtime/*
+    imports dnd, server session state, and server.agent_protocol
+    projects engine truth, builds epochs, and revalidates commands
 
-ai/runtime/*
-    imports ai.protocol only
-    materializes and replays subjective state
+server/event_server.py
+    composes engine and server-owned agent runtime; never imports ai
+
+ai/subjective/*
+    imports server.agent_protocol and owns the client-side hot store/runtime
 
 ai/knowledge/*
-    imports ai.protocol and ai.runtime models
+    imports server.agent_protocol and ai.subjective
     derives facts, indexes, and policy memory
 
 ai/policy/*
-    imports ai.protocol and ai.knowledge
+    imports server.agent_protocol and ai.knowledge
     contains BT, FSM, utility, GOAP, arbitration
 
-ai/llm/*
-    imports ai.protocol and ai.policy contracts
-    contains presentation, tools, and LLM adapters
-
-server/*
-    hosts observation, command, telemetry, and lease endpoints
-
-ai/driver.py
-    composition root that imports runtime and policy implementations
+ai/external_agent.py and ai/codex_tools/*
+    client-facing composition roots that import subjective runtime and policy
 ```
 
-The protocol package must not import engine objects, projectors, runtime classes,
-or policy implementations. In particular, `DecisionEpoch`, `AffordanceSet`,
-command requests, and command results belong in `protocol/control.py`. Subjective
-observation envelopes may contain a decision epoch, so the observation contract
-depends downward on the neutral control contract. It must never import an epoch
-model from the higher-level client runtime.
+The protocol package does not import projectors, runtime classes, or policy
+implementations. It may import only explicitly dependency-neutral domain types,
+such as condition tags, life state, equipment slots, and effect provenance.
+`DecisionEpoch`, `AffordanceSet`, command requests, and command results belong in
+`server.agent_protocol.control`. Subjective observation envelopes may contain a
+decision epoch, so the observation contract depends downward on that neutral
+control contract. It never imports an epoch model from the higher-level client
+runtime.
 
-The observation projector is an adapter: it imports D&D engine types and emits
-protocol models. The runtime consumes those models but never imports the
-projector or the engine. The policy host does not belong inside the runtime; the
-driver is the composition root that is allowed to import both. This removes the
-current observation-to-subjective inversion without hiding a cycle behind late
-imports or `TYPE_CHECKING`.
+The observation projector is a server adapter: it imports D&D engine types and
+emits protocol models. External clients consume those models without importing
+the projector or engine. In-process self-play may deliberately compose the
+server adapter and client policy, but server and engine production modules
+never import `ai`. No layer may hide a reversed dependency behind a function
+import, dynamic import, or `TYPE_CHECKING`.
 
-## 8. Proposed Package Layout
+## 8. Current Package Layout
 
-The package layout is:
+The implemented ownership split is:
 
 ```text
-ai/
-  protocol/
-    base.py
+server/
+  agent_protocol/
+    immutable.py
     control.py
     observation.py
+    observation_replay.py
     semantics.py
     telemetry.py
+    gauntlet.py
 
-  observation/
-    projector.py
-    combat_log_filter.py
-    knowledge_projection.py
-    stream.py
+  agent_runtime/
+    observation_projector.py
+    action_semantics.py
+    epochs.py
+    movement_revalidation.py
+    service.py
+    service_manager.py
+    subprocess_service.py
 
-  runtime/
+  runtime_performance.py
+
+ai/
+  subjective/
     store.py
     runtime.py
-    replay.py
     hooks.py
-    subscriptions.py
+    processors.py
+    queries.py
+    printers.py
 
   knowledge/
-    facts.py
-    truth.py
-    indexes.py
+    deriver.py
+    models.py
     topology.py
-    targets.py
-    effects.py
-    memory.py
+    replay.py
 
   policy/
-    base.py
+    source.py
     host.py
-    arbitration.py
-    directives.py
-    intents.py
     candidates.py
-    profiles.py
-    behavior_tree/
-    utility/
-    state_machine/
-    goap/
-
-  policies/
-    default_combat/
-    exploration/
-    examples/
-
-  llm/
-    adapter.py
-    tools.py
-    presentation.py
-    prompts.py
-    session.py
-
-  telemetry/
-    events.py
-    sinks.py
-    artifacts.py
-    metrics.py
+    contracts.py
+    routines.py
+    tree.py
+    utility.py
+    memory.py
 
   evaluation/
-    selfplay.py
-    arenas.py
-    tournaments.py
-    reports.py
 
-  driver.py
+  codex_tools/
+
+  external_agent.py
+  external_selfplay.py
 ```
 
-Existing modules can be adapted toward this layout. A destructive move is not
-required before the contracts are proven.
+`server.agent_protocol` and `server.agent_runtime` are game-server core.
+Everything under `ai` is a client-facing consumer, policy, tool, or evaluation
+harness and is therefore forbidden as a dependency of `dnd` or `server`.
+Policy filesystem inspection belongs to `ai.policy.source`; the server exposes
+only an explicitly injected neutral manifest and works when `ai` is absent.
 
 ## 9. One Typed Subjective State
 

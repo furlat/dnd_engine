@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
+from ai.game_server_profiles import EMBEDDED_AI_WORKER_APPLICATION
 from ai.remote_connection import redeem_remote_agent_grant
 from dnd.core.base_object import BaseObject
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
@@ -50,6 +51,7 @@ def test_prewarmed_worker_is_claimed_without_cold_process_start(tmp_path: Path) 
     async def exercise_pool() -> None:
         workers = HostedWorkerManager(
             tmp_path / "runtime",
+            worker_application=EMBEDDED_AI_WORKER_APPLICATION,
             warm_pool_size=1,
             startup_timeout_seconds=20.0,
         )
@@ -122,9 +124,9 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
             "isolated_game_workers": True,
         }
         assert catalog_response.status_code == 200
-        assert catalog_response.json() == build_game_creation_catalog().model_dump(
-            mode="json",
-        )
+        assert catalog_response.json() == build_game_creation_catalog(
+            ("human",),
+        ).model_dump(mode="json")
         assert valid_response.status_code == 200
         assert valid_response.json()["admitted"] is True
         assert invalid_response.status_code == 400
@@ -142,6 +144,64 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
     repository.close()
 
 
+def test_core_gateway_rejects_managed_ai_before_spawning_worker(
+    tmp_path: Path,
+) -> None:
+    """Core-only gateway admission agrees with its human-only catalog."""
+    repository = GameDirectoryRepository(
+        tmp_path / "directory.sqlite3",
+        capability_pepper=PEPPER,
+    )
+    workers = HostedWorkerManager(tmp_path / "runtime")
+    app = create_gateway_app(
+        repository=repository,
+        worker_manager=workers,
+        capability_pepper=PEPPER,
+    )
+
+    with TestClient(app) as client:
+        owner = client.post(
+            "/directory/principals/guest",
+            json={"display_name": "Core Owner"},
+        ).json()
+        rejected = client.post("/games", json=_creation_body(owner))
+
+    assert rejected.status_code == 503
+    assert rejected.json()["detail"]["code"] == "agent_service_unavailable"
+    assert workers.active_game_ids() == ()
+    assert repository.list_games() == ()
+    repository.close()
+
+
+def test_managed_ai_gateway_catalog_matches_worker_composition(
+    tmp_path: Path,
+) -> None:
+    """The AI-owned gateway advertises only capabilities proved at worker boot."""
+    repository = GameDirectoryRepository(
+        tmp_path / "directory.sqlite3",
+        capability_pepper=PEPPER,
+    )
+    workers = HostedWorkerManager(
+        tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
+    )
+    app = create_gateway_app(
+        repository=repository,
+        worker_manager=workers,
+        capability_pepper=PEPPER,
+    )
+
+    with TestClient(app) as client:
+        catalog = client.get("/game-creation/catalog")
+
+    assert catalog.status_code == 200
+    assert catalog.json() == build_game_creation_catalog().model_dump(
+        mode="json",
+    )
+    assert workers.active_game_ids() == ()
+    repository.close()
+
+
 def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: Path) -> None:
     """Cold handshakes create fresh hot capabilities without DB runtime access."""
     repository = GameDirectoryRepository(
@@ -150,6 +210,7 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -188,14 +249,18 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
         assert len(connection["controlled_entity_uuids"]) == 1
         assert connection["engine_base_url"].endswith(f"/games/{game_id}/runtime")
 
-        runtime_path = f"/games/{game_id}/runtime/game/status"
+        runtime_path = f"/games/{game_id}/runtime/replication/bootstrap"
         with repository.forbid_hot_path_access():
-            status = client.get(
+            bootstrap = client.get(
                 runtime_path,
+                params={"session_id": connection["runtime_session_id"]},
                 headers={"Authorization": f"Bearer {connection['runtime_token']}"},
             )
-        assert status.status_code == 200, status.text
-        assert status.json()["active"] is True
+        assert bootstrap.status_code == 200, bootstrap.text
+        assert (
+            bootstrap.json()["perspective"]["controlled_entity_uuids"]
+            == connection["controlled_entity_uuids"]
+        )
         assert client.get(runtime_path).status_code == 403
         assert client.post(
             f"/games/{game_id}/runtime/simulation/reset",
@@ -238,21 +303,29 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
         observer_connection = observe_response.json()["connection"]
         assert observer_connection["access_mode"] == "observer"
         assert observer_connection["controlled_entity_uuids"] == []
-        observer_status = client.get(
+        assert observer_connection["observer_entity_uuids"]
+        assert observer_connection["active_observer_uuid"] in observer_connection["observer_entity_uuids"]
+        observer_bootstrap = client.get(
             runtime_path,
+            params={"session_id": observer_connection["runtime_session_id"]},
             headers={"Authorization": f"Bearer {observer_connection['runtime_token']}"},
         )
-        assert observer_status.status_code == 200
+        assert observer_bootstrap.status_code == 200
+        assert (
+            observer_bootstrap.json()["perspective"]["controlled_entity_uuids"]
+            == []
+        )
 
         public_games = client.get("/games")
         assert public_games.status_code == 200
         assert [row["game_id"] for row in public_games.json()["games"]] == [str(game_id)]
 
-        wrong_game_status = client.get(
-            f"/games/{uuid4()}/runtime/game/status",
+        wrong_game_bootstrap = client.get(
+            f"/games/{uuid4()}/runtime/replication/bootstrap",
+            params={"session_id": connection["runtime_session_id"]},
             headers={"Authorization": f"Bearer {connection['runtime_token']}"},
         )
-        assert wrong_game_status.status_code == 403
+        assert wrong_game_bootstrap.status_code == 403
 
         stopped = client.post(
             f"/games/{game_id}/stop",
@@ -304,6 +377,7 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -379,6 +453,7 @@ def test_autonomous_composed_match_persists_summary_within_half_second(
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -460,7 +535,11 @@ def test_remote_agent_uses_public_subjective_runtime_without_engine_access(tmp_p
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
     )
-    workers = HostedWorkerManager(tmp_path / "runtime", startup_timeout_seconds=20.0)
+    workers = HostedWorkerManager(
+        tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
+        startup_timeout_seconds=20.0,
+    )
     app = create_gateway_app(
         repository=repository,
         worker_manager=workers,
@@ -477,6 +556,27 @@ def test_remote_agent_uses_public_subjective_runtime_without_engine_access(tmp_p
         assert created_response.status_code == 200, created_response.text
         created = created_response.json()
         game_id = UUID(created["game"]["game_id"])
+        side = created["creation"]["side_b"]
+        fallback_session_id = side["fallback_ai_session_id"]
+        codex_session_id = side["codex_session_id"]
+        assert fallback_session_id
+        assert codex_session_id
+        assert fallback_session_id != codex_session_id
+        worker_transport = httpx.HTTPTransport(
+            uds=str(workers.socket_path(game_id))
+        )
+        with httpx.Client(
+            transport=worker_transport,
+            base_url="http://game-worker",
+        ) as worker_client:
+            service = worker_client.get("/ai/service")
+        assert service.status_code == 200
+        fallback_status = next(
+            row
+            for row in service.json()["sessions"]
+            if row["session_id"] == fallback_session_id
+        )
+        assert fallback_status["ready"] is True
 
         remote_identity = client.post(
             "/directory/principals/guest",
@@ -493,6 +593,7 @@ def test_remote_agent_uses_public_subjective_runtime_without_engine_access(tmp_p
         )
         assert grant_response.status_code == 200, grant_response.text
         grant = grant_response.json()
+        assert grant["runtime_session_id"] == codex_session_id
 
         connection_model = redeem_remote_agent_grant(
             gateway_url=str(client.base_url),

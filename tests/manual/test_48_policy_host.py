@@ -15,7 +15,7 @@ from ai.policy import (
     command_from_policy_decision,
 )
 from ai.knowledge import derive_agent_facts
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     AdjacentOffset,
     KnowledgeState,
     ObservationEffectProtection,
@@ -38,6 +38,7 @@ from ai.policy import (
     PolicyHost,
     PolicyDecisionTelemetry,
     PolicyResultDisposition,
+    PolicyResultRecord,
 )
 from ai.policy.contracts import (
     CapabilityModelStatus,
@@ -56,7 +57,7 @@ from ai.policy.generations import (
     list_policy_generations,
 )
 from ai.policy.generations.registry import EXPECTED_V31_BEHAVIOR_SHA256
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -70,11 +71,12 @@ from ai.protocol.control import (
     DamageRollProfile,
     DecisionEpoch,
     DecisionEpochReason,
+    END_TURN_ROW_ID,
     OutcomeAdvantage,
     OutcomeResolution,
     ResourcePool,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     CapabilityOutcomeAdjustment,
@@ -554,8 +556,16 @@ def test_policy_host_does_not_advance_memory_for_accepted_canceled_action() -> N
 
     assert outcome.disposition is PolicyResultDisposition.ACCEPTED
     assert outcome.memory_advanced is False
+    assert outcome.reason == "matched_accepted_canceled_command_result"
     assert host.pending_submission("command-1") is None
-    assert host.memory_for("session", "actor").active_routine is None
+    memory = host.memory_for("session", "actor")
+    assert memory.active_routine is None
+    assert memory.canceled_row_ids == {"move-row"}
+    assert outcome.submission is not None
+    assert outcome.submission.selected_action_shape is not None
+    assert memory.canceled_semantic_counts == {
+        outcome.submission.selected_action_shape.semantic_key: 1
+    }
 
 
 def test_policy_host_fails_closed_for_accepted_execute_without_resolution() -> None:
@@ -1002,7 +1012,17 @@ def test_policy_host_pursuit_revalidates_move_dash_yield_and_fresh_attack() -> N
     yield_turn = host.decide(exhausted)
     assert isinstance(yield_turn.selected.intent, EndTurnIntent)
     assert yield_turn.selected.source_node == "Pressure/PursueCapability/YieldTurn"
-    _accept_policy_decision(host, exhausted, yield_turn, "pursuit-yield")
+    yield_result = _accept_policy_decision(
+        host,
+        exhausted,
+        yield_turn,
+        "pursuit-yield",
+    )
+    assert yield_result.submission is not None
+    assert isinstance(yield_result.submission.intent, EndTurnIntent)
+    assert yield_result.submission.routine_plan is not None
+    assert yield_result.submission.routine_plan.step_id == "yield_turn"
+    assert host.pending_submission("pursuit-yield") is None
     assert host.memory_for("session", "actor").active_routine is not None
 
     next_turn = _pursuit_next_turn_attack_world(exhausted)
@@ -1710,6 +1730,38 @@ def test_policy_host_ends_spent_no_contact_turn_with_opaque_row() -> None:
     assert "ReactiveRoot/TerminalFallback/EndTurn" in {
         step.node_path for step in decision.trace
     }
+    host.prepare_submission(
+        session_id="session",
+        actor_uuid="actor",
+        epoch_id="epoch-1",
+        command_id="terminal-end-turn",
+    )
+    missing_row = host.record_result(CommandResult(
+        status=CommandResultStatus.ACCEPTED,
+        command_id="terminal-end-turn",
+        session_id="session",
+        actor_uuid="actor",
+        requested_epoch_id="epoch-1",
+        current_epoch_id="epoch-2",
+        row_id=None,
+    ))
+    assert missing_row.disposition is PolicyResultDisposition.UNMATCHED
+    assert missing_row.reason == "end_turn_result_row_mismatch"
+    assert host.pending_submission("terminal-end-turn") is not None
+
+    outcome = host.record_result(CommandResult(
+        status=CommandResultStatus.ACCEPTED,
+        command_id="terminal-end-turn",
+        session_id="session",
+        actor_uuid="actor",
+        requested_epoch_id="epoch-1",
+        current_epoch_id="epoch-2",
+        row_id=END_TURN_ROW_ID,
+    ))
+    assert outcome.disposition is PolicyResultDisposition.ACCEPTED
+    assert outcome.reason == "matched_accepted_command_result"
+    assert outcome.memory_advanced is False
+    assert host.pending_submission("terminal-end-turn") is None
 
 
 def test_enable_then_act_reuses_los_for_equivalent_subjective_geometry(
@@ -3094,7 +3146,7 @@ def _accept_policy_decision(
     world: SubjectiveWorldState,
     decision: PolicyDecision,
     command_id: str,
-) -> None:
+) -> PolicyResultRecord:
     """Prepare and accept one selected command against its exact test epoch."""
     epoch = world.current_epoch
     assert epoch is not None
@@ -3112,7 +3164,11 @@ def _accept_policy_decision(
         actor_uuid="actor",
         requested_epoch_id=epoch.epoch_id,
         current_epoch_id=f"{epoch.epoch_id}:next",
-        row_id=(intent.row_id if isinstance(intent, ExecuteIntent) else None),
+        row_id=(
+            intent.row_id
+            if isinstance(intent, ExecuteIntent)
+            else END_TURN_ROW_ID
+        ),
         action_resolution=(
             ActionResolutionStatus.COMPLETED
             if isinstance(intent, ExecuteIntent)
@@ -3120,3 +3176,5 @@ def _accept_policy_decision(
         ),
     ))
     assert outcome.disposition is PolicyResultDisposition.ACCEPTED
+    assert host.pending_submission(command_id) is None
+    return outcome

@@ -1,25 +1,14 @@
 # D&D Engine TypeScript SDK
 
-This package is the browser and TypeScript replication boundary owned by
-`dnd_engine`. A game client consumes this package; it does not redefine engine
-events, action rows, state snapshots, combat logs, or stream cursors.
+This package is the generated and handwritten browser boundary owned by
+`dnd_engine`. Player replication, objective diagnostics, and the game-directory
+control plane are deliberately separate transports.
 
-## Contract Source
+## Contract generation
 
-`devtools/generate_typescript_sdk.py` walks the existing Pydantic models used by
-the engine and server. It generates:
-
-- every concrete engine event with its Python class path as `wire_type`;
-- public state, visibility, entity, equipment, action, session, and game setup models;
-- SSE sync, event, combat-log, heartbeat, and eviction envelopes;
-- runtime model and enum descriptors used to validate JSON at the network boundary.
-
-Arbitrary values become `JsonValue` only where the Python annotation is already
-`Any` or `JsonValue`. The generator emits no TypeScript `any` or `unknown` wire
-fields. `unknown` appears only as the input type of runtime validators before a
-payload has proved its contract.
-
-Regenerate and verify with:
+`devtools/generate_typescript_sdk.py` walks the backend Pydantic graph. The
+player contract is authenticated by `PLAYER_REPLICATION_CONTRACT_HASH`, which
+covers the complete transitive subjective wire schema.
 
 ```bash
 uv run python devtools/generate_typescript_sdk.py
@@ -27,192 +16,171 @@ uv run python devtools/generate_typescript_sdk.py --check
 npm test --prefix sdk/typescript
 ```
 
-## Replication Model
+Generated files are never edited manually. Runtime validators accept
+`unknown`, prove a generated descriptor, and return the corresponding generated
+type. `decodeAlias()` validates the discriminated `SubjectiveWorldPatch`,
+`SubjectivePresentationCue`, `SubjectiveStreamDelivery`, and
+`SubjectiveReplayDelivery` unions.
 
-The server exposes one atomic base at `/replication/bootstrap`. It includes the
-state, visibility, combat-log history, session context, event cursor, log
-cursor, event-contract identity, and EventQueue generation UUID.
+## Canonical player replication
 
-`DndEngineClient.events()` resumes from those cursors. Every payload is runtime
-validated before it enters `ReplicationJournal`.
+There is one player route family:
 
-```text
-server EventQueue                   local SDK
------------------                  ---------
-atomic bootstrap  ---------------> authoritative world
-event burst       ---------------> validate -> reduce immediately
-                                      |
-                                      +----> ordered presentation backlog
-                                                |
-renderer finishes clip <---------------- acknowledge one cursor
-                                                |
-                                      presentation world advances
-```
+- `/replication/bootstrap`
+- `/replication/frames`
+- `/replication/combat-log`
+- `/replication/subscribe`
 
-The authoritative world answers what the server currently knows. The
-presentation world answers what the player has actually seen rendered. They
-use the same pure reducer but advance at different speeds. A slow animation can
-therefore never cause a later server position, death, or condition update to
-overwrite the actor currently on screen.
+`SubjectiveReplicationClient` is its only SDK client. The three non-bootstrap
+routes require the source-stream, generation, and perspective-epoch identities.
+The SSE union is exactly `sync | frame | combat_log`; it never carries engine
+events, objective state, heartbeats, command receipts, or compatibility frames.
 
-Numeric cursors are scoped by `generation_id`. A server reset changes the
-generation even though cursors restart at zero. Duplicate events are ignored;
-cursor gaps, generation changes, eviction, contract mismatch, and presentation
-overflow explicitly require a fresh bootstrap.
-
-## Client Responsibilities
-
-The SDK owns transport parsing, validation, cursor semantics, replay,
-authoritative reduction, and presentation coordination. A game client owns
-rendering decisions: which terminal event maps to which animation, how clips
-are coalesced, camera behavior, VFX, controls, and UI composition.
-
-The SDK is intentionally independent from `ai.observation` and the subjective
-agent runtime. Human-client replication and AI belief construction solve
-different problems even though both consume engine events.
-
-## Starting A Human Client
-
-World creation resets the engine generation and therefore invalidates every
-session from the previous world. The canonical startup order is:
+`SubjectiveReplicationJournal` maintains two views. Its authoritative view
+applies typed world patches as soon as an observation frame arrives. Its
+presentation view applies the same patch transaction only when the renderer
+commits that whole frame. Combat-log source slots—including hidden nullable
+slots—advance independently and are released to presentation only after their
+source-event barrier has been presented.
 
 ```text
-create world -> create session -> join entities -> atomic replication bootstrap
+subjective bootstrap
+       |
+       +----> authoritative world
+       +----> presentation world
+
+frame --typed patches--> authoritative world
+  |
+  +--safe cue graph--> renderer transaction
+                           |
+                    commitPresentationFrame()
+                           |
+                    presentation world
 ```
 
-All request and response values below are generated from the Python models. A
-consumer should not redeclare any of their shapes.
+### Standalone startup
 
 ```ts
 import {
   DndEngineClient,
-  ReplicationJournal,
+  SubjectiveReplicationClient,
+  SubjectiveReplicationJournal,
 } from "@neurodragon/dnd-engine-sdk";
 
-const client = new DndEngineClient("/api");
-const simulation = await client.startHuman("fighter");
+const engine = new DndEngineClient("/api");
+const simulation = await engine.startHuman("fighter");
 if (simulation.hero_uuid === null) throw new Error("world has no hero");
 
-const session = await client.createSession({
+const session = await engine.createSession({
   player_type: "human",
   name: "My Client",
 });
-await client.joinGame({
+await engine.joinGame({
   session_id: session.session_id,
   entity_uuids: [simulation.hero_uuid],
   entity_uuid: null,
   faction: null,
 });
 
-const journal = new ReplicationJournal();
-journal.bootstrap(await client.bootstrap(session.session_id));
+const replication = new SubjectiveReplicationClient("/api");
+const journal = new SubjectiveReplicationJournal();
+journal.bootstrap(await replication.bootstrap(session.session_id));
 ```
 
-## Hosted Games And Reconnection
-
-Use `DndEngineClient.getServerCapabilities()` before choosing a startup flow.
-The typed response distinguishes the DB-free standalone server from the hosted
-gateway without relying on an expected 404 from `/games`.
-
-`GameDirectoryClient` owns the cold multi-game control plane. Applications use
-it to discover games, create or observe a hosted game, reopen a reconnect grant,
-and retrieve the immutable terminal summary. Once attached, `runtimeClient()`
-returns the ordinary `DndEngineClient` bound to that game and its short-lived
-runtime authority token.
-
-Directory principal capabilities and runtime tokens are sent in headers. They
-are never placed in query strings or SSE URLs.
-
-```ts
-import {
-  GameDirectoryClient,
-  ReplicationJournal,
-} from "@neurodragon/dnd-engine-sdk";
-
-const directory = new GameDirectoryClient("/gateway-api");
-const guest = await directory.createGuest({ display_name: "Tommaso" });
-const credential = {
-  principalId: guest.principal.principal_id,
-  principalCapability: guest.principal_capability,
-};
-
-const visible = await directory.listGames(credential);
-const attachment = await directory.attach(visible.games[0]!.game_id, {
-  grant_id: savedReconnectGrantId,
-  capability: savedReconnectCapability,
-  client_instance_id: browserInstanceId,
-  client_kind: "neuroclient",
-});
-
-const client = directory.runtimeClient(attachment.connection);
-const journal = new ReplicationJournal();
-journal.bootstrap(await client.bootstrap(attachment.connection.runtime_session_id));
-```
-
-`followGames()` consumes the durable directory lifecycle stream. It validates
-every envelope, resumes from the last delivered global cursor, filters private
-games through the supplied principal credential, and reconnects after transient
-transport failures.
+### Following the stream
 
 ```ts
 const controller = new AbortController();
 
-void directory.followGames({
-  credential,
-  signal: controller.signal,
-  onEnvelope: ({ event, data }) => {
-    if (event === "directory_event") {
-      // Refresh or patch the game browser from data.event_type and data.game_id.
-    }
-  },
-});
-```
-
-The SDK deliberately does not persist capabilities. The application chooses
-its platform-appropriate secret storage and supplies a saved reconnect grant
-when opening a new attachment.
-
-## Following Replication
-
-`followReplication()` is the normal connection surface. It resumes at the
-journal cursors, validates every SSE envelope, applies events in order,
-reconnects after transient transport failures, and performs an atomic bootstrap
-when a generation change, cursor gap, eviction, contract mismatch, or local
-presentation overflow requires resynchronization.
-
-```ts
-const controller = new AbortController();
-
-void client.followReplication(journal, {
+void replication.follow(journal, {
   sessionId: session.session_id,
   signal: controller.signal,
-  onUpdate: async ({ envelope, result }) => {
-    // Read journal.state().authoritative for current game truth.
-    // Queue visual work only for applied game_event envelopes.
+  onUpdate: ({ envelope }) => {
+    if (envelope.event === "frame") {
+      // Build one animation transaction from envelope.data.frame.presentation.
+    }
   },
-  onReplicaReset: async ({ state }) => {
-    // Snap the renderer to state.presentation after the atomic replacement.
+  onReplicaReset: ({ bootstrap, state }) => {
+    // Atomically seed the app from the exact validated bootstrap fetched for
+    // this reset; its sparse combat-log window is not reconstructed from state.
   },
 });
+
+const next = journal.peekPresentationFrame();
+if (next !== null) {
+  await renderFrame(next.presentation);
+  journal.commitPresentationFrame(next.watermarks.observation_cursor);
+}
 ```
 
-The consumer must acknowledge presentation only after the corresponding visual
-transaction has finished:
+Movement perception commits atomically with its observation frame. A trajectory
+describes animation order; it does not expose intermediate visibility states.
+
+## One render projection
+
+`projectSubjectiveRenderWorld()` and `projectObjectiveRenderWorld()` feed the
+same render DTO and the same `projectGrid()` implementation. Physical tile
+boundaries are emitted only as `RenderGrid.structural_edges`. Every edge has
+canonical north/east ownership, a `wall | door | generic` kind, an explicit
+door state, and its blocked channels. Clients must not reconstruct a second
+edge set from tile halves or draw directional floor-object rows as duplicate
+geometry.
+
+## Hosted games
+
+`GameDirectoryClient` owns discovery and attachment. Its `runtimeClient()` is
+the general action/state client. Construct `SubjectiveReplicationClient` with
+the same runtime base URL and authorization headers for the player stream.
+Credentials remain in headers and are never placed in SSE URLs.
+
+## Durable ended-game replays
+
+`GameDirectoryClient.getObjectiveReplay()` reads
+`/games/{gameId}/diagnostics/objective-replay`; `getSubjectiveReplay()` reads
+only one exact membership from `/games/{gameId}/memberships/{membershipId}/replay`.
+Both require principal credentials in headers.
+
+`decodeObjectiveReplay()` accepts the completion-only objective reducer seed,
+event frames, and objective logs. `decodeSubjectivePlayerReplay()` accepts only
+the same canonical subjective bootstrap, typed patch/presentation frames, and
+nullable subjective log deliveries used during first play. Raw engine events
+and objective state cannot inhabit the player replay type. The persistence-only
+aggregate archive containing every membership is deliberately not exported by
+the SDK.
+
+## Objective diagnostics
+
+`ObjectiveDiagnosticsClient`, `ObjectiveDiagnosticsSseDecoder`, and
+`ObjectiveDiagnosticsFollower` own the separate privileged objective surface.
+Its cold `GameEventFrame` and broad `TimelineCombatLogFrame` types are not
+accepted by the subjective client or journal.
+
+An ADMINISTER client can continuously audit an already-open player partition:
 
 ```ts
-journal.commitPresentationThrough(completedRootEventCursor);
+const report = await objectiveDiagnostics.subjectiveParity(sessionId);
+if (!report.matches) console.error(report.mismatches);
 ```
 
-This is the only renderer-owned cursor operation. SSE parsing, retries, replay,
-deduplication, authoritative reduction, and resync belong to the SDK.
+The check compares the retained subjective reducer with an independently
+censored objective checkpoint at the same source/generation/perspective
+boundary. It never bootstraps, binds, advances, or repairs player state.
 
-## Contract Discipline
+## Stable live exports
 
-- Python engine/Pydantic models are the sole wire-contract source.
-- Generated files are never edited manually.
-- SDK runtime types describe local behavior such as connection health; they do
-  not redeclare backend payloads.
-- The reducer explicitly classifies every generated event wire class. A new
-  event class fails TypeScript compilation until its public-state behavior is
-  handled or deliberately identified as observational.
-- A fresh bootstrap is the parity oracle for the locally reduced replica.
+- `SubjectiveReplicationClient`, `SUBJECTIVE_REPLICATION_ROUTES`
+- `SubjectiveSseDecoder`, `SubjectiveStreamFollower`, `SubjectiveSseEnvelope`
+- `SubjectiveReplicationJournal`, `SubjectiveReplicationJournalState`
+- `reduceSubjectiveWorld`, `assertSubjectiveWorld`
+- `projectSubjectiveRenderWorld`, `projectObjectiveRenderWorld`,
+  `projectStructuralEdges`
+- `ObjectiveDiagnosticsClient.subjectiveParity`
+- `decodeObjectiveReplay`, `decodeSubjectivePlayerReplay`
+- generated `ObjectiveReplayBundle`, `SubjectivePlayerReplayBundle`,
+  `SubjectiveReplaySegment`, and `SubjectiveReplayDelivery`
+- generated `SubjectiveReplicationBootstrap`, `SubjectiveFramesResponse`,
+  `SubjectiveCombatLogFramesResponse`, `SubjectiveWorldPatch`,
+  `SubjectivePresentationCue`, and `SubjectiveStreamDelivery`
+
+The general `DndEngineClient` intentionally has no replication methods. That
+keeps one correct player transport instead of parallel legacy entry points.

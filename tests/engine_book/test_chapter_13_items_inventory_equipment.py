@@ -4,11 +4,11 @@ from uuid import uuid4
 
 from dnd.actions_functional import execute_use_action, setup_standard_actions
 from dnd.blocks.base_item import BaseItem
-from dnd.blocks.equipment import WeaponProperty
+from dnd.core.equipment_types import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventHandler, EventQueue, EventPhase, EventType, Trigger, WeaponSlot, BodyPart
+from dnd.core.events import Event, EventHandler, EventQueue, EventPhase, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType, NumericalModifier
 from dnd.core.values import BaseValue
@@ -291,6 +291,7 @@ def test_eb_13_013_canceled_high_level_equip_preserves_inventory_item() -> None:
         EventHandler(
             name="Cancel Weapon Equip",
             source_entity_uuid=entity.uuid,
+            validation_only=True,
             event_processor=cancel_weapon_equip,
             trigger_conditions=[
                 Trigger(
@@ -409,6 +410,7 @@ def test_eb_13_016_canceled_direct_equip_preserves_existing_slot_item() -> None:
         EventHandler(
             name="Cancel Direct Weapon Equip",
             source_entity_uuid=entity.uuid,
+            validation_only=True,
             event_processor=cancel_weapon_equip,
             trigger_conditions=[
                 Trigger(
@@ -561,11 +563,16 @@ def test_eb_13_008_consumable_use_actions_consume_charges_and_stacks() -> None:
     assert potion.charges == potion.max_charges
     assert entity.inventory.has_item(potion.uuid)
     assert BaseBlock.get(potion.uuid) is potion
+    assert entity.action_economy.bonus_actions.normalized_score == 0
 
+    # The second stack unit is consumed on a second legal turn, not by
+    # bypassing the potion's bonus-action budget.
+    entity.action_economy.reset_all_costs()
     second = execute_use_action(entity, potion.uuid, "Drink Potion")
 
     assert second is not None and not second.canceled
     assert get_hp(entity) == 15
+    assert entity.action_economy.bonus_actions.normalized_score == 0
     assert not entity.inventory.has_item(potion.uuid)
     assert BaseBlock.get(potion.uuid) is None
 

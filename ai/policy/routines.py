@@ -51,13 +51,13 @@ from ai.knowledge.replay import (
     position_replay_token,
 )
 from ai.policy.utility import UtilityArbiter
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionTarget,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,

@@ -6,8 +6,8 @@ from typing import Dict, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ai.protocol.control import ActionAffordance, ActionCapability, ActionEconomyState
-from ai.protocol.semantics import ActionSemantics, ActionTag
+from server.agent_protocol.control import ActionAffordance, ActionCapability, ActionEconomyState
+from server.agent_protocol.semantics import ActionSemantics, ActionTag
 
 
 Position = Tuple[int, int]

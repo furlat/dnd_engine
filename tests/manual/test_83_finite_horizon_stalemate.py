@@ -6,18 +6,31 @@ from ai.external_selfplay import (
     run_external_selfplay_with_arena_factory,
     STALEMATE_COMMAND_WINDOW,
 )
+from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
 from dnd.scenarios.evaluation.assembler import assemble_composed_arena
 
 
-def test_kiting_attack_control_loop_reaches_typed_stalemate_draw() -> None:
+def test_non_damaging_match_reaches_typed_stalemate_draw() -> None:
     def arena_factory():
-        return assemble_composed_arena(
+        arena = assemble_composed_arena(
             "hero.fighter_l5_wounded_necrotic",
             "monsters.srd_goblinoid_warband",
             "battlefield.arcane_device_bright",
             "neutral.battlefield.arcane_device_bright",
             opening_faction="monsters",
         )
+        for actor in (*arena.side_a, *arena.side_b):
+            for damage_type in DamageType:
+                actor.health.damage_reduction.self_static.add_resistance_modifier(
+                    ResistanceModifier(
+                        source_entity_uuid=actor.uuid,
+                        target_entity_uuid=actor.uuid,
+                        name=f"Finite-horizon immunity to {damage_type.value}",
+                        value=ResistanceStatus.IMMUNITY,
+                        damage_type=damage_type,
+                    )
+                )
+        return arena
 
     result = run_external_selfplay_with_arena_factory(
         "finite-horizon-stalemate-regression",

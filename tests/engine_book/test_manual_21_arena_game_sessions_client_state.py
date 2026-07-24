@@ -1,6 +1,7 @@
 """Manual Chapter 21 checks for arena game sessions and client state."""
 
 import warnings
+from uuid import UUID
 
 warnings.filterwarnings(
     "ignore",
@@ -9,29 +10,70 @@ warnings.filterwarnings(
 
 from fastapi.testclient import TestClient
 import pytest
+from pathlib import Path
 
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue
+from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.utils import reset_combat_state
 from server import event_server
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.event_server import (
     _available_actions_cache,
     app,
     setup_arena_combat,
     sim,
 )
+from server.event_stream import event_stream
+
+
+class _TutorialAgentLauncher:
+    """Registered managed-agent capability for in-process tutorial checks."""
+
+    service_id = "tests.tutorial-agent"
+
+    def preflight(self, required_agents: int) -> None:
+        _ = required_agents
+        return None
+
+    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+        return AgentProcessSpec(
+            argv=("unused-tutorial-agent", request.session_id),
+            cwd=Path(__file__).resolve().parents[2],
+        )
 
 
 @pytest.fixture(autouse=True)
-def stub_external_ai_processes(monkeypatch: pytest.MonkeyPatch) -> None:
+def stub_external_ai_processes(monkeypatch: pytest.MonkeyPatch):
     """Keep arena-session tutorial checks from spawning real AI subprocesses."""
-    monkeypatch.setattr(event_server.ai_process_manager, "start_external_agent", lambda *_args: None)
-    monkeypatch.setattr(event_server.ai_process_manager, "stop_all", lambda: None)
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_TutorialAgentLauncher()))
+
+    async def accept_batch(
+        _requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        return ()
+
+    monkeypatch.setattr(
+        event_server.agent_service_manager,
+        "start_agents",
+        accept_batch,
+    )
+    yield
+    event_server.agent_service_manager.stop_all_blocking()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
 
 
 def reset_live_game_tutorial_state() -> None:
@@ -46,6 +88,8 @@ def reset_live_game_tutorial_state() -> None:
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
+    event_stream.ensure_attached()
+    event_stream._clear_source_journal()
     _available_actions_cache.clear()
 
     manager = sim.get_session_manager()
@@ -65,9 +109,60 @@ def entity_by_name(name: str) -> Entity:
     return entity
 
 
-def state_floor_object_names(client: TestClient) -> list[str]:
-    """Return floor-object names from the public game-state payload."""
-    return [obj["name"] for obj in client.get("/state").json()["floor_objects"]]
+def arena_floor_object_names() -> list[str]:
+    """Return names of blocks registered as floor objects in the arena grid."""
+    grid = get_map()
+    return [
+        block.name
+        for block in BaseBlock._registry.values()
+        if block.name is not None and grid.get_object_position(block.uuid) is not None
+    ]
+
+
+def player_replication_seed(client: TestClient, session_id: str) -> dict:
+    """Open the sole expectation-free player replication entry point."""
+    response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def player_replication_after(
+    client: TestClient,
+    session_id: str,
+    bootstrap: dict,
+) -> tuple[dict, dict, dict]:
+    """Read exact reducer and combat-log windows after one player seed."""
+    identity = {
+        "session_id": session_id,
+        "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
+        "expected_generation_id": bootstrap["protocol"]["generation_id"],
+        "expected_perspective_epoch_id": bootstrap["perspective"]["perspective_epoch_id"],
+    }
+    frames_response = client.get(
+        "/replication/frames",
+        params={
+            **identity,
+            "from_observation_cursor": bootstrap["watermarks"]["observation_cursor"],
+        },
+    )
+    logs_response = client.get(
+        "/replication/combat-log",
+        params={
+            **identity,
+            "from_combat_log_cursor": bootstrap["watermarks"]["combat_log_cursor"],
+        },
+    )
+    current_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert frames_response.status_code == 200
+    assert logs_response.status_code == 200
+    assert current_response.status_code == 200
+    return current_response.json(), frames_response.json(), logs_response.json()
 
 
 def action_template_names(entity: Entity) -> set[str]:
@@ -116,12 +211,11 @@ def test_standard_arena_composes_map_hero_monsters_environment_and_controllers()
 
     encounter = setup_arena_combat(pvp_mode=False, character_class="fighter")
     sim.encounter = encounter
-    client = TestClient(app)
     hero = entity_by_name("Hero")
     warrior = entity_by_name("Skeleton Warrior")
     archer = entity_by_name("Skeleton Archer")
     warlock = entity_by_name("Skeleton Warlock")
-    object_names = state_floor_object_names(client)
+    object_names = arena_floor_object_names()
 
     assert encounter.name == "Arena Combat"
     assert encounter.state == EncounterState.NOT_STARTED
@@ -225,29 +319,43 @@ def test_start_human_mode_creates_ai_session_and_waits_for_player_join() -> None
     assert ping_response.json()["active_entity_name"] == "Hero"
 
 
-def test_state_visibility_and_session_entity_payloads_describe_the_live_arena() -> None:
-    """Client-facing payloads describe map, entities, encounter, and vision."""
+def test_player_replication_describes_the_subjective_live_arena() -> None:
+    """The player seed contains only the controlled hero's observed arena."""
     client, session_id, hero_uuid = start_joined_human_arena()
 
-    state = client.get("/state").json()
-    visibility = client.get("/visibility").json()
-    controlled = client.get(f"/session/{session_id}/entities").json()
-    hero_detail = client.get(f"/entity/{hero_uuid}").json()
+    bootstrap = player_replication_seed(client, session_id)
+    state = bootstrap["world"]["state"]
+    visibility = bootstrap["world"]["visibility"]
+    controlled = bootstrap["perspective"]["controlled_entity_uuids"]
+    hero_detail = next(
+        entity for entity in state["entities"] if entity["uuid"] == hero_uuid
+    )
+    hero_equipment = bootstrap["world"]["equipment_by_entity"][hero_uuid]
+    actions_response = client.get(
+        f"/entity/{hero_uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    actions = actions_response.json()
 
     assert state["grid"]["min_x"] == 0
     assert state["grid"]["min_y"] == 0
     assert state["grid"]["max_x"] == 14
     assert state["grid"]["max_y"] == 14
-    assert len(state["grid"]["tiles"]) == 225
-    assert {entity["name"] for entity in state["entities"]} == {
-        "Hero",
-        "Skeleton Warrior",
-        "Skeleton Archer",
-        "Skeleton Warlock",
+    assert {
+        (tile["x"], tile["y"])
+        for tile in state["grid"]["tiles"]
+    } == {
+        tuple(position)
+        for position in visibility[hero_uuid]["seen_cells"]
     }
+    assert {entity["name"] for entity in state["entities"]} == {"Hero"}
     assert state["encounter"]["name"] == "Arena Combat"
     assert state["encounter"]["state"] == "active"
-    assert {obj["name"] for obj in state["floor_objects"]} >= {"Door", "Trap Lever", "Potion of Healing"}
+    assert {obj["name"] for obj in state["floor_objects"]} >= {
+        "Trap Lever",
+        "Potion of Healing",
+    }
+    assert "Door" not in {obj["name"] for obj in state["floor_objects"]}
 
     assert hero_uuid in visibility
     assert visibility[hero_uuid]["name"] == "Hero"
@@ -255,21 +363,23 @@ def test_state_visibility_and_session_entity_payloads_describe_the_live_arena() 
     assert visibility[hero_uuid]["visible_cells"]
     assert isinstance(visibility[hero_uuid]["sense_modes"], list)
 
-    assert controlled["controlled_entities"][0]["uuid"] == hero_uuid
-    assert controlled["controlled_entities"][0]["name"] == "Hero"
+    assert controlled == [hero_uuid]
     assert hero_detail["name"] == "Hero"
-    assert hero_detail["equipment"]["ac"] == hero_detail["ac"]
-    assert hero_detail["action_economy"]["actions"] == 1
+    assert hero_equipment["ac"] == hero_detail["ac"]
+    assert actions_response.status_code == 200
+    assert actions["actions_remaining"] == 1
 
 
 def test_available_actions_action_results_and_log_cursors_drive_the_client_loop() -> None:
     """Available actions, execution results, and log cursors form the client loop."""
     client, session_id, hero_uuid = start_joined_human_arena()
 
-    actions_response = client.get(f"/entity/{hero_uuid}/available-actions")
+    before = player_replication_seed(client, session_id)
+    actions_response = client.get(
+        f"/entity/{hero_uuid}/available-actions",
+        params={"session_id": session_id},
+    )
     actions = actions_response.json()
-    before_log = client.get("/combat-log").json()
-    before_event_total = client.get("/events", params={"since": 0, "limit": 0}).json()["total"]
 
     assert actions_response.status_code == 200
     assert actions["entity_uuid"] == hero_uuid
@@ -281,23 +391,53 @@ def test_available_actions_action_results_and_log_cursors_drive_the_client_loop(
     }
     assert any(action["template_name"].startswith("Drink Greater Invisibility Potion") for action in actions["self_actions"])
 
+    dash = next(
+        action for action in actions["self_actions"] if action["template_name"] == "Dash"
+    )
     dash_response = client.post(
-        "/action/self",
-        json={"session_id": session_id, "entity_uuid": hero_uuid, "action_name": "Dash"},
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": hero_uuid,
+            "template_name": dash["template_name"],
+            "target_index": dash["valid_targets"][0]["index"],
+        },
     )
     dash_payload = dash_response.json()
-    new_logs = client.get("/combat-log", params={"since": before_log["total"]}).json()
-    new_events = client.get("/events", params={"since": before_event_total, "limit": 0}).json()
+    current, frame_window, log_window = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    log_entries = [
+        frame["entry"]
+        for frame in log_window["frames"]
+        if frame["entry"] is not None
+    ]
+    presentation = [
+        cue
+        for frame in frame_window["frames"]
+        for cue in frame["presentation"]
+    ]
 
     assert dash_response.status_code == 200
     assert dash_payload["success"] is True
     assert dash_payload["message"] == "Applied Dashing - gained 30ft extra movement"
-    assert dash_payload["combat_log_entries"][0]["entry_type"] == "action"
-    assert dash_payload["combat_log_entries"][0]["data"]["action_name"] == "Dash"
-    assert dash_payload["combat_log_cursor_after"] == before_log["total"] + 1
-    assert new_logs["count"] == 1
-    assert new_logs["entries"][0]["entry_type"] == "action"
-    assert new_events["total"] > before_event_total
+    assert "combat_log_entries" not in dash_payload
+    assert dash_payload["event_cursor_after"] > before["watermarks"]["source_event_cursor"]
+    assert dash_payload["combat_log_cursor_after"] == (
+        before["watermarks"]["combat_log_cursor"] + 1
+    )
+    assert current["watermarks"]["source_event_cursor"] == dash_payload["event_cursor_after"]
+    assert current["watermarks"]["combat_log_cursor"] == dash_payload["combat_log_cursor_after"]
+    assert log_entries[0]["entry_type"] == "action"
+    assert log_entries[0]["data"]["action_name"] == "Dash"
+    assert any(
+        cue["kind"] == "condition"
+        and cue["condition_semantic_key"] == "dnd.conditions.Dashing"
+        and cue["operation"] == "applied"
+        for cue in presentation
+    )
 
 
 def test_aoe_test_mode_builds_a_sorcerer_and_clustered_targets() -> None:
@@ -325,3 +465,172 @@ def test_aoe_test_mode_builds_a_sorcerer_and_clustered_targets() -> None:
     assert hero.is_spellcaster
     assert {"Fireball", "Magic Missile", "Lightning Bolt"} <= action_template_names(hero)
     assert hero.action_economy.spell_slot_3.normalized_score > 0
+
+
+def test_aoe_spell_executes_through_canonical_action_and_replication_routes() -> None:
+    """Fireball executes through one action route and one player journal."""
+    reset_live_game_tutorial_state()
+    client = TestClient(app)
+    start_response = client.post("/simulation/start-aoe-test")
+    assert start_response.status_code == 200
+    hero_uuid = start_response.json()["hero_uuid"]
+
+    session_response = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "AoE Player"},
+    )
+    assert session_response.status_code == 200
+    session_id = session_response.json()["session_id"]
+    join_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [hero_uuid]},
+    )
+    assert join_response.status_code == 200
+
+    before = player_replication_seed(client, session_id)
+    actions_response = client.get(
+        f"/entity/{hero_uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert actions_response.status_code == 200
+    fireball = next(
+        action
+        for action in actions_response.json()["position_actions"]
+        if action["template_name"] == "Fireball__slot_3"
+    )
+    target = max(
+        fireball["valid_targets"],
+        key=lambda candidate: candidate["affected_count"],
+    )
+    assert target["affected_count"] == 3
+    assert set(target["affected_entity_names"]) == {
+        "Goblin 1",
+        "Goblin 2",
+        "Goblin 3",
+    }
+    goblins = [
+        entity
+        for entity in Entity.get_all_entities()
+        if entity.name is not None and entity.name.startswith("Goblin ")
+    ]
+    hp_before = {goblin.uuid: goblin.get_hp() for goblin in goblins}
+
+    with fixed_dice_faces(*([1] * 64)):
+        execute_response = client.post(
+            "/action/execute",
+            json={
+                "session_id": session_id,
+                "entity_uuid": hero_uuid,
+                "template_name": fireball["template_name"],
+                "target_index": target["index"],
+            },
+        )
+
+    assert execute_response.status_code == 200
+    result = execute_response.json()
+    assert result["success"] is True
+    assert "state" not in result
+    assert "combat_log_entries" not in result
+    assert all(goblin.get_hp() < hp_before[goblin.uuid] for goblin in goblins)
+
+    current, frame_window, log_window = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    presentation = [
+        cue
+        for frame in frame_window["frames"]
+        for cue in frame["presentation"]
+    ]
+    logs = [
+        frame["entry"]
+        for frame in log_window["frames"]
+        if frame["entry"] is not None
+    ]
+    assert current["watermarks"]["source_event_cursor"] == result["event_cursor_after"]
+    assert current["watermarks"]["combat_log_cursor"] == (
+        result["combat_log_cursor_after"]
+    )
+    assert any(
+        cue["kind"] == "spell"
+        and cue["spell_id"] == "fireball"
+        and len(cue["targets"]) == 3
+        for cue in presentation
+    )
+    assert sum(cue["kind"] == "damage" for cue in presentation) == 3
+    assert len(logs) == 1
+    assert logs[0]["entry_type"] == "multi_entity_action"
+    assert logs[0]["data"]["total_targets"] == 3
+
+
+def test_jump_executes_through_canonical_action_and_replication_routes() -> None:
+    """Jump moves the controlled actor through action execution and patches."""
+    client, session_id, hero_uuid = start_joined_human_arena()
+    hero = Entity.get(UUID(hero_uuid))
+    assert hero is not None
+    initial_position = hero.position
+    initial_movement = hero.action_economy.movement.normalized_score
+    before = player_replication_seed(client, session_id)
+
+    actions_response = client.get(
+        f"/entity/{hero_uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert actions_response.status_code == 200
+    jump = next(
+        action
+        for action in actions_response.json()["position_actions"]
+        if action["template_name"] == "Jump"
+    )
+    target = next(
+        candidate
+        for candidate in jump["valid_targets"]
+        if tuple(candidate["position"]) != initial_position
+    )
+
+    execute_response = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": hero_uuid,
+            "template_name": jump["template_name"],
+            "target_index": target["index"],
+        },
+    )
+    assert execute_response.status_code == 200
+    result = execute_response.json()
+    assert result["success"] is True
+    assert hero.position == tuple(target["position"])
+    assert hero.action_economy.movement.normalized_score < initial_movement
+
+    current, frame_window, log_window = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    replicated_hero = next(
+        entity
+        for entity in current["world"]["state"]["entities"]
+        if entity["uuid"] == hero_uuid
+    )
+    presentation = [
+        cue
+        for frame in frame_window["frames"]
+        for cue in frame["presentation"]
+    ]
+    logs = [
+        frame["entry"]
+        for frame in log_window["frames"]
+        if frame["entry"] is not None
+    ]
+    assert replicated_hero["position"] == target["position"]
+    assert any(
+        cue["kind"] == "movement"
+        and cue["entity_uuid"] == hero_uuid
+        and cue["trajectory"][0] == list(initial_position)
+        and cue["trajectory"][-1] == target["position"]
+        for cue in presentation
+    )
+    assert len(logs) == 1
+    assert logs[0]["entry_type"] == "movement"

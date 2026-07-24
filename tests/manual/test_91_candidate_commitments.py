@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ai.knowledge import derive_agent_facts
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     SubjectiveWorldState,
@@ -32,7 +32,7 @@ from ai.policy.generations.registry import (
     get_policy_implementation,
 )
 from ai.policy.host import PolicyHost
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,

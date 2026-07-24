@@ -6,31 +6,36 @@ from dnd.actions_functional import execute_use_action
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem, ItemChargeConsumptionEvent
-from dnd.blocks.equipment import EquipmentConfig, Weapon, WeaponProperty
+from dnd.blocks.equipment import EquipmentConfig, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
+from dnd.core.condition_types import ConditionTag
+from dnd.core.equipment_types import BodyPart, WeaponProperty, WeaponSlot
 from dnd.core.events import (
-    BodyPart,
     EventPhase,
     EventQueue,
     EventType,
     Range,
     RangeType,
-    WeaponSlot,
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items import create_healing_potion
-from dnd.items.test_items import create_potion_of_haste
+from dnd.items.test_items import (
+    create_potion_of_greater_invisibility,
+    create_potion_of_haste,
+)
 from dnd.items.armors import create_chain_mail, create_shield
 from dnd.items.environment import DirectionalDoor as TutorialDoor
 from dnd.items.weapons import create_greatsword, create_shortbow, create_shortsword
+from dnd.conditions import GreaterInvisibilityEffect
+from dnd.spells.transmutation import HasteEffect
 
 
 def reset_item_tutorial_state() -> None:
@@ -800,3 +805,62 @@ def test_condition_potion_keeps_presentation_and_condition_log_in_one_lineage() 
     assert condition_log.compact in {
         sub_entry.compact for sub_entry in completion.combat_log.sub_entries
     }
+
+
+def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() -> None:
+    """Magic-item conditions retain their origin and exact removal behavior."""
+    reset_item_tutorial_state()
+    actor = create_tutorial_actor("Magic Potion Tester")
+    haste_potion = create_potion_of_haste(actor.uuid)
+    put_in_inventory(actor, haste_potion)
+    haste_potion_uuid = haste_potion.uuid
+    base_speed = actor.action_economy.movement.normalized_score
+    base_ac = actor.equipment.ac_bonus.normalized_score
+
+    haste_completion = execute_use_action(
+        actor,
+        haste_potion.uuid,
+        "Drink Haste Potion",
+    )
+
+    assert haste_completion is not None and not haste_completion.canceled
+    haste = actor.active_conditions.get("Haste")
+    assert isinstance(haste, HasteEffect)
+    assert haste.tags == {ConditionTag.MAGICAL}
+    assert haste.apply_lethargy is True
+    assert "Concentrating" not in actor.active_conditions
+    assert actor.action_economy.movement.normalized_score == base_speed * 2
+    assert actor.equipment.ac_bonus.normalized_score == base_ac + 2
+    assert (
+        actor.saving_throws.get_saving_throw("dexterity").bonus.advantage
+        is AdvantageStatus.ADVANTAGE
+    )
+    assert actor.action_economy.resources["haste_action"].current == 1
+    assert not actor.inventory.has_item(haste_potion_uuid)
+    assert BaseBlock.get(haste_potion_uuid) is None
+
+    actor.remove_condition_by_uuid(haste.uuid, parent_event=haste_completion)
+
+    assert "Haste" not in actor.active_conditions
+    assert "Haste Lethargy" in actor.active_conditions
+    assert actor.action_economy.action_permission.normalized_score == 0
+    assert actor.action_economy.movement.normalized_score == 0
+
+    reset_item_tutorial_state()
+    actor = create_tutorial_actor("Invisibility Potion Tester")
+    invisibility_potion = create_potion_of_greater_invisibility(actor.uuid)
+    put_in_inventory(actor, invisibility_potion)
+
+    invisibility_completion = execute_use_action(
+        actor,
+        invisibility_potion.uuid,
+        "Drink Greater Invisibility Potion",
+    )
+
+    assert (
+        invisibility_completion is not None
+        and not invisibility_completion.canceled
+    )
+    invisibility = actor.active_conditions.get("Invisible")
+    assert isinstance(invisibility, GreaterInvisibilityEffect)
+    assert invisibility.tags == {ConditionTag.MAGICAL}

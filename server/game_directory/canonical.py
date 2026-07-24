@@ -4,14 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 from datetime import UTC, datetime
-from enum import Enum
-from pathlib import Path
-from typing import Any
-from uuid import UUID
 
-from pydantic import BaseModel
+from server.canonical_json import canonical_json
 
 
 def utc_now() -> datetime:
@@ -39,48 +34,7 @@ def datetime_to_text(value: datetime) -> str:
     return normalized.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-def _json_ready(value: Any) -> Any:
-    """Convert supported values into canonical JSON-compatible data."""
-
-    if isinstance(value, BaseModel):
-        return _json_ready(value.model_dump(mode="json", by_alias=True, exclude_none=False))
-    if isinstance(value, datetime):
-        return datetime_to_text(value)
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, Enum):
-        return _json_ready(value.value)
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, dict):
-        return {str(key): _json_ready(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_ready(item) for item in value]
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    raise TypeError(f"Unsupported canonical JSON value: {type(value).__name__}")
-
-
-def canonical_json(value: Any) -> str:
-    """Serialize a supported value into deterministic canonical JSON.
-
-    Args:
-        value: Pydantic model or JSON-compatible value.
-
-    Returns:
-        Compact UTF-8 JSON with sorted keys.
-    """
-
-    return json.dumps(
-        _json_ready(value),
-        ensure_ascii=True,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-
-
-def canonical_digest(value: Any) -> str:
+def canonical_digest(value: object) -> str:
     """Return the SHA-256 digest of canonical JSON for ``value``."""
 
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()

@@ -18,7 +18,7 @@ from ai.planning.contracts import (
     RequirementKind,
     ResourceProjection,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     EffectOperation,
     FactExpression,
     FactOperator,

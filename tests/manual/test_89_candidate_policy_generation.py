@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ai.knowledge import derive_agent_facts
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     ObservationConditionFact,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -34,7 +34,7 @@ from ai.policy.generations.registry import (
     get_policy_implementation,
 )
 from ai.policy.routines import revalidate_active_routine
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -43,7 +43,7 @@ from ai.protocol.control import (
     DamageRollProfile,
     OutcomeResolution,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,
@@ -73,7 +73,7 @@ from ai.protocol.semantics import (
     WorldEffectScope,
     action_semantics_ref,
 )
-from dnd.core.base_conditions import ConditionAgencyDenial
+from dnd.core.condition_types import ConditionAgencyDenial
 from tests.manual.test_44_typed_agent_policy import _world
 from tests.manual.test_45_policy_routines import _context, _row
 

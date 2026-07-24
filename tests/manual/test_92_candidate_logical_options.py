@@ -1,5 +1,6 @@
 """Candidate logical annotations and authored routine option compilation."""
 
+from ai.knowledge import derive_agent_facts
 from ai.planning.contracts import RequirementKind
 from ai.planning.registry import (
     contract_for_policy_method,
@@ -15,8 +16,17 @@ from ai.policy.generations.current_options import (
     compose_registered_routine_options,
     option_for_routine,
 )
-from ai.policy.routines import APPROACH_OPEN_REASSESS, REGISTERED_ROUTINES
-from ai.protocol.semantics import EffectOperation
+from ai.policy.contracts import PolicyContext, PolicyGoal
+from ai.policy.generations.current_commitments import describe_proposal
+from ai.policy.routines import (
+    APPROACH_OPEN_REASSESS,
+    REGISTERED_ROUTINES,
+    RoutinePlan,
+    RoutinePlanStatus,
+)
+from server.agent_protocol.semantics import EffectOperation
+from tests.manual.test_44_typed_agent_policy import _world
+from tests.manual.test_91_candidate_commitments import _pressure
 
 
 def test_every_current_candidate_entry_method_has_logical_contract() -> None:
@@ -90,13 +100,6 @@ def test_door_option_stops_at_open_for_real_sensory_feedback() -> None:
 
 def test_commitment_descriptor_uses_authored_routine_option() -> None:
     """Routine-backed proposals retain option-level consequences in live traces."""
-    from ai.knowledge import derive_agent_facts
-    from ai.policy.contracts import PolicyContext, PolicyGoal
-    from ai.policy.generations.current_commitments import describe_proposal
-    from ai.policy.routines import RoutinePlan, RoutinePlanStatus
-    from tests.manual.test_91_candidate_commitments import _pressure
-    from tests.manual.test_44_typed_agent_policy import _world
-
     world = _world()
     proposal = _pressure("visible-enemy", 75.0).model_copy(
         update={"goal": PolicyGoal.ROUTINE}

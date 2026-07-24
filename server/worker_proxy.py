@@ -13,10 +13,13 @@ from fastapi.responses import Response, StreamingResponse
 
 from server.hosted_worker import HostedWorkerManager
 from server.runtime_authority import (
+    RUNTIME_PROJECTION_HEADER_PREFIX,
+    RuntimeAuthority,
     RuntimeAuthorityCache,
     RuntimeAuthorityError,
     RuntimeScope,
     extract_bearer_token,
+    runtime_projection_headers,
     validate_session_binding,
 )
 
@@ -25,8 +28,10 @@ class ProxyRouteKind(str, Enum):
     """Authorization family for a worker route."""
 
     OBSERVE = "observe"
+    SUBJECTIVE = "subjective"
     COMMAND = "command"
     AGENT = "agent"
+    ADMINISTER = "administer"
     DENIED = "denied"
 
 
@@ -57,6 +62,48 @@ _DENIED_PREFIXES = (
     "game/evidence/",
 )
 
+_RAW_PLAYER_REPLICATION_ROUTES = frozenset({
+    "combat-log",
+    "events",
+    "events/history",
+    "events/subscribe",
+})
+
+_PLAYER_REPLICATION_ROUTES = frozenset({
+    "replication/bootstrap",
+    "replication/frames",
+    "replication/combat-log",
+    "replication/subscribe",
+})
+
+_OBJECTIVE_DIAGNOSTICS_ROUTES = frozenset({
+    "diagnostics/objective/bootstrap",
+    "diagnostics/objective/events",
+    "diagnostics/objective/combat-log",
+    "diagnostics/objective/subscribe",
+    "diagnostics/subjective-parity",
+})
+
+_RAW_OBJECTIVE_READ_ROUTES = frozenset({
+    "state",
+    "visibility",
+    "entities",
+    "grid",
+    "encounter",
+})
+_RAW_OBJECTIVE_READ_PREFIXES = ("entity/", "tile/")
+
+_HOSTED_DENIED_READ_ROUTES = frozenset({
+    "game/status",
+    "simulation/status",
+})
+
+_CONTROLLED_ENTITY_READ_SUFFIXES = frozenset({
+    "available-actions",
+    "equippable-items",
+    "handlers",
+})
+
 
 def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
     """Classify a public game-scoped worker route without reading SQLite."""
@@ -66,11 +113,45 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
         return ProxyRouteKind.DENIED
     if upper_method == "DELETE" and normalized.startswith("session/"):
         return ProxyRouteKind.DENIED
+    if normalized in _RAW_PLAYER_REPLICATION_ROUTES:
+        return ProxyRouteKind.DENIED
+    if normalized in _PLAYER_REPLICATION_ROUTES:
+        return (
+            ProxyRouteKind.SUBJECTIVE
+            if upper_method in {"GET", "HEAD"}
+            else ProxyRouteKind.DENIED
+        )
+    if normalized == "replication" or normalized.startswith("replication/"):
+        return ProxyRouteKind.DENIED
+    if normalized in _OBJECTIVE_DIAGNOSTICS_ROUTES:
+        return (
+            ProxyRouteKind.ADMINISTER
+            if upper_method in {"GET", "HEAD"}
+            else ProxyRouteKind.DENIED
+        )
+    if normalized == "diagnostics/objective" or normalized.startswith(
+        "diagnostics/objective/"
+    ):
+        return ProxyRouteKind.DENIED
+    if upper_method in {"GET", "HEAD"} and normalized in _HOSTED_DENIED_READ_ROUTES:
+        return ProxyRouteKind.DENIED
+    path_parts = [part for part in normalized.split("/") if part]
+    if (
+        upper_method in {"GET", "HEAD"}
+        and len(path_parts) == 3
+        and path_parts[0] == "entity"
+        and path_parts[2] in _CONTROLLED_ENTITY_READ_SUFFIXES
+    ):
+        return ProxyRouteKind.COMMAND
+    if upper_method in {"GET", "HEAD"} and (
+        normalized in _RAW_OBJECTIVE_READ_ROUTES
+        or normalized.startswith(_RAW_OBJECTIVE_READ_PREFIXES)
+    ):
+        return ProxyRouteKind.DENIED
     if normalized == "ai/sessions":
         return ProxyRouteKind.DENIED
     if normalized.startswith("ai/sessions/"):
         return ProxyRouteKind.AGENT
-    path_parts = [part for part in normalized.split("/") if part]
     if (
         upper_method == "POST"
         and len(path_parts) == 4
@@ -111,8 +192,10 @@ async def proxy_runtime_request(
 
     required_scope = {
         ProxyRouteKind.OBSERVE: RuntimeScope.OBSERVE,
+        ProxyRouteKind.SUBJECTIVE: RuntimeScope.SUBJECTIVE_OBSERVE,
         ProxyRouteKind.COMMAND: RuntimeScope.CONTROL,
         ProxyRouteKind.AGENT: RuntimeScope.AGENT,
+        ProxyRouteKind.ADMINISTER: RuntimeScope.ADMINISTER,
     }[route_kind]
     try:
         token = extract_bearer_token(request.headers.get("authorization"))
@@ -145,7 +228,7 @@ async def proxy_runtime_request(
     worker_request = client.build_request(
         request.method,
         target_path,
-        headers=_forward_request_headers(request),
+        headers=_forward_request_headers(request, authority=authority),
         content=body,
     )
     try:
@@ -220,14 +303,21 @@ def _decode_json_body(body: bytes, content_type: str | None) -> object | None:
         return None
 
 
-def _forward_request_headers(request: Request) -> dict[str, str]:
-    """Copy end-to-end request headers without gateway credentials."""
-    return {
+def _forward_request_headers(
+    request: Request,
+    *,
+    authority: RuntimeAuthority,
+) -> dict[str, str]:
+    """Copy end-to-end headers and install trusted private-hop authority."""
+    forwarded = {
         key: value
         for key, value in request.headers.items()
         if key.lower() not in _HOP_BY_HOP_HEADERS
         and key.lower() not in {"host", "content-length", "authorization"}
+        and not key.lower().startswith(RUNTIME_PROJECTION_HEADER_PREFIX)
     }
+    forwarded.update(runtime_projection_headers(authority))
+    return forwarded
 
 
 def _forward_response_headers(response: httpx.Response) -> dict[str, str]:

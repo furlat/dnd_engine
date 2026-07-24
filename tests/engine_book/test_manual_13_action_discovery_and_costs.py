@@ -251,7 +251,11 @@ def test_inventory_use_actions_surface_item_metadata_and_consume_the_item() -> N
     assert potion_info.display_name == "Drink Potion (Potion of Healing)"
     assert potion_info.target_type == TargetType.SELF
     assert potion_info.valid_targets[0].index == 0
-    assert potion_info.cost_amount == 0
+    assert potion_info.cost_type == "bonus_actions"
+    assert potion_info.cost_amount == 1
+    assert potion_info.item_charge_cost == 1
+
+    bonus_actions_before = hero.action_economy.bonus_actions.normalized_score
 
     result = execute_by_index(
         hero,
@@ -262,5 +266,7 @@ def test_inventory_use_actions_surface_item_metadata_and_consume_the_item() -> N
 
     assert result is not None
     assert not result.canceled
+    assert bonus_actions_before == 1
+    assert hero.action_economy.bonus_actions.normalized_score == 0
     assert potion.uuid not in hero.inventory.items
     assert BaseBlock.get(potion.uuid) is None
