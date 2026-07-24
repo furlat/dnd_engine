@@ -41,13 +41,13 @@ from dnd.core.events import (
     RangeType,
     TakeDamageEvent,
     Trigger,
-    WeaponSlot,
 )
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier, DamageType, NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
-from dnd.core.base_conditions import DurationType
+from dnd.core.condition_types import ConditionCategory, DurationType
 
 
 DamageDieValue = Literal[4, 6, 8, 10, 12, 20]
@@ -207,6 +207,11 @@ def register_bite_prone_rider(entity: Entity, dc: int) -> None:
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name="Bite Prone Rider",
+            description=(
+                f"Hits with Bite force a DC {dc} Strength saving throw; "
+                "on failure, the target is knocked prone."
+            ),
+            semantic_key="dnd.monsters.traits.BiteProneRiderFeature",
             weapon_names=("Bite",),
             save_ability="strength",
             save_dc=dc,
@@ -223,6 +228,11 @@ def register_ghoul_claws_paralysis(entity: Entity) -> None:
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             name="Ghoul Claws Paralysis",
+            description=(
+                "Hits with Claws force a DC 10 Constitution saving throw; "
+                "on failure, a non-undead target is paralyzed by ghoul claws."
+            ),
+            semantic_key="dnd.monsters.traits.GhoulClawsParalysisFeature",
             weapon_names=("Claws",),
             save_ability="constitution",
             save_dc=10,
@@ -308,7 +318,7 @@ def pack_tactics_advantage(source_entity_uuid: UUID, target_entity_uuid: Optiona
             continue
         if not source.is_ally(candidate):
             continue
-        if "Incapacitated" in candidate.active_conditions or "Dead" in candidate.active_conditions:
+        if not candidate.can_take_actions():
             continue
         if candidate.senses.get_feet_distance(target.position) <= 5:
             return AdvantageModifier(name="Pack Tactics", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
@@ -766,6 +776,10 @@ class SimpleMarkerCondition(BaseCondition):
 
     name: str = Field(default="Marker", description="Condition name.")
     description: str = Field(default="Internal marker.", description="Rules summary.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description="Internal lifecycle-marker category.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{self.name} applied")
@@ -775,6 +789,13 @@ class HitSaveRiderFeature(BaseCondition):
     """Feature that applies a save-based condition rider after a named hit."""
 
     name: str = Field(default="Hit Save Rider", description="Condition name.")
+    description: str = Field(
+        default=(
+            "Hits with a configured weapon force a saving throw; on failure, "
+            "the configured condition is applied."
+        ),
+        description="Rules-facing summary for the hit-triggered saving throw rider.",
+    )
     weapon_names: tuple[str, ...] = Field(default_factory=tuple, description="Weapon names that trigger the rider.")
     save_ability: str = Field(default="strength", description="Saving throw ability.")
     save_dc: int = Field(default=10, description="Saving throw DC.")
@@ -1022,6 +1043,13 @@ class DivineEminenceActive(BonusDamageFeature):
     """Temporary radiant melee damage condition."""
 
     name: str = Field(default="Divine Eminence Active", description="Condition name.")
+    description: str = Field(
+        default=(
+            "Until the end of this turn, melee weapon hits deal 3d6 radiant "
+            "damage, plus 1d6 per spell-slot level above 1st."
+        ),
+        description="Rules-facing summary for active Divine Eminence.",
+    )
     slot_level: int = Field(default=1, description="Slot level spent.")
     damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Radiant damage.")
     melee_only: bool = Field(default=True, description="Only melee attacks qualify.")
@@ -1116,6 +1144,13 @@ class RampageFeature(BaseCondition):
     """Gnoll feature that grants a bonus bite after a melee kill."""
 
     name: str = Field(default="Rampage", description="Condition name.")
+    description: str = Field(
+        default=(
+            "After reducing a creature to 0 hit points with a melee attack, "
+            "gain a Rampage Bite bonus action for 1 round."
+        ),
+        description="Rules-facing summary for the Rampage trait.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1149,6 +1184,13 @@ class RampageAvailable(BaseCondition):
     """Temporary condition that grants Rampage Bite."""
 
     name: str = Field(default="Rampage Available", description="Condition name.")
+    description: str = Field(
+        default=(
+            "Can make a Rampage Bite as a bonus action before this condition "
+            "expires."
+        ),
+        description="Rules-facing summary for the available Rampage Bite.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1184,7 +1226,7 @@ def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
             continue
         if not source.is_ally(candidate):
             continue
-        if "Dead" in candidate.active_conditions or "Incapacitated" in candidate.active_conditions:
+        if not candidate.can_take_actions():
             continue
         if candidate.senses.get_feet_distance(target.position) <= 5:
             return True
@@ -1204,7 +1246,7 @@ def _has_sneak_attack_condition(source: Entity, target: Entity, event: DamageRol
 
 def _is_unseen_attacker(source: Entity, target: Entity) -> bool:
     """Return whether target currently lacks sight of the source."""
-    return "Hidden" in source.active_conditions or "Invisible" in source.active_conditions or source.uuid not in target.senses.entities
+    return source.uuid not in target.senses.entities
 
 
 def _attack_weapon_name(actor: Entity, action: Attack) -> Optional[str]:

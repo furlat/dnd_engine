@@ -16,6 +16,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import Tile
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.condition_types import ConditionCategory, HazardFilter
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -32,8 +33,10 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_skeleton
-from dnd.spells.evocation import Fireball, MagicMissile
 from dnd.spells.divination import SeeInvisibilityEffect
+from dnd.spells.enchantment import Bane, Bless
+from dnd.spells.evocation import Fireball, MagicMissile
+from dnd.spells.necromancy import NecroticBless
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.utils import reset_combat_state
 
@@ -314,7 +317,7 @@ def test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty() -> N
 
 
 def test_eb_12_009_sense_mode_changes_emit_replacement_payloads() -> None:
-    """EB-12-009: sense-mode conditions emit replacement sensory payloads."""
+    """EB-12-009: sense-mode grant and removal emit replacement payloads."""
     reset_senses_state(width=6, height=1)
     observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
     invisible = create_skeleton(name="Invisible", position=(3, 0), darkvision=False)
@@ -336,6 +339,17 @@ def test_eb_12_009_sense_mode_changes_emit_replacement_payloads() -> None:
     assert changed[-1].model_dump(mode="json")["sense_modes"] == [
         {"sense_type": "See Invisible", "range_feet": 0}
     ]
+
+    observer.remove_condition(effect.name)
+
+    assert invisible.uuid not in observer.senses.entities
+    assert observer.senses.sense_modes == []
+    changed = [
+        event
+        for event in completed_sensory_updates(observer.uuid)
+        if event.sense_modes_changed
+    ]
+    assert changed[-1].model_dump(mode="json")["sense_modes"] == []
 
 
 def test_eb_12_010_very_bright_light_reveals_hidden_entities() -> None:
@@ -762,6 +776,7 @@ def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -
 
     hidden_hp_before = hidden_target.get_hp()
     visible_hp_before = visible_target.get_hp()
+    assert caster.action_economy.spell_slot_3.normalized_score == 2
 
     result = Fireball(
         source_entity_uuid=caster.uuid,
@@ -770,11 +785,17 @@ def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -
     ).apply()
 
     assert result is not None and not result.canceled
+    assert result.phase == EventPhase.COMPLETION
+    assert sum(
+        event.lineage_uuid == result.lineage_uuid
+        and event.phase == EventPhase.COMPLETION
+        for event in EventQueue._all_events
+    ) == 1
     assert hidden_target.get_hp() < hidden_hp_before
     assert visible_target.get_hp() < visible_hp_before
     assert "Hidden" not in hidden_target.active_conditions
     assert caster.action_economy.actions.normalized_score == 0
-    assert caster.action_economy.spell_slot_3.normalized_score == 2
+    assert caster.action_economy.spell_slot_3.normalized_score == 1
 
 
 def test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths() -> None:
@@ -1069,6 +1090,403 @@ def test_eb_12_028_directional_transition_cache_is_revision_scoped(
 
     assert transition_calls > calls_after_first
     assert third != second
+
+
+def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility() -> None:
+    """EB-12-029: objective collision corrects an unsafe subjective path."""
+    reset_senses_state(width=6, height=3)
+    mover = create_skeleton(
+        name="Mover",
+        position=(0, 1),
+        faction="heroes",
+        darkvision=False,
+    )
+    invisible = create_skeleton(
+        name="Invisible Blocker",
+        position=(2, 1),
+        faction="monsters",
+        darkvision=False,
+    )
+    invisible.add_condition(
+        Invisible(
+            source_entity_uuid=invisible.uuid,
+            target_entity_uuid=invisible.uuid,
+        )
+    )
+    Entity.update_all_entities_senses(max_distance=10)
+
+    assert invisible.uuid not in mover.senses.entities
+    assert mover.senses.paths[(4, 1)] == [
+        (0, 1),
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+    ]
+
+    result = Move(
+        source_entity_uuid=mover.uuid,
+        end_position=(4, 1),
+        use_movement_cost=False,
+    ).apply()
+
+    assert result is not None
+    assert not result.canceled
+    assert result.status_message == "Partial movement for Move, stopped at (1, 1)"
+    assert mover.position == (1, 1)
+    assert mover.senses.collision_blocked == {(2, 1)}
+    assert invisible.is_invisible is True
+    assert "Invisible" in invisible.active_conditions
+    collision_completions = [
+        event
+        for event in EventQueue._all_events
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type == EventType.MOVEMENT_COLLISION
+        and event.phase == EventPhase.COMPLETION
+        and event.position == (2, 1)
+    ]
+    assert len(collision_completions) == 1
+
+    mover.update_entity_senses(max_distance=10)
+
+    corrected_path = mover.senses.paths[(4, 1)]
+    assert corrected_path[0] == mover.position
+    assert corrected_path[-1] == (4, 1)
+    assert (2, 1) not in corrected_path
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "magic_missile_primary",
+        "magic_missile_extra",
+        "bane_extra",
+        "bless_extra",
+        "necrotic_bless_extra",
+        "magic_missile_visible_control",
+    ),
+)
+def test_eb_12_030_multi_entity_spells_reject_unperceived_explicit_targets(
+    case: str,
+) -> None:
+    """EB-12-030: every explicit multi-target branch revalidates perception."""
+    reset_senses_state(width=7, height=3)
+    caster = create_caster(
+        name="Caster",
+        position=(0, 1),
+        faction="heroes",
+        level=5,
+    )
+    visible_enemy = create_skeleton(
+        name="Visible Enemy",
+        position=(2, 1),
+        faction="monsters",
+        darkvision=False,
+    )
+    second_visible_enemy = create_skeleton(
+        name="Second Visible Enemy",
+        position=(2, 0),
+        faction="monsters",
+        darkvision=False,
+    )
+    invisible_enemy = create_skeleton(
+        name="Invisible Enemy",
+        position=(2, 2),
+        faction="monsters",
+        darkvision=False,
+    )
+    visible_ally = create_skeleton(
+        name="Visible Ally",
+        position=(1, 0),
+        faction="heroes",
+        darkvision=False,
+    )
+    invisible_ally = create_skeleton(
+        name="Invisible Ally",
+        position=(1, 2),
+        faction="heroes",
+        darkvision=False,
+    )
+    for target in (invisible_enemy, invisible_ally):
+        target.add_condition(
+            Invisible(
+                source_entity_uuid=target.uuid,
+                target_entity_uuid=target.uuid,
+            )
+        )
+    Entity.update_all_entities_senses(max_distance=10)
+
+    assert visible_enemy.uuid in caster.senses.entities
+    assert second_visible_enemy.uuid in caster.senses.entities
+    assert visible_ally.uuid in caster.senses.entities
+    assert invisible_enemy.uuid not in caster.senses.entities
+    assert invisible_ally.uuid not in caster.senses.entities
+
+    if case == "magic_missile_primary":
+        action = MagicMissile(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=invisible_enemy.uuid,
+            cast_at_level=1,
+        )
+        slot_level = 1
+    elif case == "magic_missile_extra":
+        action = MagicMissile(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=visible_enemy.uuid,
+            extra_target_entity_uuids=[visible_enemy.uuid, invisible_enemy.uuid],
+            cast_at_level=1,
+        )
+        slot_level = 1
+    elif case == "bane_extra":
+        action = Bane(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=visible_enemy.uuid,
+            extra_target_entity_uuids=[invisible_enemy.uuid],
+            cast_at_level=1,
+        )
+        slot_level = 1
+    elif case == "bless_extra":
+        action = Bless(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=visible_ally.uuid,
+            extra_target_entity_uuids=[invisible_ally.uuid],
+            cast_at_level=1,
+        )
+        slot_level = 1
+    elif case == "necrotic_bless_extra":
+        action = NecroticBless(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=visible_ally.uuid,
+            extra_target_entity_uuids=[invisible_enemy.uuid],
+            cast_at_level=2,
+        )
+        slot_level = 2
+    else:
+        action = MagicMissile(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=visible_enemy.uuid,
+            extra_target_entity_uuids=[
+                visible_enemy.uuid,
+                second_visible_enemy.uuid,
+            ],
+            cast_at_level=1,
+        )
+        slot_level = 1
+
+    actions_before = caster.action_economy.actions.normalized_score
+    spell_slot = getattr(caster.action_economy, f"spell_slot_{slot_level}")
+    slots_before = spell_slot.normalized_score
+    result = action.apply()
+
+    assert result is not None
+    if case == "magic_missile_visible_control":
+        assert not result.canceled
+        assert caster.action_economy.actions.normalized_score == actions_before - 1
+        assert (
+            spell_slot.normalized_score == slots_before - 1
+        )
+    else:
+        assert result.canceled
+        assert result.status_message is not None
+        assert (
+            "not visible" in result.status_message
+            or "not in line of sight" in result.status_message
+        )
+        assert caster.action_economy.actions.normalized_score == actions_before
+        assert (
+            spell_slot.normalized_score == slots_before
+        )
+
+
+def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() -> None:
+    """EB-12-031: sequential Perception changes cross each subjective threshold."""
+    reset_senses_state(width=7, height=3)
+    captured_logs: list[CombatLogEntry] = []
+    EventQueue.set_combat_log_callback(
+        lambda event: captured_logs.append(event.combat_log)
+        if event.combat_log
+        else None
+    )
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 1),
+        faction="heroes",
+        darkvision=False,
+    )
+    easy_hidden = create_skeleton(
+        name="Easy Hidden",
+        position=(2, 0),
+        faction="monsters",
+        darkvision=False,
+    )
+    hard_hidden = create_skeleton(
+        name="Hard Hidden",
+        position=(2, 2),
+        faction="monsters",
+        darkvision=False,
+    )
+    Entity.update_all_entities_senses(max_distance=10)
+    base_perception = observer.get_passive_perception()
+    easy_dc = base_perception - 1
+    hard_dc = base_perception + 3
+    easy_hidden.add_condition(
+        Hidden(
+            source_entity_uuid=easy_hidden.uuid,
+            target_entity_uuid=easy_hidden.uuid,
+            stealth_result=easy_dc,
+        )
+    )
+    hard_hidden.add_condition(
+        Hidden(
+            source_entity_uuid=hard_hidden.uuid,
+            target_entity_uuid=hard_hidden.uuid,
+            stealth_result=hard_dc,
+        )
+    )
+
+    grid = get_map()
+    for position, name, stealth_dc in (
+        ((4, 0), "Easy Trap", easy_dc),
+        ((4, 2), "Hard Trap", hard_dc),
+    ):
+        tile = grid.get_tile(*position)
+        assert tile is not None
+        tile.add_condition(
+            BaseCondition(
+                name=name,
+                source_entity_uuid=uuid4(),
+                target_entity_uuid=tile.uuid,
+                condition_category=ConditionCategory.CONDITION,
+                hazard_filter=HazardFilter.ALL,
+                condition_stealth_dc=stealth_dc,
+            )
+        )
+    Entity.update_all_entities_senses(max_distance=10)
+    captured_logs.clear()
+
+    assert easy_hidden.uuid in observer.senses.entities
+    assert hard_hidden.uuid not in observer.senses.entities
+    assert easy_hidden.position not in observer.senses.paths
+    assert hard_hidden.position in observer.senses.paths
+    assert grid.is_position_hazardous_for(4, 0, observer.uuid)
+    assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+
+    observer.add_condition(
+        PerceptionModifierCondition(
+            source_entity_uuid=observer.uuid,
+            target_entity_uuid=observer.uuid,
+            modifier_amount=5,
+        )
+    )
+
+    boosted_perception = observer.get_passive_perception()
+    assert boosted_perception == base_perception + 5
+    assert easy_hidden.uuid in observer.senses.entities
+    assert hard_hidden.uuid in observer.senses.entities
+    assert grid.is_position_hazardous_for(4, 0, observer.uuid)
+    assert grid.is_position_hazardous_for(4, 2, observer.uuid)
+    assert observer.senses._paths_dirty is True
+    spotted = [
+        log
+        for log in captured_logs
+        if log.entry_type == CombatLogEntryType.ENTITY_SPOTTED
+    ]
+    hazards = [
+        log
+        for log in captured_logs
+        if log.entry_type == CombatLogEntryType.HAZARD_DETECTED
+    ]
+    assert len(spotted) == 1
+    assert spotted[0].target_uuid == str(hard_hidden.uuid)
+    assert spotted[0].data == {
+        "observer_name": observer.name,
+        "observer_uuid": str(observer.uuid),
+        "target_name": hard_hidden.name,
+        "target_uuid": str(hard_hidden.uuid),
+        "target_position": hard_hidden.position,
+        "passive_perception": boosted_perception,
+        "stealth_dc": hard_dc,
+    }
+    assert len(hazards) == 1
+    assert hazards[0].data == {
+        "observer_name": observer.name,
+        "observer_uuid": str(observer.uuid),
+        "hazard_name": "Hard Trap",
+        "position": (4, 2),
+        "passive_perception": boosted_perception,
+        "stealth_dc": hard_dc,
+    }
+
+    positive_log_count = len(spotted) + len(hazards)
+    observer.remove_condition("Perception Payload Modifier")
+
+    assert observer.get_passive_perception() == base_perception
+    assert easy_hidden.uuid in observer.senses.entities
+    assert hard_hidden.uuid not in observer.senses.entities
+    assert grid.is_position_hazardous_for(4, 0, observer.uuid)
+    assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+
+    observer.add_condition(
+        PerceptionModifierCondition(
+            source_entity_uuid=observer.uuid,
+            target_entity_uuid=observer.uuid,
+            modifier_amount=-5,
+        )
+    )
+
+    assert observer.get_passive_perception() == base_perception - 5
+    assert easy_hidden.uuid not in observer.senses.entities
+    assert hard_hidden.uuid not in observer.senses.entities
+    assert not grid.is_position_hazardous_for(4, 0, observer.uuid)
+    assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+    assert observer.senses._paths_dirty is True
+    assert sum(
+        log.entry_type
+        in {
+            CombatLogEntryType.ENTITY_SPOTTED,
+            CombatLogEntryType.HAZARD_DETECTED,
+        }
+        for log in captured_logs
+    ) == positive_log_count
+
+
+def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() -> None:
+    """EB-12-032: hiding and revealing immediately invalidate cached paths."""
+    reset_senses_state(width=5, height=1)
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        faction="heroes",
+        darkvision=False,
+    )
+    target = create_skeleton(
+        name="Target",
+        position=(2, 0),
+        faction="monsters",
+        darkvision=False,
+    )
+    Entity.update_all_entities_senses(max_distance=5)
+
+    assert target.uuid in observer.senses.entities
+    assert target.position not in observer.senses.paths
+
+    target.add_condition(
+        Hidden(
+            source_entity_uuid=target.uuid,
+            target_entity_uuid=target.uuid,
+            stealth_result=observer.get_passive_perception() + 3,
+        )
+    )
+    observer.update_entity_senses(max_distance=5)
+
+    assert target.uuid not in observer.senses.entities
+    assert target.position in observer.senses.paths
+
+    target.remove_condition("Hidden")
+    observer.update_entity_senses(max_distance=5)
+
+    assert target.uuid in observer.senses.entities
+    assert target.position not in observer.senses.paths
 
 
 if __name__ == "__main__":

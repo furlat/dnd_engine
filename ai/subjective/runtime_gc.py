@@ -4,11 +4,28 @@ from __future__ import annotations
 
 import gc
 from threading import Lock
+from typing import Protocol
 
 
 _lease_lock = Lock()
 _active_leases = 0
 _restore_automatic_gc = False
+
+
+class RuntimeGcLease(Protocol):
+    """One acquired process-GC policy lease."""
+
+    def release(self) -> None:
+        """Release the policy exactly once."""
+        ...
+
+
+class RuntimeGcPolicy(Protocol):
+    """Factory for one runtime's process-GC lease."""
+
+    def acquire(self) -> RuntimeGcLease:
+        """Acquire the process policy for one runtime lifetime."""
+        ...
 
 
 class AutomaticGcLease:
@@ -49,6 +66,33 @@ class AutomaticGcLease:
                 if _restore_automatic_gc:
                     gc.enable()
                 _restore_automatic_gc = False
+
+
+class SuspendAutomaticGcPolicy:
+    """Use the external-process low-latency GC policy."""
+
+    def acquire(self) -> RuntimeGcLease:
+        """Suspend automatic cyclic collection for one runtime lifetime."""
+        return AutomaticGcLease.acquire()
+
+
+class _PreserveAutomaticGcLease:
+    """No-op lease that leaves the embedding process policy untouched."""
+
+    def release(self) -> None:
+        """Preserve the process policy on release."""
+
+
+class PreserveAutomaticGcPolicy:
+    """Keep the embedding process's automatic-GC setting unchanged."""
+
+    def acquire(self) -> RuntimeGcLease:
+        """Acquire a no-op lease."""
+        return _PreserveAutomaticGcLease()
+
+
+SUSPEND_AUTOMATIC_GC = SuspendAutomaticGcPolicy()
+PRESERVE_AUTOMATIC_GC = PreserveAutomaticGcPolicy()
 
 
 def automatic_gc_suspended() -> bool:

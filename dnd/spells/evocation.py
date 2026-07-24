@@ -11,11 +11,12 @@ import time
 from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_actions import (
     ActionCategory,
+    ActionEvent,
     ActionInformationOperation,
     ActionOutcomeProfile,
     ActionWorldEffectAnchor,
@@ -30,18 +31,26 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, ConditionTag, Duration, DurationType, HazardFilter
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome
 from typing import cast as type_cast
-from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, WeaponSlot, AbilityName, WindExposureEvent
+from dnd.core.equipment_types import ArmorType, WeaponSlot
+from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, AbilityName, WindExposureEvent
 from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
 from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
-from dnd.blocks.equipment import ArmorType, Weapon as WeaponItem, Shield as ShieldItem
+from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
 
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, Attack
+from dnd.actions import (
+    Attack,
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_applier,
+    entity_action_economy_cost_evaluator,
+)
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
@@ -196,7 +205,13 @@ class RayOfFrostEffect(BaseCondition):
     when this condition expires at caster's turn start.
     """
     name: str = Field(default="Ray of Frost Effect", description="Display name for the ray of frost effect condition.")
-    description: str = Field(default="Tracking condition for Ray of Frost speed reduction", description="Rules-facing summary for the ray of frost effect condition.")
+    description: str = Field(
+        default=(
+            "A creature hit by the caster has its speed reduced by 10 feet "
+            "until the start of the caster's next turn."
+        ),
+        description="Rules-facing summary for the ray of frost effect condition.",
+    )
     tags: Set[ConditionTag] = Field(
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags that classify the ray of frost slow for cleanup and filtering.",
@@ -2287,6 +2302,9 @@ class GuidingBoltMarked(BaseCondition):
         handler = self._create_remove_on_attack_handler()
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
+        expiry_handler = self._create_caster_turn_expiry_handler()
+        target.add_event_handler(expiry_handler)
+        handler_uuids.append(expiry_handler.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -2329,6 +2347,49 @@ class GuidingBoltMarked(BaseCondition):
                 )
             ],
             event_processor=remove_on_attack_processor
+        )
+
+    def _create_caster_turn_expiry_handler(self) -> EventHandler:
+        """Remove the mark at the end of the caster's next turn."""
+        assert self.target_entity_uuid is not None
+        assert self.caster_uuid is not None
+
+        target_uuid = self.target_entity_uuid
+        caster_uuid = self.caster_uuid
+        effect_uuid = self.uuid
+        caster_turn_ends_remaining = 2
+
+        def expire_on_caster_turn_end(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            nonlocal caster_turn_ends_remaining
+            if event.source_entity_uuid != caster_uuid:
+                return None
+
+            target = Entity.get(target_uuid)
+            if not target:
+                return None
+            guiding_mark = target.active_conditions.get("Guiding Bolt")
+            if not guiding_mark or guiding_mark.uuid != effect_uuid:
+                return None
+
+            caster_turn_ends_remaining -= 1
+            if caster_turn_ends_remaining == 0:
+                target.remove_condition("Guiding Bolt", parent_event=event)
+            return None
+
+        return EventHandler(
+            name=f"Guiding Bolt Caster Turn Expiry ({target_uuid})",
+            source_entity_uuid=target_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_END,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=caster_uuid,
+                )
+            ],
+            event_processor=expire_on_caster_turn_end,
         )
 
 
@@ -2602,6 +2663,7 @@ class GustOfWindZone(ZoneControlCondition):
 
     spell_dc: int = Field(default=10, description="Spell save DC used by gust of wind zone saving throws.")
     caster_position: Tuple[int, int] = Field(default=(0, 0), description="Domain value for caster_position on gust of wind zone.")
+    _pushes_in_flight: Set[UUID] = PrivateAttr(default_factory=set)
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute line from caster in the chosen direction."""
@@ -2639,7 +2701,13 @@ class GustOfWindZone(ZoneControlCondition):
             if not entity or not entity.has_hp:
                 return None
 
-            _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            if entity.uuid in self._pushes_in_flight:
+                return None
+            self._pushes_in_flight.add(entity.uuid)
+            try:
+                _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            finally:
+                self._pushes_in_flight.discard(entity.uuid)
             return None
 
         return EventHandler(
@@ -2667,7 +2735,13 @@ class GustOfWindZone(ZoneControlCondition):
             if entity.senses.position not in zone_condition.affected_positions:
                 return None
 
-            _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            if entity.uuid in zone_condition._pushes_in_flight:
+                return None
+            zone_condition._pushes_in_flight.add(entity.uuid)
+            try:
+                _apply_gust_push(entity, dc, caster_pos, source_uuid, event)
+            finally:
+                zone_condition._pushes_in_flight.discard(entity.uuid)
             return None
 
         return EventHandler(
@@ -2843,11 +2917,11 @@ class GustOfWind(SpellAction):
             status_message=f"Gust of Wind pushes {target.name}"
         )
 
-    def _finalize_aoe(self, effect_event: Any) -> None:
+    def _finalize_aoe(self, effect_event: SpellEvent) -> None:
         """Create persistent zone after convolution completes."""
         self._setup_zone(effect_event)
 
-    def _setup_zone(self, parent_event: Any) -> None:
+    def _setup_zone(self, parent_event: SpellEvent) -> None:
         """Set up the persistent zone condition after initial push."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -2867,7 +2941,8 @@ class GustOfWind(SpellAction):
             zone_center=caster.senses.position,
             zone_direction=direction,
             spell_dc=dc,
-            caster_position=caster.senses.position
+            caster_position=caster.senses.position,
+            effect_origin=parent_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=parent_event)
 
@@ -2979,13 +3054,23 @@ class IceStorm(SpellAction):
         bludg_roll = bludg_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         cold_roll = cold_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         total = bludg_roll.total + cold_roll.total
+        applied_rolls = [bludg_roll, cold_roll]
         if success:
             total = total // 2
+            applied_bludgeoning = bludg_roll.total // 2
+            applied_rolls = [
+                bludg_roll.model_copy(update={"total": applied_bludgeoning}),
+                cold_roll.model_copy(
+                    update={"total": total - applied_bludgeoning}
+                ),
+            ]
 
         target.receive_damage(
             amount=total,
-            damage_type=DamageType.COLD,
+            damage_type=DamageType.BLUDGEONING,
             source_entity_uuid=caster.uuid,
+            damage_rolls=applied_rolls,
+            damages=[bludg_damage, cold_damage],
             parent_event=effect_event.uuid
         )
 
@@ -2997,11 +3082,11 @@ class IceStorm(SpellAction):
             status_message=f"Ice Storm deals {total} damage to {target.name}"
         )
 
-    def _finalize_aoe(self, effect_event: Any) -> None:
+    def _finalize_aoe(self, effect_event: SpellEvent) -> None:
         """Apply difficult terrain zone after convolution completes."""
-        self._setup_terrain()
+        self._setup_terrain(effect_event)
 
-    def _setup_terrain(self) -> None:
+    def _setup_terrain(self, effect_event: SpellEvent) -> None:
         """Apply 1-round difficult terrain at the target area."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
@@ -3014,11 +3099,12 @@ class IceStorm(SpellAction):
         terrain = IceStormTerrain(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            zone_center=target_pos
+            zone_center=target_pos,
+            effect_origin=effect_event.to_effect_origin(),
         )
         terrain.duration.duration_type = DurationType.ROUNDS
         terrain.duration.duration = 1
-        caster.add_condition(terrain)
+        caster.add_condition(terrain, parent_event=effect_event)
 
 
 class SunbeamStrike(BaseAction):
@@ -3123,6 +3209,13 @@ class SunbeamStrike(BaseAction):
             damage_rolls=[damage_roll],
             total_damage=final_damage,
             status_message=f"Sunbeam deals {final_damage} radiant to {target.name}{save_text}"
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        """Spend the action declared by the granted beam."""
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
         )
 
 
@@ -3715,13 +3808,23 @@ class FlameStrike(SpellAction):
         fire_roll = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         radiant_roll = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         total = fire_roll.total + radiant_roll.total
+        applied_rolls = [fire_roll, radiant_roll]
         if success:
             total = total // 2
+            applied_fire = fire_roll.total // 2
+            applied_rolls = [
+                fire_roll.model_copy(update={"total": applied_fire}),
+                radiant_roll.model_copy(
+                    update={"total": total - applied_fire}
+                ),
+            ]
 
         target.receive_damage(
             amount=total,
             damage_type=DamageType.FIRE,
             source_entity_uuid=caster.uuid,
+            damage_rolls=applied_rolls,
+            damages=[fire_damage, radiant_damage],
             parent_event=effect_event.uuid
         )
 

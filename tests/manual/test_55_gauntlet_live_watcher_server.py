@@ -9,9 +9,9 @@ from ai.evaluation.gauntlet import build_gauntlet_schedule, build_gauntlet_summa
 from ai.evaluation.gauntlet import GauntletEvent as RunnerGauntletEvent
 from ai.evaluation.gauntlet import GauntletSummary as RunnerGauntletSummary
 from ai.evaluation.gauntlet import run_ai_gauntlet
-from ai.evaluation.gauntlet_contract import GauntletEvent
-from ai.evaluation.gauntlet_contract import GauntletEvent as ContractGauntletEvent
-from ai.evaluation.gauntlet_contract import GauntletSummary as ContractGauntletSummary
+from server.agent_protocol.gauntlet import GauntletEvent
+from server.agent_protocol.gauntlet import GauntletEvent as ContractGauntletEvent
+from server.agent_protocol.gauntlet import GauntletSummary as ContractGauntletSummary
 from ai.evaluation.tournament import EloConfig, TournamentSummary
 from ai.external_selfplay import ExternalSelfPlayResult, ExternalSelfPlayTrace
 from server import event_server
@@ -276,9 +276,15 @@ def test_runner_can_publish_directly_to_server_live_stream(monkeypatch: pytest.M
                     subjective_known_object_uuids=[],
                     subjective_known_object_positions=[],
                     subjective_known_tile_positions=[],
+                    subjective_visible_cell_positions=[],
+                    subjective_seen_cell_positions=[],
                     subjective_affordance_row_ids=[],
                     subjective_affordance_target_uuids=[],
                     subjective_affordance_target_positions=[],
+                    audit_controlled_entity_uuids=["hero-uuid"],
+                    audit_authorized_entity_uuids=["hero-uuid"],
+                    audit_authorized_object_uuids=[],
+                    audit_authorized_positions=[],
                 )
             ],
         )
@@ -367,9 +373,15 @@ def test_runner_emits_match_failed_for_stale_completed_match(monkeypatch: pytest
                     subjective_known_object_uuids=[],
                     subjective_known_object_positions=[],
                     subjective_known_tile_positions=[],
+                    subjective_visible_cell_positions=[],
+                    subjective_seen_cell_positions=[],
                     subjective_affordance_row_ids=[],
                     subjective_affordance_target_uuids=[],
                     subjective_affordance_target_positions=[],
+                    audit_controlled_entity_uuids=["hero-uuid"],
+                    audit_authorized_entity_uuids=["hero-uuid"],
+                    audit_authorized_object_uuids=[],
+                    audit_authorized_positions=[],
                 )
             ],
         )

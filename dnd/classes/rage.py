@@ -17,14 +17,15 @@ from dnd.core.base_actions import (
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    WeaponSlot, DeathEvent,
+    DeathEvent,
 )
+from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
     ContextualNumericalModifier,
     ResistanceModifier, ResistanceStatus, DamageType
 )
-from dnd.blocks.equipment import ArmorType, ArmorEquipEvent, Armor
+from dnd.blocks.equipment import ArmorEquipEvent, Armor
 from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity
 from dnd.actions import (
@@ -32,6 +33,7 @@ from dnd.actions import (
     entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
     Attack, AttackEvent, build_weapon_attack_outcome_profile,
+    create_weapon_attack_declaration_event,
 )
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
@@ -124,7 +126,7 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
     """
     End rage if heavy armor is equipped.
 
-    Triggers on ARMOR_EQUIP at EXECUTION phase.
+    Triggers on ARMOR_EQUIP at EFFECT phase after the gear transaction commits.
     If the armor being equipped is heavy armor, rage ends immediately.
     """
     if event.source_entity_uuid != source_entity_uuid:
@@ -173,7 +175,7 @@ def create_rage_armor_handler(source_entity_uuid: UUID) -> EventHandler:
         trigger_conditions=[
             Trigger(
                 event_type=EventType.ARMOR_EQUIP,
-                event_phase=EventPhase.EXECUTION
+                event_phase=EventPhase.EFFECT
             )
         ],
         event_processor=rage_armor_equip_handler
@@ -199,10 +201,15 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
     if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
         return None
 
-    if "Frenzied" in entity.active_conditions:
-        entity.remove_condition("Frenzied", parent_event=event)
-    elif "Raging" in entity.active_conditions:
+    # Frenzied is owned by Raging as a sub-condition.  Remove the parent so
+    # BaseBlock performs the complete condition-tree cleanup; removing only
+    # Frenzied would leave the dead entity with the Raging transforms active.
+    if "Raging" in entity.active_conditions:
         entity.remove_condition("Raging", parent_event=event)
+    elif "Frenzied" in entity.active_conditions:
+        # Defensive recovery for malformed legacy state where Frenzied exists
+        # without its owning Raging condition.
+        entity.remove_condition("Frenzied", parent_event=event)
 
     return event.model_copy(update={
         "modified": True,
@@ -749,31 +756,15 @@ class FrenziedStrike(BaseAction):
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for frenzied strike."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        source_name = source_entity.name if source_entity else None
-        target_name = target_entity.name if target_entity else None
-
-        weapon_name = None
-        if source_entity:
-            weapon = source_entity.equipment._get_weapon_by_slot(self.weapon_slot)
-            weapon_name = weapon.name if weapon else "Unarmed"
-
-        display_name = f"Frenzied Strike ({weapon_name})" if weapon_name else "Frenzied Strike"
-
-        return AttackEvent(
-            name=display_name,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
+        return create_weapon_attack_declaration_event(
+            action_name="Frenzied Strike",
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             weapon_slot=self.weapon_slot,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=self.costs,
+            parent_event=parent_event,
             use_register=use_register,
-            source_entity_name=source_name,
-            target_entity_name=target_name,
-            weapon_name=weapon_name
+            append_weapon_to_name=True,
         )
 
     def pre_validate(self) -> bool:

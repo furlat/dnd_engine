@@ -196,10 +196,11 @@ Responsibilities:
 - `profiles.py`: compatibility and balanced profile definitions.
 - `projector.py`: resolve a profile and evaluate selected components.
 
-The package may import `ai.observation`, `ai.knowledge`, `ai.protocol`, and
-`ai.subjective`. Only the optional oracle component may import `ai.policy`.
-Core representation models, inspection, predicates, and non-oracle components
-must not import `ai.policy`.
+The package may import `server.agent_protocol`, `ai.knowledge`, and
+`ai.subjective`. Server-side projection belongs to `server.agent_runtime` and
+is not a dependency of the representation package. Only the optional oracle
+component may import `ai.policy`. Core representation models, inspection,
+predicates, and non-oracle components must not import `ai.policy`.
 
 ## 6. Representation Type System
 

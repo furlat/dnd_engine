@@ -2,7 +2,8 @@
 
 This package controls how a Codex or other LLM operator receives an already
 materialized session-subjective game world. It is an interpretation layer over
-`ai.observation` and `ai.subjective`; it is not another game-state bus, action
+the server-owned `server.agent_protocol` contracts and the client-side
+`ai.subjective` materialization; it is not another game-state bus, action
 validator, or traditional AI policy.
 
 The complete implementation rationale and staged design are in

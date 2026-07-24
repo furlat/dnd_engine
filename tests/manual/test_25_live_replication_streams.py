@@ -2,14 +2,18 @@
 
 import asyncio
 import inspect
+from threading import Event as ThreadEvent, Thread
+
+import pytest
 
 from dnd.actions import Dodge, Shove, ShoveEvent
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, ForcedMovementEvent
+from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.encounter import Encounter
 from server import live_replication
 from server.event_stream import (
     BoundedSubscription,
-    CombatLogPayload,
     HeartbeatPayload,
     StreamSyncPayload,
     event_stream,
@@ -17,6 +21,7 @@ from server.event_stream import (
     make_stream_id,
 )
 from server.api_models import SessionPingResponse
+from server.combat_log_source import CombatLogSourceError, CombatLogSourceSlot
 from server.live_replication import (
     create_stream_scene,
     drain_subscription,
@@ -136,16 +141,12 @@ def test_sync_frame_reports_the_current_cursor_pair(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_live_stream_reset_owns_the_stream_runtime_state(capsys) -> None:
-    """The stream scene reset names its own runtime state instead of delegating to test helpers."""
+def test_live_stream_reset_composes_engine_and_stream_owned_state(capsys) -> None:
+    """The stream reset composes the engine reset with stream-specific hooks."""
     source = inspect.getsource(live_replication.reset_live_stream_state)
     required_fragments = [
         "event_stream.stop()",
-        "EventQueue.reset()",
-        "SpellProtectionRegistry.reset()",
-        "Controller.clear_registry()",
-        "Encounter.clear_registry()",
-        "GridMap.reset()",
+        "reset_engine_runtime(grid_size=(width, height))",
         "event_stream.ensure_attached()",
     ]
 
@@ -173,7 +174,7 @@ def test_live_stream_reset_owns_the_stream_runtime_state(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "reset source: reset_combat_state=False, required=7/7",
+        "reset source: reset_combat_state=False, required=3/3",
         "post reset: event_cursor=42, queue_cursor=42, log_cursor=1, logs=1",
     ]
 
@@ -183,61 +184,146 @@ def test_live_stream_reset_owns_the_stream_runtime_state(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_cursor_replay_returns_events_and_logs_after_saved_cursors(capsys) -> None:
-    """Saved cursors replay only the game events and combat logs after them."""
+def test_exact_combat_log_window_retains_original_causal_event_cursor() -> None:
+    """Later events cannot move a stored combat-log slot's causal barrier."""
     scene = create_stream_scene()
-    event_cursor_before, combat_log_cursor_before = execute_stream_attack(
-        scene.hero,
-        scene.monster,
+    combat_log_cursor_before = len(scene.encounter.combat_log)
+    subscription = event_stream.subscribe(max_depth=64)
+    try:
+        execute_stream_attack(scene.hero, scene.monster, scene.encounter)
+        envelopes = asyncio.run(drain_subscription(subscription))
+    finally:
+        event_stream.unsubscribe(subscription)
+
+    live_log = next(
+        envelope["data"]
+        for envelope in envelopes
+        if envelope["event"] == "combat_log"
+        and envelope["data"].combat_log_cursor == combat_log_cursor_before + 1
+    )
+    causal_event_cursor = live_log.event_cursor
+
+    unrelated = Event(
+        event_type=EventType.BASE_ACTION,
+        source_entity_uuid=scene.hero.uuid,
+    )
+    unrelated.phase_to(EventPhase.COMPLETION)
+
+    assert EventQueue.event_cursor() > causal_event_cursor
+
+    source = event_stream.capture_combat_log_source_window(
         scene.encounter,
+        from_cursor=combat_log_cursor_before,
     )
 
-    game_events = event_stream.iter_game_events_since(event_cursor_before, scene.encounter)
-    combat_logs = event_stream.iter_combat_logs_since(scene.encounter, combat_log_cursor_before)
+    assert len(source.slots) == 1
+    assert source.generation_id == str(EventQueue.generation_id())
+    assert source.slots[0].combat_log_cursor == combat_log_cursor_before + 1
+    assert source.slots[0].event_cursor == causal_event_cursor
 
-    assert game_events
-    assert combat_logs
-    assert game_events[0].event_index == event_cursor_before
-    assert game_events[-1].event_cursor == EventQueue.event_cursor()
-    assert all(payload.event_cursor == payload.event_index + 1 for payload in game_events)
-    assert any(payload.event.phase == EventPhase.COMPLETION for payload in game_events)
-    assert combat_logs[0].log_index == combat_log_cursor_before
-    assert combat_logs[-1].combat_log_cursor == len(scene.encounter.combat_log)
-    assert all(isinstance(payload, CombatLogPayload) for payload in combat_logs)
 
-    completion_count = sum(
-        payload.event.phase == EventPhase.COMPLETION for payload in game_events
+def test_standalone_combat_log_slot_retains_its_append_cursor() -> None:
+    """Standalone informational logs keep the cursor visible at append time."""
+    scene = create_stream_scene()
+    combat_log_cursor_before = len(scene.encounter.combat_log)
+    event_cursor_at_append = EventQueue.event_cursor()
+    standalone = CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name=scene.hero.name,
+        source_uuid=str(scene.hero.uuid),
+        compact="Standalone evidence",
+        verbose="Standalone evidence",
+        detailed="Standalone evidence",
     )
-    readout_lines = [
-        f"saved cursors: event={event_cursor_before}, log={combat_log_cursor_before}",
-        (
-            "replay: "
-            f"game_events={len(game_events)}, "
-            f"combat_logs={len(combat_logs)}, "
-            f"completions={completion_count}"
-        ),
-        (
-            "cursor range: "
-            f"first_event={game_events[0].event_index}, "
-            f"last_cursor={game_events[-1].event_cursor}, "
-            f"log_cursor={combat_logs[-1].combat_log_cursor}"
-        ),
-        (
-            "payload types: "
-            f"logs_are_combat={all(isinstance(payload, CombatLogPayload) for payload in combat_logs)}"
-        ),
-    ]
-    expected_lines = [
-        "saved cursors: event=42, log=1",
-        "replay: game_events=30, combat_logs=1, completions=7",
-        "cursor range: first_event=42, last_cursor=72, log_cursor=2",
-        "payload types: logs_are_combat=True",
-    ]
 
-    print("\n".join(readout_lines))
+    EventQueue.push_combat_log(standalone, scene.hero.uuid)
+    event_stream.stop()
+    event_stream.ensure_attached()
+    Event(
+        event_type=EventType.BASE_ACTION,
+        source_entity_uuid=scene.hero.uuid,
+    ).phase_to(EventPhase.COMPLETION)
 
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+    assert EventQueue.event_cursor() > event_cursor_at_append
+
+    source = event_stream.capture_combat_log_source_window(
+        scene.encounter,
+        from_cursor=combat_log_cursor_before,
+    )
+
+    assert len(source.slots) == 1
+    assert source.slots[0].entry == standalone
+    assert source.slots[0].event_cursor == event_cursor_at_append
+
+
+def test_exact_combat_log_source_window_preserves_finalized_causal_barriers() -> None:
+    """Canonical source capture returns one exact finalized page."""
+    scene = create_stream_scene()
+    from_cursor = len(scene.encounter.combat_log)
+    execute_stream_attack(scene.hero, scene.monster, scene.encounter)
+    first_total = len(scene.encounter.combat_log)
+    later_log = CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name=scene.hero.name,
+        source_uuid=str(scene.hero.uuid),
+        compact="Later exact source slot",
+        verbose="Later exact source slot",
+        detailed="Later exact source slot",
+    )
+    EventQueue.push_combat_log(later_log, scene.hero.uuid)
+
+    window = event_stream.capture_combat_log_source_window(
+        scene.encounter,
+        from_cursor=from_cursor,
+        through_cursor=first_total,
+        expected_generation_id=str(EventQueue.generation_id()),
+    )
+
+    assert window.source_stream_id == str(scene.encounter.uuid)
+    assert window.from_cursor == from_cursor
+    assert window.through_cursor == first_total
+    assert window.total == len(scene.encounter.combat_log)
+    assert [slot.combat_log_cursor for slot in window.slots] == list(
+        range(from_cursor + 1, first_total + 1)
+    )
+    assert all(slot.finalized and slot.causal_cursor_exact for slot in window.slots)
+    assert [slot.event_cursor for slot in window.slots] == sorted(
+        slot.event_cursor for slot in window.slots
+    )
+
+    empty = event_stream.capture_combat_log_source_window(
+        scene.encounter,
+        from_cursor=first_total,
+        through_cursor=first_total,
+    )
+    assert empty.slots == ()
+    assert empty.total > empty.through_cursor
+
+
+def test_exact_combat_log_source_window_rejects_uncaptured_history() -> None:
+    """A missed source append cannot silently acquire an invented barrier."""
+    scene = create_stream_scene()
+    from_cursor = len(scene.encounter.combat_log)
+    standalone = CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name=scene.hero.name,
+        source_uuid=str(scene.hero.uuid),
+        compact="Missed by exact listener",
+        verbose="Missed by exact listener",
+        detailed="Missed by exact listener",
+    )
+
+    event_stream.stop()
+    try:
+        EventQueue.push_combat_log(standalone, scene.hero.uuid)
+    finally:
+        event_stream.ensure_attached()
+
+    with pytest.raises(CombatLogSourceError, match="exact combat-log source slot"):
+        event_stream.capture_combat_log_source_window(
+            scene.encounter,
+            from_cursor=from_cursor,
+        )
 
 
 def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
@@ -266,7 +352,7 @@ def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
         latest_game_payload.event_cursor,
         latest_game_payload.combat_log_cursor,
     )
-    assert latest_game_payload.event.phase == EventPhase.COMPLETION
+    assert latest_game_payload.event.phase == EventPhase.COMPLETION.value
 
     latest_log = combat_log_envelopes[-1]
     latest_log_payload = latest_log["data"]
@@ -287,7 +373,7 @@ def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
         (
             "latest game: "
             f"id={latest_game_event['id']}, "
-            f"phase={latest_game_payload.event.phase.value}, "
+            f"phase={latest_game_payload.event.phase}, "
             f"cursor={latest_game_payload.event_cursor}"
         ),
         (
@@ -338,54 +424,44 @@ def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
     completion_envelopes = [
         envelope
         for envelope in game_event_envelopes
-        if envelope["data"].event.phase == EventPhase.COMPLETION
+        if envelope["data"].event.phase == EventPhase.COMPLETION.value
     ]
     forced_envelope = next(
         envelope
         for envelope in completion_envelopes
-        if isinstance(envelope["data"].event, ForcedMovementEvent)
+        if envelope["data"].event.wire_type
+        == "dnd.core.events.ForcedMovementEvent"
     )
     shove_envelope = next(
         envelope
         for envelope in completion_envelopes
-        if isinstance(envelope["data"].event, ShoveEvent)
+        if envelope["data"].event.wire_type == "dnd.actions.ShoveEvent"
     )
 
-    forced_event = forced_envelope["data"].event
     forced_wire = forced_envelope["data"].model_dump(mode="json")["event"]
-    assert forced_event.source_entity_uuid == scene.monster.uuid
-    assert forced_event.target_entity_uuid == scene.hero.uuid
-    assert forced_event.start_position != forced_event.end_position
-    assert forced_event.end_position == scene.hero.position
-    assert forced_event.cause == "shove"
+    assert forced_wire["source_entity_uuid"] == str(scene.monster.uuid)
+    assert forced_wire["target_entity_uuid"] == str(scene.hero.uuid)
+    assert forced_wire["start_position"] != forced_wire["end_position"]
+    assert forced_wire["end_position"] == list(scene.hero.position)
+    assert forced_wire["cause"] == "shove"
     assert forced_wire["wire_type"] == "dnd.core.events.ForcedMovementEvent"
     assert forced_wire["event_type"] == "forced_movement"
-    assert forced_wire["start_position"] == list(forced_event.start_position)
-    assert forced_wire["end_position"] == list(forced_event.end_position)
     assert forced_envelope["data"].event_index < shove_envelope["data"].event_index
     assert game_event_envelopes[-1]["data"].event_cursor == EventQueue.event_cursor()
 
-    replayed_events = event_stream.iter_game_events_since(
-        event_cursor_before,
-        scene.encounter,
+    assert all(
+        envelope["data"].event_index >= event_cursor_before
+        for envelope in game_event_envelopes
     )
-    replayed_forced = [
-        payload.event
-        for payload in replayed_events
-        if isinstance(payload.event, ForcedMovementEvent)
-        and payload.event.phase == EventPhase.COMPLETION
-    ]
-    assert len(replayed_forced) == 1
-    assert replayed_forced[0].end_position == scene.hero.position
 
-    combat_logs = event_stream.iter_combat_logs_since(
+    source = event_stream.capture_combat_log_source_window(
         scene.encounter,
-        combat_log_cursor_before,
+        from_cursor=combat_log_cursor_before,
     )
     shove_log = next(
-        payload.entry
-        for payload in combat_logs
-        if payload.entry.data.get("action_type") == "shove"
+        slot.entry
+        for slot in source.slots
+        if slot.entry.data.get("action_type") == "shove"
     )
     forced_logs = [
         entry
@@ -393,10 +469,10 @@ def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
         if entry.data.get("type") == "forced_movement"
     ]
     assert len(forced_logs) == 1
-    assert forced_logs[0].data["start_position"] == list(forced_event.start_position)
-    assert forced_logs[0].data["end_position"] == list(forced_event.end_position)
-    assert str(forced_event.start_position) in forced_logs[0].verbose
-    assert str(forced_event.end_position) in forced_logs[0].verbose
+    assert forced_logs[0].data["start_position"] == forced_wire["start_position"]
+    assert forced_logs[0].data["end_position"] == forced_wire["end_position"]
+    assert str(tuple(forced_wire["start_position"])) in forced_logs[0].verbose
+    assert str(tuple(forced_wire["end_position"])) in forced_logs[0].verbose
 
 
 def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None:
@@ -416,7 +492,7 @@ def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None
     completion_indexes = [
         index for index, envelope in enumerate(envelopes[:first_log_index])
         if envelope["event"] == "game_event"
-        and envelope["data"].event.phase == EventPhase.COMPLETION
+        and envelope["data"].event.phase == EventPhase.COMPLETION.value
     ]
 
     assert completion_indexes
@@ -440,6 +516,71 @@ def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_hot_event_envelopes_carry_the_finalized_causal_log_barrier() -> None:
+    """Early events cannot see a log waiting on a later completion cursor."""
+    scene = create_stream_scene()
+    combat_log_cursor_before = len(scene.encounter.combat_log)
+    subscription = event_stream.subscribe(max_depth=64)
+    try:
+        execute_stream_attack(scene.hero, scene.monster, scene.encounter)
+        envelopes = asyncio.run(drain_subscription(subscription))
+    finally:
+        event_stream.unsubscribe(subscription)
+
+    game_payloads = [
+        envelope["data"]
+        for envelope in envelopes
+        if envelope["event"] == "game_event"
+    ]
+    log_payload = next(
+        envelope["data"]
+        for envelope in envelopes
+        if envelope["event"] == "combat_log"
+        and envelope["data"].combat_log_cursor == combat_log_cursor_before + 1
+    )
+
+    assert game_payloads
+    assert all(
+        payload.combat_log_cursor == combat_log_cursor_before
+        for payload in game_payloads
+        if payload.event_cursor < log_payload.event_cursor
+    )
+    causal_completion = next(
+        payload
+        for payload in game_payloads
+        if payload.event_cursor == log_payload.event_cursor
+    )
+    assert causal_completion.event.phase == EventPhase.COMPLETION.value
+    assert causal_completion.combat_log_cursor == log_payload.combat_log_cursor
+
+
+def test_terminal_event_keeps_the_bound_encounter_source_identity() -> None:
+    """Clearing Encounter.active before an end event cannot orphan its stream."""
+    scene = create_stream_scene()
+    subscription = event_stream.subscribe(max_depth=64)
+    active_encounter = Encounter.get_active()
+    try:
+        Encounter._active_encounter = None
+        terminal = Event(
+            name="Terminal objective event",
+            source_entity_uuid=scene.encounter.uuid,
+            event_type=EventType.ENCOUNTER_END,
+            phase=EventPhase.COMPLETION,
+        )
+        envelopes = asyncio.run(drain_subscription(subscription))
+    finally:
+        Encounter._active_encounter = active_encounter
+        event_stream.unsubscribe(subscription)
+
+    payload = next(
+        envelope["data"]
+        for envelope in envelopes
+        if envelope["event"] == "game_event"
+        and envelope["data"].event.uuid == str(terminal.uuid)
+    )
+    assert payload.source_stream_id == str(scene.encounter.uuid)
 
 
 def test_heartbeat_frame_carries_current_cursors(capsys) -> None:
@@ -543,3 +684,55 @@ def test_bounded_subscription_evicts_slow_consumers(capsys) -> None:
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_finalized_source_listeners_run_after_the_source_lock_is_released() -> None:
+    """Passive consumers cannot deadlock against runtime attachment lock order."""
+    scene = create_stream_scene()
+    entry = CombatLogEntry(
+        entry_type=CombatLogEntryType.ACTION,
+        source_name="Lock probe",
+        source_uuid=str(scene.hero.uuid),
+        compact="Lock probe acts",
+        verbose="Lock probe acts",
+        detailed="Lock probe acts",
+    )
+    event = Event(
+        name="Lock probe",
+        source_entity_uuid=scene.hero.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    scene.encounter.combat_log.append(entry)
+    acquired = ThreadEvent()
+    observed_during_callback: list[bool] = []
+    threads: list[Thread] = []
+
+    def listener(_slot: CombatLogSourceSlot) -> None:
+        thread = Thread(
+            target=lambda: (
+                event_stream.current_event_cursor(),
+                acquired.set(),
+            ),
+            daemon=True,
+        )
+        threads.append(thread)
+        thread.start()
+        observed_during_callback.append(acquired.wait(timeout=1.0))
+
+    event_stream.add_finalized_combat_log_source_listener(listener)
+    try:
+        event_stream._on_combat_log(
+            scene.encounter,
+            len(scene.encounter.combat_log) - 1,
+            entry,
+            event,
+        )
+    finally:
+        event_stream.remove_finalized_combat_log_source_listener(listener)
+        for thread in threads:
+            thread.join(timeout=1.0)
+
+    assert observed_during_callback == [True]
+    assert acquired.is_set()

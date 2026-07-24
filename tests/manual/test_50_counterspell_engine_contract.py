@@ -4,7 +4,10 @@ import json
 from unittest.mock import patch
 from uuid import uuid4
 
-from ai.observation import build_observation_snapshot, iter_observation_frames
+from server.agent_runtime.observation_projector import (
+    build_observation_snapshot,
+    iter_observation_frames,
+)
 from dnd.actions import SpellAction, SpellEvent
 from dnd.actions_functional import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig

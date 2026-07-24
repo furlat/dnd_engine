@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from contextlib import contextmanager
 import ctypes
 from datetime import datetime, timezone
-import importlib
 import os
 import resource
 from pathlib import Path
@@ -16,7 +15,7 @@ import subprocess
 import sys
 import time
 import traceback as traceback_module
-from typing import Any, Iterator, cast
+from typing import Any, Iterator
 
 from ai.evaluation.config_ladder.artifact_store import (
     atomic_write_json,
@@ -103,18 +102,6 @@ def _soft_deadline(seconds: float) -> Iterator[None]:
         signal.signal(signal.SIGALRM, previous_handler)
         if previous_timer[0] > 0.0:
             signal.setitimer(signal.ITIMER_REAL, *previous_timer)
-
-
-def _load_real_match_runner(entrypoint: str) -> RealMatchRunner:
-    module_name, separator, attribute_path = entrypoint.partition(":")
-    if not separator or not module_name or not attribute_path:
-        raise ValueError("Real-match entry point must use 'module:callable' syntax.")
-    value: Any = importlib.import_module(module_name)
-    for attribute in attribute_path.split("."):
-        value = getattr(value, attribute)
-    if not callable(value):
-        raise TypeError(f"Real-match entry point is not callable: {entrypoint}")
-    return cast(RealMatchRunner, value)
 
 
 def _run_probe(request: MatchWorkerRequest) -> WorkerTaskResult:
@@ -214,10 +201,10 @@ def execute_worker_task(
         result = _run_probe(request)
     else:
         runner = real_match_runner
-        if runner is None and request.real_match_entrypoint is not None:
-            runner = _load_real_match_runner(request.real_match_entrypoint)
         if runner is None:
-            unsupported = RuntimeError("No real-match runner or entry point was provided.")
+            unsupported = RuntimeError(
+                "No statically bound real-match runner was provided by this worker entry module."
+            )
             return WorkerTaskResult(
                 status=WorkerStatus.UNSUPPORTED,
                 error=_error("real_match_runner_missing", unsupported, include_traceback=False),
@@ -333,7 +320,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    real_match_runner: RealMatchRunner | None = None,
+) -> int:
     """CLI entry point used directly by the coordinator's Python interpreter."""
     arguments = _build_parser().parse_args(argv)
     try:
@@ -342,6 +333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.response,
             arguments.artifact,
             parent_pid=arguments.parent_pid,
+            real_match_runner=real_match_runner,
         )
     except BaseException:
         traceback_module.print_exc(file=sys.stderr)

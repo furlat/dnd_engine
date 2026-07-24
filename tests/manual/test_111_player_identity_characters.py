@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
+from ai.game_server_profiles import EMBEDDED_AI_WORKER_APPLICATION
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_gateway import create_gateway_app
 from server.hosted_worker import HostedWorkerManager
@@ -105,7 +106,11 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         capability_pepper=PEPPER,
     )
     authority_cache = RuntimeAuthorityCache()
-    workers = HostedWorkerManager(tmp_path / "runtime", startup_timeout_seconds=20.0)
+    workers = HostedWorkerManager(
+        tmp_path / "runtime",
+        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
+        startup_timeout_seconds=20.0,
+    )
     app = create_gateway_app(
         repository=repository,
         worker_manager=workers,
@@ -147,7 +152,7 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         membership_id = created["connection"]["membership"]["membership_id"]
         session_id = created["connection"]["runtime_session_id"]
         first_token = created["connection"]["runtime_token"]
-        runtime_status = f"/games/{game_id}/runtime/game/status"
+        runtime_bootstrap = f"/games/{game_id}/runtime/replication/bootstrap"
 
         profile = client.get("/directory/players/me", headers=_headers(browser_b))
         assert profile.status_code == 200, profile.text
@@ -192,11 +197,13 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         assert parallel["connection"]["runtime_session_id"] == session_id
         second_token = parallel["connection"]["runtime_token"]
         assert client.get(
-            runtime_status,
+            runtime_bootstrap,
+            params={"session_id": session_id},
             headers={"Authorization": f"Bearer {first_token}"},
         ).status_code == 200
         assert client.get(
-            runtime_status,
+            runtime_bootstrap,
+            params={"session_id": session_id},
             headers={"Authorization": f"Bearer {second_token}"},
         ).status_code == 200
 
@@ -215,15 +222,18 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         replaced = replace_response.json()
         assert len(replaced["replaced_attachment_ids"]) == 2
         assert client.get(
-            runtime_status,
+            runtime_bootstrap,
+            params={"session_id": session_id},
             headers={"Authorization": f"Bearer {first_token}"},
         ).status_code == 403
         assert client.get(
-            runtime_status,
+            runtime_bootstrap,
+            params={"session_id": session_id},
             headers={"Authorization": f"Bearer {second_token}"},
         ).status_code == 403
         assert client.get(
-            runtime_status,
+            runtime_bootstrap,
+            params={"session_id": session_id},
             headers={"Authorization": f"Bearer {replaced['connection']['runtime_token']}"},
         ).status_code == 200
 

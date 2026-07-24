@@ -14,7 +14,7 @@ from ai.knowledge.deriver import derive_agent_facts
 from ai.knowledge.topology import grid_distance_feet
 from ai.policy.candidates import PolicyCandidateSet, build_policy_candidate_set
 from ai.knowledge.models import AgentFacts
-from ai.observation.models import SubjectiveWorldState
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.policy.contracts import (
     EndTurnIntent,
     ExecuteIntent,
@@ -61,8 +61,13 @@ from ai.policy.routines import (
     routine_trace_name,
 )
 from ai.policy.source import POLICY_NAME, POLICY_VERSION
-from ai.protocol.control import ActionResolutionStatus, CommandResult, CommandResultStatus
-from ai.protocol.semantics import ActionTag, TargetAllocation
+from server.agent_protocol.control import (
+    ActionResolutionStatus,
+    CommandResult,
+    CommandResultStatus,
+    END_TURN_ROW_ID,
+)
+from server.agent_protocol.semantics import ActionTag, TargetAllocation
 
 
 EpochKey = tuple[str, str, str]
@@ -217,7 +222,9 @@ class PolicyResultRecord(HostModel):
 
     command_id: Optional[str] = Field(default=None, description="Result command id, when supplied.")
     disposition: PolicyResultDisposition = Field(description="Correlation and terminal-result outcome.")
-    memory_advanced: bool = Field(description="Whether acceptance changed actor policy memory.")
+    memory_advanced: bool = Field(
+        description="Whether the correlated result advanced gameplay intention or routine memory."
+    )
     reason: str = Field(description="Stable explanation of the correlation outcome.")
     result: CommandResult = Field(description="Authoritative result observed by the host.")
     submission: Optional[PreparedPolicySubmission] = Field(
@@ -673,8 +680,6 @@ class PolicyHost:
             entity_uuid: set(positions)
             for entity_uuid, positions in memory.remembered_search_visited_positions.items()
         }
-        before_canceled_rows = set(memory.canceled_row_ids)
-        before_canceled_semantics = dict(memory.canceled_semantic_counts)
         consumed_transformation = (
             result.action_effect_committed
             and _submission_consumes_active_transformation(memory, submission)
@@ -726,8 +731,6 @@ class PolicyHost:
             or memory.same_turn_spacing_intention != before_spacing
             or memory.remembered_search_failures != before_search_failures
             or memory.remembered_search_visited_positions != before_search_positions
-            or memory.canceled_row_ids != before_canceled_rows
-            or memory.canceled_semantic_counts != before_canceled_semantics
         )
         record = PolicyResultRecord(
             command_id=command_id,
@@ -814,8 +817,8 @@ class PolicyHost:
         intent = submission.intent
         if isinstance(intent, ExecuteIntent) and result.row_id != intent.row_id:
             return "command_result_row_mismatch"
-        if isinstance(intent, EndTurnIntent) and result.row_id is not None:
-            return "end_turn_result_has_row_id"
+        if isinstance(intent, EndTurnIntent) and result.row_id != END_TURN_ROW_ID:
+            return "end_turn_result_row_mismatch"
         return None
 
 
@@ -1057,4 +1060,3 @@ def _spacing_intention_on_accept(
         started_round_number=epoch.round_number,
         started_turn_index=epoch.turn_index,
     )
-

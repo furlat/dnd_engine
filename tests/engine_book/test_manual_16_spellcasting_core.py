@@ -183,14 +183,14 @@ def test_registered_spells_surface_cantrips_and_slot_variants_in_discovery() -> 
 
 
 def test_fire_bolt_uses_spell_attack_bonus_cantrip_scaling_and_damage() -> None:
-    """A cantrip spell attack rolls d20, scales damage dice, and costs an action."""
+    """An adjacent cantrip attack rolls disadvantage and scales its damage."""
     reset_spell_tutorial_state()
     caster = create_spell_actor("Pyromancer", (0, 0), "heroes")
     enemy = create_spell_actor("Training Goblin", (1, 0), "monsters")
     Entity.update_all_entities_senses(max_distance=30)
     hp_before = enemy.get_hp()
 
-    with patch("dnd.core.dice.random.randint", side_effect=[12, 5, 6]):
+    with patch("dnd.core.dice.random.randint", side_effect=[14, 12, 5, 6]):
         event = FireBolt(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=enemy.uuid,
@@ -201,7 +201,7 @@ def test_fire_bolt_uses_spell_attack_bonus_cantrip_scaling_and_damage() -> None:
     assert not event.canceled
     assert event.attack_outcome == AttackOutcome.HIT
     assert event.dice_roll is not None
-    assert event.dice_roll.results == [12]
+    assert event.dice_roll.results == [14, 12]
     assert event.dice_roll.total == 19
     assert event.damage_rolls is not None
     assert event.damage_rolls[0].results == [5, 6]
@@ -269,7 +269,8 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up_when_broken() -
     assert "Concentrating" in caster.active_conditions
     assert "Haste" in ally.active_conditions
     assert ally.action_economy.movement.normalized_score == movement_before * 2
-    assert ally.action_economy.actions.normalized_score == actions_before + 1
+    assert ally.action_economy.actions.normalized_score == actions_before
+    assert ally.action_economy.resources["haste_action"].current == 1
     assert ally.ac_bonus().normalized_score == ac_before + 2
     assert caster.action_economy.spell_slot_3.normalized_score == 0
 
@@ -280,5 +281,8 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up_when_broken() -
 
     assert "Concentrating" not in caster.active_conditions
     assert "Haste" not in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "haste_action" not in ally.action_economy.resources
+    assert "Haste Lethargy" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
     assert ally.ac_bonus().normalized_score == ac_before

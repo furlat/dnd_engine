@@ -3,9 +3,12 @@
 import asyncio
 import os
 import tempfile
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
@@ -16,7 +19,52 @@ from dnd.core.gridmap import GridMap
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from server import event_server
+from server.agent_runtime.service import AgentLaunchRequest
+from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.event_server import app, sim
+
+
+class _MapAuthoringTestLauncher:
+    """Registered managed-agent capability for combat-to-editor handoff checks."""
+
+    service_id = "tests.map-authoring-agent"
+
+    def preflight(self, _required_agents: int) -> None:
+        return None
+
+    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
+        return AgentProcessSpec(
+            argv=("unused-map-authoring-agent", request.session_id),
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+
+@pytest.fixture(autouse=True)
+def stub_map_authoring_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
+    """Expose a managed service without spawning subprocesses in editor checks."""
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
+    event_server.agent_service_manager.register_service(SubprocessAgentService(_MapAuthoringTestLauncher()))
+
+    async def accept_batch(
+        _requests: tuple[AgentLaunchRequest, ...],
+    ) -> tuple[object, ...]:
+        return ()
+
+    monkeypatch.setattr(
+        event_server.agent_service_manager,
+        "start_agents",
+        accept_batch,
+    )
+    yield
+    event_server.agent_service_manager.stop_all_blocking()
+    service_id = event_server.agent_service_manager.service_id
+    if service_id is not None:
+        event_server.agent_service_manager.unregister_service(service_id)
 
 
 class ApiClient:
@@ -150,8 +198,7 @@ def test_catalog_and_scratch_map_creation_define_the_authoring_palette(capsys) -
 
     catalog = client.get("/mapeditor/catalog").json()
     snapshot = create_tutorial_editor_map(client)
-    public_state = client.get("/state").json()
-    entities = client.get("/entities").json()
+    authoring_entities = Entity.get_all_entities()
 
     assert {"scratch", "forgotten_crypt_arena"} <= {entry["id"] for entry in catalog["presets"]}
     assert {"floor", "wall", "water", "difficult_terrain", "spike_zone"} <= {
@@ -164,9 +211,8 @@ def test_catalog_and_scratch_map_creation_define_the_authoring_palette(capsys) -
     assert len(snapshot["tiles"]) == 12
     assert snapshot["floor_objects"] == []
     assert tile_at(snapshot, 10, 20)["light_level"] == 1
-    assert entities == {"entities": []}
-    assert public_state["entities"] == []
-    assert public_state["encounter"] is None
+    assert authoring_entities == []
+    assert sim.encounter is None
 
     readout_lines = [
         (
@@ -184,16 +230,15 @@ def test_catalog_and_scratch_map_creation_define_the_authoring_palette(capsys) -
         ),
         (
             "play state: "
-            f"entities={len(public_state['entities'])}, "
-            f"encounter={'none' if public_state['encounter'] is None else 'active'}, "
-            f"entity_route={len(entities['entities'])}"
+            f"entities={len(authoring_entities)}, "
+            f"encounter={'none' if sim.encounter is None else 'active'}"
         ),
     ]
     expected_lines = [
         "catalog core: presets=yes, tiles=yes, objects=yes, loot=yes",
         "scratch map: bounds={'min_x': 10, 'min_y': 20, 'max_x': 13, 'max_y': 22}, tiles=12, objects=0",
         "origin tile: name=Floor, light=1",
-        "play state: entities=0, encounter=none, entity_route=0",
+        "play state: entities=0, encounter=none",
     ]
 
     print("\n".join(readout_lines))
@@ -363,7 +408,10 @@ def test_object_deletion_updates_the_editor_snapshot(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_save_load_roundtrip_restores_entity_free_map_state(capsys) -> None:
+def test_save_load_roundtrip_restores_entity_free_map_state(
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Saved editor maps round-trip tiles and reloadable object placements."""
     client = create_authoring_client()
     create_tutorial_editor_map(client)
@@ -380,6 +428,16 @@ def test_save_load_roundtrip_restores_entity_free_map_state(capsys) -> None:
             )
             document_response = client.get("/mapeditor/saves/tutorial_room")
 
+            stop_calls: list[str] = []
+
+            async def capture_stop_all() -> None:
+                stop_calls.append("stop")
+
+            monkeypatch.setattr(
+                event_server.agent_service_manager,
+                "stop_all",
+                capture_stop_all,
+            )
             client.post(
                 "/mapeditor/maps",
                 json={"source": "scratch", "width": 1, "height": 1, "origin": [0, 0]},
@@ -399,6 +457,7 @@ def test_save_load_roundtrip_restores_entity_free_map_state(capsys) -> None:
     listed = listed_response.json()
 
     assert save_response.status_code == 200
+    assert stop_calls == ["stop", "stop"]
     assert save_payload["id"] == "tutorial_room"
     assert save_payload["tile_count"] == 12
     assert save_payload["floor_object_count"] == 2
@@ -464,8 +523,9 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
         json={"source": "preset", "preset_id": "forgotten_crypt_arena"},
     )
     preset = preset_response.json()
-    preset_state = client.get("/state").json()
     object_names = [obj["name"] for obj in preset["floor_objects"]]
+    preset_entity_count = len(Entity.get_all_entities())
+    preset_has_encounter = sim.encounter is not None
 
     assert preset_response.status_code == 200
     assert preset["grid_bounds"] == {"min_x": 0, "min_y": 0, "max_x": 14, "max_y": 14}
@@ -477,8 +537,6 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
     assert object_names.count("Trap Lever") == 1
     assert Entity.get_all_entities() == []
     assert sim.encounter is None
-    assert preset_state["entities"] == []
-    assert preset_state["encounter"] is None
 
     start_response = client.post("/simulation/start-human", params={"character_class": "fighter"})
     assert start_response.status_code == 200
@@ -491,14 +549,13 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
         "/mapeditor/maps",
         json={"source": "scratch", "width": 2, "height": 2, "origin": [0, 0]},
     )
-    public_state = client.get("/state").json()
+    editor_entity_count = len(Entity.get_all_entities())
+    editor_has_encounter = sim.encounter is not None
 
     assert editor_response.status_code == 200
     assert editor_response.json()["grid_bounds"] == {"min_x": 0, "min_y": 0, "max_x": 1, "max_y": 1}
     assert Entity.get_all_entities() == []
     assert sim.encounter is None
-    assert public_state["entities"] == []
-    assert public_state["encounter"] is None
 
     readout_lines = [
         (
@@ -517,8 +574,8 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
         ),
         (
             "preset play state: "
-            f"entities={len(preset_state['entities'])}, "
-            f"encounter={'none' if preset_state['encounter'] is None else 'active'}"
+            f"entities={preset_entity_count}, "
+            f"encounter={'active' if preset_has_encounter else 'none'}"
         ),
         (
             "running game: "
@@ -530,8 +587,8 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
             "return to editor: "
             f"status={editor_response.status_code}, "
             f"bounds={editor_response.json()['grid_bounds']}, "
-            f"entities={len(public_state['entities'])}, "
-            f"encounter={'none' if public_state['encounter'] is None else 'active'}"
+            f"entities={editor_entity_count}, "
+            f"encounter={'active' if editor_has_encounter else 'none'}"
         ),
     ]
     expected_lines = [

@@ -1,11 +1,13 @@
 """External controller checks against the one shared subjective policy stack."""
 
-from typing import Any, cast
+from typing import Any
 
+import httpx
 import pytest
 
 from ai.external_agent import ExternalAgent
-from ai.observation.models import (
+from ai.subjective.policy_agent import SubjectivePolicyAgent
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationObjectFact,
@@ -15,8 +17,7 @@ from ai.observation.models import (
 )
 from ai.policy import AgentCommand, AgentCommandType, PolicyDecisionTelemetry
 from ai.policy.source import policy_source_snapshot
-from ai.policy.telemetry import QueuedPolicyTelemetrySink
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCostProfile,
     ActionEconomyState,
@@ -27,7 +28,7 @@ from ai.protocol.control import (
     DecisionEpoch,
     DecisionEpochReason,
 )
-from ai.protocol.semantics import ActionSemantics, ActionTag, action_semantics_ref
+from server.agent_protocol.semantics import ActionSemantics, ActionTag, action_semantics_ref
 from ai.subjective.processors import AgentFactsProcessor
 from ai.subjective.store import SubjectiveStore
 
@@ -36,7 +37,9 @@ class _FakeRuntime:
     """Minimal event-first runtime boundary consumed by the controller."""
 
     def __init__(self, store: SubjectiveStore) -> None:
+        self.session_id = "session-ai"
         self.store = store
+        self.last_command_timing: dict[str, Any] | None = None
         self.events: list[dict[str, Any]] = []
         self.resync_count = 0
 
@@ -54,6 +57,22 @@ class _FakeRuntime:
     def resync(self) -> None:
         self.resync_count += 1
 
+    def execute(
+        self,
+        row_id: str,
+        *,
+        command_id: str | None = None,
+        **options: Any,
+    ) -> CommandResult:
+        raise AssertionError(
+            f"execute should be replaced by the test: {row_id} {command_id} {options}"
+        )
+
+    def end_turn(self, *, command_id: str | None = None) -> CommandResult:
+        raise AssertionError(
+            f"end_turn should be replaced by the test: {command_id}"
+        )
+
     def emit_event(self, event_type: str, summary: str, **kwargs: Any) -> None:
         self.events.append({"event_type": event_type, "summary": summary, **kwargs})
 
@@ -69,6 +88,25 @@ def test_external_controller_has_no_available_actions_polling_surface() -> None:
         assert not hasattr(agent, "fetch_available_actions")
         assert len(agent.runtime.hooks.processors) == 1
         assert isinstance(agent.runtime.hooks.processors[0], AgentFactsProcessor)
+    finally:
+        agent.close()
+
+
+def test_external_controller_propagates_transport_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dead managed controller is reported instead of looking successful."""
+    agent = ExternalAgent("http://127.0.0.1:9", "session-ai")
+    transport_error = httpx.ConnectError("server unavailable")
+    monkeypatch.setattr(
+        agent,
+        "_ensure_runtime_ready",
+        lambda: (_ for _ in ()).throw(transport_error),
+    )
+
+    try:
+        with pytest.raises(httpx.ConnectError, match="server unavailable"):
+            agent.run_forever()
     finally:
         agent.close()
 
@@ -198,10 +236,10 @@ def test_policy_source_snapshot_contains_only_the_shared_stack() -> None:
     assert len(snapshot.source_sha256) == 64
     assert snapshot.line_count > 1_000
     assert snapshot.source_path == "ai/policy/host.py"
-    assert "ai/protocol/control.py" in snapshot.source_paths
-    assert "ai/protocol/semantics.py" in snapshot.source_paths
-    assert "ai/semantics/actions.py" in snapshot.source_paths
-    assert "ai/subjective/epochs.py" in snapshot.source_paths
+    assert "server/agent_protocol/control.py" in snapshot.source_paths
+    assert "server/agent_protocol/semantics.py" in snapshot.source_paths
+    assert "server/agent_runtime/action_semantics.py" in snapshot.source_paths
+    assert "server/agent_runtime/epochs.py" in snapshot.source_paths
     assert "ai/policy/commands.py" in snapshot.source_paths
     assert "ai/policy/candidates.py" in snapshot.source_paths
     assert "ai/policy/routines.py" in snapshot.source_paths
@@ -212,14 +250,9 @@ def test_policy_source_snapshot_contains_only_the_shared_stack() -> None:
     assert "class PolicyHost" in snapshot.source
 
 
-def _agent_with_runtime(runtime: _FakeRuntime) -> ExternalAgent:
-    """Create a controller with its network runtime replaced by a local store."""
-    agent = ExternalAgent("http://testserver", "session-ai")
-    agent.policy_telemetry.close()
-    agent.runtime.close()
-    agent.runtime = cast(Any, runtime)
-    agent.policy_telemetry = QueuedPolicyTelemetrySink(runtime)
-    return agent
+def _agent_with_runtime(runtime: _FakeRuntime) -> SubjectivePolicyAgent:
+    """Create the canonical policy controller over an injected local runtime."""
+    return SubjectivePolicyAgent(runtime)
 
 
 def _install_world(store: SubjectiveStore, world: SubjectiveWorldState) -> None:

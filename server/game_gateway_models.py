@@ -150,6 +150,13 @@ class HostedGameConnection(GatewayModel):
         default_factory=list,
         description="Entities this runtime may command.",
     )
+    observer_entity_uuids: list[UUID] = Field(
+        default_factory=list,
+        description="Explicit entity senses this runtime may combine for subjective replication.",
+    )
+    active_observer_uuid: UUID = Field(
+        description="Observer selected for focus within the authorized subjective union.",
+    )
     takeover_claim_uuids: list[UUID] = Field(
         default_factory=list,
         description="Controller leases this runtime may keep alive.",

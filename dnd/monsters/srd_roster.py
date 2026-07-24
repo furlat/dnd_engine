@@ -21,12 +21,13 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import EquippedVisualPolicy
-from dnd.blocks.equipment import BodyArmor, Weapon, WeaponSlot, ArmorType, Range, WeaponProperty
+from dnd.blocks.equipment import BodyArmor, Weapon, Range
+from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import SenseMode, SensesType
-from dnd.core.events import AbilityName, BodyPart, RangeType
+from dnd.core.events import AbilityName, RangeType
 from dnd.core.modifiers import CreatureType, DamageType, Size
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig

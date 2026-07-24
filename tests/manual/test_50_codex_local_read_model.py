@@ -11,10 +11,10 @@ from ai.codex_tools.hot_runtime import (
     HotCodexQueryRequest,
     HotCodexSession,
 )
-from ai.observation.materializer import apply_observation_frame, materialize_snapshot
-from ai.observation.models import SubjectiveWorldState
+from server.agent_protocol.observation_replay import apply_observation_frame, materialize_snapshot
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.policy import PolicyDecisionTelemetry
-from ai.protocol.control import CommandResult, DecisionEpoch
+from server.agent_protocol.control import CommandResult, DecisionEpoch
 from ai.subjective.models import AgentState
 from ai.subjective.queries import SubjectiveActionFilter, SubjectiveQuerySelection
 

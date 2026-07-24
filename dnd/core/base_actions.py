@@ -4,15 +4,22 @@ import time
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
+from dnd.core.action_types import (
+    ActionPresentationKind,
+    RestrictedActionGrant,
+    RestrictedActionGrantProvider,
+    RestrictedActionKind,
+)
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.aoe import AoEShape
+from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.modifiers import AdvantageStatus
 from dnd.blocks.sensory import Senses
-from typing import Any, Optional, Callable, OrderedDict, List, Dict, Literal, Sequence, Set, Tuple, cast
-from uuid import UUID, uuid4
+from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Literal, Sequence, Set, Tuple, cast
+from uuid import UUID, uuid4, uuid5
 from enum import Enum
 
 CostType = Literal[
@@ -27,6 +34,7 @@ SPELL_SLOT_COST_TYPES: Dict[int, CostType] = {
     7: "spell_slot_7", 8: "spell_slot_8", 9: "spell_slot_9",
 }
 SPELL_SLOT_TEMPLATE_SEPARATOR = "__slot_"
+RESTRICTED_ACTION_TEMPLATE_SEPARATOR = "__grant_"
 
 
 def spell_slot_cost_type(level: int) -> CostType:
@@ -76,17 +84,6 @@ class ActionCategory(str, Enum):
     ATTACK = "attack"
     SPELL = "spell"
     MOVEMENT = "movement"
-
-
-class ActionPresentationKind(str, Enum):
-    """Stable presentation semantics carried by action events.
-
-    The engine describes what happened while clients remain responsible for
-    choosing concrete sprites, clips, sounds, and effects.
-    """
-
-    DEFAULT = "default"
-    DRINK = "drink"
 
 
 class PositionDiscoveryContract(BaseModel):
@@ -490,6 +487,18 @@ CostEvaluator = Callable[[UUID, CostType, int], bool]
 ResourceCostEvaluator = Callable[[UUID, str, int], bool]
 
 
+def block_action_resource_cost_evaluator(
+    owner_uuid: UUID,
+    resource_name: str,
+    resource_cost: int,
+) -> bool:
+    """Check a named resource through the neutral BaseBlock owner surface."""
+    owner = BaseBlock.get(owner_uuid)
+    if owner is None:
+        return False
+    return owner.can_afford_action_resource(resource_name, resource_cost)
+
+
 class BaseCost(BaseModel):
     """Serializable action cost without executable callbacks."""
 
@@ -526,6 +535,13 @@ class ActionEvent(Event):
         default=None,
         description="Usable item supplying this action when execution is item-bound.",
     )
+    source_item_presentation: Optional[ItemPresentationState] = Field(
+        default=None,
+        description=(
+            "Immutable source-item snapshot captured when the action was declared; "
+            "later phases and replay never need the live item registry."
+        ),
+    )
     item_charge_cost: int = Field(
         default=0,
         ge=0,
@@ -542,6 +558,15 @@ class ActionEvent(Event):
     declared_target_entity_uuids: List[UUID] = Field(
         default_factory=list,
         description="Complete entity target selection captured when the action is declared.",
+    )
+    application_index: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Ordered target-application index for a convolution child event.",
+    )
+    application_id: Optional[UUID] = Field(
+        default=None,
+        description="Deterministic identity of one ordered target application.",
     )
     event_type: EventType = Field(default=EventType.BASE_ACTION, description="Base action event type.")
     description: str = Field(default="", description="Action description for combat log generation")
@@ -576,6 +601,7 @@ class ActionEvent(Event):
         parent_event: Optional[Event] = None,
         use_register: bool = True,
         source_item_uuid: Optional[UUID] = None,
+        source_item_presentation: Optional[ItemPresentationState] = None,
         item_charge_cost: int = 0,
         declared_target_entity_uuids: Optional[List[UUID]] = None,
         presentation_kind: ActionPresentationKind = ActionPresentationKind.DEFAULT,
@@ -589,6 +615,7 @@ class ActionEvent(Event):
             parent_event: Optional parent event for event-tree nesting.
             use_register: Whether the event should be registered immediately.
             source_item_uuid: Optional usable item supplying this action.
+            source_item_presentation: Declaration-time cold item snapshot.
             item_charge_cost: Finite item charges consumed on completion.
             declared_target_entity_uuids: Complete entity target selection.
             presentation_kind: Stable presentation meaning for this action.
@@ -604,12 +631,30 @@ class ActionEvent(Event):
             parent_event=parent_event.uuid if parent_event else None,
             use_register=use_register,
             source_item_uuid=source_item_uuid,
+            source_item_presentation=source_item_presentation,
             item_charge_cost=item_charge_cost,
             declared_target_entity_uuids=declared_target_entity_uuids or [],
             presentation_kind=presentation_kind,
         )
         event.item_charge_action_lineage_uuid = event.lineage_uuid
         return event
+
+    @model_validator(mode="after")
+    def validate_cold_presentation_facts(self) -> "ActionEvent":
+        """Keep item and target-application identities internally coherent."""
+        if self.source_item_presentation is not None:
+            if self.source_item_uuid is None:
+                raise ValueError("source item presentation requires source_item_uuid")
+            if self.source_item_presentation.item_uuid != self.source_item_uuid:
+                raise ValueError("source item presentation UUID must match source_item_uuid")
+        if (
+            self.presentation_kind is ActionPresentationKind.DRINK
+            and self.source_item_presentation is None
+        ):
+            raise ValueError("drink action requires a declaration-time item presentation")
+        if (self.application_index is None) != (self.application_id is None):
+            raise ValueError("application_index and application_id must be set together")
+        return self
 
     def get_participant_entity_uuids(self) -> Set[UUID]:
         """Return the actor and every entity selected by the action.
@@ -762,6 +807,12 @@ class BaseAction(BaseObject):
         default=None,
         description="Typed subjective candidate contract for plain position actions.",
     )
+    restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = (
+        frozenset()
+    )
+    _restricted_action_grant: Optional[RestrictedActionGrant] = PrivateAttr(
+        default=None,
+    )
 
     @property
     def is_attack(self) -> bool:
@@ -854,6 +905,10 @@ class BaseAction(BaseObject):
         default=None,
         description="UUID of the item providing this action when it is an item-use action.",
     )
+    source_item_presentation: Optional[ItemPresentationState] = Field(
+        default=None,
+        description="Cold source-item state bound before an item action is declared.",
+    )
     charge_cost: int = Field(default=1, description="Charges consumed when this action is used from an item")
     end_position: Optional[Tuple[int, int]] = Field(
         default=None,
@@ -895,6 +950,19 @@ class BaseAction(BaseObject):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    def model_post_init(self, __context: Any) -> None:
+        """Capture an item source before the action can outlive that item."""
+        if (
+            self.source_item_uuid is not None
+            and self.source_item_presentation is None
+        ):
+            source_item = BaseBlock.get(self.source_item_uuid)
+            if isinstance(source_item, ItemPresentationProvider):
+                self.source_item_presentation = (
+                    source_item.to_item_presentation_state()
+                )
+        super().model_post_init(__context)
+
     @property
     def effective_target_type(self) -> TargetType:
         """Target type with alt override applied."""
@@ -910,6 +978,39 @@ class BaseAction(BaseObject):
         if self.alt_skip_slot:
             costs = [c for c in costs if not c.cost_type.startswith("spell_slot")]
         costs.extend(self.alt_extra_costs)
+        grant = self._restricted_action_grant
+        if grant is not None:
+            transformed_costs: List["Cost"] = []
+            grant_bound = False
+            for cost in costs:
+                if (
+                    not grant_bound
+                    and cost.cost_type in grant.replaced_cost_types
+                    and cost.cost > 0
+                    and cost.resource_name is None
+                    and cost.resource_cost == 0
+                ):
+                    transformed_costs.append(
+                        cost.model_copy(
+                            update={
+                                "cost": 0,
+                                "resource_name": grant.resource_name,
+                                "resource_cost": 1,
+                                "resource_evaluator": (
+                                    block_action_resource_cost_evaluator
+                                ),
+                            }
+                        )
+                    )
+                    grant_bound = True
+                else:
+                    transformed_costs.append(cost)
+            if not grant_bound:
+                raise ValueError(
+                    f"{self.name or 'action'} cannot bind restricted grant "
+                    f"{grant.grant_id!r}"
+                )
+            costs = transformed_costs
         return costs
 
     def set_target_entity(self, target_uuid: UUID) -> None:
@@ -1185,15 +1286,56 @@ class BaseAction(BaseObject):
             Discovery actions for this template. Non-variant actions expose
             themselves.
         """
-        return [self]
+        variants: List["BaseAction"] = [self]
+        if not self.restricted_action_kinds:
+            return variants
+        if not isinstance(entity, RestrictedActionGrantProvider):
+            return variants
+        for grant in entity.get_restricted_action_grants():
+            if self.restricted_action_kinds.isdisjoint(grant.allowed_kinds):
+                continue
+            if not any(
+                cost.cost_type in grant.replaced_cost_types
+                and cost.cost > 0
+                and cost.resource_name is None
+                and cost.resource_cost == 0
+                for cost in self.effective_costs
+            ):
+                continue
+            variant = self.model_copy(
+                deep=True,
+                update={
+                    "uuid": uuid4(),
+                    "template": False,
+                    "use_register": False,
+                },
+            )
+            variant._restricted_action_grant = grant
+            variants.append(variant)
+        return variants
 
     def get_discovery_template_name(self) -> str:
         """Return the machine-facing action name used for execution."""
-        return self.name or "Unknown"
+        base_name = self.name or "Unknown"
+        grant = self._restricted_action_grant
+        if grant is None:
+            return base_name
+        return (
+            f"{base_name}{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}"
+            f"{grant.grant_id}"
+        )
 
     def get_discovery_display_name(self) -> str:
         """Return the human-facing action name used by UIs."""
-        return self.get_discovery_template_name()
+        grant = self._restricted_action_grant
+        if grant is None:
+            return self.get_discovery_template_name()
+        return f"{grant.display_name}: {self.name or 'Unknown'}"
+
+    def get_restricted_action_display_name(self) -> Optional[str]:
+        """Return the explicit restricted-budget label for this variant."""
+        grant = self._restricted_action_grant
+        return grant.display_name if grant is not None else None
 
     def check_costs(self) -> bool:
         """Check whether the acting entity can afford all effective costs."""
@@ -1209,14 +1351,25 @@ class BaseAction(BaseObject):
         return True
 
     def _source_cannot_take_actions(self) -> bool:
-        """Return whether severe conditions prevent this source from acting."""
+        """Return whether the source's neutral permission gate denies actions."""
         if self.allow_while_incapacitated:
             return False
         source = BaseBlock.get(self.source_entity_uuid)
         if source is None:
             return False
-        active_conditions = getattr(source, "active_conditions", {})
-        return "Dead" in active_conditions or "Incapacitated" in active_conditions
+        if source.can_take_actions():
+            return False
+
+        positive_costs = [
+            cost
+            for cost in self.effective_costs
+            if cost.cost > 0
+        ]
+        is_pure_reaction = (
+            bool(positive_costs)
+            and all(cost.cost_type == "reactions" for cost in positive_costs)
+        )
+        return not is_pure_reaction
 
     def _create_declaration_event(
         self,
@@ -1239,6 +1392,7 @@ class BaseAction(BaseObject):
             parent_event,
             use_register=use_register,
             source_item_uuid=self.source_item_uuid,
+            source_item_presentation=self.source_item_presentation,
             item_charge_cost=self.charge_cost if self.source_item_uuid is not None else 0,
             declared_target_entity_uuids=self._declared_target_entity_uuids(),
             presentation_kind=self.presentation_kind,
@@ -1453,7 +1607,7 @@ class BaseAction(BaseObject):
             total_damage = 0
 
             targets_started = start_phase()
-            for target_uuid in all_target_uuids:
+            for application_index, target_uuid in enumerate(all_target_uuids):
                 target_started = start_phase()
                 self.target_entity_uuid = target_uuid
 
@@ -1468,6 +1622,11 @@ class BaseAction(BaseObject):
                     'target_entity_name': target_entity_name,
                     'children_events': [],
                     'lineage_children_events': [],
+                    'application_index': application_index,
+                    'application_id': uuid5(
+                        execution_event.lineage_uuid,
+                        f"target-application:{application_index}",
+                    ),
                 })
                 per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
 

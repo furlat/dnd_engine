@@ -1,0 +1,778 @@
+"""Focused security and renderer-seed tests for subjective world projection."""
+
+from collections.abc import Iterator
+from uuid import uuid4
+
+import pytest
+
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.base_block import LightLevel
+from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
+from dnd.core.gridmap import GridMap
+from dnd.core.item_types import EquippedVisualPolicy
+from dnd.encounter import CombatantState, Encounter, EncounterState
+from dnd.entity import Entity, EntityConfig
+from dnd.items.test_items import StorageChest, Torch, create_torch
+from dnd.items.environment import DirectionalDoor, DirectionalWall
+from dnd.items.weapons import create_dagger
+from dnd.runtime_reset import reset_engine_runtime
+from server.player_replication.world_projection import (
+    SubjectiveSpatialMemory,
+    SubjectiveWorldProjectionError,
+    build_entity_visual_loadout,
+    build_subjective_world,
+    diff_subjective_worlds,
+)
+from server.player_replication.journal import SubjectiveFrameProjectionContext
+from server.player_replication.mapper import (
+    CanonicalSubjectivePresentationMapper,
+    CausalEventBatch,
+    ProjectedEventSlot,
+)
+from server.player_replication_contract import (
+    ActiveWeaponSet,
+    DoorPresentationCue,
+    DoorStatePatch,
+    EntityUpsertPatch,
+    FloorObjectProjectionKind,
+    PerspectiveKind,
+    PlayerReplicationProtocolIdentity,
+    PlayerReplicationWatermarks,
+    SubjectivePerspective,
+)
+from server.world_contracts import StructuralEdgeKind
+from server.world_projection import project_observed_tile
+
+
+@pytest.fixture
+def subjective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Entity, Torch, Encounter]]:
+    """Create three actors where one is outside the first observer's knowledge."""
+    grid = reset_engine_runtime(grid_size=(4, 2))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Observer",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    visible = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Visible target",
+        config=EntityConfig(position=(1, 0), faction="monsters"),
+    )
+    hidden = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Hidden target",
+        config=EntityConfig(position=(3, 1), faction="monsters"),
+    )
+    torch = create_torch(observer.uuid)
+    torch.is_lit = True
+    grid.place_object(torch.uuid, (1, 1))
+
+    observer.senses.visible = {(0, 0): True, (1, 0): True, (2, 0): False}
+    observer.senses.seen = {(0, 0), (1, 0), (2, 0)}
+    observer.senses.entities = {visible.uuid: visible.position}
+    observer.senses.objects = {torch.uuid: (1, 1)}
+
+    visible.senses.visible = {(1, 0): True, (2, 0): True, (3, 1): True}
+    visible.senses.seen = {(1, 0), (2, 0), (3, 1)}
+    visible.senses.entities = {hidden.uuid: hidden.position}
+    visible.senses.objects = {}
+
+    dagger = create_dagger(observer.uuid)
+    assert observer.loot_item(dagger)
+    assert observer.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
+
+    encounter = Encounter(name="Subjective encounter", source_entity_uuid=observer.uuid)
+    for entity, initiative in ((hidden, 18), (observer, 12), (visible, 8)):
+        encounter.combatants[entity.uuid] = CombatantState(
+            source_entity_uuid=entity.uuid,
+            entity_uuid=entity.uuid,
+            controller_uuid=uuid4(),
+            initiative_total=initiative,
+        )
+    encounter.initiative_order = [hidden.uuid, observer.uuid, visible.uuid]
+    encounter.current_turn_index = 0
+    encounter.round_number = 2
+    encounter.state = EncounterState.ACTIVE
+
+    try:
+        yield grid, observer, visible, hidden, torch, encounter
+    finally:
+        reset_engine_runtime()
+
+
+def _participant(observer: Entity) -> SubjectivePerspective:
+    observer_uuid = str(observer.uuid)
+    return SubjectivePerspective(
+        perspective_epoch_id="participant-epoch",
+        kind=PerspectiveKind.CONTROLLED_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(observer_uuid,),
+        observer_entity_uuids=(observer_uuid,),
+        active_observer_uuid=observer_uuid,
+    )
+
+
+def _memory(perspective: SubjectivePerspective) -> SubjectiveSpatialMemory:
+    return SubjectiveSpatialMemory(
+        perspective_epoch_id=perspective.perspective_epoch_id,
+    )
+
+
+def test_participant_world_excludes_unknown_registry_rows_and_hidden_turn_identity(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """Objective registries cannot leak actors, initiative identity, or equipment."""
+    grid, observer, visible, hidden, torch, encounter = subjective_scene
+
+    perspective = _participant(observer)
+    world = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=_memory(perspective),
+    )
+
+    assert {entity.uuid for entity in world.state.entities} == {
+        str(observer.uuid),
+        str(visible.uuid),
+    }
+    assert str(hidden.uuid) not in world.model_dump_json()
+    assert world.state.encounter is not None
+    assert [row.uuid for row in world.state.encounter.initiative_order] == [
+        str(observer.uuid),
+        str(visible.uuid),
+    ]
+    assert world.state.encounter.current_entity_uuid is None
+    assert world.state.encounter.current_turn_index is None
+    assert set(world.equipment_by_entity) == {str(observer.uuid)}
+    assert world.visual_loadout_by_entity[str(observer.uuid)].active_weapon_set is ActiveWeaponSet.MELEE
+    assert set(world.visual_loadout_by_entity) == {
+        str(observer.uuid),
+        str(visible.uuid),
+    }
+    assert set(world.visibility.root) == {str(observer.uuid)}
+    assert {(tile.x, tile.y) for tile in world.state.grid.tiles} == {
+        (0, 0),
+        (1, 0),
+    }
+    assert all(tile.visual_key == "floor.png" for tile in world.state.grid.tiles)
+    assert len(world.state.floor_objects) == 1
+    floor_object = world.state.floor_objects[0]
+    assert floor_object.uuid == str(torch.uuid)
+    assert floor_object.object_kind is FloorObjectProjectionKind.LIGHT_SOURCE
+    assert floor_object.is_lit is True
+    assert floor_object.bright_radius_feet == torch.bright_radius_feet
+    assert "state" not in floor_object.model_dump()
+
+
+def test_spectator_union_combines_only_its_explicit_observers(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """A zero-control view unions authorized senses without objective fallback."""
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    perspective = SubjectivePerspective(
+        perspective_epoch_id="spectator-epoch",
+        kind=PerspectiveKind.SPECTATOR_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(),
+        observer_entity_uuids=(str(observer.uuid), str(visible.uuid)),
+        active_observer_uuid=str(visible.uuid),
+    )
+
+    world = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=_memory(perspective),
+    )
+
+    assert {entity.uuid for entity in world.state.entities} == {
+        str(observer.uuid),
+        str(visible.uuid),
+        str(hidden.uuid),
+    }
+    assert world.equipment_by_entity == {}
+    assert set(world.visibility.root) == {str(observer.uuid), str(visible.uuid)}
+    assert world.state.encounter is not None
+    assert world.state.encounter.current_entity_uuid == str(hidden.uuid)
+    assert world.state.encounter.current_turn_index == 0
+
+
+def test_projection_rejects_an_observer_absent_from_the_engine_registry(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """An invalid grant fails closed instead of silently becoming objective."""
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    missing_uuid = str(uuid4())
+    perspective = SubjectivePerspective(
+        perspective_epoch_id="invalid-epoch",
+        kind=PerspectiveKind.SPECTATOR_KNOWLEDGE_UNION,
+        observer_entity_uuids=(missing_uuid,),
+        active_observer_uuid=missing_uuid,
+    )
+
+    with pytest.raises(SubjectiveWorldProjectionError, match="absent"):
+        build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer, visible, hidden],
+            encounter=encounter,
+            memory=_memory(perspective),
+        )
+
+
+def test_world_diff_emits_typed_entity_replacement(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """Incremental reducers receive discriminated patches rather than opaque dictionaries."""
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+    previous = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    visible.health.add_damage(1)
+    current = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+
+    patches = diff_subjective_worlds(previous, current)
+
+    assert any(
+        isinstance(patch, EntityUpsertPatch)
+        and patch.entity.uuid == str(visible.uuid)
+        for patch in patches
+    )
+
+
+def test_hidden_body_weapon_keeps_logical_active_weapon_set(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """Natural/body attacks keep melee stance without rendering a weapon layer."""
+    _, observer, _, _, _, _ = subjective_scene
+    weapon = observer.equipment.weapon_melee_main
+    assert weapon is not None
+    weapon.equipped_visual_policy = EquippedVisualPolicy.HIDDEN
+
+    loadout = build_entity_visual_loadout(observer)
+
+    assert loadout.active_weapon_set is ActiveWeaponSet.MELEE
+    assert loadout.layers[0].equipped_visual_policy is EquippedVisualPolicy.HIDDEN
+
+
+def test_storage_chest_projects_as_container_with_explicit_visual_key(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    chest = StorageChest(
+        source_entity_uuid=observer.uuid,
+        visual_item_name="OakChest",
+        visual_variant_id="iron_bands",
+    )
+    grid.place_object(chest.uuid, (0, 1))
+    observer.senses.objects[chest.uuid] = (0, 1)
+
+    perspective = _participant(observer)
+    world = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=_memory(perspective),
+    )
+
+    projected = next(row for row in world.state.floor_objects if row.uuid == str(chest.uuid))
+    assert projected.object_kind is FloorObjectProjectionKind.CONTAINER
+    assert projected.visual_item_name == "OakChest"
+    assert projected.visual_variant_id == "iron_bands"
+
+
+def test_unseen_cell_uses_last_observed_facts_until_reobserved(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+    observer.senses.visible[(2, 0)] = True
+
+    observed = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    observed_tile = next(
+        tile for tile in observed.state.grid.tiles if (tile.x, tile.y) == (2, 0)
+    )
+
+    observer.senses.visible[(2, 0)] = False
+    live_tile = grid.get_tile(2, 0)
+    assert live_tile is not None
+    live_tile.name = "Secret changed terrain"
+    live_tile.sprite_name = "secret-terrain.png"
+    live_tile.walkable = False
+    live_tile.default_light = LightLevel.DARKNESS
+    assert live_tile.set_intrinsic_border("movement", "east", False)
+
+    hidden_world = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    remembered_tile = next(
+        tile for tile in hidden_world.state.grid.tiles if (tile.x, tile.y) == (2, 0)
+    )
+    assert remembered_tile == observed_tile.model_copy(update={"visible": False})
+    assert "Secret changed terrain" not in hidden_world.model_dump_json()
+    assert "secret-terrain.png" not in hidden_world.model_dump_json()
+
+    observer.senses.visible[(2, 0)] = True
+    refreshed = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    refreshed_tile = next(
+        tile for tile in refreshed.state.grid.tiles if (tile.x, tile.y) == (2, 0)
+    )
+    assert refreshed_tile.name == "Secret changed terrain"
+    assert refreshed_tile.visual_key == "secret-terrain.png"
+    assert refreshed_tile.walkable is False
+    assert refreshed_tile.light_level == LightLevel.DARKNESS.value
+    assert refreshed_tile.directional_blocks_movement.east is True
+
+
+def test_directional_structure_is_visible_and_remembered_without_senses_object_entry(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    wall = DirectionalWall(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=("east",),
+        blocked_channels=("movement", "vision"),
+        visual_item_name="StoneWallEdge",
+    )
+    grid.place_object(wall.uuid, (1, 0))
+    assert wall.uuid not in observer.senses.objects
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+
+    observed = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    projected = next(row for row in observed.state.floor_objects if row.uuid == str(wall.uuid))
+    assert projected.object_kind is FloorObjectProjectionKind.DIRECTIONAL_STRUCTURE
+    assert projected.visual_item_name == "StoneWallEdge"
+
+    observer.senses.visible[(1, 0)] = False
+    grid.remove_object(wall.uuid)
+    hidden_world = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    assert str(wall.uuid) in {row.uuid for row in hidden_world.state.floor_objects}
+
+    observer.senses.visible[(1, 0)] = True
+    refreshed = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    assert str(wall.uuid) not in {row.uuid for row in refreshed.state.floor_objects}
+
+
+@pytest.mark.parametrize(
+    ("wall_position", "wall_direction", "projected_direction"),
+    (
+        ((2, 1), "west", "east"),
+        ((0, 1), "east", "west"),
+        ((1, 2), "south", "north"),
+        ((1, 0), "north", "south"),
+    ),
+)
+def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
+    wall_position: tuple[int, int],
+    wall_direction: str,
+    projected_direction: str,
+) -> None:
+    """The visible side owns knowledge of the wall edge that stops its sight."""
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Boundary observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    wall = DirectionalWall(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=(wall_direction,),
+        blocked_channels=("vision",),
+    )
+    grid.place_object(wall.uuid, wall_position)
+    perspective = _participant(observer)
+
+    try:
+        world = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=_memory(perspective),
+        )
+    finally:
+        reset_engine_runtime()
+
+    assert {(tile.x, tile.y) for tile in world.state.grid.tiles} == {(1, 1)}
+    projected_tile = world.state.grid.tiles[0]
+    assert getattr(
+        projected_tile.directional_blocks_vision,
+        projected_direction,
+    ) is True
+    edge = getattr(
+        projected_tile.directional_structural_edges,
+        projected_direction,
+    )
+    assert edge is not None
+    assert edge.kind is StructuralEdgeKind.WALL
+    assert edge.is_open is None
+    assert world.state.floor_objects == ()
+
+
+@pytest.mark.parametrize(
+    ("door_position", "door_direction", "projected_direction"),
+    (
+        ((2, 1), "west", "east"),
+        ((0, 1), "east", "west"),
+        ((1, 2), "south", "north"),
+        ((1, 0), "north", "south"),
+    ),
+)
+def test_distant_closed_door_projects_only_privacy_safe_edge_identity(
+    door_position: tuple[int, int],
+    door_direction: str,
+    projected_direction: str,
+) -> None:
+    """Every visible boundary direction distinguishes a door without object facts."""
+
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Boundary observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    secret_name = f"Private Door {uuid4()}"
+    secret_visual = f"PrivateVisual{uuid4()}"
+    door = DirectionalDoor(
+        source_entity_uuid=observer.uuid,
+        name=secret_name,
+        blocked_directions=(door_direction,),
+        blocked_channels=("movement", "vision"),
+        visual_item_name=secret_visual,
+    )
+    grid.place_object(door.uuid, door_position)
+    perspective = _participant(observer)
+
+    try:
+        world = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=_memory(perspective),
+        )
+    finally:
+        reset_engine_runtime()
+
+    assert len(world.state.grid.tiles) == 1
+    projected_tile = world.state.grid.tiles[0]
+    assert getattr(
+        projected_tile.directional_blocks_vision,
+        projected_direction,
+    ) is True
+    edge = getattr(
+        projected_tile.directional_structural_edges,
+        projected_direction,
+    )
+    assert edge is not None
+    assert edge.kind is StructuralEdgeKind.DOOR
+    assert edge.is_open is False
+    assert world.state.floor_objects == ()
+    payload = world.model_dump_json()
+    assert str(door.uuid) not in payload
+    assert secret_name not in payload
+    assert secret_visual not in payload
+
+
+def test_visible_door_edge_tracks_authorized_open_and_closed_state() -> None:
+    """A known door keeps one typed edge while its blocking channels toggle."""
+
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Door observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    door = DirectionalDoor(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=("east",),
+        blocked_channels=("movement", "vision"),
+    )
+    grid.place_object(door.uuid, (1, 1))
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+
+    try:
+        closed = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=memory,
+        )
+        door.open()
+        opened = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=memory,
+        )
+    finally:
+        reset_engine_runtime()
+
+    closed_tile = closed.state.grid.tiles[0]
+    closed_edge = closed_tile.directional_structural_edges.east
+    assert closed_edge is not None
+    assert closed_edge.kind is StructuralEdgeKind.DOOR
+    assert closed_edge.is_open is False
+    assert closed_tile.directional_blocks_movement.east is True
+    assert closed_tile.directional_blocks_vision.east is True
+
+    opened_tile = opened.state.grid.tiles[0]
+    opened_edge = opened_tile.directional_structural_edges.east
+    assert opened_edge is not None
+    assert opened_edge.kind is StructuralEdgeKind.DOOR
+    assert opened_edge.is_open is True
+    assert opened_tile.directional_blocks_movement.east is False
+    assert opened_tile.directional_blocks_vision.east is False
+
+
+def test_imperceivable_hidden_door_does_not_cross_the_edge_contract() -> None:
+    """Private object identity and its derived blocker both fail closed."""
+
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Door observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    door = DirectionalDoor(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=("west",),
+        blocked_channels=("movement", "vision"),
+        is_invisible=True,
+    )
+    grid.place_object(door.uuid, (2, 1))
+    perspective = _participant(observer)
+
+    try:
+        world = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=_memory(perspective),
+        )
+    finally:
+        reset_engine_runtime()
+
+    tile = world.state.grid.tiles[0]
+    assert tile.directional_blocks_vision.east is False
+    assert tile.directional_structural_edges.east is None
+    assert world.state.floor_objects == ()
+
+
+def test_hidden_neighbor_movement_only_boundary_does_not_invent_vision_wall() -> None:
+    """A hidden movement-only edge is not promoted into visible wall knowledge."""
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Boundary observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    wall = DirectionalWall(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=("west",),
+        blocked_channels=("movement",),
+    )
+    grid.place_object(wall.uuid, (2, 1))
+    perspective = _participant(observer)
+
+    try:
+        world = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=_memory(perspective),
+        )
+    finally:
+        reset_engine_runtime()
+
+    projected_tile = world.state.grid.tiles[0]
+    assert projected_tile.directional_blocks_vision.east is False
+    assert projected_tile.directional_blocks_movement.east is False
+    assert world.state.floor_objects == ()
+
+
+def test_open_door_world_diff_drives_the_canonical_presentation_cue(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """The one world diff is the mapper's typed source for door presentation."""
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    door = DirectionalDoor(
+        source_entity_uuid=observer.uuid,
+        blocked_directions=("east",),
+        blocked_channels=("movement", "vision"),
+        visual_item_name="DirectionalDoor",
+    )
+    grid.place_object(door.uuid, (1, 0))
+    observer.senses.objects[door.uuid] = (1, 0)
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+    previous = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+
+    event_cursor = EventQueue.event_cursor()
+    door.open()
+    current = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    patches = diff_subjective_worlds(previous, current)
+    door_patch = next(patch for patch in patches if isinstance(patch, DoorStatePatch))
+    completion = next(
+        event
+        for _, event in reversed(tuple(EventQueue.iter_events_since(event_cursor)))
+        if isinstance(event, SpatialChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.object_uuid == door.uuid
+    )
+
+    mapper = CanonicalSubjectivePresentationMapper()
+    frame = mapper.project_frame(
+        CausalEventBatch(
+            slots=(ProjectedEventSlot(source_event_cursor=1, event=completion),),
+            through_source_event_cursor=1,
+            patches=patches,
+        ),
+        SubjectiveFrameProjectionContext(
+            protocol=PlayerReplicationProtocolIdentity(
+                source_stream_id="door-test",
+                generation_id="door-generation",
+                ),
+                perspective=perspective,
+                previous_watermarks=PlayerReplicationWatermarks(
+                    source_event_cursor=0,
+                    observation_cursor=0,
+                    presentation_cursor=0,
+                    combat_log_cursor=0,
+                ),
+                next_observation_cursor=1,
+        ),
+    )
+
+    assert door_patch.is_open is True
+    cue = next(cue for cue in frame.presentation if isinstance(cue, DoorPresentationCue))
+    assert cue.object_uuid == str(door.uuid)
+    assert cue.position == (1, 0)
+    assert cue.is_open is True
+
+
+def test_conflicting_door_appearances_are_conservative_and_observer_order_stable() -> None:
+    """Defensive overlap handling can never depend on observer-union order."""
+
+    grid = reset_engine_runtime(grid_size=(1, 1))
+    observer_a = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Observer A",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    observer_b = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Observer B",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    closed = DirectionalDoor(
+        source_entity_uuid=observer_a.uuid,
+        blocked_directions=("east",),
+        blocked_channels=("movement", "vision"),
+        visual_item_name="ClosedOverlap",
+    )
+    opened = DirectionalDoor(
+        source_entity_uuid=observer_b.uuid,
+        blocked_directions=("east",),
+        blocked_channels=("movement", "vision"),
+        visual_item_name="OpenOverlap",
+    )
+    opened.open()
+    grid.place_object(closed.uuid, (0, 0))
+    grid.place_object(opened.uuid, (0, 0))
+
+    try:
+        forward = project_observed_tile(
+            grid,
+            (0, 0),
+            (observer_a.uuid, observer_b.uuid),
+        )
+        reverse = project_observed_tile(
+            grid,
+            (0, 0),
+            (observer_b.uuid, observer_a.uuid),
+        )
+
+        assert forward == reverse
+        assert forward.directional_structural_edges.east is not None
+        assert forward.directional_structural_edges.east.kind is StructuralEdgeKind.DOOR
+        assert forward.directional_structural_edges.east.is_open is False
+    finally:
+        reset_engine_runtime()

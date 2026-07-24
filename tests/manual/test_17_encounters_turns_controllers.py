@@ -11,6 +11,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent, SensoryUpdateReason
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import AutoHitModifier, AutoHitStatus, DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
@@ -565,7 +566,7 @@ def test_death_checks_end_encounter_by_faction_survival(capsys) -> None:
 
     assert death_events
     assert encounter.combatants[monster.uuid].is_dead
-    assert "Dead" in monster.active_conditions
+    assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED
     assert Encounter.get_active() is None
     assert len(encounter.get_alive_combatants()) == 1
@@ -576,7 +577,7 @@ def test_death_checks_end_encounter_by_faction_survival(capsys) -> None:
             f"death check: hp={hp_before}->{monster.get_hp()}, "
             f"events={len(death_events)}, "
             f"monster_dead={encounter.combatants[monster.uuid].is_dead}, "
-            f"condition={'Dead' in monster.active_conditions}"
+            f"life_state={monster.health.life_state.value}"
         ),
         (
             f"encounter end: state={encounter.state.value}, "
@@ -594,7 +595,7 @@ def test_death_checks_end_encounter_by_faction_survival(capsys) -> None:
     print("\n".join(readout_lines))
 
     expected_lines = [
-        "death check: hp=17->0, events=1, monster_dead=yes, condition=yes",
+        "death check: hp=17->0, events=1, monster_dead=yes, life_state=dead",
         "encounter end: state=ended, active=no, alive=['Manual Hero'], dead=['Manual Skeleton']",
     ]
     assert readout_lines == expected_lines

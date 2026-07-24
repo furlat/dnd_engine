@@ -628,4 +628,6 @@ def _trace(
         subjective_affordance_row_ids=[],
         subjective_affordance_target_uuids=[],
         subjective_affordance_target_positions=[],
+        audit_controlled_entity_uuids=["hero-uuid"],
+        audit_authorized_entity_uuids=["hero-uuid"],
     )

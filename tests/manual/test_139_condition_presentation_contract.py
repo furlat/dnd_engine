@@ -1,0 +1,374 @@
+"""Focused contract tests for authoritative public condition presentation."""
+
+from collections.abc import Iterator
+from typing import Any, TypeVar
+from uuid import UUID, uuid4
+
+import pytest
+from pydantic import Field, ValidationError
+
+from devtools.generate_event_contract import import_dnd_modules
+from dnd.conditions import ConcentrationActionMarker
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.core.gridmap import GridMap
+from dnd.core.modifiers import ContextAwareCondition
+from dnd.entity import Entity, EntityConfig
+from dnd.monsters.traits import SimpleMarkerCondition
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.spells.conjuration import GuardianWarded, SpiritGuardiansTriggered
+from dnd.tile_conditions import ZoneControlCondition
+from server.player_replication.world_projection import (
+    SubjectiveSpatialMemory,
+    build_subjective_world,
+)
+from server.player_replication_contract import PerspectiveKind, SubjectivePerspective
+from server.world_projection import (
+    project_condition_summary,
+    project_entity_summary,
+    project_grid,
+    project_observed_tile,
+)
+
+ConditionT = TypeVar("ConditionT", bound=BaseCondition)
+
+
+class AlphaPresentationCondition(BaseCondition):
+    """Public fixture condition with exact backend-authored presentation."""
+
+    name: str = Field(default="Alpha State")
+    description: str = Field(default="Exact alpha rules text.")
+
+
+class BetaPresentationCondition(BaseCondition):
+    """Second public fixture condition used to prove stable ordering."""
+
+    name: str = Field(default="Beta State")
+    description: str = Field(default="Exact beta rules text.")
+    condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS)
+
+
+class SharedNameAlphaCondition(BaseCondition):
+    """First mechanic using a deliberately shared display name."""
+
+    name: str = Field(default="Shared Display Name")
+    description: str = Field(default="First shared-name mechanic.")
+
+
+class SharedNameBetaCondition(BaseCondition):
+    """Second mechanic using the same display name."""
+
+    name: str = Field(default="Shared Display Name")
+    description: str = Field(default="Second shared-name mechanic.")
+
+
+class InternalPresentationMarker(BaseCondition):
+    """Private fixture marker that must never cross the public contract."""
+
+    name: str = Field(default="Private Presentation Marker")
+    description: str = Field(default="Private marker rules text.")
+    condition_category: ConditionCategory = Field(default=ConditionCategory.INTERNAL)
+
+
+@pytest.fixture
+def presentation_grid() -> Iterator[GridMap]:
+    """Provide an isolated runtime for entity, tile, and subjective projections."""
+    grid = reset_engine_runtime(grid_size=(3, 1))
+    try:
+        yield grid
+    finally:
+        reset_engine_runtime()
+
+
+def _duration(
+    source_uuid: UUID,
+    target_uuid: UUID,
+    duration_type: DurationType,
+    value: int | ContextAwareCondition | None,
+) -> Duration:
+    """Build one live duration without relying on condition application."""
+    return Duration(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=target_uuid,
+        duration_type=duration_type,
+        duration=value,
+    )
+
+
+def _condition(
+    condition_type: type[ConditionT],
+    source_uuid: UUID,
+    target_uuid: UUID,
+    *,
+    duration_type: DurationType = DurationType.PERMANENT,
+    duration: int | ContextAwareCondition | None = None,
+    **updates: Any,
+) -> ConditionT:
+    """Construct a presentation fixture condition with explicit duration state."""
+    return condition_type(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=target_uuid,
+        duration=_duration(source_uuid, target_uuid, duration_type, duration),
+        **updates,
+    )
+
+
+def test_entity_projection_is_authoritative_filtered_and_deterministic(
+    presentation_grid: GridMap,
+) -> None:
+    """Entity names are derived from sorted, complete public detail rows."""
+    _ = presentation_grid
+    entity = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Condition bearer",
+        config=EntityConfig(position=(1, 0), faction="heroes"),
+    )
+    beta = _condition(
+        BetaPresentationCondition,
+        entity.uuid,
+        entity.uuid,
+        duration_type=DurationType.PERMANENT,
+    )
+    internal = _condition(
+        InternalPresentationMarker,
+        entity.uuid,
+        entity.uuid,
+        duration_type=DurationType.ROUNDS,
+        duration=9,
+    )
+    alpha = _condition(
+        AlphaPresentationCondition,
+        entity.uuid,
+        entity.uuid,
+        duration_type=DurationType.ROUNDS,
+        duration=3,
+    )
+    entity.active_conditions[beta.name] = beta
+    entity.active_conditions[internal.name] = internal
+    entity.active_conditions[alpha.name] = alpha
+
+    summary = project_entity_summary(entity)
+
+    assert summary.conditions == ["Alpha State", "Beta State"]
+    assert summary.conditions == [detail.name for detail in summary.condition_details]
+    assert [detail.semantic_key for detail in summary.condition_details] == [
+        alpha.get_semantic_key(),
+        beta.get_semantic_key(),
+    ]
+    assert summary.condition_details[0].description == "Exact alpha rules text."
+    assert summary.condition_details[0].category == "condition"
+    assert summary.condition_details[0].duration_type == "rounds"
+    assert summary.condition_details[0].remaining_rounds == 3
+    assert summary.condition_details[1].category == "status"
+    assert summary.condition_details[1].duration_type == "permanent"
+    assert summary.condition_details[1].remaining_rounds is None
+    assert internal.name not in summary.model_dump_json()
+
+    mismatched = summary.model_dump(mode="python")
+    mismatched["conditions"] = ["Drifted legacy name"]
+    with pytest.raises(ValidationError, match="condition detail names"):
+        type(summary).model_validate(mismatched)
+
+
+def test_non_round_durations_never_expose_remaining_rounds() -> None:
+    """Only round-based duration state crosses the public DTO."""
+    source_uuid = uuid4()
+    target_uuid = uuid4()
+    conditional = lambda *_args: False
+    cases = (
+        (DurationType.PERMANENT, None),
+        (DurationType.ON_CONDITION, conditional),
+        (DurationType.UNTIL_LONG_REST, None),
+    )
+
+    for duration_type, duration in cases:
+        condition = _condition(
+            AlphaPresentationCondition,
+            source_uuid,
+            target_uuid,
+            duration_type=duration_type,
+            duration=duration,
+        )
+        detail = project_condition_summary(condition)
+        assert detail.duration_type == duration_type.value
+        assert detail.remaining_rounds is None
+
+
+def test_same_display_name_keeps_distinct_backend_semantic_keys() -> None:
+    """Class identity, not display text, remains the authoritative mechanic key."""
+    source_uuid = uuid4()
+    target_uuid = uuid4()
+    first = _condition(SharedNameAlphaCondition, source_uuid, target_uuid)
+    second = _condition(SharedNameBetaCondition, source_uuid, target_uuid)
+
+    first_detail = project_condition_summary(first)
+    second_detail = project_condition_summary(second)
+
+    assert first_detail.name == second_detail.name == "Shared Display Name"
+    assert first_detail.semantic_key != second_detail.semantic_key
+    assert first_detail.semantic_key == first.get_semantic_key()
+    assert second_detail.semantic_key == second.get_semantic_key()
+
+
+def test_tile_details_share_name_visibility_and_subjective_memory_policy(
+    presentation_grid: GridMap,
+) -> None:
+    """Rich tile rows cannot reveal a condition hidden from the legacy name list."""
+    grid = presentation_grid
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Tile observer",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    observer.senses.visible = {(0, 0): True, (1, 0): True}
+    observer.senses.seen = {(0, 0), (1, 0)}
+    observer.senses.entities = {}
+    observer.senses.objects = {}
+    tile = grid.get_tile(1, 0)
+    assert tile is not None
+    passive_perception = observer.get_passive_perception()
+
+    visible = _condition(
+        AlphaPresentationCondition,
+        observer.uuid,
+        tile.uuid,
+        condition_stealth_dc=passive_perception - 1,
+    )
+    hidden = _condition(
+        BetaPresentationCondition,
+        observer.uuid,
+        tile.uuid,
+        condition_stealth_dc=passive_perception,
+        description="SECRET HIDDEN TILE DESCRIPTION",
+        semantic_key="secret.hidden.tile.semantic-key",
+    )
+    internal = _condition(
+        InternalPresentationMarker,
+        observer.uuid,
+        tile.uuid,
+    )
+    tile.active_conditions[hidden.name] = hidden
+    tile.active_conditions[internal.name] = internal
+    tile.active_conditions[visible.name] = visible
+
+    observed = project_observed_tile(grid, (1, 0), (observer.uuid,))
+    objective_for_observer = next(
+        row
+        for row in project_grid(grid, observer.uuid).tiles
+        if (row.x, row.y) == (1, 0)
+    )
+
+    assert observed.conditions == ["Alpha State"]
+    assert observed.conditions == [detail.name for detail in observed.condition_details]
+    assert observed.condition_details == objective_for_observer.condition_details
+    assert "SECRET HIDDEN TILE DESCRIPTION" not in observed.model_dump_json()
+    assert "secret.hidden.tile.semantic-key" not in observed.model_dump_json()
+    assert internal.name not in observed.model_dump_json()
+
+    perspective = SubjectivePerspective(
+        perspective_epoch_id="condition-detail-epoch",
+        kind=PerspectiveKind.CONTROLLED_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(str(observer.uuid),),
+        observer_entity_uuids=(str(observer.uuid),),
+        active_observer_uuid=str(observer.uuid),
+    )
+    subjective = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=(observer,),
+        encounter=None,
+        memory=SubjectiveSpatialMemory(
+            perspective_epoch_id=perspective.perspective_epoch_id,
+        ),
+    )
+    subjective_tile = next(
+        row
+        for row in subjective.state.grid.tiles
+        if (row.x, row.y) == (1, 0)
+    )
+
+    assert subjective_tile.condition_details == observed.condition_details
+    assert subjective_tile.conditions == observed.conditions
+    assert "SECRET HIDDEN TILE DESCRIPTION" not in subjective.model_dump_json()
+    assert "secret.hidden.tile.semantic-key" not in subjective.model_dump_json()
+
+    mismatched = subjective_tile.model_dump(mode="python")
+    mismatched["conditions"] = ["Drifted tile name"]
+    with pytest.raises(ValidationError, match="condition detail names"):
+        type(subjective_tile).model_validate(mismatched)
+
+
+def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
+    presentation_grid: GridMap,
+) -> None:
+    """Generic tile records retain the concrete zone mechanic's presentation."""
+    source_uuid = uuid4()
+    tile = presentation_grid.get_tile(1, 0)
+    assert tile is not None
+    zone = ZoneControlCondition(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=source_uuid,
+        name="Authored Zone",
+        description="Exact authored zone rules text.",
+        marker_name="Authored Zone",
+        affected_positions={(1, 0)},
+    )
+
+    zone._apply_tile_markers()
+
+    marker = tile.active_conditions["Authored Zone"]
+    detail = project_condition_summary(marker)
+    assert detail.semantic_key == f"{zone.get_semantic_key()}.tile"
+    assert detail.description == "Exact authored zone rules text."
+
+
+@pytest.mark.parametrize(
+    "condition_type",
+    (
+        SimpleMarkerCondition,
+        ConcentrationActionMarker,
+        SpiritGuardiansTriggered,
+        GuardianWarded,
+    ),
+)
+def test_tracking_only_conditions_are_internal(
+    condition_type: type[BaseCondition],
+) -> None:
+    """Lifecycle and already-triggered markers cannot become public tooltips."""
+    category = condition_type.model_fields["condition_category"].get_default(
+        call_default_factory=True,
+    )
+    assert category is ConditionCategory.INTERNAL
+
+
+def test_every_public_condition_class_declares_name_and_description() -> None:
+    """Reachable public condition types cannot fall back to missing tooltip text."""
+    import_dnd_modules()
+    seen: set[type[BaseCondition]] = set()
+    pending = list(BaseCondition.__subclasses__())
+    failures: list[str] = []
+
+    while pending:
+        condition_type = pending.pop()
+        pending.extend(condition_type.__subclasses__())
+        if condition_type in seen:
+            continue
+        seen.add(condition_type)
+        fields = condition_type.model_fields
+        category = fields["condition_category"].get_default(
+            call_default_factory=True,
+        )
+        if category is ConditionCategory.INTERNAL:
+            continue
+        name = fields["name"].get_default(call_default_factory=True)
+        description = fields["description"].get_default(
+            call_default_factory=True,
+        )
+        if not isinstance(name, str) or not name.strip():
+            failures.append(f"{condition_type.__module__}.{condition_type.__name__}: name")
+        if not isinstance(description, str) or not description.strip():
+            failures.append(
+                f"{condition_type.__module__}.{condition_type.__name__}: description"
+            )
+
+    assert failures == []

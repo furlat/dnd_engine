@@ -73,11 +73,13 @@ const startRequest: GameCreationStartRequest = {
 
 test("game creation client uses the typed catalog and preflight routes", async () => {
   const calls: Array<{ path: string; init?: RequestInit }> = [];
-  const client = new DndEngineClient("http://engine.test", async (input, init) => {
-    const url = new URL(String(input));
-    calls.push({ path: url.pathname, ...(init === undefined ? {} : { init }) });
-    const payload = url.pathname.endsWith("/catalog") ? catalog : compatibility;
-    return jsonResponse(payload);
+  const client = new DndEngineClient("http://engine.test", {
+    fetchImplementation: async (input, init) => {
+      const url = new URL(String(input));
+      calls.push({ path: url.pathname, ...(init === undefined ? {} : { init }) });
+      const payload = url.pathname.endsWith("/catalog") ? catalog : compatibility;
+      return jsonResponse(payload);
+    },
   });
 
   assert.deepEqual(await client.getGameCreationCatalog(), catalog);
@@ -108,17 +110,17 @@ test("game creation client sends the exact atomic start request", async () => {
     entity_name: "Hero",
     round: 1,
     turn_index: 0,
-    ai_actions: [],
-    new_log_since: 0,
     event_cursor_after: 0,
     combat_log_cursor_after: 0,
   };
-  const client = new DndEngineClient("http://engine.test", async (input, init) => {
-    captured = {
-      path: new URL(String(input)).pathname,
-      body: JSON.parse(String(init?.body)),
-    };
-    return jsonResponse(response);
+  const client = new DndEngineClient("http://engine.test", {
+    fetchImplementation: async (input, init) => {
+      captured = {
+        path: new URL(String(input)).pathname,
+        body: JSON.parse(String(init?.body)),
+      };
+      return jsonResponse(response);
+    },
   });
 
   assert.deepEqual(await client.startGameCreation(startRequest), response);
@@ -134,8 +136,11 @@ function sideResult(sideId: "side_a" | "side_b", controller: "human" | "ai") {
     title: sideId === "side_a" ? "Berserker" : "Goblins",
     controller,
     participant_name: sideId === "side_a" ? "Player" : "Opposition",
-    entities: [],
-    human_entity_uuids: sideId === "side_a" ? ["hero"] : [],
+    entity_assignments: [{
+      entity_uuid: sideId === "side_a" ? "hero" : "goblin",
+      entity_name: sideId === "side_a" ? "Hero" : "Goblin",
+      faction: sideId === "side_a" ? "heroes" : "monsters",
+    }],
     fallback_ai_session_id: sideId === "side_b" ? "ai-session" : null,
     codex_session_id: null,
     takeover_claim_id: null,

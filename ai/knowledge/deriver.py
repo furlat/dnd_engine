@@ -22,11 +22,11 @@ from ai.knowledge.models import (
     TopologyFacts,
     target_effect_hypothesis_key,
 )
-from ai.observation.models import KnowledgeState, SubjectiveWorldState
+from server.agent_protocol.observation import KnowledgeState, SubjectiveWorldState
 from ai.knowledge.replay import entity_fact_replay_token
-from ai.protocol.control import ActionAffordance
-from ai.protocol.immutable import FrozenDict
-from ai.protocol.semantics import ActionSemantics, ActionTag
+from server.agent_protocol.control import ActionAffordance
+from server.agent_protocol.immutable import FrozenDict
+from server.agent_protocol.semantics import ActionSemantics, ActionTag
 
 
 SectionT = TypeVar("SectionT")

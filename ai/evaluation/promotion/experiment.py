@@ -18,6 +18,7 @@ from ai.evaluation.config_ladder.worker_contracts import (
     AttemptOutcome,
     CoordinatorSummary,
     MatchWorkerRequest,
+    PROMOTION_MATCH_ENTRYPOINT,
     RequestFactory,
     WorkerArtifactEnvelope,
     WorkerTaskMode,
@@ -57,9 +58,6 @@ from ai.policy.generations import (
 )
 from dnd.scenarios.evaluation.battlefield_catalog import BATTLEFIELDS
 from dnd.scenarios.evaluation.combatant_catalog import list_combatant_configurations
-
-
-PROMOTION_MATCH_ENTRYPOINT = "ai.evaluation.promotion.match_runner:run_promotion_match"
 
 
 class PromotionExperimentAnalysis(PromotionEvidenceGates):

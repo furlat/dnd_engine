@@ -10,7 +10,7 @@ from typing import get_args, get_origin
 
 from pydantic import BaseModel
 
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     _UNORDERED_SEMANTIC_FIELDS,
     action_semantics_payload_ref,
@@ -108,7 +108,7 @@ def test_ordered_effect_sequences_remain_order_sensitive() -> None:
 def test_frozenset_semantics_hash_identically_across_processes() -> None:
     """Real model dumps must produce one reference under different hash seeds."""
     script = """
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     EffectDisposition,

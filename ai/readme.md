@@ -19,8 +19,10 @@ flowchart LR
 ## Architectural Boundary
 
 The authoritative engine remains objective and event driven. The observation
-projector filters that history by session ownership and perception before an
-agent sees it. The local runtime bootstraps once from a snapshot, then reduces
+projector in `server.agent_runtime` filters that history by session ownership
+and perception before an agent sees it. The transport contracts and replay
+reducers it emits live in the server-owned `server.agent_protocol` package.
+The client-facing runtime in `ai` bootstraps once from a snapshot, then reduces
 cursor-ordered subjective event envelopes into its local world state.
 
 Legal choices are server-authored affordances in a `DecisionEpoch`. Agents do
@@ -35,28 +37,84 @@ The runtime never reads objective `/state` or `/visibility`. Hidden entities,
 objects, and event details must not enter policy inputs, telemetry, or replay
 artifacts.
 
+The ownership boundary is one-way: `dnd` and `server` never import `ai`.
+Server code may depend on dependency-neutral engine types such as condition
+tags and life-state enums, while client-facing AI consumes the public server
+protocol. An in-process self-play or evaluation harness may compose both sides,
+but it does not make the AI package part of the game server.
+
 ## Package Layers
 
-- `ai.protocol`: dependency-neutral Pydantic contracts for epochs,
-  affordances, costs, semantics, and commands.
-- `ai.observation`: server-side projection from objective engine history to a
-  session-subjective snapshot and ordered event envelopes.
+- `server.agent_protocol`: server-owned, dependency-neutral contracts for
+  epochs, affordances, observations, costs, semantics, commands, telemetry,
+  gauntlet reporting, and deterministic observation replay.
+- `server.agent_runtime`: server-owned adapters that know about engine and
+  session state: observation projection, action-semantic enrichment,
+  decision-epoch construction, command revalidation, and the
+  dependency-neutral managed-agent service lifecycle.
+- `server.runtime_performance`: shared latency-sensitive runtime controls used
+  by server paths and in-process validation.
 - `ai.subjective`: client-side store, hooks, processors, queries, printers, and
   stream runtime.
-- `ai.semantics`: typed meanings attached to engine-authored action
-  capabilities and affordances.
 - `ai.knowledge`: deterministic derivation of actor, contact, object, and
   topology facts from subjective data.
 - `ai.policy`: the shared hierarchy, routines, utility arbitration, memory,
-  command binding, and `PolicyHost` lifecycle.
+  command binding, `PolicyHost` lifecycle, and client-owned source manifest.
 - `ai.codex_tools`: takeover and hot-runtime tools that expose the same local
   subjective state and policy contract to Codex. The takeover HTTP client owns
   only lease transport; it has no snapshot, action, watch, or command loop.
-- `ai.external_agent`: the normal out-of-process controller consuming
-  `SubjectiveRuntime` and `PolicyHost`.
+- `ai.external_agent`: the direct HTTP/SSE controller used by the isolated
+  process composition.
+- `ai.in_process_agent_service`: the standalone embedded adapter. It owns the
+  concrete policy import and registers only the neutral service contract with
+  the server.
 - `ai.external_selfplay`: the same controller stack connected to both sides for
   fast validation.
 - `ai.evaluation`: immutable run artifacts and dashboard projection.
+
+## Playable Local Server
+
+Managed AI is an explicit registered service, not an ambient server import or
+environment-variable fallback. Start the complete local composition with:
+
+```bash
+uv run python -m ai.local_game_server --host 127.0.0.1 --port 8000
+```
+
+`ai.local_game_server` imports the bundled policy once while the backend boots,
+then registers an embedded service through the server-owned neutral protocol.
+Each AI session receives a fresh policy host, memory, subjective runtime,
+telemetry pipeline, and managed thread. It still bootstraps and acts only
+through the canonical subjective HTTP/SSE and command routes; embedding grants
+no engine, `Entity`, objective-state, or event-queue shortcut.
+
+Game creation therefore does not start another Python interpreter or repeat
+the policy import graph. The server stops and joins every managed runtime on
+session deletion, world replacement, reset, or shutdown. A managed start
+succeeds only after every runtime validates its subjective snapshot, receives
+the first observation-stream sync, and returns its manager-issued one-time
+readiness proof.
+
+Use the isolated equivalent when process fault isolation is desired:
+
+```bash
+uv run python -m ai.isolated_game_server --host 127.0.0.1 --port 8000
+```
+
+Both compositions use the same server protocol, readiness, rollback, and
+diagnostics. Only placement differs. Importing the core server alone registers
+no agent service, advertises only human game creation, and rejects managed-AI
+starts before mutating live game state. The agent attachment endpoint comes
+from the ASGI listener or trusted `DND_AGENT_INTERNAL_BASE_URL`, never the
+client `Host` header.
+
+For multi-game hosting, run `ai.game_gateway:app`. The gateway parent imports
+only lightweight composition identities; each already-isolated, prewarmed game
+worker imports `ai.local_game_server:app` and embeds fresh per-session policy
+instances. `ai.isolated_game_gateway:app` is the opt-in nested-process variant.
+The core `server.game_gateway:app` remains human-only. Every warm worker proves
+its exact managed service ID and execution mode through `/ai/service` before
+the gateway advertises or admits managed controllers.
 
 ## Decision Lifecycle
 
@@ -96,6 +154,11 @@ correlated by session, actor, observation cursor, epoch, and command ID. Engine
 events and subjective observation frames remain the information carriers for
 game state.
 
+Policy source introspection is client-owned. `ai.policy.source` may build the
+filesystem-backed manifest, while the server accepts only an opaque
+`PolicySourceManifest` supplied by a composition root. A server-only deployment
+does not inspect or require an `ai` directory.
+
 ## Validation
 
 Focused tests live in `tests/manual/test_28_subjective_observation_stream.py`
@@ -124,8 +187,8 @@ uv run python -m ai.evaluation.gauntlet_runner run --mode smoke
 The runner builds a deterministic `GauntletSchedule`, validates every arena ID
 against `dnd/scenarios/ai_validation_arenas.py`, runs the production
 external-self-play stack, writes raw run artifacts under `ai/evidence/runs/`,
-writes the compact gauntlet summary under `ai/evidence/gauntlets/`, and updates
-`ai/evidence/gauntlets/latest.json`.
+writes the compact server-readable gauntlet summary under
+`evidence/gauntlets/`, and updates `evidence/gauntlets/latest.json`.
 
 Useful commands:
 
@@ -134,9 +197,9 @@ uv run python -m ai.evaluation.gauntlet_runner schedule --mode rotation
 uv run python -m ai.evaluation.gauntlet_runner run --mode smoke --seed 44 --max-commands 40
 uv run python -m ai.evaluation.gauntlet_runner run --mode smoke --watcher-base-url http://127.0.0.1:8000
 uv run python -m ai.evaluation.gauntlet_runner run --mode release --require-gate-pass
-uv run python -m ai.evaluation.gauntlet_runner check ai/evidence/gauntlets/latest.json --require-gate-pass --require-latency-pass
-uv run python -m ai.evaluation.gauntlet_runner check ai/evidence/gauntlets/latest.json --require-gate-pass
-uv run python -m ai.evaluation.gauntlet_runner schedule --mode regression --regression-source ai/evidence/gauntlets/latest.json
+uv run python -m ai.evaluation.gauntlet_runner check evidence/gauntlets/latest.json --require-gate-pass --require-latency-pass
+uv run python -m ai.evaluation.gauntlet_runner check evidence/gauntlets/latest.json --require-gate-pass
+uv run python -m ai.evaluation.gauntlet_runner schedule --mode regression --regression-source evidence/gauntlets/latest.json
 uv run python -m ai.evaluation.gauntlet_runner run --mode content --arena-id zone_control_web_gauntlet --arena-id item_resource_gauntlet
 ```
 
@@ -214,7 +277,7 @@ gauntlet is still running.
 
 If no live gauntlet events are retained, the watcher asks
 `GET /ai/gauntlets/latest`, then falls back to
-`ai/evidence/gauntlets/latest.json` directly, with tournament JSON as a legacy
+`evidence/gauntlets/latest.json` directly, with tournament JSON as a legacy
 fallback. It does not contain manual statistics. It renders only fields present
 in retained JSON or the live watcher projection, including subjectivity status,
 latency status, stale/rejected totals, max command latency, ratings, failures,

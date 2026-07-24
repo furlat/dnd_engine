@@ -12,7 +12,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import (
     AutoHitModifier,

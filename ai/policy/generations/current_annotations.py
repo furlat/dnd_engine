@@ -1,7 +1,7 @@
 """Logical method contracts owned exclusively by the current candidate."""
 
 from ai.planning.registry import PolicyMethodContract
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ComparisonOperator,
     EffectOperation,
     FactExpression,

@@ -35,6 +35,8 @@ from dnd.core.events import (
 )
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from server.objective_replay import ObjectiveReplaySeed
+from server.objective_state import build_current_objective_world
 
 
 DEFAULT_WORKER_SUMMARY_CAPACITY = 32
@@ -49,6 +51,8 @@ class _EncounterCapture:
     initial_snapshot_complete: bool
     event_origin: int
     combat_log_origin: int | None
+    replay_generation_id: str
+    replay_seed: ObjectiveReplaySeed | None
 
 
 class WorkerSummaryEvidence(BaseModel):
@@ -60,6 +64,20 @@ class WorkerSummaryEvidence(BaseModel):
     summary: GameSummary = Field(description="Canonical objective terminal summary.")
     source_event_digest: str = Field(min_length=64, max_length=64, description="Digest of typed event versions.")
     source_combat_log_digest: str = Field(min_length=64, max_length=64, description="Digest of structured combat logs.")
+
+
+class WorkerReplayCapture(BaseModel):
+    """Cold coordinates needed to materialize one terminal replay artifact."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    generation_id: str = Field(min_length=1)
+    game_id: str = Field(min_length=1)
+    encounter_uuid: str = Field(min_length=1)
+    source_stream_id: str = Field(min_length=1)
+    seed: ObjectiveReplaySeed
+    terminal_event_cursor: int = Field(ge=1)
+    terminal_combat_log_cursor: int = Field(ge=0)
 
 
 class WorkerGameSummaryStore:
@@ -75,6 +93,7 @@ class WorkerGameSummaryStore:
         self._max_summaries = max_summaries
         self._captures: dict[UUID, _EncounterCapture] = {}
         self._summaries: OrderedDict[str, WorkerSummaryEvidence] = OrderedDict()
+        self._replay_captures: OrderedDict[str, WorkerReplayCapture] = OrderedDict()
         self._lock = RLock()
         self.ensure_attached()
 
@@ -87,6 +106,7 @@ class WorkerGameSummaryStore:
         with self._lock:
             self._captures.clear()
             self._summaries.clear()
+            self._replay_captures.clear()
         self.ensure_attached()
 
     def ensure_attached(self) -> None:
@@ -166,6 +186,29 @@ class WorkerGameSummaryStore:
                 )
             return evidence.model_copy(deep=True) if evidence is not None else None
 
+    def get_replay_capture(
+        self,
+        game_id: str | UUID | None = None,
+    ) -> WorkerReplayCapture | None:
+        """Return immutable seed and terminal coordinates for replay assembly."""
+        with self._lock:
+            if not self._replay_captures:
+                return None
+            if game_id is None:
+                return next(reversed(self._replay_captures.values())).model_copy(deep=True)
+            identifier = str(game_id)
+            capture = self._replay_captures.get(identifier)
+            if capture is None:
+                capture = next(
+                    (
+                        candidate
+                        for candidate in self._replay_captures.values()
+                        if candidate.encounter_uuid == identifier
+                    ),
+                    None,
+                )
+            return capture.model_copy(deep=True) if capture is not None else None
+
     def _on_event_batch(self, events: Sequence[Event]) -> None:
         """Capture encounter boundaries observed in an authoritative batch.
 
@@ -188,11 +231,23 @@ class WorkerGameSummaryStore:
 
         initial_entities, snapshot_complete = _capture_entities(event.combatant_uuids)
         encounter = Encounter.get(event.encounter_uuid)
+        replay_generation_id = str(EventQueue.generation_id())
+        replay_seed = (
+            ObjectiveReplaySeed(
+                event_cursor=EventQueue.event_cursor(),
+                combat_log_cursor=len(encounter.combat_log),
+                world=build_current_objective_world(encounter=encounter),
+            )
+            if encounter is not None
+            else None
+        )
         capture = _EncounterCapture(
             initial_entities=initial_entities,
             initial_snapshot_complete=snapshot_complete,
             event_origin=event_origin,
             combat_log_origin=(len(encounter.combat_log) if encounter is not None else None),
+            replay_generation_id=replay_generation_id,
+            replay_seed=replay_seed,
         )
         with self._lock:
             self._captures[event.encounter_uuid] = capture
@@ -272,6 +327,24 @@ class WorkerGameSummaryStore:
                 ),
             )
         )
+        if (
+            capture is not None
+            and capture.replay_seed is not None
+            and terminal_event_index is not None
+            and capture.replay_generation_id == str(EventQueue.generation_id())
+            and capture.replay_seed.event_cursor <= terminal_event_index
+        ):
+            self._retain_replay_capture(
+                WorkerReplayCapture(
+                    generation_id=capture.replay_generation_id,
+                    game_id=game_id,
+                    encounter_uuid=str(event.encounter_uuid),
+                    source_stream_id=str(event.encounter_uuid),
+                    seed=capture.replay_seed,
+                    terminal_event_cursor=terminal_event_index + 1,
+                    terminal_combat_log_cursor=combat_log_cursor,
+                )
+            )
 
     def _retain(self, evidence: WorkerSummaryEvidence) -> None:
         """Retain one summary and evict the oldest entry when necessary."""
@@ -280,6 +353,14 @@ class WorkerGameSummaryStore:
             self._summaries[evidence.summary.game_id] = evidence.model_copy(deep=True)
             while len(self._summaries) > self._max_summaries:
                 self._summaries.popitem(last=False)
+
+    def _retain_replay_capture(self, capture: WorkerReplayCapture) -> None:
+        """Retain terminal replay coordinates under the same bounded policy."""
+        with self._lock:
+            self._replay_captures.pop(capture.game_id, None)
+            self._replay_captures[capture.game_id] = capture.model_copy(deep=True)
+            while len(self._replay_captures) > self._max_summaries:
+                self._replay_captures.popitem(last=False)
 
 
 def _canonical_digest(value: object) -> str:
@@ -340,6 +421,7 @@ def _capture_entity(entity: Entity) -> EntitySnapshotV1:
             0,
             entity.health.temporary_hit_points.normalized_score,
         ),
+        life_state=entity.health.life_state,
         is_defeated=not entity.is_encounter_alive,
         position=entity.position,
         condition_semantic_keys=condition_semantic_keys,
@@ -353,6 +435,7 @@ game_summary_store = WorkerGameSummaryStore()
 __all__ = [
     "DEFAULT_WORKER_SUMMARY_CAPACITY",
     "WorkerGameSummaryStore",
+    "WorkerReplayCapture",
     "WorkerSummaryEvidence",
     "game_summary_store",
 ]

@@ -1,11 +1,11 @@
-"""Inspectable source snapshot for the shared subjective policy stack."""
+"""Inspectable source snapshot for the client-facing subjective policy stack."""
 
 from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from server.agent_protocol.telemetry import PolicySourceManifest
 
 
 POLICY_NAME = "shared_subjective_hierarchical_policy"
@@ -13,10 +13,10 @@ POLICY_VERSION = "2026-07-18.shared-policy-v32-candidate-valuation"
 CONTROLLER_PROFILE = "unified_ai_current"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 POLICY_SOURCE_RELATIVE_PATHS = (
-    "ai/protocol/control.py",
-    "ai/protocol/semantics.py",
-    "ai/semantics/actions.py",
-    "ai/subjective/epochs.py",
+    "server/agent_protocol/control.py",
+    "server/agent_protocol/semantics.py",
+    "server/agent_runtime/action_semantics.py",
+    "server/agent_runtime/epochs.py",
     "ai/knowledge/deriver.py",
     "ai/knowledge/models.py",
     "ai/knowledge/topology.py",
@@ -38,18 +38,6 @@ POLICY_SOURCE_RELATIVE_PATHS = (
 POLICY_SOURCE_PATHS = tuple(REPOSITORY_ROOT / path for path in POLICY_SOURCE_RELATIVE_PATHS)
 
 
-class PolicySourceSnapshot(BaseModel):
-    """Versioned source manifest for the shared traditional and LLM policy."""
-
-    policy_name: str = Field(description="Stable policy identifier.")
-    policy_version: str = Field(description="Human-readable policy version label.")
-    source_path: str = Field(description="Primary repository-relative policy entry point.")
-    source_paths: list[str] = Field(description="Ordered repository-relative paths in the source manifest.")
-    source_sha256: str = Field(description="SHA-256 hash of the exact composite source manifest.")
-    line_count: int = Field(description="Number of lines in the composite source manifest.")
-    source: str = Field(description="Exact composite policy source manifest.")
-
-
 def policy_source() -> str:
     """Return a deterministic manifest of every decision-bearing source file."""
     sections = []
@@ -59,10 +47,10 @@ def policy_source() -> str:
     return "\n".join(sections)
 
 
-def policy_source_snapshot() -> PolicySourceSnapshot:
-    """Return a versioned, hashable snapshot for the shared policy stack."""
+def policy_source_snapshot() -> PolicySourceManifest:
+    """Build the client-owned policy source manifest supplied to observers."""
     source = policy_source()
-    return PolicySourceSnapshot(
+    return PolicySourceManifest(
         policy_name=POLICY_NAME,
         policy_version=POLICY_VERSION,
         source_path="ai/policy/host.py",

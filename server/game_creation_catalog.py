@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
 from dnd.scenarios.evaluation.battlefield_catalog import BATTLEFIELDS, get_battlefield
@@ -16,6 +16,7 @@ from dnd.scenarios.evaluation.deployment_catalog import DEPLOYMENTS, get_deploym
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
 from server.api_models import (
     GameCreationCatalogResponse,
+    GameCreationControllerKind,
     GameCreationPreflightRequest,
     GameCreationPreset,
 )
@@ -45,12 +46,14 @@ class GameCreationCatalogError(ValueError):
         }
 
 
-def build_game_creation_catalog() -> GameCreationCatalogResponse:
+def build_game_creation_catalog(
+    controllers: Sequence[GameCreationControllerKind] = ("human", "ai", "codex"),
+) -> GameCreationCatalogResponse:
     """Build the canonical game-creation catalog without engine mutation.
 
     Returns:
-        Complete controller, composition, battlefield, deployment, and preset
-        catalog consumed by standalone and hosted clients.
+        Complete composition, battlefield, deployment, and preset catalog,
+        limited to the controller services supported by the caller.
     """
     specs_by_id = {
         spec.arena_id: spec
@@ -68,7 +71,7 @@ def build_game_creation_catalog() -> GameCreationCatalogResponse:
         for recipe in LEGACY_RECIPES
     ]
     return GameCreationCatalogResponse(
-        controllers=["human", "ai", "codex"],
+        controllers=list(controllers),
         opening_sides=["initiative", "side_a", "side_b"],
         hero_configurations=list(HERO_CONFIGURATIONS),
         monster_configurations=list(MONSTER_PARTY_CONFIGURATIONS),

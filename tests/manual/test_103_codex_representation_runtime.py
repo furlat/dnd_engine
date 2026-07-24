@@ -35,11 +35,11 @@ from ai.codex_tools.representation.profiles import (
     CURRENT_V1_PROFILE_ID,
 )
 from ai.knowledge.models import AgentFacts
-from ai.observation.models import SubjectiveWorldState
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.policy import PolicyDecision, PolicyHost
 from ai.policy.contracts import PolicyExecutionConstraints
 from ai.policy.host import PolicyTelemetrySink
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ComparisonOperator,
     FactExpression,
     FactOperator,

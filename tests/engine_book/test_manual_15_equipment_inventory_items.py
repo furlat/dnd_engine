@@ -11,7 +11,8 @@ from dnd.blocks.inventory import Inventory
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
@@ -269,6 +270,7 @@ def test_consumable_use_actions_bind_to_items_and_consume_stacks() -> None:
     assert potion.stack_count == 1
     assert hero.inventory.has_item(potion.uuid)
 
+    hero.action_economy.reset_all_costs()
     second = execute_use_action(hero, potion.uuid, "Drink Potion")
 
     assert second is not None and not second.canceled

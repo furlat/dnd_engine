@@ -18,7 +18,8 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
 from dnd.core.base_actions import ActionCategory, TargetType
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, HazardFilter
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
@@ -105,6 +106,10 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     Entity.update_all_entities_senses()
 
     available = get_available_actions(hero)
+    entity_names = {
+        info.template_name for info in available.entity_actions
+    }
+    assert "Shove" in entity_names
     dash_info = next(
         info for info in available.self_actions if info.template_name == "Dash"
     )
@@ -162,7 +167,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     expected_lines = [
         "actor: Scout",
         "movement left: 30",
-        "groups: entity=2, position=2, self=4, object=0",
+        "groups: entity=3, position=2, self=4, object=0",
         "dash row: target=self, cost=1 actions, afford=True",
         "move row: target 0 -> (5, 6), distance=5, path=[(5, 5), (5, 6)]",
         "attack row: Scimitar -> Skeleton, distance=5",
@@ -244,12 +249,14 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     available = get_available_actions(hero)
     self_names = {info.template_name for info in available.self_actions}
     position_names = {info.template_name for info in available.position_actions}
+    entity_names = {info.template_name for info in available.entity_actions}
 
     assert available.entity_uuid == hero.uuid
     assert available.remaining_movement == hero.action_economy.movement.normalized_score
     assert {"Dash", "Dodge", "Disengage"}.issubset(self_names)
     assert "Move" in position_names
     assert "Jump" in position_names
+    assert "Shove" in entity_names
 
     dash_info = find_action(available, "Dash")
     assert dash_info.target_type == TargetType.SELF
@@ -311,7 +318,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     expected_discovery_lines = [
         "entity uuid matches actor: True",
         "remaining movement: 30",
-        "groups: entity=2, position=2, self=4, object=0",
+        "groups: entity=3, position=2, self=4, object=0",
         "self actions include: ['Dash', 'Disengage', 'Dodge']",
         "dash row: target=self, index=0, cost=1 actions, afford=True",
         "move row: category=movement, target=(5, 6), path=[(5, 5), (5, 6)]",
@@ -671,6 +678,10 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     assert hazard_target.safe_path_cost is not None
     assert hazard_position in hazard_target.path[1:]
     assert hazard_position not in hazard_target.safe_path[1:]
+    assert hazard_target.safe_path in (
+        [(5, 3), (5, 4), (4, 5), (5, 6)],
+        [(5, 3), (5, 4), (6, 5), (5, 6)],
+    )
 
     movement_before = scout.action_economy.movement.normalized_score
     result = execute_by_index(
@@ -707,7 +718,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     expected_safe_lines = [
         "hazard target position: (5, 6)",
         "unsafe path: [(5, 3), (5, 4), (5, 5), (5, 6)]",
-        "safe path: [(5, 3), (5, 4), (4, 5), (5, 6)]",
+        f"safe path: {hazard_target.safe_path}",
         "hazardous path: True",
         "hazard in unsafe path: True",
         "hazard in safe path: False",

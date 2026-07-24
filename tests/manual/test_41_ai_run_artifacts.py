@@ -55,9 +55,9 @@ def test_external_selfplay_artifact_retains_raw_trace_and_derived_metrics(tmp_pa
     assert loaded.source_revision == "working-tree-test"
     assert "ai/policy/host.py" in loaded.policy.source_paths
     assert "ai/policy/candidates.py" in loaded.policy.source_paths
-    assert "ai/protocol/semantics.py" in loaded.policy.source_paths
-    assert "ai/semantics/actions.py" in loaded.policy.source_paths
-    assert "ai/subjective/epochs.py" in loaded.policy.source_paths
+    assert "server/agent_protocol/semantics.py" in loaded.policy.source_paths
+    assert "server/agent_runtime/action_semantics.py" in loaded.policy.source_paths
+    assert "server/agent_runtime/epochs.py" in loaded.policy.source_paths
     assert loaded.policy.source_hash
     assert loaded.result == result
     assert loaded.command_summary.accepted == 1

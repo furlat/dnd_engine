@@ -20,10 +20,12 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_conditions import (
     BaseCondition,
+    Duration,
+)
+from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
     ConditionTag,
-    Duration,
     DurationType,
     HazardFilter,
 )
@@ -34,7 +36,8 @@ from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
-from dnd.conditions import Frightened, Charmed, Incapacitated, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
+from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
+from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.core.gridmap import get_map
 from dnd.core.events import SpatialChangeEvent
@@ -398,8 +401,11 @@ class HypnoticPatternEffect(BaseCondition):
     description: str = Field(default="Charmed and incapacitated by swirling pattern", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
     removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
-        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
-        description="Positive applied damage ends the pattern for this target.",
+        default_factory=lambda: frozenset({
+            ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED,
+            ConditionRemovalTrigger.SHAKE_AWAKE,
+        }),
+        description="Positive damage or external assistance ends this effect.",
     )
     agency_denial: ConditionAgencyDenial = Field(
         default=ConditionAgencyDenial.FULL_TURN,
@@ -407,7 +413,7 @@ class HypnoticPatternEffect(BaseCondition):
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply the charmed/incapacitated condition tree and break handler.
+        """Apply Charmed plus a directly owned incapacitation transform.
 
         Args:
             declaration_event: Condition application declaration event.
@@ -419,7 +425,7 @@ class HypnoticPatternEffect(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
 
         target = Entity.get(self.target_entity_uuid)
-        if not target:
+        if not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         sub_condition_uuids: List[UUID] = []
@@ -435,15 +441,11 @@ class HypnoticPatternEffect(BaseCondition):
         if sub_event and sub_event.phase == EventPhase.COMPLETION:
             sub_condition_uuids.append(charmed.uuid)
 
-        incapacitated = Incapacitated(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
+        outs = apply_incapacitated_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
         )
-        sub_event2 = target.add_condition(incapacitated, parent_event=declaration_event)
-        if sub_event2 and sub_event2.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(incapacitated.uuid)
 
         handler = self._create_damage_break_handler()
         target.add_event_handler(handler)
@@ -453,7 +455,7 @@ class HypnoticPatternEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"Applied Hypnotic Pattern effect to {target.name}"
         )
-        return [], handler_uuids, sub_condition_uuids, [], effect_event
+        return outs, handler_uuids, sub_condition_uuids, [], effect_event
 
     def _create_damage_break_handler(self) -> EventHandler:
         """Break Hypnotic Pattern when target takes damage."""
@@ -539,7 +541,6 @@ class HypnoticPattern(SpellAction):
                     condition_semantic_keys=frozenset({
                         "dnd.spells.illusion.HypnoticPatternEffect",
                         "dnd.conditions.Charmed",
-                        "dnd.conditions.Incapacitated",
                     }),
                 ),
             ),
@@ -1449,7 +1450,8 @@ class Silence(SpellAction):
         zone = SilenceZone(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
-            zone_center=position
+            zone_center=position,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 

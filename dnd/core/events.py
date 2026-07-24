@@ -7,7 +7,6 @@ for logs, sensory updates, and API streams.
 """
 
 __all__ = [
-    "WeaponSlot", "BodyPart", "RingSlot", "EquipmentSlot",
     "EventType", "SpatialChangeType", "EventPhase", "RangeType", "MovementTrajectory",
     "AbilityName", "SkillName",
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
@@ -26,21 +25,22 @@ __all__ = [
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
     "TurnEvent", "TurnStartEvent", "TurnEndEvent",
+    "LifeStateChangeEvent", "ReviveEvent",
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     SavingThrowLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
-    md_color, md_d20_roll, md_breakdown
+    md_color, md_d20_roll, md_breakdown, position_evidence_key
 )
 from dnd.core.content import (
     ContentKind,
@@ -48,8 +48,11 @@ from dnd.core.content import (
     HandlerDispatchOutcome,
 )
 from dnd.core.damage import DamageResolution
+from dnd.core.effect_types import EffectOrigin
+from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.modifiers import DamageType
 from dnd.core.senses import SenseMode
+from dnd.core.equipment_types import WeaponSlot
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
@@ -60,9 +63,19 @@ import time
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_object import BaseObject
 T = TypeVar('T', bound='Event')
+EventT = TypeVar('EventT', bound='Event')
 E = TypeVar('E', bound='Event')
 
 EventProcessor = Callable[[E, UUID], Optional[E]]
+
+
+def _preserve_nullable_unique_array_schema(schema: Dict[str, Any]) -> None:
+    """Retain set uniqueness metadata after a JSON-only list serializer."""
+    schema["default"] = None
+    for option in schema.get("anyOf", []):
+        if isinstance(option, dict) and option.get("type") == "array":
+            option["uniqueItems"] = True
+
 
 class TypedEventListener(Protocol[T]):
     """Callable contract for handlers that consume one event subtype."""
@@ -117,28 +130,6 @@ SkillName = TypeLiteral[
 ]
 
 
-class WeaponSlot(str, Enum):
-    MELEE_MAIN = "MELEE_MAIN"
-    MELEE_OFF = "MELEE_OFF"
-    RANGED_MAIN = "RANGED_MAIN"
-    RANGED_OFF = "RANGED_OFF"
-
-class BodyPart(str, Enum):
-    HEAD = "Head"
-    BODY = "Body"
-    HANDS = "Hands"
-    LEGS = "Legs"
-    FEET = "Feet"
-    AMULET = "Amulet"
-    RING = "Ring"
-    CLOAK = "Cloak"
-
-class RingSlot(str, Enum):
-    LEFT = "Left Ring"
-    RIGHT = "Right Ring"
-
-EquipmentSlot = Union[WeaponSlot, BodyPart, RingSlot]
-
 class EventType(str, Enum):
     """Kinds of state transitions that handlers and logs can subscribe to."""
 
@@ -166,6 +157,7 @@ class EventType(str, Enum):
     ARMOR_UNEQUIP = "armor_unequip"
     SHIELD_EQUIP = "shield_equip"
     SHIELD_UNEQUIP = "shield_unequip"
+    ITEM_LOCATION_STATE = "item_location_state"
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
 
     TRIGGER_EVENT = "trigger_event"
@@ -203,6 +195,8 @@ class EventType(str, Enum):
     ROUND_END = "round_end"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
+    LIFE_STATE_CHANGE = "life_state_change"
+    REVIVE = "revive"
     DEATH_SAVE = "death_save"
     INSTANT_DEATH = "instant_death"
     DEATH = "death"
@@ -238,6 +232,7 @@ class SensoryUpdateReason(str, Enum):
     PERCEIVABILITY = "perceivability"
     DEATH = "death"
     CONDITION = "condition"
+    LIFE_STATE = "life_state"
     TURN_START = "turn_start"
     UNKNOWN = "unknown"
 
@@ -363,6 +358,14 @@ class Event(BaseObject):
             "unlike identity grants these are recomputed at every event version."
         ),
     )
+    located_position_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal event-time coordinate grants keyed by canonical x,y; "
+            "used only when every carried coordinate has independent evidence."
+        ),
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -376,6 +379,10 @@ class Event(BaseObject):
             CombatLogEntry if this event type supports combat logging, None otherwise.
         """
         return self.combat_log
+
+    def get_effect_origin(self) -> Optional[EffectOrigin]:
+        """Return neutral effect provenance when this event carries any."""
+        return None
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Grid positions spatially relevant to this event.
@@ -396,6 +403,17 @@ class Event(BaseObject):
             entity_uuid
             for entity_uuid in (self.source_entity_uuid, self.target_entity_uuid)
             if entity_uuid is not None
+        }
+
+    def completion_position_observer_evidence(
+        self,
+        completion_locations: Dict[str, Set[str]],
+    ) -> Dict[str, Set[str]]:
+        """Return coordinate grants to freeze onto the completion version."""
+        del completion_locations
+        return {
+            key: set(observer_uuids)
+            for key, observer_uuids in self.located_position_observer_uuids.items()
         }
 
     def get_trigger(self) -> 'Trigger':
@@ -462,6 +480,13 @@ class Event(BaseObject):
                         EventQueue._identified_entity_observer_computer(self).items()
                     )
                 }
+            completion_locations = phase_updates.get(
+                "located_entity_observer_uuids",
+                self.located_entity_observer_uuids,
+            )
+            phase_updates["located_position_observer_uuids"] = (
+                self.completion_position_observer_evidence(completion_locations)
+            )
 
             all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
             phase_updates['lineage_children_events'] = all_children
@@ -496,6 +521,10 @@ class Event(BaseObject):
                     combat_log.located_entity_observer_uuids = {
                         entity_uuid: set(observer_uuids)
                         for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
+                    }
+                    combat_log.located_position_observer_uuids = {
+                        position: set(observer_uuids)
+                        for position, observer_uuids in temp_event.located_position_observer_uuids.items()
                     }
                     if EventQueue._perceiver_computer:
                         combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
@@ -875,6 +904,14 @@ class BaseHandler(BaseObject):
         default=False,
         description="Whether player-facing controls may enable or disable this handler.",
     )
+    validation_only: bool = Field(
+        default=False,
+        description=(
+            "Whether this handler is a pure transactional validator. Validation-only "
+            "handlers may inspect, modify, or cancel an unpublished proposal, but must "
+            "not mutate engine state or emit events."
+        ),
+    )
     owner_block: Optional[EntityWithEventHandlers] = Field(
         default=None,
         exclude=True,
@@ -1079,6 +1116,10 @@ class EventQueue:
         "event_queue_pending_batch",
         default=None,
     )
+    _preflight_depth: ContextVar[int] = ContextVar(
+        "event_queue_preflight_depth",
+        default=0,
+    )
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
     _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
     _pre_completion_systems_by_event_type: Dict[
@@ -1146,6 +1187,8 @@ class EventQueue:
         to a normal event lifecycle. Creates a lightweight Event just to carry the
         combat_log to the callback.
         """
+        if cls._preflight_depth.get() > 0:
+            raise RuntimeError("Validation-only handlers cannot publish combat logs during preflight")
         if cls._combat_log_callback is None:
             return
         event = Event(
@@ -1561,6 +1604,91 @@ class EventQueue:
         return current_event
 
     @classmethod
+    def preflight(cls, event: EventT) -> EventT:
+        """Evaluate pure validation handlers without publishing an event.
+
+        This is the validation half of an explicit transactional boundary.
+        Every matching handler must opt into the ``validation_only`` contract:
+        it may return a modified or canceled proposal, but it must not mutate
+        engine state or emit child events. The queue enforces the observable
+        part of that contract by rejecting emitted events. Accepted proposals
+        can later be published exactly once with :meth:`publish_preflighted`.
+
+        Args:
+            event: Unregistered declaration or execution proposal.
+
+        Returns:
+            The final proposed version after validation handlers run.
+
+        Raises:
+            ValueError: If the proposal is already configured for publication.
+            RuntimeError: If a matching handler is not validation-only or emits
+                an event while validating.
+            TypeError: If a validator replaces the proposal with another type.
+        """
+        if event.use_register:
+            raise ValueError("Preflight events must use use_register=False")
+        if event.phase not in (EventPhase.DECLARATION, EventPhase.EXECUTION):
+            raise ValueError("Only declaration and execution events may be preflighted")
+
+        current_event = event
+        for handler in cls._get_handlers_for_event(event):
+            if not handler.enabled:
+                continue
+            if not handler.validation_only:
+                raise RuntimeError(
+                    f"Handler {handler.name!r} matches a transactional preflight but is not "
+                    "declared validation_only; move state changes to EFFECT or mark a pure "
+                    "validator explicitly"
+                )
+            before_cursor = cls.event_cursor()
+            depth_token = cls._preflight_depth.set(cls._preflight_depth.get() + 1)
+            try:
+                result = handler(current_event)
+            finally:
+                cls._preflight_depth.reset(depth_token)
+            if cls.event_cursor() != before_cursor:
+                raise RuntimeError(
+                    f"Validation-only handler {handler.name!r} emitted an event during preflight"
+                )
+            if result is None:
+                continue
+            if not isinstance(result, event.__class__):
+                raise TypeError(
+                    f"Expected {event.__class__.__name__} but got {result.__class__.__name__}"
+                )
+            if result.use_register:
+                raise RuntimeError(
+                    f"Validation-only handler {handler.name!r} returned a publishable event"
+                )
+            current_event = cast(EventT, result)
+            if result.canceled:
+                return cast(EventT, result)
+        return current_event
+
+    @classmethod
+    def publish_preflighted(cls, event: EventT) -> EventT:
+        """Publish one accepted proposal without dispatching validators twice.
+
+        Args:
+            event: Unregistered event version already accepted by ``preflight``.
+
+        Returns:
+            The stored publishable event version.
+
+        Raises:
+            ValueError: If the event is publishable already or was canceled.
+        """
+        if event.use_register:
+            raise ValueError("Preflighted events must still use use_register=False")
+        if event.canceled:
+            raise ValueError("Canceled preflight events cannot be published")
+        event.use_register = True
+        event.timestamp = datetime.now(UTC)
+        cls._store_event(event)
+        return event
+
+    @classmethod
     def register_completion_sequence(
         cls,
         events: Sequence[Event],
@@ -1628,6 +1756,8 @@ class EventQueue:
         notify_batch_callbacks: bool = True,
     ) -> None:
         """Store an event in all queue indexes and notify passive observers."""
+        if cls._preflight_depth.get() > 0:
+            raise RuntimeError("Validation-only handlers cannot publish events during preflight")
         if event.uuid in cls._events_by_uuid:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
@@ -2083,6 +2213,7 @@ class EventQueue:
         cls._handler_dispatch_cursor = 0
         cls._event_batch_depth.set(0)
         cls._pending_event_batch.set(None)
+        cls._preflight_depth.set(0)
         cls._pre_completion_callbacks.clear()
         for system in tuple(cls._pre_completion_systems.values()):
             system.reset()
@@ -2494,6 +2625,7 @@ class SensesUpdateHint(BaseModel):
     light_changed_positions: Optional[Set[Tuple[int, int]]] = Field(
         default=None,
         description="Positions whose resolved light should be re-filtered.",
+        json_schema_extra=_preserve_nullable_unique_array_schema,
     )
     perceivability_entity: Optional[UUID] = Field(
         default=None,
@@ -2514,14 +2646,17 @@ class SensesUpdateHint(BaseModel):
     directional_positions: Optional[Set[Tuple[int, int]]] = Field(
         default=None,
         description="Tiles whose directional blocking metadata changed.",
+        json_schema_extra=_preserve_nullable_unique_array_schema,
     )
     directional_neighbors: Optional[Set[Tuple[int, int]]] = Field(
         default=None,
         description="Neighbor cells affected by directional blocking metadata.",
+        json_schema_extra=_preserve_nullable_unique_array_schema,
     )
     directional_channels_changed: Optional[Set[str]] = Field(
         default=None,
         description="Directional channels affected, such as movement, vision, light, or propagation.",
+        json_schema_extra=_preserve_nullable_unique_array_schema,
     )
     requires_light_recompute: bool = Field(
         default=False,
@@ -2531,6 +2666,27 @@ class SensesUpdateHint(BaseModel):
         default=False,
         description="Whether non-light propagation fields must be recomputed.",
     )
+
+    @field_serializer(
+        "light_changed_positions",
+        "directional_positions",
+        "directional_neighbors",
+        when_used="json",
+    )
+    def serialize_position_sets(
+        self,
+        value: Optional[Set[Tuple[int, int]]],
+    ) -> Optional[List[Tuple[int, int]]]:
+        """Emit unordered coordinate hints in canonical wire order."""
+        return None if value is None else sorted(value)
+
+    @field_serializer("directional_channels_changed", when_used="json")
+    def serialize_directional_channels(
+        self,
+        value: Optional[Set[str]],
+    ) -> Optional[List[str]]:
+        """Emit unordered directional channels in canonical wire order."""
+        return None if value is None else sorted(value)
 
 
 class SensoryUpdateEvent(Event):
@@ -3198,6 +3354,7 @@ class WindExposureEvent(Event):
     positions: Set[Tuple[int, int]] = Field(
         default_factory=set,
         description="Grid positions exposed to the wind.",
+        json_schema_extra={"uniqueItems": True},
     )
     wind_speed_mph: int = Field(
         default=0,
@@ -3208,6 +3365,14 @@ class WindExposureEvent(Event):
         default="wind",
         description="Rules-facing description of the wind source.",
     )
+
+    @field_serializer("positions", when_used="json")
+    def serialize_positions(
+        self,
+        value: Set[Tuple[int, int]],
+    ) -> List[Tuple[int, int]]:
+        """Emit wind-exposed cells in canonical wire order."""
+        return sorted(value)
 
     def gas_dispersal_rounds(self) -> Optional[int]:
         """Return SRD gas dispersal rounds for this wind speed.
@@ -3334,6 +3499,23 @@ class StepMovementEvent(Event):
         default=False,
         description="Whether the entity position was committed to the destination cell.",
     )
+
+    def completion_position_observer_evidence(
+        self,
+        completion_locations: Dict[str, Set[str]],
+    ) -> Dict[str, Set[str]]:
+        """Freeze independent pre-step and post-step coordinate grants."""
+        entity_key = str(self.source_entity_uuid)
+        evidence = super().completion_position_observer_evidence(
+            completion_locations
+        )
+        evidence[position_evidence_key(self.from_position)] = set(
+            self.located_entity_observer_uuids.get(entity_key, set())
+        )
+        evidence[position_evidence_key(self.to_position)] = set(
+            completion_locations.get(entity_key, set())
+        )
+        return evidence
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for a movement step (usually not logged individually)."""
@@ -4019,6 +4201,39 @@ class TurnEndEvent(TurnEvent):
         )
 
 
+class LifeStateChangeEvent(Event):
+    """Typed transition of an entity's authoritative health life state."""
+
+    name: str = Field(default="Life State Change", description="Human-readable lifecycle transition label.")
+    event_type: EventType = Field(
+        default=EventType.LIFE_STATE_CHANGE,
+        description="Event category for authoritative life-state transitions.",
+    )
+    entity_uuid: UUID = Field(description="Entity whose life state is changing.")
+    entity_name: str = Field(default="", description="Display name of the affected entity.")
+    previous_state: LifeState = Field(description="Authoritative state before execution.")
+    new_state: LifeState = Field(description="Authoritative state after the transition.")
+    reason: LifeStateChangeReason = Field(description="Rules-facing cause of the transition.")
+    normal_hit_points: int = Field(
+        default=0,
+        description="Normal hit points observed when the transition was requested.",
+    )
+
+
+class ReviveEvent(Event):
+    """Typed revival request with revival-specific condition options."""
+
+    name: str = Field(default="Revive", description="Human-readable revival label.")
+    event_type: EventType = Field(default=EventType.REVIVE, description="Event category for revival.")
+    entity_uuid: UUID = Field(description="Entity being restored to life.")
+    entity_name: str = Field(default="", description="Display name of the revived entity.")
+    hit_points: int = Field(default=1, ge=1, description="Normal hit points restored by revival.")
+    reduce_exhaustion: bool = Field(
+        default=True,
+        description="Whether condition-owned revival rules may reduce Exhaustion.",
+    )
+
+
 class DeathSaveEvent(Event):
     """Fired when a player-style dying entity makes a death saving throw."""
 
@@ -4080,7 +4295,7 @@ class DeathSaveEvent(Event):
 
 
 class DeathEvent(Event):
-    """Fired when an entity dies (HP drops to 0 or below)."""
+    """Fired when an accepted rule transitions an entity to dead."""
 
     name: str = Field(default="Death", description="Human-readable death event label.")
     event_type: EventType = Field(default=EventType.DEATH, description="Event category for entity death.")

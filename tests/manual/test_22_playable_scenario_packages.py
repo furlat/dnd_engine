@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.dice import fixed_dice_faces
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import DamageType
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.scenarios.gatehouse import (
@@ -225,7 +226,7 @@ def test_scenario_ends_when_one_faction_has_survivors(capsys) -> None:
     assert scenario.hero_controller.encounter_end_names == ["Gatehouse Hero"]
     assert scenario.encounter.get_alive_combatants()[0].entity_uuid == scenario.hero.uuid
     assert scenario.encounter.get_dead_combatants()[0].entity_uuid == scenario.monster.uuid
-    assert "Dead" in scenario.monster.active_conditions
+    assert scenario.monster.health.life_state is LifeState.DEAD
     alive = scenario.encounter.get_alive_combatants()
     dead = scenario.encounter.get_dead_combatants()
 
@@ -234,7 +235,7 @@ def test_scenario_ends_when_one_faction_has_survivors(capsys) -> None:
             "death check: "
             f"hp={hp_before}->{scenario.monster.get_hp()}, "
             f"events={len(death_events)}, "
-            f"dead_condition={'yes' if 'Dead' in scenario.monster.active_conditions else 'no'}"
+            f"life_state={scenario.monster.health.life_state.value}"
         ),
         (
             "encounter end: "
@@ -249,7 +250,7 @@ def test_scenario_ends_when_one_faction_has_survivors(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "death check: hp=17->0, events=1, dead_condition=yes",
+        "death check: hp=17->0, events=1, life_state=dead",
         "encounter end: state=ended, active=no, end_callbacks=['Gatehouse Hero']",
         "survivors: alive=['Gatehouse Hero'], dead=['Gatehouse Skeleton']",
     ]

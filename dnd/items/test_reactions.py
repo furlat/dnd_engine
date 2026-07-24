@@ -19,16 +19,17 @@ from dnd.core.base_actions import (
     TargetType,
     Cost,
 )
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import DurationType
 from dnd.core.events import (
     Event,
     EventPhase,
     EventType,
     EventHandler,
     Trigger,
-    WeaponSlot,
     StepMovementEvent,
 )
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity

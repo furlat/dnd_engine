@@ -1,6 +1,7 @@
 """Manual Chapter 18 checks for sessions, API payloads, and client cursors."""
 
 import asyncio
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import httpx
@@ -10,7 +11,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
 from dnd.core.values import BaseValue
@@ -18,9 +19,13 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from server.event_server import app, sim
-from server.event_stream import event_stream, format_sse, make_stream_id
-from server.api_models import ReplicationBootstrapResponse
-from server.session import PlayerType, SessionManager
+from server.player_replication_contract import SubjectiveReplicationBootstrap
+from server.session import (
+    ConnectionStatus,
+    PlayerSession,
+    PlayerType,
+    SessionManager,
+)
 
 
 class ApiClient:
@@ -117,6 +122,39 @@ def create_joined_client_game() -> tuple[ApiClient, str, Entity, Entity, Encount
     return client, session_id, hero, monster, encounter
 
 
+def replication_seed(client: ApiClient, session_id: str) -> dict:
+    """Fetch the sole expectation-free player replication entry point."""
+    response = client.get("/replication/bootstrap", params={"session_id": session_id})
+    assert response.status_code == 200
+    return response.json()
+
+
+def replication_window(client: ApiClient, session_id: str, seed: dict) -> tuple[dict, dict]:
+    """Fetch exact subjective reducer and combat-log windows after one seed."""
+    identity = {
+        "session_id": session_id,
+        "expected_source_stream_id": seed["protocol"]["source_stream_id"],
+        "expected_generation_id": seed["protocol"]["generation_id"],
+        "expected_perspective_epoch_id": seed["perspective"]["perspective_epoch_id"],
+    }
+    frames = client.get(
+        "/replication/frames",
+        params={
+            **identity,
+            "from_observation_cursor": seed["watermarks"]["observation_cursor"],
+        },
+    )
+    logs = client.get(
+        "/replication/combat-log",
+        params={
+            **identity,
+            "from_combat_log_cursor": seed["watermarks"]["combat_log_cursor"],
+        },
+    )
+    assert frames.status_code == logs.status_code == 200
+    return frames.json(), logs.json()
+
+
 def test_session_manager_reset_preserves_the_shared_registry() -> None:
     """Arena resets clear session state without creating a split registry."""
     reset_client_api_state()
@@ -129,6 +167,63 @@ def test_session_manager_reset_preserves_the_shared_registry() -> None:
     assert manager.sessions == {}
     assert manager.games == {}
     assert manager.active_game is None
+
+
+def test_player_session_activity_disconnect_and_ping_reconnect() -> None:
+    """Ping advances activity exactly and reconnects a disconnected session."""
+    session = PlayerSession(
+        session_id=uuid4(),
+        player_type=PlayerType.HUMAN,
+        name="Lifecycle Probe",
+        last_activity=100.0,
+    )
+
+    assert session.connection_status is ConnectionStatus.CONNECTED
+    assert session.last_activity == 100.0
+
+    with patch("server.session.time.time", return_value=101.25):
+        session.ping()
+
+    assert session.last_activity == 101.25
+    session.disconnect()
+    assert session.connection_status is ConnectionStatus.DISCONNECTED
+
+    with patch("server.session.time.time", return_value=103.5):
+        session.ping()
+
+    assert session.last_activity == 103.5
+    assert session.connection_status is ConnectionStatus.CONNECTED
+
+
+def test_invalid_session_player_type_returns_structured_400() -> None:
+    """Invalid session input remains a client error with correction metadata."""
+    reset_client_api_state()
+    response = ApiClient().post(
+        "/session/create",
+        json={"player_type": "dragon", "name": "Wrong Door"},
+    )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert set(detail) == {
+        "code",
+        "message",
+        "session_id",
+        "player_type",
+        "valid_player_types",
+        "known_sessions",
+        "active_game_id",
+        "active_entity_uuid",
+    }
+    assert detail["code"] == "invalid_player_type"
+    assert detail["player_type"] == "dragon"
+    assert detail["session_id"] is None
+    assert set(detail["valid_player_types"]) == {
+        player_type.value for player_type in PlayerType
+    }
+    assert detail["known_sessions"] == []
+    assert detail["active_game_id"] is None
+    assert detail["active_entity_uuid"] is None
 
 
 def make_melee_attack_auto_hit(entity: Entity) -> UUID:
@@ -165,7 +260,10 @@ def execute_manual_attack(
     monster: Entity,
 ) -> dict:
     """Execute the hero's indexed melee attack through the public API."""
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     target_index = attack_target_index(actions, monster.uuid)
     modifier_uuid = make_melee_attack_auto_hit(hero)
     try:
@@ -301,43 +399,43 @@ def test_game_join_accepts_single_entity_uuid_alias() -> None:
     assert ping_payload["controlled_entities"] == [str(hero.uuid)]
 
 
-def test_state_current_turn_and_available_actions_payloads(capsys) -> None:
-    """State, current-turn, and available-action routes describe the scene."""
+def test_subjective_state_and_available_actions_payloads(capsys) -> None:
+    """Subjective bootstrap and command routes describe the joined scene."""
     client, session_id, hero, monster, _encounter = create_joined_client_game()
 
-    state_payload = client.get("/state").json()
-    entity_names = {entity["name"] for entity in state_payload["entities"]}
-    current_turn = client.get("/encounter/current-turn").json()
-    actions_payload = client.get(f"/entity/{hero.uuid}/available-actions").json()
-    attack_names = {
+    bootstrap_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert bootstrap_response.status_code == 200
+    bootstrap = SubjectiveReplicationBootstrap.model_validate(bootstrap_response.json())
+    encounter = bootstrap.world.state.encounter
+    assert encounter is not None
+    entity_names = {entity.name for entity in bootstrap.world.state.entities}
+    actions_payload = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
+    action_names = {
         action["template_name"]
         for action in actions_payload["entity_actions"]
     }
 
     assert {"Manual Hero", "Manual Skeleton"} <= entity_names
-    assert state_payload["encounter"]["current_entity_uuid"] == str(hero.uuid)
-    assert current_turn["current_entity_uuid"] == str(hero.uuid)
-    assert current_turn["controller_type"] == "human"
-    assert current_turn["waiting_for_input"]
-    assert current_turn["actions_remaining"] == 1
+    assert bootstrap.perspective.controlled_entity_uuids == (str(hero.uuid),)
+    assert encounter.current_entity_uuid == str(hero.uuid)
     assert actions_payload["entity_uuid"] == str(hero.uuid)
-    assert "Attack_MELEE_MAIN" in attack_names
+    assert "Attack_MELEE_MAIN" in action_names
     assert attack_target_index(actions_payload, monster.uuid) == 0
     assert actions_payload["actions_remaining"] == 1
     assert session_id in client.get("/game/status").text
 
     readout_lines = [
-        f"state snapshot: entities={sorted(entity_names)}, current=Manual Hero",
-        (
-            "turn payload: "
-            f"controller={current_turn['controller_type']}, "
-            f"waiting={'yes' if current_turn['waiting_for_input'] else 'no'}, "
-            f"actions={current_turn['actions_remaining']}"
-        ),
+        f"subjective snapshot: entities={sorted(entity_names)}, current=Manual Hero",
         (
             "action menu: "
             "entity=Manual Hero, "
-            f"attacks={sorted(attack_names)}, "
+            f"actions={sorted(action_names)}, "
             f"target_index={attack_target_index(actions_payload, monster.uuid)}"
         ),
         (
@@ -347,11 +445,10 @@ def test_state_current_turn_and_available_actions_payloads(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "state snapshot: entities=['Manual Hero', 'Manual Skeleton'], current=Manual Hero",
-        "turn payload: controller=human, waiting=yes, actions=1",
+        "subjective snapshot: entities=['Manual Hero', 'Manual Skeleton'], current=Manual Hero",
         (
             "action menu: entity=Manual Hero, "
-            "attacks=['Attack_MELEE_MAIN', 'Attack_RANGED_MAIN'], target_index=0"
+            "actions=['Attack_MELEE_MAIN', 'Attack_RANGED_MAIN', 'Shove'], target_index=0"
         ),
         "status echo: session_seen=yes, actions_remaining=1",
     ]
@@ -362,25 +459,44 @@ def test_state_current_turn_and_available_actions_payloads(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_execute_action_by_index_returns_state_logs_and_cursors(capsys) -> None:
-    """The client can execute a discovered target index and receive deltas."""
+def test_execute_action_by_index_acknowledges_then_journals_state_and_logs(capsys) -> None:
+    """Commands ack once; reducer facts and logs arrive through the player journal."""
     client, session_id, hero, monster, encounter = create_joined_client_game()
     initial_monster_hp = monster.get_hp()
+    seed = replication_seed(client, session_id)
 
     with fixed_dice_faces(12, 4):
         result = execute_manual_attack(client, session_id, hero, monster)
+    frames, logs = replication_window(client, session_id, seed)
+    presentation = [
+        cue
+        for frame in frames["frames"]
+        for cue in frame["presentation"]
+    ]
+    damage = next(
+        cue
+        for cue in presentation
+        if cue["kind"] == "damage" and cue["target_uuid"] == str(monster.uuid)
+    )
 
     assert result["success"]
     assert result["event_type"] == "attack_melee_main"
-    assert result["target_hp"] < initial_monster_hp
-    assert result["entity_hp"] == hero.get_hp()
+    assert damage["resulting_hp"] == monster.get_hp() < initial_monster_hp
     assert result["turn_continues"]
     assert not result["encounter_ended"]
-    assert result["combat_log_entries"]
     assert result["available_actions"]["actions_remaining"] == 0
-    assert result["state"]["encounter"]["current_entity_uuid"] == str(hero.uuid)
     assert result["event_cursor_after"] == EventQueue.event_cursor()
     assert result["combat_log_cursor_after"] == len(encounter.combat_log)
+    assert frames["through_watermarks"]["source_event_cursor"] == result["event_cursor_after"]
+    assert logs["through_cursor"] == result["combat_log_cursor_after"]
+    assert any(frame["entry"] is not None for frame in logs["frames"])
+    assert {
+        "state",
+        "event_data",
+        "entity_hp",
+        "target_hp",
+        "combat_log_entries",
+    }.isdisjoint(result)
 
     readout_lines = [
         (
@@ -389,10 +505,9 @@ def test_execute_action_by_index_returns_state_logs_and_cursors(capsys) -> None:
             f"event={result['event_type']}, "
             f"turn_continues={'yes' if result['turn_continues'] else 'no'}"
         ),
-        f"hit points: monster={initial_monster_hp}->{result['target_hp']}, hero={result['entity_hp']}",
+        f"journal damage: monster={initial_monster_hp}->{damage['resulting_hp']}",
         (
-            "returned state: "
-            "current=Manual Hero, "
+            "command ack: "
             f"actions_remaining={result['available_actions']['actions_remaining']}, "
             f"ended={'yes' if result['encounter_ended'] else 'no'}"
         ),
@@ -400,14 +515,14 @@ def test_execute_action_by_index_returns_state_logs_and_cursors(capsys) -> None:
             "cursors: "
             f"events={result['event_cursor_after']}, "
             f"logs={result['combat_log_cursor_after']}, "
-            f"log_entries={len(result['combat_log_entries'])}"
+            f"log_frames={len(logs['frames'])}"
         ),
     ]
     expected_lines = [
         "execute result: success=yes, event=attack_melee_main, turn_continues=yes",
-        "hit points: monster=17->11, hero=10",
-        "returned state: current=Manual Hero, actions_remaining=0, ended=no",
-        "cursors: events=72, logs=2, log_entries=1",
+        "journal damage: monster=17->11",
+        "command ack: actions_remaining=0, ended=no",
+        "cursors: events=72, logs=2, log_frames=1",
     ]
 
     print("\n".join(readout_lines))
@@ -416,10 +531,14 @@ def test_execute_action_by_index_returns_state_logs_and_cursors(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_execute_movement_returns_json_serialized_event_data() -> None:
-    """Movement coordinates cross the action boundary as JSON arrays."""
+def test_execute_movement_delivers_typed_trajectory_through_replication() -> None:
+    """Movement geometry belongs to presentation cues, not command responses."""
     client, session_id, hero, _monster, _encounter = create_joined_client_game()
-    actions = client.get(f"/entity/{hero.uuid}/available-actions").json()
+    seed = replication_seed(client, session_id)
+    actions = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
     move = next(
         action
         for action in actions["position_actions"]
@@ -439,140 +558,42 @@ def test_execute_movement_returns_json_serialized_event_data() -> None:
             "template_name": "Move",
             "target_index": target["index"],
             "return_available_actions": False,
-            "include_state": False,
         },
     )
 
     assert response.status_code == 200
     payload = response.json()
+    frames, _logs = replication_window(client, session_id, seed)
+    movement = next(
+        cue
+        for frame in frames["frames"]
+        for cue in frame["presentation"]
+        if cue["kind"] == "movement"
+    )
     assert payload["success"]
-    assert payload["event_data"]["start_position"] == [1, 1]
-    assert payload["event_data"]["end_position"] == target["position"]
-    assert all(isinstance(position, list) for position in payload["event_data"]["path"])
-
-
-def test_event_and_combat_log_history_are_cursor_addressed(capsys) -> None:
-    """Clients can poll or stream event and combat-log deltas by cursor."""
-    client, session_id, hero, monster, encounter = create_joined_client_game()
-
-    with fixed_dice_faces(12, 4):
-        execute_manual_attack(client, session_id, hero, monster)
-
-    events_payload = client.get("/events", params={"since": 0, "limit": 0}).json()
-    logs_payload = client.get("/combat-log", params={"since": 0}).json()
-    game_events = event_stream.iter_game_events_since(0, encounter)
-    combat_logs = event_stream.iter_combat_logs_since(encounter, 0)
-    latest_log = combat_logs[-1]
-    frame = format_sse(
-        "combat_log",
-        latest_log,
-        make_stream_id(latest_log.event_cursor, latest_log.combat_log_cursor),
-    )
-
-    assert events_payload["count"] == events_payload["total"]
-    assert events_payload["total"] == EventQueue.event_cursor()
-    assert any(event["phase"] == EventPhase.COMPLETION.value for event in events_payload["events"])
-    assert logs_payload["count"] == logs_payload["total"]
-    assert logs_payload["total"] == len(encounter.combat_log)
-    assert game_events[-1].event_cursor == EventQueue.event_cursor()
-    assert combat_logs[-1].combat_log_cursor == len(encounter.combat_log)
-    assert frame.startswith("id: e=")
-    assert "\nevent: combat_log\n" in frame
-
-    transcript_cursor = EventQueue.event_cursor()
-    transcript_payload = client.get(
-        "/events/history",
-        params={
-            "from_cursor": 0,
-            "through_cursor": transcript_cursor,
-            "phase": EventPhase.COMPLETION.value,
-        },
-    ).json()
-    expected_completions = [
-        event
-        for event in EventQueue._all_events[:transcript_cursor]
-        if event.phase == EventPhase.COMPLETION
-    ]
-    assert transcript_payload["generation_id"] == events_payload["generation_id"]
-    assert transcript_payload["from_cursor"] == 0
-    assert transcript_payload["through_cursor"] == transcript_cursor
-    assert transcript_payload["total"] == EventQueue.event_cursor()
-    assert len(transcript_payload["frames"]) == len(expected_completions)
-    assert all(
-        row["event_cursor"] == row["event_index"] + 1
-        and row["event_cursor"] <= transcript_cursor
-        and row["event"]["phase"] == EventPhase.COMPLETION.value
-        for row in transcript_payload["frames"]
-    )
-
-    invalid_window = client.get(
-        "/events/history",
-        params={"from_cursor": 5, "through_cursor": 4},
-    )
-    assert invalid_window.status_code == 400
-
-    completion_count = sum(
-        1
-        for event in events_payload["events"]
-        if event["phase"] == EventPhase.COMPLETION.value
-    )
-    readout_lines = [
-        (
-            "event history: "
-            f"route_count={events_payload['count']}, "
-            f"total={events_payload['total']}, "
-            f"completions={completion_count}"
-        ),
-        (
-            "combat log: "
-            f"route_count={logs_payload['count']}, "
-            f"total={logs_payload['total']}, "
-            f"latest_type={latest_log.entry.entry_type.value}"
-        ),
-        (
-            "stream cursors: "
-            f"event={game_events[-1].event_cursor}, "
-            f"combat={combat_logs[-1].combat_log_cursor}"
-        ),
-        (
-            "sse frame: "
-            f"id={frame.splitlines()[0]}, "
-            f"event_line={frame.splitlines()[1]}"
-        ),
-    ]
-    expected_lines = [
-        "event history: route_count=72, total=72, completions=19",
-        "combat log: route_count=2, total=2, latest_type=attack",
-        "stream cursors: event=72, combat=2",
-        "sse frame: id=id: e=72;l=2, event_line=event: combat_log",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+    assert "event_data" not in payload
+    assert movement["trajectory"][0] == [1, 1]
+    assert movement["trajectory"][-1] == target["position"]
+    assert all(isinstance(position, list) for position in movement["trajectory"])
 
 
 def test_replication_bootstrap_is_one_typed_cursor_aligned_base() -> None:
-    """State, visibility, logs, session, and cursors share one generation."""
+    """The canonical subjective world, logs, and cursors share one identity."""
     client, session_id, hero, _, encounter = create_joined_client_game()
 
     response = client.get("/replication/bootstrap", params={"session_id": session_id})
 
     assert response.status_code == 200
-    bootstrap = ReplicationBootstrapResponse.model_validate(response.json())
+    bootstrap = SubjectiveReplicationBootstrap.model_validate(response.json())
     assert bootstrap.protocol.generation_id == str(EventQueue.generation_id())
-    assert bootstrap.event_cursor == EventQueue.event_cursor()
-    assert bootstrap.combat_log_cursor == len(encounter.combat_log)
-    assert [entry.model_dump(mode="json") for entry in bootstrap.combat_log] == [
-        entry.model_dump(mode="json") for entry in encounter.combat_log
-    ]
-    assert bootstrap.session is not None
-    assert bootstrap.session.session_id == session_id
-    assert str(hero.uuid) in bootstrap.session.controlled_entities
-    assert any(entity.uuid == str(hero.uuid) for entity in bootstrap.state.entities)
-    assert str(hero.uuid) in bootstrap.visibility.root
-    hero_visibility = bootstrap.visibility.root[str(hero.uuid)]
+    assert bootstrap.protocol.source_stream_id == str(encounter.uuid)
+    assert bootstrap.watermarks.source_event_cursor == EventQueue.event_cursor()
+    assert bootstrap.watermarks.combat_log_cursor == len(encounter.combat_log)
+    assert bootstrap.combat_log_frames.total == len(encounter.combat_log)
+    assert str(hero.uuid) in bootstrap.perspective.controlled_entity_uuids
+    assert any(entity.uuid == str(hero.uuid) for entity in bootstrap.world.state.entities)
+    assert str(hero.uuid) in bootstrap.world.visibility.root
+    hero_visibility = bootstrap.world.visibility.root[str(hero.uuid)]
     assert hero_visibility.position == hero.position
     assert hero_visibility.effective_light_levels == (
         hero.senses.get_effective_light_levels(hero.uuid)

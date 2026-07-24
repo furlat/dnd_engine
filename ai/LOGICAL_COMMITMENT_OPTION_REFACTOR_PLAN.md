@@ -29,7 +29,7 @@ The engine remains authoritative for mutation, perception, raycasting, legality,
 
 The codebase already contains substantial correct infrastructure:
 
-- `ai.protocol.semantics.ActionSemantics` declares planning preconditions, guaranteed effects, conditional effects, stochastic effects, target effects, resources, concentration, topology, information changes, targeting, and capability transformations.
+- `server.agent_protocol.semantics.ActionSemantics` declares planning preconditions, guaranteed effects, conditional effects, stochastic effects, target effects, resources, concentration, topology, information changes, targeting, and capability transformations.
 - `FactExpression` and `evaluate_fact_expression()` implement three-valued subjective logic: true, false, and unknown.
 - `ai.policy.routines.RoutineContract` declares applicability, invariants, completion, ordered steps, accepted action tags, expected effects, and revalidation boundaries.
 - `PolicyHost` aligns subjective state and facts, caches one decision per epoch, correlates commands, and advances routine memory only from authoritative results.

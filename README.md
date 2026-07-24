@@ -8,7 +8,7 @@ This D&D 5e game engine is built on a sophisticated event-driven architecture wi
 - **Entity-Component Framework**: Entities composed of specialized component "blocks"
 - **Value System**: Modifiable values with multiple modification sources
 - **Event System**: Event-driven architecture for game state changes
-- **Condition System**: Effects that modify entities through subconditions
+- **Condition System**: Source-owned effects, modifiers, handlers, and explicit condition relationships
 - **Action Framework**: Structured approach to character actions
 
 The fundamental principle is that **all game state changes flow through events**, allowing for interception, modification, and reaction at every stage.
@@ -203,118 +203,55 @@ class Trigger:
 
 ### 5.5 Handler Registration
 
-Handlers are registered with entities:
+Use `entity.add_event_handler(handler)` for entity-owned handlers. It both
+tracks the handler for cleanup and registers it with EventQueue; do not also
+call `EventQueue.add_event_handler()` for the same handler.
 
-```python
-def add_event_handler(self, event_handler: EventHandler) -> None:
-    self.event_handlers[event_handler.uuid] = event_handler
-    for trigger in event_handler.trigger_conditions:
-        self.event_handlers_by_trigger[trigger].append(event_handler)
-```
+Equipment uses an explicit transactional boundary. Matching DECLARATION or
+EXECUTION handlers must declare `validation_only=True` before they may run in
+`EventQueue.preflight()`, and those validators may not mutate state or emit
+events. Once every transition is accepted, `publish_preflighted()` stores each
+proposal exactly once and stateful equipment reactions run at EFFECT.
 
 ## 6. Condition System
 
 Conditions are effects applied to entities (like Blinded, Charmed, Raging).
 
-### 6.1 Condition Hierarchy
+### 6.1 Direct Mechanical Ownership
 
-The key insight is that conditions use a **parent-child hierarchy**:
+Each concrete condition owns all of the mechanics stated by that rule. Its
+`_apply()` result records the exact modifier, event-handler, sub-condition, and
+spatial-handler UUIDs that BaseBlock must clean up later. Reusable capability
+transforms live in `dnd/creature_transforms.py`; they operate on a structural
+creature surface and deliberately do not import `Entity`.
 
-```
-BaseCondition (parent)
-└── SubConditions (children)
-```
+`Paralyzed`, `Stunned`, `Petrified`, and `Unconscious` apply their action,
+movement, save, perception, and attack transforms directly. They do not create
+a synthetic `Incapacitated` child merely to share code.
 
-The parent condition:
-- Manages the overall effect lifecycle
-- Registers event handlers
-- Tracks subconditions
+### 6.2 Explicit Condition Relationships
 
-The subconditions:
-- Apply actual modifiers to the entity
-- Are removed when the parent is removed
-- Can be added/removed dynamically
+Sub-conditions are reserved for rules that genuinely apply a distinct named
+condition. For example, a spell-specific `HoldPersonEffect` wrapper may own a
+`Paralyzed` sub-condition while the wrapper controls spell duration and
+concentration. Cross-block effects use linked conditions plus reverse parent
+links, so cleanup works both from parent to child and from child back to parent.
 
-### 6.2 Condition Registration
+### 6.3 BaseBlock-Driven Cleanup
 
-Conditions must be registered with their parent:
+`BaseBlock.remove_condition()` removes same-block sub-conditions, removes
+cross-block linked conditions, calls the condition's own modifier/handler
+cleanup, and then applies the configured reverse-link removal policy. The block
+pops its indexes before recursion, preventing parent/child cleanup loops.
 
-```python
-def _apply(self, event: Event) -> Tuple[List[Tuple[UUID,UUID]],List[UUID],List[UUID],Optional[Event]]:
-    # Returns:
-    # - List of (block_uuid, modifier_uuid) tuples
-    # - List of event handler UUIDs
-    # - List of subcondition UUIDs
-    # - Modified event
-```
+### 6.4 Life State Is Not a Condition
 
-### 6.3 Condition-Event Interaction Pattern
-
-This is the critical pattern for dynamic condition behavior:
-
-1. **Parent condition** sets up event handlers during application
-2. **Event handlers** create events that trigger application/removal of subconditions
-3. **Subconditions** apply the actual modifiers to the entity
-
-Example flow:
-
-```
-1. AdaptiveArmorCondition applies
-   └── Sets up "damage taken" event handler
-   └── Creates AdaptiveArmorBaseCondition (basic AC bonus)
-
-2. Entity takes fire damage
-   └── Event handler triggers
-   └── Creates a "apply resistance" event
-
-3. "Apply resistance" event
-   └── Removes old resistance subcondition (if any)
-   └── Creates FireResistanceCondition subcondition
-```
-
-### 6.4. Condition Removal Cascade
-
-When a parent condition is removed:
-1. It removes all registered subconditions
-2. It removes all registered event handlers
-3. Each subcondition removes its modifiers
-
-This ensures clean cleanup and prevents dangling effects.
-
-### 6.5 Condition State Management
-
-**CRITICAL POINT**: Conditions themselves should be immutable after application. Any state changes must happen through the creation/removal of subconditions.
-
-❌ WRONG:
-```python
-def event_handler(event, entity_uuid):
-    condition.some_value += 1  # WRONG! Directly modifying condition state
-```
-
-✅ CORRECT:
-```python
-def event_handler(event, entity_uuid):
-    # Create an event that will create/remove subconditions
-    new_event = Event(...)
-    subcondition = SomeSubcondition(...)
-    subcondition.apply(new_event)
-```
-
-### 6.6 Event Handler State Pattern
-
-When event handlers need to maintain state between calls, use the `partial` function:
-
-```python
-from functools import partial
-
-# During condition application
-image_iterator = cycle(subcondition_uuids)
-handler = EventHandler(
-    handler_function=partial(self.handle_missed_attack, image_iterator)
-)
-```
-
-This ensures the state is tied to the specific event handler instance.
+`Health.life_state` is the sole creature-lifecycle truth and uses the neutral
+`LifeState` enum. Entity is its only production writer. `DYING`, `STABLE`, and
+`DEAD` are not mirrored as concrete conditions or repaired by a lifecycle
+handler; Entity derives their capability transforms atomically and emits a
+`LifeStateChangeEvent` completion fact after the causal damage, death, healing,
+or revival event has been accepted.
 
 ## 7. Action Framework
 

@@ -566,7 +566,8 @@ def test_paralyzed_barbarian_cannot_use_zero_cost_reckless_attack() -> None:
     assert paralyze_event is not None
     assert not paralyze_event.canceled
     assert "Paralyzed" in barbarian.active_conditions
-    assert "Incapacitated" in barbarian.active_conditions
+    assert "Incapacitated" not in barbarian.active_conditions
+    assert barbarian.action_economy.action_permission.normalized_score == 0
 
     available = get_available_actions(barbarian)
     reckless = next(

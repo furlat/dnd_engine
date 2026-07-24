@@ -5,7 +5,7 @@ from uuid import uuid4
 from dnd.actions_functional import execute_by_index, get_available_actions
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import ActionEvent, TargetType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import GridMap, get_map
@@ -212,14 +212,25 @@ def test_usable_item_packages_the_same_action_template(capsys) -> None:
 
     actions = get_available_actions(hero)
     item_action = find_item_action(actions, "Deploy Field Focus", kit.uuid)
+    actions_before = hero.action_economy.actions.normalized_score
+    bonus_actions_before = hero.action_economy.bonus_actions.normalized_score
     event = execute_by_index(hero, item_action.template_name, 0, available=actions)
 
     assert item_action.is_item_use
     assert item_action.source_item_uuid == kit.uuid
     assert item_action.display_name == "Deploy Field Focus (Field Kit)"
-    assert event is not None
+    assert isinstance(event, ActionEvent)
     assert event.phase == EventPhase.COMPLETION
+    assert event.source_item_uuid == kit.uuid
+    assert event.source_item_presentation is not None
+    assert event.source_item_presentation.item_uuid == kit.uuid
+    assert event.item_charge_cost == 1
     assert kit.charges == 0
+    assert hero.action_economy.actions.normalized_score == actions_before
+    assert (
+        hero.action_economy.bonus_actions.normalized_score
+        == bonus_actions_before - 1
+    )
     assert "Field Focus" in hero.active_conditions
 
     refreshed = get_available_actions(hero)
@@ -268,14 +279,25 @@ def test_floor_object_use_action_comes_from_nearby_sensed_item(capsys) -> None:
 
     actions = get_available_actions(hero)
     item_action = find_item_action(actions, "Deploy Field Focus", kit.uuid)
+    actions_before = hero.action_economy.actions.normalized_score
+    bonus_actions_before = hero.action_economy.bonus_actions.normalized_score
     event = execute_by_index(hero, item_action.template_name, 0, available=actions)
 
     assert kit.uuid in hero.senses.objects
     assert item_action.is_item_use
     assert item_action.source_item_uuid == kit.uuid
-    assert event is not None
+    assert isinstance(event, ActionEvent)
     assert event.phase == EventPhase.COMPLETION
+    assert event.source_item_uuid == kit.uuid
+    assert event.source_item_presentation is not None
+    assert event.source_item_presentation.item_uuid == kit.uuid
+    assert event.item_charge_cost == 1
     assert kit.charges == 0
+    assert hero.action_economy.actions.normalized_score == actions_before
+    assert (
+        hero.action_economy.bonus_actions.normalized_score
+        == bonus_actions_before - 1
+    )
     assert "Field Focus" in hero.active_conditions
 
     readout_lines = [

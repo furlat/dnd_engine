@@ -8,12 +8,12 @@ import math
 from types import MappingProxyType
 from typing import AbstractSet, Optional, Tuple
 
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from ai.protocol.semantics import TruthValue
+from server.agent_protocol.semantics import TruthValue
 from dnd.core.geometry import supercover_line
 
 

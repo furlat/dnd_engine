@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
 
-from ai.evaluation.gauntlet_contract import GauntletEvent, GauntletEventType
+from server.agent_protocol.gauntlet import GauntletEvent, GauntletEventType
 from server.event_stream import BoundedSubscription, DEFAULT_SUBSCRIPTION_MAX_DEPTH, EvictedPayload
 
 DEFAULT_GAUNTLET_HISTORY_LIMIT = 2048

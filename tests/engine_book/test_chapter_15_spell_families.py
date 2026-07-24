@@ -14,13 +14,16 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Blinded, Concentrating, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
 from dnd.core.base_actions import TargetType
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
-from dnd.core.base_conditions import BaseCondition, ConditionTag, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import water_factory
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import AttackOutcome, RollType
-from dnd.core.events import AbilityName, Event, EventPhase, EventQueue, EventType, FireExposureEvent, RangeType, WeaponSlot, WindExposureEvent
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import AbilityName, Event, EventPhase, EventQueue, EventType, FireExposureEvent, RangeType, WindExposureEvent
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.modifiers import (
     AdvantageStatus,
     AutoHitStatus,
@@ -71,7 +74,7 @@ from dnd.spells.conjuration import (
     WebZone,
 )
 from dnd.spells.divination import Guidance, SeeInvisibility
-from dnd.spells.evocation import CureWounds, GustOfWindZone, HealingWord, RayOfFrostEffect
+from dnd.spells.evocation import CureWounds, GustOfWind, GustOfWindZone, HealingWord, RayOfFrostEffect
 from dnd.spells.illusion import ColorSpray, Invisibility, MirrorImage
 from dnd.spells.illusion import MirrorImageEffect
 from dnd.spells.necromancy import AbilityCurseEffect, Eyebite, FalseLife
@@ -528,7 +531,8 @@ def test_eb_15_023_restoration_spells_remove_supported_effects_only() -> None:
     assert "Poisoned" in ally.active_conditions
     assert "Lingering Disease" in ally.active_conditions
     assert "Stunned" in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
 
     lesser_event = LesserRestoration(
         source_entity_uuid=caster.uuid,
@@ -540,7 +544,8 @@ def test_eb_15_023_restoration_spells_remove_supported_effects_only() -> None:
     assert "Poisoned" not in ally.active_conditions
     assert "Lingering Disease" in ally.active_conditions
     assert "Stunned" in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
     assert caster.action_economy.spell_slot_2.normalized_score == 1
 
     caster.action_economy.reset_all_costs()
@@ -553,7 +558,8 @@ def test_eb_15_023_restoration_spells_remove_supported_effects_only() -> None:
     lesser_disease_event = assert_completed_spell(lesser_disease_event)
     assert "Lingering Disease" not in ally.active_conditions
     assert "Stunned" in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
     assert caster.action_economy.spell_slot_2.normalized_score == 0
 
     caster.action_economy.reset_all_costs()
@@ -566,6 +572,7 @@ def test_eb_15_023_restoration_spells_remove_supported_effects_only() -> None:
     greater_event = assert_completed_spell(greater_event)
     assert "Stunned" not in ally.active_conditions
     assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 1
     assert caster.action_economy.spell_slot_5.normalized_score == 1
 
     caster.action_economy.reset_all_costs()
@@ -715,7 +722,8 @@ def test_eb_15_039_greater_restoration_removes_standard_petrified_condition() ->
     )
 
     assert "Petrified" in ally.active_conditions
-    assert "Incapacitated" in ally.active_conditions
+    assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 0
     assert ally.check_condition_immunity("Poisoned")
     for damage_type in DamageType:
         assert ally.health.get_resistance(damage_type) == ResistanceStatus.RESISTANCE
@@ -729,6 +737,7 @@ def test_eb_15_039_greater_restoration_removes_standard_petrified_condition() ->
     restoration_event = assert_completed_spell(restoration_event)
     assert "Petrified" not in ally.active_conditions
     assert "Incapacitated" not in ally.active_conditions
+    assert ally.action_economy.action_permission.normalized_score == 1
     assert not ally.check_condition_immunity("Poisoned")
     for damage_type in DamageType:
         assert ally.health.get_resistance(damage_type) == ResistanceStatus.NONE
@@ -928,7 +937,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     warded_kill_event = assert_completed_spell(warded_kill_event)
     assert "Death Ward" not in ally.active_conditions
     assert get_hp(ally) == 50
-    assert "Dead" not in ally.active_conditions
+    assert ally.health.life_state is LifeState.ALIVE
     assert caster.action_economy.spell_slot_9.normalized_score == 1
 
     caster.action_economy.reset_all_costs()
@@ -940,7 +949,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     ).apply()
     unwarded_kill_event = assert_completed_spell(unwarded_kill_event)
     assert get_hp(doomed) == 0
-    assert "Dead" in doomed.active_conditions
+    assert doomed.health.life_state is LifeState.DEAD
     assert caster.action_economy.spell_slot_9.normalized_score == 0
 
     caster.action_economy.reset_all_costs()
@@ -1714,6 +1723,7 @@ def test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup() -> None:
     assert "Hold Person" not in target.active_conditions
     assert "Paralyzed" not in target.active_conditions
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
     assert "Concentrating" not in caster.active_conditions
 
 
@@ -1802,6 +1812,7 @@ def test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup() -> None:
     assert "Hold Monster" not in target.active_conditions
     assert "Paralyzed" not in target.active_conditions
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
     assert "Concentrating" not in caster.active_conditions
 
 
@@ -2025,6 +2036,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(1, 1), spell_slots={1: 1})
     target = create_family_target(name="Grease Target", position=(8, 5))
+    setup_standard_actions(target)
     penalize_save(target, "dexterity")
     Entity.update_all_entities_senses(max_distance=30)
 
@@ -2048,7 +2060,8 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     target.remove_condition("Prone")
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         target.on_turn_start(round_number=1, turn_index=0)
-    assert "Prone" in target.active_conditions
+    assert "Prone" not in target.active_conditions
+    assert target.action_economy.movement.normalized_score == 15
 
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
@@ -2563,6 +2576,65 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     assert cloud_zone.event_handlers_uuids == []
 
 
+def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
+    """EB-15-045: ending Gust invalidates paths cached with difficult terrain."""
+    reset_spell_family_state(width=25, height=21)
+    grid = get_map()
+    for x in range(25):
+        grid.set_tile(x, 9, walkable=False, visible=False, name="Wall")
+        grid.set_tile(x, 11, walkable=False, visible=False, name="Wall")
+
+    caster = create_family_caster(
+        position=(1, 10),
+        spell_slots={2: 1},
+    )
+    mover = create_family_target(
+        name="Mover",
+        position=(5, 10),
+    )
+    setup_standard_actions(mover)
+    boost_save(mover, "strength")
+    Entity.update_all_entities_senses(max_distance=20)
+    mover.update_entity_senses(max_distance=20, path_max_distance=6)
+
+    def move_targets() -> set[tuple[int, int]]:
+        move = next(
+            action
+            for action in mover.get_available_actions().position_actions
+            if action.template_name == "Move"
+        )
+        return {
+            target.position
+            for target in move.valid_targets
+            if target.position is not None
+        }
+
+    targets_before = move_targets()
+    revision_before = grid.movement_revision
+    cast_event = GustOfWind(
+        source_entity_uuid=caster.uuid,
+        end_position=(20, 10),
+        cast_at_level=2,
+        template=False,
+    ).apply()
+
+    assert_completed_spell(cast_event)
+    assert mover.position == (5, 10)
+    assert mover.senses._paths_dirty is True
+    assert grid.movement_revision > revision_before
+
+    targets_during = move_targets()
+    assert len(targets_during) < len(targets_before)
+    revision_during = grid.movement_revision
+
+    caster.remove_condition("Concentrating")
+
+    assert mover.senses._paths_dirty is True
+    assert grid.movement_revision > revision_during
+    targets_restored = move_targets()
+    assert targets_restored == targets_before
+
+
 def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     """EB-15-043: Sleet Storm douses exposed carried and placed flames."""
     reset_spell_family_state(width=24, height=18)
@@ -2817,14 +2889,18 @@ def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
         == AdvantageStatus.ADVANTAGE
     )
-    assert target.action_economy.actions.normalized_score == base_actions + 1
+    assert target.action_economy.actions.normalized_score == base_actions
+    assert target.action_economy.resources["haste_action"].current == 1
     assert caster.action_economy.spell_slot_3.normalized_score == 0
 
     caster.remove_condition("Concentrating")
 
     assert "Concentrating" not in caster.active_conditions
     assert "Haste" not in target.active_conditions
-    assert "Incapacitated" in target.active_conditions
+    assert "haste_action" not in target.action_economy.resources
+    assert "Haste Lethargy" in target.active_conditions
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.movement.normalized_score == 0
 
@@ -2919,7 +2995,9 @@ def test_eb_15_013_sleep_hp_pool_selection_immunity_and_wake_on_damage() -> None
 
     event = assert_completed_spell(event)
     assert "Sleep" in low.active_conditions
-    assert "Unconscious" in low.active_conditions
+    assert "Unconscious" not in low.active_conditions
+    assert low.action_economy.action_permission.normalized_score == 0
+    assert low.senses.visual_access.normalized_score == 0
     assert "Sleep" not in mid.active_conditions
     assert sleep.hp_pool_remaining == 0
     assert caster.action_economy.spell_slot_1.normalized_score == 1
@@ -2928,6 +3006,8 @@ def test_eb_15_013_sleep_hp_pool_selection_immunity_and_wake_on_damage() -> None
 
     assert "Sleep" not in low.active_conditions
     assert "Unconscious" not in low.active_conditions
+    assert low.action_economy.action_permission.normalized_score == 1
+    assert low.senses.visual_access.normalized_score == 1
 
 
 def test_eb_15_014_color_spray_hp_pool_skips_and_blinded_cleanup() -> None:
@@ -3211,7 +3291,9 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
 
     sleep_event = assert_completed_spell(sleep_event)
     assert "Sleep" in sleeper.active_conditions
-    assert "Unconscious" in sleeper.active_conditions
+    assert "Unconscious" not in sleeper.active_conditions
+    assert sleeper.action_economy.action_permission.normalized_score == 0
+    assert sleeper.senses.visual_access.normalized_score == 0
 
     sleep_actions = [
         action for action in helper.get_available_actions().entity_actions
@@ -3228,6 +3310,8 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
     assert not wake_event.canceled
     assert "Sleep" not in sleeper.active_conditions
     assert "Unconscious" not in sleeper.active_conditions
+    assert sleeper.action_economy.action_permission.normalized_score == 1
+    assert sleeper.senses.visual_access.normalized_score == 1
     assert helper.action_economy.actions.normalized_score == 0
     assert all(
         action.template_name != "Shake Awake"
@@ -3252,7 +3336,9 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
 
     eyebite_event = assert_completed_spell(eyebite_event)
     assert "Eyebite Asleep" in sleeper.active_conditions
-    assert "Unconscious" in sleeper.active_conditions
+    assert "Unconscious" not in sleeper.active_conditions
+    assert sleeper.action_economy.action_permission.normalized_score == 0
+    assert sleeper.senses.visual_access.normalized_score == 0
 
     helper.action_economy.reset_all_costs()
     eyebite_actions = [
@@ -3270,6 +3356,8 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
     assert not wake_eyebite_event.canceled
     assert "Eyebite Asleep" not in sleeper.active_conditions
     assert "Unconscious" not in sleeper.active_conditions
+    assert sleeper.action_economy.action_permission.normalized_score == 1
+    assert sleeper.senses.visual_access.normalized_score == 1
     assert helper.action_economy.actions.normalized_score == 0
 
 

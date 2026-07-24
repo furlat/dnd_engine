@@ -92,7 +92,7 @@ from ai.codex_tools.session_transcript import (
 )
 from ai.knowledge import derive_agent_facts
 from ai.knowledge.models import AgentFacts, TargetEffectBlockHypothesis
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     ObservationEntityFact,
     ObservationObjectFact,
     SubjectiveWorldState,
@@ -113,8 +113,9 @@ from ai.policy.generations.registry import (
 )
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from ai.policy.host import PolicyDecisionDiagnostics
-from ai.protocol.control import ActionCostProfile, ActionEconomyState, CommandResult, DecisionEpoch
-from ai.subjective.models import AgentEvent, AgentState
+from server.agent_protocol.control import ActionCostProfile, ActionEconomyState, CommandResult, DecisionEpoch
+from ai.subjective.models import AgentState
+from server.agent_protocol.telemetry import AgentEvent
 from ai.subjective.queries import (
     SubjectiveQueries,
     SubjectiveQueryResult,
@@ -1270,6 +1271,7 @@ class HotCodexSession:
                 pass
             with self._state_lock:
                 self._require_writable_unlocked()
+                self._record_terminal_if_reached_unlocked()
                 return self._turn_index_unlocked()
         finally:
             self._wait_lock.release()
@@ -1490,6 +1492,19 @@ class HotCodexSession:
             heartbeat.join(timeout=1.0)
         upstream_status: Optional[str] = None
         shutdown_failures: list[str] = []
+        # Both local telemetry queues may still contain actor-scoped events.
+        # Drain them while this session still owns its claimed entities; the
+        # server correctly rejects those events after ownership is released.
+        try:
+            self.policy_telemetry.close()
+        except Exception as exc:
+            shutdown_failures.append(f"policy telemetry close: {type(exc).__name__}: {exc}")
+            logger.warning("hot Codex policy telemetry close failed", exc_info=True)
+        try:
+            self.runtime.close()
+        except Exception as exc:
+            shutdown_failures.append(f"subjective runtime close: {type(exc).__name__}: {exc}")
+            logger.warning("hot Codex subjective runtime close failed", exc_info=True)
         if self.control_client is not None:
             try:
                 upstream = self.control_client.release(self.claim_id)
@@ -1505,16 +1520,6 @@ class HotCodexSession:
                 except Exception as exc:
                     shutdown_failures.append(f"control client close: {type(exc).__name__}: {exc}")
                     logger.warning("hot Codex control client close failed", exc_info=True)
-        try:
-            self.policy_telemetry.close()
-        except Exception as exc:
-            shutdown_failures.append(f"policy telemetry close: {type(exc).__name__}: {exc}")
-            logger.warning("hot Codex policy telemetry close failed", exc_info=True)
-        try:
-            self.runtime.close()
-        except Exception as exc:
-            shutdown_failures.append(f"subjective runtime close: {type(exc).__name__}: {exc}")
-            logger.warning("hot Codex subjective runtime close failed", exc_info=True)
         view = HotCodexReleaseView(
             status="released",
             claim_id=self.claim_id,
@@ -2265,22 +2270,30 @@ class HotCodexSession:
             actor_uuid=result.actor_uuid,
             command_id=result.command_id,
         )
+        self._record_terminal_if_reached_unlocked()
+
+    def _record_terminal_if_reached_unlocked(self) -> None:
+        """Retain terminal subjective state once, regardless of who ended play."""
+        if self.transcript is None:
+            return
         world = self._world_unlocked()
-        if world.encounter is not None and world.encounter.state == "ended":
-            summary = self._brief_unlocked().encounter_summary
-            self.transcript.record_terminal(
-                {
-                    "final_revision": view.revision.model_dump(mode="json"),
-                    "final_subjective_world": world.model_dump(mode="json"),
-                    "encounter_summary": (
-                        summary.model_dump(mode="json")
-                        if summary is not None
-                        else None
-                    ),
-                },
-                encounter_uuid=world.encounter.uuid,
-                cursor=world.observation_cursor,
-            )
+        if world.encounter is None or world.encounter.state != "ended":
+            return
+        revision = self._revision_unlocked()
+        summary = self._brief_unlocked().encounter_summary
+        self.transcript.record_terminal(
+            {
+                "final_revision": revision.model_dump(mode="json"),
+                "final_subjective_world": world.model_dump(mode="json"),
+                "encounter_summary": (
+                    summary.model_dump(mode="json")
+                    if summary is not None
+                    else None
+                ),
+            },
+            encounter_uuid=world.encounter.uuid,
+            cursor=world.observation_cursor,
+        )
 
     def _require_writable_unlocked(self) -> None:
         """Reject writes when lease or lifecycle state is unsafe."""

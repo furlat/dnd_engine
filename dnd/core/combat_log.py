@@ -7,7 +7,12 @@ display payloads near the event data that produced them.
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+
+def position_evidence_key(position: Tuple[int, int]) -> str:
+    """Return the canonical internal key for one event-time grid position."""
+    return f"{position[0]},{position[1]}"
 
 
 class CombatLogEntryType(str, Enum):
@@ -177,6 +182,10 @@ class MovementLogData(BaseModel):
         path: Path cells traversed by the movement.
         distance_feet: Movement distance in feet.
         movement_cost: Action-economy movement cost in feet.
+        requested_end_position: Destination requested before partial termination.
+        termination_reason: Machine-readable reason movement ended.
+        controller_revalidation: Whether a committed step required a new decision.
+        controller_revalidation_reason: Subjective change requiring that decision.
     """
 
     entity_name: str = Field(description="Display name of the moving entity.")
@@ -505,6 +514,8 @@ class CombatLogEntry(BaseModel):
             keyed by participant UUID.
         located_entity_observer_uuids: Internal event-time exact-location grants,
             keyed by participant UUID.
+        located_position_observer_uuids: Internal event-time coordinate grants,
+            keyed by canonical ``x,y`` position.
     """
 
     entry_type: CombatLogEntryType = Field(description="Category of combat-log entry.")
@@ -533,10 +544,12 @@ class CombatLogEntry(BaseModel):
     perceiver_uuids: Set[str] = Field(
         default_factory=set,
         description="Entity UUIDs that could perceive this event when it happened.",
+        json_schema_extra={"uniqueItems": True},
     )
     revealed_entity_uuids: Set[str] = Field(
         default_factory=set,
         description="Entity UUIDs revealed during this event chain.",
+        json_schema_extra={"uniqueItems": True},
     )
     identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
         default_factory=dict,
@@ -554,6 +567,23 @@ class CombatLogEntry(BaseModel):
             "located them exactly when this event occurred."
         ),
     )
+    located_position_observer_uuids: Dict[str, Set[str]] = Field(
+        default_factory=dict,
+        exclude=True,
+        description=(
+            "Internal mapping from exact grid coordinates to observer UUIDs "
+            "that saw that coordinate at the relevant event phase."
+        ),
+    )
+
+    @field_serializer(
+        "perceiver_uuids",
+        "revealed_entity_uuids",
+        when_used="json",
+    )
+    def serialize_uuid_set(self, value: Set[str]) -> List[str]:
+        """Emit unordered UUID knowledge as a canonical JSON array."""
+        return sorted(value)
 
     def get_text(self, verbosity: CombatLogVerbosity) -> str:
         """Get formatted text at specified verbosity level."""

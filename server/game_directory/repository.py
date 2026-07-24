@@ -1777,62 +1777,81 @@ class GameDirectoryRepository:
     def publish_artifact(self, request: ArtifactCreate) -> ArtifactRecord:
         """Publish immutable artifact metadata idempotently by content identity."""
 
-        now = self._now()
         with self._database.transaction("publish_artifact") as connection:
-            existing_identity = connection.execute(
+            return self._publish_artifact_in_transaction(
+                connection,
+                request,
+                created_at=self._now(),
+            )
+
+    def _publish_artifact_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        request: ArtifactCreate,
+        *,
+        created_at: datetime,
+    ) -> ArtifactRecord:
+        """Insert or authenticate immutable artifact metadata in a caller transaction."""
+        existing_identity = connection.execute(
+            """
+            SELECT * FROM game_artifacts
+            WHERE COALESCE(game_id, '') = COALESCE(?, '')
+              AND artifact_kind = ? AND content_digest = ?
+            """,
+            (
+                str(request.game_id) if request.game_id else None,
+                request.artifact_kind.value,
+                request.content_digest,
+            ),
+        ).fetchone()
+        if existing_identity is not None:
+            existing = _artifact_from_row(existing_identity)
+            if self._artifact_semantics(existing) != self._artifact_semantics(request):
+                raise ImmutableRecordError(
+                    "Artifact digest identity was reused with different metadata"
+                )
+            return existing
+        existing_id = connection.execute(
+            "SELECT * FROM game_artifacts WHERE artifact_id = ?",
+            (str(request.artifact_id),),
+        ).fetchone()
+        if existing_id is not None:
+            raise ImmutableRecordError(
+                f"Artifact id {request.artifact_id} already identifies different content"
+            )
+        try:
+            connection.execute(
                 """
-                SELECT * FROM game_artifacts
-                WHERE COALESCE(game_id, '') = COALESCE(?, '')
-                  AND artifact_kind = ? AND content_digest = ?
+                INSERT INTO game_artifacts(
+                    artifact_id, game_id, artifact_kind, schema_version,
+                    media_type, uri, byte_size, content_digest, created_at,
+                    producer_kind, producer_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    str(request.artifact_id),
                     str(request.game_id) if request.game_id else None,
                     request.artifact_kind.value,
+                    request.schema_version,
+                    request.media_type,
+                    request.uri,
+                    request.byte_size,
                     request.content_digest,
+                    datetime_to_text(created_at),
+                    request.producer_kind.value,
+                    request.producer_version,
                 ),
-            ).fetchone()
-            if existing_identity is not None:
-                existing = _artifact_from_row(existing_identity)
-                if self._artifact_semantics(existing) != self._artifact_semantics(request):
-                    raise ImmutableRecordError("Artifact digest identity was reused with different metadata")
-                return existing
-            existing_id = connection.execute(
-                "SELECT * FROM game_artifacts WHERE artifact_id = ?",
-                (str(request.artifact_id),),
-            ).fetchone()
-            if existing_id is not None:
-                raise ImmutableRecordError(f"Artifact id {request.artifact_id} already identifies different content")
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO game_artifacts(
-                        artifact_id, game_id, artifact_kind, schema_version,
-                        media_type, uri, byte_size, content_digest, created_at,
-                        producer_kind, producer_version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(request.artifact_id),
-                        str(request.game_id) if request.game_id else None,
-                        request.artifact_kind.value,
-                        request.schema_version,
-                        request.media_type,
-                        request.uri,
-                        request.byte_size,
-                        request.content_digest,
-                        datetime_to_text(now),
-                        request.producer_kind.value,
-                        request.producer_version,
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(f"Artifact {request.artifact_id} could not be published: {exc}") from exc
-            row = self._required_row(
-                connection,
-                "SELECT * FROM game_artifacts WHERE artifact_id = ?",
-                (str(request.artifact_id),),
-                "artifact",
             )
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(
+                f"Artifact {request.artifact_id} could not be published: {exc}"
+            ) from exc
+        row = self._required_row(
+            connection,
+            "SELECT * FROM game_artifacts WHERE artifact_id = ?",
+            (str(request.artifact_id),),
+            "artifact",
+        )
         return _artifact_from_row(row)
 
     def list_artifacts(
@@ -1856,7 +1875,7 @@ class GameDirectoryRepository:
                 ).fetchall()
         return tuple(_artifact_from_row(row) for row in rows)
 
-    def publish_final_summary(
+    def publish_summary_correction(
         self,
         summary: GameSummary,
         *,
@@ -1866,13 +1885,256 @@ class GameDirectoryRepository:
         supersedes_summary_id: UUID | None = None,
         summary_id: UUID | None = None,
     ) -> FinalSummaryRecord:
-        """Publish one immutable objective summary revision atomically.
+        """Publish an immutable correction to existing terminal evidence.
 
-        Exact repeated publication is idempotent. A changed document must use
-        the next revision and explicitly supersede the current summary.
-        Publication updates the game's indexed terminal fields and appends one
-        ``summary_ready`` directory event in the same transaction.
+        Initial terminal publication has exactly one path:
+        :meth:`publish_terminal_evidence`.  Corrections may change derived
+        summary facts, but must preserve the replay coordinates fixed by that
+        terminal transaction.
         """
+
+        if summary_revision < 2:
+            raise ValueError("Summary corrections must start at revision 2")
+        try:
+            summary_game_id = UUID(summary.game_id)
+        except ValueError as exc:
+            raise ValueError("Persisted game summaries require a UUID game_id") from exc
+        with self._database.transaction("publish_summary_correction") as connection:
+            game_row = self._required_row(
+                connection,
+                "SELECT lifecycle_state FROM games WHERE game_id = ?",
+                (str(summary_game_id),),
+                "game",
+            )
+            if GameLifecycleState(game_row["lifecycle_state"]) is not GameLifecycleState.ENDED:
+                raise ConflictError(
+                    "Summary corrections require terminal replay evidence"
+                )
+            terminal_artifact_kinds = {
+                ArtifactKind(row["artifact_kind"])
+                for row in connection.execute(
+                    """
+                    SELECT artifact_kind FROM game_artifacts
+                    WHERE game_id = ? AND artifact_kind IN (?, ?)
+                    """,
+                    (
+                        str(summary_game_id),
+                        ArtifactKind.REPLAY_BUNDLE.value,
+                        ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE.value,
+                    ),
+                ).fetchall()
+            }
+            if terminal_artifact_kinds != {
+                ArtifactKind.REPLAY_BUNDLE,
+                ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+            }:
+                raise ConflictError(
+                    "Summary corrections require complete terminal replay evidence"
+                )
+            return self._publish_final_summary_in_transaction(
+                connection,
+                summary,
+                summary_revision=summary_revision,
+                source_event_digest=source_event_digest,
+                source_combat_log_digest=source_combat_log_digest,
+                supersedes_summary_id=supersedes_summary_id,
+                summary_id=summary_id,
+            )
+
+    def publish_terminal_evidence(
+        self,
+        replay_artifact: ArtifactCreate,
+        summary: GameSummary,
+        *,
+        additional_artifacts: tuple[ArtifactCreate, ...] = (),
+        summary_revision: int,
+        source_event_digest: str,
+        source_combat_log_digest: str,
+        supersedes_summary_id: UUID | None = None,
+        summary_id: UUID | None = None,
+    ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
+        """Atomically publish replay metadata, summary, and the ended transition.
+
+        Replay bytes are persisted by the caller before this transaction. An
+        exact retry against an already-ended game is idempotent; no other
+        terminal lifecycle may be resurrected as ended.
+        """
+        try:
+            summary_game_id = UUID(summary.game_id)
+        except ValueError as exc:
+            raise ValueError("Persisted game summaries require a UUID game_id") from exc
+        terminal_artifacts = (replay_artifact, *additional_artifacts)
+        if any(artifact.game_id != summary_game_id for artifact in terminal_artifacts):
+            raise ValueError("Terminal artifacts and summary must belong to the same game")
+        if replay_artifact.artifact_kind is not ArtifactKind.REPLAY_BUNDLE:
+            raise ValueError("Terminal evidence requires a replay-bundle artifact")
+        artifact_kinds = tuple(artifact.artifact_kind for artifact in terminal_artifacts)
+        if len(artifact_kinds) != len(set(artifact_kinds)):
+            raise ValueError("Terminal evidence artifacts must use distinct artifact kinds")
+
+        with self._database.transaction("publish_terminal_evidence") as connection:
+            game_row = self._required_row(
+                connection,
+                "SELECT * FROM games WHERE game_id = ?",
+                (str(summary_game_id),),
+                "game",
+            )
+            lifecycle_state = GameLifecycleState(game_row["lifecycle_state"])
+            if lifecycle_state is GameLifecycleState.ENDED:
+                return self._require_exact_terminal_evidence_retry(
+                    connection,
+                    replay_artifact,
+                    summary,
+                    additional_artifacts=additional_artifacts,
+                    summary_revision=summary_revision,
+                    source_event_digest=source_event_digest,
+                    source_combat_log_digest=source_combat_log_digest,
+                    supersedes_summary_id=supersedes_summary_id,
+                )
+            if lifecycle_state is not GameLifecycleState.ACTIVE:
+                raise ConflictError(
+                    "Terminal evidence can only end an active game"
+                )
+            if (
+                ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE
+                not in artifact_kinds
+            ):
+                raise ValueError(
+                    "Terminal evidence requires one subjective replay archive"
+                )
+
+            created_at = self._now()
+            artifact = self._publish_artifact_in_transaction(
+                connection,
+                replay_artifact,
+                created_at=created_at,
+            )
+            additional_records = tuple(
+                self._publish_artifact_in_transaction(
+                    connection,
+                    additional_artifact,
+                    created_at=created_at,
+                )
+                for additional_artifact in additional_artifacts
+            )
+            published_summary = self._publish_final_summary_in_transaction(
+                connection,
+                summary,
+                summary_revision=summary_revision,
+                source_event_digest=source_event_digest,
+                source_combat_log_digest=source_combat_log_digest,
+                supersedes_summary_id=supersedes_summary_id,
+                summary_id=summary_id,
+                replay_artifact=artifact,
+                additional_artifacts=additional_records,
+                created_at=created_at,
+            )
+            return artifact, published_summary
+
+    def _require_exact_terminal_evidence_retry(
+        self,
+        connection: sqlite3.Connection,
+        replay_artifact: ArtifactCreate,
+        summary: GameSummary,
+        *,
+        additional_artifacts: tuple[ArtifactCreate, ...],
+        summary_revision: int,
+        source_event_digest: str,
+        source_combat_log_digest: str,
+        supersedes_summary_id: UUID | None,
+    ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
+        """Authenticate a complete already-published terminal evidence pair."""
+        artifact = self._require_exact_terminal_artifact_retry(
+            connection,
+            replay_artifact,
+        )
+        for additional_artifact in additional_artifacts:
+            self._require_exact_terminal_artifact_retry(
+                connection,
+                additional_artifact,
+            )
+
+        persisted_subjective_count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM game_artifacts
+                WHERE game_id = ? AND artifact_kind = ?
+                """,
+                (
+                    str(replay_artifact.game_id),
+                    ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE.value,
+                ),
+            ).fetchone()[0]
+        )
+        requested_subjective_count = sum(
+            artifact.artifact_kind is ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE
+            for artifact in additional_artifacts
+        )
+        if persisted_subjective_count != requested_subjective_count:
+            raise ConflictError(
+                "Ended game subjective replay evidence differs from the exact retry"
+            )
+
+        summary_row = connection.execute(
+            "SELECT * FROM game_summaries WHERE game_id = ? AND summary_digest = ?",
+            (summary.game_id, summary.canonical_sha256),
+        ).fetchone()
+        if summary_row is None:
+            raise ConflictError("Ended game is missing the exact final summary")
+        published = _summary_from_row(summary_row)
+        if (
+            published.summary_revision != summary_revision
+            or published.source_event_digest != source_event_digest
+            or published.source_combat_log_digest != source_combat_log_digest
+            or published.supersedes_summary_id != supersedes_summary_id
+        ):
+            raise ImmutableRecordError(
+                "Summary retry changed revision or source evidence"
+            )
+        return artifact, published
+
+    def _require_exact_terminal_artifact_retry(
+        self,
+        connection: sqlite3.Connection,
+        request: ArtifactCreate,
+    ) -> ArtifactRecord:
+        """Authenticate one immutable artifact in an already-ended retry."""
+
+        artifact_row = connection.execute(
+            """
+            SELECT * FROM game_artifacts
+            WHERE game_id = ? AND artifact_kind = ? AND content_digest = ?
+            """,
+            (
+                str(request.game_id),
+                request.artifact_kind.value,
+                request.content_digest,
+            ),
+        ).fetchone()
+        if artifact_row is None:
+            raise ConflictError("Ended game is missing an exact terminal artifact")
+        artifact = _artifact_from_row(artifact_row)
+        if self._artifact_semantics(artifact) != self._artifact_semantics(request):
+            raise ImmutableRecordError(
+                "Terminal artifact retry changed immutable metadata"
+            )
+        return artifact
+
+    def _publish_final_summary_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        summary: GameSummary,
+        *,
+        summary_revision: int,
+        source_event_digest: str,
+        source_combat_log_digest: str,
+        supersedes_summary_id: UUID | None,
+        summary_id: UUID | None,
+        replay_artifact: ArtifactRecord | None = None,
+        additional_artifacts: tuple[ArtifactRecord, ...] = (),
+        created_at: datetime | None = None,
+    ) -> FinalSummaryRecord:
+        """Insert one final-summary revision inside a caller-owned transaction."""
 
         if summary_revision < 1:
             raise ValueError("summary_revision must be positive")
@@ -1893,136 +2155,161 @@ class GameDirectoryRepository:
         turn_count = sum(entity.statistics.turns_started for entity in summary.entities)
         duration_ms = round((summary.duration_seconds or 0.0) * 1000)
         schema_version = f"{summary.schema_name}.v{summary.schema_version}"
-        now = self._now()
+        now = created_at or self._now()
         if not summary_digest_is_valid(summary):
             raise ValueError("Canonical game-summary digest is invalid")
         summary_json = canonical_json(summary)
         summary_digest = summary.canonical_sha256
         resolved_summary_id = summary_id or uuid4()
-        with self._database.transaction("publish_final_summary") as connection:
-            self._required_row(
-                connection,
-                "SELECT game_id FROM games WHERE game_id = ?",
-                (str(summary_game_id),),
-                "game",
-            )
-            identical_row = connection.execute(
-                "SELECT * FROM game_summaries WHERE game_id = ? AND summary_digest = ?",
-                (str(summary_game_id), summary_digest),
-            ).fetchone()
-            if identical_row is not None:
-                identical = _summary_from_row(identical_row)
-                if (
-                    identical.summary_revision != summary_revision
-                    or identical.source_event_digest != source_event_digest
-                    or identical.source_combat_log_digest != source_combat_log_digest
-                    or identical.supersedes_summary_id != supersedes_summary_id
-                ):
-                    raise ImmutableRecordError(
-                        "Summary digest was reused with different revision or source evidence"
-                    )
-                return identical
-
-            revision_row = connection.execute(
-                "SELECT * FROM game_summaries WHERE game_id = ? AND summary_revision = ?",
-                (str(summary_game_id), summary_revision),
-            ).fetchone()
-            if revision_row is not None:
+        self._required_row(
+            connection,
+            "SELECT game_id FROM games WHERE game_id = ?",
+            (str(summary_game_id),),
+            "game",
+        )
+        identical_row = connection.execute(
+            "SELECT * FROM game_summaries WHERE game_id = ? AND summary_digest = ?",
+            (str(summary_game_id), summary_digest),
+        ).fetchone()
+        if identical_row is not None:
+            identical = _summary_from_row(identical_row)
+            if (
+                identical.summary_revision != summary_revision
+                or identical.source_event_digest != source_event_digest
+                or identical.source_combat_log_digest != source_combat_log_digest
+                or identical.supersedes_summary_id != supersedes_summary_id
+            ):
                 raise ImmutableRecordError(
-                    f"Summary revision {summary_revision} already contains different content"
+                    "Summary digest was reused with different revision or source evidence"
                 )
+            return identical
 
-            current_row = connection.execute(
-                "SELECT * FROM game_summaries WHERE game_id = ? AND is_current = 1",
-                (str(summary_game_id),),
-            ).fetchone()
-            if current_row is None:
-                if summary_revision != 1 or supersedes_summary_id is not None:
-                    raise ImmutableRecordError(
-                        "The first summary must be revision 1 and cannot supersede another summary"
-                    )
-            else:
-                current = _summary_from_row(current_row)
-                if summary_revision != current.summary_revision + 1:
-                    raise ImmutableRecordError("Summary revisions must increase by exactly one")
-                if supersedes_summary_id != current.summary_id:
-                    raise ImmutableRecordError(
-                        "A correction must explicitly supersede the current summary"
-                    )
-                connection.execute(
-                    "UPDATE game_summaries SET is_current = 0 WHERE summary_id = ?",
-                    (str(current.summary_id),),
+        revision_row = connection.execute(
+            "SELECT * FROM game_summaries WHERE game_id = ? AND summary_revision = ?",
+            (str(summary_game_id), summary_revision),
+        ).fetchone()
+        if revision_row is not None:
+            raise ImmutableRecordError(
+                f"Summary revision {summary_revision} already contains different content"
+            )
+
+        current_row = connection.execute(
+            "SELECT * FROM game_summaries WHERE game_id = ? AND is_current = 1",
+            (str(summary_game_id),),
+        ).fetchone()
+        if current_row is None:
+            if summary_revision != 1 or supersedes_summary_id is not None:
+                raise ImmutableRecordError(
+                    "The first summary must be revision 1 and cannot supersede another summary"
                 )
-
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO game_summaries(
-                        summary_id, game_id, schema_version, summary_revision,
-                        summary_json, summary_digest, winner_side_id,
-                        terminal_reason, round_count, turn_count, duration_ms,
-                        source_event_digest, source_combat_log_digest, created_at,
-                        supersedes_summary_id, is_current
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                    """,
-                    (
-                        str(resolved_summary_id),
-                        str(summary_game_id),
-                        schema_version,
-                        summary_revision,
-                        summary_json,
-                        summary_digest,
-                        winner_side_id,
-                        terminal_reason,
-                        summary.rounds_started,
-                        turn_count,
-                        duration_ms,
-                        source_event_digest,
-                        source_combat_log_digest,
-                        datetime_to_text(now),
-                        str(supersedes_summary_id) if supersedes_summary_id else None,
-                    ),
+        else:
+            current = _summary_from_row(current_row)
+            if (
+                current.summary.encounter_uuid != summary.encounter_uuid
+                or current.summary.terminal_cursor != summary.terminal_cursor
+            ):
+                raise ImmutableRecordError(
+                    "Summary corrections cannot change terminal replay coordinates"
                 )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(f"Summary could not be published: {exc}") from exc
+            if summary_revision != current.summary_revision + 1:
+                raise ImmutableRecordError("Summary revisions must increase by exactly one")
+            if supersedes_summary_id != current.summary_id:
+                raise ImmutableRecordError(
+                    "A correction must explicitly supersede the current summary"
+                )
+            connection.execute(
+                "UPDATE game_summaries SET is_current = 0 WHERE summary_id = ?",
+                (str(current.summary_id),),
+            )
 
+        try:
             connection.execute(
                 """
-                UPDATE games
-                SET lifecycle_state = 'ended', ended_at = ?, terminal_reason = ?,
-                    winner_side_id = ?, final_event_cursor = ?,
-                    final_combat_log_cursor = ?, current_summary_digest = ?,
-                    row_version = row_version + 1
-                WHERE game_id = ?
+                INSERT INTO game_summaries(
+                    summary_id, game_id, schema_version, summary_revision,
+                    summary_json, summary_digest, winner_side_id,
+                    terminal_reason, round_count, turn_count, duration_ms,
+                    source_event_digest, source_combat_log_digest, created_at,
+                    supersedes_summary_id, is_current
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 (
-                    datetime_to_text(summary.ended_at),
-                    terminal_reason,
-                    winner_side_id,
-                    summary.terminal_cursor.event_cursor,
-                    summary.terminal_cursor.combat_log_cursor,
-                    summary_digest,
+                    str(resolved_summary_id),
                     str(summary_game_id),
+                    schema_version,
+                    summary_revision,
+                    summary_json,
+                    summary_digest,
+                    winner_side_id,
+                    terminal_reason,
+                    summary.rounds_started,
+                    turn_count,
+                    duration_ms,
+                    source_event_digest,
+                    source_combat_log_digest,
+                    datetime_to_text(now),
+                    str(supersedes_summary_id) if supersedes_summary_id else None,
                 ),
             )
-            self._append_event_in_transaction(
-                connection,
-                game_id=summary_game_id,
-                event_type="summary_ready",
-                payload={
-                    "summary_id": str(resolved_summary_id),
-                    "summary_revision": summary_revision,
-                    "summary_digest": summary_digest,
-                    "schema_version": schema_version,
-                },
-                created_at=now,
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(f"Summary could not be published: {exc}") from exc
+
+        connection.execute(
+            """
+            UPDATE games
+            SET lifecycle_state = 'ended', ended_at = ?, terminal_reason = ?,
+                winner_side_id = ?, final_event_cursor = ?,
+                final_combat_log_cursor = ?, current_summary_digest = ?,
+                row_version = row_version + 1
+            WHERE game_id = ?
+            """,
+            (
+                datetime_to_text(summary.ended_at),
+                terminal_reason,
+                winner_side_id,
+                summary.terminal_cursor.event_cursor,
+                summary.terminal_cursor.combat_log_cursor,
+                summary_digest,
+                str(summary_game_id),
+            ),
+        )
+        event_payload = {
+            "summary_id": str(resolved_summary_id),
+            "summary_revision": summary_revision,
+            "summary_digest": summary_digest,
+            "schema_version": schema_version,
+        }
+        if replay_artifact is not None:
+            event_payload.update(
+                {
+                    "replay_artifact_id": str(replay_artifact.artifact_id),
+                    "replay_digest": replay_artifact.content_digest,
+                    "replay_schema_version": replay_artifact.schema_version,
+                }
             )
-            row = self._required_row(
-                connection,
-                "SELECT * FROM game_summaries WHERE summary_id = ?",
-                (str(resolved_summary_id),),
-                "game summary",
-            )
+        if additional_artifacts:
+            event_payload["additional_artifacts"] = [
+                {
+                    "artifact_id": str(artifact.artifact_id),
+                    "artifact_kind": artifact.artifact_kind.value,
+                    "content_digest": artifact.content_digest,
+                    "schema_version": artifact.schema_version,
+                }
+                for artifact in additional_artifacts
+            ]
+        self._append_event_in_transaction(
+            connection,
+            game_id=summary_game_id,
+            event_type="summary_ready",
+            payload=event_payload,
+            created_at=now,
+        )
+        row = self._required_row(
+            connection,
+            "SELECT * FROM game_summaries WHERE summary_id = ?",
+            (str(resolved_summary_id),),
+            "game summary",
+        )
         return _summary_from_row(row)
 
     def get_current_summary(self, game_id: UUID) -> FinalSummaryRecord:

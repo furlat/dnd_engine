@@ -11,22 +11,16 @@ from uuid import UUID, uuid4
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
-from dnd.core.events import EventQueue
-from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import (
     NumericalModifier, CriticalModifier, CriticalStatus, DamageType,
     AutoHitModifier, AutoHitStatus
 )
+from dnd.runtime_reset import reset_engine_runtime
 
 
 def reset_combat_state():
     """Clear all global state for a fresh combat test."""
-    from dnd.core.base_conditions import SpellProtectionRegistry
-    EventQueue.reset()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
-    SpellProtectionRegistry.reset()
+    reset_engine_runtime()
 
 
 def setup_combat_arena(

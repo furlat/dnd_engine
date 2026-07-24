@@ -6,8 +6,9 @@ from pydantic import Field
 
 from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import UsableItem
-from dnd.core.base_actions import ActionEvent, AvailableActionInfo, BaseAction, BaseCost, Cost, TargetType
-from dnd.core.base_conditions import BaseCondition, ConditionCategory
+from dnd.core.base_actions import ActionEvent, AvailableActionInfo, BaseAction, Cost, TargetType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
@@ -90,33 +91,6 @@ class DeployFieldFocus(BaseAction):
         description="Bonus-action cost required to deploy the focus.",
     )
     charge_cost: int = Field(default=1, description="Charges consumed when provided by an item.")
-
-    def _create_declaration_event(
-        self,
-        parent_event: Optional[Event] = None,
-        use_register: bool = True,
-    ) -> Optional[ActionEvent]:
-        """Create the action declaration event.
-
-        Args:
-            parent_event: Optional parent event for nested action resolution.
-            use_register: Whether the event should be globally registered.
-
-        Returns:
-            Declaration event for the action.
-        """
-        source = Entity.get(self.source_entity_uuid)
-        return ActionEvent(
-            name=self.name,
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source.name if source else None,
-        )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate that the actor can deploy Field Focus.

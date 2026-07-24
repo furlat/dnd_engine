@@ -19,6 +19,12 @@ Sha256Hex = Annotated[
     Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
 ]
 DEFAULT_RATING_MAX_COMMANDS = 400
+CONNECTED_MATCH_ENTRYPOINT = (
+    "ai.evaluation.config_ladder.match_runner:run_connected_match"
+)
+PROMOTION_MATCH_ENTRYPOINT = (
+    "ai.evaluation.promotion.match_runner:run_promotion_match"
+)
 
 
 class StrictFrozenModel(BaseModel):

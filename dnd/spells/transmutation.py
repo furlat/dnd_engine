@@ -28,7 +28,18 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
 )
-from dnd.core.base_conditions import BaseCondition, ConditionTag, HazardFilter, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import (
+    ConditionAgencyDenial,
+    ConditionTag,
+    DurationType,
+    HazardFilter,
+)
+from dnd.core.action_types import (
+    ActionEconomyCostType,
+    RestrictedActionGrant,
+    RestrictedActionKind,
+)
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
@@ -39,7 +50,8 @@ from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Incapacitated, Dashing, Restrained, Concentrating, ConcentrationActionMarker
+from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActionMarker
+from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
 from dnd.spells.spell_utils import fire_heal_roll_result
@@ -198,7 +210,8 @@ class SpikeGrowth(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             zone_center=target_pos,
-            spell_dc=dc
+            spell_dc=dc,
+            effect_origin=execution_event.to_effect_origin(),
         )
         caster.add_condition(zone, parent_event=effect_event)
 
@@ -344,31 +357,33 @@ class SlowedEffect(BaseCondition):
             if not entity:
                 return None
 
-            for cost in event.costs:
-                if cost.cost_type == "actions":
-                    lock_uuid = entity.action_economy.bonus_actions.self_static.add_max_constraint(
-                        constraint=NumericalModifier(
-                            name="Slowed: Bonus Locked",
-                            value=0,
-                            source_entity_uuid=target_uuid,
-                            target_entity_uuid=target_uuid
-                        )
+            committed_cost_types = {
+                cost.cost_type
+                for cost in event.costs
+                if cost.cost > 0
+            }
+            if ActionEconomyCostType.ACTIONS in committed_cost_types:
+                lock_uuid = entity.action_economy.bonus_actions.self_static.add_max_constraint(
+                    constraint=NumericalModifier(
+                        name="Slowed: Bonus Locked",
+                        value=0,
+                        source_entity_uuid=target_uuid,
+                        target_entity_uuid=target_uuid
                     )
-                    condition._lockout_modifier_uuid = lock_uuid
-                    condition._lockout_target_mv_uuid = entity.action_economy.bonus_actions.uuid
-                    return None
-                elif cost.cost_type == "bonus_actions":
-                    lock_uuid = entity.action_economy.actions.self_static.add_max_constraint(
-                        constraint=NumericalModifier(
-                            name="Slowed: Actions Locked",
-                            value=0,
-                            source_entity_uuid=target_uuid,
-                            target_entity_uuid=target_uuid
-                        )
+                )
+                condition._lockout_modifier_uuid = lock_uuid
+                condition._lockout_target_mv_uuid = entity.action_economy.bonus_actions.uuid
+            elif ActionEconomyCostType.BONUS_ACTIONS in committed_cost_types:
+                lock_uuid = entity.action_economy.actions.self_static.add_max_constraint(
+                    constraint=NumericalModifier(
+                        name="Slowed: Actions Locked",
+                        value=0,
+                        source_entity_uuid=target_uuid,
+                        target_entity_uuid=target_uuid
                     )
-                    condition._lockout_modifier_uuid = lock_uuid
-                    condition._lockout_target_mv_uuid = entity.action_economy.actions.uuid
-                    return None
+                )
+                condition._lockout_modifier_uuid = lock_uuid
+                condition._lockout_target_mv_uuid = entity.action_economy.actions.uuid
             return None
 
         return EventHandler(
@@ -376,9 +391,15 @@ class SlowedEffect(BaseCondition):
             source_entity_uuid=target_uuid,
             trigger_conditions=[
                 Trigger(
-                    event_type=EventType.BASE_ACTION,
+                    event_type=event_type,
                     event_phase=EventPhase.EFFECT,
                     event_source_entity_uuid=target_uuid
+                )
+                for event_type in (
+                    EventType.BASE_ACTION,
+                    EventType.ATTACK,
+                    EventType.MOVEMENT,
+                    EventType.CAST_SPELL,
                 )
             ],
             event_processor=processor
@@ -641,22 +662,60 @@ class Slow(SpellAction):
         )
 
 
+class HasteLethargyEffect(BaseCondition):
+    """Own the one-round incapacitation transform left when Haste ends."""
+
+    name: str = Field(default="Haste Lethargy", description="Condition name.")
+    description: str = Field(
+        default="Unable to move or take actions until the lethargy ends.",
+        description="Rules-facing condition summary.",
+    )
+    tags: Set[ConditionTag] = Field(
+        default_factory=lambda: {ConditionTag.MAGICAL},
+        description="Condition tags used by cleanup and rules filters.",
+    )
+    agency_denial: ConditionAgencyDenial = Field(
+        default=ConditionAgencyDenial.FULL_TURN,
+        description="Haste lethargy removes the target's turn agency.",
+    )
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
+    ]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not isinstance(target, Entity):
+            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
+        outs = apply_incapacitated_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
+        )
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"Applied Haste lethargy to {target.name}",
+        )
+        return outs, [], [], [], effect_event
+
+
 class HasteEffect(BaseCondition):
     """Apply Haste's modifier bundle and cleanup lethargy.
 
     The effect doubles movement by adding the current base speed, grants +2 AC,
-    advantage on Dexterity saves, and one additional action. Extra Attack is
-    suppressed when the last remaining action is the Haste action. Removal can
-    apply one round of Incapacitated lethargy.
+    advantage on Dexterity saves, and an explicitly restricted action budget.
+    The budget never mutates ordinary actions or Extra Attack. Removal can apply
+    one round of directly owned lethargy.
     """
     name: str = Field(default="Haste", description="Condition name.")
     description: str = Field(
-        default="Speed doubled, +2 AC, advantage on DEX saves, +1 action",
+        default=(
+            "Speed doubled, +2 AC, advantage on DEX saves, "
+            "one restricted Haste action"
+        ),
         description="Rules-facing condition summary.",
     )
     caster_uuid: Optional[UUID] = Field(default=None, description="UUID of the caster")
-    apply_lethargy: bool = Field(default=True, description="Apply Incapacitated when Haste ends")
-    _haste_ea_suppressed_this_turn: bool = PrivateAttr(default=False)
+    apply_lethargy: bool = Field(default=True, description="Apply incapacitating lethargy when Haste ends")
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
@@ -668,8 +727,6 @@ class HasteEffect(BaseCondition):
             )
 
         outs: List[Tuple[UUID, UUID]] = []
-        handler_uuids: List[UUID] = []
-
         base_speed_modifier = target.action_economy.movement.get_base_modifier()
         if base_speed_modifier:
             speed_bonus = base_speed_modifier.value
@@ -701,22 +758,28 @@ class HasteEffect(BaseCondition):
         dex_mod_uuid = dex_save.bonus.self_static.add_advantage_modifier(dex_adv)
         outs.append((dex_save.bonus.uuid, dex_mod_uuid))
 
-        action_mod = NumericalModifier(
-            name="Haste",
-            value=1,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid
+        target.action_economy.add_restricted_action_grant(
+            RestrictedActionGrant(
+                grant_id="haste",
+                owner_uuid=self.uuid,
+                resource_name="haste_action",
+                display_name="Haste",
+                allowed_kinds=frozenset(
+                    {
+                        RestrictedActionKind.WEAPON_ATTACK,
+                        RestrictedActionKind.DASH,
+                        RestrictedActionKind.DISENGAGE,
+                        RestrictedActionKind.HIDE,
+                    }
+                ),
+                replaced_cost_types=frozenset(
+                    {
+                        ActionEconomyCostType.ACTIONS,
+                        ActionEconomyCostType.BONUS_ACTIONS,
+                    }
+                ),
+            )
         )
-        target.action_economy.actions.self_static.add_value_modifier(action_mod)
-        outs.append((target.action_economy.actions.uuid, action_mod.uuid))
-
-        ea_handler = self._create_extra_attack_suppression_handler()
-        target.add_event_handler(ea_handler)
-        handler_uuids.append(ea_handler.uuid)
-
-        reset_handler = self._create_ea_suppression_reset_handler()
-        target.add_event_handler(reset_handler)
-        handler_uuids.append(reset_handler.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -724,7 +787,7 @@ class HasteEffect(BaseCondition):
             status_message=f"Applied Haste to {target.name}",
             resulting_ac=target.ac_bonus().normalized_score
         )
-        return outs, handler_uuids, [], [], effect_event
+        return outs, [], [], [], effect_event
 
     def _post_removal_stats(self) -> Dict[str, Any]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -732,86 +795,18 @@ class HasteEffect(BaseCondition):
             return {"resulting_ac": target.ac_bonus().normalized_score}
         return {}
 
-    def _create_extra_attack_suppression_handler(self) -> EventHandler:
-        """Suppress Extra Attack on the last remaining action (the haste action).
-
-        When remaining actions are one or fewer, the active action is treated as
-        the Haste action and Extra Attack is suppressed once for that turn.
-        """
-        target_uuid = type_cast(UUID, self.target_entity_uuid)
-        condition = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            if condition._haste_ea_suppressed_this_turn:
-                return None
-
-            entity = Entity.get(target_uuid)
-            if not entity:
-                return None
-
-            if isinstance(event, ActionEvent):
-                has_action_cost = any(
-                    c.cost_type == "actions" and c.cost > 0 for c in event.costs
-                )
-                if not has_action_cost:
-                    return None
-
-            remaining_actions = entity.action_economy.actions.normalized_score
-            if remaining_actions <= 1:
-                if entity.action_economy.has_resource("extra_attacks"):
-                    entity.action_economy.resources["extra_attacks"].current = 0
-                condition._haste_ea_suppressed_this_turn = True
-
-            return None
-
-        return EventHandler(
-            name="Haste: Extra Attack Suppression",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.ATTACK,
-                    event_phase=EventPhase.EXECUTION,
-                    event_source_entity_uuid=target_uuid
-                )
-            ],
-            event_processor=processor
-        )
-
-    def _create_ea_suppression_reset_handler(self) -> EventHandler:
-        """Reset the per-turn EA suppression flag at turn start."""
-        target_uuid = type_cast(UUID, self.target_entity_uuid)
-        condition = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.source_entity_uuid != target_uuid:
-                return None
-            condition._haste_ea_suppressed_this_turn = False
-            return None
-
-        return EventHandler(
-            name="Haste: EA Suppression Reset",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EXECUTION,
-                    event_source_entity_uuid=target_uuid
-                )
-            ],
-            event_processor=processor
-        )
-
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Apply lethargy (Incapacitated 1 round) when Haste ends, if apply_lethargy is True."""
+        """Apply the one-round Haste Lethargy effect when Haste ends."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if self.apply_lethargy and target and target.is_active:
-            lethargy = Incapacitated(
+        if isinstance(target, Entity):
+            target.action_economy.remove_restricted_action_grant(
+                "haste",
+                self.uuid,
+            )
+        if self.apply_lethargy and isinstance(target, Entity) and target.is_active:
+            lethargy = HasteLethargyEffect(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
-                tags={ConditionTag.MAGICAL}
             )
             lethargy.duration.duration_type = DurationType.ROUNDS
             lethargy.duration.duration = 1
@@ -827,7 +822,12 @@ class Haste(SpellAction):
     paths, applies lethargy through the effect removal hook.
     """
     name: str = Field(default="Haste", description="Spell name.")
-    description: str = Field(default="Double speed, +2 AC, DEX adv, +1 action", description="Rules-facing spell summary.")
+    description: str = Field(
+        default=(
+            "Double speed, +2 AC, DEX advantage, and one restricted action"
+        ),
+        description="Rules-facing spell summary.",
+    )
     spell_level: int = Field(default=3, description="Base spell level.")
     spell_school: str = Field(default="transmutation", description="Spell school.")
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")

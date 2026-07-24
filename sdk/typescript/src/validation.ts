@@ -1,4 +1,5 @@
 import {
+  SDK_ALIAS_DESCRIPTORS,
   SDK_ENUM_DESCRIPTORS,
   SDK_EVENT_CLASSES,
   SDK_MODEL_DESCRIPTORS,
@@ -6,6 +7,8 @@ import {
   type ContractDescriptor,
   type ConcreteServerEvent,
   type JsonValue,
+  type SdkAliasByName,
+  type SdkAliasName,
   type SdkModelByName,
   type SdkModelName,
   type ServerEvent,
@@ -69,11 +72,19 @@ function validateDescriptor(
       if (typeof value !== "string") {
         throw new ContractValidationError(path, "expected string");
       }
+      assertLength(value.length, descriptor, path);
       return;
     case "number":
       if (typeof value !== "number" || !Number.isFinite(value)) {
         throw new ContractValidationError(path, "expected finite number");
       }
+      assertNumericBounds(value, descriptor, path);
+      return;
+    case "integer":
+      if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+        throw new ContractValidationError(path, "expected safe integer");
+      }
+      assertNumericBounds(value, descriptor, path);
       return;
     case "boolean":
       if (typeof value !== "boolean") {
@@ -99,7 +110,10 @@ function validateDescriptor(
       return;
     }
     case "model":
-      if (descriptor.ref === "dnd.core.events.Event") {
+      if (
+        descriptor.ref === "dnd.core.events.Event"
+        || descriptor.ref === "server.timeline_contracts.WireEvent"
+      ) {
         validateServerEvent(value, path);
         return;
       }
@@ -109,6 +123,7 @@ function validateDescriptor(
       if (!Array.isArray(value)) {
         throw new ContractValidationError(path, "expected array");
       }
+      assertLength(value.length, descriptor, path);
       value.forEach((item, index) => {
         validateDescriptor(item, descriptor.items, `${path}[${index}]`);
       });
@@ -117,6 +132,7 @@ function validateDescriptor(
       if (!isRecord(value)) {
         throw new ContractValidationError(path, "expected object record");
       }
+      assertLength(Object.keys(value).length, descriptor, path);
       for (const [key, item] of Object.entries(value)) {
         validateDescriptor(item, descriptor.values, `${path}.${key}`);
       }
@@ -150,7 +166,48 @@ function validateDescriptor(
   }
 }
 
+function assertLength(
+  length: number,
+  descriptor: { readonly min_length?: number; readonly max_length?: number },
+  path: string,
+): void {
+  if (descriptor.min_length !== undefined && length < descriptor.min_length) {
+    throw new ContractValidationError(path, `expected length >= ${descriptor.min_length}`);
+  }
+  if (descriptor.max_length !== undefined && length > descriptor.max_length) {
+    throw new ContractValidationError(path, `expected length <= ${descriptor.max_length}`);
+  }
+}
+
+function assertNumericBounds(
+  value: number,
+  descriptor: {
+    readonly minimum?: number;
+    readonly exclusive_minimum?: number;
+    readonly maximum?: number;
+    readonly exclusive_maximum?: number;
+  },
+  path: string,
+): void {
+  if (descriptor.minimum !== undefined && value < descriptor.minimum) {
+    throw new ContractValidationError(path, `expected value >= ${descriptor.minimum}`);
+  }
+  if (descriptor.exclusive_minimum !== undefined && value <= descriptor.exclusive_minimum) {
+    throw new ContractValidationError(path, `expected value > ${descriptor.exclusive_minimum}`);
+  }
+  if (descriptor.maximum !== undefined && value > descriptor.maximum) {
+    throw new ContractValidationError(path, `expected value <= ${descriptor.maximum}`);
+  }
+  if (descriptor.exclusive_maximum !== undefined && value >= descriptor.exclusive_maximum) {
+    throw new ContractValidationError(path, `expected value < ${descriptor.exclusive_maximum}`);
+  }
+}
+
 function validateModelPath(value: unknown, modelPath: string, path: string): void {
+  if (modelPath === "server.timeline_contracts.WireEvent") {
+    validateServerEvent(value, path);
+    return;
+  }
   const model = SDK_MODEL_DESCRIPTORS[modelPath];
   if (model === undefined) {
     throw new ContractValidationError(path, `unknown model ${modelPath}`);
@@ -215,6 +272,18 @@ export function decodeModel<Name extends SdkModelName>(
   }
   validateModelPath(value, path, "$" + String(name));
   return value as SdkModelByName[Name];
+}
+
+export function decodeAlias<Name extends SdkAliasName>(
+  name: Name,
+  value: unknown,
+): SdkAliasByName[Name] {
+  const descriptor = SDK_ALIAS_DESCRIPTORS[name];
+  if (descriptor === undefined) {
+    throw new ContractValidationError("$", `unknown SDK alias ${String(name)}`);
+  }
+  validateDescriptor(value, descriptor, "$" + String(name));
+  return value as SdkAliasByName[Name];
 }
 
 export function validateServerEvent(value: unknown, path = "$event"): asserts value is ServerEvent {

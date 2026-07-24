@@ -1,21 +1,12 @@
 """Pydantic DTOs for REST API serialization."""
 
-from uuid import UUID
-from pydantic import BaseModel, Field, JsonValue, RootModel, SerializeAsAny, field_serializer
+from pydantic import (
+    BaseModel,
+    Field,
+)
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 
-from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.equipment import Armor, Shield, Weapon
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
-from dnd.core.base_conditions import ConditionCategory
-from dnd.core.combat_log import CombatLogEntry
-from dnd.core.events import Event
-from dnd.core.gridmap import GridMap
-from dnd.core.senses import SenseMode
-from dnd.encounter import Encounter
-from dnd.entity import Entity
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from dnd.scenarios.evaluation.models import (
     BattlefieldSpec,
@@ -23,7 +14,7 @@ from dnd.scenarios.evaluation.models import (
     LegacyScenarioRecipe,
     SideConfigurationSpec,
 )
-from server.event_contract import serialize_event
+from server import world_contracts
 
 
 class ServerCapabilitiesResponse(BaseModel):
@@ -43,181 +34,23 @@ class ServerCapabilitiesResponse(BaseModel):
     )
 
 
-class APIItemSummary(BaseModel):
-    """Expose lightweight item metadata for inventory and equipment views.
+class APIEquippableDisplacement(BaseModel):
+    """One equipped item displaced by a proposed equipment footprint."""
 
-    Attributes:
-        uuid: Stable item UUID serialized as text.
-        name: Display name of the item.
-        description: Optional player-facing item description.
-        item_type: API category for the concrete item kind.
-        rarity: Item rarity value.
-        weight: Item weight in pounds.
-        is_equipped: Whether the item is currently equipped.
-        equipped_slot: Equipment slot name when the item is equipped.
-        visual_item_name: Effective renderer registry key for the item.
-        visual_variant_id: Renderer variant identifier for the item, if any.
-        equipped_visual_policy: Whether the item contributes a separate actor layer.
-        damage_dice: Weapon damage dice such as `1d8` or `2d6`.
-        damage_type: Weapon damage type.
-        weapon_properties: Weapon property names.
-        armor_type: Armor category such as light, medium, or heavy.
-        armor_ac: Base armor class value from worn armor.
-        shield_ac_bonus: Armor class bonus granted by a shield.
-        charges: Current usable-item charges, with -1 meaning unlimited.
-        max_charges: Maximum usable-item charges.
-        stack_count: Number of items represented by this stack.
-        is_consumable: Whether use consumes the item or stack.
-    """
-
-    uuid: str = Field(description="Stable item UUID serialized as text.")
-    name: str = Field(description="Display name of the item.")
-    description: Optional[str] = Field(default=None, description="Optional player-facing item description.")
-    item_type: str = Field(description="API category for the concrete item kind.")
-    rarity: str = Field(description="Item rarity value.")
-    weight: float = Field(description="Item weight in pounds.")
-    is_equipped: bool = Field(description="Whether the item is currently equipped.")
-    equipped_slot: Optional[str] = Field(default=None, description="Equipment slot name when the item is equipped.")
-    visual_item_name: str = Field(description="Effective renderer registry key for the item.")
-    visual_variant_id: Optional[str] = Field(default=None, description="Renderer variant identifier for the item, if any.")
-    equipped_visual_policy: Literal["visible", "hidden"] = Field(description="Whether the equipped item contributes a separate actor layer.")
-    damage_dice: Optional[str] = Field(default=None, description="Weapon damage dice such as 1d8 or 2d6.")
-    damage_type: Optional[str] = Field(default=None, description="Weapon damage type.")
-    weapon_properties: List[str] = Field(default_factory=list, description="Weapon property names.")
-    armor_type: Optional[str] = Field(default=None, description="Armor category such as light, medium, or heavy.")
-    armor_ac: Optional[int] = Field(default=None, description="Base armor class value from worn armor.")
-    shield_ac_bonus: Optional[int] = Field(default=None, description="Armor class bonus granted by a shield.")
-    charges: Optional[int] = Field(default=None, description="Current usable-item charges, with -1 meaning unlimited.")
-    max_charges: Optional[int] = Field(default=None, description="Maximum usable-item charges.")
-    stack_count: Optional[int] = Field(default=None, description="Number of items represented by this stack.")
-    is_consumable: bool = Field(default=False, description="Whether use consumes the item or stack.")
-
-    @classmethod
-    def create(cls, item: BaseItem) -> 'APIItemSummary':
-        if isinstance(item, Weapon):
-            item_type = "weapon"
-        elif isinstance(item, Shield):
-            item_type = "shield"
-        elif isinstance(item, Armor):
-            item_type = "armor"
-        elif isinstance(item, UsableItem):
-            item_type = "usable"
-        else:
-            item_type = "item"
-
-        data: Dict[str, Any] = {
-            "uuid": str(item.uuid),
-            "name": item.name,
-            "description": item.description,
-            "item_type": item_type,
-            "rarity": item.rarity.value,
-            "weight": item.weight,
-            "is_equipped": item.is_equipped,
-            "equipped_slot": item.equipped_slot,
-            "visual_item_name": item.visual_item_name or item.name,
-            "visual_variant_id": item.visual_variant_id,
-            "equipped_visual_policy": item.equipped_visual_policy.value,
-        }
-
-        if isinstance(item, Weapon):
-            dice_str = f"{item.dice_numbers}d{item.damage_dice}"
-            data["damage_dice"] = dice_str
-            data["damage_type"] = item.damage_type.value
-            data["weapon_properties"] = [p.value for p in item.properties]
-
-        if isinstance(item, Armor):
-            data["armor_type"] = item.type.value
-            data["armor_ac"] = item.ac.score
-
-        if isinstance(item, Shield):
-            data["shield_ac_bonus"] = item.ac_bonus.score
-
-        if isinstance(item, UsableItem):
-            data["charges"] = item.charges
-            data["max_charges"] = item.max_charges
-            data["stack_count"] = item.stack_count
-            data["is_consumable"] = item.is_consumable
-
-        return cls(**data)
-
-
-class APIEquipmentSlot(BaseModel):
-    """Expose one equipment slot and its current item.
-
-    Attributes:
-        slot: Stable API slot name.
-        slot_type: Slot category for client grouping.
-        item: Equipped item summary when the slot is occupied.
-    """
-
-    slot: str = Field(description="Stable API slot name.")
-    slot_type: str = Field(description="Slot category for client grouping.")
-    item: Optional[APIItemSummary] = Field(default=None, description="Equipped item summary when the slot is occupied.")
-
-
-class APIEquipmentOverview(BaseModel):
-    """Expose equipped slots, armor class, and carried inventory.
-
-    Attributes:
-        slots: Equipment slots in stable display order.
-        ac: Current armor class after equipment and modifiers.
-        inventory: Unequipped inventory item summaries.
-    """
-
-    slots: List[APIEquipmentSlot] = Field(description="Equipment slots in stable display order.")
-    ac: int = Field(description="Current armor class after equipment and modifiers.")
-    inventory: List[APIItemSummary] = Field(description="Unequipped inventory item summaries.")
-
-    @classmethod
-    def create(cls, entity: 'Entity') -> 'APIEquipmentOverview':
-        equipment = entity.equipment
-
-        slot_defs: List[Tuple[str, str, Any]] = [
-            ("weapon_melee_main", "weapon", equipment.weapon_melee_main),
-            ("weapon_melee_off", "weapon", equipment.weapon_melee_off),
-            ("weapon_ranged_main", "weapon", equipment.weapon_ranged_main),
-            ("weapon_ranged_off", "weapon", equipment.weapon_ranged_off),
-            ("helmet", "armor", equipment.helmet),
-            ("body_armor", "armor", equipment.body_armor),
-            ("gauntlets", "armor", equipment.gauntlets),
-            ("greaves", "armor", equipment.greaves),
-            ("boots", "armor", equipment.boots),
-            ("amulet", "armor", equipment.amulet),
-            ("cloak", "armor", equipment.cloak),
-            ("ring_left", "ring", equipment.ring_left),
-            ("ring_right", "ring", equipment.ring_right),
-        ]
-
-        slots = []
-        for slot_name, slot_type, item in slot_defs:
-            actual_type = slot_type
-            if item is not None:
-                if isinstance(item, Shield):
-                    actual_type = "shield"
-                elif isinstance(item, Weapon):
-                    actual_type = "weapon"
-            slots.append(APIEquipmentSlot(
-                slot=slot_name,
-                slot_type=actual_type,
-                item=APIItemSummary.create(item) if item is not None else None,
-            ))
-
-        inv_items = [APIItemSummary.create(item) for item in entity.inventory.items.values()]
-
-        return cls(
-            slots=slots,
-            ac=entity.ac_bonus().normalized_score,
-            inventory=inv_items,
-        )
+    item_uuid: str = Field(description="Equipped item UUID.")
+    item_name: str = Field(description="Equipped item display name.")
+    slot: str = Field(description="Canonical storage slot currently holding the item.")
 
 
 class APIEquippableEntry(BaseModel):
-    """One inventory item and the item it would displace from a slot."""
+    """One inventory candidate and every equipped item it would displace."""
 
     item_uuid: str = Field(description="Inventory item UUID.")
     item_name: str = Field(description="Inventory item display name.")
-    swap_item_name: Optional[str] = Field(default=None, description="Currently equipped item name, if any.")
-    swap_item_uuid: Optional[str] = Field(default=None, description="Currently equipped item UUID, if any.")
+    displaced_items: List[APIEquippableDisplacement] = Field(
+        default_factory=list,
+        description="Equipped items whose declared footprints overlap this proposal.",
+    )
 
 
 class APIEquippableItems(BaseModel):
@@ -250,13 +83,11 @@ class EquipRequest(BaseModel):
 
     Attributes:
         session_id: Acting player session UUID.
-        entity_uuid: Entity performing the equipment change.
         item_uuid: Inventory item to equip.
         slot: Optional explicit target slot; omitted means auto-assign.
     """
 
     session_id: str = Field(description="Acting player session UUID.")
-    entity_uuid: str = Field(description="Entity performing the equipment change.")
     item_uuid: str = Field(description="Inventory item to equip.")
     slot: Optional[str] = Field(default=None, description="Optional explicit target slot; omitted means auto-assign.")
 
@@ -266,465 +97,27 @@ class UnequipRequest(BaseModel):
 
     Attributes:
         session_id: Acting player session UUID.
-        entity_uuid: Entity performing the equipment change.
         slot: Equipment slot to clear.
     """
 
     session_id: str = Field(description="Acting player session UUID.")
-    entity_uuid: str = Field(description="Entity performing the equipment change.")
     slot: str = Field(description="Equipment slot to clear.")
 
 
 class EquipmentMutationResult(BaseModel):
-    """Response after an equipment mutation request.
+    """Minimal acknowledgement after an equipment mutation request.
 
     Attributes:
         success: Whether the equipment command succeeded.
         message: Human-readable result summary.
-        equipment: Equipment snapshot after the command.
         event_cursor_after: Event-history cursor after side effects.
         combat_log_cursor_after: Combat-log cursor after side effects.
     """
 
     success: bool = Field(description="Whether the equipment command succeeded.")
     message: str = Field(description="Human-readable result summary.")
-    equipment: APIEquipmentOverview = Field(description="Equipment snapshot after the command.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after side effects.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after side effects.")
-
-
-class APIAppearance(AppearanceConfig):
-    """Public appearance projection using the engine's canonical configuration."""
-
-    @classmethod
-    def create(cls, appearance: Any) -> 'APIAppearance':
-        return cls(
-            portrait_key=appearance.portrait_key,
-            presentation_kind=appearance.presentation_kind,
-            visual_scale=appearance.visual_scale,
-            placeholder_tint=appearance.placeholder_tint,
-            body_category=appearance.body_category,
-            skin_tint=appearance.skin_tint,
-            head_category=appearance.head_category,
-            hair_tint=appearance.hair_tint,
-            has_beard=appearance.has_beard,
-            beard_tint=appearance.beard_tint,
-        )
-
-
-class APIConditionSummary(BaseModel):
-    """Condition identity needed by game clients."""
-
-    name: str = Field(description="Stable condition name.")
-    category: str = Field(description="Condition category value.")
-
-
-class APIActionEconomySnapshot(BaseModel):
-    """Current primitive action-economy values for one entity."""
-
-    actions: int = Field(description="Actions currently available.")
-    bonus_actions: int = Field(description="Bonus actions currently available.")
-    reactions: int = Field(description="Reactions currently available.")
-    movement: int = Field(description="Movement currently available in feet.")
-
-
-class APIAbilityScoresSnapshot(BaseModel):
-    """Resolved ability scores for one entity."""
-
-    strength: int = Field(description="Resolved Strength score.")
-    dexterity: int = Field(description="Resolved Dexterity score.")
-    constitution: int = Field(description="Resolved Constitution score.")
-    intelligence: int = Field(description="Resolved Intelligence score.")
-    wisdom: int = Field(description="Resolved Wisdom score.")
-    charisma: int = Field(description="Resolved Charisma score.")
-
-
-class APIEntitySummary(BaseModel):
-    """Lightweight entity for list views and event-driven updates.
-
-    Attributes:
-        uuid: Stable entity UUID serialized as a string.
-        name: Display name for the entity.
-        position: Current grid position as an ``(x, y)`` pair.
-        hp: Current hit points.
-        max_hp: Maximum hit points after constitution and bonus HP.
-        ac: Current armor class.
-        conditions: Active condition names keyed on the entity.
-        condition_details: Active condition names and categories for UI filters.
-        is_dead: Whether the entity currently has no hit points.
-        faction: Optional faction identifier used for ally/enemy grouping.
-        creature_type: D&D creature taxonomy value.
-        size: D&D rules size value.
-        appearance: Passive renderer identity metadata.
-    """
-
-    uuid: str = Field(description="Stable entity UUID serialized as a string.")
-    name: str = Field(description="Display name for the entity.")
-    position: Tuple[int, int] = Field(description="Current grid position as an (x, y) pair.")
-    hp: int = Field(description="Current hit points.")
-    max_hp: int = Field(description="Maximum hit points after constitution and bonus HP.")
-    ac: int = Field(description="Current armor class.")
-    conditions: List[str] = Field(description="Active condition names keyed on the entity.")
-    condition_details: List[APIConditionSummary] = Field(
-        default_factory=list,
-        description="Active condition names and categories for UI filters.",
-    )
-    is_dead: bool = Field(description="Whether the entity currently has no hit points.")
-    faction: Optional[str] = Field(default=None, description="Optional faction identifier used for ally/enemy grouping.")
-    creature_type: str = Field(description="D&D creature taxonomy value.")
-    size: str = Field(description="D&D rules size value.")
-    appearance: APIAppearance = Field(description="Passive renderer identity metadata.")
-
-    @classmethod
-    def create(cls, entity: 'Entity') -> 'APIEntitySummary':
-        con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-        max_hp = entity.health.get_max_hit_dices_points(con_mod) + entity.health.max_hit_points_bonus.score
-
-        return cls(
-            uuid=str(entity.uuid),
-            name=entity.name,
-            position=entity.position,
-            hp=entity.get_hp(),
-            max_hp=max_hp,
-            ac=entity.ac_bonus().normalized_score,
-            conditions=list(entity.active_conditions.keys()),
-            condition_details=[
-                APIConditionSummary(
-                    name=c.name or type(c).__name__,
-                    category=c.condition_category.value,
-                )
-                for c in entity.active_conditions.values()
-            ],
-            is_dead=not entity.has_hp,
-            faction=entity.faction,
-            creature_type=entity.creature_type.value,
-            size=entity.size.value,
-            appearance=APIAppearance.create(entity.appearance),
-        )
-
-
-class APIEntityFull(APIEntitySummary):
-    """Full entity details for single-entity queries.
-
-    Attributes:
-        action_economy: Current action, bonus-action, reaction, and movement counts.
-        ability_scores: Current ability score values keyed by ability name.
-        weapon_name: Name of the equipped main-hand melee weapon, if any.
-        equipment: Full equipment overview for the entity.
-    """
-
-    action_economy: APIActionEconomySnapshot = Field(
-        description="Current action, bonus-action, reaction, and movement counts."
-    )
-    ability_scores: APIAbilityScoresSnapshot = Field(
-        description="Current resolved ability scores."
-    )
-    weapon_name: Optional[str] = Field(default=None, description="Name of the equipped main-hand melee weapon, if any.")
-    equipment: Optional[APIEquipmentOverview] = Field(default=None, description="Full equipment overview for the entity.")
-
-    @classmethod
-    def create(cls, entity: 'Entity') -> 'APIEntityFull':
-        con_mod = entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-        max_hp = entity.health.get_max_hit_dices_points(con_mod) + entity.health.max_hit_points_bonus.score
-
-        weapon = entity.equipment.weapon_melee_main
-        return cls(
-            uuid=str(entity.uuid),
-            name=entity.name,
-            position=entity.position,
-            hp=entity.get_hp(),
-            max_hp=max_hp,
-            ac=entity.ac_bonus().normalized_score,
-            conditions=list(entity.active_conditions.keys()),
-            condition_details=[
-                APIConditionSummary(
-                    name=c.name or type(c).__name__,
-                    category=c.condition_category.value,
-                )
-                for c in entity.active_conditions.values()
-            ],
-            is_dead=not entity.has_hp,
-            faction=entity.faction,
-            creature_type=entity.creature_type.value,
-            size=entity.size.value,
-            appearance=APIAppearance.create(entity.appearance),
-            action_economy=APIActionEconomySnapshot(
-                actions=entity.action_economy.actions.normalized_score,
-                bonus_actions=entity.action_economy.bonus_actions.normalized_score,
-                reactions=entity.action_economy.reactions.normalized_score,
-                movement=entity.action_economy.movement.normalized_score,
-            ),
-            ability_scores=APIAbilityScoresSnapshot(
-                strength=entity.ability_scores.strength.ability_score.normalized_score,
-                dexterity=entity.ability_scores.dexterity.ability_score.normalized_score,
-                constitution=entity.ability_scores.constitution.ability_score.normalized_score,
-                intelligence=entity.ability_scores.intelligence.ability_score.normalized_score,
-                wisdom=entity.ability_scores.wisdom.ability_score.normalized_score,
-                charisma=entity.ability_scores.charisma.ability_score.normalized_score,
-            ),
-            weapon_name=weapon.name if weapon else None,
-            equipment=APIEquipmentOverview.create(entity),
-        )
-
-
-class APIDirectionalBlockMap(BaseModel):
-    """Blocking flags for the four cardinal directions."""
-
-    north: bool = Field(description="Whether passage toward north is blocked.")
-    south: bool = Field(description="Whether passage toward south is blocked.")
-    east: bool = Field(description="Whether passage toward east is blocked.")
-    west: bool = Field(description="Whether passage toward west is blocked.")
-
-
-class APITile(BaseModel):
-    """Single public tile snapshot.
-
-    Attributes:
-        x: Tile x-coordinate.
-        y: Tile y-coordinate.
-        walkable: Whether the tile is passable before entity and object checks.
-        visible: Whether the tile is visible in the current map view.
-        name: Tile terrain name.
-        walking_cost: Normalized movement cost for entering the tile.
-        is_hazardous: Whether the tile is hazardous for the requesting entity.
-        conditions: Public condition names visible on the tile.
-        light_level: Resolved light level enum value.
-        directional_blocks_movement: Directional movement blockers keyed by compass direction.
-        directional_blocks_vision: Directional vision blockers keyed by compass direction.
-        directional_blocks_light: Directional light blockers keyed by compass direction.
-        directional_blocks_propagation: Directional propagation blockers keyed by compass direction.
-    """
-
-    x: int = Field(description="Tile x-coordinate.")
-    y: int = Field(description="Tile y-coordinate.")
-    walkable: bool = Field(description="Whether the tile is passable before entity and object checks.")
-    visible: bool = Field(description="Whether the tile is visible in the current map view.")
-    name: str = Field(default="Floor", description="Tile terrain name.")
-    walking_cost: int = Field(default=1, description="Normalized movement cost for entering the tile.")
-    is_hazardous: bool = Field(default=False, description="Whether the tile is hazardous for the requesting entity.")
-    conditions: List[str] = Field(default_factory=list, description="Public condition names visible on the tile.")
-    light_level: int = Field(default=3, description="Resolved light level enum value.")
-    directional_blocks_movement: APIDirectionalBlockMap = Field(
-        description="Directional movement blockers keyed by compass direction.",
-    )
-    directional_blocks_vision: APIDirectionalBlockMap = Field(
-        description="Directional vision blockers keyed by compass direction.",
-    )
-    directional_blocks_light: APIDirectionalBlockMap = Field(
-        description="Directional light blockers keyed by compass direction.",
-    )
-    directional_blocks_propagation: APIDirectionalBlockMap = Field(
-        description="Directional propagation blockers keyed by compass direction.",
-    )
-
-
-class APIGrid(BaseModel):
-    """Public grid snapshot.
-
-    Attributes:
-        min_x: Minimum x-coordinate included in the grid bounds.
-        min_y: Minimum y-coordinate included in the grid bounds.
-        max_x: Maximum x-coordinate included in the grid bounds.
-        max_y: Maximum y-coordinate included in the grid bounds.
-        tiles: Serialized tiles in the grid.
-    """
-
-    min_x: int = Field(description="Minimum x-coordinate included in the grid bounds.")
-    min_y: int = Field(description="Minimum y-coordinate included in the grid bounds.")
-    max_x: int = Field(description="Maximum x-coordinate included in the grid bounds.")
-    max_y: int = Field(description="Maximum y-coordinate included in the grid bounds.")
-    tiles: List[APITile] = Field(description="Serialized tiles in the grid.")
-
-    @classmethod
-    def create(cls, grid: GridMap, requesting_entity_uuid: Optional[UUID] = None) -> 'APIGrid':
-        bounds = grid.bounds
-
-        observer_perception = 0
-        if requesting_entity_uuid:
-            obs = BaseBlock.get(requesting_entity_uuid)
-            if obs is not None:
-                observer_perception = obs.get_passive_perception()
-
-        tiles: List[APITile] = []
-        for (x, y), td in grid._tiles.items():
-            walking_cost = int(td.walking_cost.normalized_score) if hasattr(td, 'walking_cost') else 1
-            is_hazardous = grid.is_position_hazardous_for(x, y, requesting_entity_uuid)
-
-            conditions: List[str] = []
-            if hasattr(td, 'active_conditions'):
-                for cond_name, cond in td.active_conditions.items():
-                    if cond.condition_category == ConditionCategory.INTERNAL:
-                        continue
-                    if cond.condition_stealth_dc is not None and cond.condition_stealth_dc >= observer_perception:
-                        continue
-                    conditions.append(cond_name)
-
-            tiles.append(APITile(
-                x=x, y=y,
-                walkable=td.walkable,
-                visible=td.visible,
-                name=td.name,
-                walking_cost=walking_cost,
-                is_hazardous=is_hazardous,
-                conditions=conditions,
-                light_level=td.resolved_light_level.value,
-                directional_blocks_movement=APIDirectionalBlockMap(
-                    north=not td.allows_direction("north", "movement"),
-                    south=not td.allows_direction("south", "movement"),
-                    east=not td.allows_direction("east", "movement"),
-                    west=not td.allows_direction("west", "movement"),
-                ),
-                directional_blocks_vision=APIDirectionalBlockMap(
-                    north=not td.allows_direction("north", "vision"),
-                    south=not td.allows_direction("south", "vision"),
-                    east=not td.allows_direction("east", "vision"),
-                    west=not td.allows_direction("west", "vision"),
-                ),
-                directional_blocks_light=APIDirectionalBlockMap(
-                    north=not td.allows_direction("north", "light"),
-                    south=not td.allows_direction("south", "light"),
-                    east=not td.allows_direction("east", "light"),
-                    west=not td.allows_direction("west", "light"),
-                ),
-                directional_blocks_propagation=APIDirectionalBlockMap(
-                    north=not td.allows_direction("north", "propagation"),
-                    south=not td.allows_direction("south", "propagation"),
-                    east=not td.allows_direction("east", "propagation"),
-                    west=not td.allows_direction("west", "propagation"),
-                ),
-            ))
-        return cls(
-            min_x=bounds[0], min_y=bounds[1],
-            max_x=bounds[2], max_y=bounds[3],
-            tiles=tiles
-        )
-
-
-class APICombatant(BaseModel):
-    """Combatant in initiative order.
-
-    Attributes:
-        uuid: Stable combatant entity UUID serialized as a string.
-        name: Combatant display name.
-        initiative: Initiative total used for turn ordering.
-        is_dead: Whether the combatant is currently dead.
-    """
-
-    uuid: str = Field(description="Stable combatant entity UUID serialized as a string.")
-    name: str = Field(description="Combatant display name.")
-    initiative: int = Field(description="Initiative total used for turn ordering.")
-    is_dead: bool = Field(description="Whether the combatant is currently dead.")
-
-
-class APIEncounter(BaseModel):
-    """Encounter combat state.
-
-    Attributes:
-        uuid: Stable encounter UUID serialized as a string.
-        name: Encounter display name.
-        state: Encounter lifecycle state value.
-        round_number: Current combat round number.
-        current_turn_index: Index of the acting combatant in initiative order.
-        current_entity_uuid: UUID of the current acting entity, if any.
-        initiative_order: Combatants ordered by initiative.
-    """
-
-    uuid: str = Field(description="Stable encounter UUID serialized as a string.")
-    name: str = Field(description="Encounter display name.")
-    state: str = Field(description="Encounter lifecycle state value.")
-    round_number: int = Field(description="Current combat round number.")
-    current_turn_index: int = Field(description="Index of the acting combatant in initiative order.")
-    current_entity_uuid: Optional[str] = Field(default=None, description="UUID of the current acting entity, if any.")
-    initiative_order: List[APICombatant] = Field(description="Combatants ordered by initiative.")
-
-    @classmethod
-    def create(cls, encounter: Encounter) -> 'APIEncounter':
-        combatants = []
-        for uuid in encounter.initiative_order:
-            entity = Entity.get(uuid)
-            combatants.append(APICombatant(
-                uuid=str(uuid),
-                name=entity.name if entity else "Unknown",
-                initiative=encounter.combatants[uuid].initiative_total,
-                is_dead=encounter.combatants[uuid].is_dead
-            ))
-        current_uuid = None
-        if encounter.initiative_order and encounter.current_turn_index < len(encounter.initiative_order):
-            current_uuid = str(encounter.initiative_order[encounter.current_turn_index])
-        return cls(
-            uuid=str(encounter.uuid),
-            name=encounter.name,
-            state=encounter.state.value,
-            round_number=encounter.round_number,
-            current_turn_index=encounter.current_turn_index,
-            current_entity_uuid=current_uuid,
-            initiative_order=combatants
-        )
-
-
-class APIFloorObject(BaseModel):
-    """Floor object or item on the ground.
-
-    Attributes:
-        uuid: Stable object UUID serialized as a string.
-        name: Object display name.
-        position: Grid position serialized as an ``(x, y)`` pair.
-        map_char: Map glyph used to render the object.
-        state: Object-specific public state fields.
-    """
-
-    uuid: str = Field(description="Stable object UUID serialized as a string.")
-    name: str = Field(description="Object display name.")
-    position: Tuple[int, int] = Field(description="Grid position serialized as an (x, y) pair.")
-    map_char: str = Field(default="\u03c6", description="Map glyph used to render the object.")
-    state: Dict[str, JsonValue] = Field(
-        default_factory=dict,
-        description="Object-specific JSON state keyed by the concrete item model.",
-    )
-
-
-class APIGameState(BaseModel):
-    """Full public game-state snapshot.
-
-    Attributes:
-        grid: Public grid snapshot.
-        entities: Lightweight entity summaries visible to the client.
-        encounter: Active encounter snapshot, if combat is active.
-        floor_objects: Public floor-object summaries.
-    """
-
-    grid: APIGrid = Field(description="Public grid snapshot.")
-    entities: List[APIEntitySummary] = Field(description="Lightweight entity summaries visible to the client.")
-    encounter: Optional[APIEncounter] = Field(default=None, description="Active encounter snapshot, if combat is active.")
-    floor_objects: List[APIFloorObject] = Field(default_factory=list, description="Public floor-object summaries.")
-
-
-class APIEntityVisibility(BaseModel):
-    """Current perception state for one observing entity."""
-
-    name: str = Field(description="Observer display name.")
-    position: Tuple[int, int] = Field(description="Observer grid position.")
-    visible_cells: List[Tuple[int, int]] = Field(description="Cells visible now.")
-    visible_entities: List[str] = Field(description="Entity UUIDs visible now.")
-    visible_objects: List[str] = Field(description="Object UUIDs visible now.")
-    seen_cells: List[Tuple[int, int]] = Field(description="Cells observed previously or currently.")
-    sense_modes: List[SenseMode] = Field(description="Active special senses.")
-    effective_light_levels: Dict[str, int] = Field(
-        description=(
-            "Backend-resolved subjective light levels for currently visible cells, "
-            "keyed as 'x,y'."
-        )
-    )
-
-
-class APIVisibilityResponse(RootModel[Dict[str, APIEntityVisibility]]):
-    """Visibility rows keyed by observer UUID."""
-
-
-class APIEntityListResponse(BaseModel):
-    """Lightweight summaries for every entity exposed by the server."""
-
-    entities: List[APIEntitySummary] = Field(description="Public entity summaries.")
 
 
 class MapEditorGridBounds(BaseModel):
@@ -753,8 +146,8 @@ class MapEditorMapSnapshot(BaseModel):
     """
 
     grid_bounds: MapEditorGridBounds = Field(description="Inclusive bounds for the serialized map.")
-    tiles: List[APITile] = Field(description="Serialized tile snapshots.")
-    floor_objects: List[APIFloorObject] = Field(
+    tiles: List[world_contracts.APITile] = Field(description="Serialized tile snapshots.")
+    floor_objects: List[world_contracts.APIFloorObject] = Field(
         default_factory=list,
         description="Serialized floor objects placed on the map.",
     )
@@ -1193,56 +586,6 @@ class MapEditorLightResponse(BaseModel):
     cells: List[MapEditorLightCell] = Field(description="Light-level cells for the current editor map.")
 
 
-class APISimulationStatus(BaseModel):
-    """Simulation control status.
-
-    Attributes:
-        has_encounter: Whether a simulation encounter currently exists.
-        paused: Whether automatic simulation advancement is paused.
-        encounter_state: Current encounter state value, if any.
-        round_number: Current encounter round number, if any.
-        turn_delay: Delay between automated turns in seconds.
-    """
-
-    has_encounter: bool = Field(description="Whether a simulation encounter currently exists.")
-    paused: bool = Field(description="Whether automatic simulation advancement is paused.")
-    encounter_state: Optional[str] = Field(description="Current encounter state value, if any.")
-    round_number: Optional[int] = Field(description="Current encounter round number, if any.")
-    turn_delay: float = Field(description="Delay between automated turns in seconds.")
-
-
-class APICurrentTurn(BaseModel):
-    """Current turn information.
-
-    Attributes:
-        encounter_active: Whether the encounter is currently active.
-        round_number: Current encounter round number.
-        turn_index: Current index in initiative order.
-        current_entity_uuid: UUID of the acting entity, if any.
-        current_entity_name: Name of the acting entity, if any.
-        is_human_turn: Whether the current controller expects manual input.
-        waiting_for_input: Whether the simulation is waiting for input.
-        controller_type: Current controller type, if any.
-        actions_remaining: Actions remaining for the acting entity.
-        bonus_actions_remaining: Bonus actions remaining for the acting entity.
-        reactions_remaining: Reactions remaining for the acting entity.
-        movement_remaining: Movement remaining for the acting entity.
-    """
-
-    encounter_active: bool = Field(description="Whether the encounter is currently active.")
-    round_number: int = Field(description="Current encounter round number.")
-    turn_index: int = Field(description="Current index in initiative order.")
-    current_entity_uuid: Optional[str] = Field(description="UUID of the acting entity, if any.")
-    current_entity_name: Optional[str] = Field(description="Name of the acting entity, if any.")
-    is_human_turn: bool = Field(description="Whether the current controller expects manual input.")
-    waiting_for_input: bool = Field(description="Whether the simulation is waiting for input.")
-    controller_type: Optional[str] = Field(description="Current controller type, if any.")
-    actions_remaining: int = Field(default=0, description="Actions remaining for the acting entity.")
-    bonus_actions_remaining: int = Field(default=0, description="Bonus actions remaining for the acting entity.")
-    reactions_remaining: int = Field(default=0, description="Reactions remaining for the acting entity.")
-    movement_remaining: int = Field(default=0, description="Movement remaining for the acting entity.")
-
-
 class CreateSessionRequest(BaseModel):
     """Request to create a new player session.
 
@@ -1299,12 +642,22 @@ class JoinGameRequest(BaseModel):
         entity_uuids: Optional entity UUIDs to control.
         entity_uuid: Optional single entity UUID convenience alias.
         faction: Optional faction whose entities should be controlled.
+        observer_entity_uuids: Explicit observer union for a zero-control session.
+        active_observer_uuid: Observer selected for focus within that union.
     """
 
     session_id: str = Field(description="Session joining the game.")
     entity_uuids: Optional[List[str]] = Field(default=None, description="Optional entity UUIDs to control.")
     entity_uuid: Optional[str] = Field(default=None, description="Optional single entity UUID to control.")
     faction: Optional[str] = Field(default=None, description="Optional faction whose entities should be controlled.")
+    observer_entity_uuids: Optional[List[str]] = Field(
+        default=None,
+        description="Explicit subjective observer union for a zero-control observer session.",
+    )
+    active_observer_uuid: Optional[str] = Field(
+        default=None,
+        description="Observer selected for focus within the explicit observer union.",
+    )
 
     def requested_entity_uuids(self) -> List[str]:
         """Return requested entity UUIDs from list and single-entity inputs.
@@ -1320,6 +673,14 @@ class JoinGameRequest(BaseModel):
             requested.append(self.entity_uuid)
         return requested
 
+    def requested_observer_entity_uuids(self) -> List[str]:
+        """Return the de-duplicated explicit observer UUID strings in request order."""
+        requested: List[str] = []
+        for uuid_str in self.observer_entity_uuids or []:
+            if uuid_str not in requested:
+                requested.append(uuid_str)
+        return requested
+
 
 class JoinGameResponse(BaseModel):
     """Response from joining a game.
@@ -1329,6 +690,8 @@ class JoinGameResponse(BaseModel):
         game_id: Game identifier joined by the session.
         session_id: Session that joined the game.
         controlled_entities: Entity UUIDs controlled after joining.
+        observer_entities: Entity UUIDs authorized as subjective observers.
+        active_observer_uuid: Observer selected for focus within that union.
         message: Human-readable join result.
     """
 
@@ -1336,6 +699,14 @@ class JoinGameResponse(BaseModel):
     game_id: str = Field(description="Game identifier joined by the session.")
     session_id: str = Field(description="Session that joined the game.")
     controlled_entities: List[str] = Field(description="Entity UUIDs controlled after joining.")
+    observer_entities: List[str] = Field(
+        default_factory=list,
+        description="Entity senses contributing to this session's subjective perspective.",
+    )
+    active_observer_uuid: Optional[str] = Field(
+        default=None,
+        description="Observer selected for observer-relative presentation.",
+    )
     message: str = Field(description="Human-readable join result.")
 
 
@@ -1429,17 +800,26 @@ class GameCreationStartRequest(BaseModel):
     )
 
 
+class GameCreationEntityAssignment(BaseModel):
+    """Control-plane identity for one entity assigned to a created side."""
+
+    entity_uuid: str = Field(description="Entity UUID assigned to the side.")
+    entity_name: str = Field(description="Entity display label retained by the game directory.")
+    faction: Optional[str] = Field(
+        default=None,
+        description="Faction identifier retained for directory assignment metadata.",
+    )
+
+
 class GameCreationSideResult(BaseModel):
-    """Resolved entities, ownership, and attach data for one side."""
+    """Resolved control-plane assignments and attach data for one side."""
 
     side_id: Literal["side_a", "side_b"] = Field(description="Stable side identifier.")
     title: str = Field(description="Resolved side configuration title.")
     controller: GameCreationControllerKind = Field(description="Configured controller kind.")
     participant_name: str = Field(description="Configured participant display name.")
-    entities: List[APIEntitySummary] = Field(description="Complete entity summaries belonging to the side.")
-    human_entity_uuids: List[str] = Field(
-        default_factory=list,
-        description="Entity UUIDs a human participant may claim through game join.",
+    entity_assignments: List[GameCreationEntityAssignment] = Field(
+        description="Stable identity rows assigned to the side; gameplay facts arrive through replication.",
     )
     fallback_ai_session_id: Optional[str] = Field(
         default=None,
@@ -1451,7 +831,12 @@ class GameCreationSideResult(BaseModel):
 
 
 class GameCreationStartResponse(BaseModel):
-    """Resolved game, sides, sessions, and first external turn boundary."""
+    """Resolved game, sides, sessions, and first external turn boundary.
+
+    State transitions and combat-log entries are consumed through the
+    canonical replication or objective-diagnostics journal, never embedded in
+    this setup acknowledgement.
+    """
 
     schema_version: int = Field(default=1, description="Game-creation contract schema version.")
     scenario_kind: Literal["preset", "composed"] = Field(description="Scenario-selection kind used for the match.")
@@ -1468,11 +853,6 @@ class GameCreationStartResponse(BaseModel):
     entity_name: Optional[str] = Field(default=None, description="Entity name waiting at the external turn boundary.")
     round: Optional[int] = Field(default=None, description="Current encounter round.")
     turn_index: Optional[int] = Field(default=None, description="Current initiative index.")
-    ai_actions: List[CombatLogEntry] = Field(
-        default_factory=list,
-        description="Automated action log entries produced during startup advancement.",
-    )
-    new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for startup advancement.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event cursor after startup advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after startup advancement.")
 
@@ -1580,18 +960,6 @@ class AgentSessionListResponse(BaseModel):
     encounter_active: bool = Field(description="Whether the active game has an active encounter.")
 
 
-class ControlledEntitiesResponse(BaseModel):
-    """Response listing entities controlled by a session.
-
-    Attributes:
-        session_id: Session whose controlled entities are listed.
-        controlled_entities: Controlled entity summaries.
-    """
-
-    session_id: str = Field(description="Session whose controlled entities are listed.")
-    controlled_entities: List[APIEntitySummary] = Field(description="Controlled entity summaries.")
-
-
 class AoEPreviewResult(BaseModel):
     """Result of an AoE position preview without execution.
 
@@ -1609,36 +977,6 @@ class AoEPreviewResult(BaseModel):
     affected_entity_names: List[str] = Field(default_factory=list, description="Names of entities affected by the preview.")
     affected_count: int = Field(default=0, description="Number of affected entities.")
 
-class MoveRequest(BaseModel):
-    """Request body for move action.
-
-    Attributes:
-        session_id: Session performing the action.
-        entity_uuid: Entity that should move.
-        position: Destination grid position.
-    """
-
-    session_id: str = Field(description="Session performing the action.")
-    entity_uuid: str = Field(description="Entity that should move.")
-    position: Tuple[int, int] = Field(description="Destination grid position.")
-
-
-class AttackRequest(BaseModel):
-    """Request body for attack action.
-
-    Attributes:
-        session_id: Session performing the action.
-        entity_uuid: Attacking entity UUID.
-        target_uuid: Target entity UUID.
-        weapon_slot: Weapon slot used for the attack.
-    """
-
-    session_id: str = Field(description="Session performing the action.")
-    entity_uuid: str = Field(description="Attacking entity UUID.")
-    target_uuid: str = Field(description="Target entity UUID.")
-    weapon_slot: str = Field(default="main_hand", description="Weapon slot used for the attack.")
-
-
 class SimpleActionRequest(BaseModel):
     """Request body for simple session-gated actions.
 
@@ -1651,43 +989,13 @@ class SimpleActionRequest(BaseModel):
     entity_uuid: str = Field(description="Entity performing the action.")
 
 
-class SelfActionRequest(BaseModel):
-    """Request for self-targeting actions.
+class PositionPreviewRequest(BaseModel):
+    """Request for a non-mutating position-area preview.
 
     Attributes:
         session_id: Session performing the action.
         entity_uuid: Entity performing the action.
-        action_name: Action template name.
-    """
-
-    session_id: str = Field(description="Session performing the action.")
-    entity_uuid: str = Field(description="Entity performing the action.")
-    action_name: str = Field(description="Action template name.")
-
-
-class EntityActionRequest(BaseModel):
-    """Request for entity-targeting actions.
-
-    Attributes:
-        session_id: Session performing the action.
-        entity_uuid: Entity performing the action.
-        action_name: Action template name.
-        target_uuid: Target entity UUID.
-    """
-
-    session_id: str = Field(description="Session performing the action.")
-    entity_uuid: str = Field(description="Entity performing the action.")
-    action_name: str = Field(description="Action template name.")
-    target_uuid: str = Field(description="Target entity UUID.")
-
-
-class PositionActionRequest(BaseModel):
-    """Request for position-targeting actions.
-
-    Attributes:
-        session_id: Session performing the action.
-        entity_uuid: Entity performing the action.
-        action_name: Action template name.
+        action_name: Position-area action template name.
         position: Target grid position.
     """
 
@@ -1709,7 +1017,6 @@ class ExecuteByIndexRequest(BaseModel):
         prefer_safe: Whether movement should prefer safe paths when available.
         return_available_actions: Whether to include recomputed action rows in
             the response.
-        include_state: Whether to include the full game state snapshot.
         include_timing: Whether to include server-side route timing.
     """
 
@@ -1726,10 +1033,6 @@ class ExecuteByIndexRequest(BaseModel):
         default=True,
         description="Whether the response should include recomputed available actions.",
     )
-    include_state: bool = Field(
-        default=True,
-        description="Whether the response should include the full game state snapshot.",
-    )
     include_timing: bool = Field(
         default=False,
         description="Whether the response should include server-side route timing.",
@@ -1741,12 +1044,10 @@ class ToggleHandlerRequest(BaseModel):
 
     Attributes:
         session_id: Session performing the toggle.
-        entity_uuid: Entity whose handler should be toggled.
         enabled: Desired handler enabled state.
     """
 
     session_id: str = Field(description="Session performing the toggle.")
-    entity_uuid: str = Field(description="Entity whose handler should be toggled.")
     enabled: bool = Field(description="Desired handler enabled state.")
 
 
@@ -1785,23 +1086,21 @@ class APIServerTiming(BaseModel):
     phase_max_ms: Dict[str, float] = Field(description="Maximum duration for each measured phase.")
 
 class ActionResult(BaseModel):
-    """Result of an action execution.
+    """Minimal acknowledgement of an action command.
+
+    World state, presentation facts, and combat-log entries are delivered only
+    by the canonical replication journal (or objective diagnostics for an
+    authorized inspector). This response carries command outcome/control data
+    and cursor barriers only.
 
     Attributes:
         success: Whether the action execution succeeded.
         message: Human-readable action result.
         event_type: Domain event type emitted by the action, if any.
         outcome_code: Stable machine-readable engine outcome, if any.
-        event_data: Serialized domain event data, if any.
-        entity_hp: Acting entity hit points after the action, if relevant.
-        target_hp: Target entity hit points after the action, if relevant.
-        deaths: Names of entities that died during the action.
-        triggered_reactions: Reaction summaries triggered by the action.
         turn_continues: Whether the acting entity's turn continues.
         encounter_ended: Whether the encounter ended because of the action.
-        combat_log_entries: Combat log entries generated by the action.
         available_actions: Updated available actions after execution.
-        state: Full game-state snapshot after execution.
         server_timing: Optional server-side route timing.
         event_cursor_after: Event-history cursor after all side effects.
         combat_log_cursor_after: Combat-log cursor after all side effects.
@@ -1814,28 +1113,12 @@ class ActionResult(BaseModel):
         default=None,
         description="Stable machine-readable engine outcome, if any.",
     )
-    event_data: Optional[Dict[str, JsonValue]] = Field(
-        default=None,
-        description="Serialized terminal domain-event data, if any.",
-    )
-    entity_hp: Optional[int] = Field(default=None, description="Acting entity hit points after the action, if relevant.")
-    target_hp: Optional[int] = Field(default=None, description="Target entity hit points after the action, if relevant.")
-    deaths: List[str] = Field(default_factory=list, description="Names of entities that died during the action.")
-    triggered_reactions: List[Dict[str, JsonValue]] = Field(
-        default_factory=list,
-        description="Structured reaction summaries triggered by the action.",
-    )
     turn_continues: bool = Field(default=True, description="Whether the acting entity's turn continues.")
     encounter_ended: bool = Field(default=False, description="Whether the encounter ended because of the action.")
-    combat_log_entries: List[CombatLogEntry] = Field(
-        default_factory=list,
-        description="Combat log entries generated by the action.",
-    )
     available_actions: Optional[APIAvailableActions] = Field(
         default=None,
         description="Updated available actions after execution.",
     )
-    state: Optional[APIGameState] = Field(default=None, description="Full game-state snapshot after execution.")
     server_timing: Optional[APIServerTiming] = Field(
         default=None,
         description="Server-side route timing when requested.",
@@ -1845,7 +1128,10 @@ class ActionResult(BaseModel):
 
 
 class AdvanceEncounterResult(BaseModel):
-    """Result of advancing combat until the next player-controlled turn.
+    """Control acknowledgement after advancing to the next player boundary.
+
+    Automated actions and their logs remain exclusively in canonical
+    replication/diagnostics streams.
 
     Attributes:
         status: Advancement status label.
@@ -1853,8 +1139,6 @@ class AdvanceEncounterResult(BaseModel):
         entity_name: Name of the next player-controlled entity, if any.
         round: Current encounter round after advancing.
         turn_index: Current turn index after advancing.
-        ai_actions: Actions taken by automated controllers while advancing.
-        new_log_since: Combat-log cursor used for newly generated logs.
         event_cursor_after: Event-history cursor after advancement.
         combat_log_cursor_after: Combat-log cursor after advancement.
     """
@@ -1864,11 +1148,6 @@ class AdvanceEncounterResult(BaseModel):
     entity_name: Optional[str] = Field(default=None, description="Name of the next player-controlled entity, if any.")
     round: Optional[int] = Field(default=None, description="Current encounter round after advancing.")
     turn_index: Optional[int] = Field(default=None, description="Current turn index after advancing.")
-    ai_actions: List[CombatLogEntry] = Field(
-        default_factory=list,
-        description="Action log entries produced by automated controllers while advancing.",
-    )
-    new_log_since: Optional[int] = Field(default=None, description="Combat-log cursor used for newly generated logs.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after advancement.")
 
@@ -1957,49 +1236,6 @@ class TakeoverReleaseResponse(BaseModel):
     advance_result: Optional[AdvanceEncounterResult] = Field(default=None, description="Advancement result after release.")
 
 
-class EventHistoryResponse(BaseModel):
-    """Cursor-addressed history of original domain events.
-
-    Attributes:
-        events: Domain events in the requested cursor window.
-        count: Number of returned events.
-        total: Total number of stored events.
-    """
-
-    generation_id: str = Field(description="EventQueue generation containing these events.")
-    events: List[SerializeAsAny[Event]] = Field(description="Domain events in the requested cursor window.")
-    count: int = Field(description="Number of returned events.")
-    total: int = Field(description="Total number of stored events.")
-
-    @field_serializer("events")
-    def serialize_wire_events(self, events: List[Event]) -> List[Dict[str, Any]]:
-        """Serialize history through the same contract used by live streams."""
-        return [serialize_event(event) for event in events]
-
-
-class CombatLogHistoryResponse(BaseModel):
-    """Cursor-addressed history of combat log entries.
-
-    Attributes:
-        entries: Combat log entries in the requested cursor window.
-        count: Number of returned combat log entries.
-        total: Total number of stored combat log entries.
-    """
-
-    generation_id: str = Field(description="EventQueue generation paired with these log entries.")
-    entries: List[CombatLogEntry] = Field(description="Combat log entries in the requested cursor window.")
-    count: int = Field(description="Number of returned combat log entries.")
-    total: int = Field(description="Total number of stored combat log entries.")
-
-
-class ReplicationProtocolIdentity(BaseModel):
-    """Identity of one compatible replication protocol and event history."""
-
-    generation_id: str = Field(description="Current EventQueue generation UUID.")
-    event_contract_version: int = Field(description="Generated event-contract version.")
-    event_contract_hash: str = Field(description="Generated event-contract content hash.")
-
-
 class EventContractSummary(BaseModel):
     """Public identity and discriminators for the generated event contract."""
 
@@ -2007,20 +1243,3 @@ class EventContractSummary(BaseModel):
     contract_hash: str = Field(description="Generated event-contract content hash.")
     event_types: List[str] = Field(description="All semantic event type values.")
     wire_types: List[str] = Field(description="All concrete event wire discriminators.")
-
-
-class ReplicationBootstrapResponse(BaseModel):
-    """Atomic base state and cursors used to start or recover replication."""
-
-    protocol: ReplicationProtocolIdentity = Field(description="Protocol and history identity.")
-    event_cursor: int = Field(description="First event cursor not represented by the snapshot.")
-    combat_log_cursor: int = Field(description="First combat-log cursor not represented by the snapshot.")
-    state: APIGameState = Field(description="Authoritative public game-state snapshot.")
-    visibility: APIVisibilityResponse = Field(description="Current observer visibility snapshot.")
-    combat_log: List[CombatLogEntry] = Field(
-        description="Combat-log history represented by combat_log_cursor.",
-    )
-    session: Optional[SessionPingResponse] = Field(
-        default=None,
-        description="Current session status when a session was requested.",
-    )

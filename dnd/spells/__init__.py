@@ -16,7 +16,6 @@ from dnd.spells.abjuration import MageArmor, ProtectionFromEnergy, Stoneskin, re
 from dnd.spells.enchantment import HoldPerson, HoldMonster, PowerWordKill, PowerWordStun, PowerWordStunEffect, CharmPerson, Sleep, Bane, BaneEffect, Bless, BlessEffect, Command, CommandGrovelEffect, CommandHaltEffect, CommandFleeEffect
 from dnd.spells.conjuration import CallLightning, CallLightningStrike, PoisonSpray, AcidSplash, MistyStep, Grease, Web, Cloudkill, SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud, StinkingCloud, SleetStorm, DimensionDoor, GuardianOfFaith, GuardianOfFaithObject, GuardianWarded, HeroesFeast, HeroesFeastObject, HeroesFeastBuff, EatFromFeast
 from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTouch, NoHealing, NecroticBless, Eyebite, FingerOfDeath, InflictWounds, Harm, BestowCurse, AbilityCurseEffect, AttackCurseEffect, InactionCurseEffect, DamageCurseEffect
-from dnd.core.base_conditions import ConditionTag
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage, Silence, SilenceZone
 from dnd.spells.transmutation import SpikeGrowth, Slow, Haste, DarkvisionSpell, Disintegrate, JumpSpell, ExpeditiousRetreat, EnhanceAbility, EnlargeReduce, Telekinesis, Regenerate, RegeneratingEffect
 from dnd.spells.divination import SeeInvisibility, TrueSeeing, Guidance, GuidanceEffect
@@ -206,7 +205,6 @@ __all__ = [
     "AttackCurseEffect",
     "InactionCurseEffect",
     "DamageCurseEffect",
-    "ConditionTag",
     "HeroesFeastObject",
     "HeroesFeastBuff",
     "EatFromFeast",

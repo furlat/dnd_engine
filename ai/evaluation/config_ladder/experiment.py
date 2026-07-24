@@ -58,6 +58,7 @@ from ai.evaluation.content_catalog import build_implemented_content_catalog
 from ai.evaluation.config_ladder.worker_contracts import (
     AttemptOutcome,
     AttemptReceipt,
+    CONNECTED_MATCH_ENTRYPOINT,
     CoordinatorSummary,
     DEFAULT_RATING_MAX_COMMANDS,
     MatchWorkerRequest,
@@ -87,7 +88,6 @@ from dnd.spells import (
 )
 
 
-REAL_MATCH_ENTRYPOINT = "ai.evaluation.config_ladder.match_runner:run_connected_match"
 _SPELLS_BY_LEVEL = (
     (0, CANTRIPS),
     (1, LEVEL_1_SPELLS),
@@ -306,7 +306,7 @@ def build_request_factory(
             },
             catalog_snapshot_path=str(resolved_catalog_path),
             catalog_snapshot_hash=catalog.catalog_hash,
-            real_match_entrypoint=REAL_MATCH_ENTRYPOINT,
+            real_match_entrypoint=CONNECTED_MATCH_ENTRYPOINT,
         )
 
     return request_factory

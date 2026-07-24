@@ -9,7 +9,7 @@ from typing import Protocol
 from pydantic import BaseModel, Field
 
 from ai.knowledge.models import AgentFacts
-from ai.observation.models import SubjectiveWorldState
+from server.agent_protocol.observation import SubjectiveWorldState
 from ai.subjective.models import AgentState, Alert, BriefEmission, PolicyHint, TraceEmission
 
 MAX_AGENT_STATE_HISTORY = 20

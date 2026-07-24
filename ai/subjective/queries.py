@@ -6,7 +6,7 @@ from typing import Any, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -16,8 +16,8 @@ from ai.observation.models import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from ai.protocol.control import ActionAffordance, ActionCapability, ActionEconomyState, DecisionEpoch
-from ai.protocol.semantics import ActionSemantics, ActionTag
+from server.agent_protocol.control import ActionAffordance, ActionCapability, ActionEconomyState, DecisionEpoch
+from server.agent_protocol.semantics import ActionSemantics, ActionTag
 from ai.subjective.models import AgentState
 
 
@@ -256,7 +256,7 @@ class SubjectiveQueries:
         """Return current authoritative rows in deterministic epoch order."""
         if self.world.current_epoch is None:
             return tuple()
-        return self.world.current_epoch.affordances.all_rows
+        return tuple(self.world.current_epoch.affordances.all_rows)
 
     def row(self, row_id: str) -> Optional[ActionAffordance]:
         """Return one complete current-epoch row by ID."""

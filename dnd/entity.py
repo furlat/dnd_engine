@@ -1,6 +1,6 @@
-from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set, cast
+from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, computed_field
 from collections import defaultdict
 from contextlib import contextmanager
 import time
@@ -9,30 +9,52 @@ from dnd.action_timing import action_timing_enabled, record_action_elapsed, reco
 from dnd.core.values import ModifiableValue, AdvantageStatus
 from dnd.core.modifiers import NumericalModifier, CreatureType, DamageType, Size
 from dnd.core.values import CriticalStatus, AutoHitStatus
-from dnd.core.base_conditions import BaseCondition, ConditionTag
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionTag
+from dnd.core.action_types import RestrictedActionGrant
+from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
-    Event, EventPhase, EventQueue, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
+    Damage, Event, EventPhase, EventQueue, Range, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
-    TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent, EquipmentSlot
+    TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
+    LifeStateChangeEvent, ReviveEvent,
 )
+from dnd.core.equipment_types import EquipmentSlot, WeaponSlot
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
-from dnd.blocks.health import DamageApplicationPreview, HealthConfig, Health, HitDiceHealingResult
-from dnd.blocks.equipment import EquipmentConfig, Equipment, WeaponSlot, WeaponProperty, Range, Shield, Damage, Armor, Weapon
+from dnd.blocks.health import (
+    DamageApplicationPreview,
+    HealthConfig,
+    Health,
+    HitDiceConfig,
+    HitDiceHealingResult,
+)
+from dnd.blocks.equipment import EquipmentConfig, Equipment
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses, VisibilityComputationCache, spatial_senses_system
 from dnd.core.base_block import SensesType, SenseMode, LightLevel
-from dnd.blocks.inventory import Inventory
+from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
-from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.base_item import (
+    BaseItem,
+    EquippableItem,
+    ItemLocationStateEvent,
+    UsableItem,
+)
+from dnd.core.item_types import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
+from dnd.creature_transforms import (
+    ModifierOwnership,
+    apply_life_state_transform,
+    remove_modifier_ownership,
+)
 from dnd.core.base_actions import (
     AttackRollBaseline, BaseAction, BaseCost, DamageRollProfile, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo,
@@ -110,7 +132,7 @@ def determine_attack_outcome(
             return AttackOutcome.MISS
 
 class EntityConfig(BaseModel):
-    """Configuration used by the reliable `Entity.create(..., config=...)` path."""
+    """Configuration used to materialize one owner-consistent Entity."""
 
     ability_scores: AbilityScoresConfig = Field(
         default_factory=AbilityScoresConfig,
@@ -188,11 +210,6 @@ class EntityConfig(BaseModel):
         le=3,
         description="Initial player-style death saving throw failures."
     )
-    is_stable: bool = Field(
-        default=False,
-        description="Whether a 0-HP player-style entity is stable and skips death saves."
-    )
-
 class Entity(BaseBlock):
     """Game actor composed from specialized engine blocks.
 
@@ -285,10 +302,6 @@ class Entity(BaseBlock):
         le=3,
         description="Current player-style death saving throw failures."
     )
-    is_stable: bool = Field(
-        default=False,
-        description="Whether a 0-HP player-style entity is stable and skips death saves."
-    )
 
     jump_distance_additive: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Additive)", base_value=0),
@@ -348,9 +361,11 @@ class Entity(BaseBlock):
         Tuple[Tuple[Tuple[int, int], ...], int],
         frozenset[Tuple[int, int]],
     ] = PrivateAttr(default_factory=dict)
+    _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
 
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
     _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
+    _LIFE_STATE_LIGHT_SUPPRESSION_TOKEN: ClassVar[str] = "entity.life_state.dead"
 
     def model_post_init(self, __context: Any) -> None:
         """Register entity identity, position, grid, and senses callbacks."""
@@ -369,6 +384,9 @@ class Entity(BaseBlock):
             )
             spatial_senses_system.register_observer(spatial_callback)
             spatial_senses_system.attach()
+
+        self._reconcile_initial_life_state()
+        self.senses.snapshot_perception(self.get_passive_perception())
 
     @classmethod
     def update_entity_position(
@@ -441,75 +459,72 @@ class Entity(BaseBlock):
             source_entity_uuid: UUID used as both entity UUID and source UUID.
             name: Display name for the entity.
             description: Optional entity description.
-            config: Optional component configuration. Defaults create a minimal
-                entity with default child blocks.
+            config: Optional component configuration. When omitted, the
+                canonical minimal configuration is used.
 
         Returns:
             Newly created entity.
         """
         if config is None:
-            appearance = Appearance.create(source_entity_uuid=source_entity_uuid)
-            return cls(
-                uuid=source_entity_uuid,
-                source_entity_uuid=source_entity_uuid,
-                name=name,
-                appearance=appearance)
-        else:
-            ability_scores = AbilityScores.create(source_entity_uuid=source_entity_uuid, config=config.ability_scores)
-            skill_set = SkillSet.create(source_entity_uuid=source_entity_uuid, config=config.skill_set)
-            saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid, config=config.saving_throws)
-            health = Health.create(source_entity_uuid=source_entity_uuid, config=config.health)
-            equipment = Equipment.create(source_entity_uuid=source_entity_uuid, config=config.equipment)
-            senses = Senses.create(source_entity_uuid=source_entity_uuid, position=config.position)
-            appearance = Appearance.create(source_entity_uuid=source_entity_uuid, config=config.appearance)
-            action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
-            proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.proficiency_bonus)
-            for modifier in config.proficiency_bonus_modifiers:
-                proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-
-            dex_mod = ability_scores.get_ability("dexterity").modifier
-            initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
-            for modifier in config.initiative_modifiers:
-                initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-
-            spellcasting = SpellcastingBlock.create(
-                source_entity_uuid=source_entity_uuid,
-                config=config.spellcasting
+            config = EntityConfig(
+                health=HealthConfig(hit_dices=[HitDiceConfig()]),
+                proficiency_bonus=2,
             )
 
-            inventory = Inventory(source_entity_uuid=source_entity_uuid)
+        ability_scores = AbilityScores.create(source_entity_uuid=source_entity_uuid, config=config.ability_scores)
+        skill_set = SkillSet.create(source_entity_uuid=source_entity_uuid, config=config.skill_set)
+        saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid, config=config.saving_throws)
+        health = Health.create(source_entity_uuid=source_entity_uuid, config=config.health)
+        equipment = Equipment.create(source_entity_uuid=source_entity_uuid, config=config.equipment)
+        senses = Senses.create(source_entity_uuid=source_entity_uuid, position=config.position)
+        appearance = Appearance.create(source_entity_uuid=source_entity_uuid, config=config.appearance)
+        action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
+        proficiency_bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.proficiency_bonus)
+        for modifier in config.proficiency_bonus_modifiers:
+            proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            return cls(
-                uuid=source_entity_uuid,
-                source_entity_uuid=source_entity_uuid,
-                name=name,
-                description=description,
-                ability_scores=ability_scores,
-                skill_set=skill_set,
-                saving_throws=saving_throws,
-                health=health,
-                equipment=equipment,
-                senses=senses,
-                inventory=inventory,
-                appearance=appearance,
-                action_economy=action_economy,
-                proficiency_bonus=proficiency_bonus,
-                initiative=initiative,
-                spellcasting=spellcasting,
-                position=config.position,
-                sprite_name=config.sprite_name,
-                faction=config.faction,
-                weight=config.weight,
-                creature_type=config.creature_type,
-                size=config.size,
-                has_ordinary_sight=config.has_ordinary_sight,
-                requires_breathing=config.requires_breathing,
-                swimming_speed=config.swimming_speed,
-                uses_death_saves=config.uses_death_saves,
-                death_save_successes=config.death_save_successes,
-                death_save_failures=config.death_save_failures,
-                is_stable=config.is_stable
-            )
+        dex_mod = ability_scores.get_ability("dexterity").modifier
+        initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
+        for modifier in config.initiative_modifiers:
+            initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
+
+        spellcasting = SpellcastingBlock.create(
+            source_entity_uuid=source_entity_uuid,
+            config=config.spellcasting
+        )
+
+        inventory = Inventory(source_entity_uuid=source_entity_uuid)
+
+        return cls(
+            uuid=source_entity_uuid,
+            source_entity_uuid=source_entity_uuid,
+            name=name,
+            description=description,
+            ability_scores=ability_scores,
+            skill_set=skill_set,
+            saving_throws=saving_throws,
+            health=health,
+            equipment=equipment,
+            senses=senses,
+            inventory=inventory,
+            appearance=appearance,
+            action_economy=action_economy,
+            proficiency_bonus=proficiency_bonus,
+            initiative=initiative,
+            spellcasting=spellcasting,
+            position=config.position,
+            sprite_name=config.sprite_name,
+            faction=config.faction,
+            weight=config.weight,
+            creature_type=config.creature_type,
+            size=config.size,
+            has_ordinary_sight=config.has_ordinary_sight,
+            requires_breathing=config.requires_breathing,
+            swimming_speed=config.swimming_speed,
+            uses_death_saves=config.uses_death_saves,
+            death_save_successes=config.death_save_successes,
+            death_save_failures=config.death_save_failures,
+        )
 
     def _set_position(self, new_position: Tuple[int, int]) -> None:
         """Set entity and senses position without updating registry indexes.
@@ -767,7 +782,7 @@ class Entity(BaseBlock):
         """
         if count < 1:
             raise ValueError("count must be at least 1")
-        if not self.has_hp or "Dead" in self.active_conditions:
+        if not self.has_hp or self.health.life_state is LifeState.DEAD:
             raise ValueError("Entity must have at least 1 HP to spend hit dice")
         hit_die = self.health.get_hit_dice(hit_dice_index)
         if count > hit_die.available_hit_dice:
@@ -802,7 +817,7 @@ class Entity(BaseBlock):
             True when the entity had at least 1 HP and gained long-rest
             benefits, otherwise False.
         """
-        if not self.has_hp or "Dead" in self.active_conditions:
+        if not self.has_hp or self.health.life_state is LifeState.DEAD:
             return False
 
         self.action_economy.reset_all_costs()
@@ -813,7 +828,6 @@ class Entity(BaseBlock):
             self._expire_long_rest_conditions_on_block(item)
         for item in self.inventory.items.values():
             self._expire_long_rest_conditions_on_block(item)
-        self.reduce_condition_by_tag(ConditionTag.EXHAUSTION)
         self.health.on_long_rest()
         return True
 
@@ -831,27 +845,118 @@ class Entity(BaseBlock):
     @property
     def is_dying(self) -> bool:
         """Whether this entity is alive but at 0 HP under death-save rules."""
-        return (
-            self.uses_death_saves
-            and "Dead" not in self.active_conditions
-            and self.get_normal_hp() <= 0
-            and "Unconscious" in self.active_conditions
-        )
+        return self.health.life_state is LifeState.DYING
+
+    @computed_field
+    @property
+    def is_stable(self) -> bool:
+        """Whether this entity is stable at zero HP."""
+        return self.health.life_state is LifeState.STABLE
 
     @property
     def is_encounter_alive(self) -> bool:
         """Whether encounter turn order should still treat this entity as alive."""
-        return "Dead" not in self.active_conditions and (self.has_hp or self.is_dying)
+        return self.health.life_state is not LifeState.DEAD
 
     def reset_death_save_state(self) -> None:
-        """Clear player-style death-save counters and stable state."""
+        """Clear player-style death-save counters."""
         self.death_save_successes = 0
         self.death_save_failures = 0
-        self.is_stable = False
 
     def _set_normal_hp(self, hit_points: int) -> None:
         """Set normal HP while preserving the current maximum HP."""
         self.health.damage_taken = max(0, self.get_max_hp() - hit_points)
+
+    def _reconcile_initial_life_state(self) -> None:
+        """Materialize capabilities derived from configured authoritative state."""
+        state = self.health.life_state
+        if state is not LifeState.ALIVE:
+            self._set_normal_hp(0)
+        self._replace_life_state_capabilities(state)
+        if state is LifeState.DEAD:
+            grid = get_map()
+            grid.set_block_light_suppressed(
+                self.uuid,
+                self._LIFE_STATE_LIGHT_SUPPRESSION_TOKEN,
+                True,
+            )
+            grid.invalidate_occupancy_paths()
+
+    def _replace_life_state_capabilities(self, state: LifeState) -> None:
+        """Replace only modifiers owned by the previous life-state transform."""
+        remove_modifier_ownership(self._life_state_modifier_ownership)
+        self._life_state_modifier_ownership = apply_life_state_transform(
+            self,
+            state,
+            effect_source_uuid=self.uuid,
+        )
+
+    def _commit_life_state(
+        self,
+        previous_state: LifeState,
+        requested_state: LifeState,
+        parent_event_uuid: Optional[UUID],
+    ) -> None:
+        """Commit authoritative state and its derived capabilities atomically."""
+        self.health.life_state = requested_state
+        self._replace_life_state_capabilities(requested_state)
+
+        crossed_dead_boundary = (
+            (previous_state is LifeState.DEAD)
+            != (requested_state is LifeState.DEAD)
+        )
+        if not crossed_dead_boundary:
+            return
+
+        grid = get_map()
+        grid.set_block_light_suppressed(
+            self.uuid,
+            self._LIFE_STATE_LIGHT_SUPPRESSION_TOKEN,
+            requested_state is LifeState.DEAD,
+            parent_event=parent_event_uuid,
+        )
+        grid.invalidate_occupancy_paths()
+        self._notify_perceivability_changed(parent_event=parent_event_uuid)
+
+    def _transition_life_state(
+        self,
+        requested_state: LifeState,
+        reason: LifeStateChangeReason,
+        parent_event: Optional[Event] = None,
+    ) -> Optional[LifeStateChangeEvent]:
+        """Commit one life-state invariant and publish its typed fact.
+
+        The causal damage, death, healing, or revival event is the veto point.
+        Once that event has accepted its effect, the derived life-state change
+        is non-vetoable: only its COMPLETION fact is published. This prevents a
+        handler from leaving zero-HP ALIVE or positive-HP DEAD combinations.
+        """
+        previous_state = self.health.life_state
+        if previous_state is requested_state:
+            return None
+        event = LifeStateChangeEvent(
+            source_entity_uuid=self.uuid,
+            source_entity_name=self.name,
+            target_entity_uuid=self.uuid,
+            target_entity_name=self.name,
+            entity_uuid=self.uuid,
+            entity_name=self.name,
+            previous_state=previous_state,
+            new_state=requested_state,
+            reason=reason,
+            normal_hit_points=self.get_normal_hp(),
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        execution_event = event.phase_to(EventPhase.EXECUTION)
+        self._commit_life_state(
+            previous_state,
+            requested_state,
+            parent_event.uuid if parent_event is not None else None,
+        )
+        effect_event = execution_event.phase_to(EventPhase.EFFECT)
+        return effect_event.phase_to(EventPhase.COMPLETION, use_register=True)
 
     def stabilize(self, parent_event: Optional[Event] = None) -> bool:
         """Stabilize a player-style dying entity at 0 HP.
@@ -862,56 +967,57 @@ class Entity(BaseBlock):
         Returns:
             True when the entity is now stable.
         """
-        if not self.uses_death_saves or "Dead" in self.active_conditions or self.get_normal_hp() > 0:
+        if (
+            not self.uses_death_saves
+            or self.health.life_state is LifeState.DEAD
+            or self.get_normal_hp() > 0
+        ):
             return False
         self._set_normal_hp(0)
         self.death_save_successes = 0
         self.death_save_failures = 0
-        self.is_stable = True
-        if "Unconscious" not in self.active_conditions:
-            from dnd.conditions import Unconscious
-            self.add_condition(
-                Unconscious(source_entity_uuid=self.uuid, target_entity_uuid=self.uuid),
-                check_save_throw=False,
-                parent_event=parent_event,
-            )
+        self._transition_life_state(
+            LifeState.STABLE,
+            LifeStateChangeReason.STABILIZATION,
+            parent_event,
+        )
         return True
 
     def enter_dying_state(self, parent_event: Optional[Event] = None) -> None:
-        """Put a player-style entity at 0 HP and apply Unconscious."""
+        """Put a player-style entity at 0 HP and request the Dying state."""
         self._set_normal_hp(0)
         self.reset_death_save_state()
-        if "Unconscious" not in self.active_conditions:
-            from dnd.conditions import Unconscious
-            self.add_condition(
-                Unconscious(source_entity_uuid=self.uuid, target_entity_uuid=self.uuid),
-                check_save_throw=False,
-                parent_event=parent_event,
-            )
+        self._transition_life_state(
+            LifeState.DYING,
+            LifeStateChangeReason.DAMAGE,
+            parent_event,
+        )
 
     def _clear_dying_state_after_healing(self, parent_event: Optional[Event] = None) -> None:
         """Clear death-save state when true healing restores positive HP."""
-        if not self.uses_death_saves or self.get_normal_hp() <= 0:
+        if (
+            not self.uses_death_saves
+            or self.health.life_state not in {LifeState.DYING, LifeState.STABLE}
+            or self.get_normal_hp() <= 0
+        ):
             return
         self.reset_death_save_state()
-        if "Unconscious" in self.active_conditions:
-            self.remove_condition("Unconscious", parent_event=parent_event)
+        self._transition_life_state(
+            LifeState.ALIVE,
+            LifeStateChangeReason.HEALING,
+            parent_event,
+        )
 
     def _fire_death_event(
         self,
         source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
         encounter_uuid: Optional[UUID] = None,
+        reason: LifeStateChangeReason = LifeStateChangeReason.DAMAGE,
     ) -> DeathEvent:
         """Fire the standard death event through completion."""
         killer = Entity.get(source_entity_uuid)
         killer_name = killer.name if killer and isinstance(killer, Entity) else ""
-        if self.uses_death_saves:
-            self.is_stable = False
-            self.death_save_successes = 0
-            self.death_save_failures = min(3, max(3, self.death_save_failures))
-            if "Unconscious" in self.active_conditions:
-                self.remove_condition("Unconscious")
         death_event = DeathEvent(
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -925,6 +1031,25 @@ class Entity(BaseBlock):
             parent_event=parent_event
         )
         death_event = death_event.phase_to(EventPhase.EXECUTION)
+        if death_event.canceled:
+            if self.get_normal_hp() <= 0:
+                self._set_normal_hp(1)
+            self.reset_death_save_state()
+            if self.health.life_state is not LifeState.ALIVE:
+                self._transition_life_state(
+                    LifeState.ALIVE,
+                    LifeStateChangeReason.DIRECT_STATE_CHECK,
+                    death_event,
+                )
+            return death_event
+        if self.uses_death_saves:
+            self.death_save_successes = 0
+            self.death_save_failures = 3
+        self._transition_life_state(
+            LifeState.DEAD,
+            reason,
+            death_event,
+        )
         death_event = death_event.phase_to(EventPhase.EFFECT)
         return death_event.phase_to(EventPhase.COMPLETION)
 
@@ -946,14 +1071,19 @@ class Entity(BaseBlock):
         """
         if count < 1:
             raise ValueError("count must be at least 1")
-        if not self.uses_death_saves or "Dead" in self.active_conditions:
+        if not self.uses_death_saves or self.health.life_state is LifeState.DEAD:
             return None
-        self.is_stable = False
+        if self.health.life_state is LifeState.STABLE:
+            self._transition_life_state(
+                LifeState.DYING,
+                LifeStateChangeReason.DAMAGE,
+            )
         self.death_save_failures = min(3, self.death_save_failures + count)
         if self.death_save_failures >= 3:
             return self._fire_death_event(
                 source_entity_uuid=source_entity_uuid or self.uuid,
                 parent_event=parent_event,
+                reason=LifeStateChangeReason.DEATH_SAVE_FAILURES,
             )
         return None
 
@@ -975,7 +1105,7 @@ class Entity(BaseBlock):
         Returns:
             Completed death-save event, or `None` when no death save is due.
         """
-        if not self.is_dying or self.is_stable:
+        if not self.is_dying:
             return None
 
         event = DeathSaveEvent(
@@ -1068,20 +1198,32 @@ class Entity(BaseBlock):
         """
         if hit_points < 1:
             raise ValueError("hit_points must be at least 1")
-        was_dead = "Dead" in self.active_conditions or not self.has_hp
-        if not was_dead:
+        if self.health.life_state is not LifeState.DEAD:
             return False
-
-        if "Dead" in self.active_conditions:
-            self.remove_condition("Dead", parent_event=parent_event)
-
-        hp_ceiling = self.get_hp() + self.health.damage_taken
-        self.health.damage_taken = max(0, hp_ceiling - hit_points)
-        self._clear_dying_state_after_healing(parent_event=parent_event)
-        self.non_blocking = False
-        get_map().invalidate_occupancy_paths()
-        if reduce_exhaustion:
-            self.reduce_condition_by_tag(ConditionTag.EXHAUSTION, parent_event=parent_event)
+        revive_event = ReviveEvent(
+            source_entity_uuid=self.uuid,
+            source_entity_name=self.name,
+            target_entity_uuid=self.uuid,
+            target_entity_name=self.name,
+            entity_uuid=self.uuid,
+            entity_name=self.name,
+            hit_points=hit_points,
+            reduce_exhaustion=reduce_exhaustion,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.DECLARATION,
+        )
+        revive_event = revive_event.phase_to(EventPhase.EXECUTION)
+        if revive_event.canceled:
+            return False
+        self._set_normal_hp(hit_points)
+        self.reset_death_save_state()
+        self._transition_life_state(
+            LifeState.ALIVE,
+            LifeStateChangeReason.REVIVAL,
+            revive_event,
+        )
+        revive_event = revive_event.phase_to(EventPhase.EFFECT)
+        revive_event.phase_to(EventPhase.COMPLETION)
         return True
 
     def on_turn_start(self, encounter_uuid: Optional[UUID] = None, round_number: int = 0, turn_index: int = 0) -> TurnStartEvent:
@@ -1256,49 +1398,13 @@ class Entity(BaseBlock):
             Proficiency value, weapon bonus, attack bonus list, ability bonus
             list, and weapon range.
         """
-        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
-
-        ability_bonuses: List[ModifiableValue] = []
-        attack_bonuses: List[ModifiableValue] = [self.equipment.attack_bonus]
-
-        if override_ability is not None:
-            ability = self.ability_scores.get_ability(override_ability)
-            ability_bonuses.append(ability.get_combined_values())
-            if weapon is None or isinstance(weapon, Shield):
-                weapon_bonus = self.equipment.unarmed_attack_bonus
-                attack_bonuses.append(self.equipment.melee_attack_bonus)
-                range = Range(type=RangeType.REACH, normal=5)
-            else:
-                weapon_bonus = weapon.attack_bonus
-                range = weapon.range
-                if range.type == RangeType.RANGE:
-                    attack_bonuses.append(self.equipment.ranged_attack_bonus)
-                else:
-                    attack_bonuses.append(self.equipment.melee_attack_bonus)
-        else:
-            dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values()
-            strength_bonus = self.ability_scores.get_ability("strength").get_combined_values()
-            if weapon is None or isinstance(weapon, Shield):
-                weapon_bonus = self.equipment.unarmed_attack_bonus
-                attack_bonuses.append(self.equipment.melee_attack_bonus)
-                ability_bonuses.append(strength_bonus)
-                range = Range(type=RangeType.REACH, normal=5)
-            else:
-                weapon_bonus = weapon.attack_bonus
-                range = weapon.range
-                if range.type == RangeType.RANGE:
-
-                    attack_bonuses.append(self.equipment.ranged_attack_bonus)
-                    ability_bonuses.append(dexterity_bonus)
-                elif range.type == RangeType.REACH and WeaponProperty.FINESSE in weapon.properties:
-                    attack_bonuses.append(self.equipment.melee_attack_bonus)
-                    if strength_bonus.normalized_score >= dexterity_bonus.normalized_score:
-                        ability_bonuses.append(strength_bonus)
-                    else:
-                        ability_bonuses.append(dexterity_bonus)
-                else:
-                    attack_bonuses.append(self.equipment.melee_attack_bonus)
-                    ability_bonuses.append(strength_bonus)
+        weapon_bonus, attack_bonuses, ability_bonuses, range = (
+            self.equipment.get_attack_bonus_components(
+                self.ability_scores,
+                weapon_slot,
+                override_ability,
+            )
+        )
         proficiency_bonus = self.proficiency_bonus
 
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
@@ -1414,9 +1520,7 @@ class Entity(BaseBlock):
 
     def can_see_visual_effects(self) -> bool:
         """Whether this entity can currently see visual effects at all."""
-        if "Blinded" in self.active_conditions:
-            return False
-        if "Unconscious" in self.active_conditions:
+        if self.senses.visual_access.normalized_score <= 0:
             return False
         return self.has_ordinary_sight or self.senses.has_sense(SensesType.TRUESIGHT)
 
@@ -1519,30 +1623,12 @@ class Entity(BaseBlock):
         Returns:
             Actor-baseline attack bonus, advantage, and critical rules.
         """
-        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
-        ability = self._weapon_attack_ability(
-            weapon if isinstance(weapon, Weapon) else None,
+        equipment_bonus, equipment_advantage = self.equipment.get_weapon_attack_baseline(
+            self.ability_scores,
+            weapon_slot,
             override_ability,
         )
-        if isinstance(weapon, Weapon):
-            weapon_bonus = weapon.attack_bonus
-            typed_bonus = (
-                self.equipment.ranged_attack_bonus
-                if weapon.range.type == RangeType.RANGE
-                else self.equipment.melee_attack_bonus
-            )
-        else:
-            weapon_bonus = self.equipment.unarmed_attack_bonus
-            typed_bonus = self.equipment.melee_attack_bonus
-        components = (
-            self.proficiency_bonus,
-            weapon_bonus,
-            self.equipment.attack_bonus,
-            typed_bonus,
-        )
-        advantage_sum = ability.modifier_bonus.advantage_sum + sum(
-            component.advantage_sum for component in components
-        )
+        advantage_sum = equipment_advantage + self.proficiency_bonus.advantage_sum
         if advantage_sum > 0:
             advantage = AdvantageStatus.ADVANTAGE
         elif advantage_sum < 0:
@@ -1550,9 +1636,7 @@ class Entity(BaseBlock):
         else:
             advantage = AdvantageStatus.NONE
         return AttackRollBaseline(
-            attack_bonus=ability.modifier + sum(
-                component.normalized_score for component in components
-            ),
+            attack_bonus=equipment_bonus + self.proficiency_bonus.normalized_score,
             advantage=advantage,
             critical_threshold=self.get_crit_threshold(weapon_slot),
             critical_extra_dice=self.get_crit_extra_dice(weapon_slot),
@@ -1572,83 +1656,11 @@ class Entity(BaseBlock):
         Returns:
             Immutable damage formulas representing one ordinary hit.
         """
-        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
-        profiles: list[DamageRollProfile] = []
-        if isinstance(weapon, Weapon):
-            base_bonuses = [
-                value
-                for value in (weapon.damage_bonus, self.equipment.damage_bonus)
-                if value is not None
-            ]
-            ability_bonus = 0
-            if weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
-                base_bonuses.append(
-                    self.equipment.off_hand_ranged_ability_bonus
-                    if weapon_slot == WeaponSlot.RANGED_OFF
-                    else self.equipment.off_hand_melee_ability_bonus
-                )
-            else:
-                ability_bonus = self._weapon_damage_ability(
-                    weapon,
-                    override_ability,
-                ).modifier
-            base_bonuses.append(
-                self.equipment.ranged_damage_bonus
-                if WeaponProperty.RANGED in weapon.properties
-                else self.equipment.melee_damage_bonus
-            )
-            profiles.append(DamageRollProfile(
-                dice_count=weapon.dice_numbers,
-                die_size=weapon.damage_dice,
-                flat_bonus=(
-                    sum(value.normalized_score for value in base_bonuses)
-                    + ability_bonus
-                ),
-                damage_type=weapon.damage_type.value,
-            ))
-            profiles.extend(
-                DamageRollProfile(
-                    dice_count=dice_count,
-                    die_size=die_size,
-                    flat_bonus=bonus.normalized_score,
-                    damage_type=damage_type.value,
-                )
-                for die_size, dice_count, bonus, damage_type in zip(
-                    weapon.extra_damage_dices,
-                    weapon.extra_damage_dices_numbers,
-                    weapon.extra_damage_bonus,
-                    weapon.extra_damage_type,
-                )
-            )
-        else:
-            ability = self._weapon_damage_ability(None, override_ability)
-            base_bonuses = (
-                self.equipment.unarmed_damage_bonus,
-                self.equipment.damage_bonus,
-                self.equipment.melee_damage_bonus,
-            )
-            profiles.append(DamageRollProfile(
-                dice_count=self.equipment.unarmed_dice_numbers,
-                die_size=self.equipment.unarmed_damage_dice,
-                flat_bonus=(
-                    sum(value.normalized_score for value in base_bonuses)
-                    + ability.modifier
-                ),
-                damage_type=self.equipment.unarmed_damage_type.value,
-            ))
-        profiles.extend(
-            DamageRollProfile(
-                dice_count=dice_count,
-                die_size=die_size,
-                flat_bonus=bonus.normalized_score,
-                damage_type=damage_type.value,
-            )
-            for die_size, dice_count, bonus, damage_type in zip(
-                self.equipment.extra_attack_damage_dices,
-                self.equipment.extra_attack_damage_dices_numbers,
-                self.equipment.extra_attack_damage_bonus,
-                self.equipment.extra_attack_damage_type,
-            )
+        profiles = self.equipment.get_weapon_damage_profiles(
+            self.ability_scores,
+            weapon_slot,
+            DamageRollProfile,
+            override_ability,
         )
         size_dice = self.get_size_damage_dice()
         if size_dice > 0 and profiles:
@@ -1658,46 +1670,6 @@ class Entity(BaseBlock):
                 damage_type=profiles[0].damage_type,
             ))
         return tuple(profiles)
-
-    def _weapon_attack_ability(
-        self,
-        weapon: Optional[Weapon],
-        override_ability: Optional[AbilityName],
-    ) -> Any:
-        """Return the ability block used by a weapon attack roll."""
-        if override_ability is not None:
-            return self.ability_scores.get_ability(override_ability)
-        if weapon is None:
-            return self.ability_scores.strength
-        if weapon.range.type == RangeType.RANGE:
-            return self.ability_scores.dexterity
-        if WeaponProperty.FINESSE in weapon.properties:
-            strength = self.ability_scores.strength
-            dexterity = self.ability_scores.dexterity
-            return strength if strength.modifier >= dexterity.modifier else dexterity
-        return self.ability_scores.strength
-
-    def _weapon_damage_ability(
-        self,
-        weapon: Optional[Weapon],
-        override_ability: Optional[AbilityName],
-    ) -> Any:
-        """Return the ability block used by a weapon damage roll."""
-        if override_ability is not None:
-            return self.ability_scores.get_ability(override_ability)
-        if weapon is None:
-            strength = self.ability_scores.strength
-            if WeaponProperty.FINESSE in self.equipment.unarmed_properties:
-                dexterity = self.ability_scores.dexterity
-                return strength if strength.modifier >= dexterity.modifier else dexterity
-            return strength
-        if WeaponProperty.RANGED in weapon.properties:
-            return self.ability_scores.dexterity
-        if WeaponProperty.FINESSE in weapon.properties:
-            strength = self.ability_scores.strength
-            dexterity = self.ability_scores.dexterity
-            return strength if strength.modifier >= dexterity.modifier else dexterity
-        return self.ability_scores.strength
 
     def get_crit_threshold(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> int:
         """Get the minimum natural roll needed for a critical hit.
@@ -1977,13 +1949,26 @@ class Entity(BaseBlock):
                 resolution=damage_resolution,
             )
 
-        if not take_damage_event.canceled and actual_damage > 0 and "Dead" not in self.active_conditions:
+        if (
+            not take_damage_event.canceled
+            and actual_damage > 0
+            and self.health.life_state is not LifeState.DEAD
+        ):
             normal_hp_after = self.get_normal_hp()
             if normal_hp_before <= 0 and self.uses_death_saves:
                 self._set_normal_hp(0)
-                self.is_stable = False
+                if self.health.life_state is LifeState.STABLE:
+                    self._transition_life_state(
+                        LifeState.DYING,
+                        LifeStateChangeReason.DAMAGE,
+                        take_damage_event,
+                    )
                 if actual_damage >= max_hp:
-                    self._fire_death_event(source_entity_uuid, parent_event=take_damage_event.uuid)
+                    self._fire_death_event(
+                        source_entity_uuid,
+                        parent_event=take_damage_event.uuid,
+                        reason=LifeStateChangeReason.MASSIVE_DAMAGE,
+                    )
                 else:
                     self.add_death_save_failure(
                         2 if critical_hit else 1,
@@ -1995,7 +1980,15 @@ class Entity(BaseBlock):
                 if self.uses_death_saves and remaining_damage < max_hp:
                     self.enter_dying_state(parent_event=take_damage_event)
                 else:
-                    self._fire_death_event(source_entity_uuid, parent_event=take_damage_event.uuid)
+                    self._fire_death_event(
+                        source_entity_uuid,
+                        parent_event=take_damage_event.uuid,
+                        reason=(
+                            LifeStateChangeReason.MASSIVE_DAMAGE
+                            if self.uses_death_saves and remaining_damage >= max_hp
+                            else LifeStateChangeReason.DAMAGE
+                        ),
+                    )
 
         take_damage_event = take_damage_event.model_copy(
             update={
@@ -2024,7 +2017,7 @@ class Entity(BaseBlock):
 
         Returns:
             Final instant-death event version. A canceled event means the death
-            was negated before HP or the `Dead` condition changed.
+            was negated before HP or authoritative life state changed.
         """
         source = Entity.get(source_entity_uuid)
         source_name = source.name if source and isinstance(source, Entity) else ""
@@ -2047,12 +2040,14 @@ class Entity(BaseBlock):
         if instant_death_event.canceled:
             return instant_death_event
 
-        hp_before = self.get_hp()
-        if hp_before > 0:
-            self.health.damage_taken += hp_before
+        self._set_normal_hp(0)
 
-        if "Dead" not in self.active_conditions:
-            self._fire_death_event(source_entity_uuid, parent_event=instant_death_event.uuid)
+        if self.health.life_state is not LifeState.DEAD:
+            self._fire_death_event(
+                source_entity_uuid,
+                parent_event=instant_death_event.uuid,
+                reason=LifeStateChangeReason.INSTANT_DEATH,
+            )
 
         return instant_death_event.phase_to(
             EventPhase.COMPLETION,
@@ -2100,7 +2095,10 @@ class Entity(BaseBlock):
 
         actual_healing = 0
         if not heal_event.canceled:
-            if self.health.is_healing_blocked():
+            if (
+                self.health.life_state is LifeState.DEAD
+                or self.health.is_healing_blocked()
+            ):
                 heal_event = heal_event.model_copy(update={"was_blocked": True})
             else:
                 hp_before = self.get_normal_hp()
@@ -2134,6 +2132,30 @@ class Entity(BaseBlock):
         """Entity is active if it has HP."""
         return self.has_hp
 
+    def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
+        """Dead entities leave creature-senses facts until revived."""
+        if self.health.life_state is LifeState.DEAD:
+            return False
+        return super().is_perceivable_by(requesting_entity_uuid)
+
+    def can_take_actions(self) -> bool:
+        """Return whether neutral condition transforms permit ordinary actions."""
+        return self.action_economy.action_permission.normalized_score > 0
+
+    def can_afford_action_resource(
+        self,
+        resource_name: str,
+        amount: int,
+    ) -> bool:
+        """Delegate named action-resource affordability to ActionEconomy."""
+        return self.action_economy.can_afford_resource(resource_name, amount)
+
+    def get_restricted_action_grants(
+        self,
+    ) -> tuple[RestrictedActionGrant, ...]:
+        """Expose ActionEconomy's dependency-neutral restricted grants."""
+        return self.action_economy.get_restricted_action_grants()
+
     def get_hp(self) -> int:
         """Return current total HP after Constitution, bonuses, temp HP, and damage."""
         con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
@@ -2149,12 +2171,7 @@ class Entity(BaseBlock):
         Returns:
             Weapon range, or default unarmed reach when no weapon is equipped.
         """
-        weapon = self.equipment._get_weapon_by_slot(weapon_slot)
-
-        if weapon is None or isinstance(weapon, Shield):
-            return Range(type=RangeType.REACH, normal=5)
-        else:
-            return weapon.range
+        return self.equipment.get_weapon_range(weapon_slot)
 
     def is_threatened(self) -> bool:
         """
@@ -2179,7 +2196,7 @@ class Entity(BaseBlock):
         self,
     ) -> List[Tuple['Entity', Set[Tuple[int, int]]]]:
         """Return threat cells for hostiles visible to this moving entity."""
-        if "Disengaging" in self.active_conditions:
+        if self.action_economy.provokes_opportunity_attacks.normalized_score <= 0:
             return []
         domains: List[Tuple['Entity', Set[Tuple[int, int]]]] = []
         for entity_uuid in sorted(self.senses.entities, key=str):
@@ -2861,11 +2878,94 @@ class Entity(BaseBlock):
         """An entity blocks walking unless it is non-blocking or the requester is itself."""
         if requesting_entity_uuid == self.uuid:
             return False
-        if self.non_blocking:
+        if self.non_blocking or self.health.life_state is LifeState.DEAD:
             return False
         return True
 
-    def loot_item(self, item: BaseItem) -> bool:
+    def _publish_owned_item_location(
+        self,
+        item: BaseItem,
+        location: ItemLocation,
+        *,
+        equipment_slot: Optional[EquipmentSlot] = None,
+        merged_into_item_uuid: Optional[UUID] = None,
+        stack_count: Optional[int] = None,
+        parent_event: Optional[Event] = None,
+    ) -> ItemLocationStateEvent:
+        """Publish one post-commit item fact with exact aggregate owner AC."""
+        if location is ItemLocation.INVENTORY:
+            owner_uuid: Optional[UUID] = self.uuid
+            container_uuid: Optional[UUID] = self.inventory.uuid
+            tile_uuid: Optional[UUID] = None
+            position: Optional[Tuple[int, int]] = None
+        elif location is ItemLocation.EQUIPMENT:
+            owner_uuid = self.uuid
+            container_uuid = self.equipment.uuid
+            tile_uuid = None
+            position = None
+        elif location is ItemLocation.FLOOR:
+            owner_uuid = None
+            container_uuid = None
+            tile_uuid = item.tile_uuid
+            position = item.position
+        else:
+            owner_uuid = None
+            container_uuid = None
+            tile_uuid = None
+            position = None
+
+        return item.publish_location_state(
+            location,
+            owner_uuid=owner_uuid,
+            container_uuid=container_uuid,
+            tile_uuid=tile_uuid,
+            position=position,
+            equipment_slot=equipment_slot,
+            merged_into_item_uuid=merged_into_item_uuid,
+            entity_armor_class_after=self.ac_bonus().normalized_score,
+            stack_count=stack_count,
+            source_entity_uuid=self.uuid,
+            parent_event=parent_event,
+        )
+
+    def _publish_inventory_add_result(
+        self,
+        incoming_item: BaseItem,
+        result: InventoryAddResult,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Publish changed surviving and consumed stacks in deterministic order."""
+        if result.merged_into_item is not None:
+            self._publish_owned_item_location(
+                result.merged_into_item,
+                ItemLocation.INVENTORY,
+                parent_event=parent_event,
+            )
+        if result.inserted_item is not None:
+            self._publish_owned_item_location(
+                result.inserted_item,
+                ItemLocation.INVENTORY,
+                parent_event=parent_event,
+            )
+        else:
+            self._publish_owned_item_location(
+                incoming_item,
+                ItemLocation.MERGED,
+                merged_into_item_uuid=(
+                    result.merged_into_item.uuid
+                    if result.merged_into_item is not None
+                    else None
+                ),
+                stack_count=0,
+                parent_event=parent_event,
+            )
+
+    def loot_item(
+        self,
+        item: BaseItem,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
         """Pick up item into inventory. Removes from GridMap if placed.
 
         Sets location tracking fields and calls lifecycle hook with entity context.
@@ -2878,8 +2978,10 @@ class Entity(BaseBlock):
             return False
         item_uuid = item.uuid
         item.source_entity_uuid = self.uuid
-        self.inventory.add_item(item)
-        merged = item_uuid not in self.inventory.items
+        result = self.inventory.add_item_with_result(item)
+        if not result.succeeded:
+            return False
+        merged = result.inserted_item is None
         item.tile_uuid = None
         gridmap = get_map()
         if gridmap.get_object_position(item_uuid) is not None:
@@ -2888,9 +2990,19 @@ class Entity(BaseBlock):
             item.owner_uuid = self.uuid
             item.stored_in_uuid = self.inventory.uuid
             item.loot(entity_uuid=self.uuid, inventory_uuid=self.inventory.uuid)
+        self._publish_inventory_add_result(
+            item,
+            result,
+            parent_event=parent_event,
+        )
         return True
 
-    def drop_item(self, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[BaseItem]:
+    def drop_item(
+        self,
+        item_uuid: UUID,
+        position: Optional[Tuple[int, int]] = None,
+        parent_event: Optional[Event] = None,
+    ) -> Optional[BaseItem]:
         """Drop item from inventory to ground.
 
         Args:
@@ -2904,17 +3016,54 @@ class Entity(BaseBlock):
         if item is None:
             return None
         drop_pos = position if position is not None else self.position
-        gridmap = get_map()
-        tile = gridmap.get_tile(drop_pos[0], drop_pos[1])
         item.owner_uuid = None
         item.stored_in_uuid = None
-        item.position = drop_pos
-        item.tile_uuid = tile.uuid if tile else None
-        gridmap.place_object(item.uuid, drop_pos)
+        item.place_on_grid(drop_pos)
         item.drop(entity_uuid=self.uuid, position=drop_pos)
+        self._publish_owned_item_location(
+            item,
+            ItemLocation.FLOOR,
+            parent_event=parent_event,
+        )
         return item
 
-    def equip_item(self, item_uuid: UUID, slot: EquipmentSlot) -> bool:
+    def _store_or_drop_equipment_item(self, item: BaseItem) -> None:
+        """Move a displaced equipment item to inventory or the entity's tile."""
+        result = self.inventory.add_item_with_result(item)
+        if result.succeeded:
+            self._publish_inventory_add_result(item, result)
+            return
+        item.owner_uuid = None
+        item.stored_in_uuid = None
+        item.place_on_grid(self.position)
+        item.drop(entity_uuid=self.uuid, position=self.position)
+        self._publish_owned_item_location(item, ItemLocation.FLOOR)
+
+    def on_owned_item_destroyed(
+        self,
+        item: BaseBlock,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
+        """Publish destroyed item membership and AC after owner cleanup."""
+        if not isinstance(item, BaseItem):
+            return False
+        self._publish_owned_item_location(
+            item,
+            ItemLocation.DESTROYED,
+            stack_count=0,
+            parent_event=parent_event,
+        )
+        return True
+
+    def is_inventory_item_equippable(self, item_uuid: UUID) -> bool:
+        """Return whether an inventory UUID resolves to the generic gear contract."""
+        return isinstance(self.inventory.items.get(item_uuid), EquippableItem)
+
+    def equip_item(
+        self,
+        item_uuid: UUID,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> bool:
         """Move item from inventory to equipment slot.
 
         If the target slot is occupied and the new equip succeeds, moves the
@@ -2922,45 +3071,32 @@ class Entity(BaseBlock):
 
         Args:
             item_uuid: UUID of the inventory item to equip.
-            slot: Equipment slot to place the item into.
+            slot: Optional slot. The item supplies a default only when its
+                policy has one unambiguous choice.
 
         Returns:
             True if the item was equipped, False if the item was absent, not
             equippable, or the equipment event was canceled.
         """
-        item = self.inventory.items.get(item_uuid)
-        if item is None or not item.is_equippable:
+        if not self.is_inventory_item_equippable(item_uuid):
             return False
-        equipped_before = {
-            equipped_item.uuid: equipped_item
-            for equipped_item in self.equipment.get_all_equipped_items()
-        }
-        if not self.equipment.equip(cast(Union[Armor, Weapon, Shield], item), slot):
+        item = self.inventory.items[item_uuid]
+        assert isinstance(item, EquippableItem)
+        result = self.equipment.equip_transaction(item, slot)
+        if not result.succeeded:
             return False
 
         self.inventory.remove_item(item_uuid)
-        equipped_after = {
-            equipped_item.uuid
-            for equipped_item in self.equipment.get_all_equipped_items()
-        }
-        displaced_items = [
-            equipped_item
-            for equipped_uuid, equipped_item in equipped_before.items()
-            if equipped_uuid not in equipped_after and equipped_uuid != item.uuid
-        ]
-        for displaced_item in displaced_items:
-            if self.inventory.add_item(displaced_item):
-                displaced_item.owner_uuid = self.uuid
-                displaced_item.stored_in_uuid = self.inventory.uuid
-            else:
-                gridmap = get_map()
-                displaced_item.owner_uuid = None
-                displaced_item.stored_in_uuid = None
-                displaced_item.position = self.position
-                tile = gridmap.get_tile(self.position[0], self.position[1])
-                displaced_item.tile_uuid = tile.uuid if tile else None
-                gridmap.place_object(displaced_item.uuid, self.position)
-                displaced_item.drop(entity_uuid=self.uuid, position=self.position)
+        selected_slot = result.selected_slot
+        if selected_slot is None:
+            raise RuntimeError("Successful equipment transaction omitted its selected slot")
+        self._publish_owned_item_location(
+            item,
+            ItemLocation.EQUIPMENT,
+            equipment_slot=selected_slot,
+        )
+        for displaced_item in result.displaced_items:
+            self._store_or_drop_equipment_item(displaced_item)
         return True
 
     def unequip_item(self, slot: EquipmentSlot) -> Optional[BaseItem]:
@@ -2977,17 +3113,7 @@ class Entity(BaseBlock):
         item = self.equipment.unequip(slot)
         if item is None:
             return None
-        if self.inventory.add_item(item):
-            item.owner_uuid = self.uuid
-            item.stored_in_uuid = self.inventory.uuid
-        else:
-            gridmap = get_map()
-            item.owner_uuid = None
-            item.stored_in_uuid = None
-            item.position = self.position
-            tile = gridmap.get_tile(self.position[0], self.position[1])
-            item.tile_uuid = tile.uuid if tile else None
-            gridmap.place_object(item.uuid, self.position)
+        self._store_or_drop_equipment_item(item)
         return item
 
     @staticmethod
@@ -3016,6 +3142,17 @@ class Entity(BaseBlock):
                     if not obj.is_perceivable_by(observer_uuid):
                         continue
                     visible_objects[obj_uuid] = position
+
+    @staticmethod
+    def _is_senses_visible_entity(
+        candidate: "Entity",
+        observer_uuid: Optional[UUID],
+    ) -> bool:
+        """Return whether a live entity belongs in an observer's entity facts."""
+        return (
+            candidate.health.life_state is not LifeState.DEAD
+            and candidate.is_perceivable_by(observer_uuid)
+        )
 
     @staticmethod
     def compute_senses_from_position(
@@ -3132,7 +3269,14 @@ class Entity(BaseBlock):
 
         if visibility_cache is not None:
             started = time.perf_counter() if timing else 0.0
-            visible_entities = dict(visibility_cache.entities)
+            visible_entities: Dict[UUID, Tuple[int, int]] = {}
+            for visible_uuid, visible_position in visibility_cache.entities.items():
+                candidate = Entity._entity_registry.get(visible_uuid)
+                if candidate is not None and Entity._is_senses_visible_entity(
+                    candidate,
+                    entity_uuid,
+                ):
+                    visible_entities[visible_uuid] = visible_position
             visible_objects = dict(visibility_cache.objects)
             if timing:
                 record_action_timing("senses.reuse_visible_entities_objects_ms", started)
@@ -3144,7 +3288,7 @@ class Entity(BaseBlock):
                 for entity in entities:
                     if entity_uuid and entity.uuid == entity_uuid:
                         continue
-                    if entity.is_perceivable_by(entity_uuid):
+                    if Entity._is_senses_visible_entity(entity, entity_uuid):
                         visible_entities[entity.uuid] = pos
             if timing:
                 record_action_timing("senses.collect_visible_entities_ms", started)
@@ -3375,8 +3519,11 @@ class Entity(BaseBlock):
         for pos in visible_dict:
             for ent_uuid in grid.get_entities_at(pos):
                 if ent_uuid != self.uuid:
-                    block = BaseBlock.get(ent_uuid)
-                    if block and block.is_perceivable_by(self.uuid):
+                    candidate = Entity._entity_registry.get(ent_uuid)
+                    if candidate is not None and Entity._is_senses_visible_entity(
+                        candidate,
+                        self.uuid,
+                    ):
                         visible_entities[ent_uuid] = pos
         if timing:
             record_action_timing("entity.update_visibility.collect_visible_entities_ms", started)
@@ -3667,7 +3814,7 @@ class Entity(BaseBlock):
         combined Constitution modifier object for every AoE preview target.
         Encounter death-save semantics are handled outside target discovery.
         """
-        if "Dead" in entity.active_conditions:
+        if entity.health.life_state is LifeState.DEAD:
             return False
         constitution = entity.ability_scores.get_ability("constitution")
         max_hp = (
@@ -4145,15 +4292,20 @@ class Entity(BaseBlock):
                 weapon_slot_attr = getattr(template, 'weapon_slot', None)
                 if weapon_slot_attr is not None:
                     weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
-                    weapon = self.equipment._get_weapon_by_slot(weapon_slot_attr)
-                    if isinstance(weapon, Weapon):
-                        weapon_name = weapon.name
-                        damage_types = [getattr(weapon.damage_type, "value", str(weapon.damage_type))]
-                        damage_types.extend(getattr(extra, "value", str(extra)) for extra in weapon.extra_damage_type)
+                    weapon_metadata = self.equipment.get_weapon_metadata(weapon_slot_attr)
+                    if weapon_metadata is not None:
+                        weapon_name, damage_types = weapon_metadata
                         if template_name.startswith("Extra Attack"):
                             display_name = f"Extra Attack ({weapon_name})"
                         else:
-                            display_name = weapon_name
+                            grant_display = (
+                                template.get_restricted_action_display_name()
+                            )
+                            display_name = (
+                                f"{grant_display}: {weapon_name}"
+                                if grant_display is not None
+                                else weapon_name
+                            )
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.weapon_metadata.{template_label}_ms",
@@ -4550,10 +4702,7 @@ class Entity(BaseBlock):
         movement_mode: MovementMode,
     ) -> List[AvailableTarget]:
         """Build legal movement targets from already-computed subjective paths."""
-        movement_blocked = (
-            "Dead" in self.active_conditions
-            or "Incapacitated" in self.active_conditions
-        )
+        movement_blocked = remaining_movement <= 0
         grid = get_map()
         cache_revision = (self.senses.path_revision, grid.movement_revision)
         if cache_revision != self._fast_move_target_cache_revision:
@@ -5049,7 +5198,8 @@ class Entity(BaseBlock):
                         maximum_uses,
                     )
             base_name = use_template.name or "Use"
-            template_name = f"{base_name}__item_{item_uuid}"
+            execution_name = use_template.get_discovery_template_name()
+            template_name = f"{execution_name}__item_{item_uuid}"
             stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
             display_name = f"{base_name} ({item_name}{stack_suffix})"
             stack_count_field = item_stack if item_stack and item_stack > 1 else None
@@ -5452,73 +5602,12 @@ class Entity(BaseBlock):
         return result
 
     def get_equippable_items(self) -> Dict[str, list]:
-        """Returns inventory items that can be equipped, grouped by valid slot.
+        """Return inventory items grouped by every compatible equipment slot.
 
-        For each EquippableItem in inventory, determines which slots it can go into
-        and whether that slot is currently occupied (includes swap info).
+        Each candidate includes every equipped item whose declared footprint
+        the proposed placement would displace.
 
         Returns:
-            Dict mapping slot name -> list of dicts with item info and swap details.
+            Dict mapping slot name to candidates and their displacement details.
         """
-        from dnd.blocks.base_item import EquippableItem
-        from dnd.blocks.equipment import Weapon, Armor, Shield, Ring, WeaponProperty, slot_mapping
-        from dnd.core.events import WeaponSlot, BodyPart, RingSlot
-
-        result: Dict[str, list] = {}
-
-        slot_attr_map = {
-            "weapon_melee_main": WeaponSlot.MELEE_MAIN,
-            "weapon_melee_off": WeaponSlot.MELEE_OFF,
-            "weapon_ranged_main": WeaponSlot.RANGED_MAIN,
-            "weapon_ranged_off": WeaponSlot.RANGED_OFF,
-            "helmet": BodyPart.HEAD,
-            "body_armor": BodyPart.BODY,
-            "gauntlets": BodyPart.HANDS,
-            "greaves": BodyPart.LEGS,
-            "boots": BodyPart.FEET,
-            "amulet": BodyPart.AMULET,
-            "cloak": BodyPart.CLOAK,
-            "ring_left": RingSlot.LEFT,
-            "ring_right": RingSlot.RIGHT,
-        }
-
-        for item in self.inventory.items.values():
-            if not isinstance(item, EquippableItem):
-                continue
-
-            valid_slots: List[str] = []
-
-            if isinstance(item, Weapon):
-                is_ranged = WeaponProperty.RANGED in item.properties
-                is_light = WeaponProperty.LIGHT in item.properties
-                if is_ranged:
-                    valid_slots.append("weapon_ranged_main")
-                    if is_light:
-                        valid_slots.append("weapon_ranged_off")
-                else:
-                    valid_slots.append("weapon_melee_main")
-                    if is_light:
-                        valid_slots.append("weapon_melee_off")
-            elif isinstance(item, Shield):
-                valid_slots.append("weapon_melee_off")
-            elif isinstance(item, Ring):
-                valid_slots.extend(["ring_left", "ring_right"])
-            elif isinstance(item, Armor):
-                for bp, attr_name in slot_mapping.items():
-                    if item.body_part == bp:
-                        valid_slots.append(attr_name)
-                        break
-
-            for slot_name in valid_slots:
-                if slot_name not in result:
-                    result[slot_name] = []
-                current_item = self.equipment.get_item_by_slot(slot_attr_map[slot_name])
-                entry = {
-                    "item_uuid": str(item.uuid),
-                    "item_name": item.name,
-                    "swap_item_name": current_item.name if current_item else None,
-                    "swap_item_uuid": str(current_item.uuid) if current_item else None,
-                }
-                result[slot_name].append(entry)
-
-        return result
+        return self.equipment.group_equippable_items(self.inventory.items.values())

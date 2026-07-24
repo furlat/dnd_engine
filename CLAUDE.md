@@ -74,6 +74,14 @@ BaseObject, BaseBlock (base classes)
 2. Move it to the higher-level class that already has access to both
 3. Or pass the needed data as parameters instead of importing
 
+**Dependency-neutral leaves** may be imported across engine and server layers:
+`dnd/core/condition_types.py`, `equipment_types.py`, `life_types.py`, and
+`effect_types.py`. They contain enums or immutable value objects, never Entity,
+concrete conditions, runtime services, or policy. Transport-only DTOs belong in
+`server/agent_protocol`. Shared creature mechanics that need several blocks use
+the structural `CreatureTransformTarget` surface in `dnd/creature_transforms.py`;
+that module must not import `Entity`.
+
 ## Common Commands
 
 ```bash
@@ -110,7 +118,7 @@ Entity
 ├── ability_scores: AbilityScores     # STR, DEX, CON, INT, WIS, CHA (each has score + modifier)
 ├── skill_set: SkillSet               # 18 D&D 5e skills, linked to abilities
 ├── saving_throws: SavingThrowSet     # 6 saves, linked to abilities
-├── health: Health                    # HP, hit dice, temp HP, damage resistances
+├── health: Health                    # HP, authoritative LifeState, hit dice, temp HP, resistances
 ├── equipment: Equipment              # Weapons (4 slots: MELEE_MAIN/OFF, RANGED_MAIN/OFF), armor, shield, AC
 ├── inventory: Inventory              # Item storage (slots, weight capacity, find/transfer)
 ├── action_economy: ActionEconomy     # actions, bonus_actions, reactions, movement
@@ -118,7 +126,7 @@ Entity
 ├── proficiency_bonus: ModifiableValue
 ├── weight: int                       # Weight in pounds (default 150, used for Shove weight limit)
 ├── faction: Optional[str]            # Faction name for ally/enemy detection (None = enemy to all)
-├── active_conditions: Dict[str, BaseCondition]
+├── active_conditions: Dict[str, BaseCondition]  # Rules effects, never a LifeState mirror
 └── active_conditions_by_uuid / by_source (lookup dicts)
 ```
 
@@ -134,6 +142,7 @@ BaseBlock
     │
     ├── EquippableItem
     │   │   Equip/unequip hooks: _on_equip(slot, entity_uuid), _on_unequip(slot, entity_uuid)
+    │   │   Owns compatible/default slots, occupied-slot footprint, and event family
     │   │   is_equippable=True, is_pickable=True
     │   │   Three hook approaches: direct modifiers, action registration, conditions
     │   │
@@ -160,13 +169,41 @@ BaseBlock
 - `is_equipped` — Boolean flag
 - `equipped_slot` — String value of the slot enum when equipped
 
-**Slot enums** (`dnd/core/events.py`): `WeaponSlot`, `BodyPart`, `RingSlot`, `EquipmentSlot` (union of all three)
+**Slot enums** (`dnd/core/equipment_types.py`): `WeaponSlot`, `BodyPart`, `RingSlot`, `EquipmentSlot` (union of all three)
+
+`EquippableItem` owns facts about the item. `Equipment` owns loadout conflict
+resolution, atomic equip/unequip transactions, and the resulting projection.
+Entity and server code call those stable APIs; they do not switch on concrete
+weapon, armor, shield, or gear classes.
 
 ### Global Registries
 
 - `BaseObject._registry: Dict[UUID, BaseObject]` - All objects by UUID
 - `Entity._entity_registry: Dict[UUID, Entity]` - All entities
 - `Entity._entity_by_position: DefaultDict[Tuple[int,int], List[Entity]]` - Entities by grid position
+
+### Life-State Ownership
+
+`Health.life_state` is the single authoritative creature lifecycle value and
+uses the dependency-neutral `LifeState` enum from `dnd/core/life_types.py`.
+Only `Entity` commits transitions. There are no `Dying` or `Dead` conditions,
+no condition-name mirror, and no lifecycle event handler that repairs state
+afterward.
+
+Damage, death, healing, and revival events are the causal veto points. Once an
+accepted causal effect commits a transition, Entity atomically replaces the
+derived capability modifiers and publishes a non-vetoable
+`LifeStateChangeEvent` completion fact. `DYING` and `STABLE` derive the
+unconscious transform; `DEAD` derives action and visual denial. These transforms
+come from `dnd/creature_transforms.py`, which operates on a structural block
+surface and never imports Entity or concrete conditions.
+
+Lifecycle-dependent behavior must read `health.life_state`, not HP, `is_active`,
+or active-condition names. Server entity/combatant DTOs and subjective facts
+carry this same value. Death also adds an owner-scoped light-suppression token
+and makes the entity nonblocking and imperceivable; revival removes only that
+token and restores the derived capabilities without overriding independent
+rules.
 
 ## The Event System
 
@@ -234,6 +271,16 @@ When an event is registered with EventQueue, it finds matching handlers by trigg
 **`enabled` toggle**: Every handler has `enabled: bool = True`. When disabled, `__call__` returns `None` immediately. Use `entity.set_handler_enabled("Shield", False)` to toggle. See `claude_docs/HANDLERS.md` for the full handler catalog and toggle API.
 
 **Handler discovery**: `entity.get_event_handler_by_name(name)`, `entity.get_event_handlers_by_name(name)`, `entity.set_handler_enabled_by_uuid(uuid, enabled)`.
+
+**Transactional preflight**: Equipment transactions validate every proposed
+equip/unequip transition before mutating inventory or slots. A handler that
+matches `EventQueue.preflight()` must explicitly set `validation_only=True` and
+must be pure: it may inspect, modify, or cancel the unpublished proposal, but
+must not mutate engine state, emit events, or publish combat logs. Accepted
+proposals are stored once through `publish_preflighted()` without redispatching
+validators. Stateful gear reactions belong at `EventPhase.EFFECT`, after the
+transaction has committed; do not put stateful behavior on a preflighted
+DECLARATION or EXECUTION phase.
 
 For dice manipulation patterns (Great Weapon Fighting, etc.), see `claude_docs/IMPLEMENTATION_GUIDE.md`.
 
@@ -413,24 +460,19 @@ class MyCondition(BaseCondition):
 
 See `claude_docs/IMPLEMENTATION_GUIDE.md` for full condition implementation patterns.
 
-### Sub-conditions Pattern (Same Entity)
+### Direct Ownership vs Sub-conditions
 
-Conditions like Paralyzed include Incapacitated as a sub-condition on the **same entity**:
+A condition owns every neutral mechanical transform stated by that rule.
+`Paralyzed`, `Stunned`, `Petrified`, and `Unconscious` therefore apply their
+action, movement, save, perception, and attack transforms directly. They must
+not manufacture a named `Incapacitated` child merely to reuse behavior; doing
+so couples one concrete rule to another and creates overlapping lifecycles.
 
-```python
-# In Paralyzed._apply():
-sub_conditions_uuids: List[UUID] = []
-incapacitated = Incapacitated(
-    source_entity_uuid=self.source_entity_uuid,
-    target_entity_uuid=self.target_entity_uuid,
-    parent_condition=self.uuid  # Links child to parent
-)
-target.add_condition(incapacitated)
-sub_conditions_uuids.append(incapacitated.uuid)
-
-return outs, [], sub_conditions_uuids, [], effect_event  # 5-tuple
-# When Paralyzed is removed, Incapacitated is automatically removed too
-```
+Use a same-entity sub-condition only when the parent rule genuinely applies a
+distinct condition whose independent identity matters. Spell-specific wrapper
+effects such as `HoldPersonEffect` may own `Paralyzed` as a sub-condition so
+the spell wrapper controls duration/concentration while `Paralyzed` owns its
+own mechanics.
 
 ### Condition Removal (BaseBlock-Driven)
 
@@ -445,7 +487,7 @@ BaseBlock.remove_condition(name) → BaseBlock._remove_condition_tree(condition)
 ```
 
 **Three condition linkage types on BaseCondition:**
-- `sub_conditions: List[UUID]` - Child conditions on **same block** (e.g., Paralyzed → Incapacitated). Parent tracks children, `parent_condition` field provides reverse link.
+- `sub_conditions: List[UUID]` - Distinct child conditions on the **same block** (e.g., HoldPersonEffect → Paralyzed). Parent tracks children, `parent_condition` field provides reverse link.
 - `linked_conditions: List[Tuple[UUID, UUID]]` - Conditions on **other BaseBlocks** (entities, tiles, items) (e.g., Concentrating → HoldPersonEffect on target, zone spells → tile conditions). Added via `add_linked_condition(target_block_uuid, condition_uuid)`.
 - `parent_link: Optional[Tuple[UUID, UUID]]` - **Reverse link** `(parent_block_uuid, parent_condition_uuid)` set automatically by `add_linked_condition()`. Enables child→parent notification when a linked child is removed.
 
@@ -629,6 +671,14 @@ Perceivability filtering on senses. See `claude_docs/VISION_HIDING_COVER_PLAN.md
 
 Per-tile light levels with dynamic light sources, sense modes (Darkvision, Truesight, etc.), zone spell light effects, and incremental senses updates. See `claude_docs/LIGHTING_SYSTEM.md` for full documentation.
 
+Anchored light sources keep their own desired `is_active` value. Temporary
+rules use `GridMap.set_block_light_suppressed(block_uuid, token, suppressed)`
+to change effective illumination without destroying that intent. Suppression
+tokens compose: the first removes illumination and only removal of the last
+restores it. Movement, new attached lights, toggles, and recomputation all honor
+the tokens. `cleanup_block_light_sources()` is destruction-only and must not be
+used for reversible effects such as death.
+
 #### Hazard System — IMPLEMENTED
 
 Subjective hazard detection and safe pathfinding. See `claude_docs/TERRAIN_MOVEMENT_SYSTEM.md` for full details.
@@ -660,7 +710,7 @@ Subjective hazard detection and safe pathfinding. See `claude_docs/TERRAIN_MOVEM
 
 **Common pitfalls in this codebase:**
 - `entity.has_hp` — boolean property, True if HP > 0. Only on Entity and BaseItem (things with health).
-- `block.is_active` — boolean property, universal on BaseBlock. True if functional (Entity delegates to `has_hp`, non-health blocks always True). Use for polymorphic filtering.
+- `block.is_active` — boolean property, universal on BaseBlock. Entity currently delegates to `has_hp`; do not use it for senses because DYING/STABLE entities at 0 HP remain perceivable. Senses filters only `LifeState.DEAD`.
 - `entity.get_hp()` — int, actual HP value. Use only when you need the number. Never use `get_hp() > 0` for filtering — use `has_hp` or `is_active`.
 - `Entity.get_hp()` returns current HP, NOT `entity.health.current_hit_points` (doesn't exist)
 - `AbilityScoresConfig` takes `AbilityConfig` objects, not raw integers
@@ -668,8 +718,8 @@ Subjective hazard detection and safe pathfinding. See `claude_docs/TERRAIN_MOVEM
 - `RangeType` is in `dnd/core/events.py`, not `dnd/blocks/equipment.py`
 - Always use bestiary factories (`create_goblin`, `create_skeleton`) as reference for entity creation
 - **Bestiary factories use keyword args**: `create_goblin(name="Name", position=(0,0))` NOT `create_goblin("Name", ...)`
-- **Weapon slots**: Use `entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)` to get weapons. 4 slots: `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, `RANGED_OFF`. Use `entity.equipment.get_item_by_slot(slot)` for any slot type (WeaponSlot, BodyPart, RingSlot).
-- **Slot enums**: `WeaponSlot`, `BodyPart`, `RingSlot`, `EquipmentSlot` are ALL in `dnd/core/events.py` (not equipment.py)
+- **Weapon slots**: Use `entity.equipment.get_item_by_slot(slot)` for any slot type. The 4 weapon slots are `MELEE_MAIN`, `MELEE_OFF` (can hold shield), `RANGED_MAIN`, and `RANGED_OFF`; concrete compatibility/default/conflict policy belongs to the item and `Equipment`, never Entity or server code.
+- **Slot enums**: `WeaponSlot`, `BodyPart`, `RingSlot`, and `EquipmentSlot` are all in the dependency-neutral `dnd/core/equipment_types.py` leaf.
 - **Weapon/Armor/Shield inherit from EquippableItem** (not BaseBlock). They have location tracking and equip hooks.
 - **Ability modifier is int**: `entity.ability_scores.strength.modifier` returns `int`, not `ModifiableValue`
 - **Always call `Entity.update_all_entities_senses()`** after creating entities for LOS to work
@@ -985,17 +1035,23 @@ Both validate that environment changes (door open/close) correctly propagate thr
 
 The active external surface is the FastAPI server (`server/event_server.py`) with
 session-based authority (`server/session.py`). Controllers in
-`dnd/controller.py` represent turn ownership. Traditional AI and Codex use the
-same session-subjective event stream, local `ai.subjective` runtime, typed
-`ai.protocol` decision epochs, and shared `ai.policy.PolicyHost`. The archived
-CLI is reference material only and is not a runtime architecture.
+`dnd/controller.py` represent turn ownership. Server-owned observation,
+decision-epoch, semantics, movement-revalidation, and transport contracts live
+under `server.agent_runtime` and `server.agent_protocol`. The client-facing
+`ai` package consumes those contracts and owns policy/evaluation concerns;
+`dnd` and `server` must never import `ai`. No controller policy reads live
+engine entities directly.
+
+The old subprocess CLI was moved to `to_archive/cli`. Keep it as reference
+material unless the user explicitly asks to recover or rebuild that surface.
 
 ## Reference
 
 ### Key Files
 
-**Core**: `dnd/core/` — `base_object.py`, `base_block.py`, `events.py`, `values.py`, `modifiers.py`, `dice.py`, `gridmap.py`, `base_actions.py`, `combat_log.py`
+**Core**: `dnd/core/` — `base_object.py`, `base_block.py`, `events.py`, `values.py`, `modifiers.py`, `dice.py`, `gridmap.py`, `base_actions.py`, `combat_log.py`, and the dependency-neutral `*_types.py` leaves
 **Entity & Blocks**: `dnd/entity.py`, `dnd/blocks/` (abilities, skills, saving_throws, health, equipment, inventory, action_economy, sensory, spellcasting, base_item)
+**Creature transforms**: `dnd/creature_transforms.py` — structural, source-owned capability transforms with no Entity import
 **Actions**: `dnd/actions.py`, `dnd/actions_functional.py`, `dnd/reactions.py`
 **Conditions**: `dnd/conditions.py`, `dnd/core/base_conditions.py`
 **Classes**: `dnd/classes/` (fighter, barbarian, sorcerer, paladin, rage, feats, dice_processor_utils + factories)

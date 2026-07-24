@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from ai.subjective.models import AgentEventPayload, AgentEventHistoryResponse
+from server.agent_protocol.telemetry import AgentEventHistoryResponse, AgentEventPayload
 
 
 _HISTORY_METADATA_KEYS = frozenset(

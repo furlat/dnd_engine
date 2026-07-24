@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     D20RollResultEvent,
     DamageRollResultEvent,
@@ -13,7 +14,6 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     Trigger,
-    WeaponSlot,
 )
 from dnd.core.modifiers import (
     AdvantageModifier,

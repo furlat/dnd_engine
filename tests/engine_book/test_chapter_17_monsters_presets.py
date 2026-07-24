@@ -2,13 +2,14 @@
 
 from uuid import uuid4
 
-from dnd.actions_functional import get_available_actions
+from dnd.actions_functional import execute_use_action, get_available_actions
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
 from dnd.conditions import Exhaustion, Hidden, InvisibilityEffect, Invisible, Poisoned
 from dnd.core.base_block import BaseBlock, SenseMode, SensesType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import (
     AdvantageStatus,
@@ -282,7 +283,7 @@ def test_eb_17_010_create_caster_wires_generic_spellcaster_state() -> None:
 
 
 def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> None:
-    """EB-17-011: create_caster potions expose zero-cost item-use actions."""
+    """EB-17-011: create_caster potions expose bonus-action item use."""
     reset_monster_state()
 
     caster = create_caster(name="Book Caster", position=(1, 1), faction="heroes", level=5)
@@ -300,7 +301,10 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     assert len(invisibility_actions) == 1
     assert invisibility_actions[0].name == "Drink Greater Invisibility Potion"
     assert invisibility_actions[0].source_item_uuid == invisibility_potion.uuid
-    assert invisibility_actions[0].effective_costs == []
+    assert [
+        (cost.cost_type, cost.cost)
+        for cost in invisibility_actions[0].effective_costs
+    ] == [("bonus_actions", 1)]
 
     assert haste_potion.is_consumable
     assert haste_potion.charges == 1
@@ -308,10 +312,36 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     assert len(haste_actions) == 1
     assert haste_actions[0].name == "Drink Haste Potion"
     assert haste_actions[0].source_item_uuid == haste_potion.uuid
-    assert haste_actions[0].effective_costs == []
+    assert [
+        (cost.cost_type, cost.cost)
+        for cost in haste_actions[0].effective_costs
+    ] == [("bonus_actions", 1)]
 
     assert any(name.startswith("Drink Greater Invisibility Potion") for name in available_item_names)
     assert any(name.startswith("Drink Haste Potion") for name in available_item_names)
+
+    invisibility_event = execute_use_action(
+        caster,
+        invisibility_potion.uuid,
+        "Drink Greater Invisibility Potion",
+    )
+    blocked_haste_event = execute_use_action(
+        caster,
+        haste_potion.uuid,
+        "Drink Haste Potion",
+    )
+
+    assert invisibility_event is not None
+    assert not invisibility_event.canceled
+    assert caster.action_economy.actions.normalized_score == 1
+    assert caster.action_economy.bonus_actions.normalized_score == 0
+    assert "Invisible" in caster.active_conditions
+    assert invisibility_potion.uuid not in caster.inventory.items
+    assert BaseBlock.get(invisibility_potion.uuid) is None
+    assert blocked_haste_event is None
+    assert "Haste" not in caster.active_conditions
+    assert haste_potion.uuid in caster.inventory.items
+    assert haste_potion.charges == 1
 
 
 def test_eb_17_012_circus_warrior_preset_applies_custom_condition_bundle() -> None:

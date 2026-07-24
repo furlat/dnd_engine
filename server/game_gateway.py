@@ -24,7 +24,7 @@ from typing import AsyncIterator, Callable, Iterable, TypeVar
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from server.api_models import (
     GameCreationCatalogResponse,
     GameCreationComposedScenario,
+    GameCreationControllerKind,
     GameCreationPreflightRequest,
     CreateSessionResponse,
     GameCreationSideResult,
@@ -45,6 +46,8 @@ from server.event_contract import EVENT_CONTRACT_HASH
 from server.game_directory.canonical import canonical_digest, hash_capability
 from server.game_directory.contracts import (
     AccessGrantCreate,
+    ArtifactCreate,
+    ArtifactKind,
     AttachmentState,
     AttachmentCreate,
     CharacterCreate,
@@ -69,6 +72,7 @@ from server.game_directory.contracts import (
     PrincipalCredentialCreate,
     PrincipalKind,
     PrincipalRecord,
+    ProducerKind,
     VisibilityPolicy,
     WorkerCreate,
     WorkerState,
@@ -81,6 +85,7 @@ from server.game_directory.errors import (
     NotFoundError,
 )
 from server.game_directory.repository import GameDirectoryRepository
+from server.game_artifact_store import GameArtifactStore, ArtifactStoreError
 from server.game_gateway_models import (
     AttachmentPolicy,
     AttachmentSummary,
@@ -113,8 +118,24 @@ from server.game_creation_catalog import (
     build_game_creation_catalog,
     preflight_game_creation,
 )
-from server.hosted_worker import HostedWorkerError, HostedWorkerManager
+from server.hosted_worker import (
+    CORE_HOSTED_WORKER_APPLICATION,
+    HostedWorkerApplication,
+    HostedWorkerError,
+    HostedWorkerManager,
+)
 from server.game_summary_store import WorkerSummaryEvidence
+from server.objective_replay import (
+    OBJECTIVE_REPLAY_CONTRACT_HASH,
+    OBJECTIVE_REPLAY_CONTRACT_VERSION,
+    ObjectiveReplayBundle,
+)
+from server.player_replay import (
+    PLAYER_REPLAY_CONTRACT_HASH,
+    PLAYER_REPLAY_CONTRACT_VERSION,
+    SubjectivePlayerReplayArchive,
+    SubjectivePlayerReplayBundle,
+)
 from server.runtime_authority import RuntimeAuthorityCache, RuntimeScope
 from server.request_timing import RequestTimingMiddleware
 from server.spell_catalog import build_spell_catalog
@@ -126,6 +147,14 @@ RULESET_VERSION = "single-videogame-ruleset-v1"
 DEFAULT_RUNTIME_TTL_SECONDS = 60 * 60
 TERMINAL_SUMMARY_READY_TIMEOUT_SECONDS = 5.0
 TERMINAL_SUMMARY_RETRY_INTERVAL_SECONDS = 0.01
+OBJECTIVE_REPLAY_SCHEMA_VERSION = (
+    f"dnd.objective-replay.v{OBJECTIVE_REPLAY_CONTRACT_VERSION}."
+    f"{OBJECTIVE_REPLAY_CONTRACT_HASH}"
+)
+SUBJECTIVE_REPLAY_SCHEMA_VERSION = (
+    f"dnd.subjective-player-replay.v{PLAYER_REPLAY_CONTRACT_VERSION}."
+    f"{PLAYER_REPLAY_CONTRACT_HASH}"
+)
 PERSISTENT_CHARACTER_PRESET_IDS = frozenset(
     {
         "hero.barbarian_l5_berserker_torch",
@@ -155,6 +184,7 @@ class GameGatewayService:
         repository: GameDirectoryRepository,
         worker_manager: HostedWorkerManager,
         authority_cache: RuntimeAuthorityCache,
+        artifact_store: GameArtifactStore,
         *,
         capability_pepper: bytes,
         runtime_ttl_seconds: int = DEFAULT_RUNTIME_TTL_SECONDS,
@@ -162,6 +192,7 @@ class GameGatewayService:
         self.repository = repository
         self.worker_manager = worker_manager
         self.authority_cache = authority_cache
+        self.artifact_store = artifact_store
         self.capability_pepper = capability_pepper
         self.runtime_ttl_seconds = runtime_ttl_seconds
         self._reconcile_orphaned_active_games()
@@ -172,37 +203,55 @@ class GameGatewayService:
             )
         )
         self._terminal_monitors: dict[UUID, asyncio.Task[None]] = {}
+        self._terminal_persistence_locks: dict[UUID, asyncio.Lock] = {}
         self._publish_new_directory_events()
 
     async def close(self) -> None:
         """Stop monitors and durably interrupt workers owned by this gateway."""
-        tasks = tuple(self._terminal_monitors.values())
-        self._terminal_monitors.clear()
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
         for game_id in self.worker_manager.active_game_ids():
-            game = self.repository.get_game(game_id)
-            await self.worker_manager.stop(game_id)
-            self.authority_cache.revoke_game(game_id)
-            if game.worker_id is not None:
-                self.repository.update_worker(
-                    game.worker_id,
-                    state=WorkerState.STOPPED,
-                    stopped_at=datetime.now(UTC),
-                )
-            if game.lifecycle_state in {
-                GameLifecycleState.RESERVED,
-                GameLifecycleState.STARTING,
-                GameLifecycleState.ACTIVE,
-            }:
-                self.repository.transition_game(
-                    game_id,
-                    expected_row_version=game.row_version,
-                    lifecycle_state=GameLifecycleState.INTERRUPTED,
-                    terminal_reason="gateway_shutdown",
-                )
+            lock = self._terminal_persistence_locks.setdefault(game_id, asyncio.Lock())
+            async with lock:
+                try:
+                    async with self.worker_manager.client(game_id) as client:
+                        await self._persist_worker_summary_if_ready_under_lock(
+                            game_id,
+                            client,
+                        )
+                except Exception:
+                    logger.exception(
+                        "terminal evidence reconciliation failed during shutdown for %s",
+                        game_id,
+                    )
+                monitor = self._terminal_monitors.pop(game_id, None)
+                if monitor is not None:
+                    monitor.cancel()
+                    await asyncio.gather(monitor, return_exceptions=True)
+                await self.worker_manager.stop(game_id)
+                self.authority_cache.revoke_game(game_id)
+                game = self.repository.get_game(game_id)
+                if game.worker_id is not None:
+                    self.repository.update_worker(
+                        game.worker_id,
+                        state=WorkerState.STOPPED,
+                        stopped_at=datetime.now(UTC),
+                    )
+                if game.lifecycle_state in {
+                    GameLifecycleState.RESERVED,
+                    GameLifecycleState.STARTING,
+                    GameLifecycleState.ACTIVE,
+                }:
+                    self.repository.transition_game(
+                        game_id,
+                        expected_row_version=game.row_version,
+                        lifecycle_state=GameLifecycleState.INTERRUPTED,
+                        terminal_reason="gateway_shutdown",
+                    )
+        remaining_tasks = tuple(self._terminal_monitors.values())
+        self._terminal_monitors.clear()
+        for task in remaining_tasks:
+            task.cancel()
+        if remaining_tasks:
+            await asyncio.gather(*remaining_tasks, return_exceptions=True)
         self._publish_new_directory_events()
 
     def _reconcile_orphaned_active_games(self) -> None:
@@ -406,6 +455,22 @@ class GameGatewayService:
                 "owner_side_is_automatic",
                 "The owner can attach only to a human or Codex side",
             )
+        required_managed_agents = sum(
+            participant.controller != "human"
+            for participant in (
+                request.creation.side_a,
+                request.creation.side_b,
+            )
+        )
+        if (
+            required_managed_agents
+            and not self.worker_manager.managed_agent_service_available
+        ):
+            raise GatewayError(
+                503,
+                "agent_service_unavailable",
+                "The hosted worker composition has no registered managed-agent service",
+            )
 
         hosted_game_id = uuid4()
         runtime_base_url = (
@@ -473,7 +538,8 @@ class GameGatewayService:
                 side,
             )
             runtime_session_id, controlled_entities = await self._create_owner_runtime_session(
-                hosted_game_id,
+                game,
+                membership,
                 principal,
                 request.owner_side,
                 side,
@@ -481,7 +547,7 @@ class GameGatewayService:
             if side is not None:
                 self._persist_entity_assignments(game, membership, side)
             if character is not None:
-                if side is None or len(side.entities) != 1:
+                if side is None or len(side.entity_assignments) != 1:
                     raise GatewayError(
                         409,
                         "character_deployment_ambiguous",
@@ -492,7 +558,7 @@ class GameGatewayService:
                         game_id=game.game_id,
                         membership_id=membership.membership_id,
                         character_id=character.character_id,
-                        entity_uuid=UUID(side.entities[0].uuid),
+                        entity_uuid=UUID(side.entity_assignments[0].entity_uuid),
                     )
                 )
             reconnect = self.repository.issue_access_grant(
@@ -510,6 +576,11 @@ class GameGatewayService:
                 membership=membership,
                 runtime_session_id=runtime_session_id,
                 controlled_entity_uuids=controlled_entities,
+                observer_entity_uuids=self._observer_entities_for_membership(
+                    game,
+                    membership,
+                    controlled_entities,
+                ),
                 takeover_claim_uuids=_side_takeover_claims(side),
                 client_kind=request.client_kind,
                 client_instance_id=request.client_instance_id,
@@ -606,6 +677,11 @@ class GameGatewayService:
             membership=membership,
             runtime_session_id=previous_runtime_session_id,
             controlled_entity_uuids=controlled,
+            observer_entity_uuids=self._observer_entities_for_membership(
+                game,
+                membership,
+                controlled,
+            ),
             takeover_claim_uuids=self._takeover_claims_for_membership(game, membership),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
@@ -671,6 +747,11 @@ class GameGatewayService:
             membership=membership,
             runtime_session_id=previous.runtime_session_id,
             controlled_entity_uuids=controlled,
+            observer_entity_uuids=self._observer_entities_for_membership(
+                game,
+                membership,
+                controlled,
+            ),
             takeover_claim_uuids=self._takeover_claims_for_membership(game, membership),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
@@ -738,7 +819,10 @@ class GameGatewayService:
             )
             assignments = self._persist_entity_assignments(game, membership, side)
             runtime_session_id = UUID(side.codex_session_id)
-            controlled = [UUID(entity.uuid) for entity in side.entities]
+            controlled = [
+                UUID(assignment.entity_uuid)
+                for assignment in side.entity_assignments
+            ]
             issued = self.repository.issue_access_grant(
                 AccessGrantCreate(
                     game_id=game_id,
@@ -802,11 +886,18 @@ class GameGatewayService:
                 capabilities=_observer_capabilities(),
             )
         )
+        observer_entities = self._observer_entities_for_membership(
+            game,
+            membership,
+            (),
+        )
         runtime_session_id = await self._create_and_join_session(
             game_id,
             player_type="observer",
             name=principal.display_name,
             entity_uuids=(),
+            observer_entity_uuids=observer_entities,
+            active_observer_uuid=min(observer_entities, key=str),
         )
         reconnect = self.repository.issue_access_grant(
             AccessGrantCreate(
@@ -826,6 +917,7 @@ class GameGatewayService:
             membership=membership,
             runtime_session_id=runtime_session_id,
             controlled_entity_uuids=(),
+            observer_entity_uuids=observer_entities,
             takeover_claim_uuids=(),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
@@ -856,12 +948,29 @@ class GameGatewayService:
         )
         if not authorized:
             raise GatewayError(403, "game_management_denied", "Principal may not stop this game")
+        lock = self._terminal_persistence_locks.setdefault(game_id, asyncio.Lock())
+        async with lock:
+            return await self._stop_hosted_game_under_lock(game_id, game)
+
+    async def _stop_hosted_game_under_lock(
+        self,
+        game_id: UUID,
+        game: GameRecord,
+    ) -> StopHostedGameResponse:
+        """Reconcile terminal evidence and stop one worker under its game lock."""
+        if game_id in self.worker_manager.active_game_ids():
+            async with self.worker_manager.client(game_id) as client:
+                await self._persist_worker_summary_if_ready_under_lock(
+                    game_id,
+                    client,
+                )
         monitor = self._terminal_monitors.pop(game_id, None)
         if monitor is not None:
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)
         stopped = await self.worker_manager.stop(game_id)
         self.authority_cache.revoke_game(game_id)
+        game = self.repository.get_game(game_id)
         if game.worker_id is not None:
             self.repository.update_worker(
                 game.worker_id,
@@ -932,6 +1041,225 @@ class GameGatewayService:
         ):
             raise GatewayError(404, "game_not_found", "Game was not found")
         return game
+
+    def get_objective_replay(
+        self,
+        game_id: UUID,
+        *,
+        principal_id: UUID,
+        principal_capability: str,
+    ) -> ObjectiveReplayBundle:
+        """Read one ended replay under its explicit cold-evidence capability."""
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        game = self.repository.get_game(game_id)
+        if game.lifecycle_state not in {
+            GameLifecycleState.ENDED,
+            GameLifecycleState.ARCHIVED,
+        }:
+            raise GatewayError(
+                409,
+                "objective_replay_not_terminal",
+                "Objective replay is available only for ended or archived games",
+            )
+        authorized = any(
+            membership.principal_id == principal.principal_id
+            and membership.membership_state in {
+                MembershipState.ACTIVE,
+                MembershipState.DISCONNECTED,
+            }
+            and membership.capabilities.may_view_objective_replay
+            for membership in self.repository.list_memberships(game_id)
+        )
+        if not authorized:
+            raise GatewayError(
+                403,
+                "objective_replay_denied",
+                "Principal may not read objective replay evidence",
+            )
+
+        artifacts = self.repository.list_artifacts(
+            game_id,
+            artifact_kind=ArtifactKind.REPLAY_BUNDLE,
+        )
+        if not artifacts:
+            raise GatewayError(404, "objective_replay_missing", "Objective replay was not found")
+        if len(artifacts) != 1:
+            raise GatewayError(409, "objective_replay_ambiguous", "Multiple objective replays are registered")
+        artifact = artifacts[0]
+        if (
+            artifact.schema_version != OBJECTIVE_REPLAY_SCHEMA_VERSION
+            or artifact.media_type != "application/json"
+        ):
+            raise GatewayError(500, "objective_replay_metadata_invalid", "Replay metadata contract is invalid")
+        try:
+            payload = self.artifact_store.read_bytes(artifact.content_digest)
+        except ArtifactStoreError as exc:
+            raise GatewayError(500, "objective_replay_integrity_failed", str(exc)) from exc
+        if len(payload) != artifact.byte_size:
+            raise GatewayError(500, "objective_replay_size_mismatch", "Replay byte size does not match metadata")
+        try:
+            replay = ObjectiveReplayBundle.model_validate_json(payload)
+        except ValueError as exc:
+            raise GatewayError(500, "objective_replay_contract_invalid", str(exc)) from exc
+        if replay.game_id != str(game_id):
+            raise GatewayError(500, "objective_replay_game_mismatch", "Replay belongs to another game")
+        summary = self.repository.get_current_summary(game_id).summary
+        if replay.encounter_uuid != str(summary.encounter_uuid):
+            raise GatewayError(
+                500,
+                "objective_replay_encounter_mismatch",
+                "Replay describes another encounter",
+            )
+        if (
+            replay.terminal_event_cursor != game.final_event_cursor
+            or replay.terminal_combat_log_cursor != game.final_combat_log_cursor
+        ):
+            raise GatewayError(500, "objective_replay_cursor_mismatch", "Replay disagrees with terminal game cursors")
+        return replay
+
+    def get_subjective_replay(
+        self,
+        game_id: UUID,
+        membership_id: UUID,
+        *,
+        principal_id: UUID,
+        principal_capability: str,
+    ) -> SubjectivePlayerReplayBundle:
+        """Return only the ended canonical replay owned by one exact membership."""
+
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        game = self.repository.get_game(game_id)
+        if game.lifecycle_state not in {
+            GameLifecycleState.ENDED,
+            GameLifecycleState.ARCHIVED,
+        }:
+            raise GatewayError(
+                409,
+                "subjective_replay_not_terminal",
+                "Player replay is available only for ended or archived games",
+            )
+        try:
+            membership = self.repository.get_membership(membership_id)
+        except NotFoundError as exc:
+            raise GatewayError(
+                404,
+                "subjective_replay_membership_not_found",
+                "Game membership was not found",
+            ) from exc
+        if (
+            membership.game_id != game_id
+            or membership.principal_id != principal.principal_id
+            or membership.membership_state
+            not in {MembershipState.ACTIVE, MembershipState.DISCONNECTED}
+            or not membership.capabilities.may_observe_subjective_state
+        ):
+            raise GatewayError(
+                403,
+                "subjective_replay_denied",
+                "Principal may not read this membership's player replay",
+            )
+
+        archive = self._read_subjective_replay_archive(game_id)
+        replay = next(
+            (
+                candidate
+                for candidate in archive.membership_replays
+                if candidate.membership_id == str(membership_id)
+            ),
+            None,
+        )
+        if replay is None:
+            raise GatewayError(
+                404,
+                "subjective_replay_missing",
+                "No canonical player replay was recorded for this membership",
+            )
+        return replay
+
+    def _read_subjective_replay_archive(
+        self,
+        game_id: UUID,
+    ) -> SubjectivePlayerReplayArchive:
+        """Read and authenticate one aggregate archive without exposing it publicly."""
+
+        game = self.repository.get_game(game_id)
+        artifacts = self.repository.list_artifacts(
+            game_id,
+            artifact_kind=ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+        )
+        if not artifacts:
+            raise GatewayError(
+                404,
+                "subjective_replay_archive_missing",
+                "Player replay archive was not found",
+            )
+        if len(artifacts) != 1:
+            raise GatewayError(
+                409,
+                "subjective_replay_archive_ambiguous",
+                "Multiple player replay archives are registered",
+            )
+        artifact = artifacts[0]
+        if (
+            artifact.schema_version != SUBJECTIVE_REPLAY_SCHEMA_VERSION
+            or artifact.media_type != "application/json"
+        ):
+            raise GatewayError(
+                500,
+                "subjective_replay_metadata_invalid",
+                "Player replay metadata contract is invalid",
+            )
+        try:
+            payload = self.artifact_store.read_bytes(artifact.content_digest)
+        except ArtifactStoreError as exc:
+            raise GatewayError(
+                500,
+                "subjective_replay_integrity_failed",
+                str(exc),
+            ) from exc
+        if len(payload) != artifact.byte_size:
+            raise GatewayError(
+                500,
+                "subjective_replay_size_mismatch",
+                "Player replay byte size does not match metadata",
+            )
+        try:
+            archive = SubjectivePlayerReplayArchive.model_validate_json(payload)
+        except ValueError as exc:
+            raise GatewayError(
+                500,
+                "subjective_replay_contract_invalid",
+                str(exc),
+            ) from exc
+        if archive.game_id != str(game_id):
+            raise GatewayError(
+                500,
+                "subjective_replay_game_mismatch",
+                "Player replay archive belongs to another game",
+            )
+        summary = self.repository.get_current_summary(game_id).summary
+        if archive.encounter_uuid != str(summary.encounter_uuid):
+            raise GatewayError(
+                500,
+                "subjective_replay_encounter_mismatch",
+                "Player replay archive describes another encounter",
+            )
+        if (
+            archive.terminal_source_event_cursor != game.final_event_cursor
+            or archive.terminal_combat_log_cursor != game.final_combat_log_cursor
+        ):
+            raise GatewayError(
+                500,
+                "subjective_replay_cursor_mismatch",
+                "Player replay archive disagrees with terminal game cursors",
+            )
+        return archive
 
     def directory_event_filter(
         self,
@@ -1014,26 +1342,33 @@ class GameGatewayService:
 
     async def _create_owner_runtime_session(
         self,
-        game_id: UUID,
+        game: GameRecord,
+        membership: MembershipRecord,
         principal: PrincipalRecord,
         owner_side: str,
         side: GameCreationSideResult | None,
     ) -> tuple[UUID, tuple[UUID, ...]]:
         if side is None:
+            observers = self._observer_entities_for_membership(game, membership, ())
             session_id = await self._create_and_join_session(
-                game_id,
+                game.game_id,
                 player_type="observer",
                 name=principal.display_name,
                 entity_uuids=(),
+                observer_entity_uuids=observers,
+                active_observer_uuid=min(observers, key=str),
             )
             return session_id, ()
-        controlled = tuple(UUID(entity.uuid) for entity in side.entities)
+        controlled = tuple(
+            UUID(assignment.entity_uuid)
+            for assignment in side.entity_assignments
+        )
         if side.controller == "codex":
             if side.codex_session_id is None:
                 raise GatewayError(502, "codex_session_missing", "Worker did not return a Codex session")
             return UUID(side.codex_session_id), controlled
         session_id = await self._create_and_join_session(
-            game_id,
+            game.game_id,
             player_type="human",
             name=principal.display_name,
             entity_uuids=controlled,
@@ -1047,6 +1382,8 @@ class GameGatewayService:
         player_type: str,
         name: str,
         entity_uuids: Iterable[UUID],
+        observer_entity_uuids: Iterable[UUID] = (),
+        active_observer_uuid: UUID | None = None,
     ) -> UUID:
         async with self.worker_manager.client(game_id) as client:
             created_response = await client.post(
@@ -1058,12 +1395,20 @@ class GameGatewayService:
                 CreateSessionResponse,
                 "session_creation_failed",
             )
+            join_payload: dict[str, object] = {
+                "session_id": created.session_id,
+                "entity_uuids": [str(entity_uuid) for entity_uuid in entity_uuids],
+            }
+            if player_type == "observer":
+                join_payload["observer_entity_uuids"] = [
+                    str(entity_uuid) for entity_uuid in observer_entity_uuids
+                ]
+                join_payload["active_observer_uuid"] = (
+                    str(active_observer_uuid) if active_observer_uuid is not None else None
+                )
             joined_response = await client.post(
                 "/game/join",
-                json={
-                    "session_id": created.session_id,
-                    "entity_uuids": [str(entity_uuid) for entity_uuid in entity_uuids],
-                },
+                json=join_payload,
             )
             self._validate_worker_response(
                 joined_response,
@@ -1086,15 +1431,15 @@ class GameGatewayService:
     ) -> tuple[EntityAssignmentRecord, ...]:
         assignments: list[EntityAssignmentRecord] = []
         try:
-            for entity in side.entities:
+            for assignment in side.entity_assignments:
                 assignments.append(
                     self.repository.assign_entity(
                         EntityAssignmentCreate(
                             game_id=game.game_id,
                             membership_id=membership.membership_id,
-                            entity_uuid=UUID(entity.uuid),
-                            entity_name=entity.name,
-                            faction=entity.faction,
+                            entity_uuid=UUID(assignment.entity_uuid),
+                            entity_name=assignment.entity_name,
+                            faction=assignment.faction,
                             side_id=side.side_id,
                             controller_kind=side.controller,
                             authority_epoch=membership.authority_epoch,
@@ -1114,6 +1459,7 @@ class GameGatewayService:
         membership: MembershipRecord,
         runtime_session_id: UUID,
         controlled_entity_uuids: Iterable[UUID],
+        observer_entity_uuids: Iterable[UUID],
         takeover_claim_uuids: Iterable[UUID],
         client_kind: ClientKind,
         client_instance_id: str,
@@ -1122,6 +1468,7 @@ class GameGatewayService:
         if game.worker_id is None or game.worker_generation is None:
             raise GatewayError(409, "game_has_no_worker", "Game has no active worker placement")
         controlled = tuple(controlled_entity_uuids)
+        observers = tuple(observer_entity_uuids)
         takeover_claims = tuple(takeover_claim_uuids)
         expires_at = datetime.now(UTC) + timedelta(seconds=self.runtime_ttl_seconds)
         issued = self.repository.open_attachment(
@@ -1145,10 +1492,17 @@ class GameGatewayService:
             membership_id=membership.membership_id,
             scopes=scopes,
             controlled_entity_uuids=controlled,
+            observer_entity_uuids=observers,
             takeover_claim_uuids=takeover_claims,
             authority_epoch=membership.authority_epoch,
             expires_at=expires_at.timestamp(),
         ).authority
+        if authority.active_observer_uuid is None:
+            raise GatewayError(
+                409,
+                "subjective_perspective_unavailable",
+                "Runtime attachment has no active subjective observer",
+            )
         return HostedGameConnection(
             game_id=game.game_id,
             attachment_id=issued.attachment.attachment_id,
@@ -1157,6 +1511,8 @@ class GameGatewayService:
             runtime_token=issued.runtime_token,
             membership=membership,
             controlled_entity_uuids=list(controlled),
+            observer_entity_uuids=list(observers),
+            active_observer_uuid=authority.active_observer_uuid,
             takeover_claim_uuids=list(takeover_claims),
             access_mode=(
                 "agent"
@@ -1183,6 +1539,48 @@ class GameGatewayService:
         creation = GameCreationStartResponse.model_validate(creation_payload)
         side = creation.side_a if membership.side_id == "side_a" else creation.side_b
         return _side_takeover_claims(side)
+
+    def _observer_entities_for_membership(
+        self,
+        game: GameRecord,
+        membership: MembershipRecord,
+        controlled_entity_uuids: Iterable[UUID],
+    ) -> tuple[UUID, ...]:
+        """Resolve the exact subjective observer union installed in the worker.
+
+        Participant perspectives are intentionally no broader than ownership.
+        Zero-control observer seats receive the combatants declared by the
+        resolved creation result plus any later directory assignments.  This
+        is an explicit union of entity senses, never an objective-state flag.
+        """
+        controlled = tuple(controlled_entity_uuids)
+        if controlled:
+            return tuple(sorted(set(controlled), key=str))
+        if not membership.capabilities.may_observe_subjective_state:
+            return ()
+
+        observers = {
+            assignment.entity_uuid
+            for assignment in self.repository.list_entity_assignments(game.game_id)
+        }
+        creation_payload = game.creation_manifest.get("response")
+        if not isinstance(creation_payload, dict):
+            raise GatewayError(500, "creation_manifest_invalid", "Game has no resolved creation response")
+        creation = GameCreationStartResponse.model_validate(creation_payload)
+        for side in (creation.side_a, creation.side_b):
+            if side is None:
+                continue
+            observers.update(
+                UUID(assignment.entity_uuid)
+                for assignment in side.entity_assignments
+            )
+        if not observers:
+            raise GatewayError(
+                409,
+                "spectator_perspective_unavailable",
+                "Observer attachment has no authorized combatant perspective",
+            )
+        return tuple(sorted(observers, key=str))
 
     def _require_live_game(self, game: GameRecord) -> None:
         if game.lifecycle_state is not GameLifecycleState.ACTIVE:
@@ -1237,7 +1635,7 @@ class GameGatewayService:
             terminal_event_observed = False
             async with client.stream(
                 "GET",
-                "/events/subscribe",
+                "/game/evidence/objective-subscribe",
                 params={"since_event": 0, "since_log": 0},
             ) as response:
                 response.raise_for_status()
@@ -1293,27 +1691,166 @@ class GameGatewayService:
         game_id: UUID,
         client: httpx.AsyncClient,
     ) -> bool:
-        """Persist available worker evidence and report whether it was ready."""
-        response = await client.get("/game/evidence/summary")
-        if response.status_code == 404:
-            detail = response.json().get("detail", {})
-            if detail.get("code") == "terminal_summary_not_ready":
-                return False
-        response.raise_for_status()
-        self._publish_worker_summary_response(game_id, response)
-        return True
+        """Persist terminal evidence and report whether all three inputs are ready."""
+        lock = self._terminal_persistence_locks.setdefault(game_id, asyncio.Lock())
+        async with lock:
+            return await self._persist_worker_summary_if_ready_under_lock(
+                game_id,
+                client,
+            )
 
-    def _publish_worker_summary_response(
+    async def _persist_worker_summary_if_ready_under_lock(
         self,
         game_id: UUID,
-        response: httpx.Response,
+        client: httpx.AsyncClient,
+    ) -> bool:
+        """Fetch and publish terminal evidence while the game lock is held."""
+        summary_response = await client.get("/game/evidence/summary")
+        if summary_response.status_code == 404:
+            detail = summary_response.json().get("detail", {})
+            if detail.get("code") == "terminal_summary_not_ready":
+                return False
+        summary_response.raise_for_status()
+
+        objective_replay_response = await client.get(
+            "/game/evidence/objective-replay"
+        )
+        if objective_replay_response.status_code == 404:
+            detail = objective_replay_response.json().get("detail", {})
+            if detail.get("code") == "terminal_objective_replay_not_ready":
+                return False
+        objective_replay_response.raise_for_status()
+
+        subjective_replay_response = await client.get(
+            "/game/evidence/subjective-replay"
+        )
+        if subjective_replay_response.status_code == 404:
+            detail = subjective_replay_response.json().get("detail", {})
+            if detail.get("code") == "terminal_subjective_replay_not_ready":
+                return False
+        subjective_replay_response.raise_for_status()
+        self._publish_worker_terminal_responses(
+            game_id,
+            summary_response=summary_response,
+            objective_replay_response=objective_replay_response,
+            subjective_replay_response=subjective_replay_response,
+        )
+        return True
+
+    def _publish_worker_terminal_responses(
+        self,
+        game_id: UUID,
+        *,
+        summary_response: httpx.Response,
+        objective_replay_response: httpx.Response,
+        subjective_replay_response: httpx.Response,
     ) -> None:
-        """Validate and durably publish one immutable worker evidence envelope."""
-        evidence = WorkerSummaryEvidence.model_validate(response.json())
+        """Validate, store, and atomically publish both replays plus summary."""
+        evidence = self._validate_worker_response(
+            summary_response,
+            WorkerSummaryEvidence,
+            "worker_summary_invalid",
+        )
+        replay = self._validate_worker_response(
+            objective_replay_response,
+            ObjectiveReplayBundle,
+            "worker_replay_invalid",
+        )
+        subjective_replay = self._validate_worker_response(
+            subjective_replay_response,
+            SubjectivePlayerReplayArchive,
+            "worker_subjective_replay_invalid",
+        )
         if evidence.summary.game_id != str(game_id):
             raise GatewayError(502, "summary_game_mismatch", "Worker summary belongs to another game")
-        self.repository.publish_final_summary(
+        if replay.game_id != str(game_id):
+            raise GatewayError(502, "replay_game_mismatch", "Worker replay belongs to another game")
+        if subjective_replay.game_id != str(game_id):
+            raise GatewayError(
+                502,
+                "subjective_replay_game_mismatch",
+                "Worker player replay belongs to another game",
+            )
+        if replay.encounter_uuid != str(evidence.summary.encounter_uuid):
+            raise GatewayError(502, "replay_encounter_mismatch", "Replay and summary describe different encounters")
+        if subjective_replay.encounter_uuid != str(evidence.summary.encounter_uuid):
+            raise GatewayError(
+                502,
+                "subjective_replay_encounter_mismatch",
+                "Player replay and summary describe different encounters",
+            )
+        if replay.generation_id != str(evidence.generation_id):
+            raise GatewayError(502, "replay_generation_mismatch", "Replay and summary use different generations")
+        if (
+            replay.terminal_event_cursor != evidence.summary.terminal_cursor.event_cursor
+            or replay.terminal_combat_log_cursor
+            != evidence.summary.terminal_cursor.combat_log_cursor
+        ):
+            raise GatewayError(502, "replay_cursor_mismatch", "Replay and summary terminal cursors differ")
+        if (
+            subjective_replay.terminal_source_event_cursor
+            != evidence.summary.terminal_cursor.event_cursor
+            or subjective_replay.terminal_combat_log_cursor
+            != evidence.summary.terminal_cursor.combat_log_cursor
+        ):
+            raise GatewayError(
+                502,
+                "subjective_replay_cursor_mismatch",
+                "Player replay and summary terminal cursors differ",
+            )
+        known_membership_ids = {
+            str(membership.membership_id)
+            for membership in self.repository.list_memberships(game_id)
+        }
+        replay_membership_ids = {
+            bundle.membership_id
+            for bundle in subjective_replay.membership_replays
+        }
+        if not replay_membership_ids.issubset(known_membership_ids):
+            raise GatewayError(
+                502,
+                "subjective_replay_membership_mismatch",
+                "Player replay contains an unknown or cross-game membership",
+            )
+
+        try:
+            stored = self.artifact_store.put_json(replay)
+        except ArtifactStoreError as exc:
+            raise GatewayError(500, "replay_store_failed", str(exc)) from exc
+        try:
+            stored_subjective = self.artifact_store.put_json(subjective_replay)
+        except ArtifactStoreError as exc:
+            raise GatewayError(
+                500,
+                "subjective_replay_store_failed",
+                str(exc),
+            ) from exc
+        replay_artifact = ArtifactCreate(
+            game_id=game_id,
+            artifact_kind=ArtifactKind.REPLAY_BUNDLE,
+            schema_version=OBJECTIVE_REPLAY_SCHEMA_VERSION,
+            media_type="application/json",
+            uri=stored.uri,
+            byte_size=stored.byte_size,
+            content_digest=stored.content_digest,
+            producer_kind=ProducerKind.WORKER,
+            producer_version=ENGINE_VERSION,
+        )
+        subjective_replay_artifact = ArtifactCreate(
+            game_id=game_id,
+            artifact_kind=ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+            schema_version=SUBJECTIVE_REPLAY_SCHEMA_VERSION,
+            media_type="application/json",
+            uri=stored_subjective.uri,
+            byte_size=stored_subjective.byte_size,
+            content_digest=stored_subjective.content_digest,
+            producer_kind=ProducerKind.WORKER,
+            producer_version=ENGINE_VERSION,
+        )
+        self.repository.publish_terminal_evidence(
+            replay_artifact,
             evidence.summary,
+            additional_artifacts=(subjective_replay_artifact,),
             summary_revision=1,
             source_event_digest=evidence.source_event_digest,
             source_combat_log_digest=evidence.source_combat_log_digest,
@@ -1339,11 +1876,18 @@ def create_gateway_app(
     repository: GameDirectoryRepository | None = None,
     worker_manager: HostedWorkerManager | None = None,
     authority_cache: RuntimeAuthorityCache | None = None,
+    artifact_store: GameArtifactStore | None = None,
     capability_pepper: bytes | None = None,
     database_path: Path | None = None,
     runtime_root: Path | None = None,
+    artifact_root: Path | None = None,
+    worker_application: HostedWorkerApplication | None = None,
 ) -> FastAPI:
     """Build the multi-game gateway with optional injected test dependencies."""
+    if worker_manager is not None and worker_application is not None:
+        raise ValueError(
+            "worker_application cannot be supplied with an existing worker_manager"
+        )
     owns_repository = repository is None
     pepper = capability_pepper or os.environ.get(
         "DND_DIRECTORY_CAPABILITY_PEPPER",
@@ -1355,6 +1899,17 @@ def create_gateway_app(
     resolved_runtime_root = runtime_root or Path(
         os.environ.get("DND_HOSTED_RUNTIME_ROOT", ".runtime/hosted-games")
     )
+    resolved_artifact_root = artifact_root or Path(
+        os.environ.get("DND_GAME_ARTIFACT_ROOT", ".runtime/game-artifacts")
+    )
+    resolved_worker_application = (
+        worker_application or CORE_HOSTED_WORKER_APPLICATION
+    )
+    managed_agent_service_available = (
+        worker_manager.managed_agent_service_available
+        if worker_manager is not None
+        else resolved_worker_application.expected_agent_service_id is not None
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -1364,12 +1919,14 @@ def create_gateway_app(
         )
         resolved_workers = worker_manager or HostedWorkerManager(
             resolved_runtime_root,
+            worker_application=resolved_worker_application,
             warm_pool_size=int(os.environ.get("DND_HOSTED_WARM_WORKERS", "1")),
         )
         service = GameGatewayService(
             resolved_repository,
             resolved_workers,
             authority_cache or RuntimeAuthorityCache(),
+            artifact_store or GameArtifactStore(resolved_artifact_root),
             capability_pepper=pepper,
         )
         app.state.gateway = service
@@ -1443,7 +2000,12 @@ def create_gateway_app(
     )
     async def get_game_creation_catalog() -> GameCreationCatalogResponse:
         """Return the shared canonical hosted-game creation catalog."""
-        return build_game_creation_catalog()
+        controllers: tuple[GameCreationControllerKind, ...] = (
+            ("human", "ai", "codex")
+            if managed_agent_service_available
+            else ("human",)
+        )
+        return build_game_creation_catalog(controllers)
 
     @gateway_app.post(
         "/game-creation/preflight",
@@ -1629,6 +2191,46 @@ def create_gateway_app(
         )
         return gateway.repository.get_current_summary(game_id)
 
+    @gateway_app.get(
+        "/games/{game_id}/diagnostics/objective-replay",
+        response_model=ObjectiveReplayBundle,
+    )
+    async def get_objective_replay(
+        game_id: UUID,
+        request: Request,
+        response: Response,
+        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
+    ) -> ObjectiveReplayBundle:
+        replay = service(request).get_objective_replay(
+            game_id,
+            principal_id=principal_id,
+            principal_capability=principal_capability,
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return replay
+
+    @gateway_app.get(
+        "/games/{game_id}/memberships/{membership_id}/replay",
+        response_model=SubjectivePlayerReplayBundle,
+    )
+    async def get_subjective_replay(
+        game_id: UUID,
+        membership_id: UUID,
+        request: Request,
+        response: Response,
+        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
+    ) -> SubjectivePlayerReplayBundle:
+        replay = service(request).get_subjective_replay(
+            game_id,
+            membership_id,
+            principal_id=principal_id,
+            principal_capability=principal_capability,
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return replay
+
     runtime_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
 
     @gateway_app.api_route(
@@ -1682,7 +2284,7 @@ def _owner_capabilities(controls_entities: bool, agent: bool) -> MembershipCapab
     return MembershipCapabilities(
         may_connect=True,
         may_observe_public_state=True,
-        may_observe_subjective_state=controls_entities,
+        may_observe_subjective_state=True,
         may_control_entities=controls_entities,
         may_view_agent_telemetry=agent,
         may_manage_members=True,
@@ -1695,6 +2297,7 @@ def _observer_capabilities() -> MembershipCapabilities:
     return MembershipCapabilities(
         may_connect=True,
         may_observe_public_state=True,
+        may_observe_subjective_state=True,
         may_view_objective_replay=False,
     )
 
@@ -1711,16 +2314,22 @@ def _agent_capabilities() -> MembershipCapabilities:
 
 
 def _runtime_scopes(membership: MembershipRecord) -> frozenset[RuntimeScope]:
+    scopes: set[RuntimeScope]
     if (
         membership.role is MembershipRole.AGENT
         or membership.controller_kind == "codex"
     ):
-        return frozenset({RuntimeScope.AGENT})
-    scopes = {RuntimeScope.OBSERVE}
+        scopes = {RuntimeScope.AGENT}
+    else:
+        scopes = {RuntimeScope.OBSERVE}
+    if membership.capabilities.may_observe_subjective_state:
+        scopes.add(RuntimeScope.SUBJECTIVE_OBSERVE)
     if membership.capabilities.may_control_entities:
         scopes.add(RuntimeScope.CONTROL)
     if membership.capabilities.may_view_agent_telemetry or membership.role is MembershipRole.AGENT:
         scopes.add(RuntimeScope.AGENT)
+    if membership.capabilities.may_manage_game:
+        scopes.add(RuntimeScope.ADMINISTER)
     return frozenset(scopes)
 
 

@@ -1,19 +1,39 @@
-"""Resumable server-sent event stream for browser clients."""
+"""Private objective source journal and diagnostics fan-out.
+
+This module records the authoritative event/log ordering used by objective
+diagnostics, archived replay capture, and downstream subjective projection.
+Its hot payloads are internal source values: no player route returns them, and
+the generated player SDK is rooted only in the canonical replication contract.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import json
-from typing import Any, Dict, List, Optional, Sequence
+from bisect import bisect_right
+from contextlib import contextmanager
+from dataclasses import dataclass
+from threading import RLock
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
-from pydantic import BaseModel, Field, SerializeAsAny, field_serializer
+from pydantic import BaseModel, Field
 
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import Event, EventPhase, EventQueue
 from dnd.encounter import Encounter
 from server.api_models import SessionPingResponse
-from server.event_contract import serialize_event
+from server.combat_log_source import (
+    CombatLogSourceError,
+    CombatLogSourceSlot,
+    CombatLogSourceWindow,
+)
+from server.objective_timeline import (
+    ObjectiveEventSourceSlot,
+    ObjectiveTimelineError,
+    freeze_objective_event_source_slot,
+)
+from server.timeline_contracts import WireEvent
 
 DEFAULT_SUBSCRIPTION_MAX_DEPTH = 512
 
@@ -22,6 +42,7 @@ class StreamSyncPayload(BaseModel):
     """Initial cursor state sent to a newly connected SSE client.
 
     Attributes:
+        generation_id: EventQueue generation containing the cursor pair.
         event_cursor: Next event-history cursor visible to the client.
         combat_log_cursor: Next combat-log cursor visible to the client.
         session: Optional serialized session context for the subscriber.
@@ -40,52 +61,39 @@ class GameEventPayload(BaseModel):
     """Serialized engine event envelope for SSE clients.
 
     Attributes:
+        source_stream_id: Encounter timeline owning this event.
+        generation_id: EventQueue generation containing this event.
         event_index: Zero-based index of the event in `EventQueue` history.
         event_cursor: Cursor after this event has been observed.
         combat_log_cursor: Combat-log cursor at the time this event is sent.
         event: Concrete event payload with subclass fields preserved.
     """
 
+    source_stream_id: Optional[str] = Field(
+        description="Encounter timeline owning this event, if one is active.",
+    )
     generation_id: str = Field(description="EventQueue generation containing this event.")
     event_index: int = Field(description="Zero-based index of the event in EventQueue history.")
     event_cursor: int = Field(description="Cursor after this event has been observed.")
     combat_log_cursor: int = Field(description="Combat-log cursor at the time this event is sent.")
-    event: SerializeAsAny[Event] = Field(description="Concrete event payload with subclass fields preserved.")
-
-    @field_serializer("event")
-    def serialize_wire_event(self, event: Event) -> Dict[str, Any]:
-        """Serialize the event through the canonical generated contract."""
-        return serialize_event(event)
-
-
-class GameEventHistoryResponse(BaseModel):
-    """Exact cursor-bounded game-event frames for transcript hydration.
-
-    Attributes:
-        generation_id: EventQueue generation containing every returned frame.
-        from_cursor: Inclusive source cursor requested by the client.
-        through_cursor: Exclusive source cursor represented by the response.
-        frames: Typed event envelopes in authoritative storage order.
-        total: Current number of stored event versions in the generation.
-    """
-
-    generation_id: str = Field(description="EventQueue generation containing these frames.")
-    from_cursor: int = Field(ge=0, description="Inclusive event cursor represented by the response.")
-    through_cursor: int = Field(ge=0, description="Exclusive event cursor represented by the response.")
-    frames: List[GameEventPayload] = Field(description="Typed event frames in storage order.")
-    total: int = Field(ge=0, description="Current event cursor for this generation.")
+    event: WireEvent = Field(
+        description="Concrete event payload frozen at its source cursor.",
+    )
 
 
 class CombatLogPayload(BaseModel):
     """Serialized combat-log entry envelope for SSE clients.
 
     Attributes:
+        source_stream_id: Encounter timeline owning this entry.
+        generation_id: EventQueue generation paired with this entry.
         log_index: Zero-based index of the entry in the active encounter log.
         event_cursor: Event cursor paired with this combat-log delivery.
         combat_log_cursor: Cursor after this combat-log entry has been observed.
         entry: Combat-log entry generated by the engine event lifecycle.
     """
 
+    source_stream_id: str = Field(description="Encounter timeline owning this log entry.")
     generation_id: str = Field(description="EventQueue generation paired with this log entry.")
     log_index: int = Field(description="Zero-based index of the entry in the active encounter log.")
     event_cursor: int = Field(description="Event cursor paired with this combat-log delivery.")
@@ -97,6 +105,7 @@ class HeartbeatPayload(BaseModel):
     """Keepalive envelope that carries the current stream cursors.
 
     Attributes:
+        generation_id: EventQueue generation containing the cursor pair.
         server_time: Server timestamp for the heartbeat emission.
         event_cursor: Current event-history cursor.
         combat_log_cursor: Current combat-log cursor.
@@ -163,100 +172,257 @@ class BoundedSubscription:
             self._queue.put_nowait(envelope)
             return True
         except asyncio.QueueFull:
-            self._evicted = True
-            while not self._queue.empty():
-                with contextlib.suppress(asyncio.QueueEmpty):
-                    self._queue.get_nowait()
-            with contextlib.suppress(asyncio.QueueFull):
-                self._queue.put_nowait({
-                    "event": "evicted",
-                    "data": EvictedPayload(reason="subscriber_queue_overflow"),
-                    "id": None,
-                })
+            self.evict("subscriber_queue_overflow")
             return False
 
     async def get(self) -> Dict[str, Any]:
         return await self._queue.get()
 
+    def evict(self, reason: str) -> None:
+        """Discard stale queued values and terminate this subscription."""
+        self._evicted = True
+        while not self._queue.empty():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._queue.get_nowait()
+        with contextlib.suppress(asyncio.QueueFull):
+            self._queue.put_nowait({
+                "event": "evicted",
+                "data": EvictedPayload(reason=reason),
+                "id": None,
+            })
+
+
+@dataclass(frozen=True)
+class ObjectiveSourceSnapshot:
+    """One locked objective event/log boundary copied from the hot journals."""
+
+    source_stream_id: str
+    generation_id: str
+    event_cursor: int
+    combat_log_cursor: int
+    event_from_cursor: int
+    event_through_cursor: int
+    event_source_slots: tuple[ObjectiveEventSourceSlot, ...]
+    complete_combat_log_source: CombatLogSourceWindow
+    combat_log_backfill_source: CombatLogSourceWindow
+
+
+@dataclass(frozen=True)
+class ObjectiveSubscriptionSnapshot:
+    """Subscribe-first barrier and exact backfill captured under one lock."""
+
+    subscription: BoundedSubscription
+    source: ObjectiveSourceSnapshot
+
 
 class DndEventStream:
-    """Fan-out bridge from EventQueue and Encounter combat log to SSE clients."""
+    """Objective source bridge from EventQueue and Encounter combat logs.
+
+    Player subscribers never bind here. Canonical subjective replication reads
+    finalized source slots through the listener seam and owns a separate
+    perspective-keyed journal.
+    """
 
     def __init__(self) -> None:
         self._subscriptions: List[BoundedSubscription] = []
-        self._pending_logs_by_lineage: Dict[str, List[CombatLogPayload]] = {}
+        self._source_lock = RLock()
+        self._journal_generation_id = str(EventQueue.generation_id())
+        self._source_encounter: Optional[Encounter] = None
+        self._objective_event_source_slots: Dict[
+            int,
+            ObjectiveEventSourceSlot,
+        ] = {}
+        self._objective_event_source_failure: Optional[str] = None
+        self._initial_event_history_adoption_allowed = True
+        self._combat_log_source_slots: Dict[str, Dict[int, CombatLogSourceSlot]] = {}
+        self._finalized_causal_event_cursors: Dict[str, List[int]] = {}
+        self._pending_log_slots_by_lineage: Dict[str, List[tuple[str, int]]] = {}
+        self._finalized_combat_log_source_listeners: List[
+            Callable[[CombatLogSourceSlot], None]
+        ] = []
 
     def start(self) -> None:
-        EventQueue.add_on_event_batch_callback(self._on_event_batch)
-        Encounter.add_combat_log_listener(self._on_combat_log)
+        with self._source_lock:
+            self._ensure_current_generation()
+            EventQueue.add_on_event_batch_callback(self._on_event_batch)
+            Encounter.add_combat_log_listener(self._on_combat_log)
+            self._adopt_initial_event_history()
 
     def ensure_attached(self) -> None:
         """Reattach after EventQueue.reset(), which clears passive callbacks."""
         self.start()
 
     def stop(self) -> None:
-        EventQueue.remove_on_event_batch_callback(self._on_event_batch)
-        Encounter.remove_combat_log_listener(self._on_combat_log)
-        for sub in list(self._subscriptions):
-            sub.try_enqueue({
-                "event": "evicted",
-                "data": EvictedPayload(reason="server_shutdown"),
-                "id": None,
-            })
-        self._subscriptions.clear()
-        self._pending_logs_by_lineage.clear()
+        with self._source_lock:
+            EventQueue.remove_on_event_batch_callback(self._on_event_batch)
+            Encounter.remove_combat_log_listener(self._on_combat_log)
+            self._evict_subscribers("server_shutdown")
+            self._pending_log_slots_by_lineage.clear()
 
     def subscribe(self, max_depth: int = DEFAULT_SUBSCRIPTION_MAX_DEPTH) -> BoundedSubscription:
-        sub = BoundedSubscription(max_depth=max_depth)
-        self._subscriptions.append(sub)
-        return sub
+        with self._source_lock:
+            self._ensure_current_generation()
+            return self._subscribe(max_depth=max_depth)
 
     def unsubscribe(self, sub: BoundedSubscription) -> None:
-        if sub in self._subscriptions:
-            self._subscriptions.remove(sub)
+        with self._source_lock:
+            if sub in self._subscriptions:
+                self._subscriptions.remove(sub)
+
+    @contextmanager
+    def source_boundary(self) -> Iterator[None]:
+        """Serialize source-journal mutation with an objective snapshot.
+
+        The lock owns only the event/log source journal and its subscribers.
+        Callers that also capture engine world state must validate the returned
+        source snapshot after building the world. That validation proves that
+        no event-driven mutation crossed the world capture; the lock alone is
+        deliberately not presented as an engine-wide mutation lock.
+        """
+        with self._source_lock:
+            self._ensure_current_generation()
+            yield
+
+    def capture_objective_source_snapshot(
+        self,
+        encounter: Encounter,
+        *,
+        from_event_cursor: Optional[int] = None,
+        through_event_cursor: Optional[int] = None,
+        event_limit: Optional[int] = None,
+        from_combat_log_cursor: Optional[int] = None,
+        through_combat_log_cursor: Optional[int] = None,
+        combat_log_limit: Optional[int] = None,
+        expected_source_stream_id: Optional[str] = None,
+        expected_generation_id: Optional[str] = None,
+    ) -> ObjectiveSourceSnapshot:
+        """Copy one exact event/log boundary while journal mutation is excluded."""
+        with self._source_lock:
+            return self._capture_objective_source_snapshot(
+                encounter,
+                from_event_cursor=from_event_cursor,
+                through_event_cursor=through_event_cursor,
+                event_limit=event_limit,
+                from_combat_log_cursor=from_combat_log_cursor,
+                through_combat_log_cursor=through_combat_log_cursor,
+                combat_log_limit=combat_log_limit,
+                expected_source_stream_id=expected_source_stream_id,
+                expected_generation_id=expected_generation_id,
+            )
+
+    def subscribe_with_objective_backfill(
+        self,
+        encounter: Encounter,
+        *,
+        from_event_cursor: int,
+        from_combat_log_cursor: int,
+        expected_source_stream_id: Optional[str] = None,
+        expected_generation_id: Optional[str] = None,
+        max_depth: int = DEFAULT_SUBSCRIPTION_MAX_DEPTH,
+    ) -> ObjectiveSubscriptionSnapshot:
+        """Subscribe before fixing barrier B and copy both histories through B."""
+        with self._source_lock:
+            self._ensure_current_generation()
+            subscription = self._subscribe(max_depth=max_depth)
+            try:
+                source = self._capture_objective_source_snapshot(
+                    encounter,
+                    from_event_cursor=from_event_cursor,
+                    through_event_cursor=None,
+                    event_limit=None,
+                    from_combat_log_cursor=from_combat_log_cursor,
+                    through_combat_log_cursor=None,
+                    combat_log_limit=None,
+                    expected_source_stream_id=expected_source_stream_id,
+                    expected_generation_id=expected_generation_id,
+                )
+            except Exception:
+                self.unsubscribe(subscription)
+                raise
+            return ObjectiveSubscriptionSnapshot(
+                subscription=subscription,
+                source=source,
+            )
+
+    def objective_source_snapshot_is_current(
+        self,
+        snapshot: ObjectiveSourceSnapshot,
+        encounter: Encounter,
+    ) -> bool:
+        """Return whether the hot runtime still matches a captured boundary."""
+        with self._source_lock:
+            self._ensure_current_generation()
+            return bool(
+                snapshot.source_stream_id == str(encounter.uuid)
+                and snapshot.generation_id == self._journal_generation_id
+                and snapshot.event_cursor == EventQueue.event_cursor()
+                and snapshot.combat_log_cursor == len(encounter.combat_log)
+            )
+
+    def add_finalized_combat_log_source_listener(
+        self,
+        callback: Callable[[CombatLogSourceSlot], None],
+    ) -> None:
+        """Observe immutable source slots only after their barrier is exact.
+
+        This is the ownership seam used by derived subjective journals.  The
+        objective stream remains solely responsible for recording and
+        finalizing slots; consumers never listen to ``Encounter`` directly.
+        """
+        with self._source_lock:
+            if callback not in self._finalized_combat_log_source_listeners:
+                self._finalized_combat_log_source_listeners.append(callback)
+
+    def remove_finalized_combat_log_source_listener(
+        self,
+        callback: Callable[[CombatLogSourceSlot], None],
+    ) -> None:
+        """Remove a finalized-source observer without changing source history."""
+        with self._source_lock:
+            if callback in self._finalized_combat_log_source_listeners:
+                self._finalized_combat_log_source_listeners.remove(callback)
 
     def current_event_cursor(self) -> int:
-        return EventQueue.event_cursor()
+        with self._source_lock:
+            self._ensure_current_generation()
+            return EventQueue.event_cursor()
 
     def current_combat_log_cursor(self, encounter: Optional[Encounter]) -> int:
-        return len(encounter.combat_log) if encounter is not None else 0
+        with self._source_lock:
+            self._ensure_current_generation()
+            return len(encounter.combat_log) if encounter is not None else 0
 
     def current_stream_id(self, encounter: Optional[Encounter]) -> str:
-        return make_stream_id(
-            self.current_event_cursor(),
-            self.current_combat_log_cursor(encounter),
-        )
+        with self._source_lock:
+            self._ensure_current_generation()
+            return make_stream_id(
+                EventQueue.event_cursor(),
+                len(encounter.combat_log) if encounter is not None else 0,
+            )
 
-    def iter_game_events_since(self, since: int, encounter: Optional[Encounter]) -> List[GameEventPayload]:
-        return self.iter_game_events_window(since, self.current_event_cursor(), encounter)
-
-    def iter_game_events_window(
+    def capture_combat_log_source_window(
         self,
+        encounter: Optional[Encounter],
+        *,
         from_cursor: int,
-        through_cursor: int,
-        encounter: Optional[Encounter],
-    ) -> List[GameEventPayload]:
-        """Return the exact `[from_cursor, through_cursor)` event window."""
-        start = max(0, from_cursor)
-        end = max(start, min(through_cursor, self.current_event_cursor()))
-        return [
-            self._game_event_payload(index, event, encounter)
-            for index, event in EventQueue.iter_events_since(start)
-            if index < end
-        ]
+        through_cursor: Optional[int] = None,
+        limit: Optional[int] = None,
+        expected_generation_id: Optional[str] = None,
+    ) -> CombatLogSourceWindow:
+        """Capture one exact finalized source window.
 
-    def iter_combat_logs_since(
-        self,
-        encounter: Optional[Encounter],
-        since: int,
-    ) -> List[CombatLogPayload]:
-        if encounter is None:
-            return []
-        start = max(0, since)
-        return [
-            self._combat_log_payload(index, entry, encounter)
-            for index, entry in enumerate(encounter.combat_log[start:], start=start)
-        ]
+        This is the source boundary for perspective-safe replication. Missing
+        or provisional slots fail closed rather than borrowing the current
+        event cursor.
+        """
+        with self._source_lock:
+            return self._capture_combat_log_source_window(
+                encounter,
+                from_cursor=from_cursor,
+                through_cursor=through_cursor,
+                limit=limit,
+                expected_generation_id=expected_generation_id,
+            )
 
     def _on_event_batch(self, events: Sequence[Event]) -> None:
         """Publish one causal batch in authoritative storage order.
@@ -269,25 +435,56 @@ class DndEventStream:
         Args:
             events: Stored event versions ordered by their EventQueue indexes.
         """
-        for event in events:
-            self._on_event(event)
+        finalized_slots: List[CombatLogSourceSlot] = []
+        with self._source_lock:
+            self._ensure_current_generation()
+            for event in events:
+                finalized_slots.extend(self._on_event(event))
+        for slot in finalized_slots:
+            self._notify_finalized_combat_log_source(slot)
 
-    def _on_event(self, event: Event) -> None:
+    def _on_event(self, event: Event) -> tuple[CombatLogSourceSlot, ...]:
         """Publish one stored event and any log waiting on its completion."""
         index = EventQueue.get_event_index(event.uuid)
         if index is None:
-            return
-        encounter = Encounter.get_active()
-        payload = self._game_event_payload(index, event, encounter)
-        self._publish("game_event", payload)
-
+            return ()
+        active_encounter = Encounter.get_active()
+        if active_encounter is not None:
+            self._source_encounter = active_encounter
+        encounter = active_encounter or self._source_encounter
+        finalized_slots: List[CombatLogSourceSlot] = []
         if event.phase == EventPhase.COMPLETION:
-            pending = self._pending_logs_by_lineage.pop(str(event.lineage_uuid), [])
-            for log_payload in pending:
-                self._publish(
-                    "combat_log",
-                    log_payload.model_copy(update={"event_cursor": payload.event_cursor}),
+            pending = self._pending_log_slots_by_lineage.pop(str(event.lineage_uuid), [])
+            for encounter_key, log_index in pending:
+                slot = self._finalize_source_slot(
+                    encounter_key,
+                    log_index,
+                    index + 1,
                 )
+                if slot is not None:
+                    finalized_slots.append(slot)
+
+        combat_log_cursor = self._exact_finalized_combat_log_barrier(
+            str(encounter.uuid) if encounter is not None else None,
+            index + 1,
+        )
+        if self._objective_event_source_failure is None:
+            try:
+                source_slot = freeze_objective_event_source_slot(
+                    (index, event),
+                    combat_log_cursor=combat_log_cursor,
+                )
+                self._record_objective_event_source_slot(source_slot)
+            except ObjectiveTimelineError as exc:
+                self._fail_objective_event_source(str(exc))
+            else:
+                self._publish(
+                    "game_event",
+                    self._game_event_payload(source_slot, encounter),
+                )
+        for slot in finalized_slots:
+            self._publish("combat_log", self._combat_log_payload(slot))
+        return tuple(finalized_slots)
 
     def _on_combat_log(
         self,
@@ -296,41 +493,229 @@ class DndEventStream:
         entry: CombatLogEntry,
         event: Event,
     ) -> None:
-        payload = self._combat_log_payload(index, entry, encounter)
-        stored_event = EventQueue.get_event_by_uuid(event.uuid) if event.use_register else None
-        if event.use_register and (stored_event is None or stored_event.phase != event.phase):
-            key = str(event.lineage_uuid)
-            self._pending_logs_by_lineage.setdefault(key, []).append(payload)
-            return
-        self._publish("combat_log", payload)
+        finalized_slot: Optional[CombatLogSourceSlot] = None
+        with self._source_lock:
+            self._ensure_current_generation()
+            self._source_encounter = encounter
+            stored_event = EventQueue.get_event_by_uuid(event.uuid) if event.use_register else None
+            stored_event_index = EventQueue.get_event_index(event.uuid) if stored_event is not None else None
+            event_cursor = (
+                stored_event_index + 1
+                if stored_event is not None
+                and stored_event.phase == event.phase
+                and stored_event_index is not None
+                else EventQueue.event_cursor()
+            )
+            pending_completion = bool(
+                event.use_register
+                and (stored_event is None or stored_event.phase != event.phase)
+            )
+            slot = self._record_source_slot(
+                encounter,
+                index,
+                entry,
+                event_cursor,
+                finalized=not pending_completion,
+                causal_cursor_exact=True,
+            )
+            if pending_completion:
+                key = str(event.lineage_uuid)
+                self._pending_log_slots_by_lineage.setdefault(key, []).append(
+                    (str(encounter.uuid), index)
+                )
+                return
+            self._publish("combat_log", self._combat_log_payload(slot))
+            finalized_slot = slot
+        if finalized_slot is not None:
+            self._notify_finalized_combat_log_source(finalized_slot)
 
     def _game_event_payload(
         self,
-        index: int,
-        event: Event,
+        slot: ObjectiveEventSourceSlot,
         encounter: Optional[Encounter],
     ) -> GameEventPayload:
         return GameEventPayload(
+            source_stream_id=str(encounter.uuid) if encounter is not None else None,
             generation_id=str(EventQueue.generation_id()),
-            event_index=index,
-            event_cursor=index + 1,
-            combat_log_cursor=self.current_combat_log_cursor(encounter),
-            event=event,
+            event_index=slot.event_index,
+            event_cursor=slot.event_cursor,
+            combat_log_cursor=slot.combat_log_cursor,
+            event=slot.wire_event(),
         )
 
     def _combat_log_payload(
         self,
-        index: int,
-        entry: CombatLogEntry,
-        encounter: Optional[Encounter],
+        slot: CombatLogSourceSlot,
     ) -> CombatLogPayload:
         return CombatLogPayload(
-            generation_id=str(EventQueue.generation_id()),
-            log_index=index,
-            event_cursor=self.current_event_cursor(),
-            combat_log_cursor=index + 1,
-            entry=entry,
+            source_stream_id=slot.source_stream_id,
+            generation_id=slot.generation_id,
+            log_index=slot.combat_log_cursor - 1,
+            event_cursor=slot.event_cursor,
+            combat_log_cursor=slot.combat_log_cursor,
+            entry=slot.entry,
         )
+
+    def _ensure_current_generation(self) -> None:
+        generation_id = str(EventQueue.generation_id())
+        if generation_id == self._journal_generation_id:
+            return
+        self._evict_subscribers("event_generation_changed")
+        self._clear_source_journal()
+        self._journal_generation_id = generation_id
+
+    def _clear_source_journal(self) -> None:
+        with self._source_lock:
+            self._source_encounter = None
+            self._objective_event_source_slots.clear()
+            self._objective_event_source_failure = None
+            self._initial_event_history_adoption_allowed = True
+            self._combat_log_source_slots.clear()
+            self._finalized_causal_event_cursors.clear()
+            self._pending_log_slots_by_lineage.clear()
+
+    def _adopt_initial_event_history(self) -> None:
+        """Freeze setup history once after a generation reset clears callbacks."""
+        event_total = EventQueue.event_cursor()
+        retained_total = len(self._objective_event_source_slots)
+        if self._objective_event_source_failure is not None:
+            self._initial_event_history_adoption_allowed = False
+            return
+        if retained_total == event_total:
+            self._initial_event_history_adoption_allowed = False
+            return
+        if retained_total or not self._initial_event_history_adoption_allowed:
+            self._fail_objective_event_source(
+                "objective event source missed a stored event after attachment"
+            )
+            self._initial_event_history_adoption_allowed = False
+            return
+
+        encounter = Encounter.get_active() or self._source_encounter
+        if encounter is not None and encounter.combat_log:
+            encounter_key = str(encounter.uuid)
+            slots = self._combat_log_source_slots.get(encounter_key, {})
+            if any(
+                index not in slots
+                or not slots[index].finalized
+                or not slots[index].causal_cursor_exact
+                for index in range(len(encounter.combat_log))
+            ):
+                self._fail_objective_event_source(
+                    "objective event source cannot adopt history with uncaptured logs"
+                )
+                self._initial_event_history_adoption_allowed = False
+                return
+            self._extend_finalized_causal_prefix(encounter_key)
+
+        for index, event in EventQueue.iter_events_since(0):
+            combat_log_cursor = self._exact_finalized_combat_log_barrier(
+                str(encounter.uuid) if encounter is not None else None,
+                index + 1,
+            )
+            try:
+                slot = freeze_objective_event_source_slot(
+                    (index, event),
+                    combat_log_cursor=combat_log_cursor,
+                )
+                self._record_objective_event_source_slot(slot)
+            except ObjectiveTimelineError as exc:
+                self._fail_objective_event_source(str(exc))
+                break
+        self._initial_event_history_adoption_allowed = False
+
+    def _record_objective_event_source_slot(
+        self,
+        slot: ObjectiveEventSourceSlot,
+    ) -> None:
+        """Append one immutable event slot without permitting cursor rewrites."""
+        existing = self._objective_event_source_slots.get(slot.event_index)
+        if existing is not None:
+            if existing != slot:
+                raise ObjectiveTimelineError(
+                    f"conflicting objective event source slot {slot.event_cursor}"
+                )
+            return
+        if slot.event_index != len(self._objective_event_source_slots):
+            raise ObjectiveTimelineError(
+                "objective event source slots must be contiguous"
+            )
+        self._objective_event_source_slots[slot.event_index] = slot
+
+    def _fail_objective_event_source(self, reason: str) -> None:
+        """Fail closed when exact cold event history can no longer be proven."""
+        if self._objective_event_source_failure is None:
+            self._objective_event_source_failure = reason
+        self._evict_subscribers("objective_event_source_invalid")
+
+    def _record_source_slot(
+        self,
+        encounter: Encounter,
+        index: int,
+        entry: CombatLogEntry,
+        event_cursor: int,
+        *,
+        finalized: bool,
+        causal_cursor_exact: bool,
+    ) -> CombatLogSourceSlot:
+        with self._source_lock:
+            encounter_key = str(encounter.uuid)
+            slots = self._combat_log_source_slots.setdefault(encounter_key, {})
+            existing = slots.get(index)
+            if existing is not None:
+                if existing.entry is not entry:
+                    raise CombatLogSourceError(
+                        f"conflicting combat-log source write at cursor {index + 1}"
+                    )
+                return existing
+            slot = CombatLogSourceSlot(
+                source_stream_id=encounter_key,
+                generation_id=self._journal_generation_id,
+                combat_log_cursor=index + 1,
+                event_cursor=event_cursor,
+                entry=entry,
+                finalized=finalized,
+                causal_cursor_exact=causal_cursor_exact,
+            )
+            slots[index] = slot
+            self._extend_finalized_causal_prefix(encounter_key)
+            return slot
+
+    def _finalize_source_slot(
+        self,
+        encounter_key: str,
+        log_index: int,
+        event_cursor: int,
+    ) -> Optional[CombatLogSourceSlot]:
+        slots = self._combat_log_source_slots.get(encounter_key)
+        if slots is None:
+            return None
+        slot = slots.get(log_index)
+        if slot is None or slot.generation_id != self._journal_generation_id:
+            return None
+        finalized = slot.model_copy(update={
+            "event_cursor": event_cursor,
+            "finalized": True,
+            "causal_cursor_exact": True,
+        })
+        slots[log_index] = finalized
+        self._extend_finalized_causal_prefix(encounter_key)
+        return finalized
+
+    def _notify_finalized_combat_log_source(
+        self,
+        slot: CombatLogSourceSlot,
+    ) -> None:
+        """Notify passive consumers after one source barrier becomes exact."""
+        if not slot.finalized or not slot.causal_cursor_exact:
+            return
+        with self._source_lock:
+            listeners = tuple(self._finalized_combat_log_source_listeners)
+        for listener in listeners:
+            try:
+                listener(slot)
+            except Exception:
+                pass
 
     def _publish(self, event: str, data: BaseModel) -> None:
         event_cursor = int(getattr(data, "event_cursor", self.current_event_cursor()))
@@ -343,5 +728,234 @@ class DndEventStream:
         for sub in list(self._subscriptions):
             if not sub.try_enqueue(envelope):
                 self.unsubscribe(sub)
+
+    def _subscribe(self, *, max_depth: int) -> BoundedSubscription:
+        sub = BoundedSubscription(max_depth=max_depth)
+        self._subscriptions.append(sub)
+        return sub
+
+    def _evict_subscribers(self, reason: str) -> None:
+        for sub in tuple(self._subscriptions):
+            sub.evict(reason)
+        self._subscriptions.clear()
+
+    def _capture_combat_log_source_window(
+        self,
+        encounter: Optional[Encounter],
+        *,
+        from_cursor: int,
+        through_cursor: Optional[int],
+        limit: Optional[int],
+        expected_generation_id: Optional[str],
+    ) -> CombatLogSourceWindow:
+        """Capture a source-log window while ``_source_lock`` is held."""
+        if encounter is None:
+            raise CombatLogSourceError("an active encounter is required")
+        if from_cursor < 0:
+            raise CombatLogSourceError("from_cursor must be non-negative")
+        if through_cursor is not None and through_cursor < from_cursor:
+            raise CombatLogSourceError("through_cursor must not precede from_cursor")
+        if limit is not None and limit < 0:
+            raise CombatLogSourceError("limit must be non-negative")
+
+        self._ensure_current_generation()
+        generation_id = self._journal_generation_id
+        if (
+            expected_generation_id is not None
+            and expected_generation_id != generation_id
+        ):
+            raise CombatLogSourceError("combat-log generation changed")
+
+        total = len(encounter.combat_log)
+        if from_cursor > total:
+            raise CombatLogSourceError("from_cursor exceeds the source cursor")
+        requested_through = total if through_cursor is None else through_cursor
+        if requested_through > total:
+            raise CombatLogSourceError("through_cursor exceeds the source cursor")
+        if limit is not None:
+            requested_through = min(requested_through, from_cursor + limit)
+
+        source_stream_id = str(encounter.uuid)
+        journal = self._combat_log_source_slots.get(source_stream_id, {})
+        slots: List[CombatLogSourceSlot] = []
+        for index in range(from_cursor, requested_through):
+            slot = journal.get(index)
+            if slot is None:
+                raise CombatLogSourceError(
+                    f"exact combat-log source slot {index + 1} is unavailable"
+                )
+            objective_entry = encounter.combat_log[index]
+            if slot.entry is not objective_entry:
+                raise CombatLogSourceError(
+                    f"combat-log source slot {index + 1} conflicts with encounter history"
+                )
+            if not slot.finalized:
+                raise CombatLogSourceError(
+                    f"combat-log source slot {index + 1} is not finalized"
+                )
+            if not slot.causal_cursor_exact:
+                raise CombatLogSourceError(
+                    f"combat-log source slot {index + 1} has only an inferred cursor"
+                )
+            slots.append(slot)
+
+        try:
+            return CombatLogSourceWindow(
+                source_stream_id=source_stream_id,
+                generation_id=generation_id,
+                retained_from_cursor=0,
+                from_cursor=from_cursor,
+                through_cursor=requested_through,
+                total=total,
+                slots=tuple(slots),
+            )
+        except ValueError as exc:
+            raise CombatLogSourceError("invalid exact combat-log source window") from exc
+
+    def _capture_objective_source_snapshot(
+        self,
+        encounter: Encounter,
+        *,
+        from_event_cursor: Optional[int],
+        through_event_cursor: Optional[int],
+        event_limit: Optional[int],
+        from_combat_log_cursor: Optional[int],
+        through_combat_log_cursor: Optional[int],
+        combat_log_limit: Optional[int],
+        expected_source_stream_id: Optional[str],
+        expected_generation_id: Optional[str],
+    ) -> ObjectiveSourceSnapshot:
+        """Copy one source boundary while ``_source_lock`` is held."""
+        self._ensure_current_generation()
+        self._source_encounter = encounter
+        source_stream_id = str(encounter.uuid)
+        generation_id = self._journal_generation_id
+        if (
+            expected_source_stream_id is not None
+            and expected_source_stream_id != source_stream_id
+        ):
+            raise CombatLogSourceError("combat-log source stream changed")
+        if (
+            expected_generation_id is not None
+            and expected_generation_id != generation_id
+        ):
+            raise CombatLogSourceError("combat-log generation changed")
+        if event_limit is not None and event_limit < 0:
+            raise CombatLogSourceError("event limit must be non-negative")
+
+        event_total = EventQueue.event_cursor()
+        event_from = event_total if from_event_cursor is None else from_event_cursor
+        if event_from < 0:
+            raise CombatLogSourceError("event from_cursor must be non-negative")
+        if event_from > event_total:
+            raise CombatLogSourceError("event from_cursor exceeds the source cursor")
+        event_through = (
+            event_total
+            if through_event_cursor is None
+            else through_event_cursor
+        )
+        if event_through < event_from:
+            raise CombatLogSourceError(
+                "event through_cursor must not precede from_cursor"
+            )
+        if event_through > event_total:
+            raise CombatLogSourceError("event through_cursor exceeds the source cursor")
+        if event_limit is not None:
+            event_through = min(event_through, event_from + event_limit)
+        if self._objective_event_source_failure is not None:
+            raise CombatLogSourceError(
+                "objective event source is invalid: "
+                f"{self._objective_event_source_failure}"
+            )
+        event_source_slots: List[ObjectiveEventSourceSlot] = []
+        for index in range(event_from, event_through):
+            slot = self._objective_event_source_slots.get(index)
+            if slot is None:
+                raise CombatLogSourceError(
+                    f"exact objective event source slot {index + 1} is unavailable"
+                )
+            event_source_slots.append(slot)
+
+        complete_logs = self._capture_combat_log_source_window(
+            encounter,
+            from_cursor=0,
+            through_cursor=None,
+            limit=None,
+            expected_generation_id=generation_id,
+        )
+        log_from = (
+            complete_logs.total
+            if from_combat_log_cursor is None
+            else from_combat_log_cursor
+        )
+        if (
+            log_from == 0
+            and through_combat_log_cursor is None
+            and combat_log_limit is None
+        ):
+            log_backfill = complete_logs
+        else:
+            log_backfill = self._capture_combat_log_source_window(
+                encounter,
+                from_cursor=log_from,
+                through_cursor=through_combat_log_cursor,
+                limit=combat_log_limit,
+                expected_generation_id=generation_id,
+            )
+
+        if (
+            generation_id != str(EventQueue.generation_id())
+            or event_total != EventQueue.event_cursor()
+            or complete_logs.total != len(encounter.combat_log)
+        ):
+            raise CombatLogSourceError(
+                "objective source changed while capturing its boundary"
+            )
+        return ObjectiveSourceSnapshot(
+            source_stream_id=source_stream_id,
+            generation_id=generation_id,
+            event_cursor=event_total,
+            combat_log_cursor=complete_logs.total,
+            event_from_cursor=event_from,
+            event_through_cursor=event_through,
+            event_source_slots=tuple(event_source_slots),
+            complete_combat_log_source=complete_logs,
+            combat_log_backfill_source=log_backfill,
+        )
+
+    def _extend_finalized_causal_prefix(self, encounter_key: str) -> None:
+        """Extend the contiguous exact cursor index for O(log n) barriers."""
+        slots = self._combat_log_source_slots.get(encounter_key, {})
+        causal_cursors = self._finalized_causal_event_cursors.setdefault(
+            encounter_key,
+            [],
+        )
+        while True:
+            slot = slots.get(len(causal_cursors))
+            if (
+                slot is None
+                or not slot.finalized
+                or not slot.causal_cursor_exact
+            ):
+                return
+            if causal_cursors and slot.event_cursor < causal_cursors[-1]:
+                raise CombatLogSourceError(
+                    "combat-log causal event cursors moved backwards"
+                )
+            causal_cursors.append(slot.event_cursor)
+
+    def _exact_finalized_combat_log_barrier(
+        self,
+        encounter_key: Optional[str],
+        event_cursor: int,
+    ) -> int:
+        """Return an exact hot barrier without rereading the log prefix."""
+        if encounter_key is None:
+            return 0
+        self._extend_finalized_causal_prefix(encounter_key)
+        return bisect_right(
+            self._finalized_causal_event_cursors.get(encounter_key, ()),
+            event_cursor,
+        )
 
 event_stream = DndEventStream()

@@ -17,11 +17,13 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_conditions import (
     BaseCondition,
+    Duration,
+)
+from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
     ConditionRemovalTrigger,
     ConditionTag,
-    Duration,
     DurationType,
 )
 from dnd.core.base_tiles import MovementMode
@@ -39,7 +41,8 @@ from dnd.entity import Entity
 from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
-from dnd.conditions import Blinded, Deafened, Unconscious, Frightened, Concentrating, ConcentrationActionMarker
+from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
+from dnd.creature_transforms import apply_unconscious_transform
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 from dnd.blocks.skills import SKILL_TO_ABILITY
 
@@ -157,7 +160,11 @@ class ChillTouchEffect(BaseCondition):
     """
     name: str = Field(default="Chill Touch Effect", description="Condition name.")
     description: str = Field(
-        default="Tracking condition for Chill Touch debuffs",
+        default=(
+            "A creature hit by Chill Touch cannot regain hit points until the "
+            "start of the caster's next turn; if it is undead, it also has "
+            "disadvantage on attacks against the caster."
+        ),
         description="Rules-facing condition summary.",
     )
     tags: Set[ConditionTag] = Field(
@@ -271,7 +278,7 @@ class ChillTouch(SpellAction):
             die_size=8,
             damage_type=DamageType.NECROTIC,
         )
-        return profile.model_copy(update={"critical_threshold": 20})
+        return profile
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight for the spell attack."""
@@ -1051,8 +1058,11 @@ class EyebiteAsleepEffect(BaseCondition):
         description="Condition tags used by cleanup and spell interactions.",
     )
     removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
-        default_factory=lambda: frozenset({ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED}),
-        description="Positive applied damage wakes this target.",
+        default_factory=lambda: frozenset({
+            ConditionRemovalTrigger.POSITIVE_DAMAGE_APPLIED,
+            ConditionRemovalTrigger.SHAKE_AWAKE,
+        }),
+        description="Positive damage or external assistance wakes this target.",
     )
     agency_denial: ConditionAgencyDenial = Field(
         default=ConditionAgencyDenial.FULL_TURN,
@@ -1060,21 +1070,16 @@ class EyebiteAsleepEffect(BaseCondition):
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Apply Unconscious and register the wake-on-damage handler."""
+        """Apply the unconscious transform and register its wake handler."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not target:
+        if not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        sub_conditions_uuids: List[UUID] = []
-
-        unconscious = Unconscious(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=target.uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
+        outs = apply_unconscious_transform(
+            target,
+            name=self.name,
+            effect_source_uuid=self.source_entity_uuid,
         )
-        target.add_condition(unconscious, parent_event=declaration_event)
-        sub_conditions_uuids.append(unconscious.uuid)
 
         handler = self._create_wake_handler()
         target.add_event_handler(handler)
@@ -1084,7 +1089,7 @@ class EyebiteAsleepEffect(BaseCondition):
             EventPhase.EFFECT,
             status_message=f"{target.name} falls asleep (Eyebite)"
         )
-        return [], handler_uuids, sub_conditions_uuids, [], effect_event
+        return outs, handler_uuids, [], [], effect_event
 
     def _create_wake_handler(self) -> EventHandler:
         """Create the damage-triggered wake handler."""
@@ -1383,7 +1388,7 @@ class EyebiteStrike(BaseAction):
         condition_fact, condition_keys = {
             "asleep": (
                 "selected_target.condition.eyebite_asleep",
-                frozenset({"dnd.spells.necromancy.EyebiteAsleepEffect", "dnd.conditions.Unconscious"}),
+                frozenset({"dnd.spells.necromancy.EyebiteAsleepEffect"}),
             ),
             "panicked": (
                 "selected_target.condition.eyebite_panicked",

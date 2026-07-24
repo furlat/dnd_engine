@@ -2,6 +2,7 @@ from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.core.damage import DamageComponentResolution, DamageResolution
+from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ResistanceModifier
 
@@ -215,6 +216,10 @@ class HitDice(BaseBlock):
 class HealthConfig(BaseModel):
     """Configuration used to materialize a health block."""
 
+    life_state: LifeState = Field(
+        default=LifeState.ALIVE,
+        description="Initial authoritative life state.",
+    )
     hit_dices: List[HitDiceConfig] = Field(default_factory=list, description="Hit-dice blocks used for HP and short rests.")
     max_hit_points_bonus: int = Field(default=0, description="Static bonus added to maximum hit points.")
     max_hit_points_bonus_modifiers: List[Tuple[str, int]] = Field(
@@ -253,6 +258,10 @@ class Health(BaseBlock):
     """
 
     name: str = Field(default="Health", description="Block name used in entity composition indexes.")
+    life_state: LifeState = Field(
+        default=LifeState.ALIVE,
+        description="Authoritative lifecycle state for the owning entity.",
+    )
     hit_dices: List[HitDice] = Field(
         default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")],
         description="Hit-dice blocks used for maximum HP and short rests.",
@@ -734,4 +743,5 @@ class Health(BaseBlock):
                 damage_reduction.self_static.add_resistance_modifier(ResistanceModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid, value=ResistanceStatus.IMMUNITY, damage_type=immunity, name=f"Immunity to {immunity}"))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                       hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction)
+                       hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,
+                       life_state=config.life_state)

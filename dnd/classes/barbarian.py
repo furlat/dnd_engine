@@ -19,7 +19,8 @@ Level 18: Indomitable Might
 Level 20: Primal Champion
 """
 
-from dnd.core.base_conditions import BaseCondition, DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import DurationType
 from dnd.core.content import ContentKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
@@ -28,14 +29,13 @@ from dnd.core.base_actions import (
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    WeaponSlot,
     DamageAppliedEvent, TakeDamageEvent, SkillCheckEvent
 )
+from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
     ContextualNumericalModifier, ContextualAdvantageModifier,
 )
-from dnd.blocks.equipment import ArmorType
 from dnd.blocks.action_economy import RechargeType
 from dnd.core.dice import RollType
 from dnd.entity import Entity

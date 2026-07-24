@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll, RollType, fixed_dice_faces
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     AttackD20RollResultEvent,
     Event,
@@ -18,7 +19,6 @@ from dnd.core.events import (
     SpatialHandler,
     StepMovementEvent,
     Trigger,
-    WeaponSlot,
 )
 from dnd.core.values import BaseValue, ModifiableValue
 

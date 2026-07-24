@@ -44,6 +44,7 @@ from ai.policy.routines import (
     AUGMENT_THEN_ACT,
     ENABLE_THEN_ACT,
     PURSUE_CAPABILITY,
+    PURSUE_CAPABILITY_STARTER_SCORE,
     RoutinePlan,
     RoutinePlanningInstrumentation,
     RoutinePlanStatus,
@@ -51,13 +52,13 @@ from ai.policy.routines import (
     plan_pursue_capability,
     plan_registered_routines as plan_v31_registered_routines,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionTarget,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     ConcentrationOperation,
@@ -68,6 +69,9 @@ from ai.protocol.semantics import (
 
 SEARCH_EXHAUSTION_LIMIT = 3
 POSITION_THEN_PRESSURE_MARGIN = 4.0
+DOMINANT_DURABLE_EXTRA_ACTION_SETUP_SCORE = (
+    PURSUE_CAPABILITY_STARTER_SCORE - POSITION_THEN_PRESSURE_MARGIN
+)
 CONCENTRATING_CONDITION_KEY = "dnd.conditions.Concentrating"
 FRAGILE_EXPOSURE_HP_FRACTION = 0.65
 FRAGILE_EXPOSURE_LIABILITY_LIMIT = 0.75
@@ -140,6 +144,12 @@ def plan_current_routines(
 ) -> tuple[RoutinePlan, ...]:
     """Plan current candidates through retained, revalidating routines."""
     candidate_set = candidates or build_current_candidate_set(context)
+    if (
+        prior_progress is None
+        and revalidation.progress is None
+        and _dominant_durable_extra_action_setup(candidate_set)
+    ):
+        return tuple()
     raw_registered = plan_v31_registered_routines(
         context,
         prior_progress,
@@ -190,6 +200,29 @@ def plan_current_routines(
             or plan.proposal.intent != stronger_pressure.proposal.intent
         ),
         stronger_pressure,
+    )
+
+
+def _dominant_durable_extra_action_setup(
+    candidates: PolicyCandidateSet,
+) -> bool:
+    """Skip speculative starters when typed durable extra actions already dominate.
+
+    The current generation rescales inherited proposals into common tactical
+    units, so the frozen v31 setup threshold cannot recognize this case. A
+    setup within the existing position-then-pressure margin of the fixed
+    pursuit starter already wins the value-of-information trade when it grants
+    future actions. Direct pressure and active-routine handling remain outside
+    this shortcut.
+    """
+    if candidates.direct_damage:
+        return False
+    return any(
+        proposal.source_node == "Preparation/DurableSelfSetup"
+        and proposal.score >= DOMINANT_DURABLE_EXTRA_ACTION_SETUP_SCORE
+        and proposal.evidence.self_setup is not None
+        and proposal.evidence.self_setup.extra_actions_per_turn > 0
+        for proposal in candidates.self_setup
     )
 
 

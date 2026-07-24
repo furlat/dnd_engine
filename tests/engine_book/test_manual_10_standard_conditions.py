@@ -23,7 +23,8 @@ from dnd.conditions import (
     Unconscious,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, ConditionTag
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionTag
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
@@ -221,8 +222,8 @@ def test_posture_and_invisibility_use_attacker_context() -> None:
     assert target.is_invisible is False
 
 
-def test_severe_conditions_create_incapacitated_subtrees() -> None:
-    """Paralyzed, Stunned, and Unconscious add Incapacitated plus incoming penalties."""
+def test_severe_conditions_own_direct_denial_transforms() -> None:
+    """Paralyzed, Stunned, and Unconscious own denial plus incoming penalties."""
     reset_standard_condition_state()
     source = create_tutorial_actor("Source", (1, 1), "heroes")
     target = create_tutorial_actor("Target", (2, 1), "monsters")
@@ -230,8 +231,9 @@ def test_severe_conditions_create_incapacitated_subtrees() -> None:
     distant_attacker = create_tutorial_actor("Distant", (8, 8), "heroes")
 
     paralyzed = apply_condition(Paralyzed, source, target)
-    assert len(paralyzed.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert paralyzed.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -244,17 +246,22 @@ def test_severe_conditions_create_incapacitated_subtrees() -> None:
 
     target.remove_condition("Paralyzed")
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
 
     stunned = apply_condition(Stunned, source, target)
-    assert len(stunned.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert stunned.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.ADVANTAGE
     target.remove_condition("Stunned")
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
 
     unconscious = apply_condition(Unconscious, source, target)
-    assert len(unconscious.sub_conditions) == 1
-    assert "Incapacitated" in target.active_conditions
+    assert unconscious.sub_conditions == []
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
+    assert target.senses.visual_access.normalized_score == 0
     target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_critical == CriticalStatus.AUTOCRIT
     target.equipment.ac_bonus.set_target_entity(distant_attacker.uuid)
@@ -288,7 +295,8 @@ def test_exhaustion_and_petrified_are_heavyweight_condition_families() -> None:
     target.remove_condition("Exhaustion")
     petrified = apply_condition(Petrified, source, target)
     assert ConditionTag.PETRIFICATION in petrified.tags
-    assert "Incapacitated" in target.active_conditions
+    assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -301,4 +309,5 @@ def test_exhaustion_and_petrified_are_heavyweight_condition_families() -> None:
 
     target.remove_condition("Petrified")
     assert "Incapacitated" not in target.active_conditions
+    assert target.action_economy.action_permission.normalized_score == 1
     assert target.check_condition_immunity("Poisoned") is False

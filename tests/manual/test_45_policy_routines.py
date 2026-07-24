@@ -9,7 +9,7 @@ from ai.policy import (
     PolicyResultDisposition,
 )
 from ai.knowledge import derive_agent_facts
-from ai.observation.models import (
+from server.agent_protocol.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationObjectFact,
@@ -33,7 +33,7 @@ from ai.policy.routines import (
     revalidate_active_routine,
     revalidate_approach_open_reassess,
 )
-from ai.protocol.control import (
+from server.agent_protocol.control import (
     ActionResolutionStatus,
     ActionAffordance,
     ActionBucket,
@@ -51,7 +51,7 @@ from ai.protocol.control import (
     OutcomeResolution,
     ResourcePool,
 )
-from ai.protocol.semantics import (
+from server.agent_protocol.semantics import (
     ActionSemantics,
     ActionTag,
     CapabilityAmountFormula,
@@ -64,7 +64,7 @@ from ai.protocol.semantics import (
     TargetingSemantics,
     action_semantics_ref,
 )
-from ai.semantics.actions import action_semantics_for_available_action
+from server.agent_runtime.action_semantics import action_semantics_for_available_action
 from dnd.core.base_actions import ActionCategory, AvailableActionInfo, BaseCost, TargetType
 
 
@@ -739,7 +739,7 @@ def test_admitted_canceled_action_is_excluded_for_the_rest_of_the_turn() -> None
         action_resolution=ActionResolutionStatus.CANCELED,
     ))
 
-    assert recorded.memory_advanced is True
+    assert recorded.memory_advanced is False
     assert "position|Jump|pos=2,0" in host.memory_for("session", "actor").canceled_row_ids
 
     second_base = _context([jump_row], door_open=True, epoch_index=2)

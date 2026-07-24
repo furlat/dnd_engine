@@ -2,8 +2,8 @@
 
 from typing import Optional
 from uuid import UUID
-from dnd.blocks.equipment import BodyArmor, Boots, Helmet, Shield, ArmorType
-from dnd.core.events import BodyPart, EquipmentSlot
+from dnd.blocks.equipment import BodyArmor, Boots, Helmet, Shield
+from dnd.core.equipment_types import ArmorType, BodyPart, EquipmentSlot
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualNumericalModifier, NumericalModifier
 from dnd.entity import Entity

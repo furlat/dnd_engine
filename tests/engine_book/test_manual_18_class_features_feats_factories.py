@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 from unittest.mock import patch
 from uuid import uuid4
 
-from dnd.actions import Attack
+from dnd.actions import Attack, SpellEvent
 from dnd.actions_functional import (
     execute_by_index,
     get_available_actions,
@@ -23,7 +23,8 @@ from dnd.classes.sorcerer import QuickenedSpell, SorceryPointsFeature
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome
-from dnd.core.events import D20RollResultEvent, EventPhase, EventQueue, EventType, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import D20RollResultEvent, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
@@ -286,7 +287,7 @@ def test_quickened_spell_uses_feature_resource_to_override_spell_template_until_
 
     with patch(
         "dnd.core.dice.random.randint",
-        side_effect=fixed_class_randint(d20_values=[12], d10_value=5),
+        side_effect=fixed_class_randint(d20_values=[12, 11], d10_value=5),
     ):
         spell_event = execute_by_index(
             sorcerer,
@@ -295,13 +296,15 @@ def test_quickened_spell_uses_feature_resource_to_override_spell_template_until_
             available=available,
         )
 
-    assert spell_event is not None
+    assert isinstance(spell_event, SpellEvent)
     assert not spell_event.canceled
     assert "MetamagicActive" not in sorcerer.active_conditions
     assert fire_bolt_template.alt_cost_type is None
     assert sorcerer.action_economy.actions.normalized_score == 1
     assert sorcerer.action_economy.bonus_actions.normalized_score == 0
     assert sorcerer.action_economy.resources["sorcery_points"].current == 3
+    assert spell_event.dice_roll is not None
+    assert spell_event.dice_roll.results == [12, 11]
     assert target.get_hp() == target_hp - 5
 
 

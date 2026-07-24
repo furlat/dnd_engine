@@ -7,7 +7,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType
 from dnd.core.values import BaseValue
@@ -176,6 +177,63 @@ def test_uniform_multiattack_discloses_repeated_attack_profile() -> None:
     assert longbow.outcome_profile.applications == 2
     assert longbow.outcome_profile.damage_rolls[0].die_size == 8
     assert longbow.outcome_profile.damage_rolls[0].damage_type == DamageType.PIERCING.value
+
+
+def test_off_hand_multiattack_children_use_parent_cost_after_bonus_is_spent() -> None:
+    """Stat-block off-hand attacks are not player two-weapon bonus actions."""
+    for monster_id, action_name in (
+        ("bandit_captain", "Bandit Captain Multiattack: Melee"),
+        ("veteran", "Veteran Multiattack: Melee"),
+    ):
+        reset_srd_trait_state()
+        actor = create_srd_monster(
+            monster_id,
+            position=(1, 1),
+            faction="monsters",
+        )
+        target = create_srd_monster(
+            "commoner",
+            position=(2, 1),
+            faction="heroes",
+        )
+        Entity.update_all_entities_senses(max_distance=30)
+        actor.action_economy.consume(
+            "bonus_actions",
+            1,
+            "Pre-spent bonus action",
+        )
+        bonus_actions_before = (
+            actor.action_economy.bonus_actions.normalized_score
+        )
+
+        multiattack = actor.get_action_template(action_name)
+        assert multiattack is not None
+        with fixed_dice_faces(1, 1, 1):
+            result = multiattack.instantiate(
+                target_entity_uuid=target.uuid,
+            ).apply()
+
+        assert result is not None and not result.canceled
+        completed_attacks = [
+            event
+            for event in EventQueue.get_events_by_type(EventType.ATTACK)
+            if event.phase == EventPhase.COMPLETION
+        ]
+        assert len(completed_attacks) == 3
+        assert [
+            event.weapon_slot
+            for event in completed_attacks
+            if isinstance(event, AttackEvent)
+        ] == [
+            WeaponSlot.MELEE_MAIN,
+            WeaponSlot.MELEE_MAIN,
+            WeaponSlot.MELEE_OFF,
+        ]
+        assert (
+            actor.action_economy.bonus_actions.normalized_score
+            == bonus_actions_before
+            == 0
+        )
 
 
 def test_actor_known_bonus_damage_reaches_attack_outcome_profiles() -> None:

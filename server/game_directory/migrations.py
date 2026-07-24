@@ -367,7 +367,56 @@ PLAYER_IDENTITIES_AND_CHARACTERS = Migration(
     ),
 )
 
-MIGRATIONS: tuple[Migration, ...] = (INITIAL_SCHEMA, PLAYER_IDENTITIES_AND_CHARACTERS)
+SUBJECTIVE_REPLAY_ARTIFACT = Migration(
+    version=3,
+    name="subjective_replay_artifact",
+    statements=(
+        """
+        CREATE TABLE game_artifacts_with_subjective_replay (
+            artifact_id TEXT PRIMARY KEY,
+            game_id TEXT REFERENCES games(game_id) ON DELETE CASCADE,
+            artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('creation_manifest', 'objective_event_history', 'combat_log', 'subjective_transcript', 'agent_telemetry', 'terminal_summary', 'replay_bundle', 'subjective_replay_bundle', 'rating_output')),
+            schema_version TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            uri TEXT NOT NULL,
+            byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+            content_digest TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            producer_kind TEXT NOT NULL CHECK (producer_kind IN ('directory', 'worker', 'evaluator', 'importer')),
+            producer_version TEXT NOT NULL
+        )
+        """,
+        """
+        INSERT INTO game_artifacts_with_subjective_replay(
+            artifact_id, game_id, artifact_kind, schema_version,
+            media_type, uri, byte_size, content_digest, created_at,
+            producer_kind, producer_version
+        )
+        SELECT
+            artifact_id, game_id, artifact_kind, schema_version,
+            media_type, uri, byte_size, content_digest, created_at,
+            producer_kind, producer_version
+        FROM game_artifacts
+        """,
+        "DROP TABLE game_artifacts",
+        "ALTER TABLE game_artifacts_with_subjective_replay RENAME TO game_artifacts",
+        """
+        CREATE UNIQUE INDEX artifact_content_identity_idx
+        ON game_artifacts(COALESCE(game_id, ''), artifact_kind, content_digest)
+        """,
+        """
+        CREATE UNIQUE INDEX terminal_replay_artifact_kind_idx
+        ON game_artifacts(game_id, artifact_kind)
+        WHERE artifact_kind IN ('replay_bundle', 'subjective_replay_bundle')
+        """,
+    ),
+)
+
+MIGRATIONS: tuple[Migration, ...] = (
+    INITIAL_SCHEMA,
+    PLAYER_IDENTITIES_AND_CHARACTERS,
+    SUBJECTIVE_REPLAY_ARTIFACT,
+)
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 
 

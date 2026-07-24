@@ -4,7 +4,8 @@ from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_actions import TargetType
 from dnd.core.base_tiles import MovementMode
-from dnd.core.events import EventPhase, EventQueue, EventType, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.modifiers import DamageType
 from dnd.core.gridmap import get_map
 from dnd.encounter import EncounterState

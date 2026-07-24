@@ -17,14 +17,17 @@ from dnd.controller import Controller, HumanController, PassController, TurnCont
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
 from dnd.utils import force_attack_hit, get_hp, remove_attack_modifier, reset_combat_state, set_hp
 from server.event_server import _available_actions_cache, app, sim
+from server.event_stream import event_stream
 
 
 class RecordingController(Controller):
@@ -91,6 +94,8 @@ def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
+    event_stream.ensure_attached()
+    event_stream._clear_source_journal()
     _available_actions_cache.clear()
 
     manager = sim.get_session_manager()
@@ -153,6 +158,7 @@ def create_session_controlled_turn() -> tuple[TestClient, str, Entity, Entity, E
         json={"player_type": "human", "name": "Runtime Player"},
     )
     assert session_response.status_code == 200
+    assert session_response.json()["player_type"] == "human"
     session_id = session_response.json()["session_id"]
 
     join_response = client.post(
@@ -163,6 +169,52 @@ def create_session_controlled_turn() -> tuple[TestClient, str, Entity, Entity, E
     assert join_response.json()["controlled_entities"] == [str(hero.uuid)]
 
     return client, session_id, hero, monster, encounter
+
+
+def player_replication_seed(client: TestClient, session_id: str) -> dict:
+    """Open the sole expectation-free player replication entry point."""
+    response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def player_replication_after(
+    client: TestClient,
+    session_id: str,
+    bootstrap: dict,
+) -> tuple[dict, dict, dict]:
+    """Read exact player reducer and log windows after a captured seed."""
+    identity = {
+        "session_id": session_id,
+        "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
+        "expected_generation_id": bootstrap["protocol"]["generation_id"],
+        "expected_perspective_epoch_id": bootstrap["perspective"]["perspective_epoch_id"],
+    }
+    frames_response = client.get(
+        "/replication/frames",
+        params={
+            **identity,
+            "from_observation_cursor": bootstrap["watermarks"]["observation_cursor"],
+        },
+    )
+    logs_response = client.get(
+        "/replication/combat-log",
+        params={
+            **identity,
+            "from_combat_log_cursor": bootstrap["watermarks"]["combat_log_cursor"],
+        },
+    )
+    current_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert frames_response.status_code == 200
+    assert logs_response.status_code == 200
+    assert current_response.status_code == 200
+    return current_response.json(), frames_response.json(), logs_response.json()
 
 
 def test_encounter_start_and_end_own_runtime_callbacks() -> None:
@@ -318,7 +370,7 @@ def test_death_checks_mark_dead_combatants_and_end_by_faction_survival() -> None
 
     assert death_events
     assert encounter.combatants[monster.uuid].is_dead
-    assert "Dead" in monster.active_conditions
+    assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED
     assert Encounter.get_active() is None
     assert len(encounter.get_alive_combatants()) == 1
@@ -329,17 +381,28 @@ def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
     """The API boundary gates actions by session ownership and active turn."""
     client, session_id, hero, monster, encounter = create_session_controlled_turn()
 
-    turn_response = client.get("/encounter/current-turn")
-    turn_payload = turn_response.json()
+    before = player_replication_seed(client, session_id)
+    turn_payload = before["world"]["state"]["encounter"]
+    ping_response = client.post(f"/session/{session_id}/ping")
+    ping_payload = ping_response.json()
+    current_entity = next(
+        entity
+        for entity in before["world"]["state"]["entities"]
+        if entity["uuid"] == turn_payload["current_entity_uuid"]
+    )
 
-    assert turn_response.status_code == 200
-    assert turn_payload["encounter_active"] is True
+    assert turn_payload["state"] == "active"
     assert turn_payload["current_entity_uuid"] == str(hero.uuid)
-    assert turn_payload["current_entity_name"] == "Runtime Hero"
-    assert turn_payload["is_human_turn"] is True
-    assert turn_payload["controller_type"] == "human"
+    assert current_entity["name"] == "Runtime Hero"
+    assert ping_response.status_code == 200
+    assert ping_payload["is_my_turn"] is True
+    assert ping_payload["active_entity_uuid"] == str(hero.uuid)
+    assert before["perspective"]["controlled_entity_uuids"] == [str(hero.uuid)]
 
-    actions_response = client.get(f"/entity/{hero.uuid}/available-actions")
+    actions_response = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
     actions_payload = actions_response.json()
 
     assert actions_response.status_code == 200
@@ -370,11 +433,24 @@ def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
         remove_attack_modifier(hero, force_uuid)
 
     action_payload = action_response.json()
+    current, frame_window, log_window = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    replicated_monster = next(
+        row
+        for row in current["world"]["state"]["entities"]
+        if row["uuid"] == str(monster.uuid)
+    )
 
     assert action_response.status_code == 200
     assert action_payload["success"] is True
-    assert action_payload["target_hp"] < starting_hp
-    assert action_payload["combat_log_entries"]
+    assert replicated_monster["hp"] < starting_hp
+    assert frame_window["frames"]
+    assert log_window["frames"]
+    assert "target_hp" not in action_payload
+    assert "combat_log_entries" not in action_payload
     assert encounter.combat_log
 
     denied_response = client.post(
@@ -419,8 +495,14 @@ def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> No
     )
     assert join_response.status_code == 200
     set_hp(monster, 1)
+    before = player_replication_seed(client, session_id)
 
-    available = client.get(f"/entity/{caster.uuid}/available-actions").json()
+    available_response = client.get(
+        f"/entity/{caster.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert available_response.status_code == 200
+    available = available_response.json()
     missile = next(
         row
         for row in available["entity_actions"]
@@ -444,18 +526,49 @@ def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> No
         },
     )
     payload = response.json()
+    current, frame_window, log_window = player_replication_after(
+        client,
+        session_id,
+        before,
+    )
+    patches = [patch for frame in frame_window["frames"] for patch in frame["patches"]]
+    cues = [cue for frame in frame_window["frames"] for cue in frame["presentation"]]
+    damage_cues = [
+        cue
+        for cue in cues
+        if cue["kind"] == "damage" and cue["target_uuid"] == str(monster.uuid)
+    ]
+    life_cues = [
+        cue
+        for cue in cues
+        if cue["kind"] == "life_state" and cue["entity_uuid"] == str(monster.uuid)
+    ]
 
     assert response.status_code == 200
-    assert payload["deaths"] == [monster.name]
-    assert payload["target_hp"] == monster.get_hp()
+    assert damage_cues[-1]["resulting_hp"] == monster.get_hp()
+    assert life_cues[-1]["current"] == LifeState.DEAD.value
+    assert life_cues[-1]["causing_effect_presentation_id"] in {
+        cue["presentation_id"] for cue in damage_cues
+    }
+    assert {
+        "kind": "entity_remove",
+        "entity_uuid": str(monster.uuid),
+    } in patches
+    assert all(
+        row["uuid"] != str(monster.uuid)
+        for row in current["world"]["state"]["entities"]
+    )
+    assert frame_window["frames"]
     assert payload["encounter_ended"] is True
     death_entries = [
         entry
-        for root in payload["combat_log_entries"]
+        for frame in log_window["frames"]
+        for root in [frame["entry"]]
         for entry in _walk_combat_log_entries(root)
         if entry["entry_type"] == "death"
     ]
     assert len(death_entries) == 1
+    assert {"deaths", "target_hp", "combat_log_entries"}.isdisjoint(payload)
 
 
 def _walk_combat_log_entries(entry: dict) -> list[dict]:

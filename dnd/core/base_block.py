@@ -3,7 +3,8 @@ from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_conditions import BaseCondition, HazardFilter
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import HazardFilter
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
 from dnd.core.senses import SenseMode as SenseMode, SensesType as SensesType
 
@@ -411,6 +412,25 @@ class BaseBlock(BaseModel):
         Default True. Override in Entity/BaseItem for health-aware checks."""
         return True
 
+    def can_take_actions(self) -> bool:
+        """Return whether this block may originate ordinary actions.
+
+        Non-entity blocks are permitted by default. Entity overrides this using
+        its neutral action-permission capability.
+        """
+        return True
+
+    def can_afford_action_resource(
+        self,
+        resource_name: str,
+        amount: int,
+    ) -> bool:
+        """Return whether this block can pay a named action resource.
+
+        Only owners with an action economy override this neutral boundary.
+        """
+        return False
+
     def get_hp(self) -> int:
         """Override in Entity/BaseItem to return current HP. Default: 0 (no health system)."""
         return 0
@@ -545,6 +565,29 @@ class BaseBlock(BaseModel):
         The base implementation is a no-op. Inventory overrides this hook.
         """
         pass
+
+    def on_owned_item_destroyed(
+        self,
+        item: 'BaseBlock',
+        parent_event: Optional[Event] = None,
+    ) -> bool:
+        """Allow a high-level owner to publish facts after item cleanup.
+
+        BaseItem invokes this hook only after container membership, equipment
+        hooks, and floor placement have been cleared. Entity overrides it to
+        publish aggregate item/AC state without requiring BaseItem or Equipment
+        to import upward. Other blocks return ``False`` so the item publishes a
+        dependency-neutral destruction fact itself.
+
+        Args:
+            item: Destroyed item block, still available until its final registry
+                removal.
+            parent_event: Optional causal event that destroyed the item.
+
+        Returns:
+            True when the owner published the destruction fact.
+        """
+        return False
 
     def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
         """React after this block is removed from GridMap object indexes.
