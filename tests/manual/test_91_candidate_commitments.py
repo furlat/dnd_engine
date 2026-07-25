@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from ai.knowledge import derive_agent_facts
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEntityFact,
     SubjectiveWorldState,
 )
 from ai.policy.candidates import PolicyCandidateSet
 from ai.policy.contracts import (
-    ExecuteIntent,
     ExplorationEvidence,
     PolicyContext,
     PolicyEvidence,
@@ -18,6 +17,7 @@ from ai.policy.contracts import (
     PolicyProposal,
     TargetPlanEvidence,
 )
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import (
     CandidateCommitmentEvaluator,
     CommitmentStatus,
@@ -32,7 +32,7 @@ from ai.policy.generations.registry import (
     get_policy_implementation,
 )
 from ai.policy.host import PolicyHost
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,
@@ -407,4 +407,3 @@ def test_authoritative_result_gate_advances_only_completed_acceptance() -> None:
     )
     assert commitment is not None
     assert commitment.accepted_steps == 1
-

@@ -15,7 +15,7 @@ from ai.policy import (
     command_from_policy_decision,
 )
 from ai.knowledge import derive_agent_facts
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     AdjacentOffset,
     KnowledgeState,
     ObservationEffectProtection,
@@ -32,7 +32,6 @@ from ai.policy import (
     ENABLE_THEN_ACT,
     TRANSFORM_THEN_ACT,
     DuplicateEpochSubmissionError,
-    ExecuteIntent,
     PolicyContextAlignmentError,
     PolicyExecutionConstraints,
     PolicyHost,
@@ -42,13 +41,13 @@ from ai.policy import (
 )
 from ai.policy.contracts import (
     CapabilityModelStatus,
-    EndTurnIntent,
     PolicyDecision,
     PolicyEvidence,
     PolicyGoal,
     PolicyProposal,
     SpacingEvidence,
 )
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from ai.policy.candidates import build_policy_candidate_set
 from ai.policy.generations import (
     BASELINE_GENERATION_ID,
@@ -57,7 +56,7 @@ from ai.policy.generations import (
     list_policy_generations,
 )
 from ai.policy.generations.registry import EXPECTED_V31_BEHAVIOR_SHA256
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -76,7 +75,7 @@ from server.agent_protocol.control import (
     OutcomeResolution,
     ResourcePool,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     CapabilityOutcomeAdjustment,

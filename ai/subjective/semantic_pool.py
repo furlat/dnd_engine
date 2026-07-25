@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any, Optional
 
-from server.agent_protocol.control import DecisionEpoch
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.control import DecisionEpoch
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     action_semantics_payload_ref,
     action_semantics_ref,

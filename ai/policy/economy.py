@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionEconomyState,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     CapabilityAmountFormula,
     CapabilityAmountSource,

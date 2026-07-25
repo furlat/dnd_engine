@@ -1,12 +1,12 @@
-"""Contracts for the dependency-neutral agent protocol layer."""
+"""Contracts for the dependency-neutral canonical AI contract layer."""
 
 from __future__ import annotations
 
 import ast
 from pathlib import Path
 
-from server.agent_protocol.observation import ObservationFrame, ObservationFrameType
-from server.agent_protocol.control import (
+from dnd.ai.contracts.observation import ObservationFrame, ObservationFrameType
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionEconomyState,
     ActionSourceDefinition,
@@ -77,10 +77,12 @@ def test_control_protocol_embeds_in_subjective_event_envelopes() -> None:
 
 
 def test_protocol_modules_do_not_import_engine_runtime_or_policy_layers() -> None:
-    """Neutral protocol contracts remain below engine and controller adapters."""
-    protocol_root = REPOSITORY_ROOT / "server" / "agent_protocol"
+    """Canonical AI contracts remain below engine and controller adapters."""
+    protocol_root = REPOSITORY_ROOT / "dnd" / "ai" / "contracts"
     forbidden_prefixes = (
         "ai",
+        "dnd.ai.policy",
+        "dnd.ai.runner",
         "server.agent_runtime",
         "server.event_server",
         "server.session",
@@ -97,8 +99,8 @@ def test_protocol_modules_do_not_import_engine_runtime_or_policy_layers() -> Non
 
 
 def test_observation_models_do_not_import_subjective_runtime_models() -> None:
-    """Observation wire models depend downward on protocol contracts only."""
-    path = REPOSITORY_ROOT / "server" / "agent_protocol" / "observation.py"
+    """Observation contracts depend downward on canonical AI contracts only."""
+    path = REPOSITORY_ROOT / "dnd" / "ai" / "contracts" / "observation.py"
 
     assert not any(
         module == "ai" or module.startswith("ai.")

@@ -16,7 +16,7 @@ from ai.codex_tools.representation.geometry import (
     GeometryQuery,
     GeometryResultKind,
 )
-from server.agent_protocol.semantics import TruthValue
+from dnd.ai.contracts.semantics import TruthValue
 from tests.manual.test_49_hot_codex_runtime import _FakeRuntime, _door_policy_world
 
 

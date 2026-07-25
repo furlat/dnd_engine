@@ -24,7 +24,7 @@ from ai.codex_tools.representation.inspection import (
     JsonValueType,
     capture_inspection_document,
 )
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,

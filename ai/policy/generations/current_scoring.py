@@ -7,13 +7,13 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai.policy.contracts import (
-    ExecuteIntent,
     PolicyContext,
     PolicyProposal,
     UtilityComponent,
 )
-from server.agent_protocol.control import ActionAffordance
-from server.agent_protocol.semantics import ActionSemantics, ActionTag, OutcomeKind
+from dnd.ai.contracts.control import ActionAffordance
+from dnd.ai.contracts.decision import ExecuteIntent
+from dnd.ai.contracts.semantics import ActionSemantics, ActionTag, OutcomeKind
 
 SETUP_VALUE_HORIZON_TURNS = 2.0
 

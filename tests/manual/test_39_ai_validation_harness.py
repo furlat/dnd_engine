@@ -15,13 +15,15 @@ from ai.codex_tools.client import CodexToolClient
 from ai.validation_harness import (
     ValidationArenaInfo,
     ValidationHarnessClient,
+    ValidationScheduleEntry,
     build_validation_schedule,
 )
 from ai.external_selfplay import run_external_selfplay
-from server.agent_protocol.control import ActionResolutionStatus
+from dnd.ai.contracts.control import ActionResolutionStatus
 from dnd.core.dice import fixed_dice_faces
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
 from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
+from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
 
 
 def validation_catalog_rows() -> list[dict[str, object]]:
@@ -37,6 +39,40 @@ def validation_catalog_rows() -> list[dict[str, object]]:
         }
         for spec in list_ai_validation_arena_specs()
     ]
+
+
+def game_creation_catalog_payload() -> dict[str, object]:
+    """Return the canonical catalog subset consumed by the harness."""
+
+    recipes = {recipe.arena_id: recipe for recipe in LEGACY_RECIPES}
+    hero_roles: dict[str, str] = {}
+    presets: list[dict[str, object]] = []
+    for row in validation_catalog_rows():
+        arena_id = str(row["arena_id"])
+        recipe = recipes[arena_id]
+        hero_roles.setdefault(
+            recipe.hero_configuration_id,
+            str(row["hero_role"]),
+        )
+        presets.append(
+            {
+                "arena_id": arena_id,
+                "title": row["title"],
+                "tags": row["tags"],
+                "expected_pressure": row["expected_pressure"],
+                "map_notes": row["map_notes"],
+                "recipe": {
+                    "hero_configuration_id": recipe.hero_configuration_id,
+                },
+            }
+        )
+    return {
+        "hero_configurations": [
+            {"configuration_id": configuration_id, "title": title}
+            for configuration_id, title in hero_roles.items()
+        ],
+        "presets": presets,
+    }
 
 
 def test_validation_schedule_rotates_hero_and_monster_side_focuses() -> None:
@@ -105,30 +141,59 @@ def test_validation_schedule_supports_offsets_without_repeating_first_arena() ->
 
 
 def test_validation_harness_client_lists_arenas_and_starts_scheduled_entry() -> None:
-    """The client uses the existing server validation endpoints."""
-    requests: list[tuple[str, str, dict[str, str]]] = []
+    """The client prepares, joins, bootstraps, and activates one Codex side."""
+    requests: list[tuple[str, str, dict[str, str], object | None]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        requests.append((request.method, request.url.path, dict(request.url.params)))
-        if request.url.path == "/simulation/ai-validation-arenas":
-            return httpx.Response(200, json={"arenas": validation_catalog_rows()})
-        if request.url.path == "/simulation/start-ai-validation":
-            arena_id = request.url.params["arena_id"]
-            mode = request.url.params["mode"]
+        body = json.loads(request.content) if request.content else None
+        requests.append(
+            (request.method, request.url.path, dict(request.url.params), body)
+        )
+        if request.url.path == "/game-creation/catalog":
+            return httpx.Response(200, json=game_creation_catalog_payload())
+        if request.url.path == "/game-creation/start":
+            assert isinstance(body, dict)
+            arena_id = body["scenario"]["arena_id"]
             return httpx.Response(
                 200,
                 json={
-                    "status": "started",
-                    "mode": mode,
-                    "arena_id": arena_id,
-                    "arena_title": "Mock Arena",
-                    "ai_session_id": "ai-session",
-                    "codex_session_id": "codex-session" if mode == "codex_monsters" else None,
-                    "takeover_claim_id": "claim-id" if mode == "codex_monsters" else None,
+                    "status": "prepared",
+                    "preset_arena_id": arena_id,
                     "encounter_uuid": "encounter-id",
-                    "hero_uuid": "hero-id",
+                    "side_a": {
+                        "entity_assignments": [{"entity_uuid": "hero-id"}],
+                    },
+                    "side_b": {
+                        "entity_assignments": [{"entity_uuid": "monster-id"}],
+                        "codex_session_id": "codex-session",
+                        "takeover_claim_id": "claim-id",
+                    },
                 },
             )
+        if request.url.path == "/game/join":
+            assert isinstance(body, dict)
+            return httpx.Response(
+                200,
+                json={
+                    "session_id": body["session_id"],
+                    "controlled_entities": body["entity_uuids"],
+                },
+            )
+        if request.url.path == "/replication/bootstrap":
+            return httpx.Response(
+                200,
+                json={
+                    "protocol": {
+                        "source_stream_id": "source-stream",
+                        "generation_id": "generation",
+                    },
+                    "perspective": {
+                        "perspective_epoch_id": "perspective-epoch",
+                    },
+                },
+            )
+        if request.url.path == "/game-creation/activate":
+            return httpx.Response(200, json={"status": "activated"})
         return httpx.Response(404, json={"detail": "not found"})
 
     http_client = httpx.Client(
@@ -145,13 +210,118 @@ def test_validation_harness_client_lists_arenas_and_starts_scheduled_entry() -> 
         "goblin_water_skirmish",
     ]
     assert schedule[1].mode == "codex_monsters"
-    assert result.status == "started"
+    assert result.status == "activated"
     assert result.mode == "codex_monsters"
     assert result.arena_id == schedule[1].arena_id
-    assert result.ai_session_id == "ai-session"
     assert result.codex_session_id == "codex-session"
     assert result.takeover_claim_id == "claim-id"
-    assert ("POST", "/simulation/start-ai-validation", {"arena_id": schedule[1].arena_id, "mode": "codex_monsters"}) in requests
+    assert [path for _method, path, _params, _body in requests] == [
+        "/game-creation/catalog",
+        "/game-creation/start",
+        "/game/join",
+        "/replication/bootstrap",
+        "/game-creation/activate",
+        "/game-creation/catalog",
+    ]
+    start_body = requests[1][3]
+    assert isinstance(start_body, dict)
+    assert start_body["side_a"]["controller"] == "ai"
+    assert start_body["side_b"]["controller"] == "codex"
+    assert start_body["opening_side"] == "side_a"
+
+
+def test_validation_harness_human_mode_creates_and_joins_human_session() -> None:
+    """Human-hero validation uses native opponents and one canonical session."""
+
+    requests: list[tuple[str, dict[str, object] | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        requests.append((request.url.path, body))
+        if request.url.path == "/game-creation/start":
+            return httpx.Response(
+                200,
+                json={
+                    "status": "prepared",
+                    "preset_arena_id": "standard_skeleton_doors",
+                    "encounter_uuid": "encounter-id",
+                    "side_a": {
+                        "entity_assignments": [{"entity_uuid": "hero-id"}],
+                    },
+                    "side_b": {
+                        "entity_assignments": [{"entity_uuid": "monster-id"}],
+                    },
+                },
+            )
+        if request.url.path == "/session/create":
+            return httpx.Response(200, json={"session_id": "human-session"})
+        if request.url.path == "/game/join":
+            assert isinstance(body, dict)
+            return httpx.Response(
+                200,
+                json={
+                    "session_id": body["session_id"],
+                    "controlled_entities": body["entity_uuids"],
+                },
+            )
+        if request.url.path == "/replication/bootstrap":
+            return httpx.Response(
+                200,
+                json={
+                    "protocol": {
+                        "source_stream_id": "source-stream",
+                        "generation_id": "generation",
+                    },
+                    "perspective": {
+                        "perspective_epoch_id": "perspective-epoch",
+                    },
+                },
+            )
+        if request.url.path == "/game-creation/activate":
+            return httpx.Response(200, json={"status": "activated"})
+        return httpx.Response(404, json={"detail": "not found"})
+
+    client = ValidationHarnessClient(
+        "http://testserver",
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            base_url="http://testserver",
+        ),
+    )
+    entry = ValidationScheduleEntry(
+        sequence=0,
+        focus="sorcerer_hero",
+        mode="human_hero",
+        arena_id="standard_skeleton_doors",
+        arena_title="Standard Skeleton Doors",
+        hero_role="Sorcerer",
+        rationale="human mapping",
+    )
+
+    result = client.start_entry(entry)
+
+    assert result.status == "activated"
+    assert result.codex_session_id is None
+    assert [path for path, _body in requests] == [
+        "/game-creation/start",
+        "/session/create",
+        "/game/join",
+        "/replication/bootstrap",
+        "/game-creation/activate",
+    ]
+    start_body = requests[0][1]
+    assert start_body is not None
+    side_a = start_body["side_a"]
+    side_b = start_body["side_b"]
+    assert isinstance(side_a, dict)
+    assert isinstance(side_b, dict)
+    assert side_a["controller"] == "human"
+    assert side_b["controller"] == "ai"
+    join_body = requests[2][1]
+    assert join_body == {
+        "session_id": "human-session",
+        "entity_uuids": ["hero-id"],
+    }
 
 
 def test_validation_harness_client_supports_context_manager() -> None:
@@ -165,7 +335,12 @@ def test_validation_harness_client_supports_context_manager() -> None:
             super().close()
 
     http_client = RecordingClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"arenas": []})),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={"hero_configurations": [], "presets": []},
+            )
+        ),
         base_url="http://testserver",
     )
 
@@ -183,7 +358,12 @@ def test_validation_harness_client_supports_context_manager() -> None:
             super().close()
 
     owned_http = OwnedRecordingClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"arenas": []})),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={"hero_configurations": [], "presets": []},
+            )
+        ),
         base_url="http://testserver",
     )
     with ValidationHarnessClient("http://testserver", client=owned_http) as client:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Iterable, Optional
 from uuid import UUID, uuid4
 
-from dnd.controller import CodexController, Controller, ExternalAIController
+from dnd.controller import CodexController, Controller
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.session import GameSession, PlayerSession, PlayerType, SessionManager
@@ -165,19 +165,35 @@ class AITakeoverManager:
         game: Optional[GameSession],
     ) -> Optional[TakeoverClaim]:
         """Release one claim and restore previous ownership."""
-        claim = self._claims.pop(claim_id, None)
+        claim = self._claims.get(claim_id)
         if claim is None:
             return None
         if encounter is None or game is None:
+            self._claims.pop(claim_id, None)
             return claim
 
+        previous_controllers: dict[UUID, Controller] = {}
         for state in claim.entity_states.values():
             entity = Entity.get(state.entity_uuid)
             if entity is None or state.entity_uuid not in encounter.combatants:
                 continue
             previous_controller = Controller.get(state.previous_controller_uuid)
             if previous_controller is None:
-                previous_controller = ExternalAIController(source_entity_uuid=state.entity_uuid)
+                raise TakeoverError(
+                    "previous_controller_not_found",
+                    (
+                        f"Cannot restore combatant {state.entity_uuid}: "
+                        "its pre-claim controller no longer exists"
+                    ),
+                    500,
+                )
+            previous_controllers[state.entity_uuid] = previous_controller
+
+        self._claims.pop(claim_id, None)
+        for state in claim.entity_states.values():
+            previous_controller = previous_controllers.get(state.entity_uuid)
+            if previous_controller is None:
+                continue
             encounter.set_controller_for(state.entity_uuid, previous_controller)
             if state.previous_owner_session_id is None:
                 game.unassign_entity(state.entity_uuid)

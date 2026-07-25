@@ -8,9 +8,9 @@ from typing import Any, Dict, Literal, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ai.knowledge.models import AgentFacts
-from server.agent_protocol.observation import SubjectiveWorldState
-from server.agent_protocol.immutable import FrozenDict
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.observation import SubjectiveWorldState
+from dnd.ai.contracts.immutable import FrozenDict
+from dnd.ai.contracts.semantics import (
     ActionTag,
     ConcentrationOperation,
     EffectDisposition,
@@ -21,7 +21,12 @@ from server.agent_protocol.semantics import (
     SelfSetupMaintenanceSemantics,
     TruthValue,
 )
-from server.agent_protocol.control import ActionAffordance, OpportunityAttackExposure
+from dnd.ai.contracts.control import ActionAffordance, OpportunityAttackExposure
+from dnd.ai.contracts.decision import (
+    EndTurnIntent,
+    ExecuteIntent,
+    PolicyIntent,
+)
 
 
 class PolicyModel(BaseModel):
@@ -52,31 +57,6 @@ class PolicyGoal(str, Enum):
     ROUTINE = "routine"
     END_TURN = "end_turn"
     OTHER = "other"
-
-
-class ExecuteIntent(PolicyModel):
-    """Intent to execute one row from the current decision epoch."""
-
-    kind: Literal["execute"] = "execute"
-    row_id: str = Field(description="Current-epoch row id.")
-    extra_target_uuids: Tuple[str, ...] = Field(default_factory=tuple, description="Additional multi-target selections.")
-    prefer_safe: bool = Field(default=True, description="Whether movement should prefer a supplied safe path.")
-
-
-class EndTurnIntent(PolicyModel):
-    """Intent to end the current actor's turn."""
-
-    kind: Literal["end_turn"] = "end_turn"
-
-
-class WaitIntent(PolicyModel):
-    """Intent to issue no command while no controlled epoch is active."""
-
-    kind: Literal["wait"] = "wait"
-    reason: str = Field(description="Why no command should be submitted.")
-
-
-PolicyIntent = Union[ExecuteIntent, EndTurnIntent, WaitIntent]
 
 
 class UtilityComponent(PolicyModel):

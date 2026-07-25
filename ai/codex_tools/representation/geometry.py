@@ -14,9 +14,9 @@ from ai.knowledge.topology import (
     grid_distance_feet,
     known_line_of_sight,
 )
-from server.agent_protocol.observation import KnowledgeState, SubjectiveWorldState
-from server.agent_protocol.control import ActionAffordance, ActionTarget
-from server.agent_protocol.semantics import TruthValue
+from dnd.ai.contracts.observation import KnowledgeState, SubjectiveWorldState
+from dnd.ai.contracts.control import ActionAffordance, ActionTarget
+from dnd.ai.contracts.semantics import TruthValue
 from dnd.core.geometry import supercover_line
 
 

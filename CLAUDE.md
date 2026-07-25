@@ -876,7 +876,7 @@ encounter.start_encounter()  # You must call this yourself!
 
 ```python
 from dnd.encounter import Encounter
-from dnd.controller import HumanController, PassController, ExternalAIController
+from dnd.controller import HumanController, PassController
 from uuid import uuid4
 
 encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
@@ -885,7 +885,12 @@ encounter.roll_initiative()
 encounter.start_encounter()
 ```
 
-**Controllers**: `HumanController`/`ClaudeController` (exit turn loop for API control), `ExternalAIController` (waits for the AI session/subprocess to act through the API), `PassController` (ends turn immediately)
+**Controllers**: `HumanController`/`ClaudeController` expose player-authority
+boundaries; `PassController` ends immediately; `NativeAIController` in
+`dnd.ai.runtime.controller` owns an in-process policy assignment; and
+`RegisteredAIController` in `server.registered_ai_controller` owns the sole
+external-provider boundary. There is no session-command
+`ExternalAIController`.
 
 #### Step 4: Run Turns
 

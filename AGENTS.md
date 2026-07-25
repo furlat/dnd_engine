@@ -903,7 +903,7 @@ encounter.start_encounter()  # You must call this yourself!
 
 ```python
 from dnd.encounter import Encounter
-from dnd.controller import HumanController, PassController, ExternalAIController
+from dnd.controller import HumanController, PassController
 from uuid import uuid4
 
 encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
@@ -912,7 +912,12 @@ encounter.roll_initiative()
 encounter.start_encounter()
 ```
 
-**Controllers**: `HumanController`/`CodexController` (exit turn loop for API control), `ExternalAIController` (waits for the AI session/subprocess to act through the API), `PassController` (ends turn immediately)
+**Controllers**: `HumanController`/`CodexController` expose player-authority
+boundaries; `PassController` ends immediately; `NativeAIController` in
+`dnd.ai.runtime.controller` owns an in-process policy assignment; and
+`RegisteredAIController` in `server.registered_ai_controller` owns the sole
+external-provider boundary. There is no session-command
+`ExternalAIController`.
 
 #### Step 4: Run Turns
 
@@ -1062,15 +1067,69 @@ Both validate that environment changes (door open/close) correctly propagate thr
 
 The active external surface is the FastAPI server (`server/event_server.py`) with
 session-based authority (`server/session.py`). Controllers in
-`dnd/controller.py` represent turn ownership. Server-owned observation,
-decision-epoch, semantics, movement-revalidation, and transport contracts live
-under `server.agent_runtime` and `server.agent_protocol`. The client-facing
-`ai` package consumes those contracts and owns policy/evaluation concerns;
-`dnd` and `server` must never import `ai`. No controller policy reads live
-engine entities directly.
+`dnd/controller.py` represent turn ownership, while the canonical AI kernel
+lives under `dnd/ai`.
 
-The old subprocess CLI was moved to `to_archive/cli`. Keep it as reference
-material unless the user explicitly asks to recover or rebuild that surface.
+### Canonical AI Ownership
+
+- `dnd/ai/contracts` owns dependency-neutral subjective observations,
+  affordances, semantics, feedback, and typed policy intents.
+- `dnd/ai` owns policy specifications, policy/memory registration, the
+  subjective state projector, the sole authoritative intent
+  validator/dispatcher, and all timing/instrumentation phases.
+- `dnd/ai/policies/basic.py` is the bundled in-process policy.
+- `custom_ai/` contains optional logic-only policies. Policy modules may use
+  canonical AI contracts and reducers, but never live `Entity`, `Encounter`,
+  actions, server transports, clocks, logging, or instrumentation.
+- `server` owns composition and transport only. It resolves one globally
+  unique `policy_id` to either an in-process binding or an authenticated
+  registered provider without changing the gameplay API.
+- The top-level `ai/` package is client/evaluation tooling. `dnd`, `server`,
+  `services`, and `custom_ai` must never import it.
+
+Native AI is a direct in-process Python call. It must never call the local game
+server over HTTP, spawn a policy subprocess, or fall back to a remote provider.
+`NativeAIController` projects subjective state and resolves `PolicyIntent`
+through `dnd.ai.runtime.execution`.
+
+External AI is the same policy boundary transported across the closed
+registered-provider protocol. `RegisteredAIController` is the sole production
+external controller. A provider receives only `SubjectiveWorldState` plus an
+ordered authoritative feedback delta and returns only a typed `PolicyIntent`;
+the main game process still owns validation and action execution. Every
+external character receives a separate assignment, capability token, policy
+instance, memory instance, and decision sequence. Provider failure never
+silently falls back to another policy.
+
+The reference multithreaded provider is run with:
+
+```bash
+uv run python -m services.ai_policy_server \
+  --host 127.0.0.1 --port 8010 \
+  --provider-id reference.local --capacity 32
+```
+
+The main server authenticates providers through
+`/admin/ai/providers`; gameplay continues to use the single
+`/game-creation/catalog`, `/game-creation/start`, and
+`/game-creation/activate` route family. Game creation is prepared: join and
+bootstrap first, activate with that exact bootstrap identity, then follow
+replication using the same seed.
+
+Core instrumentation owns assignment initialization/teardown, state
+projection, memory and feedback reduction, policy decision, validation,
+authoritative action execution, and provider wait timing. Custom policies
+contain decision logic only.
+
+The architectural gates in
+`tests/architecture/test_ai_import_direction.py` enforce dependency direction,
+zero local imports/`TYPE_CHECKING` escapes, an acyclic AI boundary, and one
+authoritative action-dispatch consumer. The real-socket matrix in
+`tests/ai/test_live_ai_matchups.py` must remain green for native-versus-external,
+external-versus-external, and per-character provider isolation.
+
+The deleted managed subprocess, self-HTTP, and `ExternalAIController` paths are
+not compatibility surfaces. Do not restore aliases or adapters for them.
 
 ## Reference
 
@@ -1086,7 +1145,7 @@ material unless the user explicitly asks to recover or rebuild that surface.
 **Spells**: `dnd/spells/` (evocation, abjuration, enchantment, conjuration, necromancy, illusion, transmutation)
 **Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
 **Monsters**: `dnd/monsters/bestiary.py` (create_goblin, create_skeleton, create_goblin_archer, create_sorcerer)
-**Server/AI**: `server/event_server.py`, `server/session.py`, `ai/`, `dnd/controller.py`
+**Server/AI**: `dnd/ai/`, `dnd/controller.py`, `server/event_server.py`, `server/registered_ai_controller.py`, `server/registered_ai_provider.py`, `services/ai_policy_server/`, `custom_ai/`
 **Tests**: `tests/` — named by manual/engine-book area and feature
 
 ### Documentation

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from ai.policy.contracts import ExecuteIntent, PolicyGoal
+from ai.policy.contracts import PolicyGoal
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import CurrentCandidatePolicyHost, create_generation_policy_host
 from ai.policy.generations.registry import CANDIDATE_GENERATION_ID, get_policy_implementation
 from ai.policy.host import PolicyResultDisposition
-from server.agent_protocol.control import ActionResolutionStatus, CommandResult, CommandResultStatus
+from dnd.ai.contracts.control import ActionResolutionStatus, CommandResult, CommandResultStatus
 from tests.manual.test_44_typed_agent_policy import _world
 
 

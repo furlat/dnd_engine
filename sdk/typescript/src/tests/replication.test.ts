@@ -407,6 +407,52 @@ test("follow reset publishes the exact single-fetch bootstrap passed to the jour
   assert.equal(reset?.state.health, "ready");
 });
 
+test("follow consumes the caller's exact initial bootstrap without a second HTTP seed", async () => {
+  const controller = new AbortController();
+  const journal = new RecordingJournal();
+  const seed = bootstrap();
+  let bootstrapRequests = 0;
+  const resets: Array<{
+    readonly reason: string;
+    readonly bootstrap: SubjectiveReplicationBootstrap;
+  }> = [];
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async (input) => {
+      if (String(input).includes("/replication/bootstrap")) {
+        bootstrapRequests += 1;
+        throw new Error("follow must not refetch its caller-owned seed");
+      }
+      return new Response(encode(
+        "sync",
+        "s=0;o=0;p=0;l=0",
+        syncDelivery(0),
+      ), {
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    },
+  });
+
+  await client.follow(journal, {
+    sessionId: "session-a",
+    initialBootstrap: seed,
+    signal: controller.signal,
+    onReplicaReset: (reset) => {
+      resets.push(reset);
+    },
+    onUpdate: () => {
+      controller.abort();
+    },
+    initialReconnectDelayMs: 0,
+    maximumReconnectDelayMs: 0,
+  });
+
+  assert.equal(bootstrapRequests, 0);
+  assert.equal(resets.length, 1);
+  assert.equal(resets[0]?.reason, "initial_bootstrap");
+  assert.equal(resets[0]?.bootstrap, seed);
+  assert.equal(resets[0]?.bootstrap, journal.lastBootstrap);
+});
+
 test("follow labels only a truly uninitialized journal as initial bootstrap", async () => {
   const controller = new AbortController();
   const resets: string[] = [];
@@ -470,17 +516,18 @@ test("subjective client invokes fetch with the global receiver", async () => {
   assert.equal(receiver, globalThis);
 });
 
-test("follow resync reuses one validated bootstrap object for callback and journal", async () => {
+test("follow resync fetches one new seed after consuming the exact initial bootstrap", async () => {
   const controller = new AbortController();
   const journal = new RecordingJournal();
   let bootstrapRequests = 0;
+  const initialSeed = bootstrap("generation-a");
   const resets: Array<{ readonly reason: string; readonly bootstrap: SubjectiveReplicationBootstrap }> = [];
   const client = new SubjectiveReplicationClient("/api", {
     fetchImplementation: async (input) => {
       const url = String(input);
       if (url.includes("/replication/bootstrap")) {
         bootstrapRequests += 1;
-        return jsonResponse(bootstrap(bootstrapRequests === 1 ? "generation-a" : "generation-b"));
+        return jsonResponse(bootstrap("generation-b"));
       }
       return new Response(encode("sync", "s=9;o=9;p=9;l=9", syncDelivery(0)), {
         headers: { "Content-Type": "text/event-stream" },
@@ -490,6 +537,7 @@ test("follow resync reuses one validated bootstrap object for callback and journ
 
   await client.follow(journal, {
     sessionId: "session-a",
+    initialBootstrap: initialSeed,
     signal: controller.signal,
     onReplicaReset: (value) => {
       resets.push(value);
@@ -499,8 +547,9 @@ test("follow resync reuses one validated bootstrap object for callback and journ
     maximumReconnectDelayMs: 0,
   });
 
-  assert.equal(bootstrapRequests, 2);
+  assert.equal(bootstrapRequests, 1);
   assert.deepEqual(resets.map((value) => value.reason), ["initial_bootstrap", "contract_mismatch"]);
+  assert.equal(resets[0]?.bootstrap, initialSeed);
   assert.equal(resets[1]?.bootstrap, journal.lastBootstrap);
   assert.equal(resets[1]?.bootstrap.protocol.generation_id, "generation-b");
 });

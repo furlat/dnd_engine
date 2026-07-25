@@ -25,18 +25,18 @@ from ai.knowledge.models import (
     ThreatFacts,
     TopologyFacts,
 )
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationEncounterState,
     ObservationSessionState,
     SubjectiveWorldState,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCostProfile,
     ActionEconomyState,
     ActionSourceDefinition,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionTag,
     ComparisonOperator,
     FactExpression,

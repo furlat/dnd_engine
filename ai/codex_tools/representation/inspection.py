@@ -25,8 +25,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
 from ai.knowledge.models import AgentFacts
-from server.agent_protocol.observation import ObservationFrame
-from server.agent_protocol.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation import ObservationFrame
+from dnd.ai.contracts.observation import SubjectiveWorldState
 from ai.subjective.models import AgentState, Alert, BriefEmission, TraceEmission
 
 

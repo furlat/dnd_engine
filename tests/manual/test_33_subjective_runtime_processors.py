@@ -3,7 +3,7 @@
 from typing import Any
 
 from ai.knowledge.deriver import derive_agent_facts
-from server.agent_protocol.observation import KnowledgeState, ObservationObjectFact, ObservationTileFact
+from dnd.ai.contracts.observation import KnowledgeState, ObservationObjectFact, ObservationTileFact
 from ai.subjective.hooks import DerivedVariableUpdate, HookContext, HookPoint, HookRegistry, ProcessorOutput
 from ai.subjective.processors import default_processors
 from ai.subjective.queries import SubjectiveQueries

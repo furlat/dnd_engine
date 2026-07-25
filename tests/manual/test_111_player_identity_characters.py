@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from ai.game_server_profiles import EMBEDDED_AI_WORKER_APPLICATION
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_gateway import create_gateway_app
 from server.hosted_worker import HostedWorkerManager
@@ -108,7 +107,6 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
     authority_cache = RuntimeAuthorityCache()
     workers = HostedWorkerManager(
         tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(

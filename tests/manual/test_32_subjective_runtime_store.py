@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.life_types import LifeState
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationFrame,
@@ -13,8 +13,8 @@ from server.agent_protocol.observation import (
     ObservationSessionState,
     SubjectiveWorldState,
 )
-from server.agent_protocol.control import CommandResult, CommandResultStatus
-from server.agent_protocol.semantics import ActionSemantics, action_semantics_ref
+from dnd.ai.contracts.control import CommandResult, CommandResultStatus
+from dnd.ai.contracts.semantics import ActionSemantics, action_semantics_ref
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 

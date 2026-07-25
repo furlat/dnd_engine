@@ -16,7 +16,11 @@ def _json_ready(value: Any) -> Any:
     """Convert supported typed values into canonical JSON-compatible data."""
 
     if isinstance(value, BaseModel):
-        return _json_ready(value.model_dump(mode="json", by_alias=True, exclude_none=False))
+        # Pydantic's JSON-mode serializer has already traversed the complete
+        # model graph and converted nested models, UUIDs, datetimes, enums, and
+        # paths to JSON primitives. Walking that often-large replay graph a
+        # second time is pure duplicate work.
+        return value.model_dump(mode="json", by_alias=True, exclude_none=False)
     if isinstance(value, datetime):
         if value.tzinfo is None:
             raise ValueError("Canonical JSON timestamps must be timezone-aware")

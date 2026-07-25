@@ -34,7 +34,7 @@ def test_side_order_forces_opening_faction_without_rerolling_initiative() -> Non
     assert monster_opener is not None and monster_opener.faction == "monsters"
 
 
-def test_selfplay_observer_captures_actual_external_controller_manifest() -> None:
+def test_selfplay_observer_captures_evaluator_only_controller_manifest() -> None:
     manifests = []
 
     result = run_external_selfplay(
@@ -54,7 +54,7 @@ def test_selfplay_observer_captures_actual_external_controller_manifest() -> Non
         row.controller_type
         for roster in manifest.entity_rosters.values()
         for row in roster
-    } == {"external_ai"}
+    } == {"subjective_policy_evaluator"}
 
 
 def test_roster_hash_ignores_opening_order_and_arena_placement_state() -> None:

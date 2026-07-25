@@ -9,6 +9,8 @@ import type {
   ExecuteByIndexRequest,
   EquipmentMutationResult,
   EquipRequest,
+  GameCreationActivateRequest,
+  GameCreationActivateResponse,
   GameCreationCatalogResponse,
   GameCreationPreflightRequest,
   GameCreationStartRequest,
@@ -24,7 +26,6 @@ import type {
   SdkModelName,
   SpellCatalogResponse,
   StandaloneGameStatusResponse,
-  StartHumanSimulationResponse,
   ToggleHandlerRequest,
   ToggleHandlerResponse,
   UnequipRequest,
@@ -80,19 +81,6 @@ export class DndEngineClient {
     return this.postModel("CreateSessionResponse", "/session/create", request, signal);
   }
 
-  async startHuman(
-    characterClass: string,
-    signal?: AbortSignal,
-  ): Promise<StartHumanSimulationResponse> {
-    const query = new URLSearchParams({ character_class: characterClass });
-    return this.postModel(
-      "StartHumanSimulationResponse",
-      `/simulation/start-human?${query.toString()}`,
-      null,
-      signal,
-    );
-  }
-
   async getGameCreationCatalog(
     signal?: AbortSignal,
   ): Promise<GameCreationCatalogResponse> {
@@ -118,6 +106,18 @@ export class DndEngineClient {
     return this.postModel(
       "GameCreationStartResponse",
       "/game-creation/start",
+      request,
+      signal,
+    );
+  }
+
+  async activateGameCreation(
+    request: GameCreationActivateRequest,
+    signal?: AbortSignal,
+  ): Promise<GameCreationActivateResponse> {
+    return this.postModel(
+      "GameCreationActivateResponse",
+      "/game-creation/activate",
       request,
       signal,
     );

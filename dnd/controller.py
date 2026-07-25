@@ -4,22 +4,34 @@ Controllers decide whether an encounter turn should run autonomously or wait for
 external input, and may provide actions while the encounter owns turn flow.
 """
 
+from enum import Enum
+from dataclasses import dataclass
 from typing import Any, Optional, Dict, List, ClassVar
 
 __all__ = [
     "TurnContext",
+    "ControllerStepResult",
+    "ControllerExecutionMode",
     "Controller",
     "PassController",
     "HumanController",
     "CodexController",
-    "ExternalAIController",
 ]
 from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import BaseAction
+from dnd.core.events import Event
 from dnd.entity import Entity
+
+
+class ControllerExecutionMode(str, Enum):
+    """Whether the encounter executes decisions or waits for external input."""
+
+    AUTONOMOUS = "autonomous"
+    DEFERRED_AUTONOMOUS = "deferred_autonomous"
+    EXTERNAL = "external"
 
 
 class TurnContext(BaseObject):
@@ -55,6 +67,38 @@ class TurnContext(BaseObject):
         default_factory=dict,
         description="Visible ally UUIDs mapped to positions.",
     )
+    encounter_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Encounter identity when this turn belongs to an encounter.",
+    )
+    encounter_name: Optional[str] = Field(
+        default=None,
+        description="Encounter display name.",
+    )
+    encounter_state: Optional[str] = Field(
+        default=None,
+        description="Current encounter lifecycle state.",
+    )
+    initiative_order: List[UUID] = Field(
+        default_factory=list,
+        description="Objective initiative identities supplied to the controller runtime.",
+    )
+    initiative_totals: Dict[UUID, int] = Field(
+        default_factory=dict,
+        description="Initiative totals keyed by combatant UUID.",
+    )
+    turn_started_source_event_cursor: Optional[int] = Field(
+        default=None,
+        description="Source cursor of the current turn-start boundary.",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ControllerStepResult:
+    """One controller-owned execution step returned to the encounter loop."""
+
+    event: Optional[Event] = None
+    end_turn: bool = False
 
 
 class Controller(BaseObject):
@@ -69,9 +113,23 @@ class Controller(BaseObject):
     """
 
     _controller_registry: ClassVar[Dict[UUID, 'Controller']] = {}
+    _execution_mode: ClassVar[ControllerExecutionMode] = (
+        ControllerExecutionMode.AUTONOMOUS
+    )
+    _external_boundary_status: ClassVar[Optional[str]] = None
 
     name: str = Field(default="Controller", description="Display name of this controller.")
     controller_type: str = Field(default="base", description="Stable controller type identifier.")
+
+    @property
+    def execution_mode(self) -> ControllerExecutionMode:
+        """Return whether the encounter should invoke this controller locally."""
+        return self._execution_mode
+
+    @property
+    def external_boundary_status(self) -> Optional[str]:
+        """Return the stable wait status for an external controller boundary."""
+        return self._external_boundary_status
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -112,6 +170,22 @@ class Controller(BaseObject):
             Action to execute, or ``None`` to end the turn.
         """
         return None
+
+    def execute_next_action(
+        self,
+        entity: Entity,
+        context: TurnContext,
+    ) -> ControllerStepResult:
+        """Execute one decision using the controller's authoritative path.
+
+        Ordinary controllers retain the historical ``BaseAction`` path.
+        Native policy controllers override this method so they can validate
+        and dispatch the exact affordance binding they selected.
+        """
+        action = self.get_next_action(entity, context)
+        if action is None:
+            return ControllerStepResult(end_turn=True)
+        return ControllerStepResult(event=action.apply())
 
     def on_turn_start(self, entity: Entity, context: TurnContext) -> None:
         """Handle turn start notification.
@@ -180,7 +254,6 @@ class PassController(Controller):
 
     def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
         return False
-
 class HumanController(Controller):
     """Controller for human-controlled entities.
 
@@ -192,6 +265,9 @@ class HumanController(Controller):
         name: Display name of this controller.
         controller_type: Stable controller type identifier.
     """
+
+    _execution_mode: ClassVar[ControllerExecutionMode] = ControllerExecutionMode.EXTERNAL
+    _external_boundary_status: ClassVar[str] = "waiting_for_human"
 
     name: str = Field(default="Human Player", description="Display name of this controller.")
     controller_type: str = Field(default="human", description="Stable controller type identifier.")
@@ -218,34 +294,11 @@ class CodexController(Controller):
         controller_type: Stable controller type identifier.
     """
 
+    _execution_mode: ClassVar[ControllerExecutionMode] = ControllerExecutionMode.EXTERNAL
+    _external_boundary_status: ClassVar[str] = "waiting_for_codex"
+
     name: str = Field(default="Codex Controller", description="Display name of this controller.")
     controller_type: str = Field(default="codex", description="Stable controller type identifier.")
-
-    def get_next_action(
-        self,
-        entity: Entity,
-        context: TurnContext
-    ) -> Optional[BaseAction]:
-        return None
-
-    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        return False
-
-
-class ExternalAIController(Controller):
-    """Controller for out-of-process AI sessions.
-
-    Actions come through the session API from a spawned agent process. The
-    encounter should start the turn and then wait for external commands, just
-    like it does for human and Codex-controlled entities.
-
-    Attributes:
-        name: Display name of this controller.
-        controller_type: Stable controller type identifier.
-    """
-
-    name: str = Field(default="External AI", description="Display name of this controller.")
-    controller_type: str = Field(default="external_ai", description="Stable controller type identifier.")
 
     def get_next_action(
         self,

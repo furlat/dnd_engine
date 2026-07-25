@@ -86,7 +86,7 @@ def test_roster_identity_ignores_names_runtime_ownership_and_member_order() -> N
     renamed = first.model_copy(update={
         "stable_name": "Entirely Different",
         "faction": "monsters",
-        "controller_type": "external_ai",
+        "controller_type": "registered_ai",
         "position": (12, 12),
     })
 
