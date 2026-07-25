@@ -7,7 +7,7 @@ from typing import Mapping, Sequence
 
 from ai.planning.composition import compose_option
 from ai.planning.contracts import LogicalStep, RegressionCandidate
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ComparisonOperator,
     EffectOperation,
     FactExpression,

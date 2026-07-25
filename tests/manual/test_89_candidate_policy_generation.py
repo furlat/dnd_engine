@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from ai.knowledge import derive_agent_facts
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationConditionFact,
     ObservationEncounterState,
     ObservationEntityFact,
 )
 from ai.policy.contracts import (
-    ExecuteIntent,
     PolicyContext,
     PolicyControlMemoryView,
     PolicyGoal,
     RememberedContactSearchState,
 )
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.default import evaluate_default_policy
 from ai.policy.memory import RoutineProgress, SemanticActionGoal
 from ai.policy.generations.current_candidate import (
@@ -34,7 +34,7 @@ from ai.policy.generations.registry import (
     get_policy_implementation,
 )
 from ai.policy.routines import revalidate_active_routine
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -43,7 +43,7 @@ from server.agent_protocol.control import (
     DamageRollProfile,
     OutcomeResolution,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,

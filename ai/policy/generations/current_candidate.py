@@ -25,13 +25,13 @@ from ai.policy.candidates import (
 )
 from ai.policy.contracts import (
     CapabilityTargetProjection,
-    ExecuteIntent,
     PolicyContext,
     PolicyEvidence,
     PolicyGoal,
     PolicyProposal,
     SpacingEvidence,
 )
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.economy import AffordabilityWorkspace
 from ai.policy.generations.current_scoring import (
     CURRENT_VALUE_PROFILE,
@@ -52,13 +52,13 @@ from ai.policy.routines import (
     plan_pursue_capability,
     plan_registered_routines as plan_v31_registered_routines,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionTarget,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     ConcentrationOperation,

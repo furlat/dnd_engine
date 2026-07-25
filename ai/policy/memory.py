@@ -12,7 +12,7 @@ from ai.policy.contracts import (
     PolicyExecutionConstraints,
     RememberedContactSearchState,
 )
-from server.agent_protocol.semantics import ActionTag, CapabilitySelector, TargetAllocation
+from dnd.ai.contracts.semantics import ActionTag, CapabilitySelector, TargetAllocation
 
 
 class SemanticActionGoal(BaseModel):

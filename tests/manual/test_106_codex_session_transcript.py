@@ -16,14 +16,14 @@ from ai.codex_tools.representation.profiles import (
     BALANCED_V2_PROFILE_ID,
     build_builtin_representation_registry,
 )
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationFrame,
     ObservationFrameType,
     ObservationSessionState,
     ObservationSnapshot,
     ObservationSourceKind,
 )
-from server.agent_protocol.control import CommandResult, CommandResultStatus
+from dnd.ai.contracts.control import CommandResult, CommandResultStatus
 from server.agent_protocol.telemetry import AgentEvent
 
 

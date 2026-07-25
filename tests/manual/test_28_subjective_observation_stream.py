@@ -8,11 +8,11 @@ from fastapi.testclient import TestClient
 
 import server.agent_runtime.observation_projector as observation_projector
 from ai.knowledge import derive_agent_facts
-from server.agent_protocol.observation_replay import (
+from dnd.ai.contracts.observation_replay import (
     apply_observation_frame,
     materialize_snapshot,
 )
-from server.agent_protocol.observation import ObservationFrame
+from dnd.ai.contracts.observation import ObservationFrame
 from dnd.actions_functional import execute_use_action
 from dnd.conditions import Invisible
 from dnd.controller import Controller, HumanController, PassController

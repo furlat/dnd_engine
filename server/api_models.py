@@ -3,9 +3,13 @@
 from pydantic import (
     BaseModel,
     Field,
+    field_validator,
+    model_validator,
 )
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
+from urllib.parse import urlsplit
 
+from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from dnd.scenarios.evaluation.models import (
@@ -712,6 +716,64 @@ class JoinGameResponse(BaseModel):
 
 GameCreationControllerKind = Literal["human", "ai", "codex"]
 GameCreationOpeningSide = Literal["initiative", "side_a", "side_b"]
+AIExecutionKind = Literal["in_process", "registered_provider"]
+
+
+class GameCreationAIPolicyOption(BaseModel):
+    """One globally unique policy selectable through ``controller='ai'``."""
+
+    descriptor: PolicyDescriptor = Field(
+        description="Stable policy identity and player-facing description.",
+    )
+    execution: AIExecutionKind = Field(
+        description="Whether policy logic runs in process or at a registered provider.",
+    )
+    provider_id: Optional[str] = Field(
+        default=None,
+        description="Owning provider for registered policies; absent for in-process policies.",
+    )
+    capacity: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Provider assignment capacity captured at catalog time.",
+    )
+    active_assignments: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Provider assignments known active at catalog time.",
+    )
+    available_capacity: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Advisory capacity remaining at catalog time.",
+    )
+
+    @model_validator(mode="after")
+    def validate_execution_metadata(self) -> "GameCreationAIPolicyOption":
+        provider_fields = (
+            self.provider_id,
+            self.capacity,
+            self.active_assignments,
+            self.available_capacity,
+        )
+        if self.execution == "in_process":
+            if any(value is not None for value in provider_fields):
+                raise ValueError(
+                    "in-process policies cannot carry provider metadata"
+                )
+            return self
+        if any(value is None for value in provider_fields):
+            raise ValueError(
+                "registered-provider policies require complete provider metadata"
+            )
+        assert self.capacity is not None
+        assert self.active_assignments is not None
+        assert self.available_capacity is not None
+        if self.active_assignments > self.capacity:
+            raise ValueError("active assignments exceed provider capacity")
+        if self.available_capacity != self.capacity - self.active_assignments:
+            raise ValueError("available provider capacity is inconsistent")
+        return self
 
 
 class GameCreationPreset(BaseModel):
@@ -739,6 +801,12 @@ class GameCreationCatalogResponse(BaseModel):
 
     schema_version: int = Field(default=1, description="Game-creation contract schema version.")
     controllers: List[GameCreationControllerKind] = Field(description="Supported side controller kinds.")
+    ai_policies: List[GameCreationAIPolicyOption] = Field(
+        description=(
+            "All globally unique AI policies currently selectable by stable id, "
+            "including in-process and registered-provider implementations."
+        ),
+    )
     opening_sides: List[GameCreationOpeningSide] = Field(description="Supported initiative-opening policies.")
     hero_configurations: List[SideConfigurationSpec] = Field(description="Canonical hero-side configurations.")
     monster_configurations: List[SideConfigurationSpec] = Field(description="Canonical monster-party configurations.")
@@ -780,6 +848,15 @@ class GameCreationSideRequest(BaseModel):
 
     controller: GameCreationControllerKind = Field(description="Controller kind assigned to every entity on the side.")
     name: str = Field(min_length=1, max_length=80, description="Participant display name.")
+    policy_id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=160,
+        description=(
+            "Globally unique policy used by an AI side or retained behind a "
+            "Codex claim. Omit for the bundled in-process basic policy."
+        ),
+    )
 
 
 class GameCreationStartRequest(BaseModel):
@@ -821,9 +898,20 @@ class GameCreationSideResult(BaseModel):
     entity_assignments: List[GameCreationEntityAssignment] = Field(
         description="Stable identity rows assigned to the side; gameplay facts arrive through replication.",
     )
-    fallback_ai_session_id: Optional[str] = Field(
+    policy_id: Optional[str] = Field(
         default=None,
-        description="External-AI session controlling the side or retained behind a Codex claim.",
+        description=(
+            "Resolved policy assigned to this side, including the policy retained "
+            "behind a Codex claim. Human sides have no policy."
+        ),
+    )
+    policy_execution: Optional[AIExecutionKind] = Field(
+        default=None,
+        description="Resolved policy execution boundary; absent for human sides.",
+    )
+    provider_id: Optional[str] = Field(
+        default=None,
+        description="Registered provider owning the resolved policy, when external.",
     )
     codex_session_id: Optional[str] = Field(default=None, description="Configured Codex session UUID.")
     takeover_claim_id: Optional[str] = Field(default=None, description="Configured Codex takeover claim UUID.")
@@ -831,11 +919,11 @@ class GameCreationSideResult(BaseModel):
 
 
 class GameCreationStartResponse(BaseModel):
-    """Resolved game, sides, sessions, and first external turn boundary.
+    """Resolved prepared game and side assignments.
 
-    State transitions and combat-log entries are consumed through the
-    canonical replication or objective-diagnostics journal, never embedded in
-    this setup acknowledgement.
+    Creation never starts an encounter. A joined client first opens its
+    canonical replication bootstrap, then explicitly activates this prepared
+    game with the exact bootstrap identity.
     """
 
     schema_version: int = Field(default=1, description="Game-creation contract schema version.")
@@ -848,13 +936,111 @@ class GameCreationStartResponse(BaseModel):
     compatibility: CompatibilityReport = Field(description="Compatibility report used to admit the scenario.")
     side_a: GameCreationSideResult = Field(description="Resolved Side A assignment.")
     side_b: GameCreationSideResult = Field(description="Resolved Side B assignment.")
-    status: str = Field(description="Current encounter advancement status.")
-    entity_uuid: Optional[str] = Field(default=None, description="Entity waiting at the external turn boundary.")
-    entity_name: Optional[str] = Field(default=None, description="Entity name waiting at the external turn boundary.")
-    round: Optional[int] = Field(default=None, description="Current encounter round.")
-    turn_index: Optional[int] = Field(default=None, description="Current initiative index.")
-    event_cursor_after: Optional[int] = Field(default=None, description="Event cursor after startup advancement.")
-    combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after startup advancement.")
+    status: Literal["prepared"] = Field(
+        default="prepared",
+        description="Prepared lifecycle boundary; no encounter event has run.",
+    )
+
+
+class GameCreationActivateRequest(BaseModel):
+    """Release one prepared game using an exact joined replication identity."""
+
+    session_id: str = Field(min_length=1, description="Joined runtime session authorizing activation.")
+    expected_source_stream_id: str = Field(
+        min_length=1,
+        description="Encounter stream identity returned by replication bootstrap.",
+    )
+    expected_generation_id: str = Field(
+        min_length=1,
+        description="Engine generation identity returned by replication bootstrap.",
+    )
+    expected_perspective_epoch_id: str = Field(
+        min_length=1,
+        description="Subjective authority epoch returned by replication bootstrap.",
+    )
+
+
+class GameCreationActivateResponse(BaseModel):
+    """Idempotent acknowledgement for the prepared-to-active transition."""
+
+    status: Literal["activated", "already_active"] = Field(
+        description="Whether this request crossed the activation boundary.",
+    )
+    game_id: str = Field(description="Activated engine game identity.")
+    encounter_uuid: str = Field(description="Activated encounter identity.")
+
+
+class AIProviderRegistrationRequest(BaseModel):
+    """Deployment-admin request to authenticate one external policy provider."""
+
+    provider_id: str = Field(
+        min_length=1,
+        pattern=r"^[a-z][a-z0-9_.-]*$",
+        description="Expected provider identity; the handshake remains authority.",
+    )
+    base_url: str = Field(
+        min_length=1,
+        description="Root HTTP(S) endpoint exposing the provider protocol.",
+    )
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "base_url must be a root HTTP(S) URL without credentials, "
+                "query, fragment, or path"
+            )
+        return value.rstrip("/")
+
+
+class AIProviderCatalogEntry(BaseModel):
+    """Authenticated provider identity and current assignment capacity."""
+
+    provider_id: str = Field(description="Handshake-authenticated provider identity.")
+    base_url: str = Field(description="Registered provider root URL.")
+    protocol_version: int = Field(ge=1, description="External AI protocol version.")
+    protocol_hash: str = Field(
+        min_length=64,
+        max_length=64,
+        description="Complete external AI wire-contract hash.",
+    )
+    policies: List[PolicyDescriptor] = Field(
+        description="Handshake-advertised policies owned by this provider.",
+    )
+    capacity: int = Field(ge=1, description="Provider assignment capacity.")
+    active_assignments: int = Field(
+        ge=0,
+        description="Assignments currently owned by this server connection.",
+    )
+    available_capacity: int = Field(
+        ge=0,
+        description="Current remaining assignment capacity.",
+    )
+
+
+class AIProviderCatalogResponse(BaseModel):
+    """Current registered-provider catalog."""
+
+    providers: List[AIProviderCatalogEntry] = Field(
+        description="Providers ordered by stable provider identity.",
+    )
+
+
+class AIProviderDeleteResponse(BaseModel):
+    """Acknowledgement after a provider and its idle client are removed."""
+
+    status: Literal["unregistered"] = "unregistered"
+    provider_id: str = Field(description="Removed provider identity.")
 
 
 class StandaloneGameSessionSummary(BaseModel):
@@ -1150,22 +1336,6 @@ class AdvanceEncounterResult(BaseModel):
     turn_index: Optional[int] = Field(default=None, description="Current turn index after advancing.")
     event_cursor_after: Optional[int] = Field(default=None, description="Event-history cursor after advancement.")
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after advancement.")
-
-
-class StartHumanSimulationResponse(AdvanceEncounterResult):
-    """Result of creating the standard human-versus-AI simulation.
-
-    Attributes:
-        ai_session_id: Session controlling the AI side.
-        encounter_uuid: Newly created encounter UUID.
-        hero_uuid: Human-controllable hero UUID, when present.
-        message: Human-readable setup summary.
-    """
-
-    ai_session_id: str = Field(description="Session controlling the AI side.")
-    encounter_uuid: str = Field(description="Newly created encounter UUID.")
-    hero_uuid: Optional[str] = Field(default=None, description="Human-controllable hero UUID, when present.")
-    message: str = Field(description="Human-readable setup summary.")
 
 
 class TakeoverRequest(BaseModel):

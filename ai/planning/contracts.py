@@ -6,9 +6,9 @@ from enum import Enum
 from typing import Dict, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
-from server.agent_protocol.immutable import FrozenDict
+from dnd.ai.contracts.immutable import FrozenDict
 
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ConditionalEffect,
     FactExpression,

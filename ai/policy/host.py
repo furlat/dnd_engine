@@ -14,20 +14,16 @@ from ai.knowledge.deriver import derive_agent_facts
 from ai.knowledge.topology import grid_distance_feet
 from ai.policy.candidates import PolicyCandidateSet, build_policy_candidate_set
 from ai.knowledge.models import AgentFacts
-from server.agent_protocol.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation import SubjectiveWorldState
 from ai.policy.contracts import (
-    EndTurnIntent,
-    ExecuteIntent,
     NodeStatus,
     PolicyContext,
     PolicyDecision,
     PolicyDecisionCorrelation,
     PolicyDecisionTelemetry,
     PolicyExecutionConstraints,
-    PolicyIntent,
     PolicyProposal,
     PolicyTraceStep,
-    WaitIntent,
 )
 from ai.policy.default import evaluate_default_policy
 from ai.policy.definitions import PolicyImplementation
@@ -61,13 +57,18 @@ from ai.policy.routines import (
     routine_trace_name,
 )
 from ai.policy.source import POLICY_NAME, POLICY_VERSION
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,
     END_TURN_ROW_ID,
 )
-from server.agent_protocol.semantics import ActionTag, TargetAllocation
+from dnd.ai.contracts.decision import (
+    EndTurnIntent,
+    ExecuteIntent,
+    PolicyIntent,
+)
+from dnd.ai.contracts.semantics import ActionTag, TargetAllocation
 
 
 EpochKey = tuple[str, str, str]
@@ -605,8 +606,6 @@ class PolicyHost:
         if command_id in self._pending_by_command_id or command_id in self._recorded_by_command_id:
             raise DuplicateCommandIdError(f"Command id {command_id} has already been used")
         intent = binding.decision.selected.intent
-        if isinstance(intent, WaitIntent):
-            raise PolicyDecisionUnavailableError("A wait intent cannot reserve an engine command")
         prepared = PreparedPolicySubmission(
             command_id=command_id,
             policy_id=self.policy_id,

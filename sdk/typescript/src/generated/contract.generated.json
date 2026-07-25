@@ -145,7 +145,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "8e3cb196029d86a6fd2e96e6e6b77d97eec656940ad19584b787dec6889f82e4",
+  "contract_hash": "f49fd34571d998f9350f0bc3c914af99b54c401f6eac9ff6c5ddbb834bf1c8b6",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -3738,6 +3738,31 @@
       "python": "dnd.actions.SpellEvent",
       "root_model": false,
       "typescript": "SpellEvent"
+    },
+    "dnd.ai.policy.PolicyDescriptor": {
+      "fields": {
+        "description": {
+          "kind": "string"
+        },
+        "deterministic": {
+          "kind": "boolean"
+        },
+        "display_name": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "policy_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "version": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "dnd.ai.policy.PolicyDescriptor",
+      "root_model": false,
+      "typescript": "PolicyDescriptor"
     },
     "dnd.analytics.models.AttackStatisticsV1": {
       "fields": {
@@ -23053,6 +23078,95 @@
       "root_model": false,
       "typescript": "SubjectiveRenderParityDiagnosticsResponse"
     },
+    "server.api_models.AIProviderCatalogEntry": {
+      "fields": {
+        "active_assignments": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "available_capacity": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "base_url": {
+          "kind": "string"
+        },
+        "capacity": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "policies": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.ai.policy.PolicyDescriptor"
+          },
+          "kind": "array"
+        },
+        "protocol_hash": {
+          "kind": "string",
+          "max_length": 64,
+          "min_length": 64
+        },
+        "protocol_version": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "provider_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.api_models.AIProviderCatalogEntry",
+      "root_model": false,
+      "typescript": "AIProviderCatalogEntry"
+    },
+    "server.api_models.AIProviderCatalogResponse": {
+      "fields": {
+        "providers": {
+          "items": {
+            "kind": "model",
+            "ref": "server.api_models.AIProviderCatalogEntry"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.api_models.AIProviderCatalogResponse",
+      "root_model": false,
+      "typescript": "AIProviderCatalogResponse"
+    },
+    "server.api_models.AIProviderDeleteResponse": {
+      "fields": {
+        "provider_id": {
+          "kind": "string"
+        },
+        "status": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "unregistered"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.api_models.AIProviderDeleteResponse",
+      "root_model": false,
+      "typescript": "AIProviderDeleteResponse"
+    },
+    "server.api_models.AIProviderRegistrationRequest": {
+      "fields": {
+        "base_url": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "provider_id": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.api_models.AIProviderRegistrationRequest",
+      "root_model": false,
+      "typescript": "AIProviderRegistrationRequest"
+    },
     "server.api_models.APIAvailableActions": {
       "fields": {
         "actions_remaining": {
@@ -23760,8 +23874,135 @@
       "root_model": false,
       "typescript": "ExecuteByIndexRequest"
     },
+    "server.api_models.GameCreationAIPolicyOption": {
+      "fields": {
+        "active_assignments": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "available_capacity": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "capacity": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "descriptor": {
+          "kind": "model",
+          "ref": "dnd.ai.policy.PolicyDescriptor"
+        },
+        "execution": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "in_process"
+            },
+            {
+              "kind": "literal",
+              "value": "registered_provider"
+            }
+          ],
+          "kind": "union"
+        },
+        "provider_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.api_models.GameCreationAIPolicyOption",
+      "root_model": false,
+      "typescript": "GameCreationAIPolicyOption"
+    },
+    "server.api_models.GameCreationActivateRequest": {
+      "fields": {
+        "expected_generation_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "expected_perspective_epoch_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "expected_source_stream_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "session_id": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.api_models.GameCreationActivateRequest",
+      "root_model": false,
+      "typescript": "GameCreationActivateRequest"
+    },
+    "server.api_models.GameCreationActivateResponse": {
+      "fields": {
+        "encounter_uuid": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "status": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "activated"
+            },
+            {
+              "kind": "literal",
+              "value": "already_active"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.api_models.GameCreationActivateResponse",
+      "root_model": false,
+      "typescript": "GameCreationActivateResponse"
+    },
     "server.api_models.GameCreationCatalogResponse": {
       "fields": {
+        "ai_policies": {
+          "items": {
+            "kind": "model",
+            "ref": "server.api_models.GameCreationAIPolicyOption"
+          },
+          "kind": "array"
+        },
         "battlefields": {
           "items": {
             "kind": "model",
@@ -23993,6 +24234,19 @@
           "kind": "string",
           "max_length": 80,
           "min_length": 1
+        },
+        "policy_id": {
+          "items": [
+            {
+              "kind": "string",
+              "max_length": 160,
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         }
       },
       "python": "server.api_models.GameCreationSideRequest",
@@ -24036,7 +24290,31 @@
           },
           "kind": "array"
         },
-        "fallback_ai_session_id": {
+        "participant_name": {
+          "kind": "string"
+        },
+        "policy_execution": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "literal",
+                  "value": "in_process"
+                },
+                {
+                  "kind": "literal",
+                  "value": "registered_provider"
+                }
+              ],
+              "kind": "union"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "policy_id": {
           "items": [
             {
               "kind": "string"
@@ -24047,8 +24325,16 @@
           ],
           "kind": "union"
         },
-        "participant_name": {
-          "kind": "string"
+        "provider_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "side_id": {
           "items": [
@@ -24145,17 +24431,6 @@
     },
     "server.api_models.GameCreationStartResponse": {
       "fields": {
-        "combat_log_cursor_after": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
         "compatibility": {
           "kind": "model",
           "ref": "dnd.scenarios.evaluation.compatibility.CompatibilityReport"
@@ -24165,39 +24440,6 @@
         },
         "encounter_uuid": {
           "kind": "string"
-        },
-        "entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "event_cursor_after": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
         },
         "game_id": {
           "kind": "string"
@@ -24230,17 +24472,6 @@
           ],
           "kind": "union"
         },
-        "round": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
         "scenario_kind": {
           "items": [
             {
@@ -24266,15 +24497,10 @@
           "ref": "server.api_models.GameCreationSideResult"
         },
         "status": {
-          "kind": "string"
-        },
-        "turn_index": {
           "items": [
             {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
+              "kind": "literal",
+              "value": "prepared"
             }
           ],
           "kind": "union"
@@ -25768,102 +25994,6 @@
       "python": "server.api_models.StandaloneGameStatusResponse",
       "root_model": false,
       "typescript": "StandaloneGameStatusResponse"
-    },
-    "server.api_models.StartHumanSimulationResponse": {
-      "fields": {
-        "ai_session_id": {
-          "kind": "string"
-        },
-        "combat_log_cursor_after": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "encounter_uuid": {
-          "kind": "string"
-        },
-        "entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "event_cursor_after": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "hero_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "message": {
-          "kind": "string"
-        },
-        "round": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "status": {
-          "kind": "string"
-        },
-        "turn_index": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        }
-      },
-      "python": "server.api_models.StartHumanSimulationResponse",
-      "root_model": false,
-      "typescript": "StartHumanSimulationResponse"
     },
     "server.api_models.TakeoverClaimResponse": {
       "fields": {
@@ -32894,6 +33024,10 @@
   "player_replication_contract_hash": "490eb9e780aad664e4de9fda50c09402056d21900cff5ac6de813588088ea864",
   "player_replication_contract_version": 1,
   "roots": [
+    "server.api_models.AIProviderCatalogEntry",
+    "server.api_models.AIProviderCatalogResponse",
+    "server.api_models.AIProviderDeleteResponse",
+    "server.api_models.AIProviderRegistrationRequest",
     "server.api_models.APIAvailableActions",
     "server.api_models.APIEntityHandlersResponse",
     "server.api_models.APIEquippableDisplacement",
@@ -32913,6 +33047,9 @@
     "server.api_models.EquipmentMutationResult",
     "server.api_models.EventContractSummary",
     "server.api_models.ExecuteByIndexRequest",
+    "server.api_models.GameCreationAIPolicyOption",
+    "server.api_models.GameCreationActivateRequest",
+    "server.api_models.GameCreationActivateResponse",
     "server.api_models.GameCreationCatalogResponse",
     "server.api_models.GameCreationComposedScenario",
     "server.api_models.GameCreationEntityAssignment",
@@ -32956,7 +33093,6 @@
     "server.api_models.SpellCatalogVfx",
     "server.api_models.StandaloneGameSessionSummary",
     "server.api_models.StandaloneGameStatusResponse",
-    "server.api_models.StartHumanSimulationResponse",
     "server.api_models.TakeoverClaimResponse",
     "server.api_models.TakeoverEntityRow",
     "server.api_models.TakeoverHeartbeatResponse",

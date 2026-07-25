@@ -9,7 +9,7 @@ from ai.policy import (
     PolicyResultDisposition,
 )
 from ai.knowledge import derive_agent_facts
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationObjectFact,
@@ -17,7 +17,8 @@ from server.agent_protocol.observation import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from ai.policy import EndTurnIntent, ExecuteIntent, PolicyContext, PolicyMemoryStore, RoutineProgress
+from ai.policy import PolicyContext, PolicyMemoryStore, RoutineProgress
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from ai.policy.economy import project_capability_transformation
 from ai.policy.routines import (
     APPROACH_OPEN_REASSESS,
@@ -33,7 +34,7 @@ from ai.policy.routines import (
     revalidate_active_routine,
     revalidate_approach_open_reassess,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     ActionAffordance,
     ActionBucket,
@@ -51,7 +52,7 @@ from server.agent_protocol.control import (
     OutcomeResolution,
     ResourcePool,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     CapabilityAmountFormula,
@@ -64,7 +65,7 @@ from server.agent_protocol.semantics import (
     TargetingSemantics,
     action_semantics_ref,
 )
-from server.agent_runtime.action_semantics import action_semantics_for_available_action
+from dnd.ai.runtime.action_semantics import action_semantics_for_available_action
 from dnd.core.base_actions import ActionCategory, AvailableActionInfo, BaseCost, TargetType
 
 

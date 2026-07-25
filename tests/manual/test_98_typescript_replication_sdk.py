@@ -12,7 +12,8 @@ from server.api_models import (
     APIEntityHandlersResponse,
     APIEquippableItems,
     EquipmentMutationResult,
-    StartHumanSimulationResponse,
+    GameCreationActivateResponse,
+    GameCreationStartResponse,
     ToggleHandlerResponse,
 )
 from server.world_contracts import APIEntityVisibility
@@ -236,7 +237,8 @@ def test_existing_combat_log_models_are_generated_instead_of_redeclared() -> Non
 def test_neuroclient_routes_publish_concrete_backend_response_models() -> None:
     """Core startup, handler, and equipment routes have one Pydantic contract."""
     expected = {
-        ("/simulation/start-human", "POST"): StartHumanSimulationResponse,
+        ("/game-creation/start", "POST"): GameCreationStartResponse,
+        ("/game-creation/activate", "POST"): GameCreationActivateResponse,
         ("/entity/{entity_uuid}/handlers", "GET"): APIEntityHandlersResponse,
         ("/entity/{entity_uuid}/handlers/{handler_name}/toggle", "POST"): ToggleHandlerResponse,
         ("/entity/{entity_uuid}/equippable-items", "GET"): APIEquippableItems,
@@ -252,5 +254,6 @@ def test_neuroclient_routes_publish_concrete_backend_response_models() -> None:
 
     for key, response_model in expected.items():
         assert routes[key] is response_model
+    assert ("/simulation/start-human", "POST") not in routes
     assert ("/entity/{entity_uuid}/equipment", "GET") not in routes
     assert ("/entity/{entity_uuid}/equipment/item/{item_uuid}", "GET") not in routes

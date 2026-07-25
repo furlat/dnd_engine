@@ -3,12 +3,9 @@
 import asyncio
 import os
 import tempfile
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
 
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
@@ -19,52 +16,7 @@ from dnd.core.gridmap import GridMap
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from server import event_server
-from server.agent_runtime.service import AgentLaunchRequest
-from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.event_server import app, sim
-
-
-class _MapAuthoringTestLauncher:
-    """Registered managed-agent capability for combat-to-editor handoff checks."""
-
-    service_id = "tests.map-authoring-agent"
-
-    def preflight(self, _required_agents: int) -> None:
-        return None
-
-    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
-        return AgentProcessSpec(
-            argv=("unused-map-authoring-agent", request.session_id),
-            cwd=Path(__file__).resolve().parents[2],
-        )
-
-
-@pytest.fixture(autouse=True)
-def stub_map_authoring_agents(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[None]:
-    """Expose a managed service without spawning subprocesses in editor checks."""
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
-    event_server.agent_service_manager.register_service(SubprocessAgentService(_MapAuthoringTestLauncher()))
-
-    async def accept_batch(
-        _requests: tuple[AgentLaunchRequest, ...],
-    ) -> tuple[object, ...]:
-        return ()
-
-    monkeypatch.setattr(
-        event_server.agent_service_manager,
-        "start_agents",
-        accept_batch,
-    )
-    yield
-    event_server.agent_service_manager.stop_all_blocking()
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
 
 
 class ApiClient:
@@ -410,7 +362,6 @@ def test_object_deletion_updates_the_editor_snapshot(capsys) -> None:
 
 def test_save_load_roundtrip_restores_entity_free_map_state(
     capsys,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Saved editor maps round-trip tiles and reloadable object placements."""
     client = create_authoring_client()
@@ -428,16 +379,6 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
             )
             document_response = client.get("/mapeditor/saves/tutorial_room")
 
-            stop_calls: list[str] = []
-
-            async def capture_stop_all() -> None:
-                stop_calls.append("stop")
-
-            monkeypatch.setattr(
-                event_server.agent_service_manager,
-                "stop_all",
-                capture_stop_all,
-            )
             client.post(
                 "/mapeditor/maps",
                 json={"source": "scratch", "width": 1, "height": 1, "origin": [0, 0]},
@@ -457,7 +398,6 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
     listed = listed_response.json()
 
     assert save_response.status_code == 200
-    assert stop_calls == ["stop", "stop"]
     assert save_payload["id"] == "tutorial_room"
     assert save_payload["tile_count"] == 12
     assert save_payload["floor_object_count"] == 2
@@ -538,7 +478,22 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
     assert Entity.get_all_entities() == []
     assert sim.encounter is None
 
-    start_response = client.post("/simulation/start-human", params={"character_class": "fighter"})
+    start_response = client.post(
+        "/game-creation/start",
+        json={
+            "scenario": {
+                "kind": "preset",
+                "arena_id": "standard_skeleton_doors",
+            },
+            "side_a": {"controller": "human", "name": "Editor Hero"},
+            "side_b": {
+                "controller": "ai",
+                "name": "Basic AI",
+                "policy_id": "builtin.basic",
+            },
+            "opening_side": "side_a",
+        },
+    )
     assert start_response.status_code == 200
     assert sim.encounter is not None
     assert Entity.get_all_entities()

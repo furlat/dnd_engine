@@ -14,6 +14,7 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.items.environment import (
     CloseDirectionalDoorAction,
@@ -24,11 +25,11 @@ from dnd.maps.arena_layout import (
     DOOR_POSITION,
     WALL_DIRECTIONS,
     WALL_POSITIONS,
+    build_standard_arena_environment,
 )
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.items.weapons import create_shortbow
 from dnd.reactions import opportunity_attack_processor
-from server.event_server import setup_arena_combat
 from server.mapeditor_support import (
     build_forgotten_crypt_arena_map,
     reset_editor_world,
@@ -72,10 +73,7 @@ def _assert_standard_directional_barrier() -> None:
 
 def test_live_and_editor_standard_builders_share_directional_barrier_contract() -> None:
     """Both public builders instantiate typed directional structures, not scalar walls."""
-    setup_arena_combat(
-        player_position=(6, 7),
-        character_class="fighter",
-    )
+    build_standard_arena_environment(reset_engine_runtime())
     _assert_standard_directional_barrier()
 
     reset_editor_world()

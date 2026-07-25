@@ -15,9 +15,9 @@ from uuid import uuid4
 import httpx
 
 from ai.ordered_delivery import OrderedDeliveryWorker
-from server.agent_protocol.observation import ObservationFrame, ObservationFrameType, ObservationSnapshot
+from dnd.ai.contracts.observation import ObservationFrame, ObservationFrameType, ObservationSnapshot
 from ai.policy.contracts import PolicyDecisionTelemetry
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,
@@ -34,10 +34,6 @@ from ai.subjective.runtime_gc import (
     automatic_gc_suspended,
 )
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
-from server.agent_protocol.service import (
-    AgentServiceReadyRequest,
-    MANAGED_AGENT_READY_ROUTE_TEMPLATE,
-)
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONTROL_REQUEST_TIMEOUT_SECONDS = 10.0
@@ -608,24 +604,6 @@ class SubjectiveRuntime:
             raise RuntimeError(
                 "Subjective observation stream signaled readiness without a sync"
             )
-
-    def acknowledge_managed_service_ready(self, readiness_token: str) -> None:
-        """Prove snapshot and stream readiness to the owning server process."""
-        payload = AgentServiceReadyRequest(
-            readiness_token=readiness_token,
-        )
-        try:
-            response = self.client.post(
-                MANAGED_AGENT_READY_ROUTE_TEMPLATE.format(
-                    session_id=self.session_id,
-                ),
-                json=payload.model_dump(mode="json"),
-            )
-            response.raise_for_status()
-        except Exception:
-            with self._state_changed:
-                self._raise_if_closed()
-            raise
 
     def wait_for_epoch(self) -> DecisionEpoch:
         """Wait on the single stream reducer until a controlled epoch exists."""

@@ -83,6 +83,7 @@ export interface SubjectiveReplicaReset {
 
 export interface FollowSubjectiveReplicationOptions {
   readonly sessionId: string;
+  readonly initialBootstrap?: SubjectiveReplicationBootstrap;
   readonly signal?: AbortSignal;
   readonly onUpdate?: (update: SubjectiveReplicationUpdate) => void | Promise<void>;
   readonly onReplicaReset?: (reset: SubjectiveReplicaReset) => void | Promise<void>;
@@ -237,6 +238,16 @@ export class SubjectiveReplicationClient {
     }
     let delay = initialDelay;
     let state = journal.state();
+    let initialBootstrap = options.initialBootstrap;
+    if (initialBootstrap !== undefined) {
+      assertSubjectiveReplicationBootstrap(initialBootstrap);
+      if (state.health === "ready") {
+        throw new ContractValidationError(
+          "$subjective.follow.initial_bootstrap",
+          "an initial bootstrap cannot replace an already-ready journal",
+        );
+      }
+    }
     let pendingResetReason: "initial_bootstrap" | SubjectiveResyncReason | null =
       state.health === "ready"
         ? null
@@ -247,7 +258,12 @@ export class SubjectiveReplicationClient {
       if (state.health !== "ready") {
         let seed: SubjectiveReplicationBootstrap;
         try {
-          seed = await this.bootstrap(options.sessionId, options.signal);
+          if (initialBootstrap !== undefined) {
+            seed = initialBootstrap;
+            initialBootstrap = undefined;
+          } else {
+            seed = await this.bootstrap(options.sessionId, options.signal);
+          }
         } catch (error) {
           if (options.signal?.aborted) return;
           if (!isRetryable(error) && resyncReason(error) === null) throw error;

@@ -3,18 +3,18 @@
 from collections import Counter
 from uuid import uuid4
 
-import server.agent_runtime.epochs as subjective_epochs_module
+import dnd.ai.runtime.decision_epoch as subjective_epochs_module
 from server.agent_runtime.observation_projector import _combat_log_cursor
-from server.agent_protocol.observation import ObservationSnapshot
-from server.agent_runtime.epochs import (
+from dnd.ai.contracts.observation import ObservationSnapshot
+from dnd.ai.runtime.decision_epoch import (
     _action_cost_profile_from_cost_rows,
     _build_action_economy_state_from_actor,
     _build_action_capabilities,
     _build_affordance_set_and_execution_authority_from_actions,
     _build_affordance_set_from_actions,
 )
-from server.agent_protocol.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
-from server.agent_protocol.control import AffordanceSet
+from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
+from dnd.ai.contracts.control import AffordanceSet
 from server.action_serialization import serialize_available_actions
 from dnd.actions_functional import execute_by_index, register_spell
 from dnd.core.base_object import BaseObject

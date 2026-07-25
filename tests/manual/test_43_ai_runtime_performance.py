@@ -22,7 +22,7 @@ from ai.knowledge.topology import grid_distance_feet, known_line_of_sight
 from ai.codex_tools.hot_runtime import HotCodexSession
 from ai.external_selfplay import SelfPlayStoreTiming, _catch_up_store, _store_for_active_session, run_external_selfplay
 from server.agent_runtime import observation_projector
-from server.agent_protocol.observation import AdjacentOffset, KnowledgeState, ObservationFrame, ObservationSnapshot
+from dnd.ai.contracts.observation import AdjacentOffset, KnowledgeState, ObservationFrame, ObservationSnapshot
 from ai.policy import PolicyHost
 from ai.policy import candidates as policy_candidates
 from ai.policy.economy import AffordabilityWorkspace
@@ -32,7 +32,7 @@ from ai.policy.generations.registry import (
 )
 from ai.policy.memory import RoutineProgress, SemanticActionGoal
 from ai.policy.routines import RoutinePlanningInstrumentation, plan_enable_then_act
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionOutcomeProfile,
     ActionResolutionStatus,
@@ -40,7 +40,7 @@ from server.agent_protocol.control import (
     CommandResult,
     CommandResultStatus,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     TruthValue,
@@ -51,8 +51,8 @@ from server.agent_protocol.observation_legacy import (
     migrate_legacy_snapshot_semantics,
 )
 from server.runtime_performance import MINIMUM_FULL_COLLECTION_INTERVAL, latency_sensitive_gc
-from server.agent_runtime import epochs as subjective_epochs
-from server.agent_runtime.epochs import _build_affordance_set_from_actions
+from dnd.ai.runtime import decision_epoch as subjective_epochs
+from dnd.ai.runtime.decision_epoch import _build_affordance_set_from_actions
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
 from ai.subjective.models import AgentState
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder

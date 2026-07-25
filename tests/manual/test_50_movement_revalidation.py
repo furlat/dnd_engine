@@ -14,16 +14,16 @@ from dnd.core.action_execution import (
 )
 from dnd.entity import Entity
 from dnd.core.gridmap import get_map
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEntityFact,
     ObservationTileFact,
 )
-from server.agent_protocol.observation_replay import materialize_snapshot
+from dnd.ai.contracts.observation_replay import materialize_snapshot
 from server.agent_runtime.observation_projector import build_observation_snapshot
-from server.agent_runtime.movement_revalidation import (
+from dnd.ai.runtime.movement_revalidation import (
     MovementRevalidationCause,
-    _movement_revalidation_cause,
+    movement_revalidation_cause,
 )
 from tests.manual.test_09_action_discovery_and_costs import (
     create_tutorial_actor,
@@ -165,7 +165,7 @@ def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() ->
         },
     })
 
-    assert _movement_revalidation_cause(
+    assert movement_revalidation_cause(
         before,
         enemy_world,
         str(hero.uuid),
@@ -182,7 +182,7 @@ def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() ->
             ally.uuid: ally,
         },
     })
-    assert _movement_revalidation_cause(
+    assert movement_revalidation_cause(
         before,
         ally_world,
         str(hero.uuid),
@@ -210,7 +210,7 @@ def test_subjective_revalidator_interrupts_for_hazard_or_actor_change() -> None:
             hazard.key: hazard,
         },
     })
-    assert _movement_revalidation_cause(
+    assert movement_revalidation_cause(
         before,
         hazard_world,
         str(hero.uuid),
@@ -226,7 +226,7 @@ def test_subjective_revalidator_interrupts_for_hazard_or_actor_change() -> None:
             str(hero.uuid): changed_actor,
         },
     })
-    assert _movement_revalidation_cause(
+    assert movement_revalidation_cause(
         before,
         actor_world,
         str(hero.uuid),

@@ -8,7 +8,7 @@ from typing import ParamSpec, TypeVar, cast
 from pydantic import Field
 
 from ai.planning.contracts import PlanningModel
-from server.agent_protocol.semantics import FactExpression, LogicalEffect
+from dnd.ai.contracts.semantics import FactExpression, LogicalEffect
 
 
 Parameters = ParamSpec("Parameters")

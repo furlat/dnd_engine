@@ -1267,7 +1267,6 @@ def _encounter_node(
     if isinstance(event, EncounterStartEvent):
         encounter_uuid = event.encounter_uuid
         transition = EncounterTransition.START
-        combatants = tuple(event.combatant_uuids)
     elif isinstance(event, EncounterEndEvent):
         encounter_uuid = event.encounter_uuid
         transition = EncounterTransition.END

@@ -16,7 +16,6 @@ from ai.knowledge import AgentFacts, derive_agent_facts
 from ai.policy import (
     AgentCommand,
     AgentCommandType,
-    ExecuteIntent,
     PolicyContext,
     PolicyExecutionConstraints,
     PolicyMemoryStore,
@@ -25,6 +24,7 @@ from ai.policy import (
     reconcile_policy_memory,
 )
 from ai.policy.contracts import PolicyDecisionTelemetry
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import create_generation_policy_host
 from ai.policy.generations.registry import (
     CANDIDATE_GENERATION_ID,
@@ -33,12 +33,12 @@ from ai.policy.generations.registry import (
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from ai.subjective.store import SubjectiveStore
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     CommandResult,
     CommandResultStatus,
     DecisionEpoch,
 )
-from server.agent_protocol.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation import SubjectiveWorldState
 
 logger = logging.getLogger(__name__)
 MAX_COMMANDS_PER_TURN = 20

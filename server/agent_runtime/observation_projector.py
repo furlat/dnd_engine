@@ -35,8 +35,8 @@ from server.combat_log_projection import (
 )
 from server.session import GameSession, PlayerSession, SessionManager
 
-from server.agent_protocol.observation_replay import apply_observation_frame
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation_replay import apply_observation_frame
+from dnd.ai.contracts.observation import (
     AdjacentOffset,
     KnowledgeState,
     ObservationCombatantState,
@@ -59,7 +59,7 @@ from server.agent_protocol.observation import (
     ObservationTileFact,
     SpatialDomainKnowledge,
 )
-from server.agent_protocol.control import CommandResult, DecisionEpoch
+from dnd.ai.contracts.control import CommandResult, DecisionEpoch
 from server.event_stream import BoundedSubscription, DEFAULT_SUBSCRIPTION_MAX_DEPTH
 
 

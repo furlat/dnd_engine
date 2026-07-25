@@ -21,6 +21,80 @@ This section is the canonical status index as of 2026-07-24. The historical
 ledger below is preserved as discovery evidence, but an older `OPEN` label does
 not override a status recorded here.
 
+### Canonical AI hard cut
+
+- **Native AI no longer uses a subprocess or self-HTTP gameplay client.**
+  `NativeAIController` calls the `dnd.ai` policy kernel directly in process;
+  the kernel owns subjective projection, memory reduction, validation,
+  authoritative dispatch, feedback, and timing. The bundled policy and the
+  `custom_ai.tactical` example contain decision logic only. Import-direction,
+  zero-local-import, acyclic-boundary, and sole-dispatch-consumer invariants
+  are measured by `tests/architecture/test_ai_import_direction.py`; policy,
+  registry, instrumentation, and native execution are measured by
+  `tests/ai/` and `tests/manual/test_151_native_ai_execution.py`.
+  **Status: RESOLVED 2026-07-24.**
+- **Registered external providers are a distinct deployment boundary over the
+  same policy contract.** The main server authenticates provider handshakes,
+  opens generation/token-fenced assignments, sends only
+  `SubjectiveWorldState` plus ordered feedback, receives only typed
+  `PolicyIntent`, and still performs the authoritative engine commit locally.
+  Every external character receives a distinct controller, lease, token,
+  policy object, memory object, and contiguous decision sequence. The
+  real-socket matrix proves `builtin.basic` versus `external.basic`,
+  `external.basic` versus `external.tactical`, replicated authoritative
+  actions from both sides, four-character capacity rejection, and exact
+  teardown in `tests/ai/test_live_ai_matchups.py`. Protocol, idempotency,
+  controller fences, and rollback are covered by
+  `tests/ai/test_external_ai_protocol.py`,
+  `tests/ai/test_external_ai_service.py`,
+  `tests/ai/test_registered_ai_provider.py`,
+  `tests/ai/test_registered_ai_controller.py`, and
+  `tests/manual/test_153_registered_ai_game_creation.py`.
+  **Status: RESOLVED 2026-07-24.**
+- **The bundled policy no longer burns a turn in no-progress cycles.**
+  Assignment-owned, per-actor turn memory suppresses revisited movement,
+  repeated successful setup/capability transforms, zero-utility inverse
+  object toggles, and voluntary concentration teardown while deliberately
+  preserving multiple legal attacks and interrupted movement replanning.
+  Red-first regressions live in `tests/ai/test_basic_policy.py`.
+  **Status: RESOLVED 2026-07-24.**
+- **AI turns no longer monopolize the server event loop.** Encounter exposes
+  one bounded autonomous action boundary at a time; the server coordinator
+  yields between boundaries and uses an explicit deferred-provider fence.
+  Actor/controller rotation, multi-step turns, and the existing complete-turn
+  engine behavior are measured by
+  `tests/manual/test_152_deferred_controller_boundary.py`. Hosted worker
+  responsiveness and terminal publication are covered by
+  `tests/manual/test_110_multi_game_gateway.py`.
+  **Status: RESOLVED 2026-07-24.**
+- **Game creation now has one prepared activation lifecycle.** Creation cannot
+  execute an AI action before a client joins and captures replication
+  identity. The exact sequence is start, join, bootstrap, activate, then
+  follow using that same bootstrap. Server lifecycle and authority are covered
+  by `tests/manual/test_150_prepared_scenario_lifecycle.py` and
+  `tests/manual/test_150_native_ai_game_creation.py`; the SDK's no-second-fetch
+  seed/reset semantics are covered by
+  `sdk/typescript/src/tests/subjectiveClient.test.ts`.
+  **Status: RESOLVED 2026-07-24.**
+- **The old `ExternalAIController`, managed-service readiness path, and
+  validation-start aliases are deleted.** `RegisteredAIController` is the sole
+  production external-provider controller. Codex takeover remains functional
+  through its public subjective surface, and the validation harness now uses
+  canonical game creation, joining, bootstrap, and activation. Absence and
+  retained Codex behavior are measured by
+  `tests/manual/test_96_game_creation_api.py`,
+  `tests/manual/test_30_codex_takeover_tools.py`,
+  `tests/manual/test_38_ai_validation_server_start.py`,
+  `tests/manual/test_39_ai_validation_harness.py`, and
+  `tests/manual/test_47_direct_codex_artifacts.py`.
+  **Status: RESOLVED 2026-07-24.**
+- **Simulation delay correction metadata now agrees with the accepted
+  boundary.** The engine default and endpoint accept `0.0`, so structured
+  errors now advertise `min_delay=0.0` rather than the stale `0.1`.
+  `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_014_replication_identity_and_simulation_errors_are_explicit`
+  failed before the correction and owns the boundary.
+  **Status: RESOLVED 2026-07-24.**
+
 ### Full active-suite audit
 
 - The first exhaustive file-isolated pass ran all `244` active Python test
@@ -46,6 +120,17 @@ not override a status recorded here.
 
 ### Recently resolved engine and rules defects
 
+- **Encounter-start projection no longer poisons a bootstrapped player
+  journal.** The staged game-creation regression bootstrapped a player before
+  activation, then the first `EncounterStartEvent` was incorrectly mapped
+  with `projected_combatant_uuids`. That field is terminal metadata and is
+  valid only for `EncounterTransition.END`, so the canonical cue validator
+  rejected the opening frame and made the journal unhealthy. Start cues now
+  omit terminal combatants while encounter-end cues retain their safe terminal
+  barrier and projected combatant set. Measured by
+  `tests/manual/test_150_native_ai_game_creation.py::test_activation_requires_exact_joined_bootstrap_identity_and_is_idempotent`;
+  the focused mapper and player-journal suites retain the END invariant.
+  **Status: RESOLVED 2026-07-24.**
 - **Standalone AI-vs-AI observation again installs an explicit subjective
   perspective.** The rolled-back NeuroClient sent `null` for both observer
   fields after creating an AI-vs-AI match and when attaching to an existing
@@ -1453,8 +1538,15 @@ not override a status recorded here.
 - **Found**: 2026-06-28 during Chapter 18 controller parity expansion
 - **Test file**: `examples/test_engine_book_encounters_apis.py`
 - **Error**: The former `MeleeAIController.get_next_action()` looped over all entity-targeted actions and instantiated the first affordable valid target. Because `Shove` is also entity-targeted and was registered before weapon attack templates, an adjacent melee AI chose `Shove` instead of `Attack_MELEE_MAIN`, contradicting the controller's documented priority.
-- **Resolution**: The in-process melee controller has been removed from the active runtime. Monster turns now use `ExternalAIController`, which waits for the external AI session/subprocess to choose from session-authorized available actions.
-- **Verification**: EB-18-021 now proves the external-AI wait boundary and engine-derived attack affordance; EB-18-034 proves legal movement path rows preserve directional blockers for downstream AI policy.
+- **Resolution**: The special-case melee controller and the later
+  session-command `ExternalAIController` have both been removed. AI sides now
+  use `NativeAIController` for in-process policy assignments or
+  `RegisteredAIController` for the authenticated provider protocol; both
+  execute through the canonical typed intent resolver.
+- **Verification**: `tests/ai/test_basic_policy.py`,
+  `tests/ai/test_registered_ai_controller.py`, and
+  `tests/manual/test_151_native_ai_execution.py` cover selection, provider
+  fencing, and canonical execution.
 - **Status**: SUPERSEDED
 
 

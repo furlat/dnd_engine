@@ -32,7 +32,12 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.entity import Entity
-from dnd.controller import Controller, TurnContext
+from dnd.controller import (
+    Controller,
+    ControllerExecutionMode,
+    ControllerStepResult,
+    TurnContext,
+)
 from dnd.actions_functional import execute_by_index
 
 
@@ -816,6 +821,17 @@ class Encounter(BaseObject):
             movement_remaining=ae.movement.normalized_score,
             visible_enemies=entity.get_visible_enemies(),
             visible_allies=entity.get_visible_allies(),
+            encounter_uuid=self.uuid,
+            encounter_name=self.name,
+            encounter_state=self.state.value,
+            initiative_order=self.initiative_order.copy(),
+            initiative_totals={
+                entity_uuid: combatant.initiative_total
+                for entity_uuid, combatant in self.combatants.items()
+            },
+            turn_started_source_event_cursor=(
+                self.current_turn_started_source_event_cursor
+            ),
         )
 
     def _advance_entity_conditions(self, entity: Entity) -> List[str]:
@@ -1035,25 +1051,25 @@ class Encounter(BaseObject):
             if not controller.can_continue_turn(entity, context):
                 break
 
-            action = controller.get_next_action(entity, context)
-
-            if action is None:
+            step = controller.execute_next_action(entity, context)
+            if step.end_turn:
                 break
-
-            _event = action.apply()
+            _event = step.event
 
             deaths = self.check_deaths()
 
             if deaths and self.state != EncounterState.ACTIVE:
                 return None
 
-        end_event = self.end_turn()
+        return self._complete_current_turn()
 
+    def _complete_current_turn(self) -> Optional[TurnEndEvent]:
+        """Commit the current turn end and advance to the next initiative slot."""
+        end_event = self.end_turn()
         self.current_turn_index += 1
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
         self.turn_state = TurnState.NOT_STARTED
-
         return end_event
 
     def advance_until_player(self) -> AdvanceResult:
@@ -1071,55 +1087,285 @@ class Encounter(BaseObject):
         """
         log_start = len(self.combat_log)
 
-        while self.state == EncounterState.ACTIVE:
+        while True:
+            result = self.advance_one_controller_boundary()
+            if result.status == "advanced_autonomous":
+                continue
+            return result.model_copy(update={"log_start_index": log_start})
+
+    def advance_one_controller_boundary(self) -> AdvanceResult:
+        """Advance one complete synchronous controller turn.
+
+        Server coordinators use :meth:`advance_one_controller_action_boundary`
+        instead so they can yield between decisions without changing the
+        encounter's deterministic turn semantics.
+        """
+        log_start = len(self.combat_log)
+        while True:
+            result = self.advance_one_controller_action_boundary()
+            if result.status != "autonomous_action_completed":
+                return result.model_copy(update={"log_start_index": log_start})
+
+    def advance_one_controller_action_boundary(self) -> AdvanceResult:
+        """Execute one decision as one passive replication transaction.
+
+        A turn boundary may emit many lifecycle events even when the
+        controller elects only to end its turn.  Player replication observes
+        the committed decision boundary, not every intermediate event write,
+        so retain those events in one causal batch and project the world once.
+        Nested action batches naturally join this outer transaction.
+        """
+        with EventQueue.batch_on_event_callbacks():
+            return self._advance_one_controller_action_boundary()
+
+    def _advance_one_controller_action_boundary(self) -> AdvanceResult:
+        """Implement one autonomous decision or expose a wait boundary."""
+        log_start = len(self.combat_log)
+        if self.state is EncounterState.ENDED:
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status="encounter_ended",
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+        if self.state is not EncounterState.ACTIVE:
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status="error",
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+
+        entity = self.get_current_entity()
+        combatant = self.get_current_combatant()
+        controller = self.get_current_controller()
+        if entity is None or combatant is None or controller is None:
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status="error",
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+
+        if combatant.is_dead or not combatant.is_alive:
+            combatant.has_acted_this_round = True
+            self.current_turn_index += 1
+            if self.current_turn_index >= len(self.initiative_order):
+                self._advance_round()
+            self.turn_state = TurnState.NOT_STARTED
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status="advanced_autonomous",
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+
+        if controller.execution_mode in {
+            ControllerExecutionMode.EXTERNAL,
+            ControllerExecutionMode.DEFERRED_AUTONOMOUS,
+        }:
+            actor_uuid = entity.uuid
+            if self.turn_state is not TurnState.IN_PROGRESS:
+                self.start_turn()
+            current_entity = self.get_current_entity()
+            if self.state is EncounterState.ENDED:
+                status = "encounter_ended"
+            elif (
+                current_entity is None
+                or current_entity.uuid != actor_uuid
+            ):
+                status = "advanced_autonomous"
+            else:
+                status = controller.external_boundary_status or "waiting_for_external"
+            current = self.get_current_entity()
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status=status,
+                entity_uuid=current.uuid if current else None,
+                entity_name=current.name if current else None,
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+
+        actor_uuid = entity.uuid
+        if self.turn_state is not TurnState.IN_PROGRESS:
+            self.start_turn()
+            if self.state is EncounterState.ENDED:
+                return AdvanceResult(
+                    source_entity_uuid=self.uuid,
+                    status="encounter_ended",
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                    log_start_index=log_start,
+                )
             entity = self.get_current_entity()
             combatant = self.get_current_combatant()
             controller = self.get_current_controller()
-
-            if combatant and (combatant.is_dead or not combatant.is_alive):
-                combatant.has_acted_this_round = True
-                self.current_turn_index += 1
-                if self.current_turn_index >= len(self.initiative_order):
-                    self._advance_round()
-                continue
-
-            if controller is None:
+            if (
+                entity is None
+                or combatant is None
+                or controller is None
+                or entity.uuid != actor_uuid
+            ):
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,
-                    status="error",
-                    log_start_index=log_start
-                )
-
-            if controller.controller_type in ("human", "codex", "external_ai"):
-                if self.turn_state != TurnState.IN_PROGRESS:
-                    self.start_turn()
-
-                entity = self.get_current_entity()
-                if controller.controller_type == "human":
-                    status = "waiting_for_human"
-                elif controller.controller_type == "codex":
-                    status = "waiting_for_codex"
-                else:
-                    status = "waiting_for_ai"
-
-                return AdvanceResult(
-                    source_entity_uuid=self.uuid,
-                    status=status,
-                    entity_uuid=entity.uuid if entity else None,
-                    entity_name=entity.name if entity else None,
+                    status="advanced_autonomous",
                     round_number=self.round_number,
                     turn_index=self.current_turn_index,
-                    log_start_index=log_start
+                    log_start_index=log_start,
                 )
 
-            self.run_turn()
+        context = self._build_turn_context(entity)
+        if (
+            not self.can_continue_turn()
+            or not controller.can_continue_turn(entity, context)
+        ):
+            self._complete_current_turn()
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status=(
+                    "encounter_ended"
+                    if self.state is EncounterState.ENDED
+                    else "advanced_autonomous"
+                ),
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
 
+        step = controller.execute_next_action(entity, context)
+        if step.event is not None:
+            deaths = self.check_deaths()
+            if deaths and self.state is not EncounterState.ACTIVE:
+                return AdvanceResult(
+                    source_entity_uuid=self.uuid,
+                    status="encounter_ended",
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                    log_start_index=log_start,
+                )
+        current = self.get_current_entity()
+        current_controller = self.get_current_controller()
+        should_end = (
+            step.end_turn
+            or current is None
+            or current.uuid != actor_uuid
+            or current_controller is None
+            or current_controller.uuid != controller.uuid
+            or not self.can_continue_turn()
+            or not controller.can_continue_turn(
+                entity,
+                self._build_turn_context(entity),
+            )
+        )
+        if should_end:
+            if (
+                self.state is EncounterState.ACTIVE
+                and self.turn_state is TurnState.IN_PROGRESS
+                and current is not None
+                and current.uuid == actor_uuid
+            ):
+                self._complete_current_turn()
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status=(
+                    "encounter_ended"
+                    if self.state is EncounterState.ENDED
+                    else "advanced_autonomous"
+                ),
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
         return AdvanceResult(
             source_entity_uuid=self.uuid,
-            status="encounter_ended",
+            status="autonomous_action_completed",
+            entity_uuid=entity.uuid,
+            entity_name=entity.name,
             round_number=self.round_number,
             turn_index=self.current_turn_index,
-            log_start_index=log_start
+            log_start_index=log_start,
+        )
+
+    def build_current_turn_context(self) -> TurnContext:
+        """Return the exact live context for the current in-progress actor."""
+        if self.state is not EncounterState.ACTIVE:
+            raise ValueError("encounter is not active")
+        if self.turn_state is not TurnState.IN_PROGRESS:
+            raise ValueError("encounter turn is not in progress")
+        entity = self.get_current_entity()
+        if entity is None:
+            raise ValueError("encounter has no current actor")
+        return self._build_turn_context(entity)
+
+    def resolve_deferred_controller_step(
+        self,
+        *,
+        entity_uuid: UUID,
+        controller_uuid: UUID,
+        step: ControllerStepResult,
+    ) -> AdvanceResult:
+        """Commit one already-executed deferred AI step against exact ownership."""
+        log_start = len(self.combat_log)
+        entity = self.get_current_entity()
+        controller = self.get_current_controller()
+        if self.state is not EncounterState.ACTIVE:
+            raise ValueError("encounter is not active")
+        if self.turn_state is not TurnState.IN_PROGRESS:
+            raise ValueError("deferred controller turn is not in progress")
+        if entity is None or entity.uuid != entity_uuid:
+            raise ValueError("deferred controller actor fence changed")
+        if controller is None or controller.uuid != controller_uuid:
+            raise ValueError("deferred controller ownership fence changed")
+        if (
+            controller.execution_mode
+            is not ControllerExecutionMode.DEFERRED_AUTONOMOUS
+        ):
+            raise ValueError("controller is not deferred autonomous")
+
+        if step.event is not None:
+            deaths = self.check_deaths()
+            if deaths and self.state is not EncounterState.ACTIVE:
+                return AdvanceResult(
+                    source_entity_uuid=self.uuid,
+                    status="encounter_ended",
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                    log_start_index=log_start,
+                )
+
+        context = self._build_turn_context(entity)
+        should_end = (
+            step.end_turn
+            or not self.can_continue_turn()
+            or not controller.can_continue_turn(entity, context)
+        )
+        if should_end:
+            self._complete_current_turn()
+            return AdvanceResult(
+                source_entity_uuid=self.uuid,
+                status=(
+                    "encounter_ended"
+                    if self.state is EncounterState.ENDED
+                    else "advanced_autonomous"
+                ),
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+                log_start_index=log_start,
+            )
+        return AdvanceResult(
+            source_entity_uuid=self.uuid,
+            status="deferred_action_completed",
+            entity_uuid=entity.uuid,
+            entity_name=entity.name,
+            round_number=self.round_number,
+            turn_index=self.current_turn_index,
+            log_start_index=log_start,
         )
 
     def execute_action(

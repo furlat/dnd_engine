@@ -68,8 +68,18 @@ import {
 } from "@neurodragon/dnd-engine-sdk";
 
 const engine = new DndEngineClient("/api");
-const simulation = await engine.startHuman("fighter");
-if (simulation.hero_uuid === null) throw new Error("world has no hero");
+const prepared = await engine.startGameCreation({
+  scenario: {
+    kind: "preset",
+    arena_id: "standard_skeleton_doors",
+  },
+  side_a: { controller: "human", name: "My Client", policy_id: null },
+  side_b: { controller: "ai", name: "Basic AI", policy_id: "builtin.basic" },
+  opening_side: "side_a",
+  codex_lease_seconds: 600,
+});
+const heroUuid = prepared.side_a.entity_assignments[0]?.entity_uuid;
+if (heroUuid === undefined) throw new Error("prepared side has no hero");
 
 const session = await engine.createSession({
   player_type: "human",
@@ -77,14 +87,24 @@ const session = await engine.createSession({
 });
 await engine.joinGame({
   session_id: session.session_id,
-  entity_uuids: [simulation.hero_uuid],
+  entity_uuids: [heroUuid],
   entity_uuid: null,
   faction: null,
+  observer_entity_uuids: [],
+  active_observer_uuid: null,
 });
 
 const replication = new SubjectiveReplicationClient("/api");
 const journal = new SubjectiveReplicationJournal();
-journal.bootstrap(await replication.bootstrap(session.session_id));
+const bootstrap = await replication.bootstrap(session.session_id);
+journal.bootstrap(bootstrap);
+await engine.activateGameCreation({
+  session_id: session.session_id,
+  expected_source_stream_id: bootstrap.protocol.source_stream_id,
+  expected_generation_id: bootstrap.protocol.generation_id,
+  expected_perspective_epoch_id:
+    bootstrap.perspective.perspective_epoch_id,
+});
 ```
 
 ### Following the stream

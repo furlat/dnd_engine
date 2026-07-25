@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from server.agent_protocol.observation import ObservationEntityFact, ObservationObjectFact
+from dnd.ai.contracts.observation import ObservationEntityFact, ObservationObjectFact
 
 
 Position = tuple[int, int]

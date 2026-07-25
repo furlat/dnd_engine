@@ -8,18 +8,17 @@ This server:
 4. Controls simulation (start/pause/resume/step)
 
 Usage:
-    # Start the core server without a managed-agent provider
+    # Start the canonical game server
     uv run python -m server.event_server
 
-    # Or import the same core app programmatically
+    # Or import the same app programmatically
     from server.event_server import run_server
     run_server(host="0.0.0.0", port=8000)
-
-Managed-agent compositions register a launcher service before running this app.
 """
 
 import argparse
 import asyncio
+import hmac
 import logging
 import os
 import signal
@@ -28,14 +27,13 @@ import sys
 import time
 import traceback
 from collections.abc import AsyncIterator
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from types import FrameType
 from typing import Any, Callable, Dict, Literal, Optional, Sequence
-from uuid import UUID, uuid4
+from uuid import UUID
 from contextlib import asynccontextmanager, nullcontext
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -48,45 +46,28 @@ from dnd.core.gridmap import get_map
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.monsters.bestiary import (
-    create_goblin, create_skeleton,
-    create_skeleton_warrior, create_skeleton_archer, create_skeleton_warlock,
-)
-from dnd.classes.sorcerer_factory import create_sorcerer as create_sorcerer_class, SorcererConfig
-from dnd.classes.fighter_factory import create_fighter, FighterConfig
-from dnd.classes.barbarian_factory import create_barbarian, BarbarianConfig, PrimalPathChoice
-from dnd.items import create_shortsword, create_dagger, create_longbow
-from dnd.items.test_items import (
-    create_scroll_of_magic_missile, create_scroll_of_fireball,
-    create_potion_of_greater_invisibility,
-    create_torch,
-)
-from dnd.maps.arena_layout import build_standard_arena_environment
-from dnd.scenarios.ai_validation_arenas import (
-    create_ai_validation_arena,
-    list_ai_validation_arena_specs,
-)
 from dnd.scenarios.evaluation.assembler import (
     IncompatibleScenarioError,
-    assemble_composed_scenario,
-    assemble_legacy_scenario,
+    prepare_composed_scenario,
+    prepare_legacy_scenario,
 )
 from dnd.scenarios.evaluation.combatant_catalog import (
     get_combatant_configuration,
 )
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES, get_legacy_recipe
-from dnd.scenarios.evaluation.wardrobes import (
-    BERSERKER_WARDROBE,
-    BESTIARY_WARDROBES,
-    equip_wardrobe,
+from dnd.ai.instrumentation import (
+    AIInstrumentation,
+    BoundedAIInstrumentationSink,
 )
+from dnd.ai.policy import PolicyDescriptor
+from dnd.ai.registry import UnknownPolicyError
+from dnd.ai.runtime.controller import NativeAIController
 from dnd.controller import (
-    CodexController,
     Controller,
-    ExternalAIController,
+    ControllerExecutionMode,
+    ControllerStepResult,
     HumanController,
-    PassController,
 )
 from dnd.actions_functional import execute_available_action, get_available_actions
 from server.runtime_performance import latency_sensitive_gc
@@ -98,23 +79,27 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.action_execution import movement_continuation_scope
-from dnd.reactions import add_opportunity_attack_handler
 
 from server.api_models import (
     APIAvailableActions, APIServerTiming,
     SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
+    AIExecutionKind,
+    AIProviderCatalogEntry, AIProviderCatalogResponse,
+    AIProviderDeleteResponse, AIProviderRegistrationRequest,
+    GameCreationAIPolicyOption,
     GameCreationCatalogResponse, GameCreationComposedScenario,
     GameCreationPreflightRequest, GameCreationPresetScenario,
     GameCreationEntityAssignment, GameCreationSideRequest, GameCreationSideResult,
+    GameCreationActivateRequest, GameCreationActivateResponse,
     GameCreationStartRequest, GameCreationStartResponse,
     EventContractSummary,
     PositionPreviewRequest, ExecuteByIndexRequest,
     ToggleHandlerRequest,
     APIEquippableItems, APIEntityHandlersResponse,
     EquipRequest, UnequipRequest, EquipmentMutationResult, ToggleHandlerResponse,
-    AdvanceEncounterResult, StartHumanSimulationResponse,
+    AdvanceEncounterResult,
     AgentSessionEntityRow, AgentSessionListResponse, AgentSessionRow,
     TakeoverClaimResponse, TakeoverEntityRow, TakeoverHeartbeatResponse, TakeoverListResponse,
     TakeoverReleaseResponse, TakeoverRequest,
@@ -125,6 +110,26 @@ from server.api_models import (
     MapEditorSavedMapList, MapEditorSavedMapMetadata,
     ServerCapabilitiesResponse,
     StandaloneGameSessionSummary, StandaloneGameStatusResponse,
+)
+from server.ai_policy_composition import (
+    DEFAULT_NATIVE_POLICY_ID,
+    SERVER_NATIVE_POLICY_REGISTRY,
+)
+from server.external_ai_protocol import (
+    EXTERNAL_AI_PROTOCOL_HASH,
+    EXTERNAL_AI_PROTOCOL_VERSION,
+)
+from server.registered_ai_controller import RegisteredAIController
+from server.registered_ai_provider import (
+    RegisteredAIProviderBusyError,
+    RegisteredAIProviderCapacityError,
+    RegisteredAIProviderCatalog,
+    RegisteredAIProviderCollisionError,
+    RegisteredAIProviderError,
+    RegisteredAIProviderInfo,
+    RegisteredAIProviderNotFoundError,
+    RegisteredAIProviderProtocolError,
+    RegisteredAIProviderTransportError,
 )
 from server.world_contracts import APIFloorObject
 from server.mapeditor_support import (
@@ -243,15 +248,8 @@ from server.agent_protocol.gauntlet import (
     project_live_watcher_state,
     project_watcher_state,
 )
-from server.agent_runtime.service import AgentLaunchRequest
-from server.agent_runtime.service_manager import (
-    AgentServiceStartError,
-    AgentServiceUnavailableError,
-    ManagedAgentServiceManager,
-)
-from server.agent_protocol.service import AgentServiceReadyRequest
 from server.ai_takeover_manager import AITakeoverManager, TakeoverClaim, TakeoverError
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationFrame,
     ObservationFramesResponse,
     ObservationSnapshot,
@@ -272,7 +270,7 @@ from server.agent_runtime.observation_projector import (
     publish_observation_ownership_changes,
 )
 from server.agent_protocol.telemetry import PolicySourceManifest
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionResolutionStatus,
     AgentEndTurnCommandRequest,
@@ -283,11 +281,11 @@ from server.agent_protocol.control import (
     DecisionEpochReason,
     END_TURN_ROW_ID,
 )
-from server.agent_protocol.semantics import ActionTag
+from dnd.ai.contracts.semantics import ActionTag
 from server.agent_runtime.movement_revalidation import (
     SessionMovementContinuationGuard,
 )
-from server.agent_runtime.epochs import (
+from dnd.ai.runtime.decision_epoch import (
     ActionExecutionBinding,
     DecisionEpochExecutionAuthority,
     build_decision_epoch as build_subjective_decision_epoch,
@@ -302,36 +300,7 @@ _available_actions_cache: Dict[str, AvailableActionsResult] = {}
 _last_published_epoch_by_session: Dict[str, str] = {}
 _current_epoch_by_session: Dict[str, DecisionEpoch] = {}
 _execution_authority_by_epoch_id: Dict[str, DecisionEpochExecutionAuthority] = {}
-agent_service_manager = ManagedAgentServiceManager()
 ai_takeover_manager = AITakeoverManager()
-
-
-def _evict_managed_agent_observation_streams(
-    session_ids: Optional[Sequence[str]] = None,
-) -> None:
-    """Wake managed agent SSE readers before waiting for their shutdown."""
-    targets = (
-        tuple(session_ids)
-        if session_ids is not None
-        else tuple(agent_service_manager.running_session_ids())
-    )
-    for session_id in targets:
-        observation_wakeup_stream.evict_session(
-            str(session_id),
-            reason="managed_agent_stopping",
-        )
-
-
-async def _stop_all_managed_agents() -> None:
-    """Evict live reads, then stop and join every managed agent."""
-    _evict_managed_agent_observation_streams()
-    await agent_service_manager.stop_all()
-
-
-def _stop_all_managed_agents_blocking() -> None:
-    """Synchronous equivalent used by reset/test composition boundaries."""
-    _evict_managed_agent_observation_streams()
-    agent_service_manager.stop_all_blocking()
 
 
 @dataclass
@@ -432,6 +401,17 @@ def clear_subjective_projection_state() -> None:
     _execution_authority_by_epoch_id.clear()
 
 
+@dataclass(frozen=True)
+class _GameActivationIdentity:
+    """Exact replication identity that released one prepared game."""
+
+    game_id: UUID
+    session_id: UUID
+    source_stream_id: str
+    generation_id: str
+    perspective_epoch_id: str
+
+
 def _store_current_epoch(session_id: str, epoch: DecisionEpoch) -> None:
     """Store one active epoch and release superseded private authority."""
     previous = _current_epoch_by_session.get(session_id)
@@ -465,11 +445,15 @@ class SimulationState:
         self.encounter: Optional[Encounter] = None
         self.combat_task: Optional[asyncio.Task] = None
         self.paused: bool = True
-        self.turn_delay: float = 1.5
+        self.turn_delay: float = 0.0
         self.auto_run_ai: bool = True
         self._session_manager = get_session_manager()
         self._game_session: Optional[GameSession] = None
         self.current_creation: Optional[GameCreationStartResponse] = None
+        self.activation_identity: Optional[_GameActivationIdentity] = None
+        self.native_ai_controllers: list[NativeAIController] = []
+        self.registered_ai_controllers: list[RegisteredAIController] = []
+        self.native_ai_instrumentation = BoundedAIInstrumentationSink()
 
     @property
     def game(self) -> Optional[GameSession]:
@@ -504,13 +488,22 @@ class SimulationState:
 
     def reset(self) -> None:
         """Reset mutable server session state for a fresh game scene."""
+        if self.combat_task is not None and not self.combat_task.done():
+            self.combat_task.cancel()
+        if self.registered_ai_controllers:
+            raise RuntimeError(
+                "registered AI controllers require asynchronous teardown "
+                "before synchronous simulation reset"
+            )
+        self.close_native_ai_controllers()
+        self.native_ai_instrumentation = BoundedAIInstrumentationSink()
         ai_takeover_manager.clear(self.encounter, self._game_session)
-        _stop_all_managed_agents_blocking()
         clear_subjective_projection_state()
         agent_event_stream.clear_all()
         self.encounter = None
         self._game_session = None
         self.current_creation = None
+        self.activation_identity = None
         self.combat_task = None
         self.paused = True
         self._session_manager.sessions.clear()
@@ -519,7 +512,61 @@ class SimulationState:
         _available_actions_cache.clear()
         event_stream.ensure_attached()
 
+    def close_native_ai_controllers(self) -> None:
+        """Close every side assignment once, including prepared games."""
+        for controller in self.native_ai_controllers:
+            controller.close()
+        self.native_ai_controllers.clear()
+
+    async def close_registered_ai_controllers(self) -> None:
+        """Close every remote assignment before releasing engine ownership."""
+        controllers = tuple(self.registered_ai_controllers)
+        self.registered_ai_controllers.clear()
+        first_error: BaseException | None = None
+        for controller in controllers:
+            try:
+                await controller.close()
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
+        if first_error is not None:
+            raise RuntimeError(
+                "registered AI controller teardown failed"
+            ) from first_error
+
 sim = SimulationState()
+
+native_policy_registry = SERVER_NATIVE_POLICY_REGISTRY
+
+
+def _new_registered_ai_provider_catalog() -> RegisteredAIProviderCatalog:
+    """Create one process-lifetime provider catalog with native IDs reserved."""
+    return RegisteredAIProviderCatalog(
+        reserved_policy_ids={
+            descriptor.policy_id
+            for descriptor in native_policy_registry.descriptors()
+        },
+    )
+
+
+registered_ai_provider_catalog = _new_registered_ai_provider_catalog()
+_ai_provider_admin_token: Optional[str] = os.getenv(
+    "DND_AI_PROVIDER_ADMIN_TOKEN"
+)
+
+
+def configure_ai_provider_admin_token(token: Optional[str]) -> None:
+    """Configure the deployment-only bearer used by provider admin routes."""
+    global _ai_provider_admin_token
+    _ai_provider_admin_token = token
+
+
+def _active_registered_ai_provider_catalog() -> RegisteredAIProviderCatalog:
+    """Return an open catalog, recreating it after a completed app lifespan."""
+    global registered_ai_provider_catalog
+    if registered_ai_provider_catalog.closed:
+        registered_ai_provider_catalog = _new_registered_ai_provider_catalog()
+    return registered_ai_provider_catalog
 
 
 @dataclass(frozen=True)
@@ -584,132 +631,6 @@ def configure_policy_source_manifest(
     _policy_source_manifest = manifest
 
 
-def setup_combat() -> Encounter:
-    """Initialize the passive two-combatant step/debug encounter.
-
-    Returns:
-        Encounter containing one goblin and one skeleton with pass controllers.
-    """
-    reset_engine_runtime(grid_size=(15, 15))
-    game_summary_store.reset()
-    event_stream.ensure_attached()
-
-    goblin = equip_wardrobe(
-        create_goblin(name="Goblin Scout", position=(2, 7)),
-        BESTIARY_WARDROBES["goblin"],
-    )
-    skeleton = create_skeleton(name="Skeleton Warrior", position=(12, 7))
-    Entity.update_all_entities_senses()
-
-    encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
-    encounter.add_combatant(goblin, PassController(source_entity_uuid=goblin.uuid))
-    encounter.add_combatant(skeleton, PassController(source_entity_uuid=skeleton.uuid))
-
-    return encounter
-
-
-def setup_arena_combat(
-    player_position: tuple = (2, 7),
-    pvp_mode: bool = False,
-    character_class: str = "fighter",
-) -> Encounter:
-    """Initialize arena combat with one hero against three skeletons.
-
-    Args:
-        player_position: Starting position for the hero.
-        pvp_mode: Whether skeletons use Codex controllers instead of external AI.
-        character_class: Hero class fixture to create.
-
-    Returns:
-        Encounter configured with the hero and skeleton combatants.
-    """
-    grid = reset_engine_runtime()
-    SessionManager.reset()
-    game_summary_store.reset()
-    event_stream.ensure_attached()
-    build_standard_arena_environment(grid)
-
-    if character_class == "barbarian":
-        player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
-    elif character_class == "sorcerer":
-        config = SorcererConfig(
-            name="Hero",
-            position=player_position,
-            faction="heroes",
-            level=5,
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt", "Ray of Frost",
-                "Magic Missile", "Burning Hands", "Thunderwave",
-                "Scorching Ray", "Hold Person", "Shatter", "Invisibility",
-                "Fireball", "Lightning Bolt",
-            ],
-        )
-        player = create_sorcerer_class(config)
-    else:
-        player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
-
-    torch = create_torch(player.uuid)
-    player.loot_item(torch)
-    torch.ignite(player.uuid)
-
-    potion = create_potion_of_greater_invisibility(player.uuid)
-    player.loot_item(potion)
-
-    if character_class == "sorcerer":
-        scroll_mm1 = create_scroll_of_magic_missile(player.uuid, cast_level=1)
-        scroll_mm2 = create_scroll_of_magic_missile(player.uuid, cast_level=1)
-        scroll_fb3 = create_scroll_of_fireball(player.uuid, cast_level=3)
-        scroll_fb5 = create_scroll_of_fireball(player.uuid, cast_level=5)
-        player.loot_item(scroll_mm1)
-        player.loot_item(scroll_mm2)
-        player.loot_item(scroll_fb3)
-        player.loot_item(scroll_fb5)
-
-    warrior = create_skeleton_warrior(
-        name="Skeleton Warrior", position=(12, 5), faction="monsters", darkvision=True
-    )
-    archer = create_skeleton_archer(
-        name="Skeleton Archer", position=(12, 7), faction="monsters", darkvision=True
-    )
-    warlock = create_skeleton_warlock(
-        name="Skeleton Warlock", position=(12, 9), faction="monsters", darkvision=True
-    )
-    skeletons = [warrior, archer, warlock]
-
-    add_opportunity_attack_handler(player)
-    for skeleton in skeletons:
-        add_opportunity_attack_handler(skeleton)
-
-    Entity.update_all_entities_senses(max_distance=20)
-
-    encounter_name = "PvP Arena" if pvp_mode else "Arena Combat"
-    encounter = Encounter(name=encounter_name, source_entity_uuid=uuid4())
-    encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
-
-    for skeleton in skeletons:
-        if pvp_mode:
-            encounter.add_combatant(skeleton, CodexController(source_entity_uuid=skeleton.uuid))
-        else:
-            encounter.add_combatant(skeleton, ExternalAIController(source_entity_uuid=skeleton.uuid))
-
-    return encounter
-
-
-def prioritize_hero_opening_turn(encounter: Encounter) -> None:
-    """Roll initiative but place the player hero first for human arena bootstrap."""
-    encounter.roll_initiative()
-    hero = next((entity for entity in Entity.get_all_entities() if entity.faction == "heroes"), None)
-    if hero is None or hero.uuid not in encounter.initiative_order:
-        return
-    encounter.initiative_order = [
-        hero.uuid,
-        *[entity_uuid for entity_uuid in encounter.initiative_order if entity_uuid != hero.uuid],
-    ]
-    encounter.current_turn_index = 0
-
-
 async def prepare_new_simulation_start() -> None:
     """Stop active automation and clear session-side projection state."""
     if sim.combat_task and not sim.combat_task.done():
@@ -719,7 +640,9 @@ async def prepare_new_simulation_start() -> None:
         except asyncio.CancelledError:
             pass
 
-    await _stop_all_managed_agents()
+    await sim.close_registered_ai_controllers()
+    sim.close_native_ai_controllers()
+    sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
     ai_takeover_manager.clear(sim.encounter, sim.game)
     clear_subjective_projection_state()
     agent_event_stream.clear_all()
@@ -730,90 +653,9 @@ async def prepare_new_simulation_start() -> None:
     sim.encounter = None
     sim.combat_task = None
     sim.current_creation = None
+    sim.activation_identity = None
     _available_actions_cache.clear()
     sim.paused = True
-
-
-def _require_managed_agent_service(required_agents: int) -> None:
-    """Preflight managed AI before a start route mutates live game state."""
-    if required_agents == 0:
-        return
-    try:
-        agent_service_manager.require_service(required_agents)
-    except AgentServiceUnavailableError as exc:
-        raise _api_http_exception(
-            status_code=503,
-            code="agent_service_unavailable",
-            message="This server has no registered managed-agent service",
-            required_agents=required_agents,
-        ) from exc
-    except (RuntimeError, ValueError) as exc:
-        raise _api_http_exception(
-            status_code=503,
-            code="agent_service_preflight_failed",
-            message="The registered managed-agent service is unavailable",
-            required_agents=required_agents,
-            error=str(exc),
-        ) from exc
-
-
-def _managed_agent_attachment_base_url(request: Request) -> str:
-    """Return the server-owned endpoint used by managed agent transports."""
-    worker_socket = os.environ.get("DND_WORKER_UNIX_SOCKET")
-    if worker_socket:
-        return "http://game-worker"
-    configured = os.environ.get("DND_AGENT_INTERNAL_BASE_URL")
-    if configured is not None:
-        normalized = configured.strip().rstrip("/")
-        if not normalized.startswith(("http://", "https://")):
-            raise RuntimeError(
-                "DND_AGENT_INTERNAL_BASE_URL must be an absolute HTTP(S) URL"
-            )
-        return normalized
-    scope_server = request.scope.get("server")
-    if (
-        not isinstance(scope_server, (tuple, list))
-        or len(scope_server) != 2
-        or not scope_server[0]
-    ):
-        raise RuntimeError(
-            "ASGI server address is unavailable; configure "
-            "DND_AGENT_INTERNAL_BASE_URL"
-        )
-    host = str(scope_server[0])
-    port = int(scope_server[1]) if scope_server[1] is not None else None
-    if host in {"0.0.0.0", "::"}:
-        host = "127.0.0.1"
-    elif ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    scheme = str(request.scope.get("scheme") or "http")
-    default_port = 443 if scheme == "https" else 80
-    port_suffix = f":{port}" if port is not None and port != default_port else ""
-    return f"{scheme}://{host}{port_suffix}"
-
-
-async def _start_managed_agent_sessions(
-    sessions: tuple[PlayerSession, ...],
-    request: Request,
-) -> None:
-    """Launch and authenticate one atomic batch of AI session services."""
-    worker_socket = os.environ.get("DND_WORKER_UNIX_SOCKET")
-    base_url = _managed_agent_attachment_base_url(request)
-    requests = tuple(
-        AgentLaunchRequest(
-            session_id=str(session.session_id),
-            base_url=base_url.rstrip("/"),
-            spawned_at=time.time(),
-            unix_socket_path=worker_socket,
-        )
-        for session in sessions
-    )
-    try:
-        await agent_service_manager.start_agents(requests)
-    except BaseException:
-        await _abort_failed_simulation_start()
-        raise
-
 
 async def _abort_failed_simulation_start() -> None:
     """Tear down every engine and server fact from a failed start transaction."""
@@ -824,7 +666,9 @@ async def _abort_failed_simulation_start() -> None:
         except asyncio.CancelledError:
             pass
 
-    await _stop_all_managed_agents()
+    await sim.close_registered_ai_controllers()
+    sim.close_native_ai_controllers()
+    sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
     ai_takeover_manager.clear(sim.encounter, sim.game)
     clear_subjective_projection_state()
     agent_event_stream.clear_all()
@@ -835,6 +679,7 @@ async def _abort_failed_simulation_start() -> None:
     sim.encounter = None
     sim._game_session = None
     sim.current_creation = None
+    sim.activation_identity = None
     sim.combat_task = None
     sim.paused = True
     _available_actions_cache.clear()
@@ -843,190 +688,19 @@ async def _abort_failed_simulation_start() -> None:
     event_stream.ensure_attached()
 
 
-async def _advance_managed_start_or_abort() -> AdvanceEncounterResult:
-    """Run initial advancement without leaking a partially started service."""
+async def _close_registered_ai_after_terminal(
+    encounter: Encounter,
+) -> None:
+    """Release remote assignments without rewriting a committed game result."""
+    if encounter.state is not EncounterState.ENDED:
+        return
     try:
-        return await advance_encounter()
+        await sim.close_registered_ai_controllers()
     except BaseException:
-        await _abort_failed_simulation_start()
-        raise
-
-
-def apply_validation_arena_controllers(encounter: Encounter, mode: str) -> None:
-    """Swap passive validation controllers for a live validation mode.
-
-    Args:
-        encounter: Validation encounter returned by the scenario catalog.
-        mode: Either ``human_hero`` or ``codex_monsters``.
-
-    Raises:
-        ValueError: If the mode is unknown.
-    """
-    if mode not in {"human_hero", "codex_monsters"}:
-        raise ValueError(f"Unsupported validation mode: {mode}")
-
-    for entity in Entity.get_all_entities():
-        if entity.uuid not in encounter.combatants:
-            continue
-        if entity.faction == "heroes":
-            controller = (
-                HumanController(source_entity_uuid=entity.uuid)
-                if mode == "human_hero"
-                else ExternalAIController(source_entity_uuid=entity.uuid)
-            )
-        elif entity.faction == "monsters":
-            controller = ExternalAIController(source_entity_uuid=entity.uuid)
-        else:
-            continue
-        encounter.set_controller_for(entity.uuid, controller)
-
-
-def setup_aoe_test_arena(
-    player_position: tuple = (2, 7),
-    character_class: str = "sorcerer"
-) -> Encounter:
-    """Initialize an open arena for area-of-effect spell testing.
-
-    Args:
-        player_position: Starting position for the hero.
-        character_class: Hero class fixture to create.
-
-    Returns:
-        Encounter with an open grid and three clustered goblins.
-    """
-    reset_engine_runtime(grid_size=(15, 15))
-    SessionManager.reset()
-    game_summary_store.reset()
-    event_stream.ensure_attached()
-
-    if character_class == "sorcerer":
-        config = SorcererConfig(
-            name="Hero",
-            position=player_position,
-            faction="heroes",
-            level=5,
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt", "Ray of Frost",
-                "Magic Missile", "Burning Hands", "Thunderwave",
-                "Scorching Ray", "Hold Person", "Shatter", "Invisibility",
-                "Fireball", "Lightning Bolt",
-            ],
+        logger.exception(
+            "Registered AI teardown failed after encounter %s ended",
+            encounter.uuid,
         )
-        player = create_sorcerer_class(config)
-    elif character_class == "barbarian":
-        player = create_barbarian_hero(name="Hero", position=player_position, faction="heroes")
-    else:
-        player = create_dex_fighter(name="Hero", position=player_position, faction="heroes")
-
-    goblin_positions = [(12, 4), (12, 5), (12, 6)]
-    goblins = []
-    for i, pos in enumerate(goblin_positions):
-        goblin = create_goblin(
-            name=f"Goblin {i+1}",
-            position=pos,
-            faction="monsters"
-        )
-        equip_wardrobe(goblin, BESTIARY_WARDROBES["goblin"])
-        goblins.append(goblin)
-
-    add_opportunity_attack_handler(player)
-    for goblin in goblins:
-        add_opportunity_attack_handler(goblin)
-
-    Entity.update_all_entities_senses(max_distance=20)
-
-    encounter = Encounter(name="AoE Test Arena", source_entity_uuid=uuid4())
-    encounter.add_combatant(player, HumanController(source_entity_uuid=player.uuid))
-
-    for goblin in goblins:
-        encounter.add_combatant(goblin, ExternalAIController(source_entity_uuid=goblin.uuid))
-
-    return encounter
-
-
-def create_dex_fighter(name: str = "Hero", position: tuple = (0, 0), faction: Optional[str] = None) -> Entity:
-    """Create a level 5 Dexterity fighter fixture.
-
-    The fixture uses two-weapon fighting, a shortsword, a dagger, and a
-    longbow, with Dexterity and Constitution racial bonuses plus a level 4
-    Dexterity ability-score increase.
-
-    Args:
-        name: Entity display name.
-        position: Starting grid position.
-        faction: Optional faction identifier.
-
-    Returns:
-        Configured fighter entity.
-    """
-    config = FighterConfig(
-        level=5,
-        name=name,
-        position=position,
-        faction=faction,
-        base_strength=12,
-        base_dexterity=15,
-        base_constitution=14,
-        base_intelligence=10,
-        base_wisdom=10,
-        base_charisma=8,
-        bonus_plus_2="dexterity",
-        bonus_plus_1="constitution",
-        fighting_style="two_weapon",
-        equipment_preset="archery",
-        asi_4=[("dexterity", 2)],
-    )
-
-    fighter = create_fighter(config)
-
-    fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
-    fighter.equipment.unequip(WeaponSlot.RANGED_MAIN)
-
-    shortsword = create_shortsword(fighter.uuid)
-    dagger = create_dagger(fighter.uuid)
-    longbow = create_longbow(fighter.uuid)
-
-    fighter.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
-    fighter.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
-    fighter.equipment.equip(longbow, WeaponSlot.RANGED_MAIN)
-
-    return fighter
-
-
-def create_barbarian_hero(name: str = "Hero", position: tuple = (0, 0), faction: Optional[str] = None) -> Entity:
-    """Create a level 5 Berserker barbarian fixture.
-
-    The fixture has Strength 19 after racial and level 4 bonuses, Constitution
-    15, and the greataxe equipment preset.
-
-    Args:
-        name: Entity display name.
-        position: Starting grid position.
-        faction: Optional faction identifier.
-
-    Returns:
-        Configured barbarian entity.
-    """
-    config = BarbarianConfig(
-        level=5,
-        name=name,
-        position=position,
-        faction=faction,
-        base_strength=15,
-        base_dexterity=13,
-        base_constitution=14,
-        base_intelligence=8,
-        base_wisdom=12,
-        base_charisma=10,
-        bonus_plus_2="strength",
-        bonus_plus_1="constitution",
-        primal_path=PrimalPathChoice.BERSERKER,
-        asi_4=[("strength", 2)],
-        equipment_preset="greataxe",
-    )
-    return equip_wardrobe(create_barbarian(config), BERSERKER_WARDROBE)
 
 
 async def advance_encounter(
@@ -1085,6 +759,171 @@ async def advance_encounter(
         turn_index=result.turn_index,
         **action_cursor_fields(),
     )
+
+
+def _schedule_activated_game_coordinator() -> bool:
+    """Schedule the sole autonomous continuation path when activation is live."""
+    encounter = sim.encounter
+    if (
+        encounter is None
+        or sim.activation_identity is None
+        or encounter.state is not EncounterState.ACTIVE
+        or sim.paused
+    ):
+        return False
+    existing = sim.combat_task
+    if existing is not None and not existing.done():
+        return True
+    sim.combat_task = asyncio.create_task(
+        _run_activated_game(),
+        name=f"native-ai-game-{sim.activation_identity.game_id}",
+    )
+    return True
+
+
+def _scheduled_advance_result() -> AdvanceEncounterResult:
+    """Capture the command barrier before the coordinator receives control."""
+    encounter = sim.encounter
+    current = encounter.get_current_entity() if encounter is not None else None
+    return AdvanceEncounterResult(
+        status="advancement_scheduled",
+        entity_uuid=str(current.uuid) if current is not None else None,
+        entity_name=current.name if current is not None else None,
+        round=encounter.round_number if encounter is not None else 0,
+        turn_index=encounter.current_turn_index if encounter is not None else 0,
+        **action_cursor_fields(),
+    )
+
+
+async def _run_activated_game() -> None:
+    """Advance native controllers cooperatively until an external boundary.
+
+    Activation starts the encounter synchronously so the opening lifecycle
+    barrier is committed exactly once. Autonomous turns then run one bounded
+    controller at a time and yield between them, allowing replication and
+    diagnostics subscribers to consume every published batch.
+    """
+    encounter = sim.encounter
+    activation = sim.activation_identity
+    if encounter is None or activation is None:
+        return
+
+    try:
+        while (
+            sim.encounter is encounter
+            and sim.activation_identity == activation
+            and encounter.state == EncounterState.ACTIVE
+            and not sim.paused
+        ):
+            controller = encounter.get_current_controller()
+            if controller is None:
+                logger.error(
+                    "Activated encounter %s has no controller for its current actor",
+                    encounter.uuid,
+                )
+                sim.paused = True
+                return
+            if (
+                controller.execution_mode is ControllerExecutionMode.AUTONOMOUS
+                and encounter.turn_state is not TurnState.IN_PROGRESS
+            ):
+                await asyncio.sleep(max(0.0, sim.turn_delay))
+            if (
+                sim.encounter is not encounter
+                or sim.activation_identity != activation
+                or sim.paused
+            ):
+                return
+            result = encounter.advance_one_controller_action_boundary()
+            if (
+                result.status == "waiting_for_ai_provider"
+                and isinstance(controller, RegisteredAIController)
+            ):
+                entity = encounter.get_current_entity()
+                if entity is None:
+                    raise RuntimeError(
+                        "registered AI boundary has no current actor"
+                    )
+                controller_uuid = controller.uuid
+                actor_uuid = entity.uuid
+                frozen_context = encounter.build_current_turn_context()
+                pending = await controller.request_intent(
+                    entity,
+                    frozen_context,
+                )
+                if (
+                    sim.encounter is not encounter
+                    or sim.activation_identity != activation
+                    or sim.paused
+                    or encounter.state is not EncounterState.ACTIVE
+                    or encounter.get_current_entity() is not entity
+                    or encounter.get_current_controller() is not controller
+                ):
+                    return
+                current_context = encounter.build_current_turn_context()
+                if (
+                    current_context.round_number
+                    != frozen_context.round_number
+                    or current_context.turn_index != frozen_context.turn_index
+                    or current_context.entity_uuid
+                    != frozen_context.entity_uuid
+                ):
+                    return
+                with EventQueue.batch_on_event_callbacks():
+                    if isinstance(pending, ControllerStepResult):
+                        step = pending
+                    else:
+                        step = controller.resolve_pending_intent(
+                            entity,
+                            current_context,
+                            pending,
+                        )
+                    result = encounter.resolve_deferred_controller_step(
+                        entity_uuid=actor_uuid,
+                        controller_uuid=controller_uuid,
+                        step=step,
+                    )
+            elif result.status == "waiting_for_ai_provider":
+                raise RuntimeError(
+                    "only RegisteredAIController may expose the external "
+                    "provider boundary"
+                )
+            if result.status in {
+                "autonomous_action_completed",
+                "advanced_autonomous",
+                "deferred_action_completed",
+            }:
+                # A zero-delay sleep immediately requeues this always-ready
+                # task.  Long AI-vs-AI matches can then make an HTTP request
+                # wait behind several projection-heavy action boundaries.
+                # One millisecond is a scheduler fairness checkpoint, not a
+                # gameplay/turn delay: it gives already-ready HTTP and SSE
+                # tasks a complete event-loop cycle while adding at most one
+                # millisecond per autonomous decision.
+                await asyncio.sleep(0.001)
+                continue
+            if result.status in {
+                "waiting_for_human",
+                "waiting_for_codex",
+            }:
+                _publish_decision_epoch_for_active_session(
+                    DecisionEpochReason.TURN_START,
+                )
+            return
+    except asyncio.CancelledError:
+        raise
+    except BaseException:
+        sim.paused = True
+        logger.exception(
+            "Activated encounter coordinator failed for %s",
+            encounter.uuid,
+        )
+    finally:
+        if (
+            sim.encounter is encounter
+            and encounter.state is EncounterState.ENDED
+        ):
+            await _close_registered_ai_after_terminal(encounter)
 
 
 def action_cursor_fields() -> dict:
@@ -1617,7 +1456,10 @@ def _assert_objective_diagnostics_access(request: Request) -> None:
     """
     try:
         is_worker = os.environ.get("DND_GAME_WORKER") == "1"
-        if request.url.path == "/game/evidence/objective-subscribe":
+        if request.url.path in {
+            "/game/evidence/objective-bootstrap",
+            "/game/evidence/objective-subscribe",
+        }:
             if not is_worker:
                 raise RuntimeAuthorityError(
                     "worker-internal objective evidence is unavailable"
@@ -1824,7 +1666,7 @@ def _simulation_context() -> dict:
         "encounter_state": sim.encounter.state.value if sim.encounter else None,
         "round_number": sim.encounter.round_number if sim.encounter else None,
         "turn_delay": sim.turn_delay,
-        "min_delay": 0.1,
+        "min_delay": 0.0,
         "max_delay": 10.0,
     }
 
@@ -1955,27 +1797,6 @@ def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity
     return entity
 
 
-async def run_combat_loop():
-    """Run automated encounter turns while the simulation is active.
-
-    Returns:
-        None.
-    """
-    if sim.encounter is None:
-        return
-
-    if sim.encounter.state == EncounterState.NOT_STARTED:
-        sim.encounter.start_encounter()
-
-    while sim.encounter.state == EncounterState.ACTIVE:
-        if sim.paused:
-            await asyncio.sleep(0.1)
-            continue
-
-        sim.encounter.run_turn()
-        await asyncio.sleep(sim.turn_delay)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage event-stream resources for the FastAPI application lifespan.
@@ -1993,15 +1814,23 @@ async def lifespan(app: FastAPI):
         try:
             yield
         finally:
-            try:
-                await _stop_all_managed_agents()
-            finally:
+            if sim.combat_task and not sim.combat_task.done():
+                sim.combat_task.cancel()
                 try:
-                    canonical_subjective_replication_runtime.stop()
+                    await sim.combat_task
+                except asyncio.CancelledError:
+                    pass
+            try:
+                await sim.close_registered_ai_controllers()
+            finally:
+                sim.close_native_ai_controllers()
+                try:
+                    await _active_registered_ai_provider_catalog().close()
                 finally:
-                    event_stream.stop()
-                    if sim.combat_task and not sim.combat_task.done():
-                        sim.combat_task.cancel()
+                    try:
+                        canonical_subjective_replication_runtime.stop()
+                    finally:
+                        event_stream.stop()
 
 app = FastAPI(
     title="D&D Engine Event Server",
@@ -2391,47 +2220,6 @@ async def get_mapeditor_light():
     return get_objective_light()
 
 
-@app.post(
-    "/simulation/start",
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def start_simulation():
-    """Reset the demo encounter and start the continuous combat loop.
-
-    Returns:
-        Status payload with the new encounter UUID.
-    """
-    await prepare_new_simulation_start()
-    sim.encounter = setup_combat()
-    sim.paused = False
-    sim.combat_task = asyncio.create_task(run_combat_loop())
-
-    return {
-        "status": "started",
-        "encounter_uuid": str(sim.encounter.uuid)
-    }
-
-
-@app.post(
-    "/simulation/reset",
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def reset_simulation():
-    """Stop current combat and reset to a paused demo encounter.
-
-    Returns:
-        Status payload with the reset encounter UUID.
-    """
-    await prepare_new_simulation_start()
-    sim.encounter = setup_combat()
-    sim.paused = True
-
-    return {
-        "status": "reset",
-        "encounter_uuid": str(sim.encounter.uuid)
-    }
-
-
 @app.post("/simulation/pause")
 async def pause_simulation():
     """Pause the combat loop.
@@ -2453,16 +2241,14 @@ async def resume_simulation():
     Raises:
         HTTPException: If no simulation exists.
     """
-    if sim.encounter is None:
+    if sim.encounter is None or sim.activation_identity is None:
         raise _simulation_http_exception(
             code="simulation_not_started",
-            message="No simulation to resume. Call /simulation/reset first.",
+            message="No activated game is available to resume.",
         )
 
     sim.paused = False
-
-    if sim.combat_task is None or sim.combat_task.done():
-        sim.combat_task = asyncio.create_task(run_combat_loop())
+    _schedule_activated_game_coordinator()
 
     return {"status": "resumed"}
 
@@ -2514,10 +2300,10 @@ async def set_turn_delay(delay: float):
     Raises:
         HTTPException: If the delay is outside supported bounds.
     """
-    if delay < 0.1:
+    if delay < 0:
         raise _simulation_http_exception(
             code="delay_too_low",
-            message="Delay must be at least 0.1 seconds",
+            message="Delay cannot be negative",
             requested_delay=delay,
         )
     if delay > 10:
@@ -2766,8 +2552,6 @@ async def delete_session(session_id: str):
             session_id=session_id,
         )
 
-    _evict_managed_agent_observation_streams((session_id,))
-    await agent_service_manager.stop_session(session_id)
     canonical_subjective_replication_runtime.retire_session(session_id)
     mgr.remove_session(sid)
     perspective_epoch_registry.clear_session(session_id)
@@ -3155,6 +2939,10 @@ async def get_subjective_render_parity_diagnostics(
     )
 
 
+@app.get(
+    "/game/evidence/objective-bootstrap",
+    include_in_schema=False,
+)
 @app.get(
     "/diagnostics/objective/bootstrap",
     response_model=ObjectiveDiagnosticsBootstrap,
@@ -3616,6 +3404,20 @@ def _build_decision_epoch(
         if cached is not None:
             return cached
 
+    started = time.perf_counter()
+    active_uuid = sim.game.active_entity_uuid
+    if (
+        sim.encounter.turn_state is not TurnState.IN_PROGRESS
+        or active_uuid is None
+        or active_uuid not in session.controlled_entities
+    ):
+        return None
+    if timing is not None:
+        timing.add(f"{phase_prefix}.resolve_active_actor_ms", started)
+    actor = Entity.get(active_uuid)
+    if actor is None or not actor.has_hp:
+        return None
+
     try:
         started = time.perf_counter()
         observation_cursor = get_observation_cursor(
@@ -3631,9 +3433,10 @@ def _build_decision_epoch(
         return None
 
     build = build_subjective_decision_epoch(
-        session=session,
-        game=sim.game,
-        encounter=sim.encounter,
+        actor,
+        epoch_namespace=session_id,
+        round_number=sim.encounter.round_number,
+        turn_index=sim.encounter.current_turn_index,
         observation_cursor=observation_cursor,
         reason=reason,
         record_timing=_prefixed_timing_recorder(timing, phase_prefix),
@@ -4712,6 +4515,10 @@ async def _advance_after_non_continuing_action(
     if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
         sim.encounter._advance_round()
     sim.encounter.turn_state = TurnState.NOT_STARTED
+    if sim.activation_identity is not None:
+        result = _scheduled_advance_result()
+        _schedule_activated_game_coordinator()
+        return result
     return await advance_encounter(
         publish_decision_epoch=publish_decision_epoch,
     )
@@ -5271,44 +5078,6 @@ def _agent_stream_session_payload(session_id: str) -> Optional[dict[str, Any]]:
     return session.to_dict() if session else None
 
 
-@app.get("/ai/service")
-async def get_managed_ai_service():
-    """Return registered service and session-runtime diagnostics."""
-    return {
-        "service_registered": agent_service_manager.has_service,
-        "service_id": agent_service_manager.service_id,
-        "execution_mode": agent_service_manager.execution_mode,
-        "sessions": agent_service_manager.session_statuses(),
-        "running_session_ids": agent_service_manager.running_session_ids(),
-    }
-
-
-@app.post(
-    "/ai/sessions/{session_id}/service-ready",
-    include_in_schema=False,
-)
-async def acknowledge_agent_service_ready(
-    session_id: str,
-    request: AgentServiceReadyRequest,
-):
-    """Accept one manager-issued readiness proof after subjective sync."""
-    _require_agent_stream_session(session_id)
-    if not agent_service_manager.acknowledge_ready(
-        session_id,
-        request.readiness_token,
-    ):
-        raise _api_http_exception(
-            status_code=409,
-            code="agent_service_readiness_rejected",
-            message="The agent service readiness proof is stale or invalid",
-            session_id=session_id,
-        )
-    return {
-        "status": "ready",
-        "session_id": session_id,
-    }
-
-
 @app.get("/entity/{entity_uuid}/handlers", response_model=APIEntityHandlersResponse)
 async def get_entity_handlers(entity_uuid: str, session_id: str) -> APIEntityHandlersResponse:
     """Get toggleable handlers for an entity controlled by the session."""
@@ -5513,6 +5282,11 @@ async def _end_turn_and_advance(
     if timing is not None:
         timing.add("end_turn.advance_turn_index_ms", started)
 
+    if sim.activation_identity is not None:
+        result = _scheduled_advance_result()
+        _schedule_activated_game_coordinator()
+        return result
+
     started = time.perf_counter()
     result = await advance_encounter(
         timing=timing,
@@ -5644,6 +5418,8 @@ async def _execute_action_by_index_impl(
         timing.add("check_deaths_ms", started)
 
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
+    if encounter_ended and sim.encounter is not None:
+        await _close_registered_ai_after_terminal(sim.encounter)
 
     updated_actions = None
     if request.return_available_actions and not encounter_ended and entity.has_hp:
@@ -5822,39 +5598,132 @@ def _game_creation_selection(
     ), recipe.arena_id
 
 
-def _set_game_creation_side_controllers(
+@dataclass(frozen=True)
+class _ResolvedAIPolicy:
+    """Cold policy resolution completed before engine replacement."""
+
+    descriptor: PolicyDescriptor
+    execution: AIExecutionKind
+    provider_id: Optional[str] = None
+
+
+async def _set_game_creation_side_controllers(
     encounter: Encounter,
-    entities: tuple[Entity, ...],
-    controller_kind: str,
-) -> None:
-    """Assign the configured external boundary controller to one exact side."""
-    controller_class = HumanController if controller_kind == "human" else ExternalAIController
-    for entity in entities:
-        encounter.set_controller_for(
-            entity.uuid,
-            controller_class(source_entity_uuid=entity.uuid),
-        )
-
-
-def _create_game_creation_ai_session(
     game: GameSession,
     entities: tuple[Entity, ...],
     participant: GameCreationSideRequest,
     side_id: str,
-) -> Optional[PlayerSession]:
-    """Create and assign one side-scoped AI session when required."""
+    resolved_policy: Optional[_ResolvedAIPolicy],
+) -> Optional[Controller]:
+    """Assign human actors or one policy/memory assignment for the whole side."""
     if participant.controller == "human":
+        for entity in entities:
+            encounter.set_controller_for(
+                entity.uuid,
+                HumanController(source_entity_uuid=entity.uuid),
+            )
         return None
-    manager = sim.get_session_manager()
-    label = participant.name
-    if participant.controller == "codex":
-        label = f"{participant.name} fallback AI"
-    session = manager.create_session(PlayerType.AI, label)
-    game.add_player(session)
+
+    if not entities or resolved_policy is None:
+        raise ValueError(f"{side_id} cannot create an AI without entities and policy")
+    controlled_entity_uuids = tuple(entity.uuid for entity in entities)
+    assignment_id = f"{game.game_id}:{side_id}"
+    instrumentation = AIInstrumentation(
+        sink=sim.native_ai_instrumentation,
+    )
+    if resolved_policy.execution == "in_process":
+        controller = NativeAIController.create(
+            source_entity_uuid=controlled_entity_uuids[0],
+            game_id=str(game.game_id),
+            assignment_id=assignment_id,
+            controlled_entity_uuids=controlled_entity_uuids,
+            policy_id=resolved_policy.descriptor.policy_id,
+            registry=native_policy_registry,
+            instrumentation=instrumentation,
+        )
+        controller.start(list(entities))
+        for entity in entities:
+            encounter.set_controller_for(entity.uuid, controller)
+        sim.native_ai_controllers.append(controller)
+        return controller
+
+    first_controller: RegisteredAIController | None = None
     for entity in entities:
-        game.assign_entity(entity.uuid, session.session_id)
-    logger.info("Created %s fallback session %s for %s", participant.controller, session.session_id, side_id)
-    return session
+        controller = await RegisteredAIController.create(
+            source_entity_uuid=entity.uuid,
+            game_id=str(game.game_id),
+            assignment_id=(
+                f"{assignment_id}:entity:{entity.uuid}"
+            ),
+            controlled_entity_uuids=(entity.uuid,),
+            policy_id=resolved_policy.descriptor.policy_id,
+            provider_catalog=_active_registered_ai_provider_catalog(),
+            instrumentation=instrumentation,
+        )
+        try:
+            controller.start([entity])
+            encounter.set_controller_for(entity.uuid, controller)
+        except BaseException:
+            await controller.close()
+            raise
+        sim.registered_ai_controllers.append(controller)
+        if first_controller is None:
+            first_controller = controller
+    return first_controller
+
+
+def _resolve_game_creation_policies(
+    creation: GameCreationStartRequest,
+) -> dict[str, Optional[_ResolvedAIPolicy]]:
+    """Validate all policy selections before replacing live engine state."""
+    resolved: dict[str, Optional[_ResolvedAIPolicy]] = {}
+    provider_catalog = _active_registered_ai_provider_catalog()
+    for side_id, participant in (
+        ("side_a", creation.side_a),
+        ("side_b", creation.side_b),
+    ):
+        if participant.controller == "human":
+            if participant.policy_id is not None:
+                raise _api_http_exception(
+                    status_code=400,
+                    code="ai_policy_not_applicable",
+                    message="Human sides cannot select an AI policy",
+                    side_id=side_id,
+                    policy_id=participant.policy_id,
+                )
+            resolved[side_id] = None
+            continue
+        policy_id = participant.policy_id or DEFAULT_NATIVE_POLICY_ID
+        try:
+            descriptor = native_policy_registry.require_descriptor(policy_id)
+        except UnknownPolicyError:
+            try:
+                descriptor = provider_catalog.policy_descriptor(policy_id)
+                provider = provider_catalog.provider_for_policy(policy_id)
+            except RegisteredAIProviderNotFoundError as exc:
+                valid_policy_ids = [
+                    option.descriptor.policy_id
+                    for option in _game_creation_ai_policy_options()
+                ]
+                raise _api_http_exception(
+                    status_code=400,
+                    code="ai_policy_not_registered",
+                    message="Requested AI policy is not registered",
+                    side_id=side_id,
+                    policy_id=policy_id,
+                    valid_policy_ids=valid_policy_ids,
+                ) from exc
+            resolved[side_id] = _ResolvedAIPolicy(
+                descriptor=descriptor,
+                execution="registered_provider",
+                provider_id=provider.provider_id,
+            )
+            continue
+        resolved[side_id] = _ResolvedAIPolicy(
+            descriptor=descriptor,
+            execution="in_process",
+        )
+    return resolved
 
 
 def _game_creation_side_result(
@@ -5863,7 +5732,7 @@ def _game_creation_side_result(
     title: str,
     entities: tuple[Entity, ...],
     participant: GameCreationSideRequest,
-    fallback_session: Optional[PlayerSession],
+    resolved_policy: Optional[_ResolvedAIPolicy],
     takeover_claim: Optional[TakeoverClaim],
 ) -> GameCreationSideResult:
     """Serialize one resolved side assignment."""
@@ -5880,9 +5749,19 @@ def _game_creation_side_result(
             )
             for entity in entities
         ],
-        fallback_ai_session_id=(
-            str(fallback_session.session_id)
-            if fallback_session is not None
+        policy_id=(
+            resolved_policy.descriptor.policy_id
+            if resolved_policy is not None
+            else None
+        ),
+        policy_execution=(
+            resolved_policy.execution
+            if resolved_policy is not None
+            else None
+        ),
+        provider_id=(
+            resolved_policy.provider_id
+            if resolved_policy is not None
             else None
         ),
         codex_session_id=(
@@ -5903,15 +5782,166 @@ def _game_creation_side_result(
     )
 
 
+def _require_ai_provider_admin(
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    """Require the deployment bearer; player/session credentials never apply."""
+    configured = _ai_provider_admin_token
+    if configured is None:
+        raise _api_http_exception(
+            status_code=503,
+            code="ai_provider_admin_disabled",
+            message=(
+                "External AI provider administration requires "
+                "DND_AI_PROVIDER_ADMIN_TOKEN"
+            ),
+        )
+    scheme, separator, credential = (authorization or "").partition(" ")
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not hmac.compare_digest(credential, configured)
+    ):
+        raise _api_http_exception(
+            status_code=403,
+            code="ai_provider_admin_forbidden",
+            message="A valid deployment AI-provider bearer is required",
+        )
+
+
+def _provider_catalog_entry(
+    info: RegisteredAIProviderInfo,
+) -> AIProviderCatalogEntry:
+    """Serialize one provider without exposing assignment capabilities."""
+    return AIProviderCatalogEntry(
+        provider_id=info.provider_id,
+        base_url=info.base_url,
+        protocol_version=EXTERNAL_AI_PROTOCOL_VERSION,
+        protocol_hash=EXTERNAL_AI_PROTOCOL_HASH,
+        policies=list(info.policies),
+        capacity=info.capacity,
+        active_assignments=info.active_assignments,
+        available_capacity=info.available_capacity,
+    )
+
+
+def _game_creation_ai_policy_options() -> tuple[GameCreationAIPolicyOption, ...]:
+    """Merge native and authenticated provider policies by global identity."""
+    options = [
+        GameCreationAIPolicyOption(
+            descriptor=descriptor,
+            execution="in_process",
+        )
+        for descriptor in native_policy_registry.descriptors()
+    ]
+    for provider in _active_registered_ai_provider_catalog().providers():
+        options.extend(
+            GameCreationAIPolicyOption(
+                descriptor=descriptor,
+                execution="registered_provider",
+                provider_id=provider.provider_id,
+                capacity=provider.capacity,
+                active_assignments=provider.active_assignments,
+                available_capacity=provider.available_capacity,
+            )
+            for descriptor in provider.policies
+        )
+    return tuple(
+        sorted(options, key=lambda option: option.descriptor.policy_id)
+    )
+
+
+def _registered_ai_provider_http_exception(
+    error: RegisteredAIProviderError,
+) -> HTTPException:
+    """Map provider ownership and transport failures to stable admin errors."""
+    if isinstance(
+        error,
+        (RegisteredAIProviderCollisionError, RegisteredAIProviderBusyError),
+    ):
+        status_code = 409
+        code = "ai_provider_conflict"
+    elif isinstance(error, RegisteredAIProviderNotFoundError):
+        status_code = 404
+        code = "ai_provider_not_found"
+    elif isinstance(error, RegisteredAIProviderProtocolError):
+        status_code = 502
+        code = "ai_provider_protocol_invalid"
+    elif isinstance(
+        error,
+        (RegisteredAIProviderTransportError, RegisteredAIProviderCapacityError),
+    ):
+        status_code = 503
+        code = "ai_provider_unavailable"
+    else:
+        status_code = 500
+        code = "ai_provider_error"
+    return _api_http_exception(
+        status_code=status_code,
+        code=code,
+        message=str(error),
+    )
+
+
+@app.get(
+    "/admin/ai/providers",
+    response_model=AIProviderCatalogResponse,
+    dependencies=[Depends(_require_ai_provider_admin)],
+)
+async def list_registered_ai_providers() -> AIProviderCatalogResponse:
+    """List authenticated external policy providers for deployment tooling."""
+    return AIProviderCatalogResponse(
+        providers=[
+            _provider_catalog_entry(info)
+            for info in _active_registered_ai_provider_catalog().providers()
+        ],
+    )
+
+
+@app.post(
+    "/admin/ai/providers",
+    response_model=AIProviderCatalogEntry,
+    dependencies=[Depends(_require_ai_provider_admin)],
+)
+async def register_ai_provider(
+    registration: AIProviderRegistrationRequest,
+) -> AIProviderCatalogEntry:
+    """Handshake with and register one external policy provider."""
+    try:
+        info = await _active_registered_ai_provider_catalog().register(
+            provider_id=registration.provider_id,
+            base_url=registration.base_url,
+        )
+    except RegisteredAIProviderError as error:
+        raise _registered_ai_provider_http_exception(error) from error
+    return _provider_catalog_entry(info)
+
+
+@app.delete(
+    "/admin/ai/providers/{provider_id}",
+    response_model=AIProviderDeleteResponse,
+    dependencies=[
+        Depends(_require_ai_provider_admin),
+        Depends(_serialize_world_replacement),
+    ],
+)
+async def unregister_ai_provider(
+    provider_id: str,
+) -> AIProviderDeleteResponse:
+    """Remove an idle provider; live game assignments reject the mutation."""
+    try:
+        await _active_registered_ai_provider_catalog().unregister(provider_id)
+    except RegisteredAIProviderError as error:
+        raise _registered_ai_provider_http_exception(error) from error
+    return AIProviderDeleteResponse(provider_id=provider_id)
+
+
 @app.get("/game-creation/catalog", response_model=GameCreationCatalogResponse)
 async def get_game_creation_catalog() -> GameCreationCatalogResponse:
     """Return canonical scenarios, formations, and controller choices."""
-    controllers: tuple[Literal["human", "ai", "codex"], ...] = (
-        ("human", "ai", "codex")
-        if agent_service_manager.has_service
-        else ("human",)
+    return build_game_creation_catalog(
+        ai_policies=_game_creation_ai_policy_options(),
     )
-    return build_game_creation_catalog(controllers)
 
 
 @app.post("/game-creation/preflight", response_model=CompatibilityReport)
@@ -5928,7 +5958,6 @@ async def preflight_game_creation(
     dependencies=[Depends(_serialize_world_replacement)],
 )
 async def start_created_game(
-    request: Request,
     creation: GameCreationStartRequest,
 ) -> GameCreationStartResponse:
     """Atomically assemble a scenario and configure both controller sides."""
@@ -5942,11 +5971,7 @@ async def start_created_game(
             compatibility=static_report.model_dump(mode="json"),
         )
 
-    required_agents = sum(
-        participant.controller != "human"
-        for participant in (creation.side_a, creation.side_b)
-    )
-    _require_managed_agent_service(required_agents)
+    policies = _resolve_game_creation_policies(creation)
     await prepare_new_simulation_start()
     opening_faction = {
         "initiative": None,
@@ -5955,13 +5980,13 @@ async def start_created_game(
     }[creation.opening_side]
     try:
         if preset_arena_id is not None:
-            arena = assemble_legacy_scenario(
+            arena = prepare_legacy_scenario(
                 preset_arena_id,
                 opening_faction=opening_faction,
             )
             compatibility = static_report
         else:
-            assembled = assemble_composed_scenario(
+            assembled = prepare_composed_scenario(
                 selection.hero_configuration_id,
                 selection.monster_configuration_id,
                 selection.battlefield_id,
@@ -5970,44 +5995,37 @@ async def start_created_game(
             )
             arena = assembled.arena
             compatibility = assembled.compatibility
-    except (IncompatibleScenarioError, ValueError) as exc:
-        raise _api_http_exception(
-            status_code=400,
-            code="game_creation_assembly_failed",
-            message=str(exc),
-            selection=selection.model_dump(mode="json"),
-        ) from exc
 
-    sim.encounter = arena.encounter
-    sim.paused = False
-    sim.encounter.clear_combat_log()
-    game_summary_store.reset()
-    game_summary_store.capture_active_encounter(arena.encounter)
-    event_stream.ensure_attached()
-    side_a = tuple(arena.side_a)
-    side_b = tuple(arena.side_b)
-    _set_game_creation_side_controllers(sim.encounter, side_a, creation.side_a.controller)
-    _set_game_creation_side_controllers(sim.encounter, side_b, creation.side_b.controller)
+        sim.encounter = arena.encounter
+        sim.paused = True
+        sim.encounter.clear_combat_log()
+        game_summary_store.reset()
+        event_stream.ensure_attached()
+        side_a = tuple(arena.side_a)
+        side_b = tuple(arena.side_b)
 
-    game = sim.create_game_session(sim.encounter)
-    side_a_fallback = _create_game_creation_ai_session(
-        game,
-        side_a,
-        creation.side_a,
-        "side_a",
-    )
-    side_b_fallback = _create_game_creation_ai_session(
-        game,
-        side_b,
-        creation.side_b,
-        "side_b",
-    )
+        game = sim.create_game_session(sim.encounter)
+        await _set_game_creation_side_controllers(
+            sim.encounter,
+            game,
+            side_a,
+            creation.side_a,
+            "side_a",
+            policies["side_a"],
+        )
+        await _set_game_creation_side_controllers(
+            sim.encounter,
+            game,
+            side_b,
+            creation.side_b,
+            "side_b",
+            policies["side_b"],
+        )
 
-    claims: dict[str, TakeoverClaim] = {}
-    manager = sim.get_session_manager()
-    subjective_authority_before = _capture_subjective_session_authority(manager)
-    ownership_boundary = prepare_observation_ownership_change(manager)
-    try:
+        claims: dict[str, TakeoverClaim] = {}
+        manager = sim.get_session_manager()
+        subjective_authority_before = _capture_subjective_session_authority(manager)
+        ownership_boundary = prepare_observation_ownership_change(manager)
         for side_id, entities, participant in (
             ("side_a", side_a, creation.side_a),
             ("side_b", side_b, creation.side_b),
@@ -6023,478 +6041,148 @@ async def start_created_game(
                 name=participant.name,
                 lease_seconds=creation.codex_lease_seconds,
             )
-    except TakeoverError as exc:
-        ai_takeover_manager.clear(sim.encounter, game)
-        raise _takeover_http_exception(exc, faction=None) from exc
-    _publish_takeover_ownership_changes(
-        ownership_boundary,
-        "game_creation_claimed",
-        subjective_authority_before=subjective_authority_before,
-    )
-
-    try:
-        await _start_managed_agent_sessions(
-            tuple(
-                session
-                for session in (side_a_fallback, side_b_fallback)
-                if session is not None
-            ),
-            request,
-        )
-    except AgentServiceStartError as exc:
-        raise _api_http_exception(
-            status_code=500,
-            code="agent_service_start_failed",
-            message="Failed to start a configured AI side",
-            error=str(exc),
-        ) from exc
-
-    advance = await _advance_managed_start_or_abort()
-    hero_spec = get_combatant_configuration(selection.hero_configuration_id)
-    monster_spec = get_combatant_configuration(selection.monster_configuration_id)
-    response = GameCreationStartResponse(
-        scenario_kind=creation.scenario.kind,
-        preset_arena_id=preset_arena_id,
-        encounter_uuid=str(sim.encounter.uuid),
-        game_id=str(game.game_id),
-        encounter_name=sim.encounter.name,
-        opening_side=creation.opening_side,
-        compatibility=compatibility,
-        side_a=_game_creation_side_result(
-            side_id="side_a",
-            title=hero_spec.title,
-            entities=side_a,
-            participant=creation.side_a,
-            fallback_session=side_a_fallback,
-            takeover_claim=claims.get("side_a"),
-        ),
-        side_b=_game_creation_side_result(
-            side_id="side_b",
-            title=monster_spec.title,
-            entities=side_b,
-            participant=creation.side_b,
-            fallback_session=side_b_fallback,
-            takeover_claim=claims.get("side_b"),
-        ),
-        **advance.model_dump(mode="json"),
-    )
-    sim.current_creation = response
-    return response
-
-
-@app.post(
-    "/simulation/start-human",
-    response_model=StartHumanSimulationResponse,
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def start_human_simulation(
-    request: Request,
-    character_class: str = "fighter",
-) -> StartHumanSimulationResponse:
-    """
-    Start a new combat with human control (player vs AI).
-
-    This creates a game session and auto-assigns entities:
-    - Hero (heroes faction) goes to the first human session that joins
-    - All monsters faction entities are controlled by AI
-
-    Args:
-        character_class: "fighter", "barbarian", or "sorcerer" - the hero's class.
-    """
-    _require_managed_agent_service(1)
-    await prepare_new_simulation_start()
-
-    sim.encounter = setup_arena_combat(
-        pvp_mode=False,
-        character_class=character_class,
-    )
-    prioritize_hero_opening_turn(sim.encounter)
-    sim.paused = False
-    sim.encounter.clear_combat_log()
-
-    game = sim.create_game_session(sim.encounter)
-
-    mgr = sim.get_session_manager()
-    ai_session = mgr.create_session(PlayerType.AI, "AI Monsters")
-    game.add_player(ai_session)
-
-    for entity in Entity.get_all_entities():
-        if entity.faction == "monsters":
-            game.assign_entity(entity.uuid, ai_session.session_id)
-
-    try:
-        await _start_managed_agent_sessions(
-            (ai_session,),
-            request,
-        )
-    except AgentServiceStartError as exc:
-        raise _api_http_exception(
-            status_code=500,
-            code="agent_service_start_failed",
-            message="Failed to start the managed AI service",
-            session_id=str(ai_session.session_id),
-            error=str(exc),
-        )
-
-    result = await _advance_managed_start_or_abort()
-
-    hero_uuid = None
-    for entity in Entity.get_all_entities():
-        if entity.faction == "heroes":
-            hero_uuid = str(entity.uuid)
-            break
-
-    return StartHumanSimulationResponse(
-        **result.model_dump(mode="python"),
-        ai_session_id=str(ai_session.session_id),
-        encounter_uuid=str(sim.encounter.uuid),
-        hero_uuid=hero_uuid,
-        message="Create a session and join with hero_uuid to control the Hero",
-    )
-
-
-@app.get("/simulation/ai-validation-arenas")
-async def list_ai_validation_arenas():
-    """Return opt-in AI validation arena specs."""
-    return {
-        "arenas": [
-            asdict(spec)
-            for spec in list_ai_validation_arena_specs()
-        ]
-    }
-
-
-@app.post(
-    "/simulation/start-ai-validation",
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def start_ai_validation_simulation(
-    request: Request,
-    arena_id: str = "standard_skeleton_doors",
-    mode: str = "human_hero",
-):
-    """Start an explicit AI validation arena.
-
-    Args:
-        arena_id: Stable id from `/simulation/ai-validation-arenas`.
-        mode: `human_hero` for a player/Codex hero against external monsters,
-            or `codex_monsters` for an external hero against Codex monsters.
-
-    Returns:
-        Validation arena bootstrap payload with session and actor ids.
-    """
-    if mode not in {"human_hero", "codex_monsters"}:
-        raise _api_http_exception(
-            status_code=400,
-            code="invalid_validation_mode",
-            message="mode must be 'human_hero' or 'codex_monsters'",
-            mode=mode,
-            valid_modes=["human_hero", "codex_monsters"],
-        )
-
-    validation_specs = list_ai_validation_arena_specs()
-    valid_arena_ids = [spec.arena_id for spec in validation_specs]
-    if arena_id not in valid_arena_ids:
-        raise _api_http_exception(
-            status_code=400,
-            code="invalid_validation_arena",
-            message=f"Unknown AI validation arena: {arena_id}",
-            arena_id=arena_id,
-            valid_arena_ids=valid_arena_ids,
-        )
-    _require_managed_agent_service(1)
-    await prepare_new_simulation_start()
-
-    try:
-        arena = create_ai_validation_arena(arena_id)
-    except ValueError as exc:
-        raise _api_http_exception(
-            status_code=400,
-            code="invalid_validation_arena",
-            message=str(exc),
-            arena_id=arena_id,
-            valid_arena_ids=valid_arena_ids,
-        )
-
-    sim.encounter = arena.encounter
-    apply_validation_arena_controllers(sim.encounter, mode)
-    prioritize_hero_opening_turn(sim.encounter)
-    sim.encounter.clear_combat_log()
-
-    game = sim.create_game_session(sim.encounter)
-    mgr = sim.get_session_manager()
-
-    ai_session = mgr.create_session(
-        PlayerType.AI,
-        "AI Monsters" if mode == "human_hero" else "AI Hero",
-    )
-    game.add_player(ai_session)
-    takeover_claim: Optional[TakeoverClaim] = None
-
-    for entity in Entity.get_all_entities():
-        if mode == "human_hero" and entity.faction == "monsters":
-            game.assign_entity(entity.uuid, ai_session.session_id)
-        elif mode == "codex_monsters" and entity.faction == "heroes":
-            game.assign_entity(entity.uuid, ai_session.session_id)
-
-    if mode == "codex_monsters":
-        subjective_authority_before = _capture_subjective_session_authority(mgr)
-        ownership_boundary = prepare_observation_ownership_change(mgr)
-        try:
-            takeover_claim = ai_takeover_manager.claim(
-                encounter=sim.encounter,
-                game=game,
-                session_manager=mgr,
-                faction="monsters",
-                name="Codex Validation Monsters",
-                lease_seconds=600.0,
-            )
-        except TakeoverError as error:
-            raise _takeover_http_exception(error, faction="monsters")
         _publish_takeover_ownership_changes(
             ownership_boundary,
-            "validation_takeover_claimed",
+            "game_creation_claimed",
             subjective_authority_before=subjective_authority_before,
         )
 
-    try:
-        await _start_managed_agent_sessions(
-            (ai_session,),
-            request,
+        hero_spec = get_combatant_configuration(
+            selection.hero_configuration_id
         )
-    except AgentServiceStartError as exc:
+        monster_spec = get_combatant_configuration(
+            selection.monster_configuration_id
+        )
+        response = GameCreationStartResponse(
+            scenario_kind=creation.scenario.kind,
+            preset_arena_id=preset_arena_id,
+            encounter_uuid=str(sim.encounter.uuid),
+            game_id=str(game.game_id),
+            encounter_name=sim.encounter.name,
+            opening_side=creation.opening_side,
+            compatibility=compatibility,
+            side_a=_game_creation_side_result(
+                side_id="side_a",
+                title=hero_spec.title,
+                entities=side_a,
+                participant=creation.side_a,
+                resolved_policy=policies["side_a"],
+                takeover_claim=claims.get("side_a"),
+            ),
+            side_b=_game_creation_side_result(
+                side_id="side_b",
+                title=monster_spec.title,
+                entities=side_b,
+                participant=creation.side_b,
+                resolved_policy=policies["side_b"],
+                takeover_claim=claims.get("side_b"),
+            ),
+        )
+        sim.current_creation = response
+        return response
+    except (IncompatibleScenarioError, ValueError) as exc:
+        await _abort_failed_simulation_start()
         raise _api_http_exception(
-            status_code=500,
-            code="agent_service_start_failed",
-            message="Failed to start the managed AI service",
-            session_id=str(ai_session.session_id),
-            error=str(exc),
-        )
-
-    result = await _advance_managed_start_or_abort()
-    hero_rows = [
-        {
-            "entity_uuid": str(entity.uuid),
-            "entity_name": entity.name,
-        }
-        for entity in Entity.get_all_entities()
-        if entity.faction == "heroes"
-    ]
-    monster_rows = [
-        {
-            "entity_uuid": str(entity.uuid),
-            "entity_name": entity.name,
-        }
-        for entity in Entity.get_all_entities()
-        if entity.faction == "monsters"
-    ]
-
-    return {
-        "status": "started",
-        "mode": mode,
-        "arena_id": arena.spec.arena_id,
-        "arena_title": arena.spec.title,
-        "arena_tags": list(arena.spec.tags),
-        "ai_session_id": str(ai_session.session_id),
-        "codex_session_id": str(takeover_claim.session_id) if takeover_claim else None,
-        "takeover_claim_id": str(takeover_claim.claim_id) if takeover_claim else None,
-        "encounter_uuid": str(sim.encounter.uuid),
-        "hero_uuid": hero_rows[0]["entity_uuid"] if hero_rows else None,
-        "heroes": hero_rows,
-        "monsters": monster_rows,
-        **result.model_dump(mode="json"),
-    }
-
-
-@app.post(
-    "/simulation/start-codex-monsters",
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def start_codex_monsters_simulation(
-    request: Request,
-    character_class: str = "fighter",
-):
-    """Start a manual self-play arena with an external-AI hero.
-
-    This is the inverse of `/simulation/start-human`: the Hero is assigned to
-    the local external AI process, while the monster faction waits for a Codex
-    operator to attach through `/ai/takeover`.
-
-    Args:
-        character_class: Hero fixture to create for the automated opponent.
-
-    Returns:
-        Arena bootstrap payload with the AI hero session and monster UUIDs.
-    """
-    _require_managed_agent_service(1)
-    await prepare_new_simulation_start()
-
-    sim.encounter = setup_arena_combat(
-        pvp_mode=True,
-        character_class=character_class,
-    )
-    prioritize_hero_opening_turn(sim.encounter)
-
-    hero = next((entity for entity in Entity.get_all_entities() if entity.faction == "heroes"), None)
-    if hero is None:
-        raise _api_http_exception(
-            status_code=500,
-            code="hero_not_found",
-            message="Could not create Hero for Codex monster arena",
-        )
-    sim.encounter.set_controller_for(hero.uuid, ExternalAIController(source_entity_uuid=hero.uuid))
-    sim.paused = False
-    sim.encounter.clear_combat_log()
-
-    game = sim.create_game_session(sim.encounter)
-    mgr = sim.get_session_manager()
-    ai_session = mgr.create_session(PlayerType.AI, "AI Hero")
-    game.add_player(ai_session)
-    game.assign_entity(hero.uuid, ai_session.session_id)
-
-    try:
-        await _start_managed_agent_sessions(
-            (ai_session,),
-            request,
-        )
-    except AgentServiceStartError as exc:
-        raise _api_http_exception(
-            status_code=500,
-            code="agent_service_start_failed",
-            message="Failed to start the managed AI service",
-            session_id=str(ai_session.session_id),
-            error=str(exc),
-        )
-
-    result = await _advance_managed_start_or_abort()
-    monster_rows = [
-        {
-            "entity_uuid": str(entity.uuid),
-            "entity_name": entity.name,
-        }
-        for entity in Entity.get_all_entities()
-        if entity.faction == "monsters"
-    ]
-
-    return {
-        "status": "started",
-        "mode": "codex_monsters",
-        "hero_ai_session_id": str(ai_session.session_id),
-        "encounter_uuid": str(sim.encounter.uuid),
-        "hero_uuid": str(hero.uuid),
-        "monsters": monster_rows,
-        "message": "Attach current Codex to faction=monsters to control the skeleton side.",
-        **result.model_dump(mode="json"),
-    }
-
-
-@app.post(
-    "/simulation/start-aoe-test",
-    dependencies=[Depends(_serialize_world_replacement)],
-)
-async def start_aoe_test(request: Request):
-    """
-    Start arena configured for AoE spell testing.
-
-    Layout:
-    - Open 15x15 grid (no walls)
-    - Sorcerer (hero) at (2, 7) with Fireball, Magic Missile, etc.
-    - 3 Goblins clustered at (12, 4), (12, 5), (12, 6) - within Fireball radius
-    """
-
-    _require_managed_agent_service(1)
-    await prepare_new_simulation_start()
-
-    sim.encounter = setup_aoe_test_arena(character_class="sorcerer")
-    prioritize_hero_opening_turn(sim.encounter)
-    sim.paused = False
-    sim.encounter.clear_combat_log()
-
-    game = sim.create_game_session(sim.encounter)
-
-    mgr = sim.get_session_manager()
-    ai_session = mgr.create_session(PlayerType.AI, "AI Monsters")
-    game.add_player(ai_session)
-
-    for entity in Entity.get_all_entities():
-        if entity.faction == "monsters":
-            game.assign_entity(entity.uuid, ai_session.session_id)
-
-    try:
-        await _start_managed_agent_sessions(
-            (ai_session,),
-            request,
-        )
-    except AgentServiceStartError as exc:
-        raise _api_http_exception(
-            status_code=500,
-            code="agent_service_start_failed",
-            message="Failed to start the managed AI service",
-            session_id=str(ai_session.session_id),
-            error=str(exc),
+            status_code=400,
+            code="game_creation_assembly_failed",
+            message=str(exc),
+            selection=selection.model_dump(mode="json"),
         ) from exc
-
-    result = await _advance_managed_start_or_abort()
-
-    hero_uuid = None
-    for entity in Entity.get_all_entities():
-        if entity.faction == "heroes":
-            hero_uuid = str(entity.uuid)
-            break
-
-    return {
-        "status": "started",
-        "test_type": "aoe",
-        "encounter_uuid": str(sim.encounter.uuid),
-        "hero_uuid": hero_uuid,
-        "message": "AoE test arena: Sorcerer vs 3 clustered Goblins",
-        **result.model_dump(mode="json"),
-    }
+    except TakeoverError as exc:
+        await _abort_failed_simulation_start()
+        raise _takeover_http_exception(exc, faction=None) from exc
+    except RegisteredAIProviderError as exc:
+        await _abort_failed_simulation_start()
+        raise _registered_ai_provider_http_exception(exc) from exc
+    except BaseException:
+        await _abort_failed_simulation_start()
+        raise
 
 
 @app.post(
-    "/simulation/start-pvp",
+    "/game-creation/activate",
+    response_model=GameCreationActivateResponse,
     dependencies=[Depends(_serialize_world_replacement)],
 )
-async def start_pvp_simulation(character_class: str = "fighter"):
-    """
-    Start PvP combat where both entities are human-controlled.
+async def activate_created_game(
+    request: Request,
+    activation: GameCreationActivateRequest,
+) -> GameCreationActivateResponse:
+    """Release a prepared encounter from one exact replication bootstrap."""
+    encounter = sim.encounter
+    game = sim.game
+    creation = sim.current_creation
+    if encounter is None or game is None or creation is None:
+        raise _api_http_exception(
+            status_code=409,
+            code="prepared_game_unavailable",
+            message="No prepared game is available for activation",
+        )
 
-    Player 1 (Hero) = controlled by user via CLI (PlayerType.HUMAN)
-    Player 2 (Skeleton) = controlled by Codex via agent CLI (PlayerType.CODEX)
+    request_context = _resolve_replication_request(request, activation.session_id)
+    if request_context.session_id not in game.players:
+        raise _api_http_exception(
+            status_code=403,
+            code="activation_session_not_joined",
+            message="Activation requires a session joined to the prepared game",
+            session_id=activation.session_id,
+            game_id=str(game.game_id),
+        )
+    context = _replication_runtime_context(
+        request_context,
+        expected_source_stream_id=activation.expected_source_stream_id,
+        expected_generation_id=activation.expected_generation_id,
+        expected_perspective_epoch_id=activation.expected_perspective_epoch_id,
+    )
+    context.bootstrap()
 
-    Both players create sessions and join to control their entities.
+    identity = _GameActivationIdentity(
+        game_id=game.game_id,
+        session_id=request_context.session_id,
+        source_stream_id=activation.expected_source_stream_id,
+        generation_id=activation.expected_generation_id,
+        perspective_epoch_id=activation.expected_perspective_epoch_id,
+    )
+    existing = sim.activation_identity
+    if existing is not None:
+        if existing != identity:
+            raise _api_http_exception(
+                status_code=409,
+                code="game_activation_identity_changed",
+                message="The prepared game was activated by another replication identity",
+                game_id=str(game.game_id),
+            )
+        return GameCreationActivateResponse(
+            status="already_active",
+            game_id=str(game.game_id),
+            encounter_uuid=str(encounter.uuid),
+        )
 
-    Args:
-        character_class: "fighter", "barbarian", or "sorcerer" - the hero's class.
-    """
+    if encounter.state != EncounterState.NOT_STARTED:
+        raise _api_http_exception(
+            status_code=409,
+            code="game_activation_state_invalid",
+            message="Encounter crossed its start boundary without canonical activation",
+            game_id=str(game.game_id),
+            encounter_state=encounter.state.value,
+        )
 
-    await prepare_new_simulation_start()
-    sim.encounter = setup_arena_combat(pvp_mode=True, character_class=character_class)
+    sim.activation_identity = identity
     sim.paused = False
-    sim.encounter.clear_combat_log()
+    try:
+        encounter.start_encounter()
+        if not _schedule_activated_game_coordinator():
+            raise RuntimeError("Activated game coordinator could not be scheduled")
+    except BaseException:
+        sim.activation_identity = None
+        sim.paused = True
+        raise
 
-    _ = sim.create_game_session(sim.encounter)
-
-    hero_uuid = None
-    skeleton_uuid = None
-    for entity in Entity.get_all_entities():
-        if entity.name == "Hero":
-            hero_uuid = entity.uuid
-        elif entity.name == "Skeleton":
-            skeleton_uuid = entity.uuid
-
-    result = await advance_encounter()
-
-    return {
-        "status": "pvp_started",
-        "mode": "pvp",
-        "encounter_uuid": str(sim.encounter.uuid),
-        "hero_uuid": str(hero_uuid) if hero_uuid else None,
-        "skeleton_uuid": str(skeleton_uuid) if skeleton_uuid else None,
-        "message": "PvP mode: Create sessions and join - Hero (human) vs Skeleton (codex)",
-        **result.model_dump(mode="json"),
-    }
+    return GameCreationActivateResponse(
+        status="activated",
+        game_id=str(game.game_id),
+        encounter_uuid=str(encounter.uuid),
+    )
 
 
 def kill_process_on_port(port: int) -> bool:
@@ -6564,15 +6252,6 @@ def kill_process_on_port(port: int) -> bool:
     return True
 
 
-class _ManagedAgentUvicornServer(uvicorn.Server):
-    """Signal owned agent clients before waiting on their live SSE requests."""
-
-    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
-        _evict_managed_agent_observation_streams()
-        agent_service_manager.request_stop_all()
-        super().handle_exit(sig, frame)
-
-
 def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False) -> None:
     """Run the event server."""
     if force:
@@ -6586,7 +6265,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False) -> 
         timeout_graceful_shutdown=2,
     )
     try:
-        _ManagedAgentUvicornServer(config).run()
+        uvicorn.Server(config).run()
     except KeyboardInterrupt:
         pass
 

@@ -20,7 +20,6 @@ from dnd.actions import Attack, Move
 from dnd.controller import (
     CodexController,
     Controller,
-    ExternalAIController,
     HumanController,
     PassController,
     TurnContext,
@@ -422,42 +421,6 @@ def test_eb_18_020_codex_controller_stops_as_external_input_turn() -> None:
     assert codex_controller.get_next_action(hero, context) is None
 
 
-def test_eb_18_021_external_ai_controller_waits_for_session_commands() -> None:
-    """EB-18-021: ExternalAI waits while legal actions stay engine-derived."""
-    reset_chapter_18_state()
-    actor = create_melee_only_skeleton(name="Book External Skeleton", position=(1, 1), faction="monsters")
-    target = create_goblin(name="Book Hero", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses()
-    controller = ExternalAIController(source_entity_uuid=actor.uuid)
-    encounter = start_ordered_encounter(
-        target,
-        actor,
-        PassController(source_entity_uuid=target.uuid),
-        controller,
-        actor,
-    )
-    result = encounter.advance_until_player()
-    context = TurnContext(
-        source_entity_uuid=actor.uuid,
-        entity_uuid=actor.uuid,
-        visible_enemies=actor.get_visible_enemies(),
-    )
-
-    available = actor.get_available_actions()
-    attack_info = next(action for action in available.entity_actions if action.template_name == "Attack_MELEE_MAIN")
-
-    assert result.status == "waiting_for_ai"
-    assert result.entity_uuid == actor.uuid
-    assert encounter.get_current_entity() is actor
-    assert encounter.turn_state == TurnState.IN_PROGRESS
-    assert controller.controller_type == "external_ai"
-    assert not controller.can_continue_turn(actor, context)
-    assert controller.get_next_action(actor, context) is None
-    assert target.uuid in context.visible_enemies
-    assert attack_info.valid_targets[0].target_uuid == target.uuid
-    assert attack_info.valid_targets[0].index == 0
-
-
 def test_eb_18_034_available_move_paths_preserve_directional_blockers() -> None:
     """EB-18-034: Available Move rows carry legal paths around directional blockers."""
     reset_chapter_18_state(width=8, height=5)
@@ -642,23 +605,19 @@ def test_eb_18_030_health_endpoint_is_state_free() -> None:
     assert response.json() == {"status": "running"}
 
 
-def test_eb_18_031_simulation_reset_status_delay_and_step_are_stateful() -> None:
-    """EB-18-031: simulation control endpoints expose stateful transitions."""
+def test_eb_18_031_simulation_pause_delay_and_step_are_stateful() -> None:
+    """EB-18-031: retained simulation controls expose stateful transitions."""
     reset_chapter_18_state(width=2, height=2)
     client = TestClient(app)
-
-    assert sim.encounter is None
-    assert sim.paused is True
-
-    reset_response = client.post("/simulation/reset")
-    assert reset_response.status_code == 200
-    reset_payload = reset_response.json()
-    assert reset_payload["status"] == "reset"
-
-    assert sim.encounter is not None
-    assert str(sim.encounter.uuid) == reset_payload["encounter_uuid"]
-    assert sim.paused is True
-    assert sim.encounter.state == EncounterState.NOT_STARTED
+    hero, monster = create_book_pair()
+    sim.encounter = start_ordered_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        hero,
+    )
+    assert sim.encounter.state == EncounterState.ACTIVE
 
     delay_response = client.post("/simulation/set-delay", params={"delay": 0.25})
     assert delay_response.status_code == 200
@@ -1449,15 +1408,15 @@ def test_eb_18_014_replication_identity_and_simulation_errors_are_explicit() -> 
     resume_detail = resume_response.json()["detail"]
     assert resume_detail["code"] == "simulation_not_started"
     assert resume_detail["has_encounter"] is False
-    assert resume_detail["min_delay"] == 0.1
+    assert resume_detail["min_delay"] == 0.0
     assert resume_detail["max_delay"] == 10.0
 
-    low_delay_response = client.post("/simulation/set-delay", params={"delay": 0.05})
-    assert low_delay_response.status_code == 400
-    low_delay = low_delay_response.json()["detail"]
-    assert low_delay["code"] == "delay_too_low"
-    assert low_delay["requested_delay"] == 0.05
-    assert low_delay["turn_delay"] == sim.turn_delay
+    zero_delay_response = client.post("/simulation/set-delay", params={"delay": 0})
+    assert zero_delay_response.status_code == 200
+    assert zero_delay_response.json() == {
+        "status": "delay_set",
+        "turn_delay": 0.0,
+    }
 
     high_delay_response = client.post("/simulation/set-delay", params={"delay": 11})
     assert high_delay_response.status_code == 400

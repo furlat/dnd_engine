@@ -8,17 +8,15 @@ from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from ai.policy.contracts import (
-    EndTurnIntent,
-    ExecuteIntent,
     PolicyContext,
     PolicyDecision,
     PolicyGoal,
     TargetEffectOutcomeEvidence,
-    WaitIntent,
 )
 from ai.policy.routines import RoutinePlan, RoutinePlanStatus, RoutinePurpose
-from server.agent_protocol.control import ActionAffordance, ActionTarget
-from server.agent_protocol.semantics import ActionSemantics, ActionTag, EffectDisposition
+from dnd.ai.contracts.control import ActionAffordance, ActionTarget
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
+from dnd.ai.contracts.semantics import ActionSemantics, ActionTag, EffectDisposition
 
 
 class AgentCommandType(str, Enum):
@@ -144,12 +142,6 @@ def command_from_policy_decision(
                 spacing.nearest_controlled_ally_distance_cells if spacing is not None else None
             ),
             ally_spacing_floor_cells=spacing.ally_spacing_floor_cells if spacing is not None else None,
-        )
-    if isinstance(intent, WaitIntent):
-        return AgentCommand(
-            command_type=AgentCommandType.WAIT,
-            entity_uuid=actor_uuid,
-            reason=intent.reason,
         )
     if not isinstance(intent, ExecuteIntent):
         return None

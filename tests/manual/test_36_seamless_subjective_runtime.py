@@ -20,12 +20,12 @@ import uvicorn
 
 import server.agent_runtime.observation_projector as observation_projector
 from ai.ordered_delivery import OrderedDeliveryTimeoutError
-from server.agent_protocol.observation import ObservationFrame, ObservationFrameType, ObservationSourceKind
+from dnd.ai.contracts.observation import ObservationFrame, ObservationFrameType, ObservationSourceKind
 from server.agent_runtime.observation_projector import (
     append_observation_control_frame,
     observation_wakeup_stream,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     CommandResult,
     CommandResultStatus,

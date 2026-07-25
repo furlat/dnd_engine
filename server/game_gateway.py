@@ -30,9 +30,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from server.api_models import (
+    GameCreationActivateRequest,
+    GameCreationActivateResponse,
     GameCreationCatalogResponse,
     GameCreationComposedScenario,
-    GameCreationControllerKind,
     GameCreationPreflightRequest,
     CreateSessionResponse,
     GameCreationSideResult,
@@ -41,6 +42,7 @@ from server.api_models import (
     SpellCatalogResponse,
     ServerCapabilitiesResponse,
 )
+from server.player_replication_contract import SubjectiveReplicationBootstrap
 from server.directory_event_stream import DirectoryEventStream
 from server.event_contract import EVENT_CONTRACT_HASH
 from server.game_directory.canonical import canonical_digest, hash_capability
@@ -136,7 +138,11 @@ from server.player_replay import (
     SubjectivePlayerReplayArchive,
     SubjectivePlayerReplayBundle,
 )
-from server.runtime_authority import RuntimeAuthorityCache, RuntimeScope
+from server.runtime_authority import (
+    RuntimeAuthorityCache,
+    RuntimeScope,
+    runtime_projection_headers,
+)
 from server.request_timing import RequestTimingMiddleware
 from server.spell_catalog import build_spell_catalog
 from server.worker_proxy import proxy_runtime_request
@@ -455,23 +461,6 @@ class GameGatewayService:
                 "owner_side_is_automatic",
                 "The owner can attach only to a human or Codex side",
             )
-        required_managed_agents = sum(
-            participant.controller != "human"
-            for participant in (
-                request.creation.side_a,
-                request.creation.side_b,
-            )
-        )
-        if (
-            required_managed_agents
-            and not self.worker_manager.managed_agent_service_available
-        ):
-            raise GatewayError(
-                503,
-                "agent_service_unavailable",
-                "The hosted worker composition has no registered managed-agent service",
-            )
-
         hosted_game_id = uuid4()
         runtime_base_url = (
             f"{public_gateway_base_url.rstrip('/')}/games/{hosted_game_id}/runtime"
@@ -585,6 +574,10 @@ class GameGatewayService:
                 client_kind=request.client_kind,
                 client_instance_id=request.client_instance_id,
                 runtime_base_url=runtime_base_url,
+            )
+            await self._bootstrap_and_activate_created_game(
+                game,
+                connection,
             )
             game = self.repository.transition_game(
                 game.game_id,
@@ -1417,6 +1410,48 @@ class GameGatewayService:
             )
         return UUID(created.session_id)
 
+    async def _bootstrap_and_activate_created_game(
+        self,
+        game: GameRecord,
+        connection: HostedGameConnection,
+    ) -> GameCreationActivateResponse:
+        """Open the owner's exact reducer seed before releasing gameplay."""
+        authority = self.authority_cache.validate(
+            connection.runtime_token,
+            hosted_game_id=game.game_id,
+            required_scope=RuntimeScope.SUBJECTIVE_OBSERVE,
+        )
+        headers = runtime_projection_headers(authority)
+        async with self.worker_manager.client(game.game_id) as client:
+            bootstrap_response = await client.get(
+                "/replication/bootstrap",
+                params={"session_id": str(connection.runtime_session_id)},
+                headers=headers,
+            )
+            bootstrap = self._validate_worker_response(
+                bootstrap_response,
+                SubjectiveReplicationBootstrap,
+                "replication_bootstrap_failed",
+            )
+            activation = GameCreationActivateRequest(
+                session_id=str(connection.runtime_session_id),
+                expected_source_stream_id=bootstrap.protocol.source_stream_id,
+                expected_generation_id=bootstrap.protocol.generation_id,
+                expected_perspective_epoch_id=(
+                    bootstrap.perspective.perspective_epoch_id
+                ),
+            )
+            activation_response = await client.post(
+                "/game-creation/activate",
+                json=activation.model_dump(mode="json"),
+                headers=headers,
+            )
+        return self._validate_worker_response(
+            activation_response,
+            GameCreationActivateResponse,
+            "game_activation_failed",
+        )
+
     async def _require_worker_session(self, game_id: UUID, session_id: UUID) -> None:
         async with self.worker_manager.client(game_id) as client:
             response = await client.post(f"/session/{session_id}/ping")
@@ -1632,11 +1667,42 @@ class GameGatewayService:
             if await self._persist_worker_summary_if_ready(game_id, client):
                 return
 
+            barrier_response = await client.get(
+                "/game/evidence/objective-bootstrap"
+            )
+            barrier_response.raise_for_status()
+            barrier_payload = barrier_response.json()
+            since_event = barrier_payload.get("event_cursor")
+            since_log = barrier_payload.get("combat_log_cursor")
+            if (
+                not isinstance(since_event, int)
+                or isinstance(since_event, bool)
+                or since_event < 0
+                or not isinstance(since_log, int)
+                or isinstance(since_log, bool)
+                or since_log < 0
+            ):
+                raise GatewayError(
+                    502,
+                    "worker_objective_barrier_invalid",
+                    "Worker objective bootstrap omitted valid cursor barriers",
+                )
+            # Close the race between the first readiness probe and the cursor
+            # capture. If the terminal batch completed in that interval, its
+            # evidence is now ready; otherwise subscribing from this exact
+            # barrier backfills any later EncounterEndEvent without replaying
+            # the whole match.
+            if await self._persist_worker_summary_if_ready(game_id, client):
+                return
+
             terminal_event_observed = False
             async with client.stream(
                 "GET",
                 "/game/evidence/objective-subscribe",
-                params={"since_event": 0, "since_log": 0},
+                params={
+                    "since_event": since_event,
+                    "since_log": since_log,
+                },
             ) as response:
                 response.raise_for_status()
                 event_name: str | None = None
@@ -1866,7 +1932,11 @@ class GameGatewayService:
         if response.status_code >= 400:
             raise GatewayError(response.status_code, code, response.text)
         try:
-            return model_type.model_validate(response.json())
+            # Validate directly from the worker's UTF-8 JSON bytes.  Parsing to
+            # an untyped Python graph first duplicates the largest replay
+            # allocation and traversal immediately before Pydantic validates
+            # the same graph.
+            return model_type.model_validate_json(response.content)
         except (ValueError, TypeError) as exc:
             raise GatewayError(502, "worker_contract_invalid", str(exc)) from exc
 
@@ -1905,12 +1975,6 @@ def create_gateway_app(
     resolved_worker_application = (
         worker_application or CORE_HOSTED_WORKER_APPLICATION
     )
-    managed_agent_service_available = (
-        worker_manager.managed_agent_service_available
-        if worker_manager is not None
-        else resolved_worker_application.expected_agent_service_id is not None
-    )
-
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         resolved_repository = repository or GameDirectoryRepository(
@@ -2000,12 +2064,7 @@ def create_gateway_app(
     )
     async def get_game_creation_catalog() -> GameCreationCatalogResponse:
         """Return the shared canonical hosted-game creation catalog."""
-        controllers: tuple[GameCreationControllerKind, ...] = (
-            ("human", "ai", "codex")
-            if managed_agent_service_available
-            else ("human",)
-        )
-        return build_game_creation_catalog(controllers)
+        return build_game_creation_catalog()
 
     @gateway_app.post(
         "/game-creation/preflight",

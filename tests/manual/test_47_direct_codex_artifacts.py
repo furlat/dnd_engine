@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,7 @@ from ai.evaluation.direct_codex_artifacts import (
     start_direct_codex_validation_run,
     write_direct_codex_run_artifact,
 )
-from server.agent_protocol.semantics import EffectCertainty, WorldEffectAnchor, WorldEffectScope
+from dnd.ai.contracts.semantics import EffectCertainty, WorldEffectAnchor, WorldEffectScope
 
 
 def test_direct_codex_artifact_round_trip_preserves_raw_subjective_evidence(
@@ -181,12 +182,15 @@ def test_direct_validation_starter_captures_snapshot_before_returning() -> None:
     )
     assert started.initial_snapshot.observation_cursor == 12
     assert requests == [
-        ("GET", "/simulation/ai-validation-arenas", {}),
+        ("GET", "/game-creation/catalog", {}),
         (
             "POST",
-            "/simulation/start-ai-validation",
-            {"arena_id": "double_door_dark_hunt", "mode": "codex_monsters"},
+            "/game-creation/start",
+            {},
         ),
+        ("POST", "/game/join", {}),
+        ("GET", "/replication/bootstrap", {"session_id": "session-1"}),
+        ("POST", "/game-creation/activate", {}),
         ("GET", "/ai/sessions/session-1/observation/snapshot", {}),
     ]
 
@@ -196,10 +200,15 @@ def test_direct_validation_starter_rejects_modes_without_codex_session() -> None
     client, _requests = _direct_start_client(
         snapshot=_snapshot_payload(observation_cursor=12),
         start_payload={
-            "status": "waiting_for_human",
-            "arena_id": "double_door_dark_hunt",
-            "mode": "human_hero",
-            "ai_session_id": "ai-session",
+            "status": "prepared",
+            "preset_arena_id": "double_door_dark_hunt",
+            "encounter_uuid": "encounter-1",
+            "side_a": {
+                "entity_assignments": [{"entity_uuid": "hero-1"}],
+            },
+            "side_b": {
+                "entity_assignments": [{"entity_uuid": "monster-1"}],
+            },
         },
     )
 
@@ -394,34 +403,71 @@ def _direct_start_client(
     """Create a recording HTTP client for direct validation startup."""
     requests: list[tuple[str, str, dict[str, str]]] = []
     payload = start_payload or {
-        "status": "waiting_for_ai",
-        "arena_id": "double_door_dark_hunt",
-        "mode": "codex_monsters",
-        "ai_session_id": "ai-session",
-        "codex_session_id": "session-1",
-        "takeover_claim_id": "claim-1",
+        "status": "prepared",
+        "preset_arena_id": "double_door_dark_hunt",
         "encounter_uuid": "encounter-1",
-        "hero_uuid": "hero-1",
+        "side_a": {
+            "entity_assignments": [{"entity_uuid": "hero-1"}],
+        },
+        "side_b": {
+            "entity_assignments": [{"entity_uuid": "hero-1"}],
+            "codex_session_id": "session-1",
+            "takeover_claim_id": "claim-1",
+        },
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         requests.append((request.method, path, dict(request.url.params)))
-        if path == "/simulation/ai-validation-arenas":
+        if path == "/game-creation/catalog":
             return httpx.Response(200, json={
-                "arenas": [
+                "hero_configurations": [
+                    {
+                        "configuration_id": "hero.barbarian",
+                        "title": "level 5 barbarian",
+                    }
+                ],
+                "presets": [
                     {
                         "arena_id": "double_door_dark_hunt",
                         "title": "Double Door Dark Hunt",
-                        "hero_role": "level 5 barbarian",
                         "tags": ["doors", "skeletons"],
                         "expected_pressure": [],
                         "map_notes": [],
+                        "recipe": {
+                            "hero_configuration_id": "hero.barbarian",
+                        },
                     }
                 ]
             })
-        if path == "/simulation/start-ai-validation":
+        if path == "/game-creation/start":
             return httpx.Response(200, json=payload)
+        if path == "/session/create":
+            return httpx.Response(200, json={"session_id": "human-session"})
+        if path == "/game/join":
+            body = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "session_id": body["session_id"],
+                    "controlled_entities": body["entity_uuids"],
+                },
+            )
+        if path == "/replication/bootstrap":
+            return httpx.Response(
+                200,
+                json={
+                    "protocol": {
+                        "source_stream_id": "source-stream",
+                        "generation_id": "generation",
+                    },
+                    "perspective": {
+                        "perspective_epoch_id": "perspective-epoch",
+                    },
+                },
+            )
+        if path == "/game-creation/activate":
+            return httpx.Response(200, json={"status": "activated"})
         if path == "/ai/sessions/session-1/observation/snapshot":
             return httpx.Response(200, json=snapshot)
         return httpx.Response(500, json={"detail": f"unexpected endpoint: {path}"})

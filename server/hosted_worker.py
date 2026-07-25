@@ -17,9 +17,6 @@ from uuid import UUID, uuid4
 import httpx
 from pydantic import BaseModel, Field
 
-from server.agent_runtime.service import AgentExecutionMode
-
-
 class HostedWorkerError(RuntimeError):
     """Raised when a hosted game worker cannot be started or contacted."""
 
@@ -71,8 +68,6 @@ class HostedWorkerApplication:
     """Dependency-neutral ASGI composition selected by a deployment root."""
 
     import_path: str
-    expected_agent_service_id: str | None = None
-    expected_agent_execution_mode: AgentExecutionMode | None = None
 
     def __post_init__(self) -> None:
         module_name, separator, attribute_name = self.import_path.partition(":")
@@ -89,22 +84,6 @@ class HostedWorkerApplication:
             raise ValueError(
                 "Hosted worker application must use a Python module:attribute "
                 f"import path, received {self.import_path!r}"
-            )
-        if (
-            self.expected_agent_service_id is None
-        ) is not (
-            self.expected_agent_execution_mode is None
-        ):
-            raise ValueError(
-                "Hosted worker expected service id and execution mode must "
-                "either both be set or both be absent"
-            )
-        if (
-            self.expected_agent_service_id is not None
-            and not self.expected_agent_service_id.strip()
-        ):
-            raise ValueError(
-                "Hosted worker expected agent service id must not be blank"
             )
 
 
@@ -155,11 +134,6 @@ class HostedWorkerManager:
         self._prewarm_lock = asyncio.Lock()
         self._replenishment_task: asyncio.Task[None] | None = None
         self._closing = False
-
-    @property
-    def managed_agent_service_available(self) -> bool:
-        """Return whether spawned workers register a managed-agent service."""
-        return self._worker_application.expected_agent_service_id is not None
 
     @property
     def application_import_path(self) -> str:
@@ -468,14 +442,7 @@ class HostedWorkerManager:
                 try:
                     async with self._client_for_handle(handle, timeout=0.5) as client:
                         status_response = await client.get("/game/status")
-                        service_response = await client.get("/ai/service")
-                    if (
-                        status_response.status_code == 200
-                        and service_response.status_code == 200
-                    ):
-                        self._validate_worker_agent_service(
-                            service_response.json()
-                        )
+                    if status_response.status_code == 200:
                         handle.placement.state = HostedWorkerState.READY
                         handle.placement.ready_at = time.time()
                         return
@@ -486,37 +453,6 @@ class HostedWorkerManager:
         handle.placement.state = HostedWorkerState.FAILED
         detail = f": {last_error}" if last_error is not None else ""
         raise HostedWorkerError(f"Worker readiness timed out{detail}")
-
-    def _validate_worker_agent_service(self, payload: object) -> None:
-        """Authenticate the worker composition before entering the warm pool."""
-        if not isinstance(payload, dict):
-            raise ValueError("Worker /ai/service response is not an object")
-        registered = payload.get("service_registered")
-        service_id = payload.get("service_id")
-        execution_mode = payload.get("execution_mode")
-        expected_service_id = (
-            self._worker_application.expected_agent_service_id
-        )
-        expected_execution_mode = (
-            self._worker_application.expected_agent_execution_mode
-        )
-        if expected_service_id is None:
-            if registered is not False or service_id is not None:
-                raise HostedWorkerError(
-                    "Core worker unexpectedly registered a managed-agent service"
-                )
-            return
-        assert expected_execution_mode is not None
-        if (
-            registered is not True
-            or service_id != expected_service_id
-            or execution_mode != expected_execution_mode.value
-        ):
-            raise HostedWorkerError(
-                "Worker managed-agent service mismatch: expected "
-                f"{expected_service_id!r}/{expected_execution_mode.value!r}, "
-                f"received {service_id!r}/{execution_mode!r}"
-            )
 
 
 def _process_group_exists(process_group_id: int) -> bool:

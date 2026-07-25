@@ -14,8 +14,8 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from ai.codex_tools.representation.models import ResolvedRepresentationManifest
-from server.agent_protocol.observation import ObservationFrame, ObservationSnapshot
-from server.agent_protocol.control import CommandResult
+from dnd.ai.contracts.observation import ObservationFrame, ObservationSnapshot
+from dnd.ai.contracts.control import CommandResult
 from server.agent_protocol.telemetry import AgentEvent
 
 

@@ -22,11 +22,11 @@ from ai.knowledge.models import (
     TopologyFacts,
     target_effect_hypothesis_key,
 )
-from server.agent_protocol.observation import KnowledgeState, SubjectiveWorldState
+from dnd.ai.contracts.observation import KnowledgeState, SubjectiveWorldState
 from ai.knowledge.replay import entity_fact_replay_token
-from server.agent_protocol.control import ActionAffordance
-from server.agent_protocol.immutable import FrozenDict
-from server.agent_protocol.semantics import ActionSemantics, ActionTag
+from dnd.ai.contracts.control import ActionAffordance
+from dnd.ai.contracts.immutable import FrozenDict
+from dnd.ai.contracts.semantics import ActionSemantics, ActionTag
 
 
 SectionT = TypeVar("SectionT")
