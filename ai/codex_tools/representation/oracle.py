@@ -10,7 +10,8 @@ from ai.codex_tools.representation.components import (
     OracleProposalSummary,
     OracleTraceStepSummary,
 )
-from ai.policy.contracts import ExecuteIntent, PolicyDecision, PolicyProposal, PolicyTraceStep
+from ai.policy.contracts import PolicyDecision, PolicyProposal, PolicyTraceStep
+from dnd.ai.contracts.decision import ExecuteIntent
 
 
 OracleDetail = Literal["selected_only", "ranked", "full_trace"]

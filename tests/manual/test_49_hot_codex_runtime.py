@@ -34,7 +34,7 @@ from ai.codex_tools.representation.profiles import (
 )
 from ai.codex_tools.contracts import TakeoverClaimInfo, TakeoverEntityInfo
 from ai.ordered_delivery import OrderedDeliveryTimeoutError
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -43,11 +43,11 @@ from server.agent_protocol.observation import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from server.agent_protocol.semantics import ActionSemantics, ActionTag, action_semantics_ref
+from dnd.ai.contracts.semantics import ActionSemantics, ActionTag, action_semantics_ref
 from ai.policy import PolicyDecisionCorrelation, PolicyDecisionTelemetry, PolicyHost
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from server.agent_protocol.telemetry import AgentEvent
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     ActionAffordance,
     ActionEconomyState,

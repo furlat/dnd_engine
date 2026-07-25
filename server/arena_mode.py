@@ -190,22 +190,54 @@ def equipped_item_name(entity: Entity, slot: WeaponSlot) -> str:
 
 
 def start_joined_human_arena(character_class: str = "fighter") -> JoinedHumanArena:
-    """Start human arena mode and join a human session to the hero.
+    """Prepare, join, bootstrap, and activate one canonical local arena.
 
     Args:
-        character_class: Hero class selected by the arena start route.
+        character_class: Canonical hero configuration family to select.
 
     Returns:
         Started arena bundle with the API client, session ID, and hero UUID.
     """
     reset_standard_arena_runtime()
     client = ArenaApiClient()
+    hero_configurations = {
+        "fighter": "hero.fighter_l5_archer_torch",
+        "sorcerer": "hero.sorcerer_l5_standard_torch",
+        "barbarian": "hero.barbarian_l5_berserker_torch",
+    }
+    try:
+        hero_configuration_id = hero_configurations[character_class]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported arena character class: {character_class}"
+        ) from error
     start_response = client.post(
-        "/simulation/start-human",
-        params={"character_class": character_class},
+        "/game-creation/start",
+        json={
+            "scenario": {
+                "kind": "composed",
+                "hero_configuration_id": hero_configuration_id,
+                "monster_configuration_id": "monsters.skeleton_trio",
+                "battlefield_id": "battlefield.standard_hazards_closed",
+                "deployment_id": "neutral.battlefield.standard_hazards_closed",
+            },
+            "side_a": {
+                "controller": "human",
+                "name": "Arena Player",
+            },
+            "side_b": {
+                "controller": "ai",
+                "name": "Basic AI",
+                "policy_id": "builtin.basic",
+            },
+            "opening_side": "side_a",
+        },
     )
     start_response.raise_for_status()
-    hero_uuid = start_response.json()["hero_uuid"]
+    assignments = start_response.json()["side_a"]["entity_assignments"]
+    if not assignments:
+        raise RuntimeError("Prepared arena has no hero assignment")
+    hero_uuid = assignments[0]["entity_uuid"]
 
     session_response = client.post(
         "/session/create",
@@ -219,6 +251,26 @@ def start_joined_human_arena(character_class: str = "fighter") -> JoinedHumanAre
         json={"session_id": session_id, "entity_uuids": [hero_uuid]},
     )
     join_response.raise_for_status()
+    bootstrap_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    bootstrap_response.raise_for_status()
+    bootstrap = bootstrap_response.json()
+    activation_response = client.post(
+        "/game-creation/activate",
+        json={
+            "session_id": session_id,
+            "expected_source_stream_id": bootstrap["protocol"][
+                "source_stream_id"
+            ],
+            "expected_generation_id": bootstrap["protocol"]["generation_id"],
+            "expected_perspective_epoch_id": bootstrap["perspective"][
+                "perspective_epoch_id"
+            ],
+        },
+    )
+    activation_response.raise_for_status()
 
     return JoinedHumanArena(
         client=client,

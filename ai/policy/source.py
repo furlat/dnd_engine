@@ -13,10 +13,10 @@ POLICY_VERSION = "2026-07-18.shared-policy-v32-candidate-valuation"
 CONTROLLER_PROFILE = "unified_ai_current"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 POLICY_SOURCE_RELATIVE_PATHS = (
-    "server/agent_protocol/control.py",
-    "server/agent_protocol/semantics.py",
-    "server/agent_runtime/action_semantics.py",
-    "server/agent_runtime/epochs.py",
+    "dnd/ai/contracts/control.py",
+    "dnd/ai/contracts/semantics.py",
+    "dnd/ai/runtime/action_semantics.py",
+    "dnd/ai/runtime/decision_epoch.py",
     "ai/knowledge/deriver.py",
     "ai/knowledge/models.py",
     "ai/knowledge/topology.py",

@@ -45,13 +45,15 @@ but it does not make the AI package part of the game server.
 
 ## Package Layers
 
-- `server.agent_protocol`: server-owned, dependency-neutral contracts for
-  epochs, affordances, observations, costs, semantics, commands, telemetry,
-  gauntlet reporting, and deterministic observation replay.
-- `server.agent_runtime`: server-owned adapters that know about engine and
-  session state: observation projection, action-semantic enrichment,
-  decision-epoch construction, command revalidation, and the
-  dependency-neutral managed-agent service lifecycle.
+- `dnd.ai`: dependency-neutral policy, memory, reducer, decision,
+  instrumentation, and runtime contracts shared by every AI execution mode.
+- `dnd.ai.policies.basic`: the bundled in-process policy.
+- `custom_ai`: optional logic-only policies registered explicitly by a
+  composition root.
+- `services.ai_policy_server`: the reference registered-provider HTTP adapter.
+- `server.registered_ai_controller`: the server-owned deferred controller that
+  awaits a registered provider and commits its intent through the canonical
+  engine executor.
 - `server.runtime_performance`: shared latency-sensitive runtime controls used
   by server paths and in-process validation.
 - `ai.subjective`: client-side store, hooks, processors, queries, printers, and
@@ -63,58 +65,43 @@ but it does not make the AI package part of the game server.
 - `ai.codex_tools`: takeover and hot-runtime tools that expose the same local
   subjective state and policy contract to Codex. The takeover HTTP client owns
   only lease transport; it has no snapshot, action, watch, or command loop.
-- `ai.external_agent`: the direct HTTP/SSE controller used by the isolated
-  process composition.
-- `ai.in_process_agent_service`: the standalone embedded adapter. It owns the
-  concrete policy import and registers only the neutral service contract with
-  the server.
-- `ai.external_selfplay`: the same controller stack connected to both sides for
-  fast validation.
+- `ai.external_selfplay`: an in-process evaluator for the retained advanced
+  subjective policy. It is evidence tooling, not a production controller or
+  external-provider transport.
 - `ai.evaluation`: immutable run artifacts and dashboard projection.
 
 ## Playable Local Server
 
-Managed AI is an explicit registered service, not an ambient server import or
-environment-variable fallback. Start the complete local composition with:
+The standalone server always exposes the bundled native AI without a helper
+process:
 
 ```bash
-uv run python -m ai.local_game_server --host 127.0.0.1 --port 8000
+uv run uvicorn server.event_server:app --host 127.0.0.1 --port 8000
 ```
 
-`ai.local_game_server` imports the bundled policy once while the backend boots,
-then registers an embedded service through the server-owned neutral protocol.
-Each AI session receives a fresh policy host, memory, subjective runtime,
-telemetry pipeline, and managed thread. It still bootstraps and acts only
-through the canonical subjective HTTP/SSE and command routes; embedding grants
-no engine, `Entity`, objective-state, or event-queue shortcut.
+Each AI side receives its own native assignment, policy instance, memory, world
+projection, bounded decision loop, and core-owned instrumentation. A separate
+policy process uses the registered-provider handshake and
+`RegisteredAIController`; it does not impersonate a player session or call the
+game server's command endpoints.
 
-Game creation therefore does not start another Python interpreter or repeat
-the policy import graph. The server stops and joins every managed runtime on
-session deletion, world replacement, reset, or shutdown. A managed start
-succeeds only after every runtime validates its subjective snapshot, receives
-the first observation-stream sync, and returns its manager-issued one-time
-readiness proof.
+Game creation constructs assignments while the scenario is prepared, but no
+policy may decide until the explicit activation boundary. Native assignment
+state is closed on replacement, reset, encounter end, or shutdown. Registered
+provider assignments additionally use explicit asynchronous open/close leases
+and generation-fenced decisions; a failed partial start rolls every opened
+lease back.
 
-Use the isolated equivalent when process fault isolation is desired:
+For external placement, run `python -m services.ai_policy_server` and register
+the provider through the deployment-authenticated `/admin/ai/providers`
+surface. The provider owns policy logic and reducer memory only. The game
+server owns subjective projection, intent validation, action execution,
+feedback, timing, and the authoritative encounter lifecycle.
 
-```bash
-uv run python -m ai.isolated_game_server --host 127.0.0.1 --port 8000
-```
-
-Both compositions use the same server protocol, readiness, rollback, and
-diagnostics. Only placement differs. Importing the core server alone registers
-no agent service, advertises only human game creation, and rejects managed-AI
-starts before mutating live game state. The agent attachment endpoint comes
-from the ASGI listener or trusted `DND_AGENT_INTERNAL_BASE_URL`, never the
-client `Host` header.
-
-For multi-game hosting, run `ai.game_gateway:app`. The gateway parent imports
-only lightweight composition identities; each already-isolated, prewarmed game
-worker imports `ai.local_game_server:app` and embeds fresh per-session policy
-instances. `ai.isolated_game_gateway:app` is the opt-in nested-process variant.
-The core `server.game_gateway:app` remains human-only. Every warm worker proves
-its exact managed service ID and execution mode through `/ai/service` before
-the gateway advertises or admits managed controllers.
+Multi-game workers already support native policies through
+`server.game_gateway`. Registered-provider catalog propagation is a separate
+host capability and is not advertised until the gateway owns and tests that
+lifecycle.
 
 ## Decision Lifecycle
 
@@ -136,10 +123,12 @@ parts of one policy architecture, not separate AI implementations.
 
 ## Controller Surfaces
 
-`ExternalAIController` marks an encounter actor whose decisions arrive through
-the session command API. `CodexController` does the same for an attached Codex
-session. Neither controller contains tactical policy. `PolicyHost` is the only
-policy lifecycle used by the external AI, self-play, and Codex hot runtime.
+`NativeAIController` executes a core AI assignment in the game process.
+`RegisteredAIController` awaits a registered provider without holding an
+engine mutation transaction open, then validates and commits the returned
+typed intent through the same canonical executor. `CodexController` remains a
+separate human-authority takeover surface. There is no session-command
+`ExternalAIController`.
 
 The Codex daemon bootstraps one `SubjectiveRuntime`, then exposes a bounded
 `GET /v1/turn` index and revision-fenced `POST /v1/query` over that same local

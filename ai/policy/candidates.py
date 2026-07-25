@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ai.knowledge.models import TargetEffectBlockHypothesis
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     AdjacentOffset,
     ObservationEntityFact,
     SpatialDomainKnowledge,
@@ -23,8 +23,6 @@ from ai.policy.contracts import (
     ControlPreservationTargetEvidence,
     DamageBlockerEvidence,
     DamageOutcomeEvidence,
-    EndTurnIntent,
-    ExecuteIntent,
     ExplorationEvidence,
     HealingOutcomeEvidence,
     PolicyContext,
@@ -39,6 +37,7 @@ from ai.policy.contracts import (
     TargetPlanEvidence,
     UtilityComponent,
 )
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from ai.policy.economy import (
     action_economy_opportunity_cost,
@@ -59,7 +58,7 @@ from ai.policy.outcomes import (
     outcome_profile_key,
 )
 from ai.knowledge.replay import entity_fact_replay_token, position_replay_token
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionOutcomeProfile,
@@ -68,7 +67,7 @@ from server.agent_protocol.control import (
     OutcomeApplicationScope,
     OutcomeResolution,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     AffectedRelationship,

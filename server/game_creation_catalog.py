@@ -15,11 +15,13 @@ from dnd.scenarios.evaluation.compatibility import CompatibilityReport, check_co
 from dnd.scenarios.evaluation.deployment_catalog import DEPLOYMENTS, get_deployment
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
 from server.api_models import (
+    GameCreationAIPolicyOption,
     GameCreationCatalogResponse,
     GameCreationControllerKind,
     GameCreationPreflightRequest,
     GameCreationPreset,
 )
+from server.ai_policy_composition import SERVER_NATIVE_POLICY_DESCRIPTORS
 
 
 class GameCreationCatalogError(ValueError):
@@ -48,6 +50,7 @@ class GameCreationCatalogError(ValueError):
 
 def build_game_creation_catalog(
     controllers: Sequence[GameCreationControllerKind] = ("human", "ai", "codex"),
+    ai_policies: Sequence[GameCreationAIPolicyOption] | None = None,
 ) -> GameCreationCatalogResponse:
     """Build the canonical game-creation catalog without engine mutation.
 
@@ -70,8 +73,23 @@ def build_game_creation_catalog(
         )
         for recipe in LEGACY_RECIPES
     ]
+    resolved_policies = (
+        tuple(ai_policies)
+        if ai_policies is not None
+        else tuple(
+            GameCreationAIPolicyOption(
+                descriptor=descriptor,
+                execution="in_process",
+            )
+            for descriptor in SERVER_NATIVE_POLICY_DESCRIPTORS
+        )
+    )
     return GameCreationCatalogResponse(
         controllers=list(controllers),
+        ai_policies=sorted(
+            resolved_policies,
+            key=lambda option: option.descriptor.policy_id,
+        ),
         opening_sides=["initiative", "side_a", "side_b"],
         hero_configurations=list(HERO_CONFIGURATIONS),
         monster_configurations=list(MONSTER_PARTY_CONFIGURATIONS),

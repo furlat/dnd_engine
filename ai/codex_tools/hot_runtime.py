@@ -92,13 +92,12 @@ from ai.codex_tools.session_transcript import (
 )
 from ai.knowledge import derive_agent_facts
 from ai.knowledge.models import AgentFacts, TargetEffectBlockHypothesis
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationEntityFact,
     ObservationObjectFact,
     SubjectiveWorldState,
 )
 from ai.policy import (
-    ExecuteIntent,
     PolicyDecision,
     PolicyDecisionUnavailableError,
     PolicyHost,
@@ -106,6 +105,7 @@ from ai.policy import (
     PolicyDecisionTelemetry,
     PolicyProposal,
 )
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import create_generation_policy_host
 from ai.policy.generations.registry import (
     CANDIDATE_GENERATION_ID,
@@ -113,7 +113,7 @@ from ai.policy.generations.registry import (
 )
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from ai.policy.host import PolicyDecisionDiagnostics
-from server.agent_protocol.control import ActionCostProfile, ActionEconomyState, CommandResult, DecisionEpoch
+from dnd.ai.contracts.control import ActionCostProfile, ActionEconomyState, CommandResult, DecisionEpoch
 from ai.subjective.models import AgentState
 from server.agent_protocol.telemetry import AgentEvent
 from ai.subjective.queries import (

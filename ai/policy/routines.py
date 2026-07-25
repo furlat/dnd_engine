@@ -22,13 +22,12 @@ from ai.policy.candidates import (
     direct_damage_candidates,
 )
 from ai.policy.contracts import (
-    EndTurnIntent,
-    ExecuteIntent,
     PolicyContext,
     PolicyGoal,
     PolicyProposal,
     UtilityComponent,
 )
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from ai.policy.economy import (
     AffordabilityWorkspace,
     ProjectedCapability,
@@ -51,13 +50,13 @@ from ai.knowledge.replay import (
     position_replay_token,
 )
 from ai.policy.utility import UtilityArbiter
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
     ActionTarget,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,

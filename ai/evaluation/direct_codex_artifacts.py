@@ -17,7 +17,7 @@ from ai.validation_harness import (
     ValidationScheduleEntry,
     ValidationStartResult,
 )
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     ObservationFramesResponse,
     ObservationSnapshot,
 )

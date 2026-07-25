@@ -10,103 +10,75 @@ warnings.filterwarnings(
 
 from fastapi.testclient import TestClient
 import pytest
-from pathlib import Path
 
-from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
-from dnd.core.values import BaseValue
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.encounter import EncounterState, TurnState
 from dnd.entity import Entity
-from dnd.utils import reset_combat_state
-from server import event_server
-from server.agent_runtime.service import AgentLaunchRequest
-from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
+from server.arena_mode import reset_standard_arena_runtime
 from server.event_server import (
-    _available_actions_cache,
     app,
-    setup_arena_combat,
     sim,
 )
-from server.event_stream import event_stream
 
 
-class _TutorialAgentLauncher:
-    """Registered managed-agent capability for in-process tutorial checks."""
+STANDARD_SCENARIO: dict[str, str] = {
+    "kind": "composed",
+    "hero_configuration_id": "hero.fighter_l5_archer_torch",
+    "monster_configuration_id": "monsters.skeleton_trio",
+    "battlefield_id": "battlefield.standard_hazards_closed",
+    "deployment_id": "legacy.standard_skeleton_doors",
+}
 
-    service_id = "tests.tutorial-agent"
-
-    def preflight(self, required_agents: int) -> None:
-        _ = required_agents
-        return None
-
-    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
-        return AgentProcessSpec(
-            argv=("unused-tutorial-agent", request.session_id),
-            cwd=Path(__file__).resolve().parents[2],
-        )
+AOE_SCENARIO: dict[str, str] = {
+    "kind": "composed",
+    "hero_configuration_id": "hero.sorcerer_l5_standard_torch",
+    "monster_configuration_id": "monsters.goblin_water_cell",
+    "battlefield_id": "battlefield.open_floor_bright",
+    "deployment_id": "neutral.battlefield.open_floor_bright",
+}
 
 
 @pytest.fixture(autouse=True)
-def stub_external_ai_processes(monkeypatch: pytest.MonkeyPatch):
-    """Keep arena-session tutorial checks from spawning real AI subprocesses."""
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
-    event_server.agent_service_manager.register_service(SubprocessAgentService(_TutorialAgentLauncher()))
-
-    async def accept_batch(
-        _requests: tuple[AgentLaunchRequest, ...],
-    ) -> tuple[object, ...]:
-        return ()
-
-    monkeypatch.setattr(
-        event_server.agent_service_manager,
-        "start_agents",
-        accept_batch,
-    )
+def isolate_live_game_tutorial_state():
+    """Close native assignments and isolate global state around each check."""
+    reset_live_game_tutorial_state()
     yield
-    event_server.agent_service_manager.stop_all_blocking()
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
+    reset_live_game_tutorial_state()
 
 
 def reset_live_game_tutorial_state() -> None:
     """Clear global state used by arena-game tutorial examples."""
-    reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    BaseObject._registry.clear()
-    BaseValue._registry.clear()
-    BaseBlock._registry.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    event_stream.ensure_attached()
-    event_stream._clear_source_journal()
-    _available_actions_cache.clear()
-
-    manager = sim.get_session_manager()
-    manager.sessions.clear()
-    manager.games.clear()
-    manager.active_game = None
-    sim.encounter = None
-    sim._game_session = None
-    sim.combat_task = None
-    sim.paused = True
+    reset_standard_arena_runtime()
 
 
-def entity_by_name(name: str) -> Entity:
-    """Return the currently registered entity with a display name."""
-    entity = next((candidate for candidate in Entity.get_all_entities() if candidate.name == name), None)
-    assert entity is not None
-    return entity
+def prepare_canonical_game(
+    client: TestClient,
+    scenario: dict[str, str],
+) -> dict:
+    """Prepare one game through the sole canonical creation route."""
+    response = client.post(
+        "/game-creation/start",
+        json={
+            "scenario": scenario,
+            "side_a": {
+                "controller": "human",
+                "name": "Tutorial Player",
+            },
+            "side_b": {
+                "controller": "ai",
+                "name": "Native AI",
+                "policy_id": "builtin.basic",
+            },
+            "opening_side": "side_a",
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "prepared"
+    return payload
 
 
 def arena_floor_object_names() -> list[str]:
@@ -178,15 +150,14 @@ def equipped_item_name(entity: Entity, slot: WeaponSlot) -> str:
     return item.name
 
 
-def start_joined_human_arena() -> tuple[TestClient, str, str]:
-    """Start the human arena mode and join a player session to the Hero."""
+def start_joined_human_arena(
+    scenario: dict[str, str] = STANDARD_SCENARIO,
+) -> tuple[TestClient, str, str]:
+    """Prepare, join, bootstrap, and activate one canonical human game."""
     reset_live_game_tutorial_state()
     client = TestClient(app)
-    start_response = client.post("/simulation/start-human", params={"character_class": "fighter"})
-
-    assert start_response.status_code == 200
-    start_payload = start_response.json()
-    hero_uuid = start_payload["hero_uuid"]
+    start_payload = prepare_canonical_game(client, scenario)
+    hero_uuid = start_payload["side_a"]["entity_assignments"][0]["entity_uuid"]
 
     session_response = client.post(
         "/session/create",
@@ -202,23 +173,47 @@ def start_joined_human_arena() -> tuple[TestClient, str, str]:
     assert join_response.status_code == 200
     assert join_response.json()["controlled_entities"] == [hero_uuid]
 
+    bootstrap = player_replication_seed(client, session_id)
+    activation_response = client.post(
+        "/game-creation/activate",
+        json={
+            "session_id": session_id,
+            "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
+            "expected_generation_id": bootstrap["protocol"]["generation_id"],
+            "expected_perspective_epoch_id": bootstrap["perspective"][
+                "perspective_epoch_id"
+            ],
+        },
+    )
+    assert activation_response.status_code == 200
+    assert activation_response.json()["status"] == "activated"
+
     return client, session_id, hero_uuid
 
 
 def test_standard_arena_composes_map_hero_monsters_environment_and_controllers() -> None:
-    """The standard arena fixture composes the playable game scene."""
+    """Canonical creation composes the detailed standard playable scene."""
     reset_live_game_tutorial_state()
-
-    encounter = setup_arena_combat(pvp_mode=False, character_class="fighter")
-    sim.encounter = encounter
-    hero = entity_by_name("Hero")
-    warrior = entity_by_name("Skeleton Warrior")
-    archer = entity_by_name("Skeleton Archer")
-    warlock = entity_by_name("Skeleton Warlock")
+    client = TestClient(app)
+    payload = prepare_canonical_game(client, STANDARD_SCENARIO)
+    encounter = sim.encounter
+    assert encounter is not None
+    hero = Entity.get(UUID(payload["side_a"]["entity_assignments"][0]["entity_uuid"]))
+    monsters = [
+        Entity.get(UUID(row["entity_uuid"]))
+        for row in payload["side_b"]["entity_assignments"]
+    ]
+    assert hero is not None
+    assert all(monster is not None for monster in monsters)
+    warrior, archer, warlock = monsters
+    assert warrior is not None
+    assert archer is not None
+    assert warlock is not None
     object_names = arena_floor_object_names()
 
-    assert encounter.name == "Arena Combat"
+    assert encounter.name == payload["encounter_name"]
     assert encounter.state == EncounterState.NOT_STARTED
+    assert encounter.turn_state == TurnState.NOT_STARTED
     assert len(encounter.combatants) == 4
     assert hero.faction == "heroes"
     assert {warrior.faction, archer.faction, warlock.faction} == {"monsters"}
@@ -236,12 +231,11 @@ def test_standard_arena_composes_map_hero_monsters_environment_and_controllers()
     assert archer_controller is not None
     assert warlock_controller is not None
     assert hero_controller.controller_type == "human"
-    assert warrior_controller.controller_type == "external_ai"
-    assert archer_controller.controller_type == "external_ai"
-    assert warlock_controller.controller_type == "external_ai"
+    assert warrior_controller.controller_type == "native_ai"
+    assert archer_controller.controller_type == "native_ai"
+    assert warlock_controller.controller_type == "native_ai"
 
     assert equipped_item_name(hero, WeaponSlot.MELEE_MAIN) == "Shortsword"
-    assert equipped_item_name(hero, WeaponSlot.MELEE_OFF) == "Dagger"
     assert equipped_item_name(hero, WeaponSlot.RANGED_MAIN) == "Longbow"
     assert {"Dash", "Dodge", "Disengage", "Action Surge"} <= action_template_names(hero)
     assert hero.get_event_handler_by_name("Opportunity Attack Handler") is not None
@@ -254,74 +248,11 @@ def test_standard_arena_composes_map_hero_monsters_environment_and_controllers()
     assert object_names.count("Trap Lever") == 1
 
 
-def test_pvp_arena_uses_codex_controllers_for_monster_side() -> None:
-    """PvP arena mode keeps the same scene and swaps monster-side controllers."""
-    reset_live_game_tutorial_state()
-
-    encounter = setup_arena_combat(pvp_mode=True, character_class="fighter")
-    hero = entity_by_name("Hero")
-    monsters = [entity for entity in Entity.get_all_entities() if entity.faction == "monsters"]
-
-    assert encounter.name == "PvP Arena"
-    hero_controller = encounter.get_controller_for(hero.uuid)
-    monster_controllers = [encounter.get_controller_for(monster.uuid) for monster in monsters]
-    assert hero_controller is not None
-    assert all(controller is not None for controller in monster_controllers)
-    assert hero_controller.controller_type == "human"
-    assert len(monsters) == 3
-    assert {controller.controller_type for controller in monster_controllers if controller is not None} == {"codex"}
-
-
-def test_start_human_mode_creates_ai_session_and_waits_for_player_join() -> None:
-    """The human arena endpoint starts the game and assigns monsters to AI."""
-    reset_live_game_tutorial_state()
-    client = TestClient(app)
-
-    response = client.post("/simulation/start-human", params={"character_class": "fighter"})
-    payload = response.json()
-    hero_uuid = payload["hero_uuid"]
-    game_status = client.get("/game/status").json()
-
-    assert response.status_code == 200
-    assert payload["status"] == "waiting_for_human"
-    assert payload["entity_uuid"] == hero_uuid
-    assert payload["entity_name"] == "Hero"
-    assert payload["combat_log_cursor_after"] >= 1
-    assert sim.encounter is not None
-    assert sim.encounter.name == "Arena Combat"
-    assert sim.encounter.state == EncounterState.ACTIVE
-    assert sim.encounter.turn_state == TurnState.IN_PROGRESS
-
-    assert game_status["active"] is True
-    assert game_status["encounter_active"] is True
-    assert game_status["active_entity_uuid"] == hero_uuid
-    ai_sessions = [session for session in game_status["sessions"] if session["player_type"] == "ai"]
-    assert len(ai_sessions) == 1
-    assert ai_sessions[0]["name"] == "AI Monsters"
-    assert len(ai_sessions[0]["controlled_entities"]) == 3
-
-    session_response = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "Tutorial Player"},
-    )
-    session_id = session_response.json()["session_id"]
-    join_response = client.post(
-        "/game/join",
-        json={"session_id": session_id, "entity_uuids": [hero_uuid]},
-    )
-    ping_response = client.post(f"/session/{session_id}/ping")
-
-    assert session_response.status_code == 200
-    assert join_response.status_code == 200
-    assert join_response.json()["controlled_entities"] == [hero_uuid]
-    assert ping_response.status_code == 200
-    assert ping_response.json()["is_my_turn"] is True
-    assert ping_response.json()["active_entity_name"] == "Hero"
-
-
 def test_player_replication_describes_the_subjective_live_arena() -> None:
     """The player seed contains only the controlled hero's observed arena."""
     client, session_id, hero_uuid = start_joined_human_arena()
+    hero = Entity.get(UUID(hero_uuid))
+    assert hero is not None
 
     bootstrap = player_replication_seed(client, session_id)
     state = bootstrap["world"]["state"]
@@ -348,8 +279,9 @@ def test_player_replication_describes_the_subjective_live_arena() -> None:
         tuple(position)
         for position in visibility[hero_uuid]["seen_cells"]
     }
-    assert {entity["name"] for entity in state["entities"]} == {"Hero"}
-    assert state["encounter"]["name"] == "Arena Combat"
+    assert {entity["uuid"] for entity in state["entities"]} == {hero_uuid}
+    assert sim.encounter is not None
+    assert state["encounter"]["name"] == sim.encounter.name
     assert state["encounter"]["state"] == "active"
     assert {obj["name"] for obj in state["floor_objects"]} >= {
         "Trap Lever",
@@ -358,13 +290,13 @@ def test_player_replication_describes_the_subjective_live_arena() -> None:
     assert "Door" not in {obj["name"] for obj in state["floor_objects"]}
 
     assert hero_uuid in visibility
-    assert visibility[hero_uuid]["name"] == "Hero"
+    assert visibility[hero_uuid]["name"] == hero.name
     assert visibility[hero_uuid]["position"] == [2, 7]
     assert visibility[hero_uuid]["visible_cells"]
     assert isinstance(visibility[hero_uuid]["sense_modes"], list)
 
     assert controlled == [hero_uuid]
-    assert hero_detail["name"] == "Hero"
+    assert hero_detail["name"] == hero.name
     assert hero_equipment["ac"] == hero_detail["ac"]
     assert actions_response.status_code == 200
     assert actions["actions_remaining"] == 1
@@ -389,7 +321,10 @@ def test_available_actions_action_results_and_log_cursors_drive_the_client_loop(
     assert {"Dash", "Dodge", "Disengage", "Action Surge"} <= {
         action["template_name"] for action in actions["self_actions"]
     }
-    assert any(action["template_name"].startswith("Drink Greater Invisibility Potion") for action in actions["self_actions"])
+    assert any(
+        action["template_name"].startswith("Drink ")
+        for action in actions["self_actions"]
+    )
 
     dash = next(
         action for action in actions["self_actions"] if action["template_name"] == "Dash"
@@ -441,27 +376,29 @@ def test_available_actions_action_results_and_log_cursors_drive_the_client_loop(
 
 
 def test_aoe_test_mode_builds_a_sorcerer_and_clustered_targets() -> None:
-    """The AoE test mode is a purpose-built game scenario for spell play."""
+    """Canonical composition can prepare a sorcerer and clustered targets."""
     reset_live_game_tutorial_state()
     client = TestClient(app)
+    payload = prepare_canonical_game(client, AOE_SCENARIO)
+    hero_uuid = payload["side_a"]["entity_assignments"][0]["entity_uuid"]
+    hero = Entity.get(UUID(hero_uuid))
+    goblins = [
+        Entity.get(UUID(row["entity_uuid"]))
+        for row in payload["side_b"]["entity_assignments"]
+    ]
 
-    response = client.post("/simulation/start-aoe-test")
-    payload = response.json()
-    hero_uuid = payload["hero_uuid"]
-    entities = {entity.name: entity for entity in Entity.get_all_entities()}
-
-    assert response.status_code == 200
-    assert payload["status"] == "waiting_for_human"
-    assert payload["test_type"] == "aoe"
-    assert payload["entity_uuid"] == hero_uuid
+    assert hero is not None
+    assert all(goblin is not None for goblin in goblins)
     assert sim.encounter is not None
-    assert sim.encounter.name == "AoE Test Arena"
+    assert sim.encounter.name == payload["encounter_name"]
+    assert sim.encounter.state == EncounterState.NOT_STARTED
 
-    assert set(entities) == {"Hero", "Goblin 1", "Goblin 2", "Goblin 3"}
-    assert entities["Goblin 1"].position == (12, 4)
-    assert entities["Goblin 2"].position == (12, 5)
-    assert entities["Goblin 3"].position == (12, 6)
-    hero = entities["Hero"]
+    assert len(goblins) == 3
+    assert {goblin.position for goblin in goblins if goblin is not None} == {
+        (12, 3),
+        (12, 5),
+        (12, 7),
+    }
     assert hero.is_spellcaster
     assert {"Fireball", "Magic Missile", "Lightning Bolt"} <= action_template_names(hero)
     assert hero.action_economy.spell_slot_3.normalized_score > 0
@@ -469,23 +406,7 @@ def test_aoe_test_mode_builds_a_sorcerer_and_clustered_targets() -> None:
 
 def test_aoe_spell_executes_through_canonical_action_and_replication_routes() -> None:
     """Fireball executes through one action route and one player journal."""
-    reset_live_game_tutorial_state()
-    client = TestClient(app)
-    start_response = client.post("/simulation/start-aoe-test")
-    assert start_response.status_code == 200
-    hero_uuid = start_response.json()["hero_uuid"]
-
-    session_response = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "AoE Player"},
-    )
-    assert session_response.status_code == 200
-    session_id = session_response.json()["session_id"]
-    join_response = client.post(
-        "/game/join",
-        json={"session_id": session_id, "entity_uuids": [hero_uuid]},
-    )
-    assert join_response.status_code == 200
+    client, session_id, hero_uuid = start_joined_human_arena(AOE_SCENARIO)
 
     before = player_replication_seed(client, session_id)
     actions_response = client.get(
@@ -502,17 +423,16 @@ def test_aoe_spell_executes_through_canonical_action_and_replication_routes() ->
         fireball["valid_targets"],
         key=lambda candidate: candidate["affected_count"],
     )
-    assert target["affected_count"] == 3
-    assert set(target["affected_entity_names"]) == {
-        "Goblin 1",
-        "Goblin 2",
-        "Goblin 3",
-    }
     goblins = [
         entity
         for entity in Entity.get_all_entities()
-        if entity.name is not None and entity.name.startswith("Goblin ")
+        if entity.faction == "monsters"
     ]
+    assert len(goblins) == 3
+    assert target["affected_count"] == len(goblins)
+    assert set(target["affected_entity_names"]) == {
+        goblin.name for goblin in goblins
+    }
     hp_before = {goblin.uuid: goblin.get_hp() for goblin in goblins}
 
     with fixed_dice_faces(*([1] * 64)):

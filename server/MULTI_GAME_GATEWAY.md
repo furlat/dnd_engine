@@ -12,22 +12,18 @@ interpret a 404.
 ## Standalone Game Server
 
 `server.event_server` hosts one hot game in one process and has no database
-dependency. For a playable local server with the bundled managed AI service,
-use the explicit AI-owned composition root:
+dependency. The bundled native policy is part of the canonical server
+composition:
 
 ```bash
-uv run python -m ai.local_game_server --host 127.0.0.1 --port 8000
+uv run uvicorn server.event_server:app --host 127.0.0.1 --port 8000
 ```
 
-All state, event execution, sessions, subjective observations, and controller
-commands remain in memory. The core-only
-`uv run python -m server.event_server ...` entry point imports no client
-package and intentionally exposes no managed AI controller choice. The local
-composition imports the policy once at backend boot and gives each AI session
-an independently owned managed thread. It returns a successful managed start
-only after every runtime completes snapshot bootstrap and its first
-subjective-stream sync. For process isolation with the same protocol, use
-`uv run python -m ai.isolated_game_server ...`.
+All state, event execution, sessions, subjective observations, and native
+policy assignments remain in memory. Each AI side owns an independent policy,
+memory, projector, bounded decision loop, and core instrumentation. Game
+creation prepares those assignments without executing decisions; the explicit
+activation request starts the encounter.
 
 ## Multi-Game Gateway
 
@@ -36,77 +32,51 @@ subjective-stream sync. For process isolation with the same protocol, use
 ```bash
 export DND_DIRECTORY_CAPABILITY_PEPPER="replace-with-a-private-random-secret"
 export DND_HOSTED_WARM_WORKERS=1
-uv run uvicorn ai.game_gateway:app --host 127.0.0.1 --port 8000 --workers 1
+uv run uvicorn server.game_gateway:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 By default it stores cold directory data at
 `.runtime/game-directory.sqlite3` and worker files under
 `.runtime/hosted-games/`. Each active game runs in an isolated
-`ai.local_game_server` worker reached over a Unix-domain socket. The worker
-imports the bundled policy once during prewarm, then starts lightweight
-per-session policy threads. This retains process isolation between games
-without nesting another Python interpreter for every AI side.
+`server.event_server:app` worker reached over a Unix-domain socket. The worker
+imports the bundled native policy during prewarm and creates lightweight
+per-side assignments after a game claims it. This retains process isolation
+between games without nesting another Python interpreter for every AI side.
 
-The core-only `server.game_gateway:app` composition remains available for
-human-only hosting and advertises only the human controller. For explicit
-double isolation—one game-worker process plus one process per AI session—use
-`ai.isolated_game_gateway:app`. The embedded composition is the normal hosted
-default because the game worker already provides the process boundary.
-
-Worker readiness verifies the exact declared managed-agent service ID and
-execution mode before a process enters the warm pool. A gateway therefore
-cannot advertise AI or Codex controllers on the strength of an unchecked
-configuration hint.
+Registered-provider catalogs are process-local deployment state and are not
+yet propagated by the gateway. Hosted creation therefore advertises the
+native policies built into its worker composition and must not infer external
+provider availability from configuration hints.
 
 SQLite is used for identities, memberships, grants, attachments, game
 lifecycle, immutable summaries, and rating evidence. It is not consulted while
 proxying runtime HTTP or SSE traffic. Runtime authorization is installed in an
 in-memory, game-scoped capability cache during attachment.
 
-## Remote Agent Workflow
+## Registered Policy Providers
 
-A remotely executing traditional AI follows the same authority flow as a human
-or Codex client:
+The legacy player-session/self-HTTP AI workflow has been removed. An external
+policy process now implements the closed registered-provider protocol and is
+registered by deployment administration, never by impersonating a player or
+redeeming a gameplay attachment.
 
-1. Create the game with the remotely controlled side configured as `codex`.
-   The worker creates a subjective session and waits at that side's turns.
-2. Create a principal for the remote process.
-3. The game owner issues `POST /games/{game_id}/agent-grants` for that principal
-   and side.
-4. The remote process redeems the returned grant through
-   `POST /games/{game_id}/attachments` with `client_kind="external_ai"`.
-5. The remote host redeems the grant with the typed
-   `ai.remote_connection.redeem_remote_agent_grant()` helper. That returns
-   `engine_base_url`, `runtime_session_id`, `runtime_token`, and the controller
-   lease. Start the policy process with those exact connection facts:
+The reference provider runs independently:
 
 ```bash
-uv run python -m ai.external_agent \
-  --base-url '<engine_base_url>' \
-  --session-id '<runtime_session_id>' \
-  --runtime-token '<runtime_token>' \
-  --takeover-claim-id '<takeover_claim_id>'
+uv run python -m services.ai_policy_server
 ```
 
-Grant redemption and the hot policy runtime remain separate operations so a
-durable cold capability is never passed into the long-lived gameplay process.
+A standalone game server configured with
+`DND_AI_PROVIDER_ADMIN_TOKEN` registers that provider through
+`POST /admin/ai/providers` using deployment bearer authentication and the
+exact `{provider_id, base_url}` request. Only handshake-authenticated policies
+then appear in `/game-creation/catalog`; each game side owns one explicit
+provider assignment and the server remains the authority for projection,
+intent validation, execution, feedback, timing, and teardown.
 
-The process bootstraps one subjective snapshot, consumes its ordered
-observation and decision-epoch SSE stream, reduces that stream locally, and
-submits typed epoch/row commands. It does not poll available actions and does
-not import or inspect live server state.
-
-Remote-agent authority is intentionally narrower than observer authority. An
-agent token can access only its own `/ai/sessions/{session_id}/...` surface.
-The gateway rejects objective `/state`, `/visibility`, `/events`, setup/reset,
-evidence, session enumeration, another session, and uncontrolled entities.
-Agent telemetry is written back through the same scoped session surface. The
-agent also heartbeats only the takeover lease named by its connection; another
-claim identifier is rejected by the in-memory authority layer.
-
-For a process on another machine, bind the gateway to a reachable interface and
-place it behind authenticated TLS. The returned `engine_base_url` must use the
-public gateway origin rather than a worker socket or private worker address.
+Provider registration is currently a standalone-server capability. The
+multi-game gateway must not advertise registered-provider policies until its
+worker manifest and lifecycle propagation are implemented and tested.
 
 ## Reconnection And Observation
 

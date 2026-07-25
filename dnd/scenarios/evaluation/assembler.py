@@ -357,12 +357,14 @@ def _build_side(
     return tuple(actors), actors_by_role, deferred
 
 
-def _start_encounter(
+def _build_encounter(
     name: str,
     actors: tuple[Entity, ...],
     opening_faction: str | None,
+    *,
+    start_encounter: bool,
 ) -> tuple[Encounter, dict[UUID, Controller]]:
-    """Preserve the historical passive-controller and subjective-senses start sequence."""
+    """Build initiative state and optionally cross the encounter-start boundary."""
     for actor in actors:
         add_opportunity_attack_handler(actor)
     Entity.update_all_entities_senses(max_distance=80)
@@ -389,7 +391,8 @@ def _start_encounter(
             *(entity_uuid for entity_uuid in encounter.initiative_order if entity_uuid != opening_entity_uuid),
         ]
     encounter.current_turn_index = 0
-    encounter.start_encounter()
+    if start_encounter:
+        encounter.start_encounter()
     return encounter, controllers
 
 
@@ -599,10 +602,11 @@ def assemble_generic_side_duel(
     )
 
     resolved_name = encounter_name or f"Evaluation: {side_a_spec.title} vs {side_b_spec.title}"
-    encounter, controllers = _start_encounter(
+    encounter, controllers = _build_encounter(
         resolved_name,
         (*side_a_actors, *side_b_actors),
         opening_faction,
+        start_encounter=True,
     )
     positions = (
         dict(notable_positions)
@@ -637,8 +641,15 @@ def assemble_composed_scenario(
     notable_positions: Mapping[str, tuple[int, int]] | None = None,
     opening_faction: str | None = None,
     validation_spec: ValidationArenaSpec | None = None,
+    start_encounter: bool = True,
 ) -> AssembledScenario:
-    """Reset and assemble one compatible scenario through existing engine factories."""
+    """Reset and assemble one compatible scenario through existing engine factories.
+
+    Server composition passes ``start_encounter=False`` so final controllers,
+    replication, and replay capture can be installed before the one canonical
+    encounter-start boundary. Evaluation helpers retain the historical
+    immediate-start behavior.
+    """
     hero_spec = get_combatant_configuration(hero_configuration_id)
     monster_spec = get_combatant_configuration(monster_configuration_id)
     battlefield_spec = get_battlefield(battlefield_id)
@@ -674,10 +685,11 @@ def assemble_composed_scenario(
 
     hero = hero_actors[0]
     resolved_encounter_name = encounter_name or f"Evaluation: {hero_spec.title} vs {monster_spec.title}"
-    encounter, controllers = _start_encounter(
+    encounter, controllers = _build_encounter(
         resolved_encounter_name,
         (hero, *monster_actors),
         opening_faction,
+        start_encounter=start_encounter,
     )
     positions = (
         dict(notable_positions)
@@ -716,6 +728,33 @@ def assemble_composed_arena(
     ).arena
 
 
+def prepare_composed_scenario(
+    hero_configuration_id: str,
+    monster_configuration_id: str,
+    battlefield_id: str,
+    deployment_id: str,
+    *,
+    encounter_name: str | None = None,
+    actor_names: Mapping[str, str] | None = None,
+    notable_positions: Mapping[str, tuple[int, int]] | None = None,
+    opening_faction: str | None = None,
+    validation_spec: ValidationArenaSpec | None = None,
+) -> AssembledScenario:
+    """Assemble a server-owned scenario without starting its encounter."""
+    return assemble_composed_scenario(
+        hero_configuration_id,
+        monster_configuration_id,
+        battlefield_id,
+        deployment_id,
+        encounter_name=encounter_name,
+        actor_names=actor_names,
+        notable_positions=notable_positions,
+        opening_faction=opening_faction,
+        validation_spec=validation_spec,
+        start_encounter=False,
+    )
+
+
 _LEGACY_VALIDATION_SPECS = {
     spec.arena_id: spec for spec in list_ai_validation_arena_specs()
 }
@@ -727,6 +766,24 @@ def assemble_legacy_scenario(arena_id: str, *, opening_faction: str | None = Non
     actor_names = {presentation.role: presentation.name for presentation in recipe.actor_presentations}
     notable_positions = {position.label: position.position for position in recipe.notable_positions}
     return assemble_composed_scenario(
+        recipe.hero_configuration_id,
+        recipe.monster_configuration_id,
+        recipe.battlefield_id,
+        recipe.deployment_id,
+        encounter_name=recipe.encounter_name,
+        actor_names=actor_names,
+        notable_positions=notable_positions,
+        opening_faction=opening_faction,
+        validation_spec=_LEGACY_VALIDATION_SPECS[arena_id],
+    ).arena
+
+
+def prepare_legacy_scenario(arena_id: str, *, opening_faction: str | None = None) -> ValidationArena:
+    """Reconstruct a historical arena without crossing encounter start."""
+    recipe = get_legacy_recipe(arena_id)
+    actor_names = {presentation.role: presentation.name for presentation in recipe.actor_presentations}
+    notable_positions = {position.label: position.position for position in recipe.notable_positions}
+    return prepare_composed_scenario(
         recipe.hero_configuration_id,
         recipe.monster_configuration_id,
         recipe.battlefield_id,

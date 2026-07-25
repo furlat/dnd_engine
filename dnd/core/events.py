@@ -1784,7 +1784,7 @@ class EventQueue:
                 record_action_timing("event_queue.store.compute_identified_ms", started)
             started = time.perf_counter() if timing else 0.0
             for entity_uuid, observer_uuids in captured.items():
-                identified.setdefault(entity_uuid, set(observer_uuids))
+                identified.setdefault(entity_uuid, set()).update(observer_uuids)
             if timing:
                 record_action_timing("event_queue.store.merge_identified_ms", started)
 

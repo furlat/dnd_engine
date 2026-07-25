@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionEconomyState,
     ActionSourceDefinition,
@@ -14,7 +14,7 @@ from server.agent_protocol.control import (
     DecisionEpoch,
     DecisionEpochReason,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     AffectedRelationship,
     CapabilityAmountSource,
     CapabilityCostOperation,
@@ -46,9 +46,9 @@ from server.agent_protocol.semantics import (
     action_semantics_ref,
     evaluate_fact_expression,
 )
-from server.agent_runtime.action_semantics import action_semantics_for_available_action
+from dnd.ai.runtime.action_semantics import action_semantics_for_available_action
 from ai.subjective.semantic_pool import SemanticContractPool
-from server.agent_runtime.epochs import (
+from dnd.ai.runtime.decision_epoch import (
     _affordance_set_from_buckets,
     _build_affordance_rows_from_actions,
     _display_tags,

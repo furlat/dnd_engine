@@ -10,8 +10,8 @@ from typing import Mapping, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ai.knowledge.models import AgentFacts
-from server.agent_protocol.observation import SubjectiveWorldState
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.observation import SubjectiveWorldState
+from dnd.ai.contracts.semantics import (
     ActionTag,
     ComparisonOperator,
     FactExpression,

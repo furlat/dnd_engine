@@ -13,7 +13,7 @@ import ai.policy.candidates as candidate_module
 import ai.policy.outcomes as outcomes_module
 from ai.knowledge import TargetEffectBlockHypothesis, derive_agent_facts
 from ai.knowledge.topology import KnownLineOfSightWorkspace, known_line_of_sight
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     AdjacentOffset,
     KnowledgeState,
     ObservationConditionFact,
@@ -29,7 +29,6 @@ from server.agent_protocol.observation import (
 )
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from ai.policy import (
-    ExecuteIntent,
     PolicyContext,
     PolicyHost,
     PolicyLogicalTag,
@@ -50,12 +49,12 @@ from ai.policy.contracts import (
     CapabilityProjectionScope,
     CapabilityRangeState,
     CapabilityTargetProjection,
-    EndTurnIntent,
     NodeStatus,
     PolicyGoal,
     TargetApplicationEvidence,
     TargetPlanEvidence,
 )
+from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from ai.policy.default import evaluate_default_policy
 from ai.policy.outcomes import SubjectiveDamageEstimate, estimate_damage_outcome
 from ai.policy.tree import (
@@ -65,7 +64,7 @@ from ai.policy.tree import (
     SequenceNode,
     UtilitySelectorNode,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCapability,
     ActionCostProfile,
@@ -80,7 +79,7 @@ from server.agent_protocol.control import (
     OutcomeResolution,
     ResourcePool,
 )
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.semantics import (
     ActionSemantics,
     ActionTag,
     ComparisonOperator,

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ai.policy.contracts import ExecuteIntent, PolicyProposal
+from ai.policy.contracts import PolicyProposal
+from dnd.ai.contracts.decision import ExecuteIntent
 
 
 class UtilityArbiter:

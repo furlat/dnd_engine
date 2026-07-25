@@ -7,9 +7,9 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from server.agent_protocol.observation_replay import apply_observation_frame, materialize_snapshot
-from server.agent_protocol.observation import ObservationFrame, ObservationFrameType, ObservationSnapshot, SubjectiveWorldState
-from server.agent_protocol.control import CommandResult
+from dnd.ai.contracts.observation_replay import apply_observation_frame, materialize_snapshot
+from dnd.ai.contracts.observation import ObservationFrame, ObservationFrameType, ObservationSnapshot, SubjectiveWorldState
+from dnd.ai.contracts.control import CommandResult
 from ai.subjective.models import AgentState
 from ai.subjective.semantic_pool import SemanticContractPool
 

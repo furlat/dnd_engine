@@ -9,17 +9,34 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
-from ai.game_server_profiles import EMBEDDED_AI_WORKER_APPLICATION
 from ai.remote_connection import redeem_remote_agent_grant
 from dnd.core.base_object import BaseObject
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
+from server.event_stream import event_stream
+from server.game_artifact_store import GameArtifactStore
 from server.game_creation_catalog import build_game_creation_catalog
+from server.game_directory.canonical import hash_capability
+from server.game_directory.contracts import (
+    ArtifactKind,
+    GameCreate,
+    GameLifecycleState,
+    PrincipalCreate,
+    PrincipalKind,
+)
 from server.game_directory.repository import GameDirectoryRepository
-from server.game_gateway import create_gateway_app
+from server.game_gateway import ENGINE_VERSION, GameGatewayService, create_gateway_app
+from server.game_summary_store import WorkerGameSummaryStore, WorkerSummaryEvidence
 from server.hosted_worker import HostedWorkerManager
+from server.live_replication import create_stream_scene, execute_stream_attack
+from server.objective_replay import ObjectiveReplayBundle
+from server.player_replay import SubjectivePlayerReplayArchive
 from server.runtime_authority import RuntimeAuthorityCache
+from server.worker_replay import build_worker_objective_replay
 
 
 PEPPER = b"gateway-test-capability-pepper"
@@ -51,7 +68,6 @@ def test_prewarmed_worker_is_claimed_without_cold_process_start(tmp_path: Path) 
     async def exercise_pool() -> None:
         workers = HostedWorkerManager(
             tmp_path / "runtime",
-            worker_application=EMBEDDED_AI_WORKER_APPLICATION,
             warm_pool_size=1,
             startup_timeout_seconds=20.0,
         )
@@ -124,9 +140,9 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
             "isolated_game_workers": True,
         }
         assert catalog_response.status_code == 200
-        assert catalog_response.json() == build_game_creation_catalog(
-            ("human",),
-        ).model_dump(mode="json")
+        assert catalog_response.json() == build_game_creation_catalog().model_dump(
+            mode="json",
+        )
         assert valid_response.status_code == 200
         assert valid_response.json()["admitted"] is True
         assert invalid_response.status_code == 400
@@ -144,10 +160,10 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
     repository.close()
 
 
-def test_core_gateway_rejects_managed_ai_before_spawning_worker(
+def test_core_gateway_exposes_native_ai_without_spawning_worker(
     tmp_path: Path,
 ) -> None:
-    """Core-only gateway admission agrees with its human-only catalog."""
+    """Native AI belongs to the core catalog without a service composition."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
@@ -160,45 +176,12 @@ def test_core_gateway_rejects_managed_ai_before_spawning_worker(
     )
 
     with TestClient(app) as client:
-        owner = client.post(
-            "/directory/principals/guest",
-            json={"display_name": "Core Owner"},
-        ).json()
-        rejected = client.post("/games", json=_creation_body(owner))
-
-    assert rejected.status_code == 503
-    assert rejected.json()["detail"]["code"] == "agent_service_unavailable"
-    assert workers.active_game_ids() == ()
-    assert repository.list_games() == ()
-    repository.close()
-
-
-def test_managed_ai_gateway_catalog_matches_worker_composition(
-    tmp_path: Path,
-) -> None:
-    """The AI-owned gateway advertises only capabilities proved at worker boot."""
-    repository = GameDirectoryRepository(
-        tmp_path / "directory.sqlite3",
-        capability_pepper=PEPPER,
-    )
-    workers = HostedWorkerManager(
-        tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
-    )
-    app = create_gateway_app(
-        repository=repository,
-        worker_manager=workers,
-        capability_pepper=PEPPER,
-    )
-
-    with TestClient(app) as client:
         catalog = client.get("/game-creation/catalog")
 
     assert catalog.status_code == 200
-    assert catalog.json() == build_game_creation_catalog().model_dump(
-        mode="json",
-    )
+    assert catalog.json() == build_game_creation_catalog().model_dump(mode="json")
     assert workers.active_game_ids() == ()
+    assert repository.list_games() == ()
     repository.close()
 
 
@@ -210,7 +193,6 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -244,6 +226,8 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
         created = created_response.json()
         game_id = UUID(created["game"]["game_id"])
         connection = created["connection"]
+        assert created["creation"]["status"] == "prepared"
+        assert created["game"]["lifecycle_state"] == "active"
         assert connection["game_id"] == str(game_id)
         assert connection["access_mode"] == "participant"
         assert len(connection["controlled_entity_uuids"]) == 1
@@ -257,6 +241,7 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
                 headers={"Authorization": f"Bearer {connection['runtime_token']}"},
             )
         assert bootstrap.status_code == 200, bootstrap.text
+        assert bootstrap.json()["watermarks"]["source_event_cursor"] > 0
         assert (
             bootstrap.json()["perspective"]["controlled_entity_uuids"]
             == connection["controlled_entity_uuids"]
@@ -377,7 +362,6 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -443,23 +427,23 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
     repository.close()
 
 
-def test_autonomous_composed_match_persists_summary_within_half_second(
+def test_autonomous_composed_match_persists_complete_terminal_archives(
     tmp_path: Path,
 ) -> None:
-    """Gateway persistence follows worker summary readiness within 500 ms."""
+    """A real autonomous match durably retains both complete replay surfaces."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
         repository=repository,
         worker_manager=workers,
         capability_pepper=PEPPER,
+        artifact_root=tmp_path / "artifacts",
     )
     with TestClient(app) as client:
         owner = client.post(
@@ -498,7 +482,11 @@ def test_autonomous_composed_match_persists_summary_within_half_second(
             base_url="http://game-worker",
             timeout=2.0,
         ) as worker_client:
-            deadline = time.monotonic() + 20.0
+            # Match duration is policy/scenario behavior, not the property
+            # measured here. Keep the worker request timeout tight while
+            # allowing the autonomous match to reach its terminal evidence;
+            # the gateway propagation assertion below remains 500 ms.
+            deadline = time.monotonic() + 60.0
             while time.monotonic() < deadline:
                 if worker_ready_at is None:
                     worker_response = worker_client.get("/game/evidence/summary")
@@ -518,26 +506,182 @@ def test_autonomous_composed_match_persists_summary_within_half_second(
         assert worker_ready_at is not None
         assert summary_response.status_code == 200, summary_response.text
         assert gateway_ready_at is not None
-        assert gateway_ready_at - worker_ready_at < 0.5
+        # This bound includes transferring, validating, canonicalizing, fsyncing,
+        # and indexing two multi-megabyte archives. The separate deterministic
+        # test below owns the sub-500-ms monitor/persistence responsiveness SLO.
+        assert gateway_ready_at - worker_ready_at < 3.0
         summary_record = summary_response.json()
         assert summary_record["summary"]["schema_version"] == 2
         assert summary_record["summary"]["outcome"]["terminal_event_observed"] is True
         game = repository.get_game(game_id)
         assert game.lifecycle_state.value == "ended"
         assert game.current_summary_digest == summary_record["summary_digest"]
+        artifacts = {
+            artifact.artifact_kind: artifact
+            for artifact in repository.list_artifacts(game_id)
+        }
+        assert {
+            ArtifactKind.REPLAY_BUNDLE,
+            ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+        } <= artifacts.keys()
+        objective_artifact = artifacts[ArtifactKind.REPLAY_BUNDLE]
+        subjective_artifact = artifacts[ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE]
+        assert objective_artifact.byte_size > 100_000
+        assert subjective_artifact.byte_size > 100_000
+        artifact_store = GameArtifactStore(tmp_path / "artifacts")
+        objective = ObjectiveReplayBundle.model_validate_json(
+            artifact_store.read_bytes(objective_artifact.content_digest)
+        )
+        subjective = SubjectivePlayerReplayArchive.model_validate_json(
+            artifact_store.read_bytes(subjective_artifact.content_digest)
+        )
+        assert objective.terminal_event_cursor == game.final_event_cursor
+        assert objective.terminal_combat_log_cursor == game.final_combat_log_cursor
+        assert (
+            subjective.terminal_source_event_cursor
+            == game.final_event_cursor
+        )
+        assert (
+            subjective.terminal_combat_log_cursor
+            == game.final_combat_log_cursor
+        )
 
     repository.close()
 
 
-def test_remote_agent_uses_public_subjective_runtime_without_engine_access(tmp_path: Path) -> None:
-    """A remote policy process attaches through the same capability flow as Codex."""
+def test_small_terminal_evidence_archival_persists_within_half_second(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The deterministic cold archival path persists small evidence in 500 ms."""
+
+    event_stream.stop()
+    reset_engine_runtime()
+    event_stream.ensure_attached()
+    game_id = uuid4()
+    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(game_id))
+    scene = create_stream_scene()
+    summary_store = WorkerGameSummaryStore()
+    summary_store.capture_active_encounter(scene.encounter)
+    execute_stream_attack(scene.hero, scene.monster, scene.encounter)
+    scene.encounter.end_encounter("deterministic persistence fixture")
+    evidence = summary_store.get_evidence(game_id)
+    capture = summary_store.get_replay_capture(game_id)
+    assert evidence is not None
+    assert capture is not None
+    replay = build_worker_objective_replay(
+        capture,
+        encounter=scene.encounter,
+        stream=event_stream,
+    )
+    subjective = SubjectivePlayerReplayArchive(
+        game_id=str(game_id),
+        encounter_uuid=str(scene.encounter.uuid),
+        terminal_source_event_cursor=capture.terminal_event_cursor,
+        terminal_combat_log_cursor=capture.terminal_combat_log_cursor,
+        opened_partition_count=0,
+        membership_replays=(),
+    )
+
+    repository = GameDirectoryRepository(
+        tmp_path / "directory.sqlite3",
+        capability_pepper=PEPPER,
+    )
+    principal_capability = "terminal-fixture-capability"
+    principal = repository.create_principal(
+        PrincipalCreate(
+            principal_kind=PrincipalKind.SERVICE,
+            display_name="Terminal Fixture",
+            credential_hash=hash_capability(principal_capability, PEPPER),
+        )
+    )
+    game = repository.create_game(
+        GameCreate(
+            game_id=game_id,
+            created_by_principal_id=principal.principal_id,
+            scenario_kind="test",
+            scenario_id="small-terminal-evidence",
+            display_name="Small Terminal Evidence",
+            creation_manifest={},
+            ruleset_version="test",
+            engine_version=ENGINE_VERSION,
+            content_digest="small-terminal-evidence",
+        )
+    )
+    service = GameGatewayService(
+        repository,
+        HostedWorkerManager(tmp_path / "runtime"),
+        RuntimeAuthorityCache(),
+        GameArtifactStore(tmp_path / "artifacts"),
+        capability_pepper=PEPPER,
+    )
+    repository.transition_game(
+        game_id,
+        expected_row_version=game.row_version,
+        lifecycle_state=GameLifecycleState.ACTIVE,
+    )
+    worker = FastAPI()
+
+    @worker.get("/game/evidence/summary", response_model=WorkerSummaryEvidence)
+    async def terminal_summary() -> WorkerSummaryEvidence:
+        return evidence
+
+    @worker.get("/game/evidence/objective-replay", response_model=ObjectiveReplayBundle)
+    async def terminal_objective_replay() -> ObjectiveReplayBundle:
+        return replay
+
+    @worker.get(
+        "/game/evidence/subjective-replay",
+        response_model=SubjectivePlayerReplayArchive,
+    )
+    async def terminal_subjective_replay() -> SubjectivePlayerReplayArchive:
+        return subjective
+
+    async def persist() -> tuple[bool, float]:
+        transport = httpx.ASGITransport(app=worker)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://terminal-worker",
+        ) as client:
+            started_at = time.perf_counter()
+            persisted = await service._persist_worker_summary_if_ready(
+                game_id,
+                client,
+            )
+            return persisted, time.perf_counter() - started_at
+
+    try:
+        persisted, elapsed = asyncio.run(persist())
+        assert persisted is True
+        assert elapsed < 0.5
+        ended = repository.get_game(game_id)
+        assert ended.lifecycle_state is GameLifecycleState.ENDED
+        assert ended.final_event_cursor == replay.terminal_event_cursor
+        assert ended.final_combat_log_cursor == replay.terminal_combat_log_cursor
+        assert {
+            artifact.artifact_kind
+            for artifact in repository.list_artifacts(game_id)
+        } == {
+            ArtifactKind.REPLAY_BUNDLE,
+            ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+        }
+    finally:
+        asyncio.run(service.close())
+        repository.close()
+        event_stream.stop()
+        reset_engine_runtime()
+
+
+def test_codex_grant_uses_public_subjective_runtime_over_native_fallback(
+    tmp_path: Path,
+) -> None:
+    """A remote Codex process attaches without replacing native fallback."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
     )
     workers = HostedWorkerManager(
         tmp_path / "runtime",
-        worker_application=EMBEDDED_AI_WORKER_APPLICATION,
         startup_timeout_seconds=20.0,
     )
     app = create_gateway_app(
@@ -557,26 +701,11 @@ def test_remote_agent_uses_public_subjective_runtime_without_engine_access(tmp_p
         created = created_response.json()
         game_id = UUID(created["game"]["game_id"])
         side = created["creation"]["side_b"]
-        fallback_session_id = side["fallback_ai_session_id"]
         codex_session_id = side["codex_session_id"]
-        assert fallback_session_id
+        assert side["policy_id"] == "builtin.basic"
+        assert side["policy_execution"] == "in_process"
+        assert side["provider_id"] is None
         assert codex_session_id
-        assert fallback_session_id != codex_session_id
-        worker_transport = httpx.HTTPTransport(
-            uds=str(workers.socket_path(game_id))
-        )
-        with httpx.Client(
-            transport=worker_transport,
-            base_url="http://game-worker",
-        ) as worker_client:
-            service = worker_client.get("/ai/service")
-        assert service.status_code == 200
-        fallback_status = next(
-            row
-            for row in service.json()["sessions"]
-            if row["session_id"] == fallback_session_id
-        )
-        assert fallback_status["ready"] is True
 
         remote_identity = client.post(
             "/directory/principals/guest",

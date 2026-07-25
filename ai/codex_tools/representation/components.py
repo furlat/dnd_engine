@@ -16,20 +16,20 @@ from ai.codex_tools.representation.predicates import (
     PredicateEvaluation,
 )
 from ai.knowledge.models import TargetEffectBlockHypothesis
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
     ObservationObjectFact,
     ObservationTileFact,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCostProfile,
     ActionEconomyState,
     AffordanceSet,
 )
-from server.agent_protocol.semantics import ActionSemanticProvenance
+from dnd.ai.contracts.semantics import ActionSemanticProvenance
 
 
 Position = Tuple[int, int]

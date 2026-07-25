@@ -6,7 +6,7 @@ import asyncio
 import random
 import time
 from dataclasses import dataclass, field as dataclass_field
-from typing import Callable, Mapping, Optional
+from typing import Callable, ClassVar, Mapping, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -16,10 +16,9 @@ from server.agent_runtime.observation_projector import (
     ObservationAccessError,
     iter_observation_frames,
 )
-from server.agent_protocol.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation import SubjectiveWorldState
 from ai.policy import (
     command_from_policy_decision,
-    ExecuteIntent,
     policy_memory_trace,
     PolicyExecutionConstraints,
     PolicyContext,
@@ -28,13 +27,14 @@ from ai.policy import (
     PolicyTraceStep,
 )
 from ai.policy.contracts import CapabilityTargetProjection
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.definitions import PolicyGenerationIdentity, PolicyImplementation
 from ai.policy.generations.current_commitments import create_generation_policy_host
 from ai.policy.generations.registry import (
     CANDIDATE_GENERATION_ID,
     get_policy_implementation,
 )
-from server.agent_protocol.control import (
+from dnd.ai.contracts.control import (
     ActionEconomyState,
     AgentEndTurnCommandRequest,
     AgentExecuteCommandRequest,
@@ -43,7 +43,7 @@ from server.agent_protocol.control import (
 )
 from server.runtime_performance import latency_sensitive_gc
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
-from dnd.controller import ExternalAIController
+from dnd.controller import Controller, ControllerExecutionMode
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import EventPhase, EventQueue, SensoryUpdateEvent
 from dnd.encounter import EncounterState
@@ -57,6 +57,25 @@ from server.session import PlayerType
 
 DEEP_DIAGNOSTIC_SAMPLE_INTERVAL = 10
 STALEMATE_COMMAND_WINDOW = 80
+
+
+class _SubjectivePolicyEvaluationController(Controller):
+    """Pause the in-process evaluator at each session-command boundary.
+
+    This marker is deliberately local to the validation harness.  It is not a
+    production external-AI transport; registered providers are represented by
+    ``RegisteredAIController`` at the server composition boundary.
+    """
+
+    _execution_mode: ClassVar[ControllerExecutionMode] = (
+        ControllerExecutionMode.EXTERNAL
+    )
+    _external_boundary_status: ClassVar[str] = (
+        "waiting_for_policy_evaluator"
+    )
+
+    name: str = Field(default="Subjective Policy Evaluator")
+    controller_type: str = Field(default="subjective_policy_evaluator")
 
 
 class SelfPlayActionSummary(BaseModel):
@@ -520,7 +539,9 @@ def _run_external_selfplay(
         if entity.uuid in sim.encounter.combatants:
             sim.encounter.set_controller_for(
                 entity.uuid,
-                ExternalAIController(source_entity_uuid=entity.uuid),
+                _SubjectivePolicyEvaluationController(
+                    source_entity_uuid=entity.uuid
+                ),
             )
     if arena_observer is not None:
         arena_observer(arena)

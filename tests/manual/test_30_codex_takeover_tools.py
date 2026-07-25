@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
-from pathlib import Path
+from collections.abc import Iterator
 from uuid import UUID
 
 import httpx
@@ -13,110 +12,139 @@ from fastapi.testclient import TestClient
 from ai.codex_tools import commands as codex_commands
 from ai.codex_tools.client import CodexToolClient, CodexToolHTTPError
 from ai.policy.source import policy_source_snapshot
-from server.agent_protocol.observation import ObservationFrame
-from server.agent_protocol.observation_replay import (
+from dnd.ai.contracts.observation import ObservationFrame
+from dnd.ai.contracts.observation_replay import (
     apply_observation_frame,
     materialize_snapshot,
 )
-from server.agent_protocol.control import DecisionEpoch
+from dnd.ai.contracts.control import DecisionEpoch
 from dnd.controller import CodexController
 from dnd.core.events import EventPhase, SensoryUpdateEvent, SensoryUpdateReason
 from dnd.entity import Entity
 from server import event_server
-from server.agent_runtime.service import AgentLaunchRequest
-from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.arena_mode import reset_standard_arena_runtime
 from server.session import PlayerType
 from tests.manual.test_28_subjective_observation_stream import complete_event, create_observation_game
 
 
-class _TakeoverTestAgentLauncher:
-    """Registered managed-agent capability for takeover route checks."""
-
-    service_id = "tests.takeover-agent"
-
-    def preflight(self, required_agents: int) -> None:
-        del required_agents
-
-    def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
-        return AgentProcessSpec(
-            argv=("unused-takeover-agent", request.session_id),
-            cwd=Path(__file__).resolve().parents[2],
-        )
-
-
 @pytest.fixture(autouse=True)
-def stop_test_external_ai_processes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Generator[None, None, None]:
-    """Stop external agents started against the in-process test server."""
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
-    event_server.agent_service_manager.register_service(SubprocessAgentService(_TakeoverTestAgentLauncher()))
-
-    async def accept_batch(
-        _requests: tuple[AgentLaunchRequest, ...],
-    ) -> tuple[object, ...]:
-        return ()
-
-    monkeypatch.setattr(
-        event_server.agent_service_manager,
-        "start_agents",
-        accept_batch,
-    )
+def isolate_takeover_runtime() -> Iterator[None]:
+    """Keep claims, native assignments, sessions, and diagnostics isolated."""
+    reset_standard_arena_runtime()
     event_server.configure_policy_source_manifest(None)
     yield
-    event_server.agent_service_manager.stop_all_blocking()
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
     event_server.configure_policy_source_manifest(None)
+    reset_standard_arena_runtime()
+
+
+def _start_canonical_human_game(
+    client: TestClient,
+    *,
+    character_class: str = "fighter",
+) -> tuple[dict[str, object], str, str]:
+    """Prepare, join, bootstrap, and activate one native-opponent game."""
+    hero_configurations = {
+        "fighter": "hero.fighter_l5_archer_torch",
+        "sorcerer": "hero.sorcerer_l5_standard_torch",
+        "barbarian": "hero.barbarian_l5_berserker_torch",
+    }
+    started = client.post(
+        "/game-creation/start",
+        json={
+            "scenario": {
+                "kind": "composed",
+                "hero_configuration_id": hero_configurations[character_class],
+                "monster_configuration_id": "monsters.skeleton_trio",
+                "battlefield_id": "battlefield.standard_hazards_closed",
+                "deployment_id": "neutral.battlefield.standard_hazards_closed",
+            },
+            "side_a": {"controller": "human", "name": "Arena Player"},
+            "side_b": {
+                "controller": "ai",
+                "name": "Basic AI",
+                "policy_id": "builtin.basic",
+            },
+            "opening_side": "side_a",
+        },
+    )
+    assert started.status_code == 200, started.text
+    payload = started.json()
+    hero_uuid = payload["side_a"]["entity_assignments"][0]["entity_uuid"]
+    session = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Arena Player"},
+    )
+    assert session.status_code == 200
+    session_id = session.json()["session_id"]
+    joined = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [hero_uuid]},
+    )
+    assert joined.status_code == 200
+    bootstrap_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert bootstrap_response.status_code == 200
+    bootstrap = bootstrap_response.json()
+    activated = client.post(
+        "/game-creation/activate",
+        json={
+            "session_id": session_id,
+            "expected_source_stream_id": bootstrap["protocol"][
+                "source_stream_id"
+            ],
+            "expected_generation_id": bootstrap["protocol"]["generation_id"],
+            "expected_perspective_epoch_id": bootstrap["perspective"][
+                "perspective_epoch_id"
+            ],
+        },
+    )
+    assert activated.status_code == 200
+    return payload, hero_uuid, session_id
 
 
 def test_codex_takeover_claims_monsters_and_stops_at_codex_turn() -> None:
-    """Codex can claim normal-AI monsters during the human turn."""
-    reset_standard_arena_runtime()
+    """Codex can claim native-AI monsters during the human turn."""
     client = TestClient(event_server.app)
 
-    start_response = client.post("/simulation/start-human", params={"character_class": "fighter"})
+    _start, hero_uuid, human_session = _start_canonical_human_game(client)
     takeover_response = client.post("/ai/takeover", json={"faction": "monsters"})
     claim = takeover_response.json()
-    hero_uuid = start_response.json()["hero_uuid"]
-    human_session = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "Arena Player"},
-    ).json()["session_id"]
-    client.post("/game/join", json={"session_id": human_session, "entity_uuids": [hero_uuid]})
     advance_response = client.post(
         "/action/end-turn",
         json={"session_id": human_session, "entity_uuid": hero_uuid},
     )
 
-    assert start_response.status_code == 200
     assert takeover_response.status_code == 200
-    assert {row["entity_name"] for row in claim["claimed_entities"]} == {
-        "Skeleton Warrior",
-        "Skeleton Archer",
-        "Skeleton Warlock",
+    assert len(claim["claimed_entities"]) == 3
+    assert {row["faction"] for row in claim["claimed_entities"]} == {
+        "monsters"
     }
-    assert {row["previous_controller_type"] for row in claim["claimed_entities"]} == {"external_ai"}
+    assert {row["previous_controller_type"] for row in claim["claimed_entities"]} == {"native_ai"}
     assert {row["current_controller_type"] for row in claim["claimed_entities"]} == {"codex"}
-    assert advance_response.json()["status"] == "waiting_for_codex"
+    assert advance_response.json()["status"] == "advancement_scheduled"
+    encounter = event_server.sim.encounter
+    assert encounter is not None
+    for _ in range(10):
+        client.get("/game/status")
+        controller = encounter.get_current_controller()
+        if isinstance(controller, CodexController):
+            break
+    assert isinstance(encounter.get_current_controller(), CodexController)
 
 
 def test_explicit_entity_takeover_reports_the_claimed_entity_faction() -> None:
     """Explicit hero ownership cannot retain the request model's monster default."""
-    reset_standard_arena_runtime()
     client = TestClient(event_server.app)
-    start = client.post(
-        "/simulation/start-human",
-        params={"character_class": "sorcerer"},
-    ).json()
+    _start, hero_uuid, _session_id = _start_canonical_human_game(
+        client,
+        character_class="sorcerer",
+    )
 
     response = client.post(
         "/ai/takeover",
-        json={"entity_uuids": [start["hero_uuid"]]},
+        json={"entity_uuids": [hero_uuid]},
     )
 
     assert response.status_code == 200
@@ -127,20 +155,18 @@ def test_explicit_entity_takeover_reports_the_claimed_entity_faction() -> None:
 
 def test_codex_takeover_release_restores_normal_ai() -> None:
     """Releasing a claim restores previous controllers and ownership."""
-    reset_standard_arena_runtime()
     client = TestClient(event_server.app)
 
-    client.post("/simulation/start-human", params={"character_class": "fighter"})
+    _start_canonical_human_game(client)
     claim = client.post("/ai/takeover", json={"faction": "monsters"}).json()
     release_response = client.post(f"/ai/takeover/{claim['claim_id']}/release")
     released = release_response.json()["claim"]
     game_status = client.get("/game/status").json()
-    ai_sessions = [session for session in game_status["sessions"] if session["player_type"] == "ai"]
     codex_sessions = [session for session in game_status["sessions"] if session["player_type"] == "codex"]
     encounter = event_server.sim.encounter
 
     assert release_response.json()["status"] == "released"
-    assert {row["current_controller_type"] for row in released["claimed_entities"]} == {"external_ai"}
+    assert {row["current_controller_type"] for row in released["claimed_entities"]} == {"native_ai"}
     assert encounter is not None
     restored_controller_types: set[str] = set()
     for entity in Entity.get_all_entities():
@@ -149,9 +175,8 @@ def test_codex_takeover_release_restores_normal_ai() -> None:
         controller = encounter.get_controller_for(entity.uuid)
         assert controller is not None
         restored_controller_types.add(controller.controller_type)
-    assert restored_controller_types == {"external_ai"}
-    assert len(ai_sessions) == 1
-    assert len(ai_sessions[0]["controlled_entities"]) == 3
+    assert restored_controller_types == {"native_ai"}
+    assert all(session["player_type"] != "ai" for session in game_status["sessions"])
     assert codex_sessions[0]["controlled_entities"] == []
 
 
@@ -208,9 +233,8 @@ def test_takeover_release_preserves_subjective_history_and_appends_state_transit
 
 def test_codex_takeover_conflict_and_force_replace() -> None:
     """Overlapping live claims require force to replace."""
-    reset_standard_arena_runtime()
     client = TestClient(event_server.app)
-    client.post("/simulation/start-human", params={"character_class": "fighter"})
+    _start_canonical_human_game(client)
 
     first = client.post("/ai/takeover", json={"faction": "monsters"}).json()
     conflict = client.post("/ai/takeover", json={"faction": "monsters"})
@@ -297,33 +321,34 @@ def test_ai_command_advances_when_accepted_action_ends_actor_turn(monkeypatch: p
 
 
 def test_expired_takeover_restores_before_advancement() -> None:
-    """Expired claims restore the external AI before encounter advancement."""
-    reset_standard_arena_runtime()
+    """Expired claims restore native AI before encounter advancement."""
     client = TestClient(event_server.app)
-    start = client.post("/simulation/start-human", params={"character_class": "fighter"}).json()
+    _start, hero_uuid, human_session = _start_canonical_human_game(client)
     claim = client.post("/ai/takeover", json={"faction": "monsters", "lease_seconds": 0.001}).json()
     stored_claim = event_server.ai_takeover_manager.get_claim(UUID(claim["claim_id"]))
     assert stored_claim is not None
     stored_claim.last_heartbeat_at -= 10.0
-    human_session = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "Arena Player"},
-    ).json()["session_id"]
-    client.post("/game/join", json={"session_id": human_session, "entity_uuids": [start["hero_uuid"]]})
     advanced = client.post(
         "/action/end-turn",
-        json={"session_id": human_session, "entity_uuid": start["hero_uuid"]},
+        json={"session_id": human_session, "entity_uuid": hero_uuid},
     )
 
-    assert advanced.json()["status"] == "waiting_for_ai"
+    assert advanced.json()["status"] == "advancement_scheduled"
     assert client.get("/ai/takeover").json()["claims"] == []
+    encounter = event_server.sim.encounter
+    assert encounter is not None
+    assert {
+        encounter.get_controller_for(entity.uuid).controller_type
+        for entity in Entity.get_all_entities()
+        if entity.faction == "monsters"
+        and encounter.get_controller_for(entity.uuid) is not None
+    } == {"native_ai"}
 
 
 def test_takeover_can_reuse_existing_codex_session() -> None:
     """A takeover may bind to an existing Codex session."""
-    reset_standard_arena_runtime()
     client = TestClient(event_server.app)
-    client.post("/simulation/start-human", params={"character_class": "fighter"})
+    _start_canonical_human_game(client)
     codex_session = client.post(
         "/session/create",
         json={"player_type": "codex", "name": "Hot Codex"},
@@ -432,9 +457,8 @@ def test_codex_cli_separates_takeover_transport_from_typed_hot_runtime_commands(
 
 def test_takeover_assigns_codex_controllers_in_registry() -> None:
     """Claimed monsters point at CodexController instances."""
-    reset_standard_arena_runtime()
     client = TestClient(event_server.app)
-    client.post("/simulation/start-human", params={"character_class": "fighter"})
+    _start_canonical_human_game(client)
     client.post("/ai/takeover", json={"faction": "monsters"})
     encounter = event_server.sim.encounter
     assert encounter is not None
@@ -464,8 +488,8 @@ def _typed_takeover_claim_payload() -> dict[str, object]:
             "entity_name": "Monster",
             "faction": "monsters",
             "previous_controller_uuid": "controller-1",
-            "previous_controller_type": "external_ai",
+            "previous_controller_type": "native_ai",
             "current_controller_type": "codex",
-            "previous_owner_session_id": "ai-session",
+            "previous_owner_session_id": None,
         }],
     }

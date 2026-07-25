@@ -10,8 +10,8 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from server import event_server
-from server.agent_protocol.observation import SubjectiveWorldState
-from server.agent_protocol.observation_replay import (
+from dnd.ai.contracts.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation_replay import (
     apply_observation_frame,
     materialize_snapshot,
 )

@@ -15,12 +15,12 @@ from ai.policy.generations.current_options import option_for_routine
 from ai.policy.candidates import PolicyCandidateSet
 from ai.policy.contracts import (
     NodeStatus,
-    ExecuteIntent,
     PolicyContext,
     PolicyGoal,
     PolicyProposal,
     PolicyTraceStep,
 )
+from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.default import DefaultPolicyEvaluation, evaluate_default_policy
 from ai.policy.definitions import (
     PolicyGenerationRole,
@@ -35,8 +35,8 @@ from ai.policy.host import (
 from ai.policy.routines import RoutinePlan
 from ai.policy.source import POLICY_NAME
 from ai.policy.memory import PolicyMemoryStore
-from server.agent_protocol.control import CommandResult
-from server.agent_protocol.semantics import (
+from dnd.ai.contracts.control import CommandResult
+from dnd.ai.contracts.semantics import (
     ComparisonOperator,
     EffectOperation,
     FactExpression,

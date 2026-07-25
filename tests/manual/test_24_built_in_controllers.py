@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from dnd.controller import (
     CodexController,
-    ExternalAIController,
+    ControllerExecutionMode,
     HumanController,
     PassController,
 )
@@ -24,14 +24,17 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         HumanController(source_entity_uuid=uuid4()),
         CodexController(source_entity_uuid=uuid4()),
         PassController(source_entity_uuid=uuid4()),
-        ExternalAIController(source_entity_uuid=uuid4()),
     ]
 
     assert [controller.controller_type for controller in controllers] == [
         "human",
         "codex",
         "pass",
-        "external_ai",
+    ]
+    assert [controller.execution_mode for controller in controllers] == [
+        ControllerExecutionMode.EXTERNAL,
+        ControllerExecutionMode.EXTERNAL,
+        ControllerExecutionMode.AUTONOMOUS,
     ]
     assert callable(create_controller_pair)
     assert callable(make_turn_context)
@@ -47,7 +50,7 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         ),
     ]
     expected_lines = [
-        "controllers: ['human', 'codex', 'pass', 'external_ai']",
+        "controllers: ['human', 'codex', 'pass']",
         "catalogue functions: pair=True, context=True, encounter=True",
     ]
 
@@ -140,54 +143,6 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_external_ai_controller_waits_for_subprocess_input(capsys) -> None:
-    """External AI controllers stop the encounter loop until the subprocess acts."""
-    reset_controller_catalogue_state()
-    hero, monster = create_controller_pair()
-    external_controller = ExternalAIController(source_entity_uuid=monster.uuid)
-    encounter = start_ordered_controller_encounter(
-        hero,
-        monster,
-        PassController(source_entity_uuid=hero.uuid),
-        external_controller,
-        first_actor=monster,
-    )
-
-    result = encounter.advance_until_player()
-    context = make_turn_context(monster)
-
-    assert external_controller.controller_type == "external_ai"
-    assert result.status == "waiting_for_ai"
-    assert result.entity_uuid == monster.uuid
-    assert encounter.get_current_entity() is monster
-    assert encounter.turn_state == TurnState.IN_PROGRESS
-    assert not external_controller.can_continue_turn(monster, context)
-    assert external_controller.get_next_action(monster, context) is None
-    current = encounter.get_current_entity()
-    assert current is not None
-
-    readout_lines = [
-        (
-            "external ai wait: "
-            f"status={result.status}, "
-            f"entity={result.entity_name}, "
-            f"current={current.name}, "
-            f"turn_state={encounter.turn_state.value}, "
-            f"can_continue={external_controller.can_continue_turn(monster, context)}"
-        ),
-        f"external ai action: {external_controller.get_next_action(monster, context)}",
-    ]
-    expected_lines = [
-        "external ai wait: status=waiting_for_ai, entity=Controller Skeleton, current=Controller Skeleton, turn_state=in_progress, can_continue=False",
-        "external ai action: None",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
 def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
     """Pass controllers consume the turn boundary without choosing an action."""
     reset_controller_catalogue_state()
@@ -230,3 +185,49 @@ def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_one_controller_boundary_advances_at_most_one_autonomous_turn() -> None:
+    """The server coordinator can yield between independently completed turns."""
+    reset_controller_catalogue_state()
+    hero, monster = create_controller_pair()
+    encounter = start_ordered_controller_encounter(
+        hero,
+        monster,
+        PassController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        first_actor=hero,
+    )
+
+    first = encounter.advance_one_controller_boundary()
+
+    assert first.status == "advanced_autonomous"
+    assert encounter.combatants[hero.uuid].turn_count == 1
+    assert encounter.combatants[monster.uuid].turn_count == 0
+    assert encounter.get_current_entity() is monster
+    assert encounter.turn_state == TurnState.NOT_STARTED
+
+    second = encounter.advance_one_controller_boundary()
+
+    assert second.status == "advanced_autonomous"
+    assert encounter.combatants[monster.uuid].turn_count == 1
+
+
+def test_one_controller_boundary_starts_and_returns_external_turn() -> None:
+    """An external boundary starts once without executing another combatant."""
+    reset_controller_catalogue_state()
+    hero, monster = create_controller_pair()
+    encounter = start_ordered_controller_encounter(
+        hero,
+        monster,
+        HumanController(source_entity_uuid=hero.uuid),
+        PassController(source_entity_uuid=monster.uuid),
+        first_actor=hero,
+    )
+
+    result = encounter.advance_one_controller_boundary()
+
+    assert result.status == "waiting_for_human"
+    assert result.entity_uuid == hero.uuid
+    assert encounter.turn_state is TurnState.IN_PROGRESS
+    assert encounter.combatants[monster.uuid].turn_count == 0

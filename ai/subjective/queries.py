@@ -6,7 +6,7 @@ from typing import Any, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from server.agent_protocol.observation import (
+from dnd.ai.contracts.observation import (
     KnowledgeState,
     ObservationEncounterState,
     ObservationEntityFact,
@@ -16,8 +16,8 @@ from server.agent_protocol.observation import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
-from server.agent_protocol.control import ActionAffordance, ActionCapability, ActionEconomyState, DecisionEpoch
-from server.agent_protocol.semantics import ActionSemantics, ActionTag
+from dnd.ai.contracts.control import ActionAffordance, ActionCapability, ActionEconomyState, DecisionEpoch
+from dnd.ai.contracts.semantics import ActionSemantics, ActionTag
 from ai.subjective.models import AgentState
 
 

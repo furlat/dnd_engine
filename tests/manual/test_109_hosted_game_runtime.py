@@ -15,15 +15,10 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from ai.game_server_profiles import ISOLATED_AI_WORKER_APPLICATION
 from server import event_server
-from server.agent_runtime.service import AgentExecutionMode, AgentLaunchRequest
-from server.agent_runtime.subprocess_service import AgentProcessSpec, SubprocessAgentService
 from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
 from server.hosted_worker import (
     HostedWorkerAssignment,
-    HostedWorkerApplication,
-    HostedWorkerError,
     HostedWorkerManager,
     HostedWorkerState,
 )
@@ -53,15 +48,9 @@ from server.worker_proxy import (
 @pytest.fixture(autouse=True)
 def clean_direct_runtime() -> Iterator[None]:
     """Reset process-global direct-server state around every focused check."""
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
     reset_standard_arena_runtime()
     yield
     reset_standard_arena_runtime()
-    service_id = event_server.agent_service_manager.service_id
-    if service_id is not None:
-        event_server.agent_service_manager.unregister_service(service_id)
 
 
 def test_hosted_worker_configuration_rejection_is_structured(
@@ -115,96 +104,6 @@ def test_hosted_worker_uses_private_socket_and_stops_process_group(tmp_path: Pat
         stopped = await manager.stop(game_id)
         assert stopped is not None
         assert stopped.state is HostedWorkerState.STOPPED
-        assert not Path(placement.socket_path).exists()
-
-    asyncio.run(exercise())
-
-
-def test_hosted_worker_rejects_mismatched_managed_agent_composition(
-    tmp_path: Path,
-) -> None:
-    """Warm readiness authenticates the declared managed-agent service."""
-
-    async def exercise() -> None:
-        manager = HostedWorkerManager(
-            tmp_path / "runtime",
-            worker_application=HostedWorkerApplication(
-                import_path="server.event_server:app",
-                expected_agent_service_id="ai.embedded-subjective-policy",
-                expected_agent_execution_mode=AgentExecutionMode.EMBEDDED_THREAD,
-            ),
-            startup_timeout_seconds=20.0,
-        )
-        game_id = uuid4()
-
-        with pytest.raises(HostedWorkerError, match="service mismatch"):
-            await manager.start(
-                game_id,
-                public_game_base_url=(
-                    f"http://gateway/games/{game_id}/runtime"
-                ),
-            )
-
-        assert manager.active_game_ids() == ()
-        await manager.stop_all()
-
-    asyncio.run(exercise())
-
-
-def test_hosted_worker_supports_explicit_double_isolated_ai(
-    tmp_path: Path,
-) -> None:
-    """Opt-in hosted composition owns one nested process per AI session."""
-
-    async def exercise() -> None:
-        manager = HostedWorkerManager(
-            tmp_path / "runtime",
-            worker_application=ISOLATED_AI_WORKER_APPLICATION,
-            startup_timeout_seconds=20.0,
-        )
-        game_id = uuid4()
-        placement = await manager.start(
-            game_id,
-            public_game_base_url=f"http://gateway/games/{game_id}/runtime",
-        )
-        try:
-            async with manager.client(game_id, timeout=30.0) as client:
-                creation = await client.post(
-                    "/game-creation/start",
-                    json={
-                        "scenario": {
-                            "kind": "preset",
-                            "arena_id": "standard_skeleton_doors",
-                        },
-                        "side_a": {
-                            "controller": "human",
-                            "name": "Human",
-                        },
-                        "side_b": {
-                            "controller": "ai",
-                            "name": "Isolated AI",
-                        },
-                        "opening_side": "side_a",
-                    },
-                )
-                service = await client.get("/ai/service")
-
-            assert creation.status_code == 200, creation.text
-            assert service.status_code == 200, service.text
-            service_payload = service.json()
-            assert service_payload["service_id"] == (
-                "ai.isolated-subjective-policy"
-            )
-            assert service_payload["execution_mode"] == "isolated_process"
-            assert len(service_payload["sessions"]) == 1
-            session = service_payload["sessions"][0]
-            assert session["ready"] is True
-            assert isinstance(session["process_id"], int)
-            assert session["process_id"] != placement.process_id
-        finally:
-            await manager.stop_all()
-
-        assert manager.active_game_ids() == ()
         assert not Path(placement.socket_path).exists()
 
     asyncio.run(exercise())
@@ -514,39 +413,10 @@ def test_direct_single_game_server_never_requires_sqlite(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Standalone event_server creates and exposes a game with SQLite disabled."""
-    process_starts: list[tuple[str, str]] = []
-
     def reject_sqlite(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("direct event_server attempted to open SQLite")
 
-    class DirectRuntimeLauncher:
-        service_id = "tests.direct-runtime-agent"
-
-        def preflight(self, _required_agents: int) -> None:
-            return None
-
-        def build_process_spec(self, request: AgentLaunchRequest) -> AgentProcessSpec:
-            return AgentProcessSpec(
-                argv=("unused-direct-runtime-agent", request.session_id),
-                cwd=Path(__file__).resolve().parents[2],
-            )
-
-    async def capture_process_starts(
-        requests: tuple[AgentLaunchRequest, ...],
-    ) -> tuple[object, ...]:
-        process_starts.extend(
-            (request.session_id, request.base_url)
-            for request in requests
-        )
-        return ()
-
     monkeypatch.setattr(sqlite3, "connect", reject_sqlite)
-    event_server.agent_service_manager.register_service(SubprocessAgentService(DirectRuntimeLauncher()))
-    monkeypatch.setattr(
-        event_server.agent_service_manager,
-        "start_agents",
-        capture_process_starts,
-    )
 
     request = {
         "scenario": {"kind": "preset", "arena_id": "standard_skeleton_doors"},
@@ -562,8 +432,11 @@ def test_direct_single_game_server_never_requires_sqlite(
         )
 
     assert start.status_code == 200
-    assert start.json()["status"] == "waiting_for_human"
+    assert start.json()["status"] == "prepared"
+    assert start.json()["side_b"]["policy_id"] == "builtin.basic"
+    assert start.json()["side_b"]["policy_execution"] == "in_process"
+    assert start.json()["side_b"]["provider_id"] is None
     assert events.status_code == 200
     assert events.json()["generation_id"]
     assert events.json()["source_stream_id"]
-    assert len(process_starts) == 1
+    assert event_server.sim.get_session_manager().sessions == {}

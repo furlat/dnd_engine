@@ -24,7 +24,7 @@ from ai.policy.routines import (
     RoutinePlan,
     RoutinePlanStatus,
 )
-from server.agent_protocol.semantics import EffectOperation
+from dnd.ai.contracts.semantics import EffectOperation
 from tests.manual.test_44_typed_agent_policy import _world
 from tests.manual.test_91_candidate_commitments import _pressure
 

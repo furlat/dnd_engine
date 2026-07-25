@@ -7,11 +7,17 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.actions import SpellEvent
+from dnd.actions_functional import execute_use_action
+from dnd.conditions import GreaterInvisibilityEffect
+from dnd.controller import Controller
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
+from dnd.items.test_items import create_potion_of_greater_invisibility
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import DndEventStream
 from server.player_replication.journal import (
@@ -26,10 +32,19 @@ from server.player_replication.runtime import (
     SubjectiveRuntimeIdentityError,
 )
 from server.player_replication_contract import (
+    ConditionOperation,
+    ConditionPresentationCue,
+    EncounterReplacePatch,
+    EntityRemovePatch,
     EntityUpsertPatch,
+    ItemActionPresentationCue,
+    LightPresentationCue,
+    ObserverVisibilityReplacePatch,
+    SpellPresentationCue,
     SubjectiveCombatLogDelivery,
     SubjectiveFrameDelivery,
     SubjectiveSyncDelivery,
+    VisualLoadoutReplacePatch,
 )
 from server.replication_perspective import PerspectiveScope
 from server.subjective_authority import ResolvedSubjectiveAuthority
@@ -249,6 +264,183 @@ def test_batch_world_diff_is_injected_as_typed_patches(
     ]
     assert len(upserts) == 1
     assert upserts[0].entity.name == "Renamed observer"
+
+
+def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:
+    """A revealing cast restores state and cues at the same censored boundary."""
+    grid = reset_engine_runtime(grid_size=(5, 1))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Observer",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    caster = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Invisible caster",
+        config=EntityConfig(position=(2, 0), faction="monsters"),
+    )
+    potion = create_potion_of_greater_invisibility(caster.uuid)
+    assert caster.loot_item(potion)
+    stored_potion = next(
+        item
+        for item in caster.inventory.items.values()
+        if item.stack_id == potion.stack_id
+    )
+    Entity.update_all_entities_senses(max_distance=10)
+    assert caster.uuid in observer.senses.entities
+
+    encounter = Encounter(name="Reveal encounter", source_entity_uuid=observer.uuid)
+    encounter.add_combatant(
+        observer,
+        Controller(source_entity_uuid=observer.uuid, name="Observer controller"),
+    )
+    encounter.add_combatant(
+        caster,
+        Controller(source_entity_uuid=caster.uuid, name="Caster controller"),
+    )
+    with fixed_dice_faces(10, 10):
+        encounter.start_encounter()
+
+    source_stream = DndEventStream()
+    runtime = CanonicalSubjectiveReplicationRuntime(
+        store=SubjectiveJournalStore(),
+        source_journal=source_stream,
+        grid_provider=lambda: grid,
+        entities_provider=Entity.get_all_entities,
+        encounter_provider=lambda: encounter,
+    )
+    context = runtime.bind(_authority(observer), encounter=encounter)
+    subscription = context.subscribe()
+
+    def next_frame() -> SubjectiveFrameDelivery:
+        while True:
+            delivery = asyncio.run(subscription.get())
+            if isinstance(delivery, SubjectiveFrameDelivery):
+                return delivery
+
+    try:
+        sync = asyncio.run(subscription.get())
+        assert isinstance(sync, SubjectiveSyncDelivery)
+        assert any(
+            entity.uuid == str(caster.uuid)
+            for entity in context.bootstrap().world.state.entities
+        )
+
+        potion_result = execute_use_action(
+            caster,
+            stored_potion.uuid,
+            "Drink Greater Invisibility Potion",
+        )
+        assert potion_result is not None and not potion_result.canceled
+        assert caster.is_invisible is True
+        assert caster.uuid not in observer.senses.entities
+
+        hidden = next_frame().frame
+        assert tuple(type(patch) for patch in hidden.patches) == (
+            EntityRemovePatch,
+            EncounterReplacePatch,
+            ObserverVisibilityReplacePatch,
+        )
+        removal = hidden.patches[0]
+        assert isinstance(removal, EntityRemovePatch)
+        assert removal.entity_uuid == str(caster.uuid)
+        assert tuple(type(cue) for cue in hidden.presentation) == (
+            ItemActionPresentationCue,
+            ConditionPresentationCue,
+            LightPresentationCue,
+        )
+        applied = hidden.presentation[1]
+        assert isinstance(applied, ConditionPresentationCue)
+        assert applied.target_uuid == str(caster.uuid)
+        assert applied.condition_name == "Invisible"
+        assert applied.operation is ConditionOperation.APPLIED
+        assert all(
+            entity.uuid != str(caster.uuid)
+            for entity in context.bootstrap().world.state.entities
+        )
+
+        invisible = caster.active_conditions["Invisible"]
+        assert isinstance(invisible, GreaterInvisibilityEffect)
+        invisible.base_dc = 100
+        with fixed_dice_faces(1):
+            with EventQueue.batch_on_event_callbacks():
+                spell = SpellEvent(
+                    name="Fireball",
+                    spell_id="fireball",
+                    source_entity_uuid=caster.uuid,
+                    source_entity_name=caster.name,
+                    source_position=caster.position,
+                    spell_level=3,
+                    cast_at_level=3,
+                    spell_school="evocation",
+                    range_type="ranged",
+                )
+                spell = spell.phase_to(EventPhase.EXECUTION)
+                spell = spell.phase_to(EventPhase.EFFECT)
+                spell = spell.phase_to(EventPhase.COMPLETION)
+
+        observer_key = str(observer.uuid)
+        caster_key = str(caster.uuid)
+        assert observer_key in spell.identified_entity_observer_uuids[caster_key]
+        assert caster.is_invisible is False
+        assert "Invisible" not in caster.active_conditions
+        assert caster.uuid in observer.senses.entities
+
+        revealed = next_frame().frame
+        assert revealed.watermarks.observation_cursor == (
+            hidden.watermarks.observation_cursor + 1
+        )
+        assert tuple(type(patch) for patch in revealed.patches) == (
+            EntityUpsertPatch,
+            EncounterReplacePatch,
+            ObserverVisibilityReplacePatch,
+            VisualLoadoutReplacePatch,
+        )
+        upsert = revealed.patches[0]
+        assert isinstance(upsert, EntityUpsertPatch)
+        assert upsert.entity.uuid == caster_key
+        assert "Invisible" not in upsert.entity.conditions
+        visibility = revealed.patches[2]
+        assert isinstance(visibility, ObserverVisibilityReplacePatch)
+        assert visibility.observer_uuid == observer_key
+        assert caster_key in visibility.visibility.visible_entities
+        loadout = revealed.patches[3]
+        assert isinstance(loadout, VisualLoadoutReplacePatch)
+        assert loadout.loadout.entity_uuid == caster_key
+
+        assert tuple(type(cue) for cue in revealed.presentation) == (
+            SpellPresentationCue,
+            ConditionPresentationCue,
+            LightPresentationCue,
+        )
+        cast = revealed.presentation[0]
+        assert isinstance(cast, SpellPresentationCue)
+        assert cast.actor_uuid == caster_key
+        assert cast.spell_id == "fireball"
+        removed = revealed.presentation[1]
+        assert isinstance(removed, ConditionPresentationCue)
+        assert removed.target_uuid == caster_key
+        assert removed.condition_name == "Invisible"
+        assert removed.operation is ConditionOperation.REMOVED
+        light = revealed.presentation[2]
+        assert isinstance(light, LightPresentationCue)
+        assert light.observer_uuid == observer_key
+        assert revealed.presentation_from_cursor == hidden.watermarks.presentation_cursor
+        assert revealed.watermarks.presentation_cursor == (
+            revealed.presentation_from_cursor + len(revealed.presentation)
+        )
+
+        current_caster = next(
+            entity
+            for entity in context.bootstrap().world.state.entities
+            if entity.uuid == caster_key
+        )
+        assert current_caster == upsert.entity
+    finally:
+        runtime.clear_all()
+        runtime.stop()
+        source_stream.stop()
+        reset_engine_runtime()
 
 
 def test_repeated_bootstrap_reuses_memory_without_leaking_hidden_mutation(
