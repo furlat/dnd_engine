@@ -52,6 +52,7 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
+from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 
@@ -79,6 +80,15 @@ def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UU
     )
 
 
+@srd_spell_identity(
+    content_id="spell.fire_bolt",
+    display_name="Fire Bolt",
+    description="Hurl a mote of fire at a target.",
+    school="evocation",
+    level=0,
+    source_page=144,
+    sort_order=10,
+)
 class FireBolt(SpellAction):
     """Fire Bolt - Evocation cantrip
 
@@ -490,6 +500,15 @@ class SacredFlame(SpellAction):
         )
 
 
+@srd_spell_identity(
+    content_id="spell.magic_missile",
+    display_name="Magic Missile",
+    description="Create force darts that strike their chosen targets.",
+    school="evocation",
+    level=1,
+    source_page=161,
+    sort_order=20,
+)
 class MagicMissile(SpellAction):
     """Magic Missile - 1st level Evocation
 
@@ -785,6 +804,15 @@ class ScorchingRay(SpellAction):
         )
 
 
+@srd_spell_identity(
+    content_id="spell.fireball",
+    display_name="Fireball",
+    description="Create a fiery explosion centered on a point in range.",
+    school="evocation",
+    level=3,
+    source_page=144,
+    sort_order=30,
+)
 class Fireball(SpellAction):
     """Fireball - 3rd level Evocation
 
@@ -960,6 +988,16 @@ class Fireball(SpellAction):
         return completion_event
 
 
+@srd_spell_identity(
+    content_id="spell.burning_hands",
+    display_name="Burning Hands",
+    description="Project a close cone of flame.",
+    school="evocation",
+    level=1,
+    source_page=123,
+    sort_order=10,
+    icon_key="spell.burning-hands",
+)
 class BurningHands(SpellAction):
     """Burning Hands - 1st level Evocation
 
@@ -3107,6 +3145,14 @@ class IceStorm(SpellAction):
         caster.add_condition(terrain, parent_event=effect_event)
 
 
+@srd_action_identity(
+    content_id="action.spell.sunbeam.strike",
+    display_name="Sunbeam Strike",
+    description="Fire another beam from an active Sunbeam spell.",
+    parent_spell_name="Sunbeam",
+    source_page=184,
+    sort_order=930,
+)
 class SunbeamStrike(BaseAction):
     """Action granted by Sunbeam to fire a beam of radiant light each turn."""
     name: str = Field(default="Sunbeam Strike", description="Display name for the sunbeam strike action.")

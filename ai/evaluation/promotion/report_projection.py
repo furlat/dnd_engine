@@ -25,7 +25,7 @@ from ai.evaluation.promotion.report import (
     WorkerEvidenceProjection,
 )
 from ai.policy.source import CONTROLLER_PROFILE
-from dnd.monsters.srd_roster import list_srd_monster_specs
+from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
 
 
 def build_promotion_report_projection(
@@ -141,7 +141,7 @@ def build_promotion_report_projection(
                 CountMetricProjection(
                     metric_id="srd_monsters",
                     label="Implemented SRD monsters",
-                    value=len(list_srd_monster_specs()),
+                    value=len(SRD_CREATURE_RECIPES_BY_ID),
                 ),
                 CountMetricProjection(
                     metric_id="implemented_identities",

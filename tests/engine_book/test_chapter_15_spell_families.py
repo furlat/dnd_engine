@@ -9,6 +9,7 @@ from pydantic import Field
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Blinded, Concentrating, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
@@ -36,8 +37,11 @@ from dnd.core.modifiers import (
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
-from dnd.items.test_items import create_torch, create_wall_torch
-from dnd.items.weapons import create_club, create_longbow
+from dnd.items.environment_content import WALL_TORCH_RECIPE
+from dnd.items.torches import TORCH_RECIPE, Torch, WallTorch
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.items.weapons import CLUB_RECIPE, LONGBOW_RECIPE
 from dnd.spells import (
     ALL_SPELLS,
     FireBolt,
@@ -995,7 +999,15 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert ally.action_economy.movement.normalized_score == 25
     ally.action_economy.reset_all_costs()
 
-    ally.equipment.equip(create_longbow(ally.uuid), WeaponSlot.RANGED_MAIN)
+    ally.equipment.equip(
+        materialize_item(
+            LONGBOW_RECIPE,
+            ally.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.RANGED_MAIN,
+    )
     ally.add_condition(Underwater(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Underwater" in ally.active_conditions
     assert ally.ignore_underwater_penalties
@@ -1084,7 +1096,15 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert unprotected_ranged_attack.auto_hit == AutoHitStatus.AUTOMISS
     unprotected_ranged_attack.clear_context()
 
-    ally.equipment.equip(create_club(ally.uuid), WeaponSlot.MELEE_MAIN)
+    ally.equipment.equip(
+        materialize_item(
+            CLUB_RECIPE,
+            ally.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     melee_underwater_context = {
         "weapon_slot": WeaponSlot.MELEE_MAIN.value,
         "weapon_name": "Club",
@@ -2642,11 +2662,28 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     caster = create_family_caster(position=(5, 5), spell_slots={3: 1})
     torchbearer = create_family_target(name="Torchbearer", position=(10, 5), hp_dice=8)
     penalize_save(torchbearer, "dexterity")
-    carried_torch = create_torch(torchbearer.uuid)
+    carried_torch = materialize_item(
+        TORCH_RECIPE,
+        torchbearer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     torchbearer.loot_item(carried_torch)
     carried_torch.ignite(torchbearer.uuid)
-    wall_torch = create_wall_torch(position=(10, 6), owner_uuid=uuid4(), lit=True)
-    outside_torch = create_wall_torch(position=(1, 1), owner_uuid=uuid4(), lit=True)
+    wall_torch = materialize_item(
+        WALL_TORCH_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=WallTorch,
+    )
+    wall_torch.mount((10, 6), lit=True)
+    outside_torch = materialize_item(
+        WALL_TORCH_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=WallTorch,
+    )
+    outside_torch.mount((1, 1), lit=True)
     carried_light_uuid = carried_torch._light_source_uuid
     wall_light_uuid = wall_torch._light_source_uuid
     outside_light_uuid = outside_torch._light_source_uuid

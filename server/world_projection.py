@@ -11,17 +11,27 @@ from uuid import UUID
 
 from dnd.blocks.appearance import Appearance
 from dnd.blocks.base_item import BaseItem
+from dnd.content_system.item_bindings import (
+    ITEM_RUNTIME_BINDINGS,
+    ItemRuntimeBinding,
+)
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.core.content.descriptors import (
+    ContentPresentation,
+    compute_safe_content_presentation_hash,
+)
 from dnd.core.gridmap import GridMap
-from dnd.core.item_types import ItemPresentationKind
+from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.world_contracts import (
     APIAppearance,
     APICombatant,
+    APIContentRefSnapshot,
     APIConditionSummary,
     APIDirectionalBlockMap,
     DirectionalStructuralEdgeMap,
@@ -30,8 +40,11 @@ from server.world_contracts import (
     APIEquipmentOverview,
     APIEquipmentSlot,
     APIGrid,
+    APIItemRuntimeRecipeRefSnapshot,
     APIItemSummary,
+    APIRecipePresetRefSnapshot,
     APITile,
+    SafeContentPresentationRef,
     StructuralEdgeAppearance,
     StructuralEdgeKind,
 )
@@ -67,12 +80,81 @@ _OPPOSITE_DIRECTION: dict[str, str] = {
 }
 
 
-def project_item_summary(item: BaseItem) -> APIItemSummary:
-    """Project one item from its engine-owned cold presentation facts."""
+def _resolve_bound_item_presentation(
+    item: BaseItem,
+) -> tuple[ItemPresentationState, ItemRuntimeBinding, ContentPresentation]:
+    """Resolve one runtime item to its exact authenticated safe presentation."""
     state = item.to_item_presentation_state()
+    binding = ITEM_RUNTIME_BINDINGS.require(item.uuid)
+    if state.content_ref is None:
+        raise ValueError(
+            f"Player-visible item {item.uuid} has no authored content reference",
+        )
+    if state.content_ref.model_dump(mode="json") != binding.recipe.ref.model_dump(
+        mode="json",
+    ):
+        raise ValueError(
+            f"Player-visible item {item.uuid} content reference disagrees with "
+            "its runtime binding",
+        )
+    loaded = SERVER_CONTENT_SYSTEM_RUNTIME.require()
+    if binding.content_set_digest != loaded.content_set_digest:
+        raise ValueError(
+            f"Player-visible item {item.uuid} belongs to a different content set",
+        )
+    if binding.recipe_preset_ref is not None:
+        preset = loaded.registry.resolve_recipe_preset(
+            binding.recipe_preset_ref,
+        )
+        if preset.recipe != binding.recipe:
+            raise ValueError(
+                f"Player-visible item {item.uuid} preset disagrees with its "
+                "runtime recipe",
+            )
+        presentation = preset.descriptor.presentation
+    else:
+        declaration = loaded.registry.resolve_definition(binding.recipe.ref)
+        presentation = declaration.descriptor.presentation
+    return state, binding, presentation
+
+
+def project_safe_item_presentation_ref(
+    item: BaseItem,
+) -> SafeContentPresentationRef:
+    """Project only the mechanics-free catalog identity for one visible item."""
+    _, _, presentation = _resolve_bound_item_presentation(item)
+    return SafeContentPresentationRef(
+        presentation_contract_hash=compute_safe_content_presentation_hash(
+            presentation,
+        ),
+    )
+
+
+def project_item_summary(item: BaseItem) -> APIItemSummary:
+    """Project one controlled item with exact reconstruction identity."""
+    state, binding, presentation = _resolve_bound_item_presentation(item)
+    content_ref = APIContentRefSnapshot.model_validate(
+        binding.recipe.ref.model_dump(mode="python"),
+    )
     is_usable = state.item_kind is ItemPresentationKind.USABLE
     return APIItemSummary(
         uuid=str(state.item_uuid),
+        content_ref=content_ref,
+        recipe_ref=APIItemRuntimeRecipeRefSnapshot(
+            recipe_digest=binding.recipe.recipe_digest,
+            preset_ref=(
+                APIRecipePresetRefSnapshot.model_validate(
+                    binding.recipe_preset_ref.model_dump(mode="python"),
+                )
+                if binding.recipe_preset_ref is not None
+                else None
+            ),
+        ),
+        safe_presentation_ref=SafeContentPresentationRef(
+            presentation_contract_hash=compute_safe_content_presentation_hash(
+                presentation,
+            ),
+        ),
         name=state.name,
         description=state.description,
         item_type=state.item_kind.value,
@@ -117,6 +199,7 @@ def project_equipment_overview(entity: Entity) -> APIEquipmentOverview:
         )
     return APIEquipmentOverview(
         slots=slots,
+        active_weapon_set=entity.equipment.active_weapon_set,
         ac=entity.ac_bonus().normalized_score,
         inventory=[
             project_item_summary(item)
@@ -143,12 +226,21 @@ def project_appearance(appearance: Appearance) -> APIAppearance:
 
 def project_condition_summary(condition: BaseCondition) -> APIConditionSummary:
     """Project one live condition without exposing private engine ownership."""
+    binding = condition.behavior_binding
+    if binding is None:
+        raise ValueError(
+            "Player-visible condition has no exact authored content binding: "
+            f"{type(condition).__module__}.{type(condition).__qualname__}",
+        )
     remaining_rounds = (
         cast(int, condition.duration.duration)
         if condition.duration.duration_type is DurationType.ROUNDS
         else None
     )
     return APIConditionSummary(
+        content_ref=APIContentRefSnapshot.model_validate(
+            binding.definition_ref.model_dump(mode="python"),
+        ),
         semantic_key=condition.get_semantic_key(),
         name=condition.name or "",
         description=condition.description,
@@ -548,4 +640,5 @@ __all__ = [
     "project_grid",
     "project_item_summary",
     "project_observed_tile",
+    "project_safe_item_presentation_ref",
 ]

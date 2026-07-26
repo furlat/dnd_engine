@@ -128,15 +128,47 @@ def patch_tutorial_room(client: ApiClient) -> dict[str, Any]:
     return response.json()
 
 
+def content_placement_payload(
+    client: ApiClient,
+    content_id: str,
+    position: tuple[int, int],
+    *,
+    runtime_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Select one exact default recipe from the live authoring palette."""
+    catalog = client.get("/mapeditor/catalog").json()
+    row = next(
+        entry
+        for entry in (*catalog["objects"], *catalog["loot"])
+        if entry["recipe"]["ref"]["content_id"] == content_id
+        and entry["recipe_preset_ref"] is None
+    )
+    return {
+        "recipe": row["recipe"],
+        "content_set_digest": row["content_set_digest"],
+        "position": list(position),
+        "runtime_state": runtime_state or {},
+    }
+
+
 def place_tutorial_objects(client: ApiClient) -> tuple[dict[str, Any], dict[str, Any]]:
     """Place the tutorial door and wall torch."""
     door_response = client.post(
         "/mapeditor/map/objects",
-        json={"catalog_id": "door", "position": [12, 21]},
+        json=content_placement_payload(
+            client,
+            "environment.door",
+            (12, 21),
+        ),
     )
     torch_response = client.post(
         "/mapeditor/map/objects",
-        json={"catalog_id": "wall_torch", "position": [13, 20], "options": {"lit": True}},
+        json=content_placement_payload(
+            client,
+            "environment.wall_torch",
+            (13, 20),
+            runtime_state={"is_lit": True},
+        ),
     )
 
     assert door_response.status_code == 200
@@ -156,8 +188,22 @@ def test_catalog_and_scratch_map_creation_define_the_authoring_palette(capsys) -
     assert {"floor", "wall", "water", "difficult_terrain", "spike_zone"} <= {
         entry["id"] for entry in catalog["tiles"]
     }
-    assert {"door", "wall_torch", "trap_lever"} <= {entry["id"] for entry in catalog["objects"]}
-    assert {"healing_potion", "scroll_of_fireball", "torch"} <= {entry["id"] for entry in catalog["loot"]}
+    assert {
+        "environment.door",
+        "environment.wall_torch",
+        "environment.trap_lever",
+    } <= {
+        entry["recipe"]["ref"]["content_id"]
+        for entry in catalog["objects"]
+    }
+    assert {
+        "consumable.healing_potion",
+        "spell_item.scroll_fireball",
+        "equipment.portable_torch",
+    } <= {
+        entry["recipe"]["ref"]["content_id"]
+        for entry in catalog["loot"]
+    }
 
     assert snapshot["grid_bounds"] == {"min_x": 10, "min_y": 20, "max_x": 13, "max_y": 22}
     assert len(snapshot["tiles"]) == 12
@@ -171,8 +217,8 @@ def test_catalog_and_scratch_map_creation_define_the_authoring_palette(capsys) -
             "catalog core: "
             f"presets={'yes' if {'scratch', 'forgotten_crypt_arena'} <= {entry['id'] for entry in catalog['presets']} else 'no'}, "
             f"tiles={'yes' if {'floor', 'wall', 'water', 'difficult_terrain', 'spike_zone'} <= {entry['id'] for entry in catalog['tiles']} else 'no'}, "
-            f"objects={'yes' if {'door', 'wall_torch', 'trap_lever'} <= {entry['id'] for entry in catalog['objects']} else 'no'}, "
-            f"loot={'yes' if {'healing_potion', 'scroll_of_fireball', 'torch'} <= {entry['id'] for entry in catalog['loot']} else 'no'}"
+            "objects=yes, "
+            "loot=yes"
         ),
         f"scratch map: bounds={snapshot['grid_bounds']}, tiles={len(snapshot['tiles'])}, objects={len(snapshot['floor_objects'])}",
         (
@@ -402,9 +448,12 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
     assert save_payload["tile_count"] == 12
     assert save_payload["floor_object_count"] == 2
     assert document_response.status_code == 200
-    assert document["schema_version"] == 1
+    assert document["schema_version"] == 2
     assert document["metadata"]["name"] == "Tutorial Room"
-    assert {placement["catalog_id"] for placement in document["object_placements"]} == {"door", "wall_torch"}
+    assert {
+        placement["recipe"]["ref"]["content_id"]
+        for placement in document["object_placements"]
+    } == {"environment.door", "environment.wall_torch"}
     assert loaded_response.status_code == 200
     assert loaded["grid_bounds"] == {"min_x": 10, "min_y": 20, "max_x": 13, "max_y": 22}
     assert len(loaded["tiles"]) == 12
@@ -424,7 +473,8 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
             "document: "
             f"schema={document['schema_version']}, "
             f"name={document['metadata']['name']}, "
-            f"placements={sorted({placement['catalog_id'] for placement in document['object_placements']})}"
+            "placements="
+            f"{sorted(placement['recipe']['ref']['content_id'] for placement in document['object_placements'])}"
         ),
         (
             "loaded map: "
@@ -440,7 +490,10 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
     ]
     expected_lines = [
         "save result: status=200, id=tutorial_room, tiles=12, objects=2",
-        "document: schema=1, name=Tutorial Room, placements=['door', 'wall_torch']",
+        (
+            "document: schema=2, name=Tutorial Room, "
+            "placements=['environment.door', 'environment.wall_torch']"
+        ),
         (
             "loaded map: bounds={'min_x': 10, 'min_y': 20, 'max_x': 13, 'max_y': 22}, "
             "tiles=12, objects=['Door', 'Wall Torch']"

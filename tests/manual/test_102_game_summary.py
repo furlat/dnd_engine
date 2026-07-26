@@ -22,6 +22,7 @@ from dnd.conditions import Prone
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import CombatLogEntry
+from dnd.core.content.runtime import bind_runtime_behavior
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.dice import AttackOutcome, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
@@ -57,6 +58,7 @@ GOBLIN_UUID = UUID("00000000-0000-0000-0000-000000000202")
 ENCOUNTER_UUID = UUID("00000000-0000-0000-0000-000000000303")
 ITEM_UUID = UUID("00000000-0000-0000-0000-000000000404")
 STARTED_AT = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+PRONE_CONTENT_IDENTITY = "core.rules:condition:condition.prone@1"
 
 
 class _EventKwargs(TypedDict):
@@ -139,7 +141,7 @@ def _snapshots() -> tuple[
             life_state=LifeState.DEAD,
             is_defeated=True,
             position=(8, 1),
-            condition_semantic_keys=("dnd.conditions.Prone",),
+            condition_semantic_keys=(PRONE_CONTENT_IDENTITY,),
         ),
     )
     return initial, final
@@ -341,6 +343,10 @@ def _representative_evidence() -> tuple[list[Event], list[CombatLogEntry]]:
         target_entity_uuid=GOBLIN_UUID,
         use_register=False,
     )
+    assert bind_runtime_behavior(
+        prone,
+        runtime_owner_uuid=GOBLIN_UUID,
+    ) is not None
     condition = ConditionApplicationEvent(
         target_entity_uuid=GOBLIN_UUID,
         condition=prone,
@@ -524,7 +530,9 @@ def test_representative_terminal_match_reduces_objective_typed_evidence() -> Non
     assert goblin.statistics.damage_taken.applied_by_type == {"Force": 8}
     assert goblin.statistics.movement.forced_events == 1
     assert goblin.statistics.movement.forced_feet == 10
-    assert goblin.statistics.conditions_applied == {"dnd.conditions.Prone": 1}
+    assert goblin.statistics.conditions_applied == {
+        PRONE_CONTENT_IDENTITY: 1,
+    }
     assert goblin.statistics.attacks.attempted == 1
     assert goblin.statistics.attacks.misses == 1
     assert goblin.statistics.attacks.opportunity_attacks == 1

@@ -14,6 +14,9 @@ from dnd.actions_functional import (
     register_spell,
     setup_standard_actions,
 )
+from dnd.blocks.equipment import BodyArmor, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import TargetType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
@@ -27,8 +30,8 @@ from dnd.core.modifiers import (
     NumericalModifier,
 )
 from dnd.entity import Entity
-from dnd.items.armors import create_chain_mail
-from dnd.items.weapons import create_dagger
+from dnd.items.armors import CHAIN_MAIL_RECIPE
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.conjuration import (
     AcidSplash,
     CallLightning,
@@ -165,7 +168,14 @@ def test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle() 
         (3, 3),
         "monsters",
     )
-    target.equipment.equip(create_chain_mail(target.uuid))
+    target.equipment.equip(
+        materialize_item(
+            CHAIN_MAIL_RECIPE,
+            target.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+    )
     Entity.update_all_entities_senses(max_distance=60)
     hp_before = get_hp(target)
     hit_modifier = _force_spell_attack_hit(caster, target)
@@ -236,7 +246,15 @@ def test_guiding_bolt_hit_upcast_mark_and_first_attack_cleanup() -> None:
         (8, 4),
         "heroes",
     )
-    attacker.equipment.equip(create_dagger(attacker.uuid), WeaponSlot.MELEE_MAIN)
+    attacker.equipment.equip(
+        materialize_item(
+            DAGGER_RECIPE,
+            attacker.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     setup_standard_actions(attacker)
     Entity.update_all_entities_senses(max_distance=100)
     hit_modifier = _force_spell_attack_hit(caster, target)
@@ -1333,6 +1351,7 @@ def test_self_range_aoe_discovery_survives_zero_visible_enemies() -> None:
     Entity.update_all_entities_senses(max_distance=80)
 
     available = get_available_actions(caster)
+    legal = get_available_actions(caster, legal_only=True)
     by_base_name = {
         action.base_template_name: action
         for action in available.position_actions
@@ -1351,8 +1370,19 @@ def test_self_range_aoe_discovery_survives_zero_visible_enemies() -> None:
     }
     assert by_base_name["Burning Hands"].valid_targets == []
     assert by_base_name["Burning Hands"].can_afford
+    assert by_base_name["Burning Hands"].availability_status == "no_valid_targets"
     assert by_base_name["Thunderwave"].valid_targets == []
+    assert by_base_name["Thunderwave"].availability_status == "no_valid_targets"
     assert by_base_name["Lightning Bolt"].valid_targets == []
+    assert by_base_name["Lightning Bolt"].availability_status == "no_valid_targets"
+    assert {
+        action.base_template_name
+        for action in legal.position_actions
+    }.isdisjoint({
+        "Burning Hands",
+        "Thunderwave",
+        "Lightning Bolt",
+    })
 
     enemy = create_spell_regression_actor(
         "Visible AoE Enemy",
@@ -1367,6 +1397,7 @@ def test_self_range_aoe_discovery_survives_zero_visible_enemies() -> None:
         if action.base_template_name == "Burning Hands"
     )
     assert burning_hands.valid_targets
+    assert burning_hands.availability_status == "available"
     assert any(
         enemy.uuid in set(target.affected_entity_uuids or [])
         for target in burning_hands.valid_targets

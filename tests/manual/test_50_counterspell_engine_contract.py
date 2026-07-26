@@ -26,7 +26,10 @@ from dnd.controller import PassController
 from dnd.entity import Entity, EntityConfig
 from dnd.encounter import Encounter
 from dnd.spells import Fireball, FireBolt, MagicMissile
-from dnd.spells.abjuration import register_counterspell_reaction
+from dnd.spells.abjuration import (
+    CounterspellReactionEvent,
+    register_counterspell_reaction,
+)
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
 from dnd.utils import reset_combat_state
 from server.event_server import sim
@@ -127,6 +130,58 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     assert interruption_logs[0].data["outcome_code"] == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
     assert interruption_logs[0].data["counterspell_slot_level"] == 3
     assert interruption_logs[0].data["succeeded"] is True
+
+
+def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> None:
+    """Live handler/action scopes survive every event phase but no raw dump."""
+    reset_counterspell_state()
+    caster = create_counterspell_caster("Caster", (2, 2), "heroes", {1: 1})
+    counterspeller = create_counterspell_caster(
+        "Abjurer",
+        (6, 2),
+        "monsters",
+        {3: 1},
+    )
+    register_spell(caster, MagicMissile, caster_level=3)
+    register_counterspell_reaction(counterspeller)
+    Entity.update_all_entities_senses()
+
+    template = caster.get_action_template("Magic Missile")
+    assert isinstance(template, SpellAction)
+    handler = counterspeller.get_event_handler_by_name("Counterspell")
+    assert handler is not None
+    assert template.behavior_binding is not None
+    assert handler.behavior_binding is not None
+
+    event = template.instantiate(
+        target_entity_uuid=counterspeller.uuid,
+    ).apply()
+
+    assert isinstance(event, SpellEvent)
+    assert event.canceled
+    incoming_versions = [
+        row
+        for row in EventQueue._all_events
+        if isinstance(row, SpellEvent)
+        and row.lineage_uuid == event.lineage_uuid
+    ]
+    assert incoming_versions
+    assert all(
+        row.behavior_binding == template.behavior_binding
+        for row in incoming_versions
+    )
+    reaction = next(
+        row
+        for row in EventQueue._all_events
+        if isinstance(row, CounterspellReactionEvent)
+        and row.phase is EventPhase.COMPLETION
+    )
+    trigger = EventQueue.get_event_by_uuid(reaction.triggered_event_uuid)
+    assert isinstance(trigger, SpellEvent)
+    assert reaction.behavior_binding == handler.behavior_binding
+    assert trigger.behavior_binding == template.behavior_binding
+    assert "behavior_binding" not in reaction.model_dump()
+    assert "behavior_binding" not in trigger.model_dump()
 
 
 def test_counterspell_does_not_interrupt_an_allied_spell() -> None:

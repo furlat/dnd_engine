@@ -5,10 +5,13 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import Attack
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core import dice as dice_module
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.entity import Entity
-from dnd.items.weapons import create_dagger, create_shortbow
+from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
 from server.player_replication.world_projection import (
@@ -44,8 +47,18 @@ def test_equipment_transitions_establish_preserve_and_fallback_stance() -> None:
     """Accepted equipment effects keep one valid persisted weapon stance."""
     reset_engine_runtime(grid_size=(4, 3))
     entity = Entity.create(source_entity_uuid=uuid4(), name="Dual loadout")
-    shortbow = create_shortbow(entity.uuid)
-    dagger = create_dagger(entity.uuid)
+    shortbow = materialize_item(
+        SHORTBOW_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
 
     try:
         assert entity.equipment.active_weapon_set is WeaponSet.NONE
@@ -178,6 +191,10 @@ def test_live_patch_and_fresh_reset_project_the_same_persisted_stance(
         )
         live_loadout = after.visual_loadout_by_entity[attacker_uuid]
         assert live_loadout.active_weapon_set is ActiveWeaponSet.RANGED
+        assert (
+            after.equipment_by_entity[attacker_uuid].active_weapon_set
+            is WeaponSet.RANGED
+        )
         loadout_patch = next(
             patch
             for patch in diff_subjective_worlds(before, after)

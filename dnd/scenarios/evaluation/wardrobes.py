@@ -2,111 +2,105 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from typing import Optional
-from uuid import UUID
+from collections.abc import Iterable
 
 from dnd.blocks.equipment import Armor
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.entity import Entity
 from dnd.items.armors import (
-    create_armored_boots,
-    create_cloth_shoes,
-    create_common_clothes,
-    create_costume,
-    create_leather_boots,
-    create_leather_shoes,
-    create_robes,
-    create_sandals,
-    create_travelers_clothes,
+    ARMORED_BOOTS_RECIPE,
+    CLOTH_SHOES_RECIPE,
+    LEATHER_BOOTS_RECIPE,
+)
+from dnd.items.apparel_presets import (
+    ACOLYTE_VESTMENTS_PRESET,
+    BLUE_CLOTH_SHOES_PRESET,
+    BROWN_BOOTS_PRESET,
+    BROWN_LEATHER_SHOES_PRESET,
+    DARK_BOOTS_PRESET,
+    DARK_CLOTH_SHOES_PRESET,
+    DARK_CULTIST_ROBES_PRESET,
+    FARMHAND_TUNIC_PRESET,
+    HEDGE_WIZARD_ROBE_PRESET,
+    NECROMANCER_ROBE_PRESET,
+    PEASANT_RAGS_PRESET,
+    PIT_FIGHTER_WRAP_PRESET,
+    PRIEST_VESTMENTS_PRESET,
+    ROPE_SANDALS_PRESET,
+    THIEF_GARB_PRESET,
+    WIZARD_ROBE_PRESET,
 )
 from dnd.scenarios.evaluation.models import ApparelGrant, BestiaryArchetype
 
 
-ApparelFactory = Callable[[UUID, Optional[str], Optional[str]], Armor]
-
-
-APPAREL_FACTORIES: dict[str, ApparelFactory] = {
-    "armored_boots": create_armored_boots,
-    "cloth_shoes": create_cloth_shoes,
-    "common_clothes": create_common_clothes,
-    "costume": create_costume,
-    "leather_boots": create_leather_boots,
-    "leather_shoes": create_leather_shoes,
-    "robes": create_robes,
-    "sandals": create_sandals,
-    "travelers_clothes": create_travelers_clothes,
-}
-
-
 BERSERKER_WARDROBE = (
-    ApparelGrant(item_id="costume", visual_variant_id="85000004", display_name="Pit Fighter's Wrap"),
-    ApparelGrant(item_id="leather_boots"),
+    ApparelGrant(recipe=PIT_FIGHTER_WRAP_PRESET.recipe),
+    ApparelGrant(recipe=LEATHER_BOOTS_RECIPE),
 )
 
 CASTER_WARDROBES: dict[str, tuple[ApparelGrant, ...]] = {
     "arcane": (
-        ApparelGrant(item_id="robes", visual_variant_id="8100000b", display_name="Hedge Wizard's Robe"),
-        ApparelGrant(item_id="cloth_shoes"),
+        ApparelGrant(recipe=HEDGE_WIZARD_ROBE_PRESET.recipe),
+        ApparelGrant(recipe=CLOTH_SHOES_RECIPE),
     ),
     "dark": (
-        ApparelGrant(item_id="robes", visual_variant_id="81000008", display_name="Dark Cultist Robes"),
-        ApparelGrant(item_id="cloth_shoes", visual_variant_id="b0000003", display_name="Dark Cloth Shoes"),
+        ApparelGrant(recipe=DARK_CULTIST_ROBES_PRESET.recipe),
+        ApparelGrant(recipe=DARK_CLOTH_SHOES_PRESET.recipe),
     ),
     "divine": (
-        ApparelGrant(item_id="robes", visual_variant_id="81000003", display_name="Priest's Vestments"),
-        ApparelGrant(item_id="sandals", visual_variant_id="b0000002", display_name="Rope Sandals"),
+        ApparelGrant(recipe=PRIEST_VESTMENTS_PRESET.recipe),
+        ApparelGrant(recipe=ROPE_SANDALS_PRESET.recipe),
     ),
     "necromancer": (
-        ApparelGrant(item_id="robes", visual_variant_id="81000004", display_name="Necromancer's Robe"),
-        ApparelGrant(item_id="cloth_shoes", visual_variant_id="b0000003", display_name="Dark Cloth Shoes"),
+        ApparelGrant(recipe=NECROMANCER_ROBE_PRESET.recipe),
+        ApparelGrant(recipe=DARK_CLOTH_SHOES_PRESET.recipe),
     ),
 }
 
 BESTIARY_WARDROBES: dict[BestiaryArchetype, tuple[ApparelGrant, ...]] = {
     "goblin": (
-        ApparelGrant(item_id="leather_boots", visual_variant_id="b0000008", display_name="Dark Boots"),
+        ApparelGrant(recipe=DARK_BOOTS_PRESET.recipe),
     ),
     "goblin_archer": (
-        ApparelGrant(item_id="leather_boots", visual_variant_id="b0000008", display_name="Dark Boots"),
+        ApparelGrant(recipe=DARK_BOOTS_PRESET.recipe),
     ),
 }
 
-_LEATHER_BOOTS = (ApparelGrant(item_id="leather_boots"),)
-_DARK_BOOTS = (
-    ApparelGrant(item_id="leather_boots", visual_variant_id="b0000008", display_name="Dark Boots"),
-)
-_ARMORED_BOOTS = (ApparelGrant(item_id="armored_boots"),)
+_LEATHER_BOOTS = (ApparelGrant(recipe=LEATHER_BOOTS_RECIPE),)
+_DARK_BOOTS = (ApparelGrant(recipe=DARK_BOOTS_PRESET.recipe),)
+_ARMORED_BOOTS = (ApparelGrant(recipe=ARMORED_BOOTS_RECIPE),)
 
 # Preserve each NPC's real armor. Only the five unarmored layered humanoids
 # receive a body outfit; every humanoid receives role-sensible footwear using
 # NeuroClient's exact annotated parent keys and variant IDs.
 SRD_WARDROBES: dict[str, tuple[ApparelGrant, ...]] = {
     "commoner": (
-        ApparelGrant(item_id="common_clothes", visual_variant_id="82000001", display_name="Farmhand's Tunic"),
-        ApparelGrant(item_id="leather_shoes", visual_variant_id="b0000007", display_name="Brown Leather Shoes"),
+        ApparelGrant(recipe=FARMHAND_TUNIC_PRESET.recipe),
+        ApparelGrant(recipe=BROWN_LEATHER_SHOES_PRESET.recipe),
     ),
     "bandit": _DARK_BOOTS,
     "cultist": _DARK_BOOTS,
     "guard": _LEATHER_BOOTS,
     "tribal_warrior": _LEATHER_BOOTS,
     "kobold": (
-        ApparelGrant(item_id="common_clothes", visual_variant_id="82000009", display_name="Peasant's Rags"),
-        ApparelGrant(item_id="sandals", visual_variant_id="b0000002", display_name="Rope Sandals"),
+        ApparelGrant(recipe=PEASANT_RAGS_PRESET.recipe),
+        ApparelGrant(recipe=ROPE_SANDALS_PRESET.recipe),
     ),
     "acolyte": (
-        ApparelGrant(item_id="robes", visual_variant_id="81000007", display_name="Acolyte's Vestments"),
-        ApparelGrant(item_id="sandals", visual_variant_id="b0000002", display_name="Rope Sandals"),
+        ApparelGrant(recipe=ACOLYTE_VESTMENTS_PRESET.recipe),
+        ApparelGrant(recipe=ROPE_SANDALS_PRESET.recipe),
     ),
     "scout": (
-        ApparelGrant(item_id="leather_boots", visual_variant_id="b0000009", display_name="Brown Boots"),
+        ApparelGrant(recipe=BROWN_BOOTS_PRESET.recipe),
     ),
     "thug": _LEATHER_BOOTS,
     "orc": _LEATHER_BOOTS,
     "hobgoblin": _ARMORED_BOOTS,
     "gnoll": _LEATHER_BOOTS,
     "spy": (
-        ApparelGrant(item_id="travelers_clothes", visual_variant_id="84000006", display_name="Thief's Garb"),
-        ApparelGrant(item_id="leather_boots", visual_variant_id="b0000008", display_name="Dark Boots"),
+        ApparelGrant(recipe=THIEF_GARB_PRESET.recipe),
+        ApparelGrant(recipe=DARK_BOOTS_PRESET.recipe),
     ),
     "bugbear": _DARK_BOOTS,
     "berserker": _LEATHER_BOOTS,
@@ -116,26 +110,30 @@ SRD_WARDROBES: dict[str, tuple[ApparelGrant, ...]] = {
     "knight": _ARMORED_BOOTS,
     "veteran": _ARMORED_BOOTS,
     "mage": (
-        ApparelGrant(item_id="robes", visual_variant_id="81000001", display_name="Wizard's Robe"),
-        ApparelGrant(item_id="cloth_shoes", visual_variant_id="b0000005", display_name="Blue Cloth Shoes"),
+        ApparelGrant(recipe=WIZARD_ROBE_PRESET.recipe),
+        ApparelGrant(recipe=BLUE_CLOTH_SHOES_PRESET.recipe),
     ),
 }
 
 
 def equip_apparel(entity: Entity, grant: ApparelGrant) -> None:
     """Equip one setting-authored wardrobe item without replacing existing gear."""
-    item = APPAREL_FACTORIES[grant.item_id](
+    item = materialize_item(
+        grant.recipe,
         entity.uuid,
-        grant.visual_variant_id,
-        grant.display_name,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Armor,
     )
     if entity.equipment.get_item_by_slot(item.body_part) is not None:
         raise ValueError(
-            f"Apparel grant {grant.item_id!r} would replace occupied {item.body_part.value!r} "
+            f"Apparel grant {grant.recipe.ref.identity_key!r} would replace occupied {item.body_part.value!r} "
             f"slot for {entity.name!r}."
         )
     if not entity.equipment.equip(item):
-        raise ValueError(f"Equipment rejected apparel {grant.item_id!r} for {entity.name!r}.")
+        raise ValueError(
+            "Equipment rejected apparel "
+            f"{grant.recipe.ref.identity_key!r} for {entity.name!r}.",
+        )
 
 
 def equip_wardrobe(entity: Entity, grants: Iterable[ApparelGrant]) -> Entity:

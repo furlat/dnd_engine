@@ -26,6 +26,8 @@ from typing import Annotated, Dict, Final, Literal, Optional, Tuple, TypeAlias, 
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.equipment_types import VisualLoadoutSlot
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from server.world_contracts import (
@@ -35,6 +37,7 @@ from server.world_contracts import (
     APIGrid,
     APITile,
     APIVisibilityResponse,
+    SafeContentPresentationRef,
 )
 from server.timeline_contracts import (
     CombatLogFrame,
@@ -78,6 +81,7 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
         "movement",
         "forced_movement",
         "shove",
+        "counterspell",
         "item_action",
         "attack",
         "spell",
@@ -119,6 +123,10 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
         "combat_log_cursor",
     ],
     "raw_event_payload": "forbidden",
+    "content_attribution": (
+        "exact authenticated definition/provider/origin-root refs only; "
+        "unbound residuals remain an empty attribution tuple"
+    ),
 }
 
 
@@ -166,6 +174,12 @@ class SubjectiveFloorObject(PlayerReplicationModel):
     position: Position
     map_char: str = Field(min_length=1)
     object_kind: FloorObjectProjectionKind
+    safe_presentation_ref: SafeContentPresentationRef = Field(
+        description=(
+            "Required mechanics-free identity in the authenticated content "
+            "catalog; exact item and recipe identities are intentionally absent."
+        ),
+    )
     visual_item_name: str = Field(
         min_length=1,
         description="Explicit renderer catalog key; clients must not infer it from the name.",
@@ -341,24 +355,6 @@ class SubjectivePerspective(PlayerReplicationModel):
         return self
 
 
-class VisualLoadoutSlot(str, Enum):
-    """Closed equipment slots understood by the actor appearance reducer."""
-
-    WEAPON_MELEE_MAIN = "weapon_melee_main"
-    WEAPON_MELEE_OFF = "weapon_melee_off"
-    WEAPON_RANGED_MAIN = "weapon_ranged_main"
-    WEAPON_RANGED_OFF = "weapon_ranged_off"
-    HELMET = "helmet"
-    BODY_ARMOR = "body_armor"
-    GAUNTLETS = "gauntlets"
-    GREAVES = "greaves"
-    BOOTS = "boots"
-    AMULET = "amulet"
-    CLOAK = "cloak"
-    RING_LEFT = "ring_left"
-    RING_RIGHT = "ring_right"
-
-
 class ActiveWeaponSet(str, Enum):
     """Weapon layers the renderer should expose for the current actor stance."""
 
@@ -372,6 +368,12 @@ class VisualEquipmentLayer(PlayerReplicationModel):
 
     slot: VisualLoadoutSlot = Field(description="Canonical occupied visual slot.")
     item_kind: ItemPresentationKind = Field(description="Small renderer item family.")
+    safe_presentation_ref: SafeContentPresentationRef = Field(
+        description=(
+            "Required mechanics-free identity in the authenticated content "
+            "catalog; exact item and recipe identities are intentionally absent."
+        ),
+    )
     visual_item_name: str = Field(min_length=1, description="Renderer catalog key.")
     visual_variant_id: Optional[str] = Field(default=None, description="Renderer variant key.")
     equipped_visual_policy: EquippedVisualPolicy = Field(
@@ -628,6 +630,60 @@ SubjectiveWorldPatch: TypeAlias = Annotated[
 # Typed safe presentation cues
 
 
+class BehaviorPresentationRole(str, Enum):
+    """Causal role played by one authenticated runtime behavior."""
+
+    BEHAVIOR = "behavior"
+    TRIGGER_BEHAVIOR = "trigger_behavior"
+
+
+class UnrootedBehaviorPresentationAttribution(PlayerReplicationModel):
+    """Exact behavior binding with no durable constructible origin root."""
+
+    kind: Literal["unrooted_behavior"] = "unrooted_behavior"
+    role: BehaviorPresentationRole
+    definition_ref: ContentRef
+    provided_by_ref: ContentRef
+
+
+class RootedBehaviorPresentationAttribution(PlayerReplicationModel):
+    """Exact behavior binding inherited from a durable authored root."""
+
+    kind: Literal["rooted_behavior"] = "rooted_behavior"
+    role: BehaviorPresentationRole
+    definition_ref: ContentRef
+    provided_by_ref: ContentRef
+    origin_root_ref: ContentRef
+
+
+class SourceItemPresentationAttribution(PlayerReplicationModel):
+    """Exact authored item definition that supplied an item-bound action."""
+
+    kind: Literal["source_item"] = "source_item"
+    definition_ref: ContentRef
+
+    @model_validator(mode="after")
+    def validate_item_kind(self) -> "SourceItemPresentationAttribution":
+        if self.definition_ref.definition_kind not in {
+            ContentDefinitionKind.ITEM,
+            ContentDefinitionKind.ENVIRONMENT_OBJECT,
+        }:
+            raise ValueError(
+                "source-item attribution requires an item or environment-object definition"
+            )
+        return self
+
+
+PresentationContentAttribution: TypeAlias = Annotated[
+    Union[
+        UnrootedBehaviorPresentationAttribution,
+        RootedBehaviorPresentationAttribution,
+        SourceItemPresentationAttribution,
+    ],
+    Field(discriminator="kind"),
+]
+
+
 class PresentationCueBase(PlayerReplicationModel):
     """One node in a projection-native, frame-closed presentation graph."""
 
@@ -640,6 +696,13 @@ class PresentationCueBase(PlayerReplicationModel):
     )
     source_event_cursor: int = Field(ge=1)
     source_event_uuid: str = Field(min_length=1)
+    content_attributions: Tuple[PresentationContentAttribution, ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Exact authenticated content identities available for this cue; "
+            "an empty tuple is the honest state for an unmigrated residual."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_local_graph_identity(self) -> "PresentationCueBase":
@@ -647,6 +710,20 @@ class PresentationCueBase(PlayerReplicationModel):
             raise ValueError("presentation child IDs must be unique and ordered")
         if self.presentation_id in self.child_presentation_ids:
             raise ValueError("presentation cue cannot be its own child")
+        roles = tuple(
+            attribution.role.value
+            if isinstance(
+                attribution,
+                (
+                    UnrootedBehaviorPresentationAttribution,
+                    RootedBehaviorPresentationAttribution,
+                ),
+            )
+            else attribution.kind
+            for attribution in self.content_attributions
+        )
+        if len(roles) != len(set(roles)):
+            raise ValueError("presentation content-attribution roles must be unique")
         return self
 
 
@@ -1053,6 +1130,102 @@ class ShovePresentationCue(PresentationCueBase):
         return self
 
 
+class CounterspellAutomaticSuccess(PlayerReplicationModel):
+    """A Counterspell slot at least as high as the incoming cast."""
+
+    kind: Literal["automatic_success"] = "automatic_success"
+
+
+class CounterspellCheckSuccess(PlayerReplicationModel):
+    """A lower-slot Counterspell whose spellcasting check succeeded."""
+
+    kind: Literal["check_success"] = "check_success"
+    check_total: int
+    check_dc: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_success(self) -> "CounterspellCheckSuccess":
+        if self.check_total < self.check_dc:
+            raise ValueError("successful Counterspell check must meet its DC")
+        return self
+
+
+class CounterspellCheckFailure(PlayerReplicationModel):
+    """A lower-slot Counterspell whose spellcasting check failed."""
+
+    kind: Literal["check_failure"] = "check_failure"
+    check_total: int
+    check_dc: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_failure(self) -> "CounterspellCheckFailure":
+        if self.check_total >= self.check_dc:
+            raise ValueError("failed Counterspell check must be below its DC")
+        return self
+
+
+CounterspellResolution: TypeAlias = Annotated[
+    Union[
+        CounterspellAutomaticSuccess,
+        CounterspellCheckSuccess,
+        CounterspellCheckFailure,
+    ],
+    Field(discriminator="kind"),
+]
+
+
+class CounterspellPresentationCue(PresentationCueBase):
+    """Closed non-movement reaction presentation for one Counterspell."""
+
+    kind: Literal["counterspell"] = "counterspell"
+    reactor_uuid: str = Field(min_length=1)
+    incoming_caster_uuid: str = Field(min_length=1)
+    incoming_spell_level: int = Field(ge=0, le=9)
+    counterspell_slot_level: int = Field(ge=3, le=9)
+    resolution: CounterspellResolution
+
+    @model_validator(mode="after")
+    def validate_counterspell(self) -> "CounterspellPresentationCue":
+        if self.child_presentation_ids:
+            raise ValueError("Counterspell presentation is a leaf cue")
+        roles = {
+            attribution.role
+            for attribution in self.content_attributions
+            if isinstance(
+                attribution,
+                (
+                    UnrootedBehaviorPresentationAttribution,
+                    RootedBehaviorPresentationAttribution,
+                ),
+            )
+        }
+        if roles != {
+            BehaviorPresentationRole.BEHAVIOR,
+            BehaviorPresentationRole.TRIGGER_BEHAVIOR,
+        }:
+            raise ValueError(
+                "Counterspell requires exact reaction and incoming-spell behavior attribution"
+            )
+        if any(
+            isinstance(attribution, SourceItemPresentationAttribution)
+            for attribution in self.content_attributions
+        ):
+            raise ValueError("Counterspell cannot carry source-item attribution")
+        if isinstance(self.resolution, CounterspellAutomaticSuccess):
+            if self.counterspell_slot_level < self.incoming_spell_level:
+                raise ValueError(
+                    "automatic Counterspell requires a slot at least as high as the incoming cast"
+                )
+        else:
+            if self.counterspell_slot_level >= self.incoming_spell_level:
+                raise ValueError(
+                    "checked Counterspell requires a lower slot than the incoming cast"
+                )
+            if self.resolution.check_dc != 10 + self.incoming_spell_level:
+                raise ValueError("Counterspell check DC must equal 10 + incoming spell level")
+        return self
+
+
 class DamagePresentationCue(PresentationCueBase):
     """Applied packet total plus ordered source categories; no invented allocation."""
 
@@ -1231,6 +1404,7 @@ SubjectivePresentationCue: TypeAlias = Annotated[
         MovementPresentationCue,
         ForcedMovementPresentationCue,
         ShovePresentationCue,
+        CounterspellPresentationCue,
         ItemActionPresentationCue,
         AttackPresentationCue,
         SpellPresentationCue,
@@ -1669,6 +1843,12 @@ __all__ = [
     "ControlledEquipmentReplacePatch",
     "CubeAreaGeometry",
     "CylinderAreaGeometry",
+    "BehaviorPresentationRole",
+    "CounterspellAutomaticSuccess",
+    "CounterspellCheckFailure",
+    "CounterspellCheckSuccess",
+    "CounterspellPresentationCue",
+    "CounterspellResolution",
     "DamagePresentationCue",
     "DeathSaveOutcome",
     "DoorPresentationCue",
@@ -1705,12 +1885,15 @@ __all__ = [
     "PerspectiveKind",
     "PlayerReplicationProtocolIdentity",
     "PlayerReplicationWatermarks",
+    "PresentationContentAttribution",
     "PresentationDamageType",
     "PresentationProjectile",
     "PresentationSpellSchool",
     "PresentationWeaponSlot",
     "ShoveOutcome",
     "ShovePresentationCue",
+    "RootedBehaviorPresentationAttribution",
+    "SourceItemPresentationAttribution",
     "SphereAreaGeometry",
     "SpellApplicationOutcome",
     "SpellDelivery",
@@ -1734,6 +1917,7 @@ __all__ = [
     "SubjectiveSyncDelivery",
     "SubjectiveWorldPatch",
     "TileUpsertPatch",
+    "UnrootedBehaviorPresentationAttribution",
     "VisualEquipmentLayer",
     "VisualLoadoutSlot",
     "VisualLoadoutReplacePatch",

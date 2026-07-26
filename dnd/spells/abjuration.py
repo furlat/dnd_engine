@@ -32,7 +32,8 @@ from dnd.core.condition_types import (
     DurationType,
 )
 from dnd.core.base_object import BaseObject
-from dnd.core.content import ContentKind
+from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier
@@ -46,6 +47,11 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterru
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
 from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.spells.content_metadata import (
+    srd_action_identity,
+    srd_reaction_identity,
+    srd_spell_identity,
+)
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.effect_ids import (
@@ -300,16 +306,22 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     return None
 
 
-def create_shield_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
+class ShieldReactionHandler(EventHandler):
+    """Direct player-toggleable Shield reaction behavior."""
+
+
+def create_shield_reaction_handler(
+    source_entity_uuid: UUID,
+) -> ShieldReactionHandler:
     """Create a Shield reaction handler for an entity.
 
     The handler listens for attack execution events and Magic Missile damage
     events that target the entity.
     """
-    return EventHandler(
+    return ShieldReactionHandler(
         name="Shield",
         semantic_key="reaction.spell.shield",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -441,6 +453,15 @@ class MageArmorCondition(BaseCondition):
             target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
 
 
+@srd_spell_identity(
+    content_id="spell.mage_armor",
+    display_name="Mage Armor",
+    description="Protect an unarmored creature with magical armor.",
+    school="abjuration",
+    level=1,
+    source_page=160,
+    sort_order=10,
+)
 class MageArmor(SpellAction):
     """Apply Mage Armor to an unarmored self or ally target."""
     name: str = Field(default="Mage Armor", description="Spell name.")
@@ -941,12 +962,30 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     return None
 
 
-def create_counterspell_reaction_handler(source_entity_uuid: UUID) -> EventHandler:
+@srd_reaction_identity(
+    content_id="reaction.spell.counterspell",
+    display_name="Counterspell",
+    description="Interrupt a visible creature while it casts a spell.",
+    source_page=131,
+    sort_order=10,
+)
+class CounterspellReactionHandler(EventHandler):
+    """Authenticated reaction behavior that resolves Counterspell."""
+
+
+COUNTERSPELL_REACTION_DECLARATION = get_content_declaration(
+    CounterspellReactionHandler,
+)
+
+
+def create_counterspell_reaction_handler(
+    source_entity_uuid: UUID,
+) -> CounterspellReactionHandler:
     """Create a Counterspell reaction handler for an entity."""
-    return EventHandler(
+    return CounterspellReactionHandler(
         name="Counterspell",
         semantic_key="reaction.spell.counterspell",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -2020,6 +2059,14 @@ def _freedom_of_movement_escape_cost_evaluator(source_entity_uuid: UUID, cost_ty
     return _freedom_of_movement_available_movement(entity) >= cost
 
 
+@srd_action_identity(
+    content_id="action.spell.freedom_of_movement.escape",
+    display_name="Freedom of Movement Escape",
+    description="Spend movement to escape an eligible nonmagical restraint.",
+    parent_spell_name="Freedom of Movement",
+    source_page=147,
+    sort_order=810,
+)
 class FreedomOfMovementEscape(BaseAction):
     """Spend movement to escape nonmagical Grappled or Restrained conditions."""
 

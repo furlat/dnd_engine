@@ -1,18 +1,28 @@
 """Creature presentation and equipment visual-contract tests."""
 
+from uuid import uuid4
+
 import pytest
 
 from dnd.blocks.base_item import EquippedVisualPolicy
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import CreatureType, Size
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.monsters.srd_roster import create_srd_monster, list_srd_monster_specs
+from dnd.monsters.srd_roster import (
+    SRD_CREATURE_DECLARATIONS_BY_ID,
+    SRD_CREATURE_RECIPES_BY_ID,
+)
 from server.world_projection import project_entity_summary, project_equipment_overview
 
 
@@ -56,6 +66,21 @@ def _reset_state() -> None:
     get_map().create_rectangle(0, 0, 20, 20)
 
 
+def _materialize_srd_fixture(creature_id: str) -> Entity:
+    declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
+    return materialize_creature(
+        SRD_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=uuid4(),
+        display_name=declaration.descriptor.display_name,
+        faction="monsters",
+        position=(2, 2),
+        deployment_role=CreatureDeploymentRole(
+            role_id=f"tests.creature_presentation.{creature_id}",
+        ),
+        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
+    )
+
+
 def test_preset_goblin_and_skeleton_keep_layered_presentation() -> None:
     """Equipment-driven humanoids and existing skeleton art stay layered."""
     goblin = create_goblin(position=(2, 2), faction="monsters")
@@ -75,9 +100,9 @@ def test_preset_goblin_and_skeleton_keep_layered_presentation() -> None:
 
 def test_srd_roster_uses_explicit_type_driven_presentation() -> None:
     """SRD factories select presentation from typed creature data, not names."""
-    for spec in list_srd_monster_specs():
+    for creature_id in SRD_CREATURE_RECIPES_BY_ID:
         _reset_state()
-        entity = create_srd_monster(spec.monster_id, position=(2, 2), faction="monsters")
+        entity = _materialize_srd_fixture(creature_id)
         summary = project_entity_summary(entity)
         expected_kind = "layered" if entity.creature_type == CreatureType.HUMANOID else "placeholder"
 
@@ -94,9 +119,9 @@ def test_srd_equipment_exposes_a_complete_visual_contract() -> None:
     observed_aliases: dict[str, str] = {}
     observed_body_items: set[str] = set()
 
-    for spec in list_srd_monster_specs():
+    for creature_id in SRD_CREATURE_RECIPES_BY_ID:
         _reset_state()
-        entity = create_srd_monster(spec.monster_id, position=(2, 2), faction="monsters")
+        entity = _materialize_srd_fixture(creature_id)
         overview = project_equipment_overview(entity)
 
         for slot in overview.slots:

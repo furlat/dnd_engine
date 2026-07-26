@@ -1,11 +1,10 @@
 """Dependency-neutral item presentation and location contracts."""
 
 from enum import Enum
-from typing import Optional, Protocol, Tuple, runtime_checkable
+from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
@@ -44,6 +43,22 @@ class ItemLocation(str, Enum):
     DESTROYED = "destroyed"
 
 
+class ItemContentRefSnapshot(BaseModel):
+    """Dependency-neutral cold copy of one authenticated item definition ref."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pack_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    definition_kind: Literal["item", "environment_object"]
+    content_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    content_version: int = Field(ge=1)
+    definition_contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ItemPresentationState(BaseModel):
     """Immutable item data needed to materialize an equipment/inventory row.
 
@@ -56,6 +71,13 @@ class ItemPresentationState(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     item_uuid: UUID = Field(description="Stable item instance identity.")
+    content_ref: Optional[ItemContentRefSnapshot] = Field(
+        default=None,
+        description=(
+            "Exact authenticated authored definition when this item was "
+            "materialized through the content registry."
+        ),
+    )
     semantic_key: str = Field(description="Stable rules-content identity.")
     name: str = Field(description="Human-readable item name.")
     description: Optional[str] = Field(default=None, description="Optional rules/UI description.")
@@ -99,6 +121,7 @@ class ItemPresentationProvider(Protocol):
 __all__ = [
     "EquippedVisualPolicy",
     "ItemLocation",
+    "ItemContentRefSnapshot",
     "ItemPresentationKind",
     "ItemPresentationProvider",
     "ItemPresentationState",

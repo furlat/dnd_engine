@@ -3,6 +3,8 @@
 from typing import Optional
 
 from dnd.controller import Controller
+from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
+from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
@@ -50,6 +52,8 @@ def reset_engine_runtime(
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
+    CREATURE_RUNTIME_BINDINGS.reset()
+    ITEM_RUNTIME_BINDINGS.reset()
 
     GridMap.reset()
     grid = get_map()

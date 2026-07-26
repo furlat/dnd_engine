@@ -19,158 +19,42 @@ from dnd.spells.necromancy import Blight, BlindnessDeafness, FalseLife, ChillTou
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, ColorSpray, Invisibility, GreaterInvisibility, MirrorImage, Silence, SilenceZone
 from dnd.spells.transmutation import SpikeGrowth, Slow, Haste, DarkvisionSpell, Disintegrate, JumpSpell, ExpeditiousRetreat, EnhanceAbility, EnlargeReduce, Telekinesis, Regenerate, RegeneratingEffect
 from dnd.spells.divination import SeeInvisibility, TrueSeeing, Guidance, GuidanceEffect
+from dnd.spells.catalog_content import (
+    SPELL_CATALOG_METADATA_BY_CLASS,
+    SPELL_CATALOG_METADATA_BY_ID,
+    SPELL_CATALOG_METADATA_BY_NAME,
+    SPELL_CATALOG_METADATA_SPECS,
+    SPELL_CONTENT_DECLARATIONS,
+    SPELL_CONTENT_DECLARATIONS_BY_CLASS,
+    SPELL_CONTENT_DECLARATIONS_BY_NAME,
+    SPELL_CONTENT_IDENTITY_BY_CLASS,
+    SPELL_CONTENT_IDENTITY_BY_NAME,
+    SPELL_CONTENT_IDENTITY_BY_REF_KEY,
+    SPELL_CONTENT_IDENTITY_SPECS,
+)
 
-CANTRIPS = {
-    "Fire Bolt": FireBolt,
-    "Sacred Flame": SacredFlame,
-    "Poison Spray": PoisonSpray,
-    "Ray of Frost": RayOfFrost,
-    "Acid Splash": AcidSplash,
-    "Chill Touch": ChillTouch,
-    "Shocking Grasp": ShockingGrasp,
-    "Eldritch Blast": EldritchBlast,
-    "True Strike": TrueStrike,
-    "Guidance": Guidance,
-    "Light": Light,
-    "Resistance": Resistance,
-}
+def _spell_map_for_level(
+    level: int | None,
+) -> dict[str, type[SpellAction]]:
+    """Project the authored identity table into the legacy public map shape."""
+    return {
+        spec.display_name: spec.spell_type
+        for spec in SPELL_CONTENT_IDENTITY_SPECS
+        if level is None or spec.level == level
+    }
 
-LEVEL_1_SPELLS = {
-    "Magic Missile": MagicMissile,
-    "Mage Armor": MageArmor,
-    "Burning Hands": BurningHands,
-    "Thunderwave": Thunderwave,
-    "False Life": FalseLife,
-    "Charm Person": CharmPerson,
-    "Sleep": Sleep,
-    "Color Spray": ColorSpray,
-    "Guiding Bolt": GuidingBolt,
-    "Grease": Grease,
-    "Fog Cloud": FogCloud,
-    "Bane": Bane,
-    "Bless": Bless,
-    "Jump": JumpSpell,
-    "Expeditious Retreat": ExpeditiousRetreat,
-    "Command": Command,
-    "Cure Wounds": CureWounds,
-    "Healing Word": HealingWord,
-    "Inflict Wounds": InflictWounds,
-    "Shield of Faith": ShieldOfFaith,
-    "Sanctuary": Sanctuary,
-}
 
-LEVEL_2_SPELLS = {
-    "Hold Person": HoldPerson,
-    "Shatter": Shatter,
-    "Scorching Ray": ScorchingRay,
-    "Blur": Blur,
-    "Misty Step": MistyStep,
-    "Blindness/Deafness": BlindnessDeafness,
-    "Spike Growth": SpikeGrowth,
-    "Web": Web,
-    "Invisibility": Invisibility,
-    "Darkness": Darkness,
-    "Mirror Image": MirrorImage,
-    "Necrotic Bless": NecroticBless,
-    "Darkvision": DarkvisionSpell,
-    "See Invisibility": SeeInvisibility,
-    "Gust of Wind": GustOfWind,
-    "Enhance Ability": EnhanceAbility,
-    "Enlarge/Reduce": EnlargeReduce,
-    "Silence": Silence,
-    "Continual Flame": ContinualFlame,
-    "Prayer of Healing": PrayerOfHealing,
-    "Lesser Restoration": LesserRestoration,
-    "Protection from Poison": ProtectionFromPoison,
-    "Aid": Aid,
-}
-
-LEVEL_3_SPELLS = {
-    "Call Lightning": CallLightning,
-    "Fireball": Fireball,
-    "Lightning Bolt": LightningBolt,
-    "Protection from Energy": ProtectionFromEnergy,
-    "Fear": Fear,
-    "Hypnotic Pattern": HypnoticPattern,
-    "Spirit Guardians": SpiritGuardians,
-    "Daylight": Daylight,
-    "Slow": Slow,
-    "Haste": Haste,
-    "Stinking Cloud": StinkingCloud,
-    "Sleet Storm": SleetStorm,
-    "Mass Healing Word": MassHealingWord,
-    "Beacon of Hope": BeaconOfHope,
-    "Remove Curse": RemoveCurse,
-    "Bestow Curse": BestowCurse,
-}
-
-LEVEL_4_SPELLS = {
-    "Blight": Blight,
-    "Stoneskin": Stoneskin,
-    "Greater Invisibility": GreaterInvisibility,
-    "Ice Storm": IceStorm,
-    "Dimension Door": DimensionDoor,
-    "Banishment": Banishment,
-    "Guardian of Faith": GuardianOfFaith,
-    "Death Ward": DeathWard,
-    "Freedom of Movement": FreedomOfMovement,
-}
-
-LEVEL_5_SPELLS = {
-    "Hold Monster": HoldMonster,
-    "Cone of Cold": ConeOfCold,
-    "Cloudkill": Cloudkill,
-    "Insect Plague": InsectPlague,
-    "Telekinesis": Telekinesis,
-    "Flame Strike": FlameStrike,
-    "Mass Cure Wounds": MassCureWounds,
-    "Greater Restoration": GreaterRestoration,
-}
-
-LEVEL_6_SPELLS = {
-    "Circle of Death": CircleOfDeath,
-    "Disintegrate": Disintegrate,
-    "True Seeing": TrueSeeing,
-    "Sunbeam": Sunbeam,
-    "Chain Lightning": ChainLightning,
-    "Eyebite": Eyebite,
-    "Globe of Invulnerability": GlobeOfInvulnerability,
-    "Heal": HealSpell,
-    "Harm": Harm,
-    "Heroes' Feast": HeroesFeast,
-}
-
-LEVEL_7_SPELLS = {
-    "Prismatic Spray": PrismaticSpray,
-    "Finger of Death": FingerOfDeath,
-    "Regenerate": Regenerate,
-    "Divine Word": DivineWord,
-}
-
-LEVEL_8_SPELLS = {
-    "Sunburst": Sunburst,
-    "Power Word Stun": PowerWordStun,
-    "Incendiary Cloud": IncendiaryCloud,
-    "Antimagic Field": AntimagicField,
-}
-
-LEVEL_9_SPELLS = {
-    "Power Word Kill": PowerWordKill,
-    "Mass Heal": MassHeal,
-}
-
-ALL_SPELLS = {
-    **CANTRIPS,
-    **LEVEL_1_SPELLS,
-    **LEVEL_2_SPELLS,
-    **LEVEL_3_SPELLS,
-    **LEVEL_4_SPELLS,
-    **LEVEL_5_SPELLS,
-    **LEVEL_6_SPELLS,
-    **LEVEL_7_SPELLS,
-    **LEVEL_8_SPELLS,
-    **LEVEL_9_SPELLS
-}
+CANTRIPS = _spell_map_for_level(0)
+LEVEL_1_SPELLS = _spell_map_for_level(1)
+LEVEL_2_SPELLS = _spell_map_for_level(2)
+LEVEL_3_SPELLS = _spell_map_for_level(3)
+LEVEL_4_SPELLS = _spell_map_for_level(4)
+LEVEL_5_SPELLS = _spell_map_for_level(5)
+LEVEL_6_SPELLS = _spell_map_for_level(6)
+LEVEL_7_SPELLS = _spell_map_for_level(7)
+LEVEL_8_SPELLS = _spell_map_for_level(8)
+LEVEL_9_SPELLS = _spell_map_for_level(9)
+ALL_SPELLS = _spell_map_for_level(None)
 
 __all__ = [
 
@@ -337,6 +221,17 @@ __all__ = [
     "LEVEL_8_SPELLS",
     "LEVEL_9_SPELLS",
     "ALL_SPELLS",
+    "SPELL_CATALOG_METADATA_BY_CLASS",
+    "SPELL_CATALOG_METADATA_BY_ID",
+    "SPELL_CATALOG_METADATA_BY_NAME",
+    "SPELL_CATALOG_METADATA_SPECS",
+    "SPELL_CONTENT_DECLARATIONS",
+    "SPELL_CONTENT_DECLARATIONS_BY_CLASS",
+    "SPELL_CONTENT_DECLARATIONS_BY_NAME",
+    "SPELL_CONTENT_IDENTITY_BY_CLASS",
+    "SPELL_CONTENT_IDENTITY_BY_NAME",
+    "SPELL_CONTENT_IDENTITY_BY_REF_KEY",
+    "SPELL_CONTENT_IDENTITY_SPECS",
 
     "register_shield_reaction",
     "register_counterspell_reaction",

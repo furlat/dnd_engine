@@ -21,10 +21,12 @@ from dnd.actions_functional import (
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import EquipmentConfig, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
@@ -33,24 +35,30 @@ from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity, EntityConfig
+from dnd.items.consumables import (
+    FIRE_WEAPON_COAT_RECIPE,
+    HEALING_POTION_RECIPE,
+    LIGHTNING_WEAPON_COAT_RECIPE,
+)
+from dnd.items.environment_content import (
+    CAMPFIRE_RECIPE,
+    DOOR_RECIPE,
+    trap_lever_recipe,
+    storage_chest_recipe,
+)
+from dnd.items.spell_items import (
+    FIREBALL_SCROLL_RECIPE,
+    MAGIC_MISSILE_SCROLL_RECIPE,
+    WAND_OF_MAGIC_MISSILES_RECIPE,
+    fireball_scroll_recipe,
+)
 from dnd.items.test_items import (
-    CookAction,
-    InteractDoorAction,
-    LootAllAction,
     PullLeverAction,
-    RestAction,
     StorageChest,
     TestDoorA as OverrideDoorFixture,
-    TestDoorB as TemplateDoorFixture,
     TrapLever,
-    create_healing_potion,
-    create_lightning_weapon_coat,
-    create_scroll_of_fireball,
-    create_scroll_of_magic_missile,
-    create_wand_of_magic_missiles,
-    create_weapon_coat,
 )
-from dnd.items.weapons import create_longsword, create_shortsword
+from dnd.items.weapons import LONGSWORD_RECIPE, SHORTSWORD_RECIPE
 from dnd.tiles import create_spike_zone
 from dnd.utils import get_hp, reset_combat_state, set_hp
 
@@ -147,8 +155,16 @@ USABLE_CASES: dict[str, CoverageRecord] = {
     "test_door_a_discovery": CoverageRecord(DOOR_SELECTOR),
     "test_door_a_open_close_cycle": CoverageRecord(DOOR_SELECTOR),
     "test_door_a_blocks_movement": CoverageRecord(DOOR_SELECTOR),
-    "test_door_b_discovery": CoverageRecord(DOOR_SELECTOR),
-    "test_door_b_toggle": CoverageRecord(DOOR_SELECTOR),
+    "test_door_b_discovery": CoverageRecord(
+        DOOR_SELECTOR,
+        CoverageStatus.STRENGTHENED,
+        "The fixture-only parallel door now uses a second exact canonical door root.",
+    ),
+    "test_door_b_toggle": CoverageRecord(
+        DOOR_SELECTOR,
+        CoverageStatus.STRENGTHENED,
+        "The fixture-only parallel door now uses a second exact canonical door root.",
+    ),
     "test_door_b_uses_default_field": CoverageRecord(
         DOOR_SELECTOR,
         CoverageStatus.RETIRED,
@@ -257,24 +273,45 @@ def test_stack_identity_limits_weight_and_full_slot_merge() -> None:
     reset_item_world()
     owner_uuid = uuid4()
     inventory = Inventory(source_entity_uuid=owner_uuid)
+    level_three_recipe = fireball_scroll_recipe(cast_level=3)
     for _ in range(22):
-        scroll = create_scroll_of_fireball(owner_uuid, cast_level=3)
+        scroll = materialize_item(
+            level_three_recipe,
+            owner_uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
         scroll.weight = 0.5
         assert inventory.add_item(scroll)
 
     fireball_level_three = [
         item
         for item in inventory.items.values()
-        if item.stack_id == "scroll_fireball_l3"
+        if item.stack_id == level_three_recipe.recipe_digest
     ]
     assert sorted(item.stack_count for item in fireball_level_three) == [2, 20]
     assert inventory.item_count == 2
     assert inventory.total_weight == 11
 
-    level_five = create_scroll_of_fireball(owner_uuid, cast_level=5)
-    missile = create_scroll_of_magic_missile(owner_uuid)
-    first_wand = create_wand_of_magic_missiles(owner_uuid, charges=3)
-    second_wand = create_wand_of_magic_missiles(owner_uuid, charges=3)
+    level_five = materialize_item(
+        fireball_scroll_recipe(cast_level=5),
+        owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    missile = materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    first_wand = materialize_item(
+        WAND_OF_MAGIC_MISSILES_RECIPE,
+        owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    second_wand = materialize_item(
+        WAND_OF_MAGIC_MISSILES_RECIPE,
+        owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     for item in (level_five, missile, first_wand, second_wand):
         assert inventory.add_item(item)
 
@@ -287,9 +324,21 @@ def test_stack_identity_limits_weight_and_full_slot_merge() -> None:
     assert second_wand.uuid in inventory.items
 
     tight = Inventory(source_entity_uuid=uuid4(), max_slots=1)
-    existing = create_scroll_of_fireball(tight.source_entity_uuid)
-    compatible = create_scroll_of_fireball(tight.source_entity_uuid)
-    incompatible = create_scroll_of_magic_missile(tight.source_entity_uuid)
+    existing = materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        tight.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    compatible = materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        tight.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    incompatible = materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        tight.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert tight.add_item(existing)
     assert tight.can_add(compatible)
     assert tight.add_item(compatible)
@@ -301,7 +350,11 @@ def test_stack_identity_limits_weight_and_full_slot_merge() -> None:
     potion_inventory = Inventory(source_entity_uuid=uuid4())
     for _ in range(3):
         assert potion_inventory.add_item(
-            create_healing_potion(potion_inventory.source_entity_uuid)
+            materialize_item(
+                HEALING_POTION_RECIPE,
+                potion_inventory.source_entity_uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+            )
         )
     potion_stack = next(iter(potion_inventory.items.values()))
     assert potion_stack.stack_count == 3
@@ -318,7 +371,11 @@ def test_stacked_scroll_has_one_discovered_row_and_consumes_one_copy() -> None:
         hit_dice_count=50,
     )
     for _ in range(3):
-        assert caster.loot_item(create_scroll_of_fireball(caster.uuid))
+        assert caster.loot_item(materialize_item(
+            FIREBALL_SCROLL_RECIPE,
+            caster.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        ))
     stacked = next(iter(caster.inventory.items.values()))
     assert isinstance(stacked, UsableItem)
     Entity.update_all_entities_senses()
@@ -368,11 +425,28 @@ def test_elemental_coat_stacks_stay_distinct_and_lightning_applies() -> None:
     """Element identity controls coat stacking and the applied damage packet."""
     reset_item_world()
     actor = create_actor((3, 3))
-    sword = create_longsword(actor.uuid)
+    sword = materialize_item(
+        LONGSWORD_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert actor.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
-    first_fire = create_weapon_coat(actor.uuid)
-    second_fire = create_weapon_coat(actor.uuid)
-    lightning = create_lightning_weapon_coat(actor.uuid)
+    first_fire = materialize_item(
+        FIRE_WEAPON_COAT_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    second_fire = materialize_item(
+        FIRE_WEAPON_COAT_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    lightning = materialize_item(
+        LIGHTNING_WEAPON_COAT_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert actor.loot_item(first_fire)
     assert actor.loot_item(second_fire)
     assert actor.loot_item(lightning)
@@ -380,12 +454,12 @@ def test_elemental_coat_stacks_stay_distinct_and_lightning_applies() -> None:
     fire_stack = next(
         item
         for item in actor.inventory.items.values()
-        if item.stack_id == "weapon_coat_fire"
+        if item.stack_id == FIRE_WEAPON_COAT_RECIPE.recipe_digest
     )
     lightning_stack = next(
         item
         for item in actor.inventory.items.values()
-        if item.stack_id == "weapon_coat_lightning"
+        if item.stack_id == LIGHTNING_WEAPON_COAT_RECIPE.recipe_digest
     )
     assert fire_stack.stack_count == 2
     assert lightning_stack.stack_count == 1
@@ -412,15 +486,20 @@ def test_elemental_coat_stacks_stay_distinct_and_lightning_applies() -> None:
 
 
 def test_override_and_default_door_actions_toggle_spatial_state() -> None:
-    """Both supported door authoring patterns expose and commit open/close state."""
+    """Two exact canonical door roots discover and commit independent state."""
     reset_item_world()
     actor = create_actor((3, 3))
-    override_door = OverrideDoorFixture(source_entity_uuid=uuid4())
-    default_door = TemplateDoorFixture(
-        source_entity_uuid=uuid4(),
-        use_action_templates=[
-            InteractDoorAction(source_entity_uuid=uuid4(), template=True)
-        ],
+    override_door = materialize_item(
+        DOOR_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=OverrideDoorFixture,
+    )
+    default_door = materialize_item(
+        DOOR_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=OverrideDoorFixture,
     )
     override_door.place_on_grid((4, 3))
     default_door.place_on_grid((3, 4))
@@ -432,14 +511,14 @@ def test_override_and_default_door_actions_toggle_spatial_state() -> None:
         "Open Door"
     ]
     assert [row.template_name.split("__item_")[0] for row in default_rows] == [
-        "Interact Door"
+        "Open Door"
     ]
     for door in (override_door, default_door):
         assert door.blocks_walking()
         assert door.blocks_vision()
 
     opened_override = execute_use_action(actor, override_door.uuid, "Open Door")
-    opened_default = execute_use_action(actor, default_door.uuid, "Interact Door")
+    opened_default = execute_use_action(actor, default_door.uuid, "Open Door")
 
     assert opened_override is not None and not opened_override.canceled
     assert opened_default is not None and not opened_default.canceled
@@ -449,7 +528,7 @@ def test_override_and_default_door_actions_toggle_spatial_state() -> None:
         assert not door.blocks_vision()
 
     closed_override = execute_use_action(actor, override_door.uuid, "Close Door")
-    closed_default = execute_use_action(actor, default_door.uuid, "Interact Door")
+    closed_default = execute_use_action(actor, default_door.uuid, "Close Door")
 
     assert closed_override is not None and not closed_override.canceled
     assert closed_default is not None and not closed_default.canceled
@@ -465,17 +544,21 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
     actor = create_actor((5, 5))
     _linked_tiles, linked_handler = create_spike_zone({(3, 3)})
     _other_tiles, other_handler = create_spike_zone({(7, 7)})
-    lever = TrapLever(
-        source_entity_uuid=uuid4(),
-        charges=1,
-        max_charges=1,
-        use_action_templates=[
+    lever = materialize_item(
+        trap_lever_recipe(charges=1),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=TrapLever,
+    )
+    lever.max_charges = 1
+    lever.use_action_templates.append(
+        lever.bind_dynamic_use_action(
             PullLeverAction(
                 source_entity_uuid=uuid4(),
                 trap_handler_uuid=linked_handler.uuid,
                 template=True,
-            )
-        ],
+            ),
+        ),
     )
     lever.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
@@ -507,15 +590,24 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
     """Loot All transfers every nested item and then vanishes from discovery."""
     reset_item_world()
     actor = create_actor((5, 5))
-    chest = StorageChest(
-        source_entity_uuid=uuid4(),
-        use_action_templates=[
-            LootAllAction(source_entity_uuid=uuid4(), template=True)
-        ],
+    chest = materialize_item(
+        storage_chest_recipe(include_loot_all_action=True),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=StorageChest,
     )
     chest.chest_inventory.source_entity_uuid = chest.uuid
-    sword = create_shortsword(chest.uuid)
-    potion = BaseItem(source_entity_uuid=chest.uuid, name="Potion")
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert chest.chest_inventory.add_item(sword)
     assert chest.chest_inventory.add_item(potion)
     chest.place_on_grid((6, 5))
@@ -544,17 +636,14 @@ def test_multi_action_environment_item_executes_and_depletes() -> None:
     actor = create_actor((5, 5))
     set_hp(actor, get_hp(actor) - 10)
     before = get_hp(actor)
-    campfire = UsableItem(
-        source_entity_uuid=uuid4(),
-        name="Campfire",
-        is_pickable=False,
-        charges=2,
-        max_charges=2,
-        use_action_templates=[
-            RestAction(source_entity_uuid=uuid4(), template=True),
-            CookAction(source_entity_uuid=uuid4(), template=True),
-        ],
+    campfire = materialize_item(
+        CAMPFIRE_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=UsableItem,
     )
+    campfire.charges = 2
+    campfire.max_charges = 2
     campfire.place_on_grid((5, 6))
     Entity.update_all_entities_senses()
 
@@ -587,7 +676,12 @@ def test_nonusable_and_out_of_range_objects_do_not_surface_use_rows() -> None:
         name="Rock",
         is_pickable=False,
     )
-    far_door = OverrideDoorFixture(source_entity_uuid=uuid4())
+    far_door = materialize_item(
+        DOOR_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=OverrideDoorFixture,
+    )
     rock.place_on_grid((2, 1))
     far_door.place_on_grid((8, 8))
     Entity.update_all_entities_senses()

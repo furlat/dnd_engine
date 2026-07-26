@@ -21,7 +21,7 @@ Level 20: Primal Champion
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import DurationType
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
@@ -1007,7 +1007,7 @@ def create_retaliation_handler(source_entity_uuid: UUID) -> EventHandler:
     return EventHandler(
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -1220,17 +1220,6 @@ class IntimidatingPresence(BaseAction):
             target_entity_name=target_name
         )
 
-    def pre_validate(self) -> bool:
-        """Check if intimidating presence can be used."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        if not entity.action_economy.can_afford("actions", 1):
-            return False
-
-        return True
-
     def _is_target_immune(self, target: Entity) -> bool:
         """Check if target has immunity to this barbarian's Intimidating Presence."""
         for condition in target.active_conditions.values():
@@ -1373,17 +1362,6 @@ class ExtendIntimidatingPresence(BaseAction):
             source_entity_name=source_name,
             target_entity_name=target_name
         )
-
-    def pre_validate(self) -> bool:
-        """Check if extend intimidating presence can be used."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        if not entity.action_economy.can_afford("actions", 1):
-            return False
-
-        return True
 
     def _is_frightened_by_me(self, target: Entity) -> bool:
         """Check if target is Frightened by this barbarian."""

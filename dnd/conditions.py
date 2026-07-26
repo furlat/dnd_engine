@@ -8,8 +8,26 @@ from dnd.core.condition_types import (
     ConditionTag,
     DurationType,
 )
+from dnd.core.content.descriptors import (
+    ContentDescriptorSpec,
+    ContentOrdering,
+    ContentPresentation,
+    ContentVisibility,
+)
+from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.content.provenance import (
+    ContentFidelity,
+    ContentProvenance,
+    ContentProvenanceRelation,
+    ContentReviewStatus,
+)
+from dnd.core.content.registration import (
+    behavior_identity,
+    get_content_declaration,
+)
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
-from typing import Dict, Any, Optional, List, Literal, Tuple, Type
+from typing import Callable, Dict, Any, Optional, List, Literal, Tuple, TypeVar
 from dnd.core.modifiers import (
     AdvantageModifier,
     ContextAwareAdvantage,
@@ -58,10 +76,55 @@ from dnd.creature_transforms import (
     apply_unconscious_transform,
     apply_visual_denial_transform,
 )
-from enum import Enum
 
 UNDERWATER_MELEE_EXCEPTION_WEAPONS: Tuple[str, ...] = ("dagger", "javelin", "shortsword", "spear", "trident")
 UNDERWATER_RANGED_EXCEPTION_WEAPON_TOKENS: Tuple[str, ...] = ("crossbow", "net", "javelin", "spear", "trident", "dart")
+
+_CoreConditionDefinition = TypeVar("_CoreConditionDefinition")
+
+
+def _core_condition_identity(
+    *,
+    content_id: str,
+    display_name: str,
+    description: str,
+    source_anchor: str,
+    sort_order: int,
+) -> Callable[[_CoreConditionDefinition], _CoreConditionDefinition]:
+    """Declare one independently provided public core condition."""
+    return behavior_identity(
+        definition_kind=ContentDefinitionKind.CONDITION,
+        runtime_behavior_kind=RuntimeBehaviorKind.CONDITION,
+        pack_id="core.rules",
+        content_id=content_id,
+        version=1,
+        descriptor=ContentDescriptorSpec(
+            display_name=display_name,
+            description=description,
+            tags=("condition", "core", "srd"),
+            visibility=ContentVisibility.PUBLIC,
+            presentation=ContentPresentation(
+                icon_key=content_id,
+                visual_variant_key=content_id.removeprefix("condition."),
+                ui_group="conditions.core",
+            ),
+            ordering=ContentOrdering(
+                sort_group="conditions.core",
+                sort_order=sort_order,
+            ),
+        ),
+        provenance=ContentProvenance(
+            primary_source_id="wotc.srd_5_1_cc",
+            source_anchor=source_anchor,
+            relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+            fidelity=ContentFidelity.PARTIAL,
+            review_status=ContentReviewStatus.REVIEWED,
+            notes=(
+                "Playable core condition identity; current implementation "
+                "coverage remains tracked independently."
+            ),
+        ),
+    )
 
 
 def underwater_weapon_name(context: Optional[Dict[str, Any]]) -> str:
@@ -198,6 +261,13 @@ class HasTakenDamage(BaseCondition):
         return [], [], [], [], effect_event
 
 
+@_core_condition_identity(
+    content_id="condition.underwater",
+    display_name="Underwater",
+    description="Applies the core penalties for fighting while underwater.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Underwater Combat",
+    sort_order=10,
+)
 class Underwater(BaseCondition):
     """Environmental condition for SRD underwater attack penalties."""
 
@@ -354,6 +424,13 @@ def create_has_taken_damage_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
+@_core_condition_identity(
+    content_id="condition.blinded",
+    display_name="Blinded",
+    description="Cannot see and suffers the standard blinded combat effects.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Blinded",
+    sort_order=20,
+)
 class Blinded(BaseCondition):
     """Sight-loss condition with self attack penalties and attacker advantage."""
 
@@ -395,6 +472,13 @@ class Blinded(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.charmed",
+    display_name="Charmed",
+    description="Cannot attack the charmer and grants the charmer social advantage.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Charmed",
+    sort_order=30,
+)
 class Charmed(BaseCondition):
     """Charmer-contextual attack block and social-check support condition."""
 
@@ -477,6 +561,13 @@ class Charmed(BaseCondition):
         return partial_function
 
 
+@_core_condition_identity(
+    content_id="condition.dashing",
+    display_name="Dashing",
+    description="Temporarily gains additional movement equal to current speed.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Dash",
+    sort_order=40,
+)
 class Dashing(BaseCondition):
     """Status condition that adds movement equal to the target's current speed."""
 
@@ -503,6 +594,13 @@ class Dashing(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.deafened",
+    display_name="Deafened",
+    description="Cannot hear and automatically fails hearing-dependent checks.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Deafened",
+    sort_order=50,
+)
 class Deafened(BaseCondition):
     """Hearing-loss condition that autofails hearing-based skills."""
 
@@ -545,6 +643,13 @@ def exhaustion_revive_processor(
     return None
 
 
+@_core_condition_identity(
+    content_id="condition.exhaustion",
+    display_name="Exhaustion",
+    description="Tracks cumulative levels of exhaustion and their penalties.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Exhaustion",
+    sort_order=60,
+)
 class Exhaustion(BaseCondition):
     """Cumulative exhaustion condition with SRD level effects."""
 
@@ -755,6 +860,13 @@ class Exhaustion(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {target_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.dodging",
+    display_name="Dodging",
+    description="Applies the defensive benefits of the Dodge action.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Dodge",
+    sort_order=70,
+)
 class Dodging(BaseCondition):
     """Status condition for the Dodge action's defensive effects."""
 
@@ -782,6 +894,13 @@ class Dodging(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.disengaging",
+    display_name="Disengaging",
+    description="Prevents movement from provoking opportunity attacks this turn.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Disengage",
+    sort_order=80,
+)
 class Disengaging(BaseCondition):
     """Status condition that owns immunity to opportunity-attack provocation."""
     name: str = Field(default="Disengaging", description="Condition name.")
@@ -807,6 +926,13 @@ class Disengaging(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+@_core_condition_identity(
+    content_id="condition.frightened",
+    display_name="Frightened",
+    description="Suffers fear penalties while the source of fear is visible.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Frightened",
+    sort_order=90,
+)
 class Frightened(BaseCondition):
     """Contextual fear condition keyed to whether the source is sensed."""
 
@@ -891,6 +1017,13 @@ class Frightened(BaseCondition):
         return partial_function
 
 
+@_core_condition_identity(
+    content_id="condition.grappled",
+    display_name="Grappled",
+    description="Has speed reduced to zero by a grappling effect.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Grappled",
+    sort_order=100,
+)
 class Grappled(BaseCondition):
     """Movement-lock condition that caps speed at zero."""
 
@@ -913,6 +1046,13 @@ class Grappled(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+@_core_condition_identity(
+    content_id="condition.incapacitated",
+    display_name="Incapacitated",
+    description="Cannot take actions or reactions.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Incapacitated",
+    sort_order=110,
+)
 class Incapacitated(BaseCondition):
     """Action-economy lock condition used by severe status effects."""
 
@@ -944,6 +1084,13 @@ class Incapacitated(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+@_core_condition_identity(
+    content_id="condition.invisible",
+    display_name="Invisible",
+    description="Cannot be seen without a sense or rule that bypasses invisibility.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Invisible",
+    sort_order=120,
+)
 class Invisible(BaseCondition):
     """Invisibility condition with unseen-attacker and unseen-target modifiers."""
 
@@ -1023,6 +1170,13 @@ def unseen_target_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Opt
     return None
 
 
+@_core_condition_identity(
+    content_id="condition.paralyzed",
+    display_name="Paralyzed",
+    description="Is incapacitated, immobile, and vulnerable to nearby attacks.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Paralyzed",
+    sort_order=130,
+)
 class Paralyzed(BaseCondition):
     """Severe condition owning incapacitation, failed saves, and auto-crits."""
 
@@ -1063,6 +1217,13 @@ class Paralyzed(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.petrified",
+    display_name="Petrified",
+    description="Is transformed into an inert solid substance.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Petrified",
+    sort_order=140,
+)
 class Petrified(BaseCondition):
     """Stone-form condition with severe-control and all-damage resistance effects."""
 
@@ -1150,6 +1311,13 @@ class Petrified(BaseCondition):
         return super()._remove(event)
 
 
+@_core_condition_identity(
+    content_id="condition.poisoned",
+    display_name="Poisoned",
+    description="Has disadvantage on attack rolls and ability checks.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Poisoned",
+    sort_order=150,
+)
 class Poisoned(BaseCondition):
     """Poison condition that penalizes attacks and ability checks."""
 
@@ -1176,6 +1344,13 @@ class Poisoned(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+@_core_condition_identity(
+    content_id="condition.prone",
+    display_name="Prone",
+    description="Is lying down and subject to the standard prone combat effects.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Prone",
+    sort_order=160,
+)
 class Prone(BaseCondition):
     """Prone condition with distance-sensitive incoming attack modifiers.
 
@@ -1237,6 +1412,13 @@ class Prone(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+@_core_condition_identity(
+    content_id="condition.stunned",
+    display_name="Stunned",
+    description="Is incapacitated, immobile, and easier to attack.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Stunned",
+    sort_order=170,
+)
 class Stunned(BaseCondition):
     """Severe condition owning incapacitation, save failures, and vulnerability."""
 
@@ -1276,6 +1458,13 @@ class Stunned(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+@_core_condition_identity(
+    content_id="condition.restrained",
+    display_name="Restrained",
+    description="Has no movement and suffers the standard restrained penalties.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Restrained",
+    sort_order=180,
+)
 class Restrained(BaseCondition):
     """Movement-lock condition with attack and Dexterity-save penalties."""
 
@@ -1309,6 +1498,13 @@ class Restrained(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_core_condition_identity(
+    content_id="condition.unconscious",
+    display_name="Unconscious",
+    description="Is unaware, incapacitated, immobile, and vulnerable to attacks.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Unconscious",
+    sort_order=190,
+)
 class Unconscious(BaseCondition):
     """Severe condition owning the complete unconscious mechanical transform."""
 
@@ -1360,6 +1556,13 @@ class ConcentrationSlot(BaseObject):
     linked_entries: List[Tuple[UUID, UUID]] = Field(default_factory=list)
 
 
+@_core_condition_identity(
+    content_id="condition.concentrating",
+    display_name="Concentrating",
+    description="Maintains one or more concentration-dependent spell effects.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Spellcasting: Concentration",
+    sort_order=200,
+)
 class Concentrating(BaseCondition):
     """
     Tracks concentration on a spell.
@@ -1647,6 +1850,13 @@ class ConcentrationActionMarker(BaseCondition):
         return super()._remove(removal_event)
 
 
+@_core_condition_identity(
+    content_id="condition.no_reactions",
+    display_name="No Reactions",
+    description="Cannot take reactions for the condition duration.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Reactions",
+    sort_order=210,
+)
 class NoReactions(BaseCondition):
     """
     Prevents the target from taking reactions.
@@ -1687,6 +1897,13 @@ class NoReactions(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+@_core_condition_identity(
+    content_id="condition.hidden",
+    display_name="Hidden",
+    description="Is concealed from observers whose perception does not reveal it.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Using Ability Scores: Hiding",
+    sort_order=220,
+)
 class Hidden(BaseCondition):
     """Stealth condition that hides an entity from low-perception observers.
 
@@ -2146,81 +2363,31 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     return None
 
 
-class ConditionType(str, Enum):
-    BLINDED = "BLINDED"
-    CHARMED = "CHARMED"
-    DASHING = "DASHING"
-    DEAFENED = "DEAFENED"
-    DISENGAGING = "DISENGAGING"
-    DODGING = "DODGING"
-    EXHAUSTION = "EXHAUSTION"
-    FRIGHTENED = "FRIGHTENED"
-    GRAPPLED = "GRAPPLED"
-    HIDDEN = "HIDDEN"
-    INCAPACITATED = "INCAPACITATED"
-    INVISIBLE = "INVISIBLE"
-    PARALYZED = "PARALYZED"
-    PETRIFIED = "PETRIFIED"
-    POISONED = "POISONED"
-    PRONE = "PRONE"
-    RESTRAINED = "RESTRAINED"
-    STUNNED = "STUNNED"
-    UNCONSCIOUS = "UNCONSCIOUS"
 
-CONDITION_MAP: Dict[ConditionType, Type[BaseCondition]] = {
-    ConditionType.BLINDED: Blinded,
-    ConditionType.CHARMED: Charmed,
-    ConditionType.DASHING: Dashing,
-    ConditionType.DEAFENED: Deafened,
-    ConditionType.DISENGAGING: Disengaging,
-    ConditionType.DODGING: Dodging,
-    ConditionType.EXHAUSTION: Exhaustion,
-    ConditionType.FRIGHTENED: Frightened,
-    ConditionType.GRAPPLED: Grappled,
-    ConditionType.HIDDEN: Hidden,
-    ConditionType.INCAPACITATED: Incapacitated,
-    ConditionType.INVISIBLE: Invisible,
-    ConditionType.PARALYZED: Paralyzed,
-    ConditionType.PETRIFIED: Petrified,
-    ConditionType.POISONED: Poisoned,
-    ConditionType.PRONE: Prone,
-    ConditionType.RESTRAINED: Restrained,
-    ConditionType.STUNNED: Stunned,
-    ConditionType.UNCONSCIOUS: Unconscious,
-}
-
-def create_condition(
-    condition_type: ConditionType,
-    source_entity_uuid: UUID,
-    target_entity_uuid: UUID,
-    duration_type: DurationType = DurationType.PERMANENT,
-    duration_rounds: Optional[int] = None
-) -> BaseCondition:
-    """
-    Factory function to create a condition of the specified type.
-
-    Args:
-        condition_type: The type of condition to create
-        source_entity_uuid: UUID of the entity causing the condition
-        target_entity_uuid: UUID of the entity receiving the condition
-        duration_type: Type of duration (PERMANENT, ROUNDS, etc.)
-        duration_rounds: Number of rounds if duration_type is ROUNDS
-
-    Returns:
-        BaseCondition: The created condition instance
-    """
-    condition_class = CONDITION_MAP[condition_type]
-
-    condition = condition_class(
-        source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=target_entity_uuid
+CORE_STANDARD_CONDITION_DECLARATIONS = tuple(
+    get_content_declaration(condition_type)
+    for condition_type in (
+        Underwater,
+        Blinded,
+        Charmed,
+        Dashing,
+        Deafened,
+        Exhaustion,
+        Dodging,
+        Disengaging,
+        Frightened,
+        Grappled,
+        Incapacitated,
+        Invisible,
+        Paralyzed,
+        Petrified,
+        Poisoned,
+        Prone,
+        Stunned,
+        Restrained,
+        Unconscious,
+        Concentrating,
+        NoReactions,
+        Hidden,
     )
-
-    if duration_type == DurationType.ROUNDS and duration_rounds is not None:
-        condition.duration.duration_type = DurationType.ROUNDS
-        condition.duration.duration = duration_rounds
-    else:
-        condition.duration.duration_type = duration_type
-        condition.duration.duration = None
-
-    return condition
+)

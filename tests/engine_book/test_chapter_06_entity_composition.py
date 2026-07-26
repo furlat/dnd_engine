@@ -10,6 +10,9 @@ from dnd.actions import Attack
 from dnd.actions_functional import register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
@@ -35,7 +38,7 @@ from dnd.core.modifiers import CreatureType, DamageType, NumericalModifier, Size
 from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import create_shortsword
+from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.spells.evocation import FireBolt
 from dnd.utils import get_max_hp, reset_combat_state
 
@@ -436,7 +439,12 @@ def test_eb_06_012_equipped_weapons_create_and_remove_attack_templates() -> None
 
     assert entity.get_action_template("Attack_MELEE_MAIN") is None
 
-    sword = create_shortsword(entity.uuid)
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert entity.loot_item(sword) is True
     assert sword.uuid in entity.inventory.items
     assert entity.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN) is True

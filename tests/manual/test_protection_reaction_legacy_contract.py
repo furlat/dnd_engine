@@ -6,12 +6,15 @@ import pytest
 
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import setup_standard_actions
+from dnd.blocks.equipment import Shield
 from dnd.classes.fighter import FightingStyleProtection
 from dnd.conditions import Invisible
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
-from dnd.items.armors import create_shield
+from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.utils import reset_combat_state
 from dnd.core.gridmap import get_map
@@ -34,7 +37,12 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
     )
     if shield:
         protector.equipment.equip(
-            create_shield(protector.uuid),
+            materialize_item(
+                SHIELD_RECIPE,
+                protector.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Shield,
+            ),
             WeaponSlot.MELEE_OFF,
         )
     protector.add_condition(

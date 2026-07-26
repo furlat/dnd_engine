@@ -118,7 +118,14 @@ export function bootstrap(generationId = "generation-a"): SubjectiveReplicationB
           effective_light_levels: { "0,0": 3 },
         },
       },
-      equipment_by_entity: { hero: { slots: [], ac: 15, inventory: [] } },
+      equipment_by_entity: {
+        hero: {
+          slots: [],
+          active_weapon_set: "none",
+          ac: 15,
+          inventory: [],
+        },
+      },
       visual_loadout_by_entity: {
         hero: { entity_uuid: "hero", active_weapon_set: "none", layers: [] },
         monster: { entity_uuid: "monster", active_weapon_set: "none", layers: [] },
@@ -154,6 +161,7 @@ export function replicationFrame(cursor = 1): SubjectiveReplicationFrame {
       child_presentation_ids: [],
       source_event_cursor: cursor,
       source_event_uuid: `event-${cursor}`,
+      content_attributions: [],
       entity_uuid: "hero",
       movement_kind: "walk",
       trajectory: [[cursor - 1, 0], [cursor, 0]],

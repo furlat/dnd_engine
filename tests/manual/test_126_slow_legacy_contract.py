@@ -20,8 +20,11 @@ from dnd.actions import (
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.fighter import (
     ActionSurge,
     ActionSurgeFeature,
@@ -35,7 +38,7 @@ from dnd.core.events import EventPhase
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import create_greatsword
+from dnd.items.weapons import GREATSWORD_RECIPE
 from dnd.spells import FireBolt
 from dnd.spells.transmutation import Slow
 from dnd.utils import (
@@ -122,7 +125,12 @@ def _create_fighter(
 ) -> Entity:
     fighter = _create_target("Slowed Fighter", position)
     fighter.equipment.equip(
-        create_greatsword(fighter.uuid),
+        materialize_item(
+            GREATSWORD_RECIPE,
+            fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     fighter.add_condition(

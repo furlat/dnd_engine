@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from ai.remote_connection import redeem_remote_agent_grant
+from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.core.base_object import BaseObject
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
@@ -130,6 +131,14 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
             },
         )
         spells_response = client.get("/catalog/spells")
+        content_manifest_response = client.get("/content/manifest")
+        content_catalog_response = client.get("/content/catalog")
+        cached_content_catalog_response = client.get(
+            "/content/catalog",
+            headers={
+                "If-None-Match": content_catalog_response.headers["etag"],
+            },
+        )
 
         assert capabilities_response.status_code == 200
         assert capabilities_response.headers["server-timing"].startswith("app;dur=")
@@ -153,6 +162,19 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
         assert spells_response.status_code == 200
         spells = {row["id"] for row in spells_response.json()["spells"]}
         assert {"fire_bolt", "magic_missile", "fireball"} <= spells
+        assert content_manifest_response.status_code == 200
+        assert content_catalog_response.status_code == 200
+        assert cached_content_catalog_response.status_code == 304
+        assert content_manifest_response.json()["content_set_digest"] == (
+            content_catalog_response.json()["content_set_digest"]
+        )
+        assert content_manifest_response.json()["content_set_digest"] == (
+            app.state.content_system.content_set_digest
+        )
+        assert not any(
+            route.path.startswith("/content/v")
+            for route in app.routes
+        )
         assert repository.list_games() == ()
         assert workers.active_game_ids() == ()
         assert BaseObject._registry == registered_objects_before
@@ -228,6 +250,9 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
         connection = created["connection"]
         assert created["creation"]["status"] == "prepared"
         assert created["game"]["lifecycle_state"] == "active"
+        assert created["game"]["content_digest"] == (
+            bootstrap_content_system().content_set_digest
+        )
         assert connection["game_id"] == str(game_id)
         assert connection["access_mode"] == "participant"
         assert len(connection["controlled_entity_uuids"]) == 1

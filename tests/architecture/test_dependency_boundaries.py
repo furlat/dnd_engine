@@ -68,6 +68,12 @@ SAFE_LEAF_MODULES = frozenset({
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "ActionPresentationKind": "dnd.core.action_types",
+    "ContentDefinitionKind": "dnd.core.content.identities",
+    "ContentRef": "dnd.core.content.identities",
+    "BehaviorBinding": "dnd.core.content.runtime",
+    "RuntimeBehaviorKind": "dnd.core.content.runtime",
+    "HandlerDispatchOutcome": "dnd.core.content.runtime",
+    "HandlerDispatchEvidence": "dnd.core.content.runtime",
     "ConditionTag": "dnd.core.condition_types",
     "LifeState": "dnd.core.life_types",
     "WeaponSlot": "dnd.core.equipment_types",
@@ -94,7 +100,16 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "APIVisibilityResponse": "server.world_contracts",
 }
 
+CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
+CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
+    "dnd.core.equipment_types",
+})
+CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
+CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"
+CONTENT_PACK_IMPORT_FUNCTION = "import_content_pack_module"
+
 WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES = frozenset({
+    "dnd.core.equipment_types",
     "dnd.core.life_types",
     "dnd.core.senses",
 })
@@ -686,7 +701,34 @@ def test_production_has_no_function_local_or_dynamic_project_imports() -> None:
         for reference in _import_references()
         if reference.function_local and not reference.dynamic
     ]
-    dynamic_violations = _dynamic_import_violations()
+    boundary = _source_modules().get(CONTENT_PACK_IMPORT_BOUNDARY_MODULE)
+    approved_dynamic_finding = (
+        (
+            boundary.path,
+            next(
+                node.lineno
+                for node in ast.walk(boundary.tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "importlib"
+                and node.func.attr == "import_module"
+            ),
+            "importlib.import_module target is not a string literal and "
+            "cannot be proven external",
+        )
+        if boundary is not None
+        else None
+    )
+    dynamic_violations = [
+        violation
+        for violation in _dynamic_import_violations()
+        if (
+            violation.path,
+            violation.line,
+            violation.detail,
+        ) != approved_dynamic_finding
+    ]
     messages: list[str] = []
     if local_imports:
         messages.append(
@@ -705,6 +747,118 @@ def test_production_has_no_function_local_or_dynamic_project_imports() -> None:
             )
         )
     assert not messages, "\n\n".join(messages)
+
+
+def test_content_pack_import_boundary_is_one_exact_function_and_caller() -> None:
+    """One tiny audited function is the sole dynamic import primitive."""
+    modules = _source_modules()
+    assert CONTENT_PACK_IMPORT_BOUNDARY_MODULE in modules
+    boundary = modules[CONTENT_PACK_IMPORT_BOUNDARY_MODULE]
+    loader = modules[CONTENT_PACK_LOADER_MODULE]
+
+    non_docstring_body = [
+        node
+        for node in boundary.tree.body
+        if not (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        )
+    ]
+    assert len(non_docstring_body) == 4
+    assert (
+        isinstance(non_docstring_body[0], ast.ImportFrom)
+        and non_docstring_body[0].module == "__future__"
+        and [alias.name for alias in non_docstring_body[0].names]
+        == ["annotations"]
+    )
+    assert (
+        isinstance(non_docstring_body[1], ast.Import)
+        and [alias.name for alias in non_docstring_body[1].names]
+        == ["importlib"]
+    )
+    assert (
+        isinstance(non_docstring_body[2], ast.ImportFrom)
+        and non_docstring_body[2].module == "types"
+        and [alias.name for alias in non_docstring_body[2].names]
+        == ["ModuleType"]
+    )
+    function = non_docstring_body[3]
+    assert isinstance(function, ast.FunctionDef)
+    assert function.name == CONTENT_PACK_IMPORT_FUNCTION
+    assert [argument.arg for argument in function.args.args] == ["module_name"]
+    assert function.args.posonlyargs == []
+    assert function.args.kwonlyargs == []
+    assert function.args.vararg is None
+    assert function.args.kwarg is None
+    assert len(function.body) == 1
+    returned = function.body[0]
+    assert isinstance(returned, ast.Return)
+    assert isinstance(returned.value, ast.Call)
+    assert (
+        isinstance(returned.value.func, ast.Attribute)
+        and isinstance(returned.value.func.value, ast.Name)
+        and returned.value.func.value.id == "importlib"
+        and returned.value.func.attr == "import_module"
+    )
+    assert (
+        len(returned.value.args) == 1
+        and isinstance(returned.value.args[0], ast.Name)
+        and returned.value.args[0].id == "module_name"
+        and returned.value.keywords == []
+    )
+
+    boundary_imports = [
+        (source_module.name, node)
+        for source_module in modules.values()
+        for node in source_module.tree.body
+        if isinstance(node, ast.ImportFrom)
+        and node.module == CONTENT_PACK_IMPORT_BOUNDARY_MODULE
+    ]
+    assert len(boundary_imports) == 1
+    importer_name, boundary_import = boundary_imports[0]
+    assert importer_name == CONTENT_PACK_LOADER_MODULE
+    assert [
+        (alias.name, alias.asname)
+        for alias in boundary_import.names
+    ] == [(CONTENT_PACK_IMPORT_FUNCTION, None)]
+
+    callers = [
+        (source_module.name, node)
+        for source_module in modules.values()
+        for node in ast.walk(source_module.tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == CONTENT_PACK_IMPORT_FUNCTION
+    ]
+    assert len(callers) == 1
+    assert callers[0][0] == CONTENT_PACK_LOADER_MODULE
+
+    loader_importlib_imports = [
+        node
+        for node in loader.tree.body
+        if (
+            isinstance(node, ast.Import)
+            and any(alias.name == "importlib" for alias in node.names)
+        )
+        or (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "importlib"
+            and any(alias.name == "import_module" for alias in node.names)
+        )
+    ]
+    assert loader_importlib_imports == []
+
+    references, violations = _dynamic_import_findings(boundary)
+    assert references == []
+    assert len(violations) == 1
+    assert violations[0].line == returned.lineno
+    assert violations[0].detail == (
+        "importlib.import_module target is not a string literal and cannot be "
+        "proven external"
+    )
+
+    assert list(_dynamic_import_violations()) == violations
 
 
 def test_active_python_has_no_function_local_imports() -> None:
@@ -912,6 +1066,99 @@ def test_safe_leaf_modules_have_no_project_dependencies() -> None:
             + _format_import_references(forbidden_imports)
         )
     assert not messages, "\n\n".join(messages)
+
+
+def test_content_contract_package_has_one_exact_import_surface_and_direction() -> None:
+    """Content contracts are a package of neutral leaves, never a broad alias."""
+    old_module_path = REPOSITORY_ROOT / "dnd" / "core" / "content.py"
+    assert not old_module_path.exists(), (
+        "dnd/core/content.py must not coexist with the canonical content package"
+    )
+
+    root_imports = [
+        reference
+        for reference in _import_references()
+        if reference.target == CONTENT_CONTRACT_MODULE_PREFIX
+    ]
+    assert not root_imports, (
+        "Import exact dnd.core.content submodules; the package root is not an API:\n"
+        + _format_import_references(root_imports)
+    )
+
+    forbidden_edges = [
+        reference
+        for reference in _import_references()
+        if (
+            reference.importer == CONTENT_CONTRACT_MODULE_PREFIX
+            or reference.importer.startswith(f"{CONTENT_CONTRACT_MODULE_PREFIX}.")
+        )
+        and _is_project_module_name(reference.target)
+        and not (
+            reference.target == CONTENT_CONTRACT_MODULE_PREFIX
+            or reference.target.startswith(f"{CONTENT_CONTRACT_MODULE_PREFIX}.")
+            or reference.target
+            in CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES
+        )
+    ]
+    assert not forbidden_edges, (
+        "Content contracts may depend only on sibling content-contract leaves "
+        "and explicitly enumerated dependency-neutral primitives:\n"
+        + _format_import_references(forbidden_edges)
+    )
+
+
+def test_retired_content_kind_has_no_definition_or_use() -> None:
+    """Definition and runtime behavior kinds must never collapse into one enum."""
+    findings: list[str] = []
+    for source_module in _source_modules().values():
+        if "ContentKind" in _top_level_symbol_definitions(source_module):
+            findings.append(f"- {source_module.display_path}: defines ContentKind")
+        for node in ast.walk(source_module.tree):
+            if isinstance(node, ast.Name) and node.id == "ContentKind":
+                findings.append(
+                    f"- {source_module.display_path}:{node.lineno}: uses ContentKind"
+                )
+    assert not findings, (
+        "ContentKind is retired; use ContentDefinitionKind or "
+        "RuntimeBehaviorKind explicitly:\n" + "\n".join(sorted(set(findings)))
+    )
+
+
+def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -> None:
+    """Importing identity/runtime leaves cannot trigger concrete engine startup."""
+    marker = "__DND_CONTENT_COLD_IMPORTS__="
+    script = (
+        "import json, sys\n"
+        "import dnd.core.content.identities\n"
+        "import dnd.core.content.runtime\n"
+        "forbidden = ('ai', 'server', 'dnd.entity', 'dnd.items', "
+        "'dnd.monsters', 'dnd.actions', 'dnd.conditions', 'dnd.spells')\n"
+        "loaded = sorted(name for name in sys.modules if any("
+        "name == prefix or name.startswith(prefix + '.') for prefix in forbidden))\n"
+        f"print({marker!r} + json.dumps(loaded))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, (
+        "Fresh content-contract import failed:\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
+    )
+    marker_lines = [
+        line for line in completed.stdout.splitlines() if line.startswith(marker)
+    ]
+    assert len(marker_lines) == 1
+    loaded = json.loads(marker_lines[0][len(marker):])
+    assert loaded == [], (
+        "Cold content contracts loaded gameplay/server layers:\n- "
+        + "\n- ".join(loaded)
+    )
 
 
 def test_world_contracts_are_a_cold_transport_leaf() -> None:

@@ -43,6 +43,9 @@ logger = logging.getLogger("dnd_server")
 from dnd.core.equipment_types import BodyPart, RingSlot, WeaponSlot
 from dnd.core.events import EventQueue, EventType, EventPhase
 from dnd.core.gridmap import get_map
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.pack_loader import ENGINE_CONTENT_API_VERSION
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
@@ -69,10 +72,9 @@ from dnd.controller import (
     ControllerStepResult,
     HumanController,
 )
-from dnd.actions_functional import execute_available_action, get_available_actions
+from dnd.action_dispatch import dispatch_available_action
+from dnd.actions_functional import get_available_actions
 from server.runtime_performance import latency_sensitive_gc
-from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
-from dnd.actions import MovementEvent
 from dnd.core.base_actions import (
     AvailableActionsResult,
     AvailableHandlerInfo,
@@ -115,6 +117,13 @@ from server.ai_policy_composition import (
     DEFAULT_NATIVE_POLICY_ID,
     SERVER_NATIVE_POLICY_REGISTRY,
 )
+from server.content_catalog import (
+    ContentCatalogResponse,
+    ContentManifestResponse,
+    build_content_manifest,
+    build_public_content_catalog,
+    content_response_etag,
+)
 from server.external_ai_protocol import (
     EXTERNAL_AI_PROTOCOL_HASH,
     EXTERNAL_AI_PROTOCOL_VERSION,
@@ -149,7 +158,10 @@ from server.mapeditor_support import (
     save_current_editor_map,
 )
 from server.request_timing import RequestTimingMiddleware
-from server.hosted_worker import HostedWorkerAssignment
+from server.hosted_worker import (
+    HostedWorkerAssignment,
+    HostedWorkerReadiness,
+)
 from server.spell_catalog import build_spell_catalog
 from server.game_creation_catalog import (
     GameCreationCatalogError,
@@ -1107,20 +1119,7 @@ def _serialize_entity_handlers(entity: Entity) -> list[AvailableHandlerInfo]:
     Returns:
         Handler summaries with name, UUID, enabled state, and trigger event.
     """
-    handlers = []
-    for handler in entity.event_handlers.values():
-        if not handler.player_toggleable:
-            continue
-        trigger_event = ""
-        if handler.trigger_conditions:
-            trigger_event = handler.trigger_conditions[0].event_type.value
-        handlers.append(AvailableHandlerInfo(
-            name=handler.name,
-            uuid=handler.uuid,
-            enabled=handler.enabled,
-            trigger_event=trigger_event,
-        ))
-    return handlers
+    return entity.get_player_toggleable_handler_infos()
 
 
 def _handler_http_exception(
@@ -1713,8 +1712,15 @@ def _mapeditor_context() -> dict:
     return {
         "valid_presets": [entry.id for entry in catalog.presets],
         "valid_tiles": [entry.id for entry in catalog.tiles],
-        "valid_objects": [entry.id for entry in catalog.objects],
-        "valid_loot": [entry.id for entry in catalog.loot],
+        "content_set_digest": catalog.content_set_digest,
+        "valid_object_recipes": [
+            entry.recipe.model_dump(mode="json")
+            for entry in catalog.objects
+        ],
+        "valid_loot_recipes": [
+            entry.recipe.model_dump(mode="json")
+            for entry in catalog.loot
+        ],
         "saved_map_ids": [metadata.id for metadata in saved_maps],
         "current_map": current_map,
         "directional_patch_required_fields": ["directional_channel", "direction", "passable"],
@@ -1807,6 +1813,12 @@ async def lifespan(app: FastAPI):
     Yields:
         None while the application is running.
     """
+    loaded_content_system = bootstrap_content_system()
+    installed_content_system = SERVER_CONTENT_SYSTEM_RUNTIME.install(
+        loaded_content_system,
+    )
+    app.state.content_system = installed_content_system
+
     with latency_sensitive_gc():
         event_stream.start()
         canonical_subjective_replication_runtime.ensure_attached()
@@ -1896,6 +1908,34 @@ async def root():
     return {"status": "running"}
 
 
+@app.get(
+    "/hosted/readiness",
+    response_model=HostedWorkerReadiness,
+    include_in_schema=False,
+)
+async def hosted_worker_readiness() -> HostedWorkerReadiness:
+    """Return the frozen content identity used for worker-pool admission."""
+    content_system = SERVER_CONTENT_SYSTEM_RUNTIME.require()
+    expected_content_set_digest = os.environ.get(
+        "DND_EXPECTED_CONTENT_SET_DIGEST",
+    )
+    return HostedWorkerReadiness(
+        status=(
+            "content_mismatch"
+            if expected_content_set_digest is not None
+            and expected_content_set_digest != content_system.content_set_digest
+            else "ready"
+        ),
+        content_api_version=ENGINE_CONTENT_API_VERSION,
+        content_set_digest=content_system.content_set_digest,
+        built_in_artifact_digest=content_system.built_in_artifact_digest,
+        expected_content_set_digest=expected_content_set_digest,
+        external_pack_ids=tuple(
+            sorted(pack.manifest.pack_id for pack in content_system.packs)
+        ),
+    )
+
+
 @app.post("/hosted/configure")
 async def configure_hosted_worker(
     assignment: HostedWorkerAssignment,
@@ -1937,6 +1977,47 @@ async def get_server_capabilities() -> ServerCapabilitiesResponse:
         persistent_game_history=False,
         isolated_game_workers=False,
     )
+
+
+@app.get("/content/manifest", response_model=ContentManifestResponse)
+async def get_content_manifest(
+    request: Request,
+    response: Response,
+) -> ContentManifestResponse | Response:
+    """Return the exact installed content-set and source identity."""
+    manifest = build_content_manifest(
+        SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+    )
+    etag = content_response_etag(manifest.content_set_digest)
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "public, max-age=0, must-revalidate",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
+    return manifest
+
+
+@app.get("/content/catalog", response_model=ContentCatalogResponse)
+async def get_content_catalog(
+    request: Request,
+    response: Response,
+) -> ContentCatalogResponse | Response:
+    """Return public code-free descriptors for the installed content set."""
+    catalog = build_public_content_catalog(
+        SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+    )
+    etag = content_response_etag(catalog.catalog_digest)
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "public, max-age=0, must-revalidate",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
+    return catalog
+
 
 @app.get("/mapeditor/catalog", response_model=MapEditorCatalog)
 async def get_mapeditor_catalog():
@@ -2140,17 +2221,17 @@ async def patch_mapeditor_tiles(request: MapEditorTilePatchRequest):
 
 @app.post("/mapeditor/map/objects", response_model=APIFloorObject)
 async def place_mapeditor_object(request: MapEditorObjectPlaceRequest):
-    """Place a catalog object or loot item on the editor map.
+    """Place an exact public item or environment recipe on the editor map.
 
     Args:
-        request: Object placement request with catalog ID, position, and
-            options.
+        request: Exact content recipe, expected content set, position, and
+            mutable post-materialization state.
 
     Returns:
         Serialized floor object that was placed.
 
     Raises:
-        HTTPException: If the catalog ID, position, or options are invalid.
+        HTTPException: If content identity, policy, state, or position is invalid.
     """
     try:
         return place_catalog_object(request)
@@ -2159,9 +2240,12 @@ async def place_mapeditor_object(request: MapEditorObjectPlaceRequest):
             status_code=400,
             code="mapeditor_object_place_failed",
             message=str(exc),
-            requested_catalog_id=request.catalog_id,
+            requested_recipe=request.recipe.model_dump(mode="json"),
+            requested_content_set_digest=request.content_set_digest,
             requested_position=list(request.position),
-            requested_options=request.options,
+            requested_runtime_state=request.runtime_state.model_dump(
+                mode="json",
+            ),
         )
 
 
@@ -5375,22 +5459,22 @@ async def _execute_action_by_index_impl(
 
     try:
         started = time.perf_counter()
-        timing_token = None
-        if timing is not None:
-            timing_token = set_action_timing_recorder(
-                lambda phase, phase_started: timing.add(f"execute_by_index.{phase}", phase_started)
+        dispatch = dispatch_available_action(
+            entity,
+            action_info=action_info,
+            target=selected_target,
+            extra_target_uuids=tuple(request.extra_target_uuids or ()),
+            prefer_safe=request.prefer_safe,
+            record_timing=(
+                lambda phase, phase_started: timing.add(
+                    f"execute_by_index.{phase}",
+                    phase_started,
+                )
             )
-        try:
-            event = execute_available_action(
-                entity,
-                action_info,
-                selected_target,
-                extra_target_uuids=request.extra_target_uuids,
-                prefer_safe=request.prefer_safe,
-            )
-        finally:
-            if timing_token is not None:
-                reset_action_timing_recorder(timing_token)
+            if timing is not None
+            else None,
+        )
+        event = dispatch.event
         if timing is not None:
             timing.add("execute_by_index_ms", started)
     except ValueError as e:
@@ -5433,12 +5517,6 @@ async def _execute_action_by_index_impl(
         if timing is not None:
             timing.add("serialize_available_actions_ms", started)
 
-    movement_termination_reason = None
-    movement_revalidation_reason = None
-    if isinstance(event, MovementEvent):
-        movement_termination_reason = event.termination_reason.value
-        movement_revalidation_reason = event.controller_revalidation_reason
-
     started = time.perf_counter()
     cursor_fields = action_cursor_fields()
     if timing is not None:
@@ -5470,8 +5548,8 @@ async def _execute_action_by_index_impl(
         action_result.server_timing = APIServerTiming.model_validate(timing.payload())
     return _ActionExecutionResult(
         response=action_result,
-        movement_termination_reason=movement_termination_reason,
-        movement_revalidation_reason=movement_revalidation_reason,
+        movement_termination_reason=dispatch.movement_termination_reason,
+        movement_revalidation_reason=dispatch.movement_revalidation_reason,
     )
 
 

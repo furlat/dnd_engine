@@ -397,8 +397,8 @@ class Rage(BaseAction):
             source_entity_name=source_name
         )
 
-    def pre_validate(self) -> bool:
-        """Check if rage can be activated (for action availability filtering)."""
+    def validate_requirements_for_discovery(self) -> bool:
+        """Check non-cost prerequisites for exposing Rage as executable."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return False
@@ -406,20 +406,10 @@ class Rage(BaseAction):
         if "Frenzy Feature" in entity.active_conditions:
             return False
 
-        body_armor = entity.equipment.body_armor
-        if body_armor and body_armor.type == ArmorType.HEAVY:
+        if "Frenzied" in entity.active_conditions:
             return False
 
-        if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
-            return False
-
-        if not entity.action_economy.can_afford_resource("rage", 1):
-            return False
-
-        if not entity.action_economy.can_afford("bonus_actions", 1):
-            return False
-
-        return True
+        return super().validate_requirements_for_discovery()
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate Rage can be used."""
@@ -511,20 +501,6 @@ class EndRage(BaseAction):
             use_register=use_register,
             source_entity_name=source_name
         )
-
-    def pre_validate(self) -> bool:
-        """Check if End Rage can be used."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        if "Raging" not in entity.active_conditions and "Frenzied" not in entity.active_conditions:
-            return False
-
-        if not entity.action_economy.can_afford("bonus_actions", 1):
-            return False
-
-        return True
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate End Rage can be used."""
@@ -767,8 +743,8 @@ class FrenziedStrike(BaseAction):
             append_weapon_to_name=True,
         )
 
-    def pre_validate(self) -> bool:
-        """Check whether Frenzied Strike can currently execute against its target."""
+    def validate_requirements_for_discovery(self) -> bool:
+        """Check non-cost Frenzied Strike requirements for discovery."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return False
@@ -777,7 +753,7 @@ class FrenziedStrike(BaseAction):
         if weapon is None:
             return False
 
-        return super().pre_validate()
+        return super().validate_requirements_for_discovery()
 
     def _validate(self, declaration_event: Event) -> Optional[Event]:
         """Validate the frenzied strike."""
@@ -875,27 +851,6 @@ class Frenzy(BaseAction):
             use_register=use_register,
             source_entity_name=source_name
         )
-
-    def pre_validate(self) -> bool:
-        """Check if frenzy can be activated."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        body_armor = entity.equipment.body_armor
-        if body_armor and body_armor.type == ArmorType.HEAVY:
-            return False
-
-        if "Raging" in entity.active_conditions or "Frenzied" in entity.active_conditions:
-            return False
-
-        if not entity.action_economy.can_afford_resource("rage", 1):
-            return False
-
-        if not entity.action_economy.can_afford("bonus_actions", 1):
-            return False
-
-        return True
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)

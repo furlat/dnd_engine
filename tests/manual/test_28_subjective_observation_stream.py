@@ -67,7 +67,9 @@ from server.event_server import app, sim
 from server.event_stream import event_stream
 from server.session import PlayerType
 from dnd.blocks.sensory import SpatialSensesCallback
-from dnd.items.test_items import create_healing_potion
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.items.consumables import HEALING_POTION_RECIPE
 
 
 def reset_observation_state(width: int = 16, height: int = 10) -> None:
@@ -1438,7 +1440,11 @@ def test_visible_lever_charge_and_linked_tile_removals_replay_from_events() -> N
 def test_visible_enemy_item_use_does_not_invent_inventory_item_position() -> None:
     """Perceived item use must not turn an inventory item into a floor object."""
     client, session_id, hero, monster, _encounter = create_observation_game()
-    potion = create_healing_potion(monster.uuid)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        monster.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert monster.inventory.add_item(potion)
     assert hero.senses.visible.get((0, 0)) is True
 

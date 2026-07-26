@@ -412,10 +412,473 @@ SUBJECTIVE_REPLAY_ARTIFACT = Migration(
     ),
 )
 
+CHARACTER_REVISIONS_AND_DEPLOYMENT_LEASES = Migration(
+    version=4,
+    name="character_revisions_and_deployment_leases",
+    statements=(
+        """
+        ALTER TABLE characters
+        ADD COLUMN revision_state TEXT NOT NULL DEFAULT 'legacy_pending'
+        CHECK (revision_state IN ('legacy_pending', 'canonical'))
+        """,
+        """
+        ALTER TABLE characters
+        ADD COLUMN current_definition_revision INTEGER
+        CHECK (
+            current_definition_revision IS NULL
+            OR current_definition_revision >= 1
+        )
+        """,
+        "ALTER TABLE characters ADD COLUMN current_definition_digest TEXT",
+        """
+        ALTER TABLE characters
+        ADD COLUMN current_holdings_revision INTEGER
+        CHECK (
+            current_holdings_revision IS NULL
+            OR current_holdings_revision >= 1
+        )
+        """,
+        "ALTER TABLE characters ADD COLUMN current_holdings_digest TEXT",
+        """
+        CREATE TABLE character_definitions (
+            character_id TEXT NOT NULL
+                REFERENCES characters(character_id),
+            definition_revision INTEGER NOT NULL
+                CHECK (definition_revision >= 1),
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            definition_json TEXT NOT NULL,
+            definition_digest TEXT NOT NULL
+                CHECK (length(definition_digest) = 64),
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (character_id, definition_revision),
+            UNIQUE (character_id, definition_digest)
+        )
+        """,
+        """
+        CREATE TABLE character_holdings_revisions (
+            character_id TEXT NOT NULL
+                REFERENCES characters(character_id),
+            holdings_revision INTEGER NOT NULL
+                CHECK (holdings_revision >= 1),
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            holdings_json TEXT NOT NULL,
+            holdings_digest TEXT NOT NULL
+                CHECK (length(holdings_digest) = 64),
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (character_id, holdings_revision),
+            UNIQUE (character_id, holdings_digest)
+        )
+        """,
+        """
+        CREATE TRIGGER character_definitions_immutable_update
+        BEFORE UPDATE ON character_definitions
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character definition revisions are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_definitions_immutable_delete
+        BEFORE DELETE ON character_definitions
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character definition revisions are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_holdings_revisions_immutable_update
+        BEFORE UPDATE ON character_holdings_revisions
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character holdings revisions are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_holdings_revisions_immutable_delete
+        BEFORE DELETE ON character_holdings_revisions
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character holdings revisions are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER characters_revision_heads_insert_guard
+        BEFORE INSERT ON characters
+        BEGIN
+            SELECT CASE
+                WHEN NEW.revision_state = 'legacy_pending'
+                     AND (
+                         NEW.current_definition_revision IS NOT NULL
+                         OR NEW.current_definition_digest IS NOT NULL
+                         OR NEW.current_holdings_revision IS NOT NULL
+                         OR NEW.current_holdings_digest IS NOT NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'legacy-pending characters cannot have revision heads'
+                )
+                WHEN NEW.revision_state = 'canonical'
+                     AND (
+                         NEW.current_definition_revision IS NULL
+                         OR NEW.current_definition_digest IS NULL
+                         OR NEW.current_holdings_revision IS NULL
+                         OR NEW.current_holdings_digest IS NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical characters require complete revision heads'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.revision_state = 'canonical'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM character_definitions AS definition
+                         WHERE definition.character_id = NEW.character_id
+                           AND definition.definition_revision =
+                               NEW.current_definition_revision
+                           AND definition.definition_digest =
+                               NEW.current_definition_digest
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical character definition head does not exist'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.revision_state = 'canonical'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM character_holdings_revisions AS holdings
+                         WHERE holdings.character_id = NEW.character_id
+                           AND holdings.holdings_revision =
+                               NEW.current_holdings_revision
+                           AND holdings.holdings_digest =
+                               NEW.current_holdings_digest
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical character holdings head does not exist'
+                )
+            END;
+        END
+        """,
+        """
+        CREATE TRIGGER characters_revision_heads_update_guard
+        BEFORE UPDATE OF
+            revision_state,
+            current_definition_revision,
+            current_definition_digest,
+            current_holdings_revision,
+            current_holdings_digest
+        ON characters
+        BEGIN
+            SELECT CASE
+                WHEN NEW.revision_state = 'legacy_pending'
+                     AND (
+                         NEW.current_definition_revision IS NOT NULL
+                         OR NEW.current_definition_digest IS NOT NULL
+                         OR NEW.current_holdings_revision IS NOT NULL
+                         OR NEW.current_holdings_digest IS NOT NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'legacy-pending characters cannot have revision heads'
+                )
+                WHEN NEW.revision_state = 'canonical'
+                     AND (
+                         NEW.current_definition_revision IS NULL
+                         OR NEW.current_definition_digest IS NULL
+                         OR NEW.current_holdings_revision IS NULL
+                         OR NEW.current_holdings_digest IS NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical characters require complete revision heads'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.revision_state = 'canonical'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM character_definitions AS definition
+                         WHERE definition.character_id = NEW.character_id
+                           AND definition.definition_revision =
+                               NEW.current_definition_revision
+                           AND definition.definition_digest =
+                               NEW.current_definition_digest
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical character definition head does not exist'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.revision_state = 'canonical'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM character_holdings_revisions AS holdings
+                         WHERE holdings.character_id = NEW.character_id
+                           AND holdings.holdings_revision =
+                               NEW.current_holdings_revision
+                           AND holdings.holdings_digest =
+                               NEW.current_holdings_digest
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical character holdings head does not exist'
+                )
+            END;
+            SELECT CASE
+                WHEN OLD.revision_state = 'canonical'
+                     AND NEW.revision_state != 'canonical'
+                THEN RAISE(
+                    ABORT,
+                    'canonical characters cannot become legacy pending'
+                )
+            END;
+            SELECT CASE
+                WHEN OLD.revision_state = 'canonical'
+                     AND (
+                         NEW.current_definition_revision <
+                             OLD.current_definition_revision
+                         OR NEW.current_holdings_revision <
+                             OLD.current_holdings_revision
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'canonical character revision heads cannot move backward'
+                )
+            END;
+        END
+        """,
+        """
+        CREATE TABLE character_deployment_leases (
+            lease_id TEXT PRIMARY KEY,
+            character_id TEXT NOT NULL
+                REFERENCES characters(character_id),
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            membership_id TEXT NOT NULL
+                REFERENCES game_memberships(membership_id) ON DELETE CASCADE,
+            acquired_at TEXT NOT NULL,
+            released_at TEXT,
+            release_reason TEXT,
+            CHECK (
+                (released_at IS NULL AND release_reason IS NULL)
+                OR (
+                    released_at IS NOT NULL
+                    AND release_reason IS NOT NULL
+                    AND length(release_reason) > 0
+                )
+            )
+        )
+        """,
+        """
+        CREATE TRIGGER character_deployment_leases_authority_guard
+        BEFORE INSERT ON character_deployment_leases
+        WHEN NOT EXISTS (
+            SELECT 1
+            FROM characters AS character
+            JOIN game_memberships AS membership
+              ON membership.membership_id = NEW.membership_id
+            WHERE character.character_id = NEW.character_id
+              AND character.owner_principal_id = membership.principal_id
+              AND character.status = 'active'
+              AND character.revision_state = 'canonical'
+              AND membership.game_id = NEW.game_id
+              AND membership.membership_state = 'active'
+              AND membership.may_control_entities = 1
+        )
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character lease requires active owner control authority'
+            );
+        END
+        """,
+        """
+        CREATE UNIQUE INDEX active_character_deployment_lease_idx
+        ON character_deployment_leases(character_id)
+        WHERE released_at IS NULL
+        """,
+        """
+        CREATE INDEX character_deployment_leases_game_idx
+        ON character_deployment_leases(game_id, released_at)
+        """,
+        """
+        CREATE TRIGGER character_deployment_leases_immutable_identity
+        BEFORE UPDATE OF
+            lease_id,
+            character_id,
+            game_id,
+            membership_id,
+            acquired_at
+        ON character_deployment_leases
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character deployment lease identity is immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_deployment_leases_single_release
+        BEFORE UPDATE OF released_at, release_reason
+        ON character_deployment_leases
+        WHEN OLD.released_at IS NOT NULL
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'released character deployment leases are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_deployment_leases_immutable_delete
+        BEFORE DELETE ON character_deployment_leases
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character deployment lease history is immutable'
+            );
+        END
+        """,
+        "ALTER TABLE character_deployments ADD COLUMN lease_id TEXT",
+        """
+        ALTER TABLE character_deployments
+        ADD COLUMN pin_state TEXT NOT NULL DEFAULT 'legacy_pending'
+        CHECK (pin_state IN ('legacy_pending', 'pinned'))
+        """,
+        """
+        ALTER TABLE character_deployments
+        ADD COLUMN definition_revision INTEGER
+        CHECK (definition_revision IS NULL OR definition_revision >= 1)
+        """,
+        "ALTER TABLE character_deployments ADD COLUMN definition_digest TEXT",
+        """
+        ALTER TABLE character_deployments
+        ADD COLUMN holdings_revision INTEGER
+        CHECK (holdings_revision IS NULL OR holdings_revision >= 1)
+        """,
+        "ALTER TABLE character_deployments ADD COLUMN holdings_digest TEXT",
+        """
+        CREATE TRIGGER character_deployment_pins_insert_guard
+        BEFORE INSERT ON character_deployments
+        BEGIN
+            SELECT CASE
+                WHEN NEW.pin_state = 'legacy_pending'
+                     AND (
+                         NEW.lease_id IS NOT NULL
+                         OR NEW.definition_revision IS NOT NULL
+                         OR NEW.definition_digest IS NOT NULL
+                         OR NEW.holdings_revision IS NOT NULL
+                         OR NEW.holdings_digest IS NOT NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'legacy-pending deployments cannot have revision pins'
+                )
+                WHEN NEW.pin_state = 'pinned'
+                     AND (
+                         NEW.lease_id IS NULL
+                         OR NEW.definition_revision IS NULL
+                         OR NEW.definition_digest IS NULL
+                         OR NEW.holdings_revision IS NULL
+                         OR NEW.holdings_digest IS NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'pinned deployments require complete revision pins'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.pin_state = 'pinned'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM character_deployment_leases AS lease
+                         WHERE lease.lease_id = NEW.lease_id
+                           AND lease.character_id = NEW.character_id
+                           AND lease.game_id = NEW.game_id
+                           AND lease.membership_id = NEW.membership_id
+                           AND lease.released_at IS NULL
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'pinned deployment requires its active character lease'
+                )
+            END;
+            SELECT CASE
+                WHEN NEW.pin_state = 'pinned'
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM characters AS character
+                         WHERE character.character_id = NEW.character_id
+                           AND character.revision_state = 'canonical'
+                           AND character.current_definition_revision =
+                               NEW.definition_revision
+                           AND character.current_definition_digest =
+                               NEW.definition_digest
+                           AND character.current_holdings_revision =
+                               NEW.holdings_revision
+                           AND character.current_holdings_digest =
+                               NEW.holdings_digest
+                     )
+                THEN RAISE(
+                    ABORT,
+                    'deployment pins do not match current character heads'
+                )
+            END;
+        END
+        """,
+        """
+        CREATE TRIGGER character_deployments_immutable_update
+        BEFORE UPDATE OF
+            deployment_id,
+            game_id,
+            membership_id,
+            character_id,
+            entity_uuid,
+            deployed_at,
+            lease_id,
+            pin_state,
+            definition_revision,
+            definition_digest,
+            holdings_revision,
+            holdings_digest
+        ON character_deployments
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character deployment identity and revision lineage are immutable'
+            );
+        END
+        """,
+        """
+        CREATE TRIGGER character_deployments_immutable_delete
+        BEFORE DELETE ON character_deployments
+        BEGIN
+            SELECT RAISE(
+                ABORT,
+                'character deployment history is immutable'
+            );
+        END
+        """,
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     INITIAL_SCHEMA,
     PLAYER_IDENTITIES_AND_CHARACTERS,
     SUBJECTIVE_REPLAY_ARTIFACT,
+    CHARACTER_REVISIONS_AND_DEPLOYMENT_LEASES,
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

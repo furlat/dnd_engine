@@ -13,6 +13,7 @@ from dnd.core.events import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
 from dnd.core.modifiers import CreatureType, DamageType
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.values import ModifiableValue
 
 from dnd.entity import Entity
@@ -116,15 +117,24 @@ def create_divine_smite_processor(slot_level: int):
     return divine_smite_processor
 
 
-def create_divine_smite_handler(source_entity_uuid: UUID, slot_level: int) -> EventHandler:
+class DivineSmiteHandler(EventHandler):
+    """One authored reaction whose selected spell-slot level remains runtime data."""
+
+
+def create_divine_smite_handler(
+    source_entity_uuid: UUID,
+    slot_level: int,
+) -> DivineSmiteHandler:
     """Create a Divine Smite handler for a specific spell slot level.
 
     Args:
         source_entity_uuid: The entity UUID (paladin).
         slot_level: The spell slot level this handler covers (1-5).
     """
-    return EventHandler(
+    return DivineSmiteHandler(
         name=f"Divine Smite (L{slot_level})",
+        semantic_key="reaction.class_feature.paladin.divine_smite",
+        content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(

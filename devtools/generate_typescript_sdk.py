@@ -29,7 +29,12 @@ from devtools.generate_event_contract import (
 )
 from dnd.core.events import Event
 from dnd.core import combat_log
-from server import api_models, game_gateway_models, game_summary_store
+from server import (
+    api_models,
+    content_catalog,
+    game_gateway_models,
+    game_summary_store,
+)
 from server.game_directory import contracts as game_directory_contracts
 from server.event_stream import EvictedPayload
 from server.directory_event_stream import DirectoryStreamHeartbeat, DirectoryStreamSync
@@ -204,6 +209,7 @@ def build_sdk_manifest() -> Dict[str, Any]:
     builder = SdkContractBuilder()
     roots = [
         *api_model_roots(),
+        *declared_model_roots(content_catalog),
         *declared_model_roots(game_gateway_models),
         *declared_model_roots(game_summary_store),
         *declared_model_roots(game_directory_contracts),

@@ -13,27 +13,27 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import (
-    EquipmentConfig, BodyArmor,
+    EquipmentConfig, BodyArmor, Helmet, Shield, Weapon,
 )
-from dnd.core.equipment_types import ArmorType, BodyPart, WeaponSlot
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.materialization import CreaturePossessionMode
+from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.modifiers import DamageType, CreatureType, Size
 from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
-from dnd.core.values import ModifiableValue
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.actions import Hide, Disengage
 
-from dnd.items import (
-    create_scimitar,
-    create_shortsword,
-    create_shortbow,
-    create_dagger,
-    create_longsword,
-    create_leather_armor,
-    create_wooden_shield,
-    create_crown,
+from dnd.items.armors import (
+    CROWN_RECIPE,
+    LEATHER_ARMOR_RECIPE,
+    WOODEN_SHIELD_RECIPE,
 )
 
 from dnd.blocks.spellcasting import SpellcastingConfig
@@ -43,15 +43,26 @@ from dnd.spells.evocation import (
 from dnd.actions_functional import register_spell
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.spells.evocation import EldritchBlast
-from dnd.items.test_items import (
-    create_potion_of_greater_invisibility,
-    create_potion_of_haste,
-    create_acid_flask, create_scroll_of_invisibility,
+from dnd.items.consumables import (
+    GREATER_INVISIBILITY_POTION_RECIPE,
+    HASTE_POTION_RECIPE,
 )
-from dnd.items.weapons import create_arcane_staff
+from dnd.items.spell_items import (
+    ACID_FLASK_RECIPE,
+    INVISIBILITY_SCROLL_RECIPE,
+)
+from dnd.items.weapons import (
+    ARCANE_STAFF_RECIPE,
+    DAGGER_RECIPE,
+    LONGSWORD_RECIPE,
+    SCIMITAR_RECIPE,
+    SHORTBOW_RECIPE,
+    SHORTSWORD_RECIPE,
+)
 from dnd.spells.abjuration import register_shield_reaction
 from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
+from dnd.monsters.bestiary_items import ARMOR_SCRAPS_RECIPE
 
 GOBLIN_NIMBLE_HIDE_ACTION = "Nimble Escape: Hide"
 GOBLIN_NIMBLE_DISENGAGE_ACTION = "Nimble Escape: Disengage"
@@ -111,40 +122,17 @@ def register_goblin_nimble_escape(entity: Entity) -> None:
     )
 
 
-def create_armor_scraps(source_id: UUID) -> BodyArmor:
-    """Create skeleton armor scraps with AC 13.
-
-    Args:
-        source_id: Entity UUID used as the item source.
-
-    Returns:
-        Armor scraps body armor.
-    """
-    return BodyArmor(
-        source_entity_uuid=source_id,
-        name="Armor Scraps",
-        description="Rusted pieces of armor barely held together on bone.",
-        type=ArmorType.LIGHT,
-        body_part=BodyPart.BODY,
-        ac=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=13,
-            value_name="Armor Class"
-        ),
-        max_dex_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Max Dex Bonus"
-        )
-    )
-
-
 def create_goblin(
     source_id: Optional[UUID] = None,
     name: str = "Goblin",
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
-    weight: int = 40
+    weight: int = 40,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Creates a Goblin (CR 1/4).
@@ -214,7 +202,8 @@ def create_goblin(
         name=name,
         source_entity_uuid=source_id,
         description="A small, green-skinned creature with pointed ears and sharp teeth.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -223,10 +212,36 @@ def create_goblin(
     )
     register_goblin_nimble_escape(entity)
 
-    scimitar = create_scimitar(entity.uuid)
-    shortbow = create_shortbow(entity.uuid)
-    leather_armor = create_leather_armor(entity.uuid)
-    shield = create_wooden_shield(entity.uuid)
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    scimitar = materialize_item_from_installed_runtime(
+        SCIMITAR_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shortbow = materialize_item_from_installed_runtime(
+        SHORTBOW_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    leather_armor = materialize_item_from_installed_runtime(
+        LEATHER_ARMOR_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+    shield = materialize_item_from_installed_runtime(
+        WOODEN_SHIELD_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
 
     entity.equipment.equip(leather_armor)
     entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
@@ -242,7 +257,12 @@ def create_skeleton(
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     weight: int = 120,
-    darkvision: bool = True
+    darkvision: bool = True,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """Create a Skeleton (CR 1/4).
 
@@ -311,7 +331,8 @@ def create_skeleton(
         name=name,
         source_entity_uuid=source_id,
         description="An animated skeleton wielding a rusty shortsword.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -321,12 +342,33 @@ def create_skeleton(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    shortsword = create_shortsword(entity.uuid)
-    shortbow = create_shortbow(entity.uuid)
-    armor_scraps = create_armor_scraps(entity.uuid)
-
     entity.add_condition_immunity("Poisoned", immunity_name="Skeleton")
     entity.add_condition_immunity("Exhaustion", immunity_name="Skeleton")
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    shortsword = materialize_item_from_installed_runtime(
+        SHORTSWORD_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shortbow = materialize_item_from_installed_runtime(
+        SHORTBOW_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    armor_scraps = materialize_item_from_installed_runtime(
+        ARMOR_SCRAPS_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+
     entity.equipment.equip(armor_scraps)
     entity.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
@@ -339,7 +381,12 @@ def create_goblin_archer(
     name: str = "Goblin Archer",
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
-    weight: int = 40
+    weight: int = 40,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Creates a Goblin Archer (CR 1/4) - Dual Wielder variant.
@@ -411,15 +458,42 @@ def create_goblin_archer(
         name=name,
         source_entity_uuid=source_id,
         description="A small goblin wielding a shortbow, preferring to attack from range.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
 
-    shortbow = create_shortbow(entity.uuid)
-    scimitar = create_scimitar(entity.uuid)
-    dagger = create_dagger(entity.uuid)
-    leather_armor = create_leather_armor(entity.uuid)
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    shortbow = materialize_item_from_installed_runtime(
+        SHORTBOW_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    scimitar = materialize_item_from_installed_runtime(
+        SCIMITAR_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    dagger = materialize_item_from_installed_runtime(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    leather_armor = materialize_item_from_installed_runtime(
+        LEATHER_ARMOR_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
 
     entity.equipment.equip(leather_armor)
     entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
@@ -434,7 +508,12 @@ def create_caster(
     name: str = "Caster",
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
-    level: int = 5
+    level: int = 5,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Create a generic spellcaster with AoE spells (Fireball, Magic Missile, etc.).
@@ -499,7 +578,8 @@ def create_caster(
         name=name,
         source_entity_uuid=source_id,
         description="A spellcaster with innate magical abilities.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -516,13 +596,32 @@ def create_caster(
 
     register_shield_reaction(entity)
 
-    dagger = create_dagger(entity.uuid)
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    dagger = materialize_item_from_installed_runtime(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
 
-    potion = create_potion_of_greater_invisibility(entity.uuid)
+    potion = materialize_item_from_installed_runtime(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(potion)
 
-    haste_potion = create_potion_of_haste(entity.uuid)
+    haste_potion = materialize_item_from_installed_runtime(
+        HASTE_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(haste_potion)
 
     return entity
@@ -534,7 +633,12 @@ def create_skeleton_warrior(
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     weight: int = 120,
-    darkvision: bool = False
+    darkvision: bool = False,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Creates a Skeleton Warrior — frontline tank with shield and acid flask.
@@ -592,7 +696,8 @@ def create_skeleton_warrior(
         name=name,
         source_entity_uuid=source_id,
         description="A heavily armored skeleton wielding a longsword and shield.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -602,15 +707,40 @@ def create_skeleton_warrior(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    longsword = create_longsword(entity.uuid)
-    shield = create_wooden_shield(entity.uuid)
-    armor_scraps = create_armor_scraps(entity.uuid)
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    longsword = materialize_item_from_installed_runtime(
+        LONGSWORD_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shield = materialize_item_from_installed_runtime(
+        WOODEN_SHIELD_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
+    armor_scraps = materialize_item_from_installed_runtime(
+        ARMOR_SCRAPS_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
 
     entity.equipment.equip(armor_scraps)
     entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
-    acid_flask = create_acid_flask(entity.uuid)
+    acid_flask = materialize_item_from_installed_runtime(
+        ACID_FLASK_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(acid_flask)
 
     return entity
@@ -622,7 +752,12 @@ def create_skeleton_archer(
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     weight: int = 120,
-    darkvision: bool = False
+    darkvision: bool = False,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Creates a Skeleton Archer — ranged DPS with Mark Target support.
@@ -679,7 +814,8 @@ def create_skeleton_archer(
         name=name,
         source_entity_uuid=source_id,
         description="A skeleton archer that can mark targets for its allies.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -689,21 +825,47 @@ def create_skeleton_archer(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    shortbow = create_shortbow(entity.uuid)
-    dagger1 = create_dagger(entity.uuid)
-    dagger2 = create_dagger(entity.uuid)
-    armor_scraps = create_armor_scraps(entity.uuid)
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
-    entity.equipment.equip(dagger1, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(dagger2, WeaponSlot.MELEE_OFF)
-
     mark_action = MarkTargetAction(
         source_entity_uuid=entity.uuid,
         template=True
     )
     entity.register_action(mark_action)
+
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    shortbow = materialize_item_from_installed_runtime(
+        SHORTBOW_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    dagger1 = materialize_item_from_installed_runtime(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    dagger2 = materialize_item_from_installed_runtime(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    armor_scraps = materialize_item_from_installed_runtime(
+        ARMOR_SCRAPS_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+
+    entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
+    entity.equipment.equip(dagger1, WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(dagger2, WeaponSlot.MELEE_OFF)
 
     return entity
 
@@ -714,7 +876,12 @@ def create_skeleton_warlock(
     position: Tuple[int, int] = (0, 0),
     faction: Optional[str] = None,
     weight: int = 120,
-    darkvision: bool = False
+    darkvision: bool = False,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
 ) -> Entity:
     """
     Creates a Skeleton Warlock — glass cannon caster with Eldritch Blast.
@@ -777,7 +944,8 @@ def create_skeleton_warlock(
         name=name,
         source_entity_uuid=source_id,
         description="A skeleton crackling with dark arcane energy.",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
@@ -787,14 +955,6 @@ def create_skeleton_warlock(
             SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
         )
 
-    staff = create_arcane_staff(entity.uuid)
-    armor_scraps = create_armor_scraps(entity.uuid)
-    crown = create_crown(entity.uuid)
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(crown)
-    entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
-
     register_spell(entity, EldritchBlast, caster_level=1)
     register_spell(entity, BurningHands, caster_level=1)
     register_spell(entity, Thunderwave, caster_level=1)
@@ -802,7 +962,40 @@ def create_skeleton_warlock(
 
     register_shield_reaction(entity)
 
-    scroll = create_scroll_of_invisibility(entity.uuid)
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    staff = materialize_item_from_installed_runtime(
+        ARCANE_STAFF_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    armor_scraps = materialize_item_from_installed_runtime(
+        ARMOR_SCRAPS_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+    crown = materialize_item_from_installed_runtime(
+        CROWN_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Helmet,
+    )
+
+    entity.equipment.equip(armor_scraps)
+    entity.equipment.equip(crown)
+    entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
+
+    scroll = materialize_item_from_installed_runtime(
+        INVISIBILITY_SCROLL_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(scroll)
 
     return entity

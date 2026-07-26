@@ -12,14 +12,88 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, model_validator
 
+from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from dnd.core.senses import SenseMode
+
+
+class APIContentRefSnapshot(BaseModel):
+    """Wire-owned exact identity for one authored content definition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pack_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    definition_kind: Literal[
+        "item",
+        "creature",
+        "action",
+        "spell",
+        "condition",
+        "trait",
+        "reaction",
+        "feat",
+        "class_feature",
+        "environment_object",
+        "rule_primitive",
+    ]
+    content_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    content_version: int = Field(ge=1)
+    definition_contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class APIRecipePresetRefSnapshot(BaseModel):
+    """Wire-owned exact identity for one named content recipe preset."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pack_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    preset_id: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
+    )
+    preset_version: int = Field(ge=1)
+    preset_contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class APIItemRuntimeRecipeRefSnapshot(BaseModel):
+    """Exact recipe identity without recipe parameters or mechanical state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preset_ref: APIRecipePresetRefSnapshot | None = None
+
+
+class SafeContentPresentationRef(BaseModel):
+    """Mechanics-free hash identity for a safe content-catalog row."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    presentation_contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class APIItemSummary(BaseModel):
     """Lightweight item metadata for inventory and equipment views."""
 
     uuid: str = Field(description="Stable item UUID serialized as text.")
+    content_ref: APIContentRefSnapshot = Field(
+        description="Exact authenticated authored item definition.",
+    )
+    recipe_ref: APIItemRuntimeRecipeRefSnapshot = Field(
+        description=(
+            "Exact runtime recipe digest and optional named catalog preset."
+        ),
+    )
+    safe_presentation_ref: SafeContentPresentationRef = Field(
+        description=(
+            "Mechanics-free presentation identity in the content catalog."
+        ),
+    )
     name: str = Field(description="Display name of the item.")
     description: Optional[str] = Field(
         default=None,
@@ -79,6 +153,17 @@ class APIItemSummary(BaseModel):
         description="Whether use consumes the item or stack.",
     )
 
+    @model_validator(mode="after")
+    def validate_item_content_ref(self) -> "APIItemSummary":
+        if self.content_ref.definition_kind not in {
+            "item",
+            "environment_object",
+        }:
+            raise ValueError(
+                "item summary content_ref must identify item-owned content",
+            )
+        return self
+
 
 class APIEquipmentSlot(BaseModel):
     """One equipment slot and its current item."""
@@ -92,9 +177,15 @@ class APIEquipmentSlot(BaseModel):
 
 
 class APIEquipmentOverview(BaseModel):
-    """Equipped slots, armor class, and carried inventory."""
+    """Equipped slots, selected weapon stance, armor class, and inventory."""
 
     slots: List[APIEquipmentSlot] = Field(description="Equipment slots in stable display order.")
+    active_weapon_set: WeaponSet = Field(
+        description=(
+            "Authoritative selected melee/ranged stance; occupied slots do "
+            "not imply which weapon set is active."
+        ),
+    )
     ac: int = Field(description="Current armor class after equipment and modifiers.")
     inventory: List[APIItemSummary] = Field(description="Unequipped inventory item summaries.")
 
@@ -159,9 +250,18 @@ class APIAppearance(BaseModel):
 class APIConditionSummary(BaseModel):
     """Authoritative public presentation for one live condition."""
 
+    content_ref: APIContentRefSnapshot = Field(
+        description=(
+            "Exact authored behavior identity used for catalog presentation; "
+            "never reconstructed from a semantic key or display name."
+        ),
+    )
     semantic_key: str = Field(
         min_length=1,
-        description="Stable backend-authored rules identity for the condition.",
+        description=(
+            "Backend-authored diagnostic identity; presentation consumers use "
+            "content_ref instead."
+        ),
     )
     name: str = Field(min_length=1, description="Player-facing condition name.")
     description: str = Field(

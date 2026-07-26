@@ -5,6 +5,25 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Literal
 
+from dnd.core.equipment_types import WeaponSlot
+from dnd.items.consumables import (
+    FIRE_WEAPON_COAT_RECIPE,
+    GREATER_INVISIBILITY_POTION_RECIPE,
+    HASTE_POTION_RECIPE,
+    LIGHTNING_WEAPON_COAT_RECIPE,
+    healing_potion_recipe,
+)
+from dnd.items.spell_items import (
+    ACID_FLASK_RECIPE,
+    FIREBALL_SCROLL_RECIPE,
+    HOLD_PERSON_SCROLL_RECIPE,
+    MAGIC_MISSILE_SCROLL_RECIPE,
+    SPIKE_GROWTH_SCROLL_RECIPE,
+    wand_of_fire_recipe,
+    wand_of_magic_missiles_recipe,
+)
+from dnd.items.torches import TORCH_RECIPE
+from dnd.items.weapons import CLUB_RECIPE, LONGBOW_RECIPE, SHORTSWORD_RECIPE
 from dnd.scenarios.evaluation.models import (
     ActorAugmentation,
     AbilityName,
@@ -237,9 +256,9 @@ def _srd(
     )
 
 
-_TORCH = ItemGrant(item_id="torch_lit")
+_TORCH = ItemGrant(recipe=TORCH_RECIPE, on_grant="ignite")
 _SHIELD_LOADOUT = (
-    EquipmentGrant(item_id="longbow", slot="ranged_main"),
+    EquipmentGrant(recipe=LONGBOW_RECIPE, slot=WeaponSlot.RANGED_MAIN),
     _TORCH,
 )
 
@@ -297,13 +316,13 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "dexterity",
             (
                 _TORCH,
-                ItemGrant(item_id="wand_magic_missiles", charges=3),
-                ItemGrant(item_id="wand_fire", charges=4),
-                ItemGrant(item_id="scroll_fireball"),
-                ItemGrant(item_id="scroll_magic_missile"),
-                ItemGrant(item_id="scroll_spike_growth"),
-                ItemGrant(item_id="potion_greater_invisibility"),
-                ItemGrant(item_id="weapon_coat"),
+                ItemGrant(recipe=wand_of_magic_missiles_recipe(charges=3)),
+                ItemGrant(recipe=wand_of_fire_recipe(charges=4)),
+                ItemGrant(recipe=FIREBALL_SCROLL_RECIPE),
+                ItemGrant(recipe=MAGIC_MISSILE_SCROLL_RECIPE),
+                ItemGrant(recipe=SPIKE_GROWTH_SCROLL_RECIPE),
+                ItemGrant(recipe=GREATER_INVISIBILITY_POTION_RECIPE),
+                ItemGrant(recipe=FIRE_WEAPON_COAT_RECIPE),
             ),
         ),
         ("item_resource_gauntlet",),
@@ -337,7 +356,11 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "dueling",
             "sword_shield",
             "strength",
-            (*_SHIELD_LOADOUT, StartingDamage(amount=8, damage_type="Necrotic"), ItemGrant(item_id="healing_potion", heal_amount=14)),
+            (
+                *_SHIELD_LOADOUT,
+                StartingDamage(amount=8, damage_type="Necrotic"),
+                ItemGrant(recipe=healing_potion_recipe(heal_amount=14)),
+            ),
         ),
         ("necrotic_anti_healing_duel",),
         ("fighter", "wounded", "diagnostic"),
@@ -398,7 +421,7 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "archery",
             "archery",
             "dexterity",
-            (_TORCH, ItemGrant(item_id="scroll_magic_missile")),
+            (_TORCH, ItemGrant(recipe=MAGIC_MISSILE_SCROLL_RECIPE)),
         ),
         ("srd_low_cr_patrol",),
         ("fighter", "ranged", "scroll"),
@@ -411,7 +434,10 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "dueling",
             "sword_shield",
             "strength",
-            (*_SHIELD_LOADOUT, ItemGrant(item_id="healing_potion", heal_amount=16)),
+            (
+                *_SHIELD_LOADOUT,
+                ItemGrant(recipe=healing_potion_recipe(heal_amount=16)),
+            ),
         ),
         ("srd_undead_crypt",),
         ("fighter", "shield", "potion"),
@@ -423,7 +449,7 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "hero",
             5,
             LEVEL_5_SORCERER_SPELLS,
-            (_TORCH, ItemGrant(item_id="scroll_hold_person")),
+            (_TORCH, ItemGrant(recipe=HOLD_PERSON_SCROLL_RECIPE)),
         ),
         ("srd_divine_cult_cell",),
         ("sorcerer", "scroll"),
@@ -435,7 +461,7 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             "hero",
             9,
             LEVEL_9_SORCERER_SPELLS,
-            (_TORCH, ItemGrant(item_id="potion_greater_invisibility")),
+            (_TORCH, ItemGrant(recipe=GREATER_INVISIBILITY_POTION_RECIPE)),
         ),
         ("srd_elite_mercenary_contract",),
         ("sorcerer", "level-9", "potion"),
@@ -479,8 +505,16 @@ HERO_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
 
 
 _CRUSHER_AUGMENTATIONS: tuple[ActorAugmentation, ...] = (
-    EquipmentGrant(item_id="shortsword", slot="melee_main", replace=True),
-    EquipmentGrant(item_id="club", slot="melee_off", replace=True),
+    EquipmentGrant(
+        recipe=SHORTSWORD_RECIPE,
+        slot=WeaponSlot.MELEE_MAIN,
+        replace=True,
+    ),
+    EquipmentGrant(
+        recipe=CLUB_RECIPE,
+        slot=WeaponSlot.MELEE_OFF,
+        replace=True,
+    ),
 )
 
 
@@ -540,9 +574,23 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "monsters.buff_consumable_cell",
         "Buff Consumable Ambush Cell",
         (
-            _skeleton("monster_1", "skeleton_warrior", (ItemGrant(item_id="potion_greater_invisibility"),)),
-            _bestiary("monster_2", "goblin_archer", augmentations=(ReactionGrant(reaction_id="goblin_nimble_escape"), ItemGrant(item_id="potion_haste"))),
-            _caster("monster_3", augmentations=(ItemGrant(item_id="scroll_hold_person"),)),
+            _skeleton(
+                "monster_1",
+                "skeleton_warrior",
+                (ItemGrant(recipe=GREATER_INVISIBILITY_POTION_RECIPE),),
+            ),
+            _bestiary(
+                "monster_2",
+                "goblin_archer",
+                augmentations=(
+                    ReactionGrant(reaction_id="goblin_nimble_escape"),
+                    ItemGrant(recipe=HASTE_POTION_RECIPE),
+                ),
+            ),
+            _caster(
+                "monster_3",
+                augmentations=(ItemGrant(recipe=HOLD_PERSON_SCROLL_RECIPE),),
+            ),
         ),
         ("buff_consumable_ambush",),
     ),
@@ -586,7 +634,10 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
             _caster(
                 "monster_3",
                 spells=("Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"),
-                augmentations=(ItemGrant(item_id="healing_potion", heal_amount=14), ItemGrant(item_id="lightning_weapon_coat")),
+                augmentations=(
+                    ItemGrant(recipe=healing_potion_recipe(heal_amount=14)),
+                    ItemGrant(recipe=LIGHTNING_WEAPON_COAT_RECIPE),
+                ),
                 wardrobe="divine",
             ),
         ),
@@ -873,7 +924,11 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "monsters.srd_goblinoid_warband",
         "SRD Goblinoid Warband",
         (
-            _srd("monster_1", "kobold", (ItemGrant(item_id="acid_flask"),)),
+            _srd(
+                "monster_1",
+                "kobold",
+                (ItemGrant(recipe=ACID_FLASK_RECIPE),),
+            ),
             _srd("monster_2", "hobgoblin"),
             _srd("monster_3", "bugbear"),
             _srd("monster_4", "gnoll"),
@@ -886,8 +941,16 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         (
             _srd("monster_1", "cultist"),
             _srd("monster_2", "guard"),
-            _srd("monster_3", "cult_fanatic", (ItemGrant(item_id="potion_haste"),)),
-            _srd("monster_4", "priest", (ItemGrant(item_id="healing_potion", heal_amount=18),)),
+            _srd(
+                "monster_3",
+                "cult_fanatic",
+                (ItemGrant(recipe=HASTE_POTION_RECIPE),),
+            ),
+            _srd(
+                "monster_4",
+                "priest",
+                (ItemGrant(recipe=healing_potion_recipe(heal_amount=18)),),
+            ),
         ),
         ("srd_divine_cult_cell",),
     ),
@@ -896,7 +959,11 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "SRD Elite Mercenaries",
         (
             _srd("monster_1", "knight"),
-            _srd("monster_2", "veteran", (ItemGrant(item_id="weapon_coat"),)),
+            _srd(
+                "monster_2",
+                "veteran",
+                (ItemGrant(recipe=FIRE_WEAPON_COAT_RECIPE),),
+            ),
             _srd("monster_3", "mage"),
             _srd("monster_4", "bandit_captain"),
         ),

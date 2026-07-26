@@ -252,6 +252,7 @@ function subjectiveReplay(): SubjectivePlayerReplayBundle {
       child_presentation_ids: [],
       source_event_cursor: 1,
       source_event_uuid: "event-1",
+      content_attributions: [],
       kind: "encounter",
       encounter_uuid: "encounter",
       transition: "end",

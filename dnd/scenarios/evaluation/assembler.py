@@ -9,34 +9,25 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions_functional import register_spells_by_name
+from dnd.blocks.equipment import Weapon
 from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.conditions import Blinded, Poisoned
 from dnd.controller import Controller, PassController
-from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.creature_materialization import materialize_creature
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.items.test_items import (
-    create_acid_flask,
-    create_healing_potion,
-    create_lightning_weapon_coat,
-    create_potion_of_greater_invisibility,
-    create_potion_of_haste,
-    create_scroll_of_fireball,
-    create_scroll_of_hold_person,
-    create_scroll_of_magic_missile,
-    create_scroll_of_spike_growth,
-    create_torch,
-    create_wand_of_fire,
-    create_wand_of_magic_missiles,
-    create_weapon_coat,
-    Torch,
-)
-from dnd.items.weapons import create_club, create_longbow, create_shortsword
+from dnd.items.torches import Torch
 from dnd.monsters.bestiary import (
     create_caster,
     create_goblin,
@@ -46,7 +37,10 @@ from dnd.monsters.bestiary import (
     create_skeleton_warrior,
     register_goblin_nimble_escape,
 )
-from dnd.monsters.srd_roster import create_srd_monster
+from dnd.monsters.srd_roster import (
+    SRD_CREATURE_DECLARATIONS_BY_ID,
+    SRD_CREATURE_RECIPES_BY_ID,
+)
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.scenarios.ai_validation_arenas import (
     ValidationArena,
@@ -196,11 +190,19 @@ def build_actor(blueprint: ActorBlueprint, context: ActorBuildContext) -> Entity
     if isinstance(blueprint, BestiaryActorBlueprint):
         return _build_bestiary_actor(blueprint, context)
     if isinstance(blueprint, SrdMonsterActorBlueprint):
-        return create_srd_monster(
-            blueprint.monster_id,
-            name=context.name,
+        declaration = SRD_CREATURE_DECLARATIONS_BY_ID[blueprint.monster_id]
+        return materialize_creature(
+            SRD_CREATURE_RECIPES_BY_ID[blueprint.monster_id],
+            runtime_entity_uuid=uuid4(),
+            display_name=context.name or declaration.descriptor.display_name,
             position=context.position,
             faction=context.faction,
+            deployment_role=CreatureDeploymentRole(
+                role_id=f"scenario.evaluation.{context.role}",
+            ),
+            possession_mode=(
+                CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+            ),
         )
     raise ValueError(f"Unsupported actor blueprint: {blueprint}")
 
@@ -208,63 +210,40 @@ def build_actor(blueprint: ActorBlueprint, context: ActorBuildContext) -> Entity
 def _grant_item(entity: Entity, grant: ItemGrant) -> None:
     """Create and loot every item represented by one typed inventory grant."""
     for _ in range(grant.count):
-        if grant.item_id == "acid_flask":
-            item = create_acid_flask(entity.uuid)
-        elif grant.item_id == "healing_potion":
-            item = create_healing_potion(entity.uuid, heal_amount=grant.heal_amount or 7)
-        elif grant.item_id == "lightning_weapon_coat":
-            item = create_lightning_weapon_coat(entity.uuid)
-        elif grant.item_id == "potion_greater_invisibility":
-            item = create_potion_of_greater_invisibility(entity.uuid)
-        elif grant.item_id == "potion_haste":
-            item = create_potion_of_haste(entity.uuid)
-        elif grant.item_id == "scroll_fireball":
-            item = create_scroll_of_fireball(entity.uuid)
-        elif grant.item_id == "scroll_hold_person":
-            item = create_scroll_of_hold_person(entity.uuid)
-        elif grant.item_id == "scroll_magic_missile":
-            item = create_scroll_of_magic_missile(entity.uuid)
-        elif grant.item_id == "scroll_spike_growth":
-            item = create_scroll_of_spike_growth(entity.uuid)
-        elif grant.item_id == "torch_lit":
-            item = create_torch(entity.uuid)
-        elif grant.item_id == "wand_fire":
-            item = create_wand_of_fire(entity.uuid, charges=grant.charges or 7)
-        elif grant.item_id == "wand_magic_missiles":
-            item = create_wand_of_magic_missiles(entity.uuid, charges=grant.charges or 3)
-        elif grant.item_id == "weapon_coat":
-            item = create_weapon_coat(entity.uuid)
-        else:
-            raise ValueError(f"Unsupported item grant: {grant.item_id}")
+        item = materialize_item(
+            grant.recipe,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
         if not entity.loot_item(item):
-            raise ValueError(f"Inventory rejected {grant.item_id!r} for {entity.name!r}.")
-        if grant.item_id == "torch_lit":
+            raise ValueError(
+                "Inventory rejected "
+                f"{grant.recipe.ref.identity_key!r} for {entity.name!r}.",
+            )
+        if grant.on_grant == "ignite":
             if not isinstance(item, Torch):
-                raise TypeError("Torch grant factory returned an incompatible item type.")
+                raise TypeError(
+                    "The ignite item-grant behavior requires a Torch.",
+                )
             item.ignite(entity.uuid)
 
 
 def _grant_equipment(entity: Entity, grant: EquipmentGrant) -> None:
     """Create and equip one typed weapon grant."""
-    slots = {
-        "melee_main": WeaponSlot.MELEE_MAIN,
-        "melee_off": WeaponSlot.MELEE_OFF,
-        "ranged_main": WeaponSlot.RANGED_MAIN,
-        "ranged_off": WeaponSlot.RANGED_OFF,
-    }
-    slot = slots[grant.slot]
+    slot = grant.slot
     if grant.replace:
         entity.equipment.unequip(slot)
-    if grant.item_id == "club":
-        item = create_club(entity.uuid)
-    elif grant.item_id == "longbow":
-        item = create_longbow(entity.uuid)
-    elif grant.item_id == "shortsword":
-        item = create_shortsword(entity.uuid)
-    else:
-        raise ValueError(f"Unsupported equipment grant: {grant.item_id}")
+    item = materialize_item(
+        grant.recipe,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     if not entity.equipment.equip(item, slot):
-        raise ValueError(f"Equipment rejected {grant.item_id!r} for {entity.name!r}.")
+        raise ValueError(
+            "Equipment rejected "
+            f"{grant.recipe.ref.identity_key!r} for {entity.name!r}.",
+        )
 
 
 def _apply_immediate_augmentation(entity: Entity, augmentation: ActorAugmentation) -> None:

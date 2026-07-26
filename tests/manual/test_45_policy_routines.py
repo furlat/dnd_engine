@@ -66,7 +66,15 @@ from dnd.ai.contracts.semantics import (
     action_semantics_ref,
 )
 from dnd.ai.runtime.action_semantics import action_semantics_for_available_action
-from dnd.core.base_actions import ActionCategory, AvailableActionInfo, BaseCost, TargetType
+from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
+    ActionCategory,
+    AvailableActionInfo,
+    AvailableTarget,
+    BaseCost,
+    TargetType,
+)
+from tests.content_identity import synthetic_action_attribution
 
 
 def test_quickened_projection_repairs_only_the_declared_action_cost() -> None:
@@ -74,8 +82,12 @@ def test_quickened_projection_repairs_only_the_declared_action_cost() -> None:
     activation = AvailableActionInfo(
         template_name="Opaque",
         semantic_key="dnd.classes.sorcerer.QuickenedSpell",
+        behavior_attribution=synthetic_action_attribution(
+            "action.quickened_projection",
+        ),
         target_type=TargetType.SELF,
-        valid_targets=[],
+        availability_status=ActionAvailabilityStatus.AVAILABLE,
+        valid_targets=[AvailableTarget(index=0)],
         can_afford=True,
         display_name="Opaque",
         cost_type="actions",
@@ -151,8 +163,12 @@ def test_twinned_projection_uses_base_spell_level_and_preserves_repeat_policy() 
     activation = AvailableActionInfo(
         template_name="Opaque",
         semantic_key="dnd.classes.sorcerer.TwinnedSpell",
+        behavior_attribution=synthetic_action_attribution(
+            "action.twinned_projection",
+        ),
         target_type=TargetType.SELF,
-        valid_targets=[],
+        availability_status=ActionAvailabilityStatus.AVAILABLE,
+        valid_targets=[AvailableTarget(index=0)],
         can_afford=True,
         display_name="Opaque",
         cost_type="actions",

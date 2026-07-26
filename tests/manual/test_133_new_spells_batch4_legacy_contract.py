@@ -15,6 +15,9 @@ from dnd.actions_functional import (
     get_available_actions,
     setup_standard_actions,
 )
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -24,7 +27,7 @@ from dnd.core.modifiers import (
     DamageType,
 )
 from dnd.entity import Entity
-from dnd.items.weapons import create_dagger
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (
     Banishment,
     GlobeOfInvulnerability,
@@ -79,7 +82,15 @@ def _true_strike_scene(caster_level: int) -> tuple[Entity, Entity]:
         (3, 3),
         "monsters",
     )
-    caster.equipment.equip(create_dagger(caster.uuid), WeaponSlot.MELEE_MAIN)
+    caster.equipment.equip(
+        materialize_item(
+            DAGGER_RECIPE,
+            caster.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     setup_standard_actions(caster)
     register_true_strike(caster, caster_level=caster_level)
     Entity.update_all_entities_senses(max_distance=60)

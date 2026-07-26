@@ -3,7 +3,15 @@
 from typing import cast
 from uuid import uuid4
 
-from dnd.actions import Dash, MovementEvent
+from pytest import MonkeyPatch, mark
+
+from dnd.actions import (
+    Attack,
+    Dash,
+    Jump,
+    MovementEvent,
+    entity_action_economy_cost_evaluator,
+)
 from dnd.actions_functional import (
     apply_action_overrides,
     clear_action_overrides,
@@ -16,7 +24,9 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
-from dnd.core.base_actions import ActionCategory, TargetType
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
@@ -26,9 +36,13 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items import create_healing_potion
-from dnd.items.test_items import create_scroll_of_fire_bolt
+from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.spell_items import fireball_scroll_recipe, fire_bolt_scroll_recipe
+from dnd.items.test_reactions import PrepareIntercept
+from dnd.items.weapons import CLUB_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.spells.evocation import Fireball
+from dnd.spells.conjuration import MistyStep
 
 
 def reset_action_state() -> None:
@@ -98,6 +112,33 @@ def find_attack_action(actions):
     raise AssertionError("No attack action found")
 
 
+def entity_target_name(target) -> str:
+    """Resolve one entity-target row without accepting optional identity."""
+    assert target.target_uuid is not None
+    entity = Entity.get(target.target_uuid)
+    assert entity is not None
+    return entity.name
+
+
+def deny_nonreaction_actions(actor: Entity) -> None:
+    """Set the neutral action-permission gate to zero for discovery tests."""
+    actor.action_economy.action_permission.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=actor.uuid,
+            target_entity_uuid=actor.uuid,
+            name="Discovery permission denied",
+            value=-1,
+        )
+    )
+    assert actor.can_take_actions() is False
+
+
+def unexpected_discovery_work(*args: object, **kwargs: object) -> None:
+    """Fail when an unaffordable collector performs target-specific work."""
+    del args, kwargs
+    raise AssertionError("unaffordable action performed target discovery")
+
+
 def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     """One actor prints grouped choices, target previews, and paid Dash state."""
     reset_action_state()
@@ -119,6 +160,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     attack_info = next(info for info in available.entity_actions if info.is_attack)
     move_target = move_info.valid_targets[0]
     attack_target = attack_info.valid_targets[0]
+    assert attack_target.target_uuid is not None
     attack_target_entity = Entity.get(attack_target.target_uuid)
     assert attack_target_entity is not None
 
@@ -167,7 +209,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     expected_lines = [
         "actor: Scout",
         "movement left: 30",
-        "groups: entity=3, position=2, self=4, object=0",
+        "groups: entity=4, position=3, self=7, object=0",
         "dash row: target=self, cost=1 actions, afford=True",
         "move row: target 0 -> (5, 6), distance=5, path=[(5, 5), (5, 6)]",
         "attack row: Scimitar -> Skeleton, distance=5",
@@ -286,7 +328,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
 
     move_target = move_info.valid_targets[0]
     attack_names = [
-        Entity.get(target.target_uuid).name for target in attack_info.valid_targets
+        entity_target_name(target) for target in attack_info.valid_targets
     ]
     discovery_lines = [
         f"entity uuid matches actor: {available.entity_uuid == hero.uuid}",
@@ -318,7 +360,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     expected_discovery_lines = [
         "entity uuid matches actor: True",
         "remaining movement: 30",
-        "groups: entity=3, position=2, self=4, object=0",
+        "groups: entity=4, position=3, self=7, object=0",
         "self actions include: ['Dash', 'Disengage', 'Dodge']",
         "dash row: target=self, index=0, cost=1 actions, afford=True",
         "move row: category=movement, target=(5, 6), path=[(5, 5), (5, 6)]",
@@ -327,6 +369,446 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     ]
     assert discovery_lines == expected_discovery_lines
     assert capsys.readouterr().out.splitlines() == expected_discovery_lines
+
+
+def test_authored_entity_action_remains_without_targets_when_cost_is_exhausted() -> None:
+    """Default discovery keeps identity while short-circuiting target work."""
+    reset_action_state()
+    hero = create_goblin(name="Spent Hero", position=(5, 5), faction="heroes")
+    enemy = create_skeleton(
+        name="Still Valid Target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    Entity.update_all_entities_senses()
+    hero.action_economy.consume("actions", 1)
+
+    attack = find_attack_action(get_available_actions(hero))
+
+    assert attack.can_afford is False
+    assert attack.valid_targets == []
+    assert enemy.uuid in hero.senses.entities
+
+
+def test_affordable_authored_entity_action_remains_with_no_valid_targets() -> None:
+    """An authored targeted action remains discoverable before a target exists."""
+    reset_action_state()
+    hero = create_goblin(name="Lonely Hero", position=(5, 5), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    attack = find_attack_action(get_available_actions(hero))
+
+    assert attack.can_afford is True
+    assert attack.valid_targets == []
+
+
+def test_affordable_self_action_remains_when_its_rule_prerequisite_fails() -> None:
+    """Self-action identity remains visible while its prerequisite disables it."""
+    reset_action_state()
+    hero = create_goblin(name="Unfocused Hero", position=(5, 5), faction="heroes")
+    Entity.update_all_entities_senses()
+
+    drop_concentration = find_action(
+        get_available_actions(hero),
+        "Drop Concentration",
+    )
+
+    assert drop_concentration.can_afford is True
+    assert drop_concentration.valid_targets == []
+
+
+def test_legal_only_action_discovery_omits_cost_and_requirement_blockers() -> None:
+    """The controller view remains sparse when an action cannot execute now."""
+    reset_action_state()
+    hero = create_goblin(name="Blocked Hero", position=(5, 5), faction="heroes")
+    enemy = create_skeleton(
+        name="Visible Target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    Entity.update_all_entities_senses()
+    hero.action_economy.consume("actions", 1)
+
+    authored = get_available_actions(hero)
+    legal = get_available_actions(hero, legal_only=True)
+
+    authored_attack = find_attack_action(authored)
+    assert authored_attack.can_afford is False
+    assert authored_attack.valid_targets == []
+    assert enemy.uuid in hero.senses.entities
+    assert find_action(authored, "Drop Concentration").valid_targets == []
+    assert not any(action.is_attack for action in legal.entity_actions)
+    assert not any(
+        action.template_name == "Drop Concentration"
+        for action in legal.self_actions
+    )
+
+
+def test_contextual_object_and_environment_discovery_remains_sparse() -> None:
+    """Invalid contextual affordances do not become authored disabled rows."""
+    reset_action_state()
+    hero = create_tutorial_actor(position=(3, 3))
+    distant_potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
+    distant_potion.place_on_grid((5, 3))
+    Entity.update_all_entities_senses()
+
+    available = get_available_actions(hero)
+
+    assert not any(
+        action.template_name in {"Pick Up", "Attack Object"}
+        for action in available.object_actions
+    )
+    assert not any(
+        action.source_item_uuid == distant_potion.uuid
+        for action in available.all_actions
+    )
+
+
+def test_unaffordable_authored_position_and_object_paths_do_no_target_work(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Disabled authored rows survive without path, LOS, or object validation."""
+    reset_action_state()
+    hero = create_tutorial_actor(position=(3, 3))
+    club = materialize_item(
+        CLUB_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
+    club.place_on_grid((4, 3))
+    Entity.update_all_entities_senses()
+    jump = hero.get_action_template("Jump")
+    assert isinstance(jump, Jump)
+    monkeypatch.setattr(jump, "position_discovery", None)
+    monkeypatch.setattr(
+        Entity,
+        "_collect_fast_move_targets",
+        unexpected_discovery_work,
+    )
+    monkeypatch.setattr(Jump, "get_valid_positions", unexpected_discovery_work)
+    monkeypatch.setattr(BaseAction, "pre_validate", unexpected_discovery_work)
+    deny_nonreaction_actions(hero)
+
+    authored = get_available_actions(hero)
+    legal = get_available_actions(hero, legal_only=True)
+
+    for template_name in ("Move", "Jump"):
+        row = find_action(authored, template_name)
+        assert row.can_afford is False
+        assert row.valid_targets == []
+        assert not any(
+            candidate.template_name == template_name
+            for candidate in legal.position_actions
+        )
+    assert authored.object_actions == []
+    assert legal.object_actions == []
+
+
+@mark.parametrize("template_name", ["Jump", "Prepare Intercept"])
+def test_position_action_rows_report_no_rules_valid_targets(
+    template_name: str,
+) -> None:
+    """An authored position action remains visible when no destination exists."""
+    reset_action_state()
+    GridMap.reset()
+    get_map().create_rectangle(2, 2, 1, 1)
+    actor = create_tutorial_actor(position=(2, 2))
+    if template_name == "Prepare Intercept":
+        actor.register_action(
+            PrepareIntercept(
+                source_entity_uuid=actor.uuid,
+                template=True,
+            )
+        )
+    Entity.update_all_entities_senses()
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    row = find_action(authored, template_name)
+    assert row.can_afford is True
+    assert row.availability_status == "no_valid_targets"
+    assert row.valid_targets == []
+    assert not any(
+        candidate.template_name == template_name
+        for candidate in legal.position_actions
+    )
+
+
+@mark.parametrize("template_name", ["Jump", "Prepare Intercept"])
+def test_position_action_rows_report_target_cost_unaffordable(
+    template_name: str,
+) -> None:
+    """Rules-valid destinations blocked only by movement get an exact status."""
+    reset_action_state()
+    actor = create_tutorial_actor(position=(2, 2))
+    if template_name == "Prepare Intercept":
+        actor.register_action(
+            PrepareIntercept(
+                source_entity_uuid=actor.uuid,
+                template=True,
+            )
+        )
+    Entity.update_all_entities_senses()
+    template = actor.get_action_template(template_name)
+    assert template is not None
+    template.set_target_position((3, 2))
+    actor.action_economy.consume(
+        "movement",
+        actor.action_economy.movement.normalized_score,
+    )
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    row = find_action(authored, template_name)
+    assert row.can_afford is True
+    assert row.availability_status == "target_cost_unaffordable"
+    assert row.valid_targets == []
+    assert [(cost.cost_type, cost.cost) for cost in row.costs] == [
+        (
+            "bonus_actions"
+            if template_name == "Jump"
+            else "actions",
+            1,
+        )
+    ]
+    assert not any(
+        candidate.template_name == template_name
+        for candidate in legal.position_actions
+    )
+
+
+def test_entity_action_discovery_does_not_retain_candidate_targets() -> None:
+    """Discovery validates target-specialized copies, never live templates."""
+    reset_action_state()
+    actor = create_tutorial_actor(position=(2, 2))
+    create_skeleton(name="First Target", position=(3, 2), faction="monsters")
+    create_skeleton(name="Second Target", position=(2, 3), faction="monsters")
+    Entity.update_all_entities_senses()
+    shake_awake = actor.get_action_template("Shake Awake")
+    shove = actor.get_action_template("Shove")
+    assert shake_awake is not None
+    assert shove is not None
+    assert shake_awake.target_entity_uuid is None
+    assert shove.target_entity_uuid is None
+
+    get_available_actions(actor)
+
+    assert shake_awake.target_entity_uuid is None
+    assert shove.target_entity_uuid is None
+
+
+def test_move_row_reports_no_rules_valid_routes() -> None:
+    """A map with no destination keeps the authored Move row with exact status."""
+    reset_action_state()
+    GridMap.reset()
+    get_map().create_rectangle(2, 2, 1, 1)
+    actor = create_tutorial_actor(position=(2, 2))
+    Entity.update_all_entities_senses()
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    move = find_action(authored, "Move")
+    assert move.can_afford is True
+    assert move.availability_status == "no_valid_targets"
+    assert move.valid_targets == []
+    assert not any(
+        candidate.template_name == "Move"
+        for candidate in legal.position_actions
+    )
+
+
+def test_move_row_reports_movement_budget_exhaustion() -> None:
+    """Rules-valid routes blocked only by movement retain a typed authored row."""
+    reset_action_state()
+    actor = create_tutorial_actor(position=(2, 2))
+    Entity.update_all_entities_senses()
+    actor.action_economy.consume(
+        "movement",
+        actor.action_economy.movement.normalized_score,
+    )
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    move = find_action(authored, "Move")
+    assert move.can_afford is True
+    assert move.availability_status == "target_cost_unaffordable"
+    assert move.valid_targets == []
+    assert move.costs == []
+    assert not any(
+        candidate.template_name == "Move"
+        for candidate in legal.position_actions
+    )
+
+
+def test_generic_position_row_reports_requirements_not_target_cost(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A rules-invalid position is not mislabeled target-cost unaffordable."""
+    reset_action_state()
+    actor = create_tutorial_actor(position=(2, 2))
+    actor.action_economy.spell_slot_2.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=actor.uuid,
+            target_entity_uuid=actor.uuid,
+            name="Misty Step regression slot",
+            value=1,
+        )
+    )
+    actor.register_action(
+        MistyStep(
+            source_entity_uuid=actor.uuid,
+            template=True,
+        )
+    )
+    Entity.update_all_entities_senses()
+    monkeypatch.setattr(
+        MistyStep,
+        "validate_requirements_for_discovery",
+        lambda self: False,
+    )
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    misty_step = next(
+        action
+        for action in authored.position_actions
+        if action.base_template_name == "Misty Step"
+    )
+    assert misty_step.can_afford is True
+    assert misty_step.availability_status == "no_valid_targets"
+    assert misty_step.valid_targets == []
+    assert not any(
+        candidate.base_template_name == "Misty Step"
+        for candidate in legal.position_actions
+    )
+
+
+def test_entity_row_reports_target_cost_unaffordable(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A rules-valid enemy blocked only by target cost gets the exact status."""
+    reset_action_state()
+    actor = create_goblin(
+        name="Cost-bound Attacker",
+        position=(2, 2),
+        faction="heroes",
+    )
+    create_skeleton(name="Adjacent Enemy", position=(3, 2), faction="monsters")
+    Entity.update_all_entities_senses()
+
+    def impossible_target_cost(self: Attack) -> list[Cost]:
+        return [
+            Cost(
+                name="Impossible target movement",
+                cost_type="movement",
+                cost=999,
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ]
+
+    monkeypatch.setattr(
+        Attack,
+        "get_target_dynamic_costs",
+        impossible_target_cost,
+    )
+
+    authored = get_available_actions(actor)
+    legal = get_available_actions(actor, legal_only=True)
+
+    attack = find_attack_action(authored)
+    assert attack.can_afford is True
+    assert attack.availability_status == "target_cost_unaffordable"
+    assert attack.valid_targets == []
+    assert all(cost.cost_type != "movement" for cost in attack.costs)
+    assert not any(candidate.is_attack for candidate in legal.entity_actions)
+
+
+def test_unaffordable_contextual_self_item_stays_sparse_without_validation(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A disabled self-use item does not run its action prerequisite."""
+    reset_action_state()
+    hero = create_tutorial_actor(position=(3, 3))
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    assert hero.loot_item(potion)
+    Entity.update_all_entities_senses()
+    monkeypatch.setattr(BaseAction, "pre_validate", unexpected_discovery_work)
+    deny_nonreaction_actions(hero)
+
+    for legal_only in (False, True):
+        available = get_available_actions(hero, legal_only=legal_only)
+        assert not any(
+            action.source_item_uuid == potion.uuid
+            for action in available.all_actions
+        )
+
+
+def test_unaffordable_contextual_entity_item_avoids_target_pool_work(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A disabled entity-target scroll is omitted before target enumeration."""
+    reset_action_state()
+    hero = create_tutorial_actor(position=(3, 3))
+    scroll = materialize_item(
+        fire_bolt_scroll_recipe(caster_level=5),
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    assert hero.loot_item(scroll)
+    create_skeleton(name="Scroll Target", position=(4, 3), faction="monsters")
+    Entity.update_all_entities_senses()
+    monkeypatch.setattr(Entity, "_compute_target_pool", unexpected_discovery_work)
+    deny_nonreaction_actions(hero)
+
+    for legal_only in (False, True):
+        available = get_available_actions(hero, legal_only=legal_only)
+        assert not any(
+            action.source_item_uuid == scroll.uuid
+            for action in available.all_actions
+        )
+
+
+def test_unaffordable_contextual_aoe_item_avoids_position_preview_work(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A disabled AoE scroll is omitted before position enumeration."""
+    reset_action_state()
+    hero = create_tutorial_actor(position=(3, 3))
+    scroll = materialize_item(
+        fireball_scroll_recipe(cast_level=3),
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    assert hero.loot_item(scroll)
+    create_skeleton(name="Blast Target", position=(5, 3), faction="monsters")
+    Entity.update_all_entities_senses()
+    monkeypatch.setattr(Fireball, "get_valid_positions", unexpected_discovery_work)
+    monkeypatch.setattr(
+        Entity,
+        "_compute_aoe_at_position",
+        unexpected_discovery_work,
+    )
+    deny_nonreaction_actions(hero)
+
+    for legal_only in (False, True):
+        available = get_available_actions(hero, legal_only=legal_only)
+        assert not any(
+            action.source_item_uuid == scroll.uuid
+            for action in available.all_actions
+        )
 
 
 def test_execute_by_index_instantiates_and_pays_costs(capsys) -> None:
@@ -409,7 +891,11 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
     """Object and item-use actions appear through the same discovery result."""
     reset_action_state()
     actor = create_tutorial_actor(position=(3, 3))
-    potion = create_healing_potion(uuid4())
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
@@ -508,7 +994,11 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         position=(4, 2),
         faction="monsters",
     )
-    scroll = create_scroll_of_fire_bolt(actor.uuid, caster_level=5)
+    scroll = materialize_item(
+        fire_bolt_scroll_recipe(caster_level=5),
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert actor.loot_item(scroll)
     Entity.update_all_entities_senses(max_distance=20)
     available = get_available_actions(actor)
@@ -609,13 +1099,13 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     default_attack = find_attack_action(hero.get_available_actions())
     assert [target.target_uuid for target in default_attack.valid_targets] == [enemy.uuid]
     default_names = [
-        Entity.get(target.target_uuid).name for target in default_attack.valid_targets
+        entity_target_name(target) for target in default_attack.valid_targets
     ]
 
     ally_attack = find_attack_action(hero.get_available_actions(target_filter="allies"))
     assert [target.target_uuid for target in ally_attack.valid_targets] == [ally.uuid]
     ally_names = [
-        Entity.get(target.target_uuid).name for target in ally_attack.valid_targets
+        entity_target_name(target) for target in ally_attack.valid_targets
     ]
 
     all_targets_attack = find_attack_action(
@@ -627,7 +1117,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
         ally.uuid,
     ]
     all_names = [
-        Entity.get(target.target_uuid).name for target in all_targets_attack.valid_targets
+        entity_target_name(target) for target in all_targets_attack.valid_targets
     ]
 
     target_lines = [

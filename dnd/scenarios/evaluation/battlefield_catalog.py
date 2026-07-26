@@ -6,19 +6,30 @@ from dataclasses import dataclass
 from typing import Callable, cast
 from uuid import UUID, uuid4
 
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.gridmap import GridMap, get_map
-from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.items.test_items import (
-    LootAllAction,
-    StorageChest,
-    create_acid_flask,
-    create_fireball_cannon,
-    create_healing_potion,
-    create_scroll_of_fireball,
-    create_scroll_of_magic_missile,
-    create_wall_torch,
-    create_weapon_coat,
+from dnd.items.consumables import (
+    FIRE_WEAPON_COAT_RECIPE,
+    healing_potion_recipe,
 )
+from dnd.items.environment import DirectionalDoor, DirectionalWall
+from dnd.items.environment_content import (
+    WALL_TORCH_RECIPE,
+    directional_door_recipe,
+    directional_wall_recipe,
+    fireball_cannon_recipe,
+    storage_chest_recipe,
+)
+from dnd.items.spell_items import (
+    ACID_FLASK_RECIPE,
+    FIREBALL_SCROLL_RECIPE,
+    MAGIC_MISSILE_SCROLL_RECIPE,
+)
+from dnd.items.test_items import (
+    StorageChest,
+)
+from dnd.items.torches import WallTorch
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
     DOOR_DIRECTIONS,
@@ -407,20 +418,28 @@ def _place_directional_barrier(
         position = (column, y)
         grid.set_tile(column, y, walkable=True, visible=True, name="Floor")
         if y == door_y:
-            door = DirectionalDoor(
-                source_entity_uuid=uuid4(),
-                name=f"{label} Door",
-                blocked_directions=("west",),
-                blocked_channels=STANDARD_BLOCKING_CHANNELS,
-                is_open=False,
+            door = materialize_item(
+                directional_door_recipe(
+                    display_name=f"{label} Door",
+                    blocked_directions=("west",),
+                    blocked_channels=STANDARD_BLOCKING_CHANNELS,
+                    is_open=False,
+                ),
+                uuid4(),
+                origin=ItemRuntimeOrigin.ENVIRONMENT,
+                expected_type=DirectionalDoor,
             )
             door.place_on_grid(position)
         else:
-            wall = DirectionalWall(
-                source_entity_uuid=uuid4(),
-                name=f"{label} Wall",
-                blocked_directions=("west",),
-                blocked_channels=STANDARD_BLOCKING_CHANNELS,
+            wall = materialize_item(
+                directional_wall_recipe(
+                    display_name=f"{label} Wall",
+                    blocked_directions=("west",),
+                    blocked_channels=STANDARD_BLOCKING_CHANNELS,
+                ),
+                uuid4(),
+                origin=ItemRuntimeOrigin.ENVIRONMENT,
+                expected_type=DirectionalWall,
             )
             wall.place_on_grid(position)
             walls.append(wall)
@@ -465,8 +484,17 @@ def _build_reveal_labyrinth_dark(spec: BattlefieldSpec, grid: GridMap) -> BuiltB
 def _build_arcane_device_bright(spec: BattlefieldSpec, grid: GridMap) -> BuiltBattlefield:
     """Build the bright open floor with a Fireball cannon and healing potion."""
     create_standard_arena_floor(grid)
-    cannon = create_fireball_cannon(uuid4(), position=(7, 7), charges=2)
-    potion = create_healing_potion(uuid4(), heal_amount=12)
+    cannon = materialize_item(
+        fireball_cannon_recipe(charges=2),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+    )
+    cannon.place_on_grid((7, 7))
+    potion = materialize_item(
+        healing_potion_recipe(heal_amount=12),
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     potion.place_on_grid((6, 7))
     return BuiltBattlefield(
         spec=spec,
@@ -478,18 +506,46 @@ def _build_arcane_device_bright(spec: BattlefieldSpec, grid: GridMap) -> BuiltBa
 
 def _create_cache(name: str, *, heal_amount: int, include_full_loadout: bool) -> StorageChest:
     """Create one environment-owned loot chest."""
-    chest = StorageChest(
-        source_entity_uuid=uuid4(),
-        name=name,
-        use_action_templates=[LootAllAction(source_entity_uuid=uuid4(), template=True)],
+    chest = materialize_item(
+        storage_chest_recipe(
+            display_name=name,
+            include_loot_all_action=True,
+        ),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=StorageChest,
     )
     if include_full_loadout:
-        chest.chest_inventory.add_item(create_scroll_of_fireball(chest.uuid))
-    chest.chest_inventory.add_item(create_scroll_of_magic_missile(chest.uuid))
-    chest.chest_inventory.add_item(create_acid_flask(chest.uuid))
-    chest.chest_inventory.add_item(create_healing_potion(chest.uuid, heal_amount=heal_amount))
+        chest.chest_inventory.add_item(materialize_item(
+            FIREBALL_SCROLL_RECIPE,
+            chest.uuid,
+            origin=ItemRuntimeOrigin.LOOT,
+        ))
+    chest.chest_inventory.add_item(materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(materialize_item(
+        ACID_FLASK_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=heal_amount),
+            chest.uuid,
+            origin=ItemRuntimeOrigin.LOOT,
+        )
+    )
     if include_full_loadout:
-        chest.chest_inventory.add_item(create_weapon_coat(chest.uuid))
+        chest.chest_inventory.add_item(
+            materialize_item(
+                FIRE_WEAPON_COAT_RECIPE,
+                chest.uuid,
+                origin=ItemRuntimeOrigin.LOOT,
+            )
+        )
     return chest
 
 
@@ -510,8 +566,19 @@ def _build_multi_object_dark(spec: BattlefieldSpec, grid: GridMap) -> BuiltBattl
     """Build the standard floor plus the control-room object package."""
     environment = build_standard_arena_environment(grid)
     environment.barrier.door.open()
-    wall_torch = create_wall_torch(position=(4, 10), owner_uuid=uuid4(), lit=True)
-    cannon = create_fireball_cannon(uuid4(), position=(6, 11), charges=2)
+    wall_torch = materialize_item(
+        WALL_TORCH_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=WallTorch,
+    )
+    wall_torch.mount((4, 10), lit=True)
+    cannon = materialize_item(
+        fireball_cannon_recipe(charges=2),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+    )
+    cannon.place_on_grid((6, 11))
     chest = _create_cache("Validation Control Cache", heal_amount=12, include_full_loadout=False)
     chest.place_on_grid((5, 10))
     return BuiltBattlefield(

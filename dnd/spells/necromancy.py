@@ -44,6 +44,7 @@ from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
 from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
 from dnd.creature_transforms import apply_unconscious_transform
 from dnd.spells.enchantment import BaneEffect, BlessEffect
+from dnd.spells.content_metadata import srd_action_identity
 from dnd.blocks.skills import SKILL_TO_ABILITY
 
 
@@ -1356,6 +1357,14 @@ class EyebiteCastingState(ConcentrationActionMarker):
     )
 
 
+@srd_action_identity(
+    content_id="action.spell.eyebite.strike",
+    display_name="Eyebite Strike",
+    description="Apply another selected gaze effect from an active Eyebite spell.",
+    parent_spell_name="Eyebite",
+    source_page=141,
+    sort_order=950,
+)
 class EyebiteStrike(BaseAction):
     """Resolve the action granted while concentrating on Eyebite."""
     name: str = Field(default="Eyebite Strike", description="Action name.")

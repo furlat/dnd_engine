@@ -243,6 +243,9 @@ test("bootstrap wire semantics reject invalid floor objects, turns, coverage, an
             position: [0, 0],
             map_char: "!",
             object_kind: "item",
+            safe_presentation_ref: {
+              presentation_contract_hash: "a".repeat(64),
+            },
             visual_item_name: "potion",
             visual_variant_id: null,
             blocks_movement: false,
@@ -730,6 +733,7 @@ test("the subjective wire gate accepts every canonical presentation and area kin
     [attackCue()],
     [spellCue()],
     [itemCue()],
+    [counterspellCue()],
     [damageCue("damage", 1, null)],
     [healCue("heal", 1, null)],
     [conditionCue("condition", 1, null)],
@@ -797,6 +801,14 @@ test("local presentation semantics reject malformed renderer transactions", () =
     ["spell child mismatch", [spellCue({ targets: [spellTarget(0, "a", ["missing"])] })]],
     ["duplicate item hidden slots", [{ ...itemCue(), hidden_slots: ["weapon", "weapon"] }]],
     ["item child mismatch", [{ ...itemCue(), effect_presentation_ids: ["missing"] }]],
+    ["Counterspell without both behavior roles", [{
+      ...counterspellCue(),
+      content_attributions: counterspellAttributions().slice(0, 1),
+    }]],
+    ["automatic Counterspell with an insufficient slot", [{
+      ...counterspellCue(),
+      incoming_spell_level: 5,
+    }]],
     ["movement child is not reactive", movementReactionGraph({
       child: damageCue("reaction", 2, "movement"),
     })],
@@ -861,6 +873,7 @@ function cueBase(
     child_presentation_ids: [...children],
     source_event_cursor: 1,
     source_event_uuid: `event-${id}`,
+    content_attributions: [],
     kind,
   };
 }
@@ -938,6 +951,46 @@ function itemCue(overrides: CueOverrides = {}): Record<string, unknown> {
     hidden_slots: ["weapon"],
     effect_presentation_ids: [],
     ...overrides,
+  };
+}
+
+function counterspellCue(overrides: CueOverrides = {}): Record<string, unknown> {
+  return {
+    ...cueBase("counterspell", "counterspell"),
+    content_attributions: counterspellAttributions(),
+    reactor_uuid: "hero",
+    incoming_caster_uuid: "monster",
+    incoming_spell_level: 3,
+    counterspell_slot_level: 3,
+    resolution: { kind: "automatic_success" },
+    ...overrides,
+  };
+}
+
+function counterspellAttributions(): ReadonlyArray<Record<string, unknown>> {
+  return [
+    {
+      kind: "unrooted_behavior",
+      role: "behavior",
+      definition_ref: contentRef("reaction.spell.counterspell", "reaction"),
+      provided_by_ref: contentRef("reaction.spell.counterspell", "reaction"),
+    },
+    {
+      kind: "unrooted_behavior",
+      role: "trigger_behavior",
+      definition_ref: contentRef("spell.fireball", "spell"),
+      provided_by_ref: contentRef("spell.fireball", "spell"),
+    },
+  ];
+}
+
+function contentRef(contentId: string, definitionKind: "reaction" | "spell"): Record<string, unknown> {
+  return {
+    pack_id: "content.srd_5_1_cc",
+    definition_kind: definitionKind,
+    content_id: contentId,
+    content_version: 1,
+    definition_contract_hash: "a".repeat(64),
   };
 }
 

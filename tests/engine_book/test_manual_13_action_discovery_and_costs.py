@@ -7,6 +7,8 @@ from dnd.actions_functional import execute_by_index, get_available_actions, setu
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import ActionCategory, AvailableActionInfo, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
@@ -14,7 +16,7 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import create_healing_potion
+from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.utils import reset_combat_state
 
 
@@ -210,7 +212,11 @@ def test_floor_items_create_object_actions_and_pickup_execution() -> None:
     """Visible floor items appear as object targets and can be picked up."""
     reset_action_state()
     hero = create_action_actor("Hero", (3, 3), "heroes")
-    potion = create_healing_potion(uuid4())
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses(max_distance=10)
 
@@ -237,7 +243,11 @@ def test_inventory_use_actions_surface_item_metadata_and_consume_the_item() -> N
     """Usable inventory items add action rows with item metadata."""
     reset_action_state()
     hero = create_action_actor("Hero", (3, 3), "heroes")
-    potion = create_healing_potion(hero.uuid, heal_amount=7)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert hero.loot_item(potion)
 
     available = get_available_actions(hero)

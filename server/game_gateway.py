@@ -29,6 +29,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.pack_loader import LoadedContentSystem
+from server.character_composition import (
+    PremadeCharacterNotFoundError,
+    compose_premade_character_bootstrap,
+)
 from server.api_models import (
     GameCreationActivateRequest,
     GameCreationActivateResponse,
@@ -44,16 +50,23 @@ from server.api_models import (
 )
 from server.player_replication_contract import SubjectiveReplicationBootstrap
 from server.directory_event_stream import DirectoryEventStream
+from server.content_catalog import (
+    ContentCatalogResponse,
+    ContentManifestResponse,
+    build_content_manifest,
+    build_public_content_catalog,
+    content_response_etag,
+)
 from server.event_contract import EVENT_CONTRACT_HASH
-from server.game_directory.canonical import canonical_digest, hash_capability
+from server.game_directory.canonical import hash_capability
 from server.game_directory.contracts import (
     AccessGrantCreate,
     ArtifactCreate,
     ArtifactKind,
     AttachmentState,
     AttachmentCreate,
-    CharacterCreate,
-    CharacterDeploymentCreate,
+    CharacterDeploymentLeaseCreate,
+    CharacterDefinitionRecord,
     CharacterRecord,
     ClientKind,
     DirectoryEventRecord,
@@ -70,6 +83,7 @@ from server.game_directory.contracts import (
     MembershipRole,
     MembershipState,
     ObserverPolicy,
+    PinnedCharacterDeploymentCreate,
     PrincipalCreate,
     PrincipalCredentialCreate,
     PrincipalKind,
@@ -113,7 +127,6 @@ from server.game_gateway_models import (
     StopHostedGameRequest,
     StopHostedGameResponse,
 )
-from dnd.scenarios.evaluation.combatant_catalog import get_combatant_configuration
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from server.game_creation_catalog import (
     GameCreationCatalogError,
@@ -161,13 +174,6 @@ SUBJECTIVE_REPLAY_SCHEMA_VERSION = (
     f"dnd.subjective-player-replay.v{PLAYER_REPLAY_CONTRACT_VERSION}."
     f"{PLAYER_REPLAY_CONTRACT_HASH}"
 )
-PERSISTENT_CHARACTER_PRESET_IDS = frozenset(
-    {
-        "hero.barbarian_l5_berserker_torch",
-        "hero.fighter_l5_shield_torch",
-        "hero.sorcerer_l5_standard_torch",
-    }
-)
 WorkerResponseT = TypeVar("WorkerResponseT", bound=BaseModel)
 logger = logging.getLogger("dnd_game_gateway")
 
@@ -193,6 +199,7 @@ class GameGatewayService:
         artifact_store: GameArtifactStore,
         *,
         capability_pepper: bytes,
+        content_system: LoadedContentSystem | None = None,
         runtime_ttl_seconds: int = DEFAULT_RUNTIME_TTL_SECONDS,
     ) -> None:
         self.repository = repository
@@ -200,6 +207,15 @@ class GameGatewayService:
         self.authority_cache = authority_cache
         self.artifact_store = artifact_store
         self.capability_pepper = capability_pepper
+        self.content_system = content_system or bootstrap_content_system()
+        self.content_set_digest = self.content_system.content_set_digest
+        if (
+            self.content_set_digest
+            != worker_manager.expected_content_set_digest
+        ):
+            raise ValueError(
+                "Gateway and worker manager content identities differ",
+            )
         self.runtime_ttl_seconds = runtime_ttl_seconds
         self._reconcile_orphaned_active_games()
         self.directory_stream = DirectoryEventStream(
@@ -383,34 +399,63 @@ class GameGatewayService:
         principal_capability: str,
         request: CreateCharacterRequest,
     ) -> CharacterRecord:
-        """Create one preset-backed persistent character for a player."""
+        """Create one exact definition/holdings-backed persistent character."""
 
         self._authenticate_principal(principal_id, principal_capability)
-        if request.preset_configuration_id not in PERSISTENT_CHARACTER_PRESET_IDS:
-            raise GatewayError(
-                400,
-                "character_preset_unsupported",
-                "Character preset is not available for persistent player characters",
-            )
-        configuration = get_combatant_configuration(request.preset_configuration_id)
-        if configuration.side_kind != "hero" or len(configuration.members) != 1:
-            raise GatewayError(
-                400,
-                "character_preset_invalid",
-                "Persistent characters require a single-member hero configuration",
-            )
         display_name = " ".join(request.display_name.split())
         if not display_name:
-            raise GatewayError(400, "character_name_empty", "Character name cannot be blank")
-        character = self.repository.create_character(
-            CharacterCreate(
+            raise GatewayError(
+                400,
+                "character_name_empty",
+                "Character name cannot be blank",
+            )
+        try:
+            bootstrap = compose_premade_character_bootstrap(
+                character_id=uuid4(),
                 owner_principal_id=principal_id,
                 display_name=display_name,
-                preset_configuration_id=request.preset_configuration_id,
+                premade_id=request.premade_id,
+                content_system=self.content_system,
             )
-        )
+        except PremadeCharacterNotFoundError as exc:
+            raise GatewayError(
+                400,
+                "character_premade_unsupported",
+                "Premade is not available for persistent player characters",
+            ) from exc
+        character = self.repository.create_character_with_revisions(bootstrap)
         self._publish_new_directory_events()
         return character
+
+    def get_character_definition(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+    ) -> CharacterDefinitionRecord:
+        """Return the authenticated owner's exact current structural revision."""
+
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        character = self.repository.get_character(character_id)
+        if character.owner_principal_id != principal.principal_id:
+            raise GatewayError(
+                403,
+                "character_not_owned",
+                "Character belongs to another player",
+            )
+        if character.current_definition_revision is None:
+            raise GatewayError(
+                409,
+                "character_definition_unavailable",
+                "Character has no canonical structural revision",
+            )
+        return self.repository.get_character_definition_revision(
+            character.character_id,
+            definition_revision=character.current_definition_revision,
+        )
 
     async def create_hosted_game(
         self,
@@ -440,13 +485,26 @@ class GameGatewayService:
                     "Persistent characters can currently enter only the composed hero seat",
                 )
             if (
+                character.current_definition_revision is None
+                or character.revision_state.value != "canonical"
+            ):
+                raise GatewayError(
+                    409,
+                    "character_revisions_unavailable",
+                    "Persistent character has not been migrated to exact revisions",
+                )
+            definition = self.repository.get_character_definition_revision(
+                character.character_id,
+                definition_revision=character.current_definition_revision,
+            ).definition
+            if (
                 request.creation.scenario.hero_configuration_id
-                != character.preset_configuration_id
+                != definition.premade_id
             ):
                 raise GatewayError(
                     400,
-                    "character_preset_mismatch",
-                    "Game hero configuration does not match the selected character",
+                    "character_premade_mismatch",
+                    "Game hero selection does not match the selected character",
                 )
         selected_side_request = (
             request.creation.side_a
@@ -513,10 +571,11 @@ class GameGatewayService:
                     creation_manifest={
                         "request": request.creation.model_dump(mode="json"),
                         "response": creation.model_dump(mode="json"),
+                        "content_set_digest": self.content_set_digest,
                     },
                     ruleset_version=RULESET_VERSION,
                     engine_version=ENGINE_VERSION,
-                    content_digest=canonical_digest(request.creation),
+                    content_digest=self.content_set_digest,
                 )
             )
             side = _selected_side(creation, request.owner_side)
@@ -542,12 +601,20 @@ class GameGatewayService:
                         "character_deployment_ambiguous",
                         "Persistent character deployment requires exactly one hero entity",
                     )
-                self.repository.deploy_character(
-                    CharacterDeploymentCreate(
+                lease = self.repository.acquire_character_deployment_lease(
+                    CharacterDeploymentLeaseCreate(
+                        character_id=character.character_id,
+                        game_id=game.game_id,
+                        membership_id=membership.membership_id,
+                    ),
+                )
+                self.repository.deploy_character_pinned(
+                    PinnedCharacterDeploymentCreate(
                         game_id=game.game_id,
                         membership_id=membership.membership_id,
                         character_id=character.character_id,
                         entity_uuid=UUID(side.entity_assignments[0].entity_uuid),
+                        lease_id=lease.lease_id,
                     )
                 )
             reconnect = self.repository.issue_access_grant(
@@ -1977,6 +2044,8 @@ def create_gateway_app(
     )
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        loaded_content_system = bootstrap_content_system()
+        app.state.content_system = loaded_content_system
         resolved_repository = repository or GameDirectoryRepository(
             resolved_database_path,
             capability_pepper=pepper,
@@ -1984,14 +2053,26 @@ def create_gateway_app(
         resolved_workers = worker_manager or HostedWorkerManager(
             resolved_runtime_root,
             worker_application=resolved_worker_application,
+            expected_content_set_digest=(
+                loaded_content_system.content_set_digest
+            ),
             warm_pool_size=int(os.environ.get("DND_HOSTED_WARM_WORKERS", "1")),
         )
+        if (
+            resolved_workers.expected_content_set_digest
+            != loaded_content_system.content_set_digest
+        ):
+            raise RuntimeError(
+                "Gateway content set differs from the configured worker "
+                "manager expectation",
+            )
         service = GameGatewayService(
             resolved_repository,
             resolved_workers,
             authority_cache or RuntimeAuthorityCache(),
             artifact_store or GameArtifactStore(resolved_artifact_root),
             capability_pepper=pepper,
+            content_system=loaded_content_system,
         )
         app.state.gateway = service
         try:
@@ -2066,6 +2147,40 @@ def create_gateway_app(
         """Return the shared canonical hosted-game creation catalog."""
         return build_game_creation_catalog()
 
+    @gateway_app.get("/content/manifest", response_model=ContentManifestResponse)
+    async def get_content_manifest(
+        request: Request,
+        response: Response,
+    ) -> ContentManifestResponse | Response:
+        """Return the exact content identity shared with every worker."""
+        manifest = build_content_manifest(request.app.state.content_system)
+        etag = content_response_etag(manifest.content_set_digest)
+        headers = {
+            "ETag": etag,
+            "Cache-Control": "public, max-age=0, must-revalidate",
+        }
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        response.headers.update(headers)
+        return manifest
+
+    @gateway_app.get("/content/catalog", response_model=ContentCatalogResponse)
+    async def get_content_catalog(
+        request: Request,
+        response: Response,
+    ) -> ContentCatalogResponse | Response:
+        """Return the shared public descriptor catalog."""
+        catalog = build_public_content_catalog(request.app.state.content_system)
+        etag = content_response_etag(catalog.catalog_digest)
+        headers = {
+            "ETag": etag,
+            "Cache-Control": "public, max-age=0, must-revalidate",
+        }
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        response.headers.update(headers)
+        return catalog
+
     @gateway_app.post(
         "/game-creation/preflight",
         response_model=CompatibilityReport,
@@ -2111,6 +2226,22 @@ def create_gateway_app(
             principal_id,
             principal_capability,
             body,
+        )
+
+    @gateway_app.get(
+        "/directory/characters/{character_id}/definition",
+        response_model=CharacterDefinitionRecord,
+    )
+    async def get_character_definition(
+        request: Request,
+        character_id: UUID,
+        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
+    ) -> CharacterDefinitionRecord:
+        return service(request).get_character_definition(
+            principal_id,
+            principal_capability,
+            character_id,
         )
 
     @gateway_app.get("/games", response_model=HostedGameListResponse)

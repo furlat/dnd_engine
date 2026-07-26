@@ -27,11 +27,13 @@ from dnd.ai.runtime.decision_epoch import (
 )
 from dnd.controller import Controller, TurnContext
 from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
     ActionCategory,
     AvailableActionInfo,
     AvailableActionsResult,
     TargetType,
 )
+from tests.content_identity import synthetic_action_attribution
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from tests.manual.test_09_action_discovery_and_costs import (
@@ -365,7 +367,11 @@ def test_native_epoch_omits_affordable_action_without_exact_target_binding() -> 
     targetless_spell = AvailableActionInfo(
         template_name="Targetless__slot_3",
         semantic_key="test.targetless",
+        behavior_attribution=synthetic_action_attribution(
+            "action.targetless_spell",
+        ),
         target_type=TargetType.POSITION_AOE,
+        availability_status=ActionAvailabilityStatus.NO_VALID_TARGETS,
         valid_targets=[],
         can_afford=True,
         display_name="Targetless",

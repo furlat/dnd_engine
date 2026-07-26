@@ -8,21 +8,33 @@ import pytest
 from pydantic import Field, ValidationError
 
 from devtools.generate_event_contract import import_dnd_modules
-from dnd.conditions import ConcentrationActionMarker
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.conditions import (
+    Blinded,
+    Charmed,
+    ConcentrationActionMarker,
+    Paralyzed,
+    Stunned,
+)
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.entity import Entity, EntityConfig
+from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import GuardianWarded, SpiritGuardiansTriggered
+from dnd.spells.transmutation import SpikeGrowthZone
 from dnd.tile_conditions import ZoneControlCondition
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
     build_subjective_world,
 )
 from server.player_replication_contract import PerspectiveKind, SubjectivePerspective
+from server.world_contracts import APIContentRefSnapshot
 from server.world_projection import (
     project_condition_summary,
     project_entity_summary,
@@ -31,6 +43,14 @@ from server.world_projection import (
 )
 
 ConditionT = TypeVar("ConditionT", bound=BaseCondition)
+
+
+def _wire_content_ref(condition: BaseCondition) -> APIContentRefSnapshot:
+    """Return the exact wire snapshot for one bound condition fixture."""
+    assert condition.behavior_binding is not None
+    return APIContentRefSnapshot.model_validate(
+        condition.behavior_binding.definition_ref.model_dump(mode="python"),
+    )
 
 
 class AlphaPresentationCondition(BaseCondition):
@@ -70,6 +90,20 @@ class InternalPresentationMarker(BaseCondition):
     condition_category: ConditionCategory = Field(default=ConditionCategory.INTERNAL)
 
 
+_FIXTURE_DEFINITION_TYPES: dict[type[BaseCondition], type[BaseCondition]] = {
+    AlphaPresentationCondition: Blinded,
+    BetaPresentationCondition: Charmed,
+    SharedNameAlphaCondition: Paralyzed,
+    SharedNameBetaCondition: Stunned,
+}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def installed_content_system() -> None:
+    """Install the exact declarations used by projected fixture bindings."""
+    bootstrap_content_system()
+
+
 @pytest.fixture
 def presentation_grid() -> Iterator[GridMap]:
     """Provide an isolated runtime for entity, tile, and subjective projections."""
@@ -105,12 +139,21 @@ def _condition(
     **updates: Any,
 ) -> ConditionT:
     """Construct a presentation fixture condition with explicit duration state."""
-    return condition_type(
+    condition = condition_type(
         source_entity_uuid=source_uuid,
         target_entity_uuid=target_uuid,
         duration=_duration(source_uuid, target_uuid, duration_type, duration),
         **updates,
     )
+    definition_type = _FIXTURE_DEFINITION_TYPES.get(condition_type)
+    if definition_type is not None:
+        declaration = get_content_declaration(definition_type)
+        condition.behavior_binding = BehaviorBinding(
+            definition_ref=declaration.ref,
+            provided_by_ref=declaration.ref,
+            runtime_owner_uuid=target_uuid,
+        )
+    return condition
 
 
 def test_entity_projection_is_authoritative_filtered_and_deterministic(
@@ -154,6 +197,12 @@ def test_entity_projection_is_authoritative_filtered_and_deterministic(
     assert [detail.semantic_key for detail in summary.condition_details] == [
         alpha.get_semantic_key(),
         beta.get_semantic_key(),
+    ]
+    assert alpha.behavior_binding is not None
+    assert beta.behavior_binding is not None
+    assert [detail.content_ref for detail in summary.condition_details] == [
+        _wire_content_ref(alpha),
+        _wire_content_ref(beta),
     ]
     assert summary.condition_details[0].description == "Exact alpha rules text."
     assert summary.condition_details[0].category == "condition"
@@ -205,9 +254,24 @@ def test_same_display_name_keeps_distinct_backend_semantic_keys() -> None:
     second_detail = project_condition_summary(second)
 
     assert first_detail.name == second_detail.name == "Shared Display Name"
+    assert first_detail.content_ref != second_detail.content_ref
     assert first_detail.semantic_key != second_detail.semantic_key
     assert first_detail.semantic_key == first.get_semantic_key()
     assert second_detail.semantic_key == second.get_semantic_key()
+
+
+def test_unbound_public_condition_cannot_enter_player_projection() -> None:
+    """Projection never fabricates identity from a class path or display name."""
+    condition = AlphaPresentationCondition(
+        source_entity_uuid=uuid4(),
+        target_entity_uuid=uuid4(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="no exact authored content binding",
+    ):
+        project_condition_summary(condition)
 
 
 def test_tile_details_share_name_visibility_and_subjective_memory_policy(
@@ -313,12 +377,21 @@ def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
         marker_name="Authored Zone",
         affected_positions={(1, 0)},
     )
+    zone_declaration = get_content_declaration(SpikeGrowthZone)
+    zone.behavior_binding = BehaviorBinding(
+        definition_ref=zone_declaration.ref,
+        provided_by_ref=zone_declaration.ref,
+        runtime_owner_uuid=source_uuid,
+    )
 
     zone._apply_tile_markers()
 
     marker = tile.active_conditions["Authored Zone"]
     detail = project_condition_summary(marker)
-    assert detail.semantic_key == f"{zone.get_semantic_key()}.tile"
+    assert detail.content_ref == APIContentRefSnapshot.model_validate(
+        zone_declaration.ref.model_dump(mode="python"),
+    )
+    assert detail.semantic_key == zone.get_semantic_key()
     assert detail.description == "Exact authored zone rules text."
 
 
@@ -329,6 +402,7 @@ def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
         ConcentrationActionMarker,
         SpiritGuardiansTriggered,
         GuardianWarded,
+        _WeaponCoatCondition,
     ),
 )
 def test_tracking_only_conditions_are_internal(

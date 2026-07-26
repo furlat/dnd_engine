@@ -35,6 +35,12 @@ from dnd.core.condition_types import (
     DurationType,
     HazardFilter,
 )
+from dnd.core.content.dependencies import (
+    ContentDependency,
+    ContentDependencyPhase,
+    ContentDependencyRelation,
+)
+from dnd.core.content.registration import get_content_declaration
 from dnd.core.action_types import (
     ActionEconomyCostType,
     RestrictedActionGrant,
@@ -54,6 +60,7 @@ from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActi
 from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
 from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
+from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.spell_utils import validate_line_of_sight
 
@@ -136,6 +143,15 @@ class SpikeGrowthZone(ZoneControlCondition):
         )
 
 
+@srd_spell_identity(
+    content_id="spell.spike_growth",
+    display_name="Spike Growth",
+    description="Transform ground into hidden damaging spikes.",
+    school="transmutation",
+    level=2,
+    source_page=182,
+    sort_order=10,
+)
 class SpikeGrowth(SpellAction):
     """Create a concentration zone of difficult, damaging terrain.
 
@@ -1625,6 +1641,14 @@ class EnlargeReduce(SpellAction):
         )
 
 
+@srd_action_identity(
+    content_id="action.spell.telekinesis.restrain",
+    display_name="Telekinesis: Restrain",
+    description="Restrain the creature currently held by Telekinesis.",
+    parent_spell_name="Telekinesis",
+    source_page=185,
+    sort_order=862,
+)
 class TelekinesisRestrain(BaseAction):
     """Restrain the creature currently grabbed by Telekinesis.
 
@@ -1681,6 +1705,14 @@ class TelekinesisRestrain(BaseAction):
         )
 
 
+@srd_action_identity(
+    content_id="action.spell.telekinesis.move",
+    display_name="Telekinesis: Move",
+    description="Move the creature currently held by Telekinesis.",
+    parent_spell_name="Telekinesis",
+    source_page=185,
+    sort_order=861,
+)
 class TelekinesisMove(BaseAction):
     """Move the creature currently grabbed by Telekinesis up to thirty feet.
 
@@ -1779,6 +1811,26 @@ class TelekinesisMove(BaseAction):
         )
 
 
+@srd_action_identity(
+    content_id="action.spell.telekinesis.grab",
+    display_name="Telekinesis",
+    description="Maintain a telekinetic grab and expose its follow-up choices.",
+    parent_spell_name="Telekinesis",
+    source_page=185,
+    sort_order=860,
+    dependencies=(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=get_content_declaration(TelekinesisMove).ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+        ),
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=get_content_declaration(TelekinesisRestrain).ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+        ),
+    ),
+)
 class TelekinesisGrab(BaseAction):
     """Contest one creature with Telekinesis and expose follow-up actions.
 

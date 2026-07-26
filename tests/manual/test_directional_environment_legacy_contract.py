@@ -4,6 +4,9 @@ from uuid import uuid4
 
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import execute_use_action, setup_standard_actions
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import (
     EventPhase,
@@ -21,6 +24,7 @@ from dnd.items.environment import (
     DirectionalDoor,
     DirectionalWall,
 )
+from dnd.items.environment_content import directional_door_recipe
 from dnd.maps.arena_layout import (
     DOOR_POSITION,
     WALL_DIRECTIONS,
@@ -28,7 +32,7 @@ from dnd.maps.arena_layout import (
     build_standard_arena_environment,
 )
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.items.weapons import create_shortbow
+from dnd.items.weapons import SHORTBOW_RECIPE
 from dnd.reactions import opportunity_attack_processor
 from server.mapeditor_support import (
     build_forgotten_crypt_arena_map,
@@ -141,9 +145,13 @@ def test_directional_door_open_event_preserves_other_sides_and_rejects_close_occ
         position=(5, 3),
         faction="monsters",
     )
-    door = DirectionalDoor(
-        source_entity_uuid=uuid4(),
-        blocked_directions=("east",),
+    door = materialize_item(
+        directional_door_recipe(
+            blocked_directions=("east",),
+        ),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     grid.place_object(door.uuid, (2, 3))
     door.set_directional_blocking("movement", "west", True)
@@ -252,7 +260,12 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         faction="heroes",
     )
     archer.equipment.equip(
-        create_shortbow(archer.uuid),
+        materialize_item(
+            SHORTBOW_RECIPE,
+            archer.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.RANGED_MAIN,
     )
     adjacent_enemy = create_goblin(

@@ -22,6 +22,7 @@ from server.world_projection import (
     project_entity_summary,
     project_equipment_overview,
     project_observed_tile,
+    project_safe_item_presentation_ref,
 )
 from server.player_replication.journal import SubjectiveWorldProjectionContext
 from server.player_replication_contract import (
@@ -258,6 +259,7 @@ def build_entity_visual_loadout(entity: Entity) -> EntityVisualLoadout:
             VisualEquipmentLayer(
                 slot=VisualLoadoutSlot(slot.slot),
                 item_kind=item_kind,
+                safe_presentation_ref=item.safe_presentation_ref,
                 visual_item_name=item.visual_item_name,
                 visual_variant_id=item.visual_variant_id,
                 equipped_visual_policy=EquippedVisualPolicy(item.equipped_visual_policy),
@@ -589,6 +591,7 @@ def _project_floor_object(
         position=position,
         map_char=obj.map_char,
         object_kind=object_kind,
+        safe_presentation_ref=project_safe_item_presentation_ref(obj),
         visual_item_name=item_presentation.visual_item_name,
         visual_variant_id=item_presentation.visual_variant_id,
         blocks_movement=obj.blocks_movement,

@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from dnd.actions_functional import execute_use_action
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.condition_types import DurationType
-from dnd.items.test_items import create_potion_of_haste
+from dnd.items.consumables import HASTE_POTION_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from dnd.spells.transmutation import HasteEffect
 from tests.engine_book.test_chapter_17_monsters_presets import (
@@ -162,7 +164,11 @@ def test_potion_authored_haste_expires_after_exactly_ten_rounds() -> None:
         position=(1, 1),
         faction="heroes",
     )
-    potion = create_potion_of_haste(actor.uuid)
+    potion = materialize_item(
+        HASTE_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     potion_uuid = potion.uuid
     assert actor.loot_item(potion)
     base_ac = actor.equipment.ac_bonus.normalized_score

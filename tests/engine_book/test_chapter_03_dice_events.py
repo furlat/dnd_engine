@@ -26,15 +26,23 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.actions import Attack
+from dnd.blocks.equipment import Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.feats import LuckyFeature
 from dnd.classes.fighter import GreatWeaponFighting
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, DamageType
 from dnd.core.values import AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
-from dnd.items import create_wooden_shield
-from dnd.items.weapons import create_greatsword, create_longsword, create_shortbow, create_shortsword
+from dnd.items.armors import WOODEN_SHIELD_RECIPE
+from dnd.items.weapons import (
+    GREATSWORD_RECIPE,
+    LONGSWORD_RECIPE,
+    SHORTBOW_RECIPE,
+    SHORTSWORD_RECIPE,
+)
 from dnd.spells.spell_utils import fire_heal_roll_result
 
 
@@ -1002,8 +1010,24 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         name="GWF Target",
         config=EntityConfig(position=(1, 0)),
     )
-    fighter.equipment.equip(create_greatsword(fighter.uuid), WeaponSlot.MELEE_MAIN)
-    fighter.equipment.equip(create_shortbow(fighter.uuid), WeaponSlot.RANGED_MAIN)
+    fighter.equipment.equip(
+        materialize_item(
+            GREATSWORD_RECIPE,
+            fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
+    fighter.equipment.equip(
+        materialize_item(
+            SHORTBOW_RECIPE,
+            fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.RANGED_MAIN,
+    )
     fighter.add_condition(
         GreatWeaponFighting(
             source_entity_uuid=fighter.uuid,
@@ -1064,7 +1088,12 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         config=EntityConfig(position=(0, 1)),
     )
     one_handed_fighter.equipment.equip(
-        create_shortsword(one_handed_fighter.uuid),
+        materialize_item(
+            SHORTSWORD_RECIPE,
+            one_handed_fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     one_handed_fighter.add_condition(
@@ -1107,7 +1136,15 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
         name="Pipeline Target",
         config=EntityConfig(position=(2, 1)),
     )
-    attacker.equipment.equip(create_greatsword(attacker.uuid), WeaponSlot.MELEE_MAIN)
+    attacker.equipment.equip(
+        materialize_item(
+            GREATSWORD_RECIPE,
+            attacker.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     attacker.add_condition(
         GreatWeaponFighting(
             source_entity_uuid=attacker.uuid,
@@ -1307,7 +1344,15 @@ def test_eb_03_016_attack_d20_slot_and_gwf_extra_packet_boundaries() -> None:
         name="Boundary Target",
         config=EntityConfig(position=(2, 1)),
     )
-    attacker.equipment.equip(create_greatsword(attacker.uuid), WeaponSlot.MELEE_MAIN)
+    attacker.equipment.equip(
+        materialize_item(
+            GREATSWORD_RECIPE,
+            attacker.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     attacker.equipment.extra_attack_damage_dices.append(4)
     attacker.equipment.extra_attack_damage_dices_numbers.append(1)
     attacker.equipment.extra_attack_damage_bonus.append(
@@ -1367,8 +1412,24 @@ def test_eb_03_017_gwf_requires_versatile_weapon_to_be_two_handed() -> None:
         name="Versatile Target",
         config=EntityConfig(position=(1, 0)),
     )
-    attacker.equipment.equip(create_longsword(attacker.uuid), WeaponSlot.MELEE_MAIN)
-    attacker.equipment.equip(create_wooden_shield(attacker.uuid), WeaponSlot.MELEE_OFF)
+    attacker.equipment.equip(
+        materialize_item(
+            LONGSWORD_RECIPE,
+            attacker.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
+    attacker.equipment.equip(
+        materialize_item(
+            WOODEN_SHIELD_RECIPE,
+            attacker.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Shield,
+        ),
+        WeaponSlot.MELEE_OFF,
+    )
     attacker.add_condition(
         GreatWeaponFighting(
             source_entity_uuid=attacker.uuid,

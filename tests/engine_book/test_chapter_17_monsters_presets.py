@@ -19,7 +19,10 @@ from dnd.core.modifiers import (
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
-from dnd.items.test_items import AcidFlaskSpell
+from dnd.items.consumables import (
+    GREATER_INVISIBILITY_POTION_RECIPE,
+    HASTE_POTION_RECIPE,
+)
 from dnd.monsters.bestiary import (
     create_caster,
     create_goblin,
@@ -297,7 +300,10 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
 
     assert invisibility_potion.is_consumable
     assert invisibility_potion.charges == 1
-    assert invisibility_potion.stack_id == "potion_of_greater_invisibility"
+    assert (
+        invisibility_potion.stack_id
+        == GREATER_INVISIBILITY_POTION_RECIPE.recipe_digest
+    )
     assert len(invisibility_actions) == 1
     assert invisibility_actions[0].name == "Drink Greater Invisibility Potion"
     assert invisibility_actions[0].source_item_uuid == invisibility_potion.uuid
@@ -308,7 +314,7 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
 
     assert haste_potion.is_consumable
     assert haste_potion.charges == 1
-    assert haste_potion.stack_id == "potion_of_haste"
+    assert haste_potion.stack_id == HASTE_POTION_RECIPE.recipe_digest
     assert len(haste_actions) == 1
     assert haste_actions[0].name == "Drink Haste Potion"
     assert haste_actions[0].source_item_uuid == haste_potion.uuid
@@ -578,17 +584,14 @@ def test_eb_17_006_warrior_acid_flask_is_a_consumable_spell_item() -> None:
     flask = get_inventory_item(warrior, "Acid Flask")
     use_actions = flask.get_use_actions(warrior.uuid)
     initial_hp = get_hp(target)
-    event = AcidFlaskSpell(
-        source_entity_uuid=warrior.uuid,
-        caster_level=1,
-        end_position=target.position,
-    ).apply()
+    action = use_actions[0].instantiate(end_position=target.position)
+    event = action.apply()
 
     assert flask.is_consumable
     assert flask.charges == 1
     assert len(use_actions) == 1
-    assert use_actions[0].name == "Acid Flask"
-    assert use_actions[0].source_item_uuid == flask.uuid
+    assert action.name == "Acid Flask"
+    assert action.source_item_uuid == flask.uuid
     assert event is not None
     assert not event.canceled
     assert get_hp(target) < initial_hp

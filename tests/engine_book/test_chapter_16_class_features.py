@@ -10,7 +10,12 @@ from dnd.actions import Attack, SpellAction
 from dnd.actions_functional import execute_action, get_available_actions, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.equipment import BodyArmor, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_actions import TargetType, spell_slot_cost_type
 from dnd.classes.barbarian_factory import (
     BarbarianConfig,
@@ -35,10 +40,14 @@ from dnd.core.life_types import LifeState
 from dnd.core.modifiers import CreatureType, DamageType, ResistanceStatus
 from dnd.core.values import AdvantageStatus, AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
-from dnd.items import create_leather_armor, create_longsword, create_shortbow
+from dnd.items.armors import LEATHER_ARMOR_RECIPE
+from dnd.items.weapons import LONGSWORD_RECIPE, SHORTBOW_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from dnd.utils import deal_damage_to, force_attack_crit, force_attack_hit, get_hp, reset_combat_state, set_hp
 from dnd.utils import force_attack_miss
+
+
+SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
 
 
 def reset_class_feature_state(width: int = 14, height: int = 8) -> None:
@@ -98,7 +107,15 @@ def create_book_paladin(
         faction="heroes",
     )
     entity = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
-    entity.equipment.equip(create_longsword(entity.uuid), WeaponSlot.MELEE_MAIN)
+    entity.equipment.equip(
+        materialize_item(
+            LONGSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     setup_standard_actions(entity)
     return entity
 
@@ -1672,7 +1689,15 @@ def test_eb_16_017_sorcerer_draconic_resilience_and_elemental_affinity() -> None
     assert get_hp(level_one) == 9
     assert level_one.ac_bonus().normalized_score == 15
 
-    level_one.equipment.equip(create_leather_armor(level_one.uuid), BodyPart.BODY)
+    level_one.equipment.equip(
+        materialize_item(
+            LEATHER_ARMOR_RECIPE,
+            level_one.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        BodyPart.BODY,
+    )
 
     assert level_one.ac_bonus().normalized_score == 13
 
@@ -1878,7 +1903,15 @@ def test_eb_16_006_divine_smite_handlers_use_highest_melee_hit_slot_once() -> No
         faction="heroes",
     )
     paladin = Entity.create(source_entity_uuid=UUID(int=201), name="Book Paladin", config=paladin_config)
-    paladin.equipment.equip(create_longsword(paladin.uuid), WeaponSlot.MELEE_MAIN)
+    paladin.equipment.equip(
+        materialize_item(
+            LONGSWORD_RECIPE,
+            paladin.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     setup_standard_actions(paladin)
     register_divine_smite(paladin, max_slot_level=2)
 
@@ -1970,7 +2003,15 @@ def test_eb_16_018_divine_smite_handler_gates_fallthrough_and_critical_dice() ->
     assert miss_paladin.action_economy.spell_slot_1.normalized_score == 1
 
     ranged_paladin, ranged_target = setup_case({1: 1}, 1, target_position=(6, 1))
-    ranged_paladin.equipment.equip(create_shortbow(ranged_paladin.uuid), WeaponSlot.RANGED_MAIN)
+    ranged_paladin.equipment.equip(
+        materialize_item(
+            SHORTBOW_RECIPE,
+            ranged_paladin.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.RANGED_MAIN,
+    )
     force_attack_hit(ranged_paladin)
     apply_attack(ranged_paladin, ranged_target, WeaponSlot.RANGED_MAIN)
 

@@ -6,14 +6,22 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import GridMap
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
+from dnd.items.consumables import healing_potion_recipe
 from dnd.items.environment import DIRECTIONAL_CHANNELS, DirectionalDoor, DirectionalWall
+from dnd.items.environment_content import (
+    WALL_TORCH_RECIPE,
+    directional_door_recipe,
+    directional_wall_recipe,
+    trap_lever_recipe,
+)
 from dnd.items.test_items import (
     PullLeverAction,
     TrapLever,
-    WallTorch,
-    create_healing_potion,
-    create_wall_torch,
 )
+from dnd.items.torches import WallTorch
 from dnd.tiles import create_spike_zone
 from dnd.core.base_tiles import difficult_terrain_factory
 
@@ -73,21 +81,29 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     walls = []
     for position in WALL_POSITIONS:
         grid.set_tile(position[0], position[1], walkable=True, visible=True, name="Floor")
-        wall = DirectionalWall(
-            source_entity_uuid=uuid4(),
-            blocked_directions=WALL_DIRECTIONS,
-            blocked_channels=STANDARD_BLOCKING_CHANNELS,
+        wall = materialize_item(
+            directional_wall_recipe(
+                blocked_directions=WALL_DIRECTIONS,
+                blocked_channels=STANDARD_BLOCKING_CHANNELS,
+            ),
+            uuid4(),
+            origin=ItemRuntimeOrigin.ENVIRONMENT,
+            expected_type=DirectionalWall,
         )
         wall.place_on_grid(position)
         walls.append(wall)
 
     grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, visible=True, name="Floor")
-    door = DirectionalDoor(
-        source_entity_uuid=uuid4(),
-        name="Door",
-        blocked_directions=DOOR_DIRECTIONS,
-        blocked_channels=STANDARD_BLOCKING_CHANNELS,
-        is_open=False,
+    door = materialize_item(
+        directional_door_recipe(
+            display_name="Door",
+            blocked_directions=DOOR_DIRECTIONS,
+            blocked_channels=STANDARD_BLOCKING_CHANNELS,
+            is_open=False,
+        ),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     door.place_on_grid(DOOR_POSITION)
 
@@ -126,14 +142,25 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
 
     darken_arena(grid)
 
-    wall_torches = tuple(
-        create_wall_torch(position=position, owner_uuid=uuid4(), lit=True)
-        for position in WALL_TORCH_POSITIONS
-    )
+    wall_torches_list = []
+    for position in WALL_TORCH_POSITIONS:
+        wall_torch = materialize_item(
+            WALL_TORCH_RECIPE,
+            uuid4(),
+            origin=ItemRuntimeOrigin.ENVIRONMENT,
+            expected_type=WallTorch,
+        )
+        wall_torch.mount(position, lit=True)
+        wall_torches_list.append(wall_torch)
+    wall_torches = tuple(wall_torches_list)
 
     healing_potion_uuids = []
     for position in HEALING_POTION_POSITIONS:
-        potion = create_healing_potion(uuid4(), heal_amount=10)
+        potion = materialize_item(
+            healing_potion_recipe(heal_amount=10),
+            uuid4(),
+            origin=ItemRuntimeOrigin.LOOT,
+        )
         potion.place_on_grid(position)
         healing_potion_uuids.append(potion.uuid)
 
@@ -143,11 +170,18 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         trap_tile_uuids=[tile.uuid for tile in spike_tiles],
         template=True,
     )
-    lever = TrapLever(
-        source_entity_uuid=uuid4(),
-        use_action_templates=[lever_action],
-        charges=1,
+    lever = materialize_item(
+        trap_lever_recipe(charges=1),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=TrapLever,
     )
+    SERVER_CONTENT_SYSTEM_RUNTIME.bind_child(
+        lever_action,
+        provider=lever,
+        runtime_owner_uuid=lever.uuid,
+    )
+    lever.use_action_templates.append(lever_action)
     lever.place_on_grid(TRAP_LEVER_POSITION)
 
     return StandardArenaObjects(

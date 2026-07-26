@@ -18,6 +18,8 @@ from dnd.blocks.base_item import BaseItem
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import ActionCategory, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
@@ -28,7 +30,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import create_healing_potion
+from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.spells import Fireball, MagicMissile
 from dnd.utils import reset_combat_state
@@ -200,7 +202,11 @@ def test_eb_09_004_floor_objects_create_object_actions_and_can_be_picked_up() ->
     """EB-09-004: visible floor objects surface OBJECT actions."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = create_healing_potion(uuid4())
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
@@ -226,7 +232,11 @@ def test_eb_09_005_inventory_use_actions_are_routed_and_consume_charges() -> Non
     """EB-09-005: inventory use actions appear with item metadata and execute by index."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = create_healing_potion(entity.uuid, heal_amount=7)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert entity.loot_item(potion)
 
     available = get_available_actions(entity)
@@ -252,8 +262,16 @@ def test_eb_09_006_nearby_environment_use_actions_are_distance_gated() -> None:
     """EB-09-006: environment UsableItem actions only appear within 5 feet."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    nearby = create_healing_potion(uuid4())
-    far = create_healing_potion(uuid4())
+    nearby = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
+    far = materialize_item(
+        HEALING_POTION_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     nearby.place_on_grid((4, 3))
     far.place_on_grid((8, 8))
     Entity.update_all_entities_senses()

@@ -13,7 +13,7 @@ from ai.evaluation.content_coverage import MatchContentCoverageCollector
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
 from dnd.conditions import Prone
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
-from dnd.core.content import ContentKind, HandlerDispatchOutcome
+from dnd.core.content.runtime import HandlerDispatchOutcome, RuntimeBehaviorKind
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 
 
@@ -37,7 +37,7 @@ def test_handler_dispatch_observer_distinguishes_opportunity_from_effect() -> No
         EventQueue.add_event_handler(EventHandler(
             name=semantic_key,
             semantic_key=semantic_key,
-            content_kind=ContentKind.REACTION,
+            content_kind=RuntimeBehaviorKind.REACTION,
             source_entity_uuid=source_uuid,
             trigger_conditions=[Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EXECUTION)],
             event_processor=processor,
@@ -105,11 +105,23 @@ def test_match_collector_records_condition_item_and_handler_lifecycles() -> None
 def test_implemented_catalog_and_general_report_keep_content_families_distinct() -> None:
     """Actions, reactions, feats, traits, conditions, and items keep separate denominators."""
     implemented = build_implemented_content_catalog()
-    assert implemented["reaction.opportunity_attack"].content_kind == ContentKind.REACTION
+    assert (
+        implemented["reaction.opportunity_attack"].content_kind
+        == RuntimeBehaviorKind.REACTION
+    )
     assert implemented["reaction.spell.counterspell"].evidence_lifecycle == "handler_dispatch"
-    assert any(row.content_kind == ContentKind.FEAT for row in implemented.values())
-    assert any(row.content_kind == ContentKind.TRAIT for row in implemented.values())
-    assert any(row.content_kind == ContentKind.ITEM for row in implemented.values())
+    assert any(
+        row.content_kind == RuntimeBehaviorKind.FEAT
+        for row in implemented.values()
+    )
+    assert any(
+        row.content_kind == RuntimeBehaviorKind.TRAIT
+        for row in implemented.values()
+    )
+    assert any(
+        row.content_kind == RuntimeBehaviorKind.ITEM
+        for row in implemented.values()
+    )
 
     retained = RetainedContentCoverage(manifest_match_count=2, lifecycle_evidence_match_count=2)
     retained.metadata["reaction.opportunity_attack"] = {

@@ -1,14 +1,21 @@
-from dnd.core.modifiers import  DamageType, AdvantageModifier, AdvantageStatus
-from dnd.core.values import ModifiableValue
+from dnd.core.modifiers import DamageType
 from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig)
 from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig)
 from dnd.blocks.health import (HealthConfig,HitDiceConfig)
-from dnd.blocks.equipment import EquipmentConfig, Range, Weapon, BodyArmor
-from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty, WeaponSlot
+from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
+from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.action_economy import (ActionEconomyConfig)
 from dnd.blocks.skills import (SkillSetConfig,SkillConfig)
-from dnd.core.events import RangeType
 from dnd.conditions import Blinded
+from dnd.monsters.circus_fighter_items import (
+    FLAMING_SCIMITAR_RECIPE,
+    PERFORMER_LEATHER_RECIPE,
+    RUSTY_DAGGER_RECIPE,
+)
 from dnd.monsters.circus_fighter_conditions import (
     DualWielder, ElementalWeaponMastery, ElementalAffinity, CircusPerformer
 )
@@ -29,154 +36,9 @@ attack_trigger = Trigger(name="Attack Trigger",
                          event_phase=EventPhase.DECLARATION)
 
 
-def create_dagger(source_id: UUID) -> Weapon:
-    """Creates a rusty dagger weapon with disadvantage"""
-    dagger = Weapon(
-        source_entity_uuid=source_id,
-        name="Rusty Dagger",
-        description="A poorly maintained dagger with a rusty blade. The ornate hilt is still beautiful, but the blade has seen better days, making it harder to strike accurately.",
-        damage_dice=4,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT, WeaponProperty.THROWN],
-        range=Range(type=RangeType.REACH, normal=5),
-
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[],
-
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        )
-    )
-
-    dagger.attack_bonus.self_static.add_advantage_modifier(
-        AdvantageModifier(
-            source_entity_uuid=source_id,
-            target_entity_uuid=None,
-            name="Rusty Blade",
-            value=AdvantageStatus.DISADVANTAGE
-        )
-    )
-
-    return dagger
-
-def create_flaming_scimitar(source_id: UUID) -> Weapon:
-    """Creates a magical flaming scimitar with extra fire damage"""
-
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Flaming Scimitar",
-        visual_item_name="Scimitar",
-        visual_variant_id="30000017",
-        description="An elegant curved blade enchanted with magical flames. The blade dances with fire during performances, leaving trails of light in its wake. The flames intensify when the wielder performs acrobatic maneuvers.",
-        damage_dice=6,
-        dice_numbers=1,
-        damage_type=DamageType.SLASHING,
-        properties=[WeaponProperty.FINESSE, WeaponProperty.LIGHT],
-        range=Range(type=RangeType.REACH, normal=5),
-
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-
-        extra_damage_dices=[6],
-        extra_damage_dices_numbers=[1],
-        extra_damage_bonus=[ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Fire Damage Bonus"
-        )],
-        extra_damage_type=[DamageType.FIRE]
-    )
-
-def create_light_armor(source_id: UUID) -> BodyArmor:
-    """Creates a set of light armor suitable for an acrobatic fighter"""
-    return BodyArmor(
-        source_entity_uuid=source_id,
-        name="Performer's Leather Armor",
-        description="A masterfully crafted set of leather armor adorned with intricate circus motifs. The armor is specially designed to allow maximum flexibility for acrobatic performances while providing protection. Gold and silver thread accents catch the light during movement.",
-        type=ArmorType.LIGHT,
-        body_part=BodyPart.BODY,
-        ac=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=11,
-            value_name="Armor Class"
-        ),
-        max_dex_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=5,
-            value_name="Max Dex Bonus"
-        )
-    )
-
-def create_longsword_plus_one(source_id: UUID) -> Weapon:
-    """Creates a magical +1 longsword"""
-    weapon = Weapon(
-        source_entity_uuid=source_id,
-        name="Longsword +1",
-        description="A finely crafted magical longsword that grants a +1 bonus to attack and damage rolls.",
-        damage_dice=8,
-        dice_numbers=1,
-        damage_type=DamageType.SLASHING,
-        properties=[WeaponProperty.VERSATILE],
-        range=Range(type=RangeType.REACH, normal=5),
-
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=1,
-            value_name="Attack Bonus"
-        ),
-
-        damage_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=1,
-            value_name="Damage Bonus"
-        ),
-
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[]
-    )
-    return weapon
-
 def create_self_blinded(source_id: UUID) -> Blinded:
     blinded = Blinded(source_entity_uuid=source_id, target_entity_uuid=source_id)
     return blinded
-
-
-def create_morningstar(source_id: UUID) -> Weapon:
-    """Creates a morningstar with necrotic damage"""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name="Soul-Draining Morningstar",
-        description="A wicked morningstar imbued with necrotic energy that drains the life force of its victims.",
-        damage_dice=8,
-        dice_numbers=1,
-        damage_type=DamageType.PIERCING,
-        properties=[],
-        range=Range(type=RangeType.REACH, normal=5),
-        attack_bonus=ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Attack Bonus"
-        ),
-
-        extra_damage_dices=[4],
-        extra_damage_dices_numbers=[1],
-        extra_damage_bonus=[ModifiableValue.create(
-            source_entity_uuid=source_id,
-            base_value=0,
-            value_name="Necrotic Damage"
-        )],
-        extra_damage_type=[DamageType.NECROTIC]
-    )
 
 
 def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger",blinded: bool=False, position: Tuple[int,int]=(0,0),sprite_name: Optional[str]=None) -> Entity:
@@ -226,9 +88,24 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     description = """A level 4 fighter character with a past in the circus and spiked claws for hands."""
     entity = Entity.create(name=name, source_entity_uuid=source_id, description=description, config=entity_config)
 
-    dagger = create_dagger(entity.uuid)
-    flaming_scimitar = create_flaming_scimitar(entity.uuid)
-    light_armor = create_light_armor(entity.uuid)
+    dagger = materialize_item_from_installed_runtime(
+        RUSTY_DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    flaming_scimitar = materialize_item_from_installed_runtime(
+        FLAMING_SCIMITAR_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    light_armor = materialize_item_from_installed_runtime(
+        PERFORMER_LEATHER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
 
     entity.equipment.equip(light_armor)
     entity.equipment.equip(flaming_scimitar, WeaponSlot.MELEE_MAIN)

@@ -55,8 +55,6 @@ _OPPOSITE_DIRECTION: dict[str, str] = {
     "east": "west",
     "west": "east",
 }
-_MELEE_SLOTS = frozenset({"weapon_melee_main", "weapon_melee_off"})
-_RANGED_SLOTS = frozenset({"weapon_ranged_main", "weapon_ranged_off"})
 _MISSING = object()
 _MAX_MISMATCHES = 100
 
@@ -270,7 +268,14 @@ def _subjective_visible_manifest(
         ),
         "floor_objects": {
             obj.uuid: {
-                **obj.model_dump(mode="json"),
+                # The objective debug envelope does not own the player-safe
+                # catalog reference. Its authentication is validated at the
+                # dedicated content/player transport boundary.
+                **{
+                    key: value
+                    for key, value in obj.model_dump(mode="json").items()
+                    if key != "safe_presentation_ref"
+                },
                 "blocked_directions": [
                     direction.value for direction in obj.blocked_directions
                 ],
@@ -565,28 +570,24 @@ def _expected_visual_loadout(
     equipment: APIEquipmentOverview,
 ) -> dict[str, Any]:
     layers: list[dict[str, Any]] = []
-    occupied_slots: set[str] = set()
     for slot in equipment.slots:
         if slot.item is None:
             continue
-        occupied_slots.add(slot.slot)
         layers.append(
             {
                 "slot": slot.slot,
                 "item_kind": slot.item.item_type,
+                "safe_presentation_ref": (
+                    slot.item.safe_presentation_ref.model_dump(mode="json")
+                ),
                 "visual_item_name": slot.item.visual_item_name,
                 "visual_variant_id": slot.item.visual_variant_id,
                 "equipped_visual_policy": slot.item.equipped_visual_policy,
             }
         )
-    active_weapon_set = "none"
-    if occupied_slots & _MELEE_SLOTS:
-        active_weapon_set = "melee"
-    elif occupied_slots & _RANGED_SLOTS:
-        active_weapon_set = "ranged"
     return {
         "entity_uuid": entity_uuid,
-        "active_weapon_set": active_weapon_set,
+        "active_weapon_set": equipment.active_weapon_set.value,
         "layers": layers,
     }
 
