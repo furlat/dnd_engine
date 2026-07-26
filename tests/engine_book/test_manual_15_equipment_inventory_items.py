@@ -6,7 +6,10 @@ from dnd.actions_functional import execute_use_action, get_available_actions, se
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.equipment import Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_block import BaseBlock
@@ -17,13 +20,14 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items import (
-    DirectionalDoor,
-    create_greatsword,
-    create_healing_potion,
-    create_shield,
-    create_shortbow,
-    create_shortsword,
+from dnd.items import DirectionalDoor
+from dnd.items.armors import SHIELD_RECIPE
+from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.environment_content import DIRECTIONAL_DOOR_RECIPE
+from dnd.items.weapons import (
+    GREATSWORD_RECIPE,
+    SHORTBOW_RECIPE,
+    SHORTSWORD_RECIPE,
 )
 from dnd.utils import reset_combat_state
 
@@ -127,9 +131,21 @@ def test_inventory_stacks_merge_and_capacity_failure_is_atomic() -> None:
     """Stacking consumes compatible item objects only when the insert can succeed."""
     reset_item_tutorial_state()
     inventory = Inventory(source_entity_uuid=uuid4(), name="Potion Satchel", weight_capacity=10)
-    existing = create_healing_potion(inventory.source_entity_uuid)
-    incoming = create_healing_potion(inventory.source_entity_uuid)
-    third = create_healing_potion(inventory.source_entity_uuid)
+    existing = materialize_item(
+        HEALING_POTION_RECIPE,
+        inventory.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    incoming = materialize_item(
+        HEALING_POTION_RECIPE,
+        inventory.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    third = materialize_item(
+        HEALING_POTION_RECIPE,
+        inventory.source_entity_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     existing.weight = 1
     incoming.weight = 1
     third.weight = 1
@@ -158,7 +174,12 @@ def test_high_level_equip_and_unequip_move_items_between_inventory_and_equipment
     """Entity equipment helpers rehome carried gear across inventory and equipment."""
     reset_item_tutorial_state()
     hero = create_item_actor("Duelist", (0, 0))
-    sword = create_shortsword(hero.uuid)
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     put_in_inventory(hero, sword)
 
     assert hero.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN)
@@ -184,8 +205,18 @@ def test_two_handed_melee_and_off_hand_conflicts_displace_by_equip_order() -> No
     """New melee equips displace conflicts based on the Two-Handed property."""
     reset_item_tutorial_state()
     hero = create_item_actor("Greatsword Guard", (0, 0))
-    greatsword = create_greatsword(hero.uuid)
-    shield = create_shield(hero.uuid)
+    greatsword = materialize_item(
+        GREATSWORD_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shield = materialize_item(
+        SHIELD_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
     put_in_inventory(hero, greatsword)
     put_in_inventory(hero, shield)
 
@@ -199,8 +230,18 @@ def test_two_handed_melee_and_off_hand_conflicts_displace_by_equip_order() -> No
     assert greatsword.stored_in_uuid == hero.inventory.uuid
 
     second = create_item_actor("Shielded Guard", (1, 0))
-    second_greatsword = create_greatsword(second.uuid)
-    second_shield = create_shield(second.uuid)
+    second_greatsword = materialize_item(
+        GREATSWORD_RECIPE,
+        second.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    second_shield = materialize_item(
+        SHIELD_RECIPE,
+        second.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
     put_in_inventory(second, second_greatsword)
     put_in_inventory(second, second_shield)
 
@@ -219,9 +260,24 @@ def test_melee_and_ranged_slots_are_parallel_videogame_loadouts() -> None:
     reset_item_tutorial_state()
     hero = create_item_actor("Loadout Switcher", (0, 0), "heroes")
     target = create_item_actor("Practice Target", (1, 0), "monsters")
-    sword = create_shortsword(hero.uuid)
-    shield = create_shield(hero.uuid)
-    bow = create_shortbow(hero.uuid)
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shield = materialize_item(
+        SHIELD_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
+    bow = materialize_item(
+        SHORTBOW_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     base_ac = hero.ac_bonus().normalized_score
     put_in_inventory(hero, sword)
     put_in_inventory(hero, shield)
@@ -249,7 +305,11 @@ def test_consumable_use_actions_bind_to_items_and_consume_stacks() -> None:
     """Usable items expose cloned actions and successful use spends item charges."""
     reset_item_tutorial_state()
     hero = create_item_actor("Patient", (0, 0))
-    potion = create_healing_potion(hero.uuid, heal_amount=7)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     potion.stack_count = 2
     put_in_inventory(hero, potion)
     hero.receive_damage(10, DamageType.SLASHING, source_entity_uuid=hero.uuid)
@@ -282,7 +342,12 @@ def test_environment_objects_surface_stateful_use_actions_from_the_grid() -> Non
     """Usable environment items expose actions based on object state and position."""
     reset_item_tutorial_state()
     hero = create_item_actor("Explorer", (0, 0))
-    door = DirectionalDoor(source_entity_uuid=uuid4())
+    door = materialize_item(
+        DIRECTIONAL_DOOR_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
+    )
     get_map().place_object(door.uuid, (1, 0))
     hero.update_entity_senses(max_distance=10)
 

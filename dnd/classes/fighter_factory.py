@@ -15,27 +15,50 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Boots,
+    EquipmentConfig,
+    Helmet,
+    Shield,
+    Weapon,
+)
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.materialization import CreaturePossessionMode
 from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 from dnd.core.base_conditions import BaseCondition
 
-from dnd.items import (
-    create_longsword,
-    create_greatsword,
-    create_shortsword,
-    create_longbow,
-    create_chain_mail,
-    create_studded_leather,
-    create_shield,
-    create_dagger,
-    create_handaxe,
-    create_javelin,
+from dnd.items.armors import (
+    CHAIN_MAIL_RECIPE,
+    CLOTH_SHOES_RECIPE,
+    LEATHER_ARMOR_RECIPE,
+    SHIELD_RECIPE,
+    STUDDED_LEATHER_RECIPE,
 )
-from dnd.items.armors import create_cloth_shoes, create_iron_helmet, create_leather_armor, create_leather_boots
-from dnd.items.test_items import create_potion_of_haste, create_healing_potion
+from dnd.items.apparel_presets import (
+    BROWN_BOOTS_PRESET,
+    STEEL_HELMET_PRESET,
+)
+from dnd.items.consumables import (
+    HASTE_POTION_RECIPE,
+    HEALING_POTION_RECIPE,
+)
+from dnd.items.weapons import (
+    DAGGER_RECIPE,
+    GREATSWORD_RECIPE,
+    HANDAXE_RECIPE,
+    JAVELIN_RECIPE,
+    LONGBOW_RECIPE,
+    LONGSWORD_RECIPE,
+    SHORTSWORD_RECIPE,
+)
 
 from dnd.classes.fighter import (
     FightingStyleArchery,
@@ -127,6 +150,9 @@ EQUIPMENT_PRESETS = {
         "armor": "studded_leather",
     },
 }
+
+_FIGHTER_LEATHER_BOOTS_RECIPE = BROWN_BOOTS_PRESET.recipe
+_FIGHTER_IRON_HELMET_RECIPE = STEEL_HELMET_PRESET.recipe
 
 
 class FighterConfig(BaseModel):
@@ -349,34 +375,74 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
 
     armor_name = preset_config.get("armor")
     if armor_name == "chain_mail":
-        armor = create_chain_mail(entity.uuid)
+        armor = materialize_item_from_installed_runtime(
+            CHAIN_MAIL_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        )
         entity.equipment.equip(armor)
     elif armor_name == "studded_leather":
-        armor = create_studded_leather(entity.uuid)
+        armor = materialize_item_from_installed_runtime(
+            STUDDED_LEATHER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        )
         entity.equipment.equip(armor)
 
     melee_main = preset_config.get("melee_main")
     if melee_main == "longsword":
-        weapon = create_longsword(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            LONGSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
     elif melee_main == "greatsword":
-        weapon = create_greatsword(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            GREATSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
     elif melee_main == "shortsword":
-        weapon = create_shortsword(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            SHORTSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
     melee_off = preset_config.get("melee_off")
     if melee_off == "shield":
-        shield = create_shield(entity.uuid)
+        shield = materialize_item_from_installed_runtime(
+            SHIELD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Shield,
+        )
         entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
     elif melee_off == "shortsword":
-        weapon = create_shortsword(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            SHORTSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_OFF)
 
     ranged_main = preset_config.get("ranged_main")
     if ranged_main == "longbow":
-        weapon = create_longbow(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            LONGBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.RANGED_MAIN)
 
 
@@ -444,7 +510,15 @@ def apply_fighter_features(entity: Entity, config: FighterConfig):
         ))
 
 
-def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> Entity:
+def create_fighter(
+    config: FighterConfig,
+    source_id: Optional[UUID] = None,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
+) -> Entity:
     """
     Create a Fighter entity at the specified level with all features applied.
 
@@ -511,41 +585,114 @@ def create_fighter(config: FighterConfig, source_id: Optional[UUID] = None) -> E
         name=config.name,
         source_entity_uuid=source_id,
         description=f"Level {config.level} Fighter (Champion)",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
 
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        apply_fighter_features(entity, config)
+        return entity
+
     apply_equipment(entity, config.equipment_preset)
-    entity.equipment.equip(create_leather_boots(entity.uuid, visual_variant_id="b0000009"))
+    entity.equipment.equip(
+        materialize_item_from_installed_runtime(
+            _FIGHTER_LEATHER_BOOTS_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Boots,
+        ),
+    )
 
     apply_fighter_features(entity, config)
 
-    haste_potion = create_potion_of_haste(entity.uuid)
+    haste_potion = materialize_item_from_installed_runtime(
+        HASTE_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(haste_potion)
-    entity.loot_item(create_healing_potion(entity.uuid))
-    entity.loot_item(create_healing_potion(entity.uuid))
-    entity.loot_item(create_cloth_shoes(entity.uuid))
-    entity.loot_item(create_iron_helmet(entity.uuid, visual_variant_id="h0000008"))
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            CLOTH_SHOES_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Boots,
+        ),
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            _FIGHTER_IRON_HELMET_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Helmet,
+        ),
+    )
 
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     spare_weapons = [
-        ("Handaxe", create_handaxe),
-        ("Javelin", create_javelin),
-        ("Dagger", create_dagger),
-        ("Longsword", create_longsword),
+        ("Handaxe", HANDAXE_RECIPE),
+        ("Javelin", JAVELIN_RECIPE),
+        ("Dagger", DAGGER_RECIPE),
+        ("Longsword", LONGSWORD_RECIPE),
     ]
-    for weapon_name, factory_fn in spare_weapons:
+    for weapon_name, recipe in spare_weapons:
         if weapon_name not in equipped_names:
-            entity.loot_item(factory_fn(entity.uuid))
+            entity.loot_item(
+                materialize_item_from_installed_runtime(
+                    recipe,
+                    entity.uuid,
+                    origin=ItemRuntimeOrigin.STARTER,
+                    expected_type=Weapon,
+                ),
+            )
 
     if "Leather Armor" not in equipped_names and "Studded Leather" not in equipped_names:
-        entity.loot_item(create_leather_armor(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                LEATHER_ARMOR_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=BodyArmor,
+            ),
+        )
     if "Chain Mail" not in equipped_names:
-        entity.loot_item(create_chain_mail(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                CHAIN_MAIL_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=BodyArmor,
+            ),
+        )
 
     if "Shield" not in equipped_names:
-        entity.loot_item(create_shield(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                SHIELD_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Shield,
+            ),
+        )
 
     return entity
 

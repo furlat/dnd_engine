@@ -198,19 +198,6 @@ class MarkTargetAction(BaseAction):
         """
         return self.spell_range
 
-    def pre_validate(self) -> bool:
-        """Check whether the archer can attempt Mark Target.
-
-        Returns:
-            False when the source entity is missing or already has Mark Cooldown.
-        """
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return False
-        if "Mark Cooldown" in caster.active_conditions:
-            return False
-        return True
-
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate Mark Target range and line of sight.
 

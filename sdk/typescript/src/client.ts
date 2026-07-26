@@ -16,6 +16,8 @@ import type {
   GameCreationStartRequest,
   GameCreationStartResponse,
   CompatibilityReport,
+  ContentCatalogResponse,
+  ContentManifestResponse,
   JoinGameRequest,
   JoinGameResponse,
   JsonValue,
@@ -66,6 +68,14 @@ export class DndEngineClient {
 
   async getServerCapabilities(signal?: AbortSignal): Promise<ServerCapabilitiesResponse> {
     return this.getModel("ServerCapabilitiesResponse", "/server/capabilities", signal);
+  }
+
+  async getContentManifest(signal?: AbortSignal): Promise<ContentManifestResponse> {
+    return this.getModel("ContentManifestResponse", "/content/manifest", signal);
+  }
+
+  async getContentCatalog(signal?: AbortSignal): Promise<ContentCatalogResponse> {
+    return this.getModel("ContentCatalogResponse", "/content/catalog", signal);
   }
 
   async getStandaloneGameStatus(

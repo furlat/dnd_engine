@@ -2,6 +2,7 @@
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     field_validator,
     model_validator,
@@ -11,6 +12,11 @@ from urllib.parse import urlsplit
 
 from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
+from dnd.core.content.descriptors import ContentOrdering, ContentPresentation
+from dnd.core.content.identities import ContentRef, validate_sha256
+from dnd.core.content.recipe_presets import ContentRecipePresetRef
+from dnd.core.content.recipes import ContentRecipe
+from dnd.core.events import AbilityName
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from dnd.scenarios.evaluation.models import (
     BattlefieldSpec,
@@ -158,19 +164,24 @@ class MapEditorMapSnapshot(BaseModel):
 
 
 class MapEditorSavedObjectPlacement(BaseModel):
-    """Reloadable editor object placement without serializing entities.
+    """Reloadable editor placement with exact construction and live state.
 
     Attributes:
-        catalog_id: Catalog identifier used to recreate the object.
-        name: Object display name stored in the save document.
+        recipe: Self-authenticating construction recipe for the placed item.
         position: Grid position where the object should be restored.
-        state: Object-specific state to restore.
+        runtime_state: Mutable state restored after canonical materialization.
     """
 
-    catalog_id: str = Field(description="Catalog identifier used to recreate the object.")
-    name: str = Field(description="Object display name stored in the save document.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recipe: ContentRecipe = Field(
+        description="Self-authenticating construction recipe for the placed item.",
+    )
     position: Tuple[int, int] = Field(description="Grid position where the object should be restored.")
-    state: Dict[str, Any] = Field(default_factory=dict, description="Object-specific state to restore.")
+    runtime_state: "MapEditorObjectRuntimeState" = Field(
+        default_factory=lambda: MapEditorObjectRuntimeState(),
+        description="Mutable state restored only after recipe materialization.",
+    )
 
 
 class MapEditorSaveMapRequest(BaseModel):
@@ -221,16 +232,42 @@ class MapEditorSavedMapDocument(BaseModel):
         schema_version: Saved map schema version.
         metadata: Saved map metadata.
         snapshot: Entity-free map snapshot.
-        object_placements: Reloadable object placement records.
+        content_set_digest: Exact installed content set required for loading.
+        object_placements: Reloadable exact-recipe object placement records.
     """
 
-    schema_version: int = Field(default=1, description="Saved map schema version.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[2] = Field(default=2, description="Saved map schema version.")
+    content_set_digest: str = Field(
+        description="Exact installed content set required for loading this map.",
+    )
     metadata: MapEditorSavedMapMetadata = Field(description="Saved map metadata.")
     snapshot: MapEditorMapSnapshot = Field(description="Entity-free map snapshot.")
     object_placements: List[MapEditorSavedObjectPlacement] = Field(
         default_factory=list,
         description="Reloadable object placement records.",
     )
+
+    @field_validator("content_set_digest")
+    @classmethod
+    def _validate_content_set_digest(cls, value: str) -> str:
+        return validate_sha256(value, "content_set_digest")
+
+    @model_validator(mode="after")
+    def _validate_single_object_authority(self) -> "MapEditorSavedMapDocument":
+        if self.snapshot.floor_objects:
+            raise ValueError(
+                "schema-2 snapshot.floor_objects must be empty; "
+                "object_placements are the durable object authority",
+            )
+        if self.metadata.floor_object_count != len(self.object_placements):
+            raise ValueError(
+                "saved map floor_object_count must match object_placements",
+            )
+        if self.metadata.tile_count != len(self.snapshot.tiles):
+            raise ValueError("saved map tile_count must match snapshot tiles")
+        return self
 
 
 class MapEditorSavedMapList(BaseModel):
@@ -305,18 +342,80 @@ class MapEditorTilePatchRequest(BaseModel):
     tiles: List[MapEditorTilePatch] = Field(description="Tile patches to apply.")
 
 
-class MapEditorObjectPlaceRequest(BaseModel):
-    """Request to place a catalog object on the editor map.
+class MapEditorObjectRuntimeState(BaseModel):
+    """Mutable placement facts kept outside authenticated construction.
 
     Attributes:
-        catalog_id: Catalog identifier for the object to place.
-        position: Grid position where the object should be placed.
-        options: Object-specific placement options.
+        is_open: Current door state after materialization.
+        is_lit: Current fixed-light state after materialization.
+        charges: Current finite-use budget after materialization.
+        trap_handler_uuid: Runtime-only linked trap handler identity.
+        trap_tile_uuids: Runtime-only linked trap tile identities.
     """
 
-    catalog_id: str = Field(description="Catalog identifier for the object to place.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    is_open: Optional[bool] = Field(
+        default=None,
+        description="Current door state applied after materialization.",
+    )
+    is_lit: Optional[bool] = Field(
+        default=None,
+        description="Current fixed-light state applied after materialization.",
+    )
+    charges: Optional[int] = Field(
+        default=None,
+        ge=-1,
+        description="Current finite-use budget applied after materialization.",
+    )
+    trap_handler_uuid: Optional[str] = Field(
+        default=None,
+        description="Runtime-only linked trap handler UUID.",
+    )
+    trap_tile_uuids: Tuple[str, ...] = Field(
+        default_factory=tuple,
+        description="Runtime-only linked trap tile UUIDs.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_trap_link(self) -> "MapEditorObjectRuntimeState":
+        has_handler = self.trap_handler_uuid is not None
+        has_tiles = bool(self.trap_tile_uuids)
+        if has_handler != has_tiles:
+            raise ValueError(
+                "trap_handler_uuid and trap_tile_uuids are required together",
+            )
+        return self
+
+
+class MapEditorObjectPlaceRequest(BaseModel):
+    """Request to place one exact content recipe on the editor map.
+
+    Attributes:
+        recipe: Self-authenticating item or environment construction recipe.
+        content_set_digest: Installed content set expected by the author.
+        position: Grid position where the object should be placed.
+        runtime_state: Mutable state applied after construction.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recipe: ContentRecipe = Field(
+        description="Self-authenticating item or environment construction recipe.",
+    )
+    content_set_digest: str = Field(
+        description="Exact installed content set expected by the author.",
+    )
     position: Tuple[int, int] = Field(description="Grid position where the object should be placed.")
-    options: Dict[str, Any] = Field(default_factory=dict, description="Object-specific placement options.")
+    runtime_state: MapEditorObjectRuntimeState = Field(
+        default_factory=MapEditorObjectRuntimeState,
+        description="Mutable state applied only after recipe materialization.",
+    )
+
+    @field_validator("content_set_digest")
+    @classmethod
+    def _validate_content_set_digest(cls, value: str) -> str:
+        return validate_sha256(value, "content_set_digest")
 
 
 class MapEditorObjectDeleteRequest(BaseModel):
@@ -343,12 +442,16 @@ class SpellCatalogSavingThrow(BaseModel):
     """Saving throw metadata for a catalog spell.
 
     Attributes:
-        ability: Short ability label used for the saving throw.
+        ability: Full lowercase ability name used for the saving throw.
         dc_source: Source used to compute the save DC.
     """
 
-    ability: str = Field(description="Short ability label used for the saving throw.")
-    dc_source: Optional[str] = Field(default=None, description="Source used to compute the save DC.")
+    ability: AbilityName = Field(
+        description="Full lowercase ability name used for the saving throw.",
+    )
+    dc_source: Literal["caster_spell_save_dc"] = Field(
+        description="Source used to compute the save DC.",
+    )
 
 
 class SpellCatalogMultiTarget(BaseModel):
@@ -368,28 +471,28 @@ class SpellCatalogMultiTarget(BaseModel):
 
 
 class SpellCatalogVfx(BaseModel):
-    """Visual routing hints derived from spell rules metadata.
+    """Authored visual routing hints for one spell.
 
     Attributes:
         projectile_type: Normalized projectile style for visual routing.
         aoe_shape_type: Normalized area-of-effect shape for visual routing.
         route_hint: Recommended animation route category.
-        recommended_asset_tags: Asset tags inferred from rules metadata.
+        recommended_asset_tags: Reviewed asset search tags.
     """
 
     projectile_type: Optional[ProjectileCatalogType] = Field(default=None, description="Normalized projectile style for visual routing.")
     aoe_shape_type: Optional[AoeCatalogShapeType] = Field(default=None, description="Normalized area-of-effect shape for visual routing.")
     route_hint: SpellCatalogRouteHint = Field(description="Recommended animation route category.")
-    recommended_asset_tags: List[str] = Field(default_factory=list, description="Asset tags inferred from rules metadata.")
+    recommended_asset_tags: List[str] = Field(default_factory=list, description="Reviewed asset search tags.")
 
 
 class SpellCatalogEntry(BaseModel):
     """Design-time spell metadata exposed by the backend catalog.
 
     Attributes:
-        id: Stable normalized spell identifier.
+        id: Explicit catalog identifier; distinct from durable content identity.
+        content_ref: Exact authored spell definition identity.
         name: Display name for the spell.
-        aliases: Alternate names accepted by tooling or clients.
         level: Spell level, with zero representing cantrips.
         school: Spell school name.
         description: Optional spell description text.
@@ -402,10 +505,11 @@ class SpellCatalogEntry(BaseModel):
         aoe_radius_ft: Area radius in feet when applicable.
         aoe_length_ft: Area length in feet when applicable.
         aoe_width_ft: Area width in feet when applicable.
-        damage_types: Damage type labels inferred from the spell.
+        aoe_height_ft: Area height in feet when applicable.
+        damage_types: Authored damage type labels for the spell.
         healing: Whether the spell restores hit points.
         attack_roll: Whether the spell uses a spell attack roll.
-        saving_throw: Saving throw metadata when the spell prompts a save.
+        saving_throws: Ordered distinct saving throws used by the spell.
         concentration: Whether the spell requires concentration.
         ritual: Whether the spell can be cast as a ritual.
         verbal: Whether the spell has a verbal component.
@@ -418,25 +522,43 @@ class SpellCatalogEntry(BaseModel):
         vfx: Visual routing hints for the spell.
     """
 
-    id: str = Field(description="Stable normalized spell identifier.")
+    id: str = Field(
+        description=(
+            "Explicit catalog identifier; distinct from durable content "
+            "identity."
+        ),
+    )
+    content_ref: ContentRef = Field(
+        description="Exact authored spell definition identity.",
+    )
     name: str = Field(description="Display name for the spell.")
-    aliases: List[str] = Field(default_factory=list, description="Alternate names accepted by tooling or clients.")
     level: int = Field(description="Spell level, with zero representing cantrips.")
     school: str = Field(description="Spell school name.")
-    description: Optional[str] = Field(default=None, description="Optional spell description text.")
+    description: str = Field(
+        min_length=1,
+        description="Authored spell description text.",
+    )
     action_category: Literal["spell"] = Field(default="spell", description="Fixed action category for spell catalog entries.")
     target_type: str = Field(description="Engine target type used by the spell action.")
-    range_type: Optional[SpellCatalogRangeType] = Field(default=None, description="Normalized spell range category.")
-    range_ft: Optional[int] = Field(default=None, description="Spell range in feet when applicable.")
+    range_type: SpellCatalogRangeType = Field(
+        description="Authored normalized spell range category.",
+    )
+    range_ft: int = Field(
+        ge=0,
+        description="Authored spell range in feet; zero for self-range effects.",
+    )
     projectile_type: Optional[ProjectileCatalogType] = Field(default=None, description="Normalized projectile style when present.")
     aoe_shape_type: Optional[AoeCatalogShapeType] = Field(default=None, description="Normalized area-of-effect shape when present.")
     aoe_radius_ft: Optional[int] = Field(default=None, description="Area radius in feet when applicable.")
     aoe_length_ft: Optional[int] = Field(default=None, description="Area length in feet when applicable.")
     aoe_width_ft: Optional[int] = Field(default=None, description="Area width in feet when applicable.")
-    damage_types: List[str] = Field(default_factory=list, description="Damage type labels inferred from the spell.")
+    aoe_height_ft: Optional[int] = Field(default=None, description="Area height in feet when applicable.")
+    damage_types: List[str] = Field(default_factory=list, description="Authored damage type labels for the spell.")
     healing: bool = Field(default=False, description="Whether the spell restores hit points.")
     attack_roll: bool = Field(default=False, description="Whether the spell uses a spell attack roll.")
-    saving_throw: Optional[SpellCatalogSavingThrow] = Field(default=None, description="Saving throw metadata when the spell prompts a save.")
+    saving_throws: Tuple[SpellCatalogSavingThrow, ...] = Field(
+        description="Ordered distinct saving throws used by the spell; empty when none.",
+    )
     concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
     ritual: bool = Field(default=False, description="Whether the spell can be cast as a ritual.")
     verbal: bool = Field(default=True, description="Whether the spell has a verbal component.")
@@ -444,9 +566,14 @@ class SpellCatalogEntry(BaseModel):
     material: Optional[bool] = Field(default=None, description="Whether the spell has a material component when known.")
     classes: List[str] = Field(default_factory=list, description="Class names associated with the spell in catalog metadata.")
     subclasses: List[str] = Field(default_factory=list, description="Subclass names associated with the spell in catalog metadata.")
-    source: Optional[str] = Field(default=None, description="Source label for the catalog metadata.")
+    source: str = Field(
+        min_length=1,
+        description="Exact authored provenance source identifier.",
+    )
     multi_target: Optional[SpellCatalogMultiTarget] = Field(default=None, description="Multi-target metadata when the spell supports it.")
-    vfx: Optional[SpellCatalogVfx] = Field(default=None, description="Visual routing hints for the spell.")
+    vfx: SpellCatalogVfx = Field(
+        description="Required authored visual routing hints for the spell.",
+    )
 
 
 class SpellCatalogResponse(BaseModel):
@@ -464,14 +591,13 @@ class SpellCatalogResponse(BaseModel):
 
 
 class MapEditorCatalogEntry(BaseModel):
-    """Normalized placeable editor catalog entry.
+    """Non-content map preset or terrain palette entry.
 
     Attributes:
         id: Stable catalog identifier.
         name: Display name shown in editor tools.
         group: High-level catalog group.
         category: Object, terrain, loot, or preset category.
-        source_module: Runtime module that provides the catalog entry.
         stability: Whether the catalog entry is stable, candidate, or demo-only.
         placement: Placement mode used by the editor.
         map_char: Optional map glyph hint.
@@ -485,7 +611,6 @@ class MapEditorCatalogEntry(BaseModel):
     name: str = Field(description="Display name shown in editor tools.")
     group: str = Field(description="High-level catalog group.")
     category: str = Field(description="Object, terrain, loot, or preset category.")
-    source_module: str = Field(description="Runtime module that provides the catalog entry.")
     stability: Literal["stable", "candidate", "demo"] = Field(
         default="stable",
         description="Whether the catalog entry is stable, candidate, or demo-only.",
@@ -498,20 +623,77 @@ class MapEditorCatalogEntry(BaseModel):
     default_state: Dict[str, Any] = Field(default_factory=dict, description="Default state applied when placing the entry.")
 
 
+class MapEditorContentCatalogEntry(BaseModel):
+    """One exact public placeable recipe discovered from the frozen registry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recipe: ContentRecipe = Field(
+        description="Exact self-authenticating construction recipe.",
+    )
+    content_set_digest: str = Field(
+        description="Installed content set that resolves this recipe.",
+    )
+    recipe_preset_ref: Optional[ContentRecipePresetRef] = Field(
+        default=None,
+        description="Exact named preset identity, absent for definition defaults.",
+    )
+    display_name: str = Field(description="Authored catalog display name.")
+    description: str = Field(description="Authored catalog description.")
+    tags: Tuple[str, ...] = Field(description="Authored searchable tags.")
+    presentation: ContentPresentation = Field(
+        description="Authored renderer presentation keys.",
+    )
+    ordering: ContentOrdering = Field(
+        description="Authored stable group and sort order.",
+    )
+
+    @field_validator("content_set_digest")
+    @classmethod
+    def _validate_content_set_digest(cls, value: str) -> str:
+        return validate_sha256(value, "content_set_digest")
+
+
 class MapEditorCatalog(BaseModel):
     """All mapeditor presets, terrain, objects, and loot known to the backend.
 
     Attributes:
         presets: Map preset catalog entries.
         tiles: Terrain tile catalog entries.
-        objects: Placeable object catalog entries.
-        loot: Loot and item catalog entries.
+        content_set_digest: Exact installed content-set identity.
+        objects: Public environment-object recipes.
+        loot: Public possession recipes and non-duplicate named presets.
     """
 
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    content_set_digest: str = Field(
+        description="Exact installed content-set identity.",
+    )
     presets: List[MapEditorCatalogEntry] = Field(description="Map preset catalog entries.")
     tiles: List[MapEditorCatalogEntry] = Field(description="Terrain tile catalog entries.")
-    objects: List[MapEditorCatalogEntry] = Field(description="Placeable object catalog entries.")
-    loot: List[MapEditorCatalogEntry] = Field(description="Loot and item catalog entries.")
+    objects: List[MapEditorContentCatalogEntry] = Field(description="Public environment-object recipes.")
+    loot: List[MapEditorContentCatalogEntry] = Field(description="Public possession recipes and named presets.")
+
+    @field_validator("content_set_digest")
+    @classmethod
+    def _validate_content_set_digest(cls, value: str) -> str:
+        return validate_sha256(value, "content_set_digest")
+
+    @model_validator(mode="after")
+    def _validate_content_rows(self) -> "MapEditorCatalog":
+        rows = (*self.objects, *self.loot)
+        if any(
+            row.content_set_digest != self.content_set_digest
+            for row in rows
+        ):
+            raise ValueError(
+                "mapeditor content rows must match the catalog content set",
+            )
+        recipe_digests = [row.recipe.recipe_digest for row in rows]
+        if len(recipe_digests) != len(set(recipe_digests)):
+            raise ValueError("mapeditor content rows contain recipe aliases")
+        return self
 
 
 class MapEditorWalkabilityCell(BaseModel):

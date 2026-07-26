@@ -1,0 +1,8 @@
+Neurodragon original content provenance baseline
+
+This source record identifies gameplay definitions authored specifically for
+the Neurodragon project and present in the dnd_engine repository at commit
+b2b39308fbbbfae0733e999c9d5c88cb0bfc91fb.
+
+It is not an attribution claim for SRD material or third-party content.
+Definitions derived from an open rules source must cite that source instead.

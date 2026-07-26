@@ -16,6 +16,7 @@ import type {
   ItemPresentationKind,
   ObjectiveReplicatedWorld,
   PerspectiveKind,
+  SafeContentPresentationRef,
   SenseMode,
   StructuralEdgeAppearance,
   StructuralEdgeKind,
@@ -86,6 +87,7 @@ export interface RenderFloorObject {
   readonly position: [number, number];
   readonly map_char: string;
   readonly object_kind: FloorObjectProjectionKind;
+  readonly safe_presentation_ref: SafeContentPresentationRef | null;
   readonly visual_item_name: string;
   readonly visual_variant_id: string | null;
   readonly blocks_movement: boolean | null;
@@ -478,25 +480,18 @@ export function deriveVisualLoadout(
       item_kind: ITEM_KINDS.has(item.item_type)
         ? item.item_type as ItemPresentationKind
         : "item",
+      safe_presentation_ref: item.safe_presentation_ref,
       visual_item_name: item.visual_item_name,
       visual_variant_id: item.visual_variant_id,
       equipped_visual_policy: item.equipped_visual_policy,
     });
   }
   layers.sort(compareVisualLayer);
-  const occupied = new Set(layers.map((layer) => layer.slot));
-  const activeWeaponSet = (
-    occupied.has("weapon_melee_main") || occupied.has("weapon_melee_off")
-  )
-    ? "melee"
-    : (
-      occupied.has("weapon_ranged_main") || occupied.has("weapon_ranged_off")
-    )
-      ? "ranged"
-      : "none";
   return {
     entity_uuid: entityUuid,
-    active_weapon_set: activeWeaponSet,
+    active_weapon_set: (
+      equipment === undefined ? "none" : equipment.active_weapon_set
+    ),
     layers,
   };
 }
@@ -549,6 +544,7 @@ function projectSubjectiveFloorObject(
     position: copyPosition(object.position),
     map_char: object.map_char,
     object_kind: object.object_kind,
+    safe_presentation_ref: object.safe_presentation_ref,
     visual_item_name: object.visual_item_name,
     visual_variant_id: object.visual_variant_id,
     blocks_movement: object.blocks_movement,
@@ -581,6 +577,9 @@ function projectObjectiveFloorObject(object: APIFloorObject): RenderFloorObject 
     position: copyPosition(object.position),
     map_char: object.map_char,
     object_kind: objectiveObjectKind(state, directions, channels),
+    safe_presentation_ref: readSafePresentationRef(
+      state.safe_presentation_ref,
+    ),
     visual_item_name: readString(state.visual_item_name) ?? object.name,
     visual_variant_id: readString(state.visual_variant_id),
     blocks_movement: readBoolean(state.blocks_movement),
@@ -639,6 +638,7 @@ function projectEquipmentDetails(
       slots: [...equipment.slots].sort((left, right) => (
         compareVisualSlot(left.slot, right.slot)
       )),
+      active_weapon_set: equipment.active_weapon_set,
       ac: equipment.ac,
       inventory: [...equipment.inventory].sort(compareUuid),
     };
@@ -890,6 +890,13 @@ function readBoolean(value: unknown): boolean | null {
 
 function readNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readSafePresentationRef(
+  value: unknown,
+): SafeContentPresentationRef | null {
+  if (value === undefined || value === null) return null;
+  return decodeModel("SafeContentPresentationRef", value);
 }
 
 function sortDirections(

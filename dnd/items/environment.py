@@ -290,17 +290,21 @@ class DirectionalDoor(UsableItem):
             if door_pos and get_map().get_entities_at(door_pos):
                 return []
             return [
-                CloseDirectionalDoorAction(
-                    source_entity_uuid=user_entity_uuid,
-                    source_item_uuid=self.uuid,
-                    template=True,
+                self.bind_dynamic_use_action(
+                    CloseDirectionalDoorAction(
+                        source_entity_uuid=user_entity_uuid,
+                        source_item_uuid=self.uuid,
+                        template=True,
+                    ),
                 )
             ]
         return [
-            OpenDirectionalDoorAction(
-                source_entity_uuid=user_entity_uuid,
-                source_item_uuid=self.uuid,
-                template=True,
+            self.bind_dynamic_use_action(
+                OpenDirectionalDoorAction(
+                    source_entity_uuid=user_entity_uuid,
+                    source_item_uuid=self.uuid,
+                    template=True,
+                ),
             )
         ]
 

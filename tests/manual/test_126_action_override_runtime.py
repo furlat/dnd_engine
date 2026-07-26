@@ -493,9 +493,12 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
         for cost in template.generate_variants(caster)[0].effective_costs
         if cost.resource_name == "sorcery_points"
     ] == ["Sorcery Points"]
+    unaffordable = find_action(caster, "Fire Bolt")
+    assert unaffordable.can_afford is False
+    assert unaffordable.valid_targets == []
     assert not any(
         info.template_name == "Fire Bolt"
-        for info in get_available_actions(caster).all_actions
+        for info in get_available_actions(caster, legal_only=True).all_actions
     )
 
     hp_before = target.get_hp()
@@ -556,9 +559,12 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
             if cost.resource_name == "sorcery_points"
         ]
     ) == 1
+    unavailable = find_action(caster, "Magic Missile__slot_1")
+    assert unavailable.can_afford is False
+    assert unavailable.valid_targets == []
     assert not any(
         info.template_name == "Magic Missile__slot_1"
-        for info in get_available_actions(caster).all_actions
+        for info in get_available_actions(caster, legal_only=True).all_actions
     )
 
     caster.action_economy.add_resource(

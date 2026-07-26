@@ -1,0 +1,14 @@
+{
+  "source_id": "neurodragon.original_b2b3930",
+  "source_family": "neurodragon_original",
+  "title": "Neurodragon Original Content Provenance Baseline",
+  "source_version": "b2b39308fbbbfae0733e999c9d5c88cb0bfc91fb",
+  "rules_baseline": "engine_neutral",
+  "license_id": "Neurodragon-Original",
+  "canonical_uri": "urn:neurodragon:content-source:b2b39308fbbbfae0733e999c9d5c88cb0bfc91fb",
+  "document_digest": "5d5b9fd982162ffeb960166665ac4bf464f260fea7cb8cfe453039366874a2f9",
+  "attribution_text": "Original gameplay content authored for the Neurodragon project.",
+  "notices": [
+    "This source record does not cover SRD or third-party material."
+  ]
+}

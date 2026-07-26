@@ -134,11 +134,36 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
             headers=_headers(browser_a),
             json={
                 "display_name": "Sol",
-                "preset_configuration_id": "hero.sorcerer_l5_standard_torch",
+                "premade_id": "hero.sorcerer_l5_standard_torch",
             },
         )
         assert character_response.status_code == 200, character_response.text
         character = character_response.json()
+        assert character["revision_state"] == "canonical"
+        assert character["current_definition_revision"] == 1
+        assert character["current_holdings_revision"] == 1
+
+        definition_response = client.get(
+            f"/directory/characters/{character['character_id']}/definition",
+            headers=_headers(browser_b),
+        )
+        assert definition_response.status_code == 200, definition_response.text
+        definition_record = definition_response.json()
+        assert definition_record["definition"]["character_id"] == character["character_id"]
+        assert (
+            definition_record["definition"]["premade_id"]
+            == "hero.sorcerer_l5_standard_torch"
+        )
+        assert definition_record["definition"]["creature_recipe"]["ref"]["definition_kind"] == (
+            "creature"
+        )
+
+        denied_definition = client.get(
+            f"/directory/characters/{character['character_id']}/definition",
+            headers=_headers(stranger),
+        )
+        assert denied_definition.status_code == 403
+        assert denied_definition.json()["detail"]["code"] == "character_not_owned"
 
         created_response = client.post(
             "/games",
@@ -239,5 +264,8 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         assert len(deployments) == 1
         assert str(deployments[0].game_id) == game_id
         assert str(deployments[0].entity_uuid) in created["connection"]["controlled_entity_uuids"]
+        assert deployments[0].pin_state.value == "pinned"
+        assert deployments[0].definition_revision == 1
+        assert deployments[0].holdings_revision == 1
 
     repository.close()

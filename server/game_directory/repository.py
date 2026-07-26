@@ -12,9 +12,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from pydantic import JsonValue, TypeAdapter
+from pydantic import JsonValue, TypeAdapter, ValidationError
 
 from dnd.analytics.models import GameSummary, summary_digest_is_valid
+from dnd.core.content.durable_characters import (
+    CharacterDefinitionRevision,
+    CharacterHoldingsRevision,
+)
 
 from server.game_directory.canonical import (
     canonical_digest,
@@ -32,10 +36,16 @@ from server.game_directory.contracts import (
     AttachmentCreate,
     AttachmentRecord,
     AttachmentState,
-    CharacterCreate,
+    CanonicalCharacterRecord,
+    CharacterBootstrapCreate,
+    CharacterDefinitionRecord,
     CharacterDeploymentCreate,
+    CharacterDeploymentLeaseCreate,
+    CharacterDeploymentLeaseRecord,
     CharacterDeploymentRecord,
+    CharacterHoldingsRecord,
     CharacterRecord,
+    CharacterRevisionState,
     DirectoryEventRecord,
     EntityAssignmentCreate,
     EntityAssignmentRecord,
@@ -49,6 +59,8 @@ from server.game_directory.contracts import (
     MembershipCreate,
     MembershipRecord,
     MembershipState,
+    PinnedCharacterDeploymentCreate,
+    PinnedCharacterDeploymentRecord,
     PlayerIdentityRecord,
     PrincipalCreate,
     PrincipalCredentialCreate,
@@ -86,6 +98,17 @@ def _load_json_object(value: str) -> JsonObject:
     decoded = json.loads(value)
     if not isinstance(decoded, dict):
         raise ValueError("Persisted directory JSON must be an object")
+    return decoded
+
+
+def _load_canonical_json_object(value: str, record_name: str) -> JsonObject:
+    """Decode one object only when its persisted bytes are canonical JSON."""
+
+    decoded = _load_json_object(value)
+    if canonical_json(decoded) != value:
+        raise ImmutableRecordError(
+            f"Persisted {record_name} JSON is not canonical",
+        )
     return decoded
 
 
@@ -143,11 +166,83 @@ def _character_from_row(row: sqlite3.Row) -> CharacterRecord:
         character_id=row["character_id"],
         owner_principal_id=row["owner_principal_id"],
         display_name=row["display_name"],
-        preset_configuration_id=row["preset_configuration_id"],
         status=row["status"],
+        revision_state=row["revision_state"],
+        current_definition_revision=row["current_definition_revision"],
+        current_definition_digest=row["current_definition_digest"],
+        current_holdings_revision=row["current_holdings_revision"],
+        current_holdings_digest=row["current_holdings_digest"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         row_version=row["row_version"],
+    )
+
+
+def _canonical_character_from_row(row: sqlite3.Row) -> CanonicalCharacterRecord:
+    """Build one character whose exact durable revision heads are installed."""
+
+    return CanonicalCharacterRecord.model_validate(
+        _character_from_row(row).model_dump(),
+    )
+
+
+def _character_definition_from_row(
+    row: sqlite3.Row,
+) -> CharacterDefinitionRecord:
+    """Decode and authenticate one immutable structural character revision."""
+
+    payload = _load_canonical_json_object(
+        row["definition_json"],
+        "character definition",
+    )
+    try:
+        definition = CharacterDefinitionRevision.model_validate(payload)
+    except ValidationError as exc:
+        raise ImmutableRecordError(
+            "Persisted character definition failed durable integrity validation",
+        ) from exc
+    if (
+        str(definition.character_id) != row["character_id"]
+        or definition.definition_revision != row["definition_revision"]
+        or definition.schema_version != row["schema_version"]
+        or definition.definition_digest != row["definition_digest"]
+    ):
+        raise ImmutableRecordError(
+            "Character definition row metadata does not match its canonical JSON",
+        )
+    return CharacterDefinitionRecord(
+        definition=definition,
+        created_at=row["created_at"],
+    )
+
+
+def _character_holdings_from_row(
+    row: sqlite3.Row,
+) -> CharacterHoldingsRecord:
+    """Decode and authenticate one immutable holdings revision."""
+
+    payload = _load_canonical_json_object(
+        row["holdings_json"],
+        "character holdings",
+    )
+    try:
+        holdings = CharacterHoldingsRevision.model_validate(payload)
+    except ValidationError as exc:
+        raise ImmutableRecordError(
+            "Persisted character holdings failed durable integrity validation",
+        ) from exc
+    if (
+        str(holdings.character_id) != row["character_id"]
+        or holdings.holdings_revision != row["holdings_revision"]
+        or holdings.schema_version != row["schema_version"]
+        or holdings.holdings_digest != row["holdings_digest"]
+    ):
+        raise ImmutableRecordError(
+            "Character holdings row metadata does not match its canonical JSON",
+        )
+    return CharacterHoldingsRecord(
+        holdings=holdings,
+        created_at=row["created_at"],
     )
 
 
@@ -160,7 +255,50 @@ def _character_deployment_from_row(row: sqlite3.Row) -> CharacterDeploymentRecor
         membership_id=row["membership_id"],
         character_id=row["character_id"],
         entity_uuid=row["entity_uuid"],
+        lease_id=row["lease_id"],
+        pin_state=row["pin_state"],
+        definition_revision=row["definition_revision"],
+        definition_digest=row["definition_digest"],
+        holdings_revision=row["holdings_revision"],
+        holdings_digest=row["holdings_digest"],
         deployed_at=row["deployed_at"],
+    )
+
+
+def _pinned_character_deployment_from_row(
+    row: sqlite3.Row,
+) -> PinnedCharacterDeploymentRecord:
+    """Build one deployment whose durable revision pins are complete."""
+
+    return PinnedCharacterDeploymentRecord(
+        deployment_id=row["deployment_id"],
+        game_id=row["game_id"],
+        membership_id=row["membership_id"],
+        character_id=row["character_id"],
+        entity_uuid=row["entity_uuid"],
+        lease_id=row["lease_id"],
+        pin_state=row["pin_state"],
+        definition_revision=row["definition_revision"],
+        definition_digest=row["definition_digest"],
+        holdings_revision=row["holdings_revision"],
+        holdings_digest=row["holdings_digest"],
+        deployed_at=row["deployed_at"],
+    )
+
+
+def _character_deployment_lease_from_row(
+    row: sqlite3.Row,
+) -> CharacterDeploymentLeaseRecord:
+    """Build one exclusive character deployment lease."""
+
+    return CharacterDeploymentLeaseRecord(
+        lease_id=row["lease_id"],
+        character_id=row["character_id"],
+        game_id=row["game_id"],
+        membership_id=row["membership_id"],
+        acquired_at=row["acquired_at"],
+        released_at=row["released_at"],
+        release_reason=row["release_reason"],
     )
 
 
@@ -682,41 +820,261 @@ class GameDirectoryRepository:
             )
         return _principal_credential_from_row(refreshed)
 
-    def create_character(self, request: CharacterCreate) -> CharacterRecord:
-        """Persist one player-owned character."""
+    def create_character_with_revisions(
+        self,
+        request: CharacterBootstrapCreate,
+    ) -> CanonicalCharacterRecord:
+        """Atomically persist a character, definition one, and starter holdings."""
 
         now = self._now()
-        with self._database.transaction("create_character") as connection:
+        timestamp = datetime_to_text(now)
+        definition = request.definition
+        holdings = request.starter_holdings
+        definition_json = canonical_json(definition.model_dump(mode="json"))
+        holdings_json = canonical_json(holdings.model_dump(mode="json"))
+        # Migration v2 made this physical column NOT NULL. It remains solely
+        # as frozen input for pending legacy-row backfill; no public contract
+        # or runtime authority reads it.
+        legacy_backfill_premade_id = (
+            definition.premade_id
+            or definition.creature_recipe.ref.identity_key
+        )
+        with self._database.transaction(
+            "create_character_with_revisions",
+        ) as connection:
             self._required_row(
                 connection,
                 "SELECT principal_id FROM principals WHERE principal_id = ?",
                 (str(request.owner_principal_id),),
                 "principal",
             )
-            connection.execute(
-                """
-                INSERT INTO characters(
-                    character_id, owner_principal_id, display_name,
-                    preset_configuration_id, status, created_at, updated_at, row_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-                """,
-                (
-                    str(request.character_id),
-                    str(request.owner_principal_id),
-                    request.display_name,
-                    request.preset_configuration_id,
-                    request.status.value,
-                    datetime_to_text(now),
-                    datetime_to_text(now),
-                ),
-            )
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO characters(
+                        character_id, owner_principal_id, display_name,
+                        preset_configuration_id, status, created_at, updated_at,
+                        row_version, revision_state
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'legacy_pending')
+                    """,
+                    (
+                        str(request.character_id),
+                        str(request.owner_principal_id),
+                        request.display_name,
+                        legacy_backfill_premade_id,
+                        request.status.value,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO character_definitions(
+                        character_id, definition_revision, schema_version,
+                        definition_json, definition_digest, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(definition.character_id),
+                        definition.definition_revision,
+                        definition.schema_version,
+                        definition_json,
+                        definition.definition_digest,
+                        timestamp,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO character_holdings_revisions(
+                        character_id, holdings_revision, schema_version,
+                        holdings_json, holdings_digest, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(holdings.character_id),
+                        holdings.holdings_revision,
+                        holdings.schema_version,
+                        holdings_json,
+                        holdings.holdings_digest,
+                        timestamp,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE characters
+                    SET revision_state = 'canonical',
+                        current_definition_revision = ?,
+                        current_definition_digest = ?,
+                        current_holdings_revision = ?,
+                        current_holdings_digest = ?
+                    WHERE character_id = ?
+                    """,
+                    (
+                        definition.definition_revision,
+                        definition.definition_digest,
+                        holdings.holdings_revision,
+                        holdings.holdings_digest,
+                        str(request.character_id),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    "Character revision-one bootstrap failed: "
+                    f"{exc}",
+                ) from exc
             row = self._required_row(
                 connection,
                 "SELECT * FROM characters WHERE character_id = ?",
                 (str(request.character_id),),
                 "character",
             )
-        return _character_from_row(row)
+        return _canonical_character_from_row(row)
+
+    def get_character_definition_revision(
+        self,
+        character_id: UUID,
+        *,
+        definition_revision: int,
+    ) -> CharacterDefinitionRecord:
+        """Return one exact immutable structural revision."""
+
+        if definition_revision < 1:
+            raise ValueError("definition_revision must be at least 1")
+        with self._database.read(
+            "get_character_definition_revision",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_definitions
+                WHERE character_id = ? AND definition_revision = ?
+                """,
+                (str(character_id), definition_revision),
+                "character definition revision",
+            )
+        return _character_definition_from_row(row)
+
+    def get_character_holdings_revision(
+        self,
+        character_id: UUID,
+        *,
+        holdings_revision: int,
+    ) -> CharacterHoldingsRecord:
+        """Return one exact immutable holdings revision."""
+
+        if holdings_revision < 1:
+            raise ValueError("holdings_revision must be at least 1")
+        with self._database.read(
+            "get_character_holdings_revision",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_holdings_revisions
+                WHERE character_id = ? AND holdings_revision = ?
+                """,
+                (str(character_id), holdings_revision),
+                "character holdings revision",
+            )
+        return _character_holdings_from_row(row)
+
+    def append_character_holdings_revision(
+        self,
+        holdings: CharacterHoldingsRevision,
+        *,
+        expected_holdings_revision: int,
+        expected_holdings_digest: str,
+        expected_row_version: int,
+    ) -> CanonicalCharacterRecord:
+        """Append immutable holdings and CAS-advance the character head."""
+
+        if expected_holdings_revision < 1:
+            raise ValueError("expected_holdings_revision must be at least 1")
+        if expected_row_version < 1:
+            raise ValueError("expected_row_version must be at least 1")
+        if holdings.holdings_revision != expected_holdings_revision + 1:
+            raise ValueError(
+                "new holdings revision must increase the expected revision "
+                "by exactly one",
+            )
+        now = self._now()
+        timestamp = datetime_to_text(now)
+        holdings_json = canonical_json(holdings.model_dump(mode="json"))
+        with self._database.transaction(
+            "append_character_holdings_revision",
+        ) as connection:
+            current_row = self._required_row(
+                connection,
+                "SELECT * FROM characters WHERE character_id = ?",
+                (str(holdings.character_id),),
+                "character",
+            )
+            current = _canonical_character_from_row(current_row)
+            if (
+                current.current_holdings_revision
+                != expected_holdings_revision
+                or current.current_holdings_digest
+                != expected_holdings_digest
+                or current.row_version != expected_row_version
+            ):
+                raise StaleVersionError(
+                    f"Character {holdings.character_id} holdings head changed",
+                )
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO character_holdings_revisions(
+                        character_id, holdings_revision, schema_version,
+                        holdings_json, holdings_digest, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(holdings.character_id),
+                        holdings.holdings_revision,
+                        holdings.schema_version,
+                        holdings_json,
+                        holdings.holdings_digest,
+                        timestamp,
+                    ),
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE characters
+                    SET current_holdings_revision = ?,
+                        current_holdings_digest = ?,
+                        updated_at = ?,
+                        row_version = row_version + 1
+                    WHERE character_id = ?
+                      AND revision_state = 'canonical'
+                      AND current_holdings_revision = ?
+                      AND current_holdings_digest = ?
+                      AND row_version = ?
+                    """,
+                    (
+                        holdings.holdings_revision,
+                        holdings.holdings_digest,
+                        timestamp,
+                        str(holdings.character_id),
+                        expected_holdings_revision,
+                        expected_holdings_digest,
+                        expected_row_version,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    f"Character holdings append failed: {exc}",
+                ) from exc
+            if cursor.rowcount != 1:
+                raise StaleVersionError(
+                    f"Character {holdings.character_id} holdings head changed",
+                )
+            updated_row = self._required_row(
+                connection,
+                "SELECT * FROM characters WHERE character_id = ?",
+                (str(holdings.character_id),),
+                "character",
+            )
+        return _canonical_character_from_row(updated_row)
 
     def get_character(self, character_id: UUID) -> CharacterRecord:
         """Return one persistent character by identifier."""
@@ -743,6 +1101,240 @@ class GameDirectoryRepository:
                 (str(principal_id),),
             ).fetchall()
         return tuple(_character_from_row(row) for row in rows)
+
+    def acquire_character_deployment_lease(
+        self,
+        request: CharacterDeploymentLeaseCreate,
+    ) -> CharacterDeploymentLeaseRecord:
+        """Acquire the one active live-deployment lease for a character."""
+
+        now = self._now()
+        with self._database.transaction(
+            "acquire_character_deployment_lease",
+        ) as connection:
+            ownership_row = self._required_row(
+                connection,
+                """
+                SELECT
+                    character.status,
+                    character.revision_state,
+                    character.owner_principal_id,
+                    membership.game_id AS membership_game_id,
+                    membership.principal_id AS membership_principal_id,
+                    membership.membership_state,
+                    membership.may_control_entities
+                FROM characters AS character
+                JOIN game_memberships AS membership
+                  ON membership.membership_id = ?
+                WHERE character.character_id = ?
+                """,
+                (
+                    str(request.membership_id),
+                    str(request.character_id),
+                ),
+                "character deployment authority",
+            )
+            if ownership_row["revision_state"] != CharacterRevisionState.CANONICAL.value:
+                raise ConflictError(
+                    "Character requires canonical revisions before deployment",
+                )
+            if ownership_row["status"] != "active":
+                raise ConflictError("Retired characters cannot be deployed")
+            if ownership_row["membership_game_id"] != str(request.game_id):
+                raise ConflictError(
+                    "Character deployment membership belongs to another game",
+                )
+            if (
+                ownership_row["membership_principal_id"]
+                != ownership_row["owner_principal_id"]
+            ):
+                raise ConflictError(
+                    "Character deployment membership does not belong to the "
+                    "character owner",
+                )
+            if ownership_row["membership_state"] != MembershipState.ACTIVE.value:
+                raise ConflictError(
+                    "Character deployment requires an active membership",
+                )
+            if not bool(ownership_row["may_control_entities"]):
+                raise ConflictError(
+                    "Character deployment membership does not have "
+                    "entity-control authority",
+                )
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO character_deployment_leases(
+                        lease_id, character_id, game_id, membership_id,
+                        acquired_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(request.lease_id),
+                        str(request.character_id),
+                        str(request.game_id),
+                        str(request.membership_id),
+                        datetime_to_text(now),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                active = connection.execute(
+                    """
+                    SELECT lease_id FROM character_deployment_leases
+                    WHERE character_id = ? AND released_at IS NULL
+                    """,
+                    (str(request.character_id),),
+                ).fetchone()
+                if active is not None:
+                    raise ConflictError(
+                        f"Character {request.character_id} already has an "
+                        "active deployment lease",
+                    ) from exc
+                raise ConflictError(
+                    f"Character deployment lease could not be acquired: {exc}",
+                ) from exc
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE lease_id = ?
+                """,
+                (str(request.lease_id),),
+                "character deployment lease",
+            )
+        return _character_deployment_lease_from_row(row)
+
+    def release_character_deployment_lease(
+        self,
+        lease_id: UUID,
+        *,
+        release_reason: str,
+    ) -> CharacterDeploymentLeaseRecord:
+        """Release one active lease, accepting an exact idempotent retry."""
+
+        if not release_reason:
+            raise ValueError("release_reason cannot be empty")
+        now = self._now()
+        with self._database.transaction(
+            "release_character_deployment_lease",
+        ) as connection:
+            current_row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE lease_id = ?
+                """,
+                (str(lease_id),),
+                "character deployment lease",
+            )
+            current = _character_deployment_lease_from_row(current_row)
+            if current.released_at is not None:
+                if current.release_reason != release_reason:
+                    raise ConflictError(
+                        "Character deployment lease was already released "
+                        "for a different reason",
+                    )
+                return current
+            connection.execute(
+                """
+                UPDATE character_deployment_leases
+                SET released_at = ?, release_reason = ?
+                WHERE lease_id = ? AND released_at IS NULL
+                """,
+                (
+                    datetime_to_text(now),
+                    release_reason,
+                    str(lease_id),
+                ),
+            )
+            released_row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE lease_id = ?
+                """,
+                (str(lease_id),),
+                "character deployment lease",
+            )
+        return _character_deployment_lease_from_row(released_row)
+
+    def deploy_character_pinned(
+        self,
+        request: PinnedCharacterDeploymentCreate,
+    ) -> PinnedCharacterDeploymentRecord:
+        """Persist a deployment pinned to the leased character's exact heads."""
+
+        now = self._now()
+        with self._database.transaction(
+            "deploy_character_pinned",
+        ) as connection:
+            lease_row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE lease_id = ?
+                """,
+                (str(request.lease_id),),
+                "character deployment lease",
+            )
+            lease = _character_deployment_lease_from_row(lease_row)
+            if lease.released_at is not None:
+                raise ConflictError(
+                    "Pinned character deployment requires an active lease",
+                )
+            if (
+                lease.character_id != request.character_id
+                or lease.game_id != request.game_id
+                or lease.membership_id != request.membership_id
+            ):
+                raise ConflictError(
+                    "Pinned character deployment does not match its lease",
+                )
+            character_row = self._required_row(
+                connection,
+                "SELECT * FROM characters WHERE character_id = ?",
+                (str(request.character_id),),
+                "character",
+            )
+            character = _canonical_character_from_row(character_row)
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO character_deployments(
+                        deployment_id, game_id, membership_id, character_id,
+                        entity_uuid, deployed_at, lease_id, pin_state,
+                        definition_revision, definition_digest,
+                        holdings_revision, holdings_digest
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pinned', ?, ?, ?, ?)
+                    """,
+                    (
+                        str(request.deployment_id),
+                        str(request.game_id),
+                        str(request.membership_id),
+                        str(request.character_id),
+                        str(request.entity_uuid),
+                        datetime_to_text(now),
+                        str(request.lease_id),
+                        character.current_definition_revision,
+                        character.current_definition_digest,
+                        character.current_holdings_revision,
+                        character.current_holdings_digest,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    f"Pinned character deployment could not be created: {exc}",
+                ) from exc
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployments
+                WHERE deployment_id = ?
+                """,
+                (str(request.deployment_id),),
+                "character deployment",
+            )
+        return _pinned_character_deployment_from_row(row)
 
     def deploy_character(
         self,

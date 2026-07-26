@@ -9,6 +9,8 @@ import pytest
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_use_action
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import GreaterInvisibilityEffect
 from dnd.controller import Controller
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
@@ -17,7 +19,7 @@ from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import create_potion_of_greater_invisibility
+from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import DndEventStream
 from server.player_replication.journal import (
@@ -279,7 +281,11 @@ def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:
         name="Invisible caster",
         config=EntityConfig(position=(2, 0), faction="monsters"),
     )
-    potion = create_potion_of_greater_invisibility(caster.uuid)
+    potion = materialize_item(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        caster.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert caster.loot_item(potion)
     stored_potion = next(
         item

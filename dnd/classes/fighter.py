@@ -19,7 +19,7 @@ from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
     Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
@@ -501,7 +501,7 @@ def create_protection_handler(source_entity_uuid: UUID) -> EventHandler:
     return EventHandler(
         name="Protection",
         semantic_key="feature.fighter.protection",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -968,9 +968,6 @@ class ActionSurge(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return declaration_event.cancel(status_message="Entity not found")
-
-        if not entity.action_economy.can_afford_resource("action_surge", 1):
-            return declaration_event.cancel(status_message="Action Surge not available")
 
         if "ActionSurging" in entity.active_conditions:
             return declaration_event.cancel(status_message="Already used Action Surge this turn")

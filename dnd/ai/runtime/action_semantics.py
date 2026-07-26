@@ -189,7 +189,10 @@ class _SemanticInput:
 
 
 HEALING_ACTION_KEYS = frozenset({
-    "dnd.items.test_items.DrinkPotionAction",
+    (
+        "content.neurodragon:action:"
+        "action.consumable.healing_potion.drink@1"
+    ),
     "dnd.spells.evocation.CureWounds",
     "dnd.spells.evocation.HealingWord",
     "dnd.spells.evocation.MassHeal",

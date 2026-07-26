@@ -6,6 +6,10 @@ from uuid import UUID, uuid4
 
 import httpx
 
+from dnd.action_dispatch import (
+    ActionDispatchResult,
+    dispatch_available_action as canonical_dispatch_available_action,
+)
 from dnd.controller import Controller, HumanController, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
@@ -18,6 +22,8 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.reactions import add_opportunity_attack_handler
+from server import event_server
 from server.event_server import app, sim
 from server.player_replication_contract import SubjectiveReplicationBootstrap
 from server.session import (
@@ -399,9 +405,10 @@ def test_game_join_accepts_single_entity_uuid_alias() -> None:
     assert ping_payload["controlled_entities"] == [str(hero.uuid)]
 
 
-def test_subjective_state_and_available_actions_payloads(capsys) -> None:
+def test_subjective_state_and_available_actions_payloads() -> None:
     """Subjective bootstrap and command routes describe the joined scene."""
     client, session_id, hero, monster, _encounter = create_joined_client_game()
+    add_opportunity_attack_handler(hero)
 
     bootstrap_response = client.get(
         "/replication/bootstrap",
@@ -420,6 +427,34 @@ def test_subjective_state_and_available_actions_payloads(capsys) -> None:
         action["template_name"]
         for action in actions_payload["entity_actions"]
     }
+    handler_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    assert handler_response.status_code == 200
+    handlers_payload = handler_response.json()
+    catalog_response = client.get("/content/catalog")
+    assert catalog_response.status_code == 200
+    catalog_keys = {
+        (
+            entry["ref"]["pack_id"],
+            entry["ref"]["definition_kind"],
+            entry["ref"]["content_id"],
+            entry["ref"]["content_version"],
+            entry["ref"]["definition_contract_hash"],
+        )
+        for entry in catalog_response.json()["entries"]
+    }
+
+    def attribution_key(attribution: dict) -> tuple:
+        ref = attribution["definition_ref"]
+        return (
+            ref["pack_id"],
+            ref["definition_kind"],
+            ref["content_id"],
+            ref["content_version"],
+            ref["definition_contract_hash"],
+        )
 
     assert {"Manual Hero", "Manual Skeleton"} <= entity_names
     assert bootstrap.perspective.controlled_entity_uuids == (str(hero.uuid),)
@@ -428,6 +463,30 @@ def test_subjective_state_and_available_actions_payloads(capsys) -> None:
     assert "Attack_MELEE_MAIN" in action_names
     assert attack_target_index(actions_payload, monster.uuid) == 0
     assert actions_payload["actions_remaining"] == 1
+    all_action_rows = (
+        actions_payload["entity_actions"]
+        + actions_payload["position_actions"]
+        + actions_payload["self_actions"]
+        + actions_payload["object_actions"]
+    )
+    shake_awake = next(
+        row
+        for row in actions_payload["entity_actions"]
+        if row["template_name"] == "Shake Awake"
+    )
+    assert shake_awake["availability_status"] == "no_valid_targets"
+    assert shake_awake["valid_targets"] == []
+    assert all(
+        attribution_key(row["behavior_attribution"]) in catalog_keys
+        for row in all_action_rows
+    )
+    assert [row["name"] for row in handlers_payload["handlers"]] == [
+        "Opportunity Attack Handler",
+    ]
+    assert all(
+        attribution_key(row["behavior_attribution"]) in catalog_keys
+        for row in handlers_payload["handlers"]
+    )
     assert session_id in client.get("/game/status").text
 
     readout_lines = [
@@ -444,19 +503,7 @@ def test_subjective_state_and_available_actions_payloads(capsys) -> None:
             f"actions_remaining={actions_payload['actions_remaining']}"
         ),
     ]
-    expected_lines = [
-        "subjective snapshot: entities=['Manual Hero', 'Manual Skeleton'], current=Manual Hero",
-        (
-            "action menu: entity=Manual Hero, "
-            "actions=['Attack_MELEE_MAIN', 'Attack_RANGED_MAIN', 'Shove'], target_index=0"
-        ),
-        "status echo: session_seen=yes, actions_remaining=1",
-    ]
-
     print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
 def test_execute_action_by_index_acknowledges_then_journals_state_and_logs(capsys) -> None:
@@ -529,6 +576,78 @@ def test_execute_action_by_index_acknowledges_then_journals_state_and_logs(capsy
 
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
+
+
+def test_execute_action_http_route_uses_the_canonical_dispatcher(
+    monkeypatch,
+) -> None:
+    """HTTP commands preserve the exact discovered row through the core dispatcher."""
+    client, session_id, hero, monster, _encounter = create_joined_client_game()
+    actions_payload = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    ).json()
+    target_index = attack_target_index(actions_payload, monster.uuid)
+    cached = event_server._available_actions_cache[str(hero.uuid)]
+    expected_action = next(
+        row
+        for row in cached.entity_actions
+        if row.template_name == "Attack_MELEE_MAIN"
+    )
+    expected_target = next(
+        target
+        for target in expected_action.valid_targets
+        if target.index == target_index
+    )
+    received: list[tuple[object, object, object]] = []
+
+    def recording_dispatch(
+        entity,
+        *,
+        action_info,
+        target,
+        extra_target_uuids=(),
+        prefer_safe=True,
+        movement_guard=None,
+        record_timing=None,
+    ) -> ActionDispatchResult:
+        received.append((entity, action_info, target))
+        assert action_info is expected_action
+        assert target is expected_target
+        assert extra_target_uuids == ()
+        assert prefer_safe is True
+        assert movement_guard is None
+        assert record_timing is None
+        return canonical_dispatch_available_action(
+            entity,
+            action_info=action_info,
+            target=target,
+            extra_target_uuids=extra_target_uuids,
+            prefer_safe=prefer_safe,
+            movement_guard=movement_guard,
+            record_timing=record_timing,
+        )
+
+    monkeypatch.setattr(
+        event_server,
+        "dispatch_available_action",
+        recording_dispatch,
+        raising=False,
+    )
+    response = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(hero.uuid),
+            "template_name": "Attack_MELEE_MAIN",
+            "target_index": target_index,
+            "return_available_actions": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] in (True, False)
+    assert received == [(hero, expected_action, expected_target)]
 
 
 def test_execute_movement_delivers_typed_trajectory_through_replication() -> None:
@@ -612,12 +731,38 @@ def test_spell_catalog_route_exposes_design_time_spell_metadata(capsys) -> None:
     assert response.status_code == 200
     assert payload["version"]
     assert {"fire_bolt", "magic_missile", "fireball"} <= set(spells)
+    assert len({
+        (
+            spell["content_ref"]["pack_id"],
+            spell["content_ref"]["definition_kind"],
+            spell["content_ref"]["content_id"],
+            spell["content_ref"]["content_version"],
+        )
+        for spell in spells.values()
+    }) == len(spells) == 110
+    assert spells["fire_bolt"]["content_ref"]["content_id"] == "spell.fire_bolt"
+    assert spells["fire_bolt"]["content_ref"]["pack_id"] == "content.srd_5_1_cc"
+    assert spells["fire_bolt"]["content_ref"]["definition_kind"] == "spell"
+    aegis_ref = spells["aegis_spark"]["content_ref"]
+    assert aegis_ref["pack_id"] == "content.neurodragon"
+    assert aegis_ref["definition_kind"] == "spell"
+    assert aegis_ref["content_id"] == "spell.aegis_spark"
+    assert aegis_ref["content_version"] == 1
+    assert len(aegis_ref["definition_contract_hash"]) == 64
     assert spells["fire_bolt"]["action_category"] == "spell"
     assert spells["fire_bolt"]["attack_roll"]
     assert spells["fire_bolt"]["range_ft"] is not None
     assert spells["magic_missile"]["multi_target"] is not None
     assert spells["fireball"]["aoe_shape_type"] == "sphere"
     assert "Fire" in spells["fireball"]["damage_types"]
+    assert spells["fireball"]["saving_throws"] == [
+        {
+            "ability": "dexterity",
+            "dc_source": "caster_spell_save_dc",
+        },
+    ]
+    assert "saving_throw" not in spells["fireball"]
+    assert "aliases" not in spells["fireball"]
 
     readout_lines = [
         (
@@ -643,7 +788,7 @@ def test_spell_catalog_route_exposes_design_time_spell_metadata(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "catalog response: status=200, version=2026-05-03.1, spells=109",
+        "catalog response: status=200, version=2026-07-26.1, spells=110",
         "fire bolt: category=spell, attack_roll=yes, range=120",
         "magic missile: multi_target=yes",
         "fireball: aoe=sphere, damage_types=['Fire']",

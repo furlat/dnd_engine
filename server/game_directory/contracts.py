@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from dnd.analytics.models import GameSummary
+from dnd.core.content.durable_characters import (
+    CharacterDefinitionRevision,
+    CharacterHoldingsRevision,
+)
 
 JsonObject = dict[str, JsonValue]
 
@@ -33,6 +38,20 @@ class CharacterStatus(str, Enum):
 
     ACTIVE = "active"
     RETIRED = "retired"
+
+
+class CharacterRevisionState(str, Enum):
+    """Durable revision readiness for a character row."""
+
+    LEGACY_PENDING = "legacy_pending"
+    CANONICAL = "canonical"
+
+
+class CharacterDeploymentPinState(str, Enum):
+    """Whether a deployment has exact durable character revision pins."""
+
+    LEGACY_PENDING = "legacy_pending"
+    PINNED = "pinned"
 
 
 class WorkerState(str, Enum):
@@ -217,25 +236,141 @@ class PrincipalCredentialRecord(PrincipalCredentialCreate):
     revoked_at: datetime | None = Field(default=None, description="UTC credential revocation time.")
 
 
-class CharacterCreate(DirectoryModel):
-    """Create one persistent character from a supported engine preset."""
-
-    character_id: UUID = Field(default_factory=uuid4, description="Stable character identifier.")
-    owner_principal_id: UUID = Field(description="Principal that owns the character.")
-    display_name: str = Field(min_length=1, max_length=80, description="Player-facing character name.")
-    preset_configuration_id: str = Field(
-        min_length=1,
-        description="Engine hero configuration used to instantiate the character.",
-    )
-    status: CharacterStatus = Field(default=CharacterStatus.ACTIVE, description="Character lifecycle state.")
-
-
-class CharacterRecord(CharacterCreate):
+class CharacterRecord(DirectoryModel):
     """Persisted player character and its current revision."""
 
+    character_id: UUID = Field(description="Stable character identifier.")
+    owner_principal_id: UUID = Field(
+        description="Principal that owns the character.",
+    )
+    display_name: str = Field(
+        min_length=1,
+        max_length=80,
+        description="Player-facing character name.",
+    )
+    status: CharacterStatus = Field(
+        default=CharacterStatus.ACTIVE,
+        description="Character lifecycle state.",
+    )
+    revision_state: CharacterRevisionState = Field(
+        default=CharacterRevisionState.LEGACY_PENDING,
+        description="Whether exact definition and holdings heads are installed.",
+    )
+    current_definition_revision: int | None = Field(
+        default=None,
+        ge=1,
+        description="Current immutable structural revision, when migrated.",
+    )
+    current_definition_digest: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="Digest of the current immutable structural revision.",
+    )
+    current_holdings_revision: int | None = Field(
+        default=None,
+        ge=1,
+        description="Current immutable holdings revision, when migrated.",
+    )
+    current_holdings_digest: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="Digest of the current immutable holdings revision.",
+    )
     created_at: datetime = Field(description="UTC character creation time.")
     updated_at: datetime = Field(description="UTC time of the latest character update.")
     row_version: int = Field(default=1, ge=1, description="Compare-and-swap character revision.")
+
+    @model_validator(mode="after")
+    def _validate_revision_heads(self) -> Self:
+        """Require either an explicit legacy gap or four complete current heads."""
+
+        heads = (
+            self.current_definition_revision,
+            self.current_definition_digest,
+            self.current_holdings_revision,
+            self.current_holdings_digest,
+        )
+        if self.revision_state is CharacterRevisionState.LEGACY_PENDING:
+            if any(value is not None for value in heads):
+                raise ValueError(
+                    "legacy-pending characters cannot have revision heads",
+                )
+        elif any(value is None for value in heads):
+            raise ValueError("canonical characters require complete revision heads")
+        return self
+
+
+class CanonicalCharacterRecord(CharacterRecord):
+    """Character row whose exact durable definition and holdings heads exist."""
+
+    revision_state: Literal[CharacterRevisionState.CANONICAL] = (
+        CharacterRevisionState.CANONICAL
+    )
+    current_definition_revision: int = Field(default=..., ge=1)
+    current_definition_digest: str = Field(
+        default=...,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    current_holdings_revision: int = Field(default=..., ge=1)
+    current_holdings_digest: str = Field(
+        default=...,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+
+
+class CharacterBootstrapCreate(DirectoryModel):
+    """Atomically create one character with definition and starter holdings."""
+
+    character_id: UUID = Field(
+        default_factory=uuid4,
+        description="Stable character identifier shared by every revision.",
+    )
+    owner_principal_id: UUID = Field(
+        description="Principal that owns the character.",
+    )
+    display_name: str = Field(
+        min_length=1,
+        max_length=80,
+        description="Player-facing character name.",
+    )
+    definition: CharacterDefinitionRevision = Field(
+        description="Immutable structural revision one.",
+    )
+    starter_holdings: CharacterHoldingsRevision = Field(
+        description="Immutable starter holdings revision one.",
+    )
+    status: CharacterStatus = Field(
+        default=CharacterStatus.ACTIVE,
+        description="Initial character lifecycle state.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_revision_one(self) -> Self:
+        """Keep the atomic bootstrap identity and initial revisions exact."""
+
+        if self.definition.character_id != self.character_id:
+            raise ValueError("definition character_id must match character_id")
+        if self.starter_holdings.character_id != self.character_id:
+            raise ValueError("starter holdings character_id must match character_id")
+        if self.definition.definition_revision != 1:
+            raise ValueError("character bootstrap requires definition revision 1")
+        if self.starter_holdings.holdings_revision != 1:
+            raise ValueError("character bootstrap requires holdings revision 1")
+        return self
+
+
+class CharacterDefinitionRecord(DirectoryModel):
+    """One decoded immutable structural revision row."""
+
+    definition: CharacterDefinitionRevision
+    created_at: datetime
+
+
+class CharacterHoldingsRecord(DirectoryModel):
+    """One decoded immutable holdings revision row."""
+
+    holdings: CharacterHoldingsRevision
+    created_at: datetime
 
 
 class CharacterDeploymentCreate(DirectoryModel):
@@ -251,7 +386,91 @@ class CharacterDeploymentCreate(DirectoryModel):
 class CharacterDeploymentRecord(CharacterDeploymentCreate):
     """Persisted character-to-game deployment history."""
 
+    lease_id: UUID | None = Field(
+        default=None,
+        description="Exclusive lease authorizing a revision-pinned deployment.",
+    )
+    pin_state: CharacterDeploymentPinState = Field(
+        default=CharacterDeploymentPinState.LEGACY_PENDING,
+        description="Whether exact definition and holdings revisions are pinned.",
+    )
+    definition_revision: int | None = Field(default=None, ge=1)
+    definition_digest: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    holdings_revision: int | None = Field(default=None, ge=1)
+    holdings_digest: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
     deployed_at: datetime = Field(description="UTC deployment time.")
+
+    @model_validator(mode="after")
+    def _validate_revision_pins(self) -> Self:
+        """Keep legacy gaps explicit and pinned deployments complete."""
+
+        pins = (
+            self.lease_id,
+            self.definition_revision,
+            self.definition_digest,
+            self.holdings_revision,
+            self.holdings_digest,
+        )
+        if self.pin_state is CharacterDeploymentPinState.LEGACY_PENDING:
+            if any(value is not None for value in pins):
+                raise ValueError(
+                    "legacy-pending deployments cannot have revision pins",
+                )
+        elif any(value is None for value in pins):
+            raise ValueError("pinned deployments require complete revision pins")
+        return self
+
+
+class CharacterDeploymentLeaseCreate(DirectoryModel):
+    """Acquire exclusive live deployment authority for one character."""
+
+    lease_id: UUID = Field(default_factory=uuid4)
+    character_id: UUID
+    game_id: UUID
+    membership_id: UUID
+
+
+class CharacterDeploymentLeaseRecord(CharacterDeploymentLeaseCreate):
+    """Persisted acquisition and release history for one character lease."""
+
+    acquired_at: datetime
+    released_at: datetime | None = None
+    release_reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_release(self) -> Self:
+        """Release timestamp and reason become visible atomically."""
+
+        if (self.released_at is None) != (self.release_reason is None):
+            raise ValueError(
+                "lease release timestamp and reason must be set together",
+            )
+        return self
+
+
+class PinnedCharacterDeploymentCreate(CharacterDeploymentCreate):
+    """Deploy a character under one matching active exclusive lease."""
+
+    lease_id: UUID
+
+
+class PinnedCharacterDeploymentRecord(PinnedCharacterDeploymentCreate):
+    """Deployment history pinned to exact durable character heads."""
+
+    pin_state: Literal[CharacterDeploymentPinState.PINNED] = (
+        CharacterDeploymentPinState.PINNED
+    )
+    definition_revision: int = Field(ge=1)
+    definition_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    holdings_revision: int = Field(ge=1)
+    holdings_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    deployed_at: datetime
 
 
 class WorkerCreate(DirectoryModel):

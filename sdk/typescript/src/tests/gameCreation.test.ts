@@ -45,9 +45,20 @@ const catalog: GameCreationCatalogResponse = {
       deployment_role: "hero",
       augmentations: [{
         kind: "apparel_grant",
-        item_id: "costume",
-        visual_variant_id: "85000004",
-        display_name: "Pit Fighter's Wrap",
+        recipe: {
+          ref: {
+            pack_id: "content.neurodragon",
+            definition_kind: "item",
+            content_id: "apparel.costume",
+            content_version: 1,
+            definition_contract_hash: "a".repeat(64),
+          },
+          parameters: {
+            visual_variant_id: "85000004",
+            display_name: "Pit Fighter's Wrap",
+          },
+          recipe_digest: "b".repeat(64),
+        },
       }],
       kind: "barbarian",
       level: 5,

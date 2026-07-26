@@ -17,7 +17,7 @@ from dnd.actions import SpellAction
 from dnd.blocks.base_item import BaseItem
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.spells import ALL_SPELLS
 
 
@@ -39,7 +39,7 @@ class ImplementedContentDefinition(BaseModel):
 
     semantic_key: str = Field(description="Stable implementation identity.")
     display_name: str = Field(description="Human-readable content name.")
-    content_kind: ContentKind = Field(description="Rules-content family.")
+    content_kind: RuntimeBehaviorKind = Field(description="Rules-content family.")
     subtype: str = Field(description="More specific engine classification.")
     source_module: str = Field(description="Python module that owns the implementation.")
     source_class: str = Field(description="Python class or handler-definition name.")
@@ -52,7 +52,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="reaction.opportunity_attack",
         display_name="Opportunity Attack",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="movement_reaction",
         source_module="dnd.reactions",
         source_class="create_opportunity_attack_handler",
@@ -61,7 +61,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="reaction.spell.shield",
         display_name="Shield",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="spell_reaction",
         source_module="dnd.spells.abjuration",
         source_class="create_shield_reaction_handler",
@@ -70,7 +70,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="reaction.spell.counterspell",
         display_name="Counterspell",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="spell_reaction",
         source_module="dnd.spells.abjuration",
         source_class="create_counterspell_reaction_handler",
@@ -79,7 +79,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="feature.fighter.protection",
         display_name="Protection",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="class_feature_reaction",
         source_module="dnd.classes.fighter",
         source_class="create_protection_handler",
@@ -88,7 +88,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="trait.monster.parry",
         display_name="Parry",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="monster_trait_reaction",
         source_module="dnd.monsters.traits",
         source_class="ParryFeature",
@@ -97,7 +97,7 @@ _EXPLICIT_HANDLER_CONTENT: tuple[ImplementedContentDefinition, ...] = (
     ImplementedContentDefinition(
         semantic_key="feature.barbarian.retaliation",
         display_name="Retaliation",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         subtype="class_feature_reaction",
         source_module="dnd.classes.barbarian",
         source_class="Retaliation",
@@ -123,11 +123,11 @@ def build_implemented_content_catalog() -> dict[str, ImplementedContentDefinitio
         is_spell = issubclass(action_type, SpellAction) or semantic_key in spell_names
         is_environment = action_type.__module__.startswith("dnd.items.environment")
         kind = (
-            ContentKind.SPELL
+            RuntimeBehaviorKind.SPELL
             if is_spell
-            else ContentKind.ENVIRONMENT_INTERACTION
+            else RuntimeBehaviorKind.ENVIRONMENT_INTERACTION
             if is_environment
-            else ContentKind.ACTION
+            else RuntimeBehaviorKind.ACTION
         )
         category = _field_string(action_type, "action_category") or "ability"
         definitions[semantic_key] = ImplementedContentDefinition(
@@ -161,9 +161,9 @@ def build_implemented_content_catalog() -> dict[str, ImplementedContentDefinitio
             continue
         semantic_key = _field_string(item_type, "semantic_key") or _class_key(item_type)
         kind = (
-            ContentKind.ENVIRONMENT_INTERACTION
+            RuntimeBehaviorKind.ENVIRONMENT_INTERACTION
             if item_type.__module__.startswith("dnd.items.environment")
-            else ContentKind.ITEM
+            else RuntimeBehaviorKind.ITEM
         )
         definitions.setdefault(
             semantic_key,
@@ -212,12 +212,12 @@ def _field_string(content_type: type[Any], field_name: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _condition_kind(condition_type: type[BaseCondition]) -> ContentKind:
+def _condition_kind(condition_type: type[BaseCondition]) -> RuntimeBehaviorKind:
     module = condition_type.__module__
     if module == "dnd.classes.feats":
-        return ContentKind.FEAT
+        return RuntimeBehaviorKind.FEAT
     if module.startswith("dnd.monsters"):
-        return ContentKind.TRAIT
+        return RuntimeBehaviorKind.TRAIT
     if module.startswith("dnd.classes"):
-        return ContentKind.CLASS_FEATURE
-    return ContentKind.CONDITION
+        return RuntimeBehaviorKind.CLASS_FEATURE
+    return RuntimeBehaviorKind.CONDITION

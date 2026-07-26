@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Literal, Optional, Tuple, List, cast
+from typing import Callable, Literal, Optional, Tuple, List
 from uuid import UUID
 
 from pydantic import Field
@@ -22,13 +22,13 @@ from dnd.core.base_actions import (
     BaseAction,
     BaseCost,
     Cost,
-    CostType,
     OutcomeResolution,
     TargetEffectDisposition,
     TargetType,
+    spell_slot_cost_type,
 )
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import (
     DamageRollResultEvent,
@@ -67,11 +67,9 @@ def register_dark_devotion(entity: Entity) -> None:
     """Register SRD Dark Devotion on an entity."""
     _add_feature_once(
         entity,
-        ConditionalSaveAdvantageFeature(
+        DarkDevotionFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Dark Devotion",
-            condition_contexts=("Charmed", "Frightened", "Charm Person", "Fear"),
         ),
     )
 
@@ -80,24 +78,31 @@ def register_brave(entity: Entity) -> None:
     """Register SRD Brave on an entity."""
     _add_feature_once(
         entity,
-        ConditionalSaveAdvantageFeature(
+        BraveFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Brave",
-            condition_contexts=("Frightened", "Fear"),
         ),
     )
 
 
-def register_keen_perception(entity: Entity, *, name: str, modes: tuple[str, ...]) -> None:
-    """Register a keen-senses perception advantage feature."""
+def register_keen_hearing_and_sight(entity: Entity) -> None:
+    """Register the eagle-style Keen Hearing and Sight trait."""
     _add_feature_once(
         entity,
-        KeenPerceptionFeature(
+        KeenHearingAndSightFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name=name,
-            modes=modes,
+        ),
+    )
+
+
+def register_keen_hearing_and_smell(entity: Entity) -> None:
+    """Register the wolf-style Keen Hearing and Smell trait."""
+    _add_feature_once(
+        entity,
+        KeenHearingAndSmellFeature(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
         ),
     )
 
@@ -136,15 +141,9 @@ def register_martial_advantage(entity: Entity) -> None:
     """Register Hobgoblin Martial Advantage."""
     _add_feature_once(
         entity,
-        BonusDamageFeature(
+        MartialAdvantageFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Martial Advantage",
-            dice_numbers=2,
-            damage_dice=6,
-            requires_adjacent_ally=True,
-            once_per_turn=True,
-            weapon_only=True,
         ),
     )
 
@@ -153,15 +152,9 @@ def register_sneak_attack(entity: Entity) -> None:
     """Register Spy Sneak Attack."""
     _add_feature_once(
         entity,
-        BonusDamageFeature(
+        SneakAttackFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Sneak Attack",
-            dice_numbers=2,
-            damage_dice=6,
-            requires_sneak_condition=True,
-            once_per_turn=True,
-            weapon_only=True,
         ),
     )
 
@@ -170,14 +163,9 @@ def register_brute(entity: Entity) -> None:
     """Register SRD Brute-style extra melee weapon die."""
     _add_feature_once(
         entity,
-        BonusDamageFeature(
+        BruteFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Brute",
-            dice_numbers=1,
-            damage_dice=8,
-            melee_only=True,
-            weapon_only=True,
         ),
     )
 
@@ -186,36 +174,31 @@ def register_surprise_attack(entity: Entity) -> None:
     """Register Bugbear Surprise Attack for unseen opening strikes."""
     _add_feature_once(
         entity,
-        BonusDamageFeature(
+        SurpriseAttackFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Surprise Attack",
-            dice_numbers=2,
-            damage_dice=6,
-            requires_unseen_attacker=True,
-            once_per_turn=True,
-            weapon_only=True,
         ),
     )
 
 
-def register_bite_prone_rider(entity: Entity, dc: int) -> None:
-    """Register wolf-style bite prone rider."""
+def register_wolf_bite_prone_rider(entity: Entity) -> None:
+    """Register the wolf's DC 11 bite-prone rider."""
     _add_feature_once(
         entity,
-        HitSaveRiderFeature(
+        WolfBiteProneRiderFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Bite Prone Rider",
-            description=(
-                f"Hits with Bite force a DC {dc} Strength saving throw; "
-                "on failure, the target is knocked prone."
-            ),
-            semantic_key="dnd.monsters.traits.BiteProneRiderFeature",
-            weapon_names=("Bite",),
-            save_ability="strength",
-            save_dc=dc,
-            condition_name="Prone",
+        ),
+    )
+
+
+def register_dire_wolf_bite_prone_rider(entity: Entity) -> None:
+    """Register the dire wolf's DC 13 bite-prone rider."""
+    _add_feature_once(
+        entity,
+        DireWolfBiteProneRiderFeature(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
         ),
     )
 
@@ -224,20 +207,9 @@ def register_ghoul_claws_paralysis(entity: Entity) -> None:
     """Register Ghoul claw paralysis rider."""
     _add_feature_once(
         entity,
-        HitSaveRiderFeature(
+        GhoulClawsParalysisFeature(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            name="Ghoul Claws Paralysis",
-            description=(
-                "Hits with Claws force a DC 10 Constitution saving throw; "
-                "on failure, a non-undead target is paralyzed by ghoul claws."
-            ),
-            semantic_key="dnd.monsters.traits.GhoulClawsParalysisFeature",
-            weapon_names=("Claws",),
-            save_ability="constitution",
-            save_dc=10,
-            condition_name="Ghoul Paralysis",
-            excluded_creature_types=("undead",),
         ),
     )
 
@@ -399,6 +371,30 @@ class ConditionalSaveAdvantageFeature(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+class DarkDevotionFeature(ConditionalSaveAdvantageFeature):
+    """Advantage against charm and fear effects."""
+
+    name: str = Field(default="Dark Devotion")
+    description: str = Field(
+        default="Has advantage on saving throws against being charmed or frightened.",
+    )
+    condition_contexts: tuple[str, ...] = Field(
+        default=("Charmed", "Frightened", "Charm Person", "Fear"),
+    )
+
+
+class BraveFeature(ConditionalSaveAdvantageFeature):
+    """Advantage against fear effects."""
+
+    name: str = Field(default="Brave")
+    description: str = Field(
+        default="Has advantage on saving throws against being frightened.",
+    )
+    condition_contexts: tuple[str, ...] = Field(
+        default=("Frightened", "Fear"),
+    )
+
+
 def _condition_context_save_advantage(condition_contexts: tuple[str, ...], name: str) -> Callable[[UUID, Optional[UUID], Optional[dict]], Optional[AdvantageModifier]]:
     """Build a save-advantage callable for configured condition contexts."""
     configured = set(condition_contexts)
@@ -435,6 +431,32 @@ class KeenPerceptionFeature(BaseCondition):
         return [(owner.skill_set.perception.skill_bonus.uuid, mod_uuid)], [], [], [], effect_event
 
 
+class KeenHearingAndSightFeature(KeenPerceptionFeature):
+    """Advantage on hearing- and sight-based Perception checks."""
+
+    name: str = Field(default="Keen Hearing and Sight")
+    description: str = Field(
+        default=(
+            "Has advantage on Wisdom (Perception) checks that rely on hearing "
+            "or sight."
+        ),
+    )
+    modes: tuple[str, ...] = Field(default=("hearing", "sight"))
+
+
+class KeenHearingAndSmellFeature(KeenPerceptionFeature):
+    """Advantage on hearing- and smell-based Perception checks."""
+
+    name: str = Field(default="Keen Hearing and Smell")
+    description: str = Field(
+        default=(
+            "Has advantage on Wisdom (Perception) checks that rely on hearing "
+            "or smell."
+        ),
+    )
+    modes: tuple[str, ...] = Field(default=("hearing", "smell"))
+
+
 def _keen_perception_advantage(modes: tuple[str, ...], name: str) -> Callable[[UUID, Optional[UUID], Optional[dict]], Optional[AdvantageModifier]]:
     """Build a Perception advantage callable for configured senses."""
     keen_modes = set(modes)
@@ -455,17 +477,6 @@ class AggressiveMoveAction(Move):
     name: str = Field(default="Aggressive", description="Action name.")
     description: str = Field(default="Move up to speed toward a visible hostile as a bonus action.", description="Rules summary.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Aggressive Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Bonus action cost.")
-
-    def pre_validate(self) -> bool:
-        """Return whether a visible hostile exists."""
-        actor = Entity.get(self.source_entity_uuid)
-        if not actor:
-            return False
-        return any(
-            actor.is_enemy(entity)
-            for entity_uuid in actor.senses.entities
-            if (entity := Entity.get(entity_uuid)) is not None
-        )
 
     def _validate(self, declaration_event):
         actor = Entity.get(self.source_entity_uuid)
@@ -771,6 +782,65 @@ class BonusDamageFeature(BaseCondition):
         return event
 
 
+class MartialAdvantageFeature(BonusDamageFeature):
+    """Hobgoblin weapon damage while an ally threatens the target."""
+
+    name: str = Field(default="Martial Advantage")
+    description: str = Field(
+        default=(
+            "Once per turn, deals 2d6 extra weapon damage when an ally is "
+            "adjacent to the target."
+        ),
+    )
+    dice_numbers: int = Field(default=2)
+    damage_dice: DamageDieValue = Field(default=6)
+    requires_adjacent_ally: bool = Field(default=True)
+    once_per_turn: bool = Field(default=True)
+
+
+class SneakAttackFeature(BonusDamageFeature):
+    """Spy weapon damage with advantage or an adjacent ally."""
+
+    name: str = Field(default="Sneak Attack")
+    description: str = Field(
+        default=(
+            "Once per turn, deals 2d6 extra weapon damage with advantage or "
+            "when an ally is adjacent to the target without disadvantage."
+        ),
+    )
+    dice_numbers: int = Field(default=2)
+    damage_dice: DamageDieValue = Field(default=6)
+    requires_sneak_condition: bool = Field(default=True)
+    once_per_turn: bool = Field(default=True)
+
+
+class BruteFeature(BonusDamageFeature):
+    """One additional melee weapon damage die on every qualifying hit."""
+
+    name: str = Field(default="Brute")
+    description: str = Field(
+        default="Deals one additional d8 of damage with melee weapon attacks.",
+    )
+    damage_dice: DamageDieValue = Field(default=8)
+    melee_only: bool = Field(default=True)
+
+
+class SurpriseAttackFeature(BonusDamageFeature):
+    """Bugbear opening damage against a target that cannot perceive it."""
+
+    name: str = Field(default="Surprise Attack")
+    description: str = Field(
+        default=(
+            "Once per turn, deals 2d6 extra weapon damage when attacking from "
+            "an unseen position."
+        ),
+    )
+    dice_numbers: int = Field(default=2)
+    damage_dice: DamageDieValue = Field(default=6)
+    requires_unseen_attacker: bool = Field(default=True)
+    once_per_turn: bool = Field(default=True)
+
+
 class SimpleMarkerCondition(BaseCondition):
     """No-op marker condition."""
 
@@ -874,6 +944,55 @@ class HitSaveRiderFeature(BaseCondition):
         return event
 
 
+class WolfBiteProneRiderFeature(HitSaveRiderFeature):
+    """A wolf bite can knock its target prone on a failed DC 11 save."""
+
+    name: str = Field(default="Bite Prone Rider")
+    description: str = Field(
+        default=(
+            "Hits with Bite force a DC 11 Strength saving throw; on failure, "
+            "the target is knocked prone."
+        ),
+    )
+    weapon_names: tuple[str, ...] = Field(default=("Bite",))
+    save_ability: str = Field(default="strength")
+    save_dc: int = Field(default=11)
+    condition_name: str = Field(default="Prone")
+
+
+class DireWolfBiteProneRiderFeature(HitSaveRiderFeature):
+    """A dire wolf bite can knock its target prone on a failed DC 13 save."""
+
+    name: str = Field(default="Bite Prone Rider")
+    description: str = Field(
+        default=(
+            "Hits with Bite force a DC 13 Strength saving throw; on failure, "
+            "the target is knocked prone."
+        ),
+    )
+    weapon_names: tuple[str, ...] = Field(default=("Bite",))
+    save_ability: str = Field(default="strength")
+    save_dc: int = Field(default=13)
+    condition_name: str = Field(default="Prone")
+
+
+class GhoulClawsParalysisFeature(HitSaveRiderFeature):
+    """Ghoul claws paralyze a non-undead target on a failed save."""
+
+    name: str = Field(default="Ghoul Claws Paralysis")
+    description: str = Field(
+        default=(
+            "Hits with Claws force a DC 10 Constitution saving throw; on "
+            "failure, a non-undead target is paralyzed by ghoul claws."
+        ),
+    )
+    weapon_names: tuple[str, ...] = Field(default=("Claws",))
+    save_ability: str = Field(default="constitution")
+    save_dc: int = Field(default=10)
+    condition_name: str = Field(default="Ghoul Paralysis")
+    excluded_creature_types: tuple[str, ...] = Field(default=("undead",))
+
+
 class GhoulParalysisEffect(BaseCondition):
     """Ghoul paralysis effect with end-of-turn repeat save."""
 
@@ -922,7 +1041,7 @@ class UndeadFortitudeFeature(BaseCondition):
         handler = EventHandler(
             name="Undead Fortitude",
             semantic_key="trait.monster.undead_fortitude",
-            content_kind=ContentKind.TRAIT,
+            content_kind=RuntimeBehaviorKind.TRAIT,
             source_entity_uuid=owner.uuid,
             trigger_conditions=[Trigger(event_type=EventType.TAKE_DAMAGE, event_phase=EventPhase.EFFECT, event_target_entity_uuid=owner.uuid)],
             event_processor=self._processor,
@@ -966,7 +1085,7 @@ class ParryFeature(BaseCondition):
         handler = EventHandler(
             name="Parry",
             semantic_key="trait.monster.parry",
-            content_kind=ContentKind.REACTION,
+            content_kind=RuntimeBehaviorKind.REACTION,
             source_entity_uuid=owner.uuid,
             trigger_conditions=[Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EXECUTION, event_target_entity_uuid=owner.uuid)],
             event_processor=self._processor,
@@ -1006,9 +1125,18 @@ class DivineEminenceAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Self action.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Divine Eminence Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Bonus action cost.")
 
-    def pre_validate(self) -> bool:
+    def get_source_dynamic_costs(self) -> List[Cost]:
+        """Declare the lowest available spell slot through the typed cost path."""
         actor = Entity.get(self.source_entity_uuid)
-        return bool(actor and actor.get_lowest_spell_slot(1) is not None and actor.action_economy.can_afford("bonus_actions", 1))
+        slot_level = actor.get_lowest_spell_slot(1) if actor is not None else None
+        return [
+            Cost(
+                name="Divine Eminence Spell Slot",
+                cost_type=spell_slot_cost_type(slot_level or 1),
+                cost=1,
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ]
 
     def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
         """Describe the short-lived radiant weapon setup for AI policy."""
@@ -1027,10 +1155,18 @@ class DivineEminenceAction(BaseAction):
         actor = Entity.get(self.source_entity_uuid)
         if actor is None:
             return execution_event.cancel(status_message="Actor not found")
-        slot = actor.get_lowest_spell_slot(1)
-        if slot is None:
+        slot_cost = next(
+            (
+                cost
+                for cost in execution_event.costs
+                if cost.cost_type.startswith("spell_slot_")
+                and cost.cost > 0
+            ),
+            None,
+        )
+        if slot_cost is None:
             return execution_event.cancel(status_message="No spell slot for Divine Eminence")
-        actor.action_economy.consume(cast(CostType, f"spell_slot_{slot}"), 1)
+        slot = int(slot_cost.cost_type.rsplit("_", maxsplit=1)[-1])
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} invokes Divine Eminence")
         actor.add_condition(DivineEminenceActive(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, slot_level=slot), parent_event=effect_event)
         return effect_event.phase_to(EventPhase.COMPLETION, status_message="Divine Eminence active")
@@ -1070,9 +1206,14 @@ class LeadershipAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF, description="Self action.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Leadership Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Action cost.")
 
-    def pre_validate(self) -> bool:
+    def validate_requirements_for_discovery(self) -> bool:
+        """Require Leadership to remain unused, independently of its cost."""
         actor = Entity.get(self.source_entity_uuid)
-        return bool(actor and "Leadership Used" not in actor.active_conditions)
+        return bool(
+            actor
+            and "Leadership Used" not in actor.active_conditions
+            and super().validate_requirements_for_discovery()
+        )
 
     def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
         """Describe the ally-support aura as a typed setup action."""

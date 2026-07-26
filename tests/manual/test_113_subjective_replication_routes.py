@@ -15,6 +15,9 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 from starlette.requests import Request
 
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
@@ -22,7 +25,8 @@ from dnd.actions_functional import get_available_actions
 from dnd.entity import Entity, EntityConfig
 from dnd.encounter import Encounter
 from dnd.items.environment import DirectionalDoor
-from dnd.items.weapons import create_dagger
+from dnd.items.environment_content import directional_door_recipe
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from server.api_models import (
     ActionResult,
@@ -114,11 +118,15 @@ def canonical_route_scene(
     observer.senses.entities = {}
     observer.senses.objects = {}
     assert grid.get_tile(0, 0) is not None
-    hidden_door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("west",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="RouteParityDoor",
+    hidden_door = materialize_item(
+        directional_door_recipe(
+            display_name="Route Parity Door",
+            blocked_directions=("west",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     grid.place_object(hidden_door.uuid, (2, 0))
 
@@ -307,7 +315,12 @@ def test_live_subjective_parity_stays_green_across_door_and_equipment_frames(
     assert opened.source_event_cursor > moved.source_event_cursor
     assert opened.observation_cursor > moved.observation_cursor
 
-    dagger = create_dagger(canonical_route_scene.observer.uuid)
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        canonical_route_scene.observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert canonical_route_scene.observer.loot_item(dagger)
     assert canonical_route_scene.observer.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
     equipped = poll()

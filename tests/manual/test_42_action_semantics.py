@@ -54,6 +54,7 @@ from dnd.ai.runtime.decision_epoch import (
     _display_tags,
 )
 from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
     ActionOutcomeProfile as EngineActionOutcomeProfile,
     ActionInformationOperation,
     ActionSelfSetupProfile,
@@ -80,6 +81,7 @@ from dnd.core.base_actions import (
     TargetType,
     TopologyEffectProfile,
 )
+from tests.content_identity import synthetic_action_attribution
 from dnd.core.modifiers import AdvantageStatus
 from dnd.spells.conjuration import Darkness, Daylight, FogCloud
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
@@ -112,12 +114,29 @@ def _action(
 ) -> AvailableActionInfo:
     """Build one discovery row without constructing a live encounter."""
     normalized_costs = costs or []
+    resolved_targets = (
+        list(valid_targets)
+        if valid_targets is not None
+        else (
+            [AvailableTarget(index=0)]
+            if target_type is TargetType.SELF
+            else []
+        )
+    )
     return AvailableActionInfo(
         template_name=template_name,
         semantic_key=semantic_key,
+        behavior_attribution=synthetic_action_attribution(
+            "action.synthetic_semantics",
+        ),
         base_template_name=base_template_name,
         target_type=target_type,
-        valid_targets=valid_targets or [],
+        availability_status=(
+            ActionAvailabilityStatus.AVAILABLE
+            if resolved_targets
+            else ActionAvailabilityStatus.NO_VALID_TARGETS
+        ),
+        valid_targets=resolved_targets,
         can_afford=True,
         display_name=display_name or template_name,
         cost_type=normalized_costs[0].cost_type if normalized_costs else "actions",
@@ -629,7 +648,10 @@ def test_healing_potion_exposes_bonus_action_healing_and_item_depletion() -> Non
     item_uuid = uuid4()
     row = _action(
         "Drink Potion__item_test",
-        semantic_key="dnd.items.test_items.DrinkPotionAction",
+        semantic_key=(
+            "content.neurodragon:action:"
+            "action.consumable.healing_potion.drink@1"
+        ),
         target_type=TargetType.SELF,
         costs=[BaseCost(name="Drink Potion", cost_type="bonus_actions", cost=1)],
         is_item_use=True,

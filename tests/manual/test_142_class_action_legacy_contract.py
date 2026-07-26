@@ -19,7 +19,10 @@ from pydantic import ValidationError
 from dnd.actions import Attack, AttackEvent, Dodge, Move, Shove, ShoveEvent
 from dnd.actions_functional import execute_action, get_available_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.equipment import BodyArmor
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.barbarian import (
     BrutalCritical,
     ExtendIntimidatingPresence,
@@ -59,9 +62,9 @@ from dnd.core.modifiers import (
 )
 from dnd.entity import Entity, EntityConfig
 from dnd.items.armors import (
-    create_chain_mail,
-    create_chain_shirt,
-    create_leather_armor,
+    CHAIN_MAIL_RECIPE,
+    CHAIN_SHIRT_RECIPE,
+    LEATHER_ARMOR_RECIPE,
 )
 from dnd.monsters.bestiary import create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
@@ -1198,17 +1201,32 @@ def test_fast_movement_tracks_armor_transitions_dash_and_feral_cleanup() -> None
     assert barbarian.action_economy.movement.normalized_score == 40
     assert barbarian.initiative.advantage is AdvantageStatus.ADVANTAGE
 
-    light_armor = create_leather_armor(barbarian.uuid)
+    light_armor = materialize_item(
+        LEATHER_ARMOR_RECIPE,
+        barbarian.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     assert barbarian.equipment.equip(light_armor, BodyPart.BODY)
     assert barbarian.equipment.body_armor is light_armor
     assert barbarian.action_economy.movement.normalized_score == 40
 
-    medium_armor = create_chain_shirt(barbarian.uuid)
+    medium_armor = materialize_item(
+        CHAIN_SHIRT_RECIPE,
+        barbarian.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     assert barbarian.equipment.equip(medium_armor, BodyPart.BODY)
     assert barbarian.equipment.body_armor is medium_armor
     assert barbarian.action_economy.movement.normalized_score == 40
 
-    heavy_armor = create_chain_mail(barbarian.uuid)
+    heavy_armor = materialize_item(
+        CHAIN_MAIL_RECIPE,
+        barbarian.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     assert barbarian.equipment.equip(heavy_armor, BodyPart.BODY)
     assert barbarian.equipment.body_armor is heavy_armor
     assert barbarian.action_economy.movement.normalized_score == 30
@@ -1358,7 +1376,12 @@ def test_rage_resistance_maintenance_voluntary_end_and_heavy_armor_gate() -> Non
     assert active_before_armor is not None and not active_before_armor.canceled
     assert "Raging" in _condition_names(barbarian)
 
-    heavy_armor = create_chain_mail(barbarian.uuid)
+    heavy_armor = materialize_item(
+        CHAIN_MAIL_RECIPE,
+        barbarian.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     assert barbarian.equipment.equip(heavy_armor, BodyPart.BODY)
     assert "Raging" not in _condition_names(barbarian)
 
@@ -1545,7 +1568,15 @@ def test_rage_death_and_frenzy_cleanup_do_not_leave_stale_state() -> None:
             primal_path=PrimalPathChoice.BERSERKER,
         )
     )
-    assert armored.equipment.equip(create_chain_mail(armored.uuid), BodyPart.BODY)
+    assert armored.equipment.equip(
+        materialize_item(
+            CHAIN_MAIL_RECIPE,
+            armored.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        BodyPart.BODY,
+    )
 
     heavy_frenzy = Frenzy(
         source_entity_uuid=armored.uuid,

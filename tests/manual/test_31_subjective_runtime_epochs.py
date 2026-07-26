@@ -18,6 +18,7 @@ from dnd.ai.contracts.control import AffordanceSet
 from server.action_serialization import serialize_available_actions
 from dnd.actions_functional import execute_by_index, register_spell
 from dnd.core.base_object import BaseObject
+from dnd.core.base_actions import ActionAvailabilityStatus
 from dnd.core.base_actions import ActionCategory
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_actions import AvailableActionsResult
@@ -29,13 +30,25 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.classes.fighter import ExtraAttack
 from dnd.classes.rage import FrenziedStrike
 from dnd.blocks.base_item import BaseItem
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.creature_materialization import materialize_creature
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.aoe import Cone, Cube, Line, Sphere
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.encounter import Encounter, TurnState
-from dnd.items.test_items import TrapLever, create_healing_potion, create_scroll_of_fireball
-from dnd.monsters.srd_roster import create_srd_monster
+from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE
+from dnd.items.test_items import TrapLever
+from dnd.monsters.srd_roster import (
+    SRD_CREATURE_DECLARATIONS_BY_ID,
+    SRD_CREATURE_RECIPES_BY_ID,
+)
 from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
 from dnd.spells.abjuration import (
     Aid,
@@ -52,6 +65,28 @@ from dnd.spells.illusion import Blur, GreaterInvisibility, MirrorImage
 from dnd.spells.necromancy import BestowCurse, EyebiteStrike
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 from tests.manual.test_53_srd_monster_traits import reset_srd_trait_state
+from tests.content_identity import synthetic_action_attribution
+
+
+def _materialize_srd_fixture(
+    creature_id: str,
+    *,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
+    role_suffix = f"{creature_id}_{position[0]}_{position[1]}"
+    return materialize_creature(
+        SRD_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=uuid4(),
+        display_name=declaration.descriptor.display_name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=f"tests.subjective_epochs.{role_suffix}",
+        ),
+        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
+    )
 
 
 def test_subjective_log_cursor_uses_latest_identical_log_occurrence() -> None:
@@ -236,7 +271,11 @@ def test_epoch_row_descriptor_cache_reuses_semantic_derivation(monkeypatch) -> N
     row = AvailableActionInfo(
         template_name="Dodge",
         semantic_key="dnd.actions.Dodge",
+        behavior_attribution=synthetic_action_attribution(
+            "action.epoch_cache_probe",
+        ),
         target_type=TargetType.SELF,
+        availability_status=ActionAvailabilityStatus.AVAILABLE,
         valid_targets=[AvailableTarget(index=0)],
         can_afford=True,
         display_name="Dodge",
@@ -285,7 +324,11 @@ def test_epoch_row_id_falls_back_to_semantic_key_not_display_name() -> None:
     first = AvailableActionInfo(
         template_name="",
         semantic_key="rules.localized.semantic_action",
+        behavior_attribution=synthetic_action_attribution(
+            "action.localized_epoch_probe",
+        ),
         target_type=TargetType.POSITION,
+        availability_status=ActionAvailabilityStatus.AVAILABLE,
         valid_targets=[AvailableTarget(index=0, position=(1, 2))],
         can_afford=True,
         display_name="Localized first label",
@@ -321,7 +364,11 @@ def test_epoch_row_id_falls_back_to_semantic_key_not_display_name() -> None:
 def test_epoch_carries_finite_item_cost_and_remaining_stack_uses() -> None:
     """Item affordances and economy expose one consistent finite resource."""
     _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    potion = create_healing_potion(hero.uuid, heal_amount=7)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     potion.stack_count = 2
     assert hero.loot_item(potion)
 
@@ -581,8 +628,8 @@ def test_execution_honest_necromancy_profiles_reach_actor_capabilities() -> None
 def test_srd_inflict_wounds_epoch_exposes_melee_spell_attack_profile() -> None:
     """SRD caster melee spell attacks should carry actor-baseline damage."""
     reset_srd_trait_state()
-    fanatic = create_srd_monster("cult_fanatic", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(2, 1), faction="heroes")
+    fanatic = _materialize_srd_fixture("cult_fanatic", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
     affordances = _build_affordance_set_from_actions(
@@ -602,8 +649,8 @@ def test_srd_inflict_wounds_epoch_exposes_melee_spell_attack_profile() -> None:
 def test_srd_command_epoch_exposes_save_control_target_effect() -> None:
     """SRD Command should disclose its save-based control branch."""
     reset_srd_trait_state()
-    fanatic = create_srd_monster("cult_fanatic", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(4, 1), faction="heroes")
+    fanatic = _materialize_srd_fixture("cult_fanatic", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(4, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=60)
 
     affordances = _build_affordance_set_from_actions(
@@ -868,7 +915,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
 def test_defensive_spell_profile_hooks_are_valid_contracts() -> None:
     """Defensive spells outside the starting arenas should still declare facts."""
     reset_srd_trait_state()
-    caster = create_srd_monster("priest", position=(1, 1), faction="monsters")
+    caster = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     expected = (
         (Aid, "support.aid", "dnd.spells.abjuration.AidEffect"),
         (DeathWard, "support.death_ward", "dnd.spells.abjuration.DeathWardEffect"),
@@ -924,8 +971,8 @@ def test_blindness_deafness_epoch_exposes_save_control_target_effect() -> None:
 def test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches() -> None:
     """Complex necromancy control actions should disclose the selected branch."""
     reset_srd_trait_state()
-    caster = create_srd_monster("priest", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(2, 1), faction="heroes")
+    caster = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     caster.register_action(BestowCurse(
         source_entity_uuid=caster.uuid,
         template=True,
@@ -1040,9 +1087,20 @@ def test_actor_capabilities_survive_absent_targets_without_leaking_contacts() ->
 
     capabilities = _build_action_capabilities(hero, semantic_catalog)
 
+    unavailable_attacks = [
+        row
+        for row in available.entity_actions
+        if row.action_category.value == "attack"
+    ]
+    assert unavailable_attacks
+    assert all(
+        row.availability_status is ActionAvailabilityStatus.NO_VALID_TARGETS
+        and not row.valid_targets
+        for row in unavailable_attacks
+    )
     assert not any(
         row.action_category.value == "attack"
-        for row in available.entity_actions
+        for row in hero.get_available_actions(legal_only=True).entity_actions
     )
     attack = next(
         capability for capability in capabilities
@@ -1147,7 +1205,11 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
 def test_epoch_reuses_one_inventory_discovery_for_rows_and_capabilities(monkeypatch) -> None:
     """Item capabilities reuse the state-specific actions captured for legal rows."""
     _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    hero.loot_item(create_scroll_of_fireball(hero.uuid))
+    hero.loot_item(materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
     inventory_type = type(hero.inventory)
     original = inventory_type.get_all_use_actions
     calls = 0
@@ -1170,7 +1232,11 @@ def test_epoch_reuses_one_inventory_discovery_for_rows_and_capabilities(monkeypa
 def test_slotless_actor_keeps_fixed_spell_scroll_capability() -> None:
     """A specialized scroll action must not be expanded through actor spell slots again."""
     _client, _session_id, hero, _monster, _encounter = create_observation_game()
-    scroll = create_scroll_of_fireball(hero.uuid, cast_level=3)
+    scroll = materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     hero.loot_item(scroll)
 
     actions = hero.get_available_actions()
@@ -1241,8 +1307,8 @@ def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
 def test_srd_natural_attack_epoch_uses_natural_damage_profile() -> None:
     """Natural weapon rows should carry natural damage, not equipped proxy damage."""
     reset_srd_trait_state()
-    gnoll = create_srd_monster("gnoll", position=(1, 1), faction="monsters")
-    target = create_srd_monster("commoner", position=(2, 1), faction="heroes")
+    gnoll = _materialize_srd_fixture("gnoll", position=(1, 1), faction="monsters")
+    target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
     affordances = _build_affordance_set_from_actions(
@@ -1265,8 +1331,8 @@ def test_srd_natural_attack_epoch_uses_natural_damage_profile() -> None:
 def test_srd_attack_riders_compose_damage_and_control_semantics() -> None:
     """Hit riders should add target effects without replacing attack damage."""
     reset_srd_trait_state()
-    wolf = create_srd_monster("wolf", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(2, 1), faction="heroes")
+    wolf = _materialize_srd_fixture("wolf", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
     affordances = _build_affordance_set_from_actions(
@@ -1290,8 +1356,8 @@ def test_srd_attack_riders_compose_damage_and_control_semantics() -> None:
 def test_srd_uniform_multiattack_epoch_exposes_repeated_profile() -> None:
     """Uniform Multiattack rows should reach epochs as repeated applications."""
     reset_srd_trait_state()
-    scout = create_srd_monster("scout", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(6, 1), faction="heroes")
+    scout = _materialize_srd_fixture("scout", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(6, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=60)
 
     affordances = _build_affordance_set_from_actions(
@@ -1313,8 +1379,8 @@ def test_srd_uniform_multiattack_epoch_exposes_repeated_profile() -> None:
 def test_srd_actor_known_bonus_damage_reaches_epoch_profiles() -> None:
     """Actor-baseline bonus damage should be present in controller epochs."""
     reset_srd_trait_state()
-    bugbear = create_srd_monster("bugbear", position=(1, 1), faction="monsters")
-    _target = create_srd_monster("commoner", position=(2, 1), faction="heroes")
+    bugbear = _materialize_srd_fixture("bugbear", position=(1, 1), faction="monsters")
+    _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
     affordances = _build_affordance_set_from_actions(
@@ -1334,7 +1400,7 @@ def test_srd_actor_known_bonus_damage_reaches_epoch_profiles() -> None:
 def test_srd_active_monster_actions_reach_setup_semantics() -> None:
     """Active SRD monster traits should be typed setup rows in epochs."""
     reset_srd_trait_state()
-    priest = create_srd_monster("priest", position=(1, 1), faction="monsters")
+    priest = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
     priest_affordances = _build_affordance_set_from_actions(
         priest,
@@ -1351,7 +1417,7 @@ def test_srd_active_monster_actions_reach_setup_semantics() -> None:
     assert divine_semantics.self_setup.increases_weapon_damage is True
 
     reset_srd_trait_state()
-    knight = create_srd_monster("knight", position=(1, 1), faction="monsters")
+    knight = _materialize_srd_fixture("knight", position=(1, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
     knight_affordances = _build_affordance_set_from_actions(
         knight,
@@ -1542,14 +1608,26 @@ def test_aoe_discovery_caches_empty_previews_for_upcast_variants(monkeypatch) ->
     first_counts = compute_calls.copy()
     second_actions = warlock.get_available_actions()
 
-    assert not [
+    first_empty_aoes = [
         action
         for action in first_actions.position_actions
         if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
     ]
-    assert not [
+    second_empty_aoes = [
         action
         for action in second_actions.position_actions
+        if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
+    ]
+    assert first_empty_aoes
+    assert second_empty_aoes
+    assert all(
+        action.availability_status is ActionAvailabilityStatus.NO_VALID_TARGETS
+        and not action.valid_targets
+        for action in (*first_empty_aoes, *second_empty_aoes)
+    )
+    assert not [
+        action
+        for action in warlock.get_available_actions(legal_only=True).position_actions
         if action.template_name.startswith(("Burning Hands__slot_", "Thunderwave__slot_"))
     ]
     assert first_counts["Burning Hands__slot_1"] > 0

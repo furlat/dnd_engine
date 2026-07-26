@@ -1,0 +1,94 @@
+"""Exact declaration and preset inventory for trusted built-in content."""
+
+from __future__ import annotations
+
+from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
+from dnd.classes.content_factories import PLAYER_CLASS_CREATURE_DECLARATIONS
+from dnd.conditions import CORE_STANDARD_CONDITION_DECLARATIONS
+from dnd.content_system.action_definitions import ACTION_BEHAVIOR_DECLARATIONS
+from dnd.content_system.condition_definitions import (
+    CONDITION_BEHAVIOR_DECLARATIONS,
+)
+from dnd.content_system.reaction_definitions import (
+    REACTION_BEHAVIOR_DECLARATIONS,
+)
+from dnd.core.content.recipe_presets import ContentRecipePreset
+from dnd.core.content.registration import ContentDeclaration
+from dnd.extensions.field_focus import (
+    NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS,
+)
+from dnd.items.armors import (
+    NEURODRAGON_ARMOR_DECLARATIONS,
+    SRD_ARMOR_DECLARATIONS,
+)
+from dnd.items.authored_variant_presets import (
+    NEURODRAGON_AUTHORED_ITEM_RECIPE_PRESETS,
+)
+from dnd.items.consumables import NEURODRAGON_CONSUMABLE_DECLARATIONS
+from dnd.items.environment_content import (
+    NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS,
+)
+from dnd.items.spell_items import (
+    ACID_FLASK_SPELL_DECLARATION,
+    NEURODRAGON_SPELL_ITEM_DECLARATIONS,
+)
+from dnd.items.torches import NEURODRAGON_TORCH_DECLARATIONS
+from dnd.items.weapons import (
+    NEURODRAGON_WEAPON_DECLARATIONS,
+    SRD_WEAPON_DECLARATIONS,
+)
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_DECLARATIONS
+from dnd.monsters.bestiary_items import (
+    NEURODRAGON_BESTIARY_ITEM_DECLARATIONS,
+)
+from dnd.monsters.circus_fighter_items import (
+    NEURODRAGON_CIRCUS_ITEM_DECLARATIONS,
+)
+from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
+from dnd.monsters.srd_roster_items import (
+    SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
+)
+from dnd.premade_characters import NEURODRAGON_PREMADE_CREATURE_DECLARATIONS
+from dnd.spells.abjuration import COUNTERSPELL_REACTION_DECLARATION
+from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS
+from dnd.spells.conjuration import (
+    SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
+)
+
+
+BUILT_IN_DECLARATION_INVENTORY: tuple[ContentDeclaration, ...] = (
+    *CORE_STANDARD_ACTION_DECLARATIONS,
+    *CORE_STANDARD_CONDITION_DECLARATIONS,
+    *ACTION_BEHAVIOR_DECLARATIONS,
+    *CONDITION_BEHAVIOR_DECLARATIONS,
+    *REACTION_BEHAVIOR_DECLARATIONS,
+    COUNTERSPELL_REACTION_DECLARATION,
+    *NEURODRAGON_ARMOR_DECLARATIONS,
+    *NEURODRAGON_BESTIARY_ITEM_DECLARATIONS,
+    *NEURODRAGON_CIRCUS_ITEM_DECLARATIONS,
+    *BESTIARY_CREATURE_DECLARATIONS,
+    *NEURODRAGON_CONSUMABLE_DECLARATIONS,
+    *NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS,
+    *NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS,
+    *NEURODRAGON_PREMADE_CREATURE_DECLARATIONS,
+    *NEURODRAGON_SPELL_ITEM_DECLARATIONS,
+    *NEURODRAGON_TORCH_DECLARATIONS,
+    *NEURODRAGON_WEAPON_DECLARATIONS,
+    *PLAYER_CLASS_CREATURE_DECLARATIONS,
+    ACID_FLASK_SPELL_DECLARATION,
+    *SPELL_CONTENT_DECLARATIONS,
+    *SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
+    *SRD_ARMOR_DECLARATIONS,
+    *SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
+    *SRD_CREATURE_DECLARATIONS,
+    *SRD_WEAPON_DECLARATIONS,
+)
+BUILT_IN_RECIPE_PRESET_INVENTORY: tuple[ContentRecipePreset, ...] = (
+    *NEURODRAGON_AUTHORED_ITEM_RECIPE_PRESETS,
+)
+
+
+__all__ = [
+    "BUILT_IN_DECLARATION_INVENTORY",
+    "BUILT_IN_RECIPE_PRESET_INVENTORY",
+]

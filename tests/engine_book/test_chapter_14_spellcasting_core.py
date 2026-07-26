@@ -20,7 +20,6 @@ from dnd.core.base_object import BaseObject
 from dnd.core.events import Damage, DeathEvent, EventPhase, EventQueue, Range, RangeType
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
-from dnd.core.naming import normalize_spell_id
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.spells import (
@@ -37,6 +36,7 @@ from dnd.spells import (
     LEVEL_9_SPELLS,
     FireBolt,
     MagicMissile,
+    SPELL_CATALOG_METADATA_BY_NAME,
 )
 from dnd.utils import get_hp, reset_combat_state, set_hp
 from server.spell_catalog import build_spell_catalog_entry
@@ -906,7 +906,7 @@ def test_eb_14_016_multi_target_concentration_reuses_one_slot() -> None:
 
 
 def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
-    """EB-14-017: catalog spell ids and SpellEvent ids share one normalizer."""
+    """EB-14-017: explicit catalog IDs agree with emitted public spell IDs."""
     reset_spell_state()
     level_buckets = {
         0: CANTRIPS,
@@ -927,18 +927,25 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
 
     before_registry_count = len(BaseObject._registry)
     entries = {
-        normalize_spell_id(display_name): build_spell_catalog_entry(display_name, spell_cls)
+        SPELL_CATALOG_METADATA_BY_NAME[display_name].catalog_id:
+            build_spell_catalog_entry(display_name, spell_cls)
         for display_name, spell_cls in ALL_SPELLS.items()
     }
     after_registry_count = len(BaseObject._registry)
 
     assert after_registry_count == before_registry_count
     assert len(entries) == len(ALL_SPELLS)
-    assert set(entries) == {normalize_spell_id(display_name) for display_name in ALL_SPELLS}
+    assert set(entries) == {
+        metadata.catalog_id
+        for metadata in SPELL_CATALOG_METADATA_BY_NAME.values()
+    }
 
     for expected_level, spells in level_buckets.items():
         for display_name in spells:
-            entry = entries[normalize_spell_id(display_name)]
+            catalog_id = SPELL_CATALOG_METADATA_BY_NAME[
+                display_name
+            ].catalog_id
+            entry = entries[catalog_id]
             assert entry.name == display_name
             assert entry.level == expected_level
 
@@ -952,8 +959,9 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
         event = spell._create_declaration_event(use_register=False)
 
         assert isinstance(event, SpellEvent)
-        assert event.spell_id == entries[normalize_spell_id(display_name)].id
-        assert event.spell_level == entries[normalize_spell_id(display_name)].level
+        catalog_id = SPELL_CATALOG_METADATA_BY_NAME[display_name].catalog_id
+        assert event.spell_id == entries[catalog_id].id
+        assert event.spell_level == entries[catalog_id].level
 
     magic_missile = entries["magic_missile"]
     fireball = entries["fireball"]
@@ -962,8 +970,9 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
     assert magic_missile.multi_target.projectiles_per_cast == 3
     assert magic_missile.vfx is not None
     assert magic_missile.vfx.route_hint == "missile_volley"
-    assert fireball.saving_throw is not None
-    assert fireball.saving_throw.ability == "DEX"
+    assert tuple(save.ability for save in fireball.saving_throws) == (
+        "dexterity",
+    )
 
 
 if __name__ == "__main__":

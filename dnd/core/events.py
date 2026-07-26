@@ -42,10 +42,13 @@ from dnd.core.combat_log import (
     SavingThrowLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
     md_color, md_d20_roll, md_breakdown, position_evidence_key
 )
-from dnd.core.content import (
-    ContentKind,
+from dnd.core.content.runtime import (
+    BehaviorBinding,
     HandlerDispatchEvidence,
     HandlerDispatchOutcome,
+    RuntimeBehaviorKind,
+    bind_runtime_handler_before_admission,
+    runtime_behavior_provider,
 )
 from dnd.core.damage import DamageResolution
 from dnd.core.effect_types import EffectOrigin
@@ -888,8 +891,17 @@ class BaseHandler(BaseObject):
         default=None,
         description="Stable rules-content identity; defaults to the processor's code identity.",
     )
-    content_kind: ContentKind = Field(
-        default=ContentKind.UNCLASSIFIED,
+    behavior_binding: Optional[BehaviorBinding] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description=(
+            "Validated runtime content binding installed once before queue "
+            "admission."
+        ),
+    )
+    content_kind: RuntimeBehaviorKind = Field(
+        default=RuntimeBehaviorKind.UNCLASSIFIED,
         description="Rules-content family used by evaluation and developer tooling.",
     )
     event_processor: EventProcessor = Field(
@@ -919,12 +931,15 @@ class BaseHandler(BaseObject):
     )
 
     def get_semantic_key(self) -> str:
-        """Return an explicit key or a stable processor code identity."""
+        """Return an explicit/bound key or an explicit unbound diagnostic."""
         if self.semantic_key:
             return self.semantic_key
+        if self.behavior_binding is not None:
+            return self.behavior_binding.definition_ref.identity_key
         module = getattr(self.event_processor, "__module__", type(self.event_processor).__module__)
         qualname = getattr(self.event_processor, "__qualname__", type(self.event_processor).__qualname__)
-        return f"{module}.{qualname}".replace(".<locals>.", ".")
+        code_identity = f"{module}.{qualname}".replace(".<locals>.", ".")
+        return f"unbound:{code_identity}"
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the stored event processor if this handler is enabled.
@@ -1256,7 +1271,8 @@ class EventQueue:
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
-        result = handler(event)
+        with runtime_behavior_provider(handler):
+            result = handler(event)
         emitted_event_count = cls.event_cursor() - before_cursor
         if result is not None and result.canceled:
             outcome = HandlerDispatchOutcome.CANCELED_EVENT
@@ -1951,6 +1967,7 @@ class EventQueue:
         Args:
             event_handler: Handler containing one or more trigger conditions.
         """
+        bind_runtime_handler_before_admission(event_handler)
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
                 cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
@@ -2004,6 +2021,7 @@ class EventQueue:
             event_type: Spatial event type for legacy handlers.
             event_phase: Spatial event phase for legacy handlers.
         """
+        bind_runtime_handler_before_admission(handler)
         if isinstance(handler, SpatialHandler):
             actual_positions = handler.positions if not positions else positions
             event_key = (handler.event_type, handler.event_phase)

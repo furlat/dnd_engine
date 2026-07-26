@@ -11,58 +11,104 @@ of being silently approximated as different behavior.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, Optional
-from uuid import UUID, uuid4
+from types import MappingProxyType
+from typing import Literal, Optional, TypeVar
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 from dnd.actions_functional import register_spells_by_name, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.base_item import EquippedVisualPolicy
-from dnd.blocks.equipment import BodyArmor, Weapon, Range
-from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty, WeaponSlot
+from dnd.blocks.base_item import BaseItem
+from dnd.blocks.equipment import BodyArmor, Shield, Weapon
+from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import SenseMode, SensesType
-from dnd.core.events import AbilityName, RangeType
+from dnd.classes.barbarian import RecklessAttack
+from dnd.core.content.dependencies import (
+    ContentDependency,
+    ContentDependencyPhase,
+    ContentDependencyRelation,
+)
+from dnd.core.content.descriptors import (
+    ContentDescriptorSpec,
+    ContentOrdering,
+    ContentPresentation,
+    ContentVisibility,
+)
+from dnd.core.content.materialization import (
+    CreatureBuildContext,
+    CreaturePossessionMode,
+)
+from dnd.core.content.provenance import (
+    ContentFidelity,
+    ContentProvenance,
+    ContentProvenanceRelation,
+    ContentReviewStatus,
+)
+from dnd.core.content.recipes import ContentRecipe
+from dnd.core.content.registration import (
+    ContentDeclaration,
+    creature_factory,
+    get_content_declaration,
+)
+from dnd.core.events import AbilityName
 from dnd.core.modifiers import CreatureType, DamageType, Size
-from dnd.core.values import ModifiableValue
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.action_definitions import (
+    ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+)
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
 from dnd.entity import Entity, EntityConfig
-from dnd.items import (
-    create_chain_mail,
-    create_chain_shirt,
-    create_club,
-    create_dagger,
-    create_greataxe,
-    create_greatsword,
-    create_heavy_crossbow,
-    create_hide_armor,
-    create_leather_armor,
-    create_light_crossbow,
-    create_longbow,
-    create_longsword,
-    create_mace,
-    create_plate_armor,
-    create_scimitar,
-    create_shield,
-    create_shortsword,
-    create_spear,
-    create_splint_armor,
-    create_studded_leather,
+from dnd.items.armors import (
+    CHAIN_MAIL_RECIPE,
+    CHAIN_SHIRT_RECIPE,
+    HIDE_ARMOR_RECIPE,
+    LEATHER_ARMOR_RECIPE,
+    PLATE_ARMOR_RECIPE,
+    SHIELD_RECIPE,
+    SPLINT_ARMOR_RECIPE,
+    STUDDED_LEATHER_RECIPE,
+)
+from dnd.items.weapons import (
+    CLUB_RECIPE,
+    DAGGER_RECIPE,
+    GREATAXE_RECIPE,
+    GREATSWORD_RECIPE,
+    HEAVY_CROSSBOW_RECIPE,
+    LIGHT_CROSSBOW_RECIPE,
+    LONGBOW_RECIPE,
+    LONGSWORD_RECIPE,
+    MACE_RECIPE,
+    SCIMITAR_RECIPE,
+    SHORTSWORD_RECIPE,
+    SPEAR_RECIPE,
+)
+from dnd.monsters.srd_roster_items import (
+    SRD_CREATURE_POSSESSION_RECIPES,
 )
 from dnd.monsters.traits import (
+    AggressiveMoveAction,
+    DivineEminenceAction,
+    LeadershipAction,
+    MultiattackAction,
+    NaturalAttack,
     register_aggressive,
-    register_bite_prone_rider,
     register_brave,
     register_brute,
     register_cunning_action,
     register_dark_devotion,
+    register_dire_wolf_bite_prone_rider,
     register_divine_eminence,
     register_ghoul_claws_paralysis,
-    register_keen_perception,
+    register_keen_hearing_and_sight,
+    register_keen_hearing_and_smell,
     register_leadership,
     register_martial_advantage,
     register_multiattack,
@@ -75,13 +121,14 @@ from dnd.monsters.traits import (
     register_sunlight_sensitivity,
     register_surprise_attack,
     register_undead_fortitude,
+    register_wolf_bite_prone_rider,
 )
 from dnd.spells.abjuration import register_counterspell_reaction, register_shield_reaction
 
 
-MonsterFactory = Callable[[Optional[UUID], str, tuple[int, int], Optional[str]], Entity]
 HitDieValue = Literal[4, 6, 8, 10, 12]
 WeaponDieValue = Literal[4, 6, 8, 10, 12, 20]
+_ItemT = TypeVar("_ItemT", bound=BaseItem)
 
 
 _VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
@@ -94,151 +141,190 @@ _VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
 }
 
 
-class SrdMonsterSpec(BaseModel):
-    """Stable metadata for one SRD-derived creature factory."""
+class SrdCreatureParameters(BaseModel):
+    """Current SRD creature roots have no authored construction variants."""
 
-    monster_id: str = Field(description="Stable snake-case monster identifier.")
-    display_name: str = Field(description="SRD display name.")
-    challenge_rating: str = Field(description="SRD challenge rating text.")
-    source_path: str = Field(description="Local markdown source used for the stat identity.")
-    role_tags: tuple[str, ...] = Field(description="AI evaluation role tags.")
-    represented_traits: tuple[str, ...] = Field(
-        default_factory=tuple,
-        description="SRD traits implemented directly by current engine mechanics.",
-    )
-    pending_traits: tuple[str, ...] = Field(
-        default_factory=tuple,
-        description="SRD traits intentionally not approximated yet.",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-def create_commoner(
-    source_id: Optional[UUID] = None,
-    name: str = "Commoner",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+class _SrdCreatureFacts(BaseModel):
+    """Private declaration inputs; the bound descriptor is the public catalog."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    creature_id: str
+    display_name: str
+    description: str
+    challenge_rating: str
+    source_anchor: str
+    role_tags: tuple[str, ...]
+    represented_traits: tuple[str, ...] = ()
+    sort_order: int
+
+
+def _configure_commoner(context: CreatureBuildContext) -> Entity:
     """Create an SRD Commoner."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A noncombatant pressed into danger.",
-        position=position,
-        faction=faction,
         abilities=(10, 10, 10, 10, 10, 10),
         hit_die_value=8,
         hit_die_count=1,
         proficiency_bonus=2,
     )
-    _equip(entity, melee=create_club(entity.uuid))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            CLUB_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     return entity
 
 
-def create_bandit(
-    source_id: Optional[UUID] = None,
-    name: str = "Bandit",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_bandit(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bandit."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A lightly armored raider with melee and crossbow pressure.",
-        position=position,
-        faction=faction,
         abilities=(11, 12, 12, 10, 10, 10),
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
     )
-    _equip(entity, armor=create_leather_armor(entity.uuid), melee=create_scimitar(entity.uuid), ranged=create_light_crossbow(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            LEATHER_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SCIMITAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            LIGHT_CROSSBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     return entity
 
 
-def create_cultist(
-    source_id: Optional[UUID] = None,
-    name: str = "Cultist",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_cultist(context: CreatureBuildContext) -> Entity:
     """Create an SRD Cultist."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A zealot with a scimitar and social skill pressure.",
-        position=position,
-        faction=faction,
         abilities=(11, 12, 10, 10, 11, 10),
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
         skills={"deception": True, "religion": True},
     )
-    _equip(entity, armor=create_leather_armor(entity.uuid), melee=create_scimitar(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            LEATHER_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SCIMITAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_dark_devotion(entity)
     return entity
 
 
-def create_guard(
-    source_id: Optional[UUID] = None,
-    name: str = "Guard",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_guard(context: CreatureBuildContext) -> Entity:
     """Create an SRD Guard."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A defensive sentry with shielded spear pressure.",
-        position=position,
-        faction=faction,
         abilities=(13, 12, 12, 10, 11, 10),
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
         skills={"perception": True},
     )
-    _equip(entity, armor=create_chain_shirt(entity.uuid), melee=create_spear(entity.uuid), shield=True)
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            CHAIN_SHIRT_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SPEAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        shield=(
+            context.possession_mode
+            == CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
+    )
     return entity
 
 
-def create_tribal_warrior(
-    source_id: Optional[UUID] = None,
-    name: str = "Tribal Warrior",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_tribal_warrior(context: CreatureBuildContext) -> Entity:
     """Create an SRD Tribal Warrior."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A light skirmisher that pressures pack-melee scenarios.",
-        position=position,
-        faction=faction,
         abilities=(13, 11, 12, 8, 11, 8),
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
     )
-    _equip(entity, armor=create_hide_armor(entity.uuid), melee=create_spear(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SPEAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_pack_tactics(entity)
     return entity
 
 
-def create_kobold(
-    source_id: Optional[UUID] = None,
-    name: str = "Kobold",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_kobold(context: CreatureBuildContext) -> Entity:
     """Create an SRD Kobold."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A fragile darkvision skirmisher.",
-        position=position,
-        faction=faction,
         abilities=(7, 15, 9, 8, 7, 8),
         hit_die_value=6,
         hit_die_count=2,
@@ -247,25 +333,33 @@ def create_kobold(
         weight=35,
         darkvision=True,
     )
-    _equip(entity, melee=create_dagger(entity.uuid), ranged=_simple_weapon(entity.uuid, "Sling", 4, 1, DamageType.BLUDGEONING, RangeType.RANGE, 30, 120, (WeaponProperty.RANGED,), visual_item_name="Sling"))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["kobold_sling"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_pack_tactics(entity)
     register_sunlight_sensitivity(entity)
     return entity
 
 
-def create_acolyte(
-    source_id: Optional[UUID] = None,
-    name: str = "Acolyte",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_acolyte(context: CreatureBuildContext) -> Entity:
     """Create an SRD Acolyte-style low priest."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A junior divine caster useful for low-CR support tests.",
-        position=position,
-        faction=faction,
         abilities=(10, 10, 10, 10, 14, 11),
         hit_die_value=8,
         hit_die_count=2,
@@ -275,123 +369,170 @@ def create_acolyte(
         skills={"medicine": True, "religion": True},
     )
     register_spells_by_name(entity, ["Sacred Flame", "Bless", "Cure Wounds"], caster_level=1)
-    _equip(entity, melee=create_club(entity.uuid))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            CLUB_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     return entity
 
 
-def create_scout(
-    source_id: Optional[UUID] = None,
-    name: str = "Scout",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_scout(context: CreatureBuildContext) -> Entity:
     """Create an SRD Scout."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A perception-heavy ranged scout.",
-        position=position,
-        faction=faction,
         abilities=(11, 14, 12, 11, 13, 11),
         hit_die_value=8,
         hit_die_count=3,
         proficiency_bonus=2,
         skills={"nature": True, "perception": True, "stealth": True, "survival": True},
     )
-    _equip(entity, armor=create_leather_armor(entity.uuid), melee=create_shortsword(entity.uuid), ranged=create_longbow(entity.uuid))
-    register_keen_perception(entity, name="Keen Hearing and Sight", modes=("hearing", "sight"))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            LEATHER_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SHORTSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            LONGBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
+    register_keen_hearing_and_sight(entity)
     register_multiattack(entity, "Scout Multiattack: Shortsword", ((WeaponSlot.MELEE_MAIN, 2),))
     register_multiattack(entity, "Scout Multiattack: Longbow", ((WeaponSlot.RANGED_MAIN, 2),))
     return entity
 
 
-def create_thug(
-    source_id: Optional[UUID] = None,
-    name: str = "Thug",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_thug(context: CreatureBuildContext) -> Entity:
     """Create an SRD Thug."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A durable low-CR bruiser with crossbow fallback.",
-        position=position,
-        faction=faction,
         abilities=(15, 11, 14, 10, 10, 11),
         hit_die_value=8,
         hit_die_count=5,
         proficiency_bonus=2,
         skills={"intimidation": True},
     )
-    _equip(entity, armor=create_leather_armor(entity.uuid), melee=create_mace(entity.uuid), ranged=create_heavy_crossbow(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            LEATHER_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            MACE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            HEAVY_CROSSBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_pack_tactics(entity)
     register_multiattack(entity, "Thug Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
     return entity
 
 
-def create_spy(
-    source_id: Optional[UUID] = None,
-    name: str = "Spy",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_spy(context: CreatureBuildContext) -> Entity:
     """Create an SRD Spy."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A mobile infiltrator with shortsword and hand-crossbow pressure.",
-        position=position,
-        faction=faction,
         abilities=(10, 15, 10, 12, 14, 16),
         hit_die_value=8,
         hit_die_count=6,
         proficiency_bonus=2,
         skills={"deception": True, "insight": True, "investigation": True, "perception": True, "persuasion": True, "sleight_of_hand": True, "stealth": True},
     )
-    _equip(entity, melee=create_shortsword(entity.uuid), ranged=_simple_weapon(entity.uuid, "Hand Crossbow", 6, 1, DamageType.PIERCING, RangeType.RANGE, 30, 120, (WeaponProperty.RANGED,), visual_item_name="Light Crossbow"))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            SHORTSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["spy_hand_crossbow"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_cunning_action(entity)
     register_sneak_attack(entity)
     register_multiattack(entity, "Spy Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
     return entity
 
 
-def create_berserker(
-    source_id: Optional[UUID] = None,
-    name: str = "Berserker",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_berserker(context: CreatureBuildContext) -> Entity:
     """Create an SRD Berserker."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A high-HP axe charger for melee pressure tests.",
-        position=position,
-        faction=faction,
         abilities=(16, 12, 17, 9, 11, 9),
         hit_die_value=8,
         hit_die_count=9,
         proficiency_bonus=2,
     )
-    _equip(entity, armor=create_hide_armor(entity.uuid), melee=create_greataxe(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            GREATAXE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_reckless(entity)
     return entity
 
 
-def create_bandit_captain(
-    source_id: Optional[UUID] = None,
-    name: str = "Bandit Captain",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_bandit_captain(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bandit Captain."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A durable duelist leader with melee and thrown-dagger pressure.",
-        position=position,
-        faction=faction,
         abilities=(15, 16, 14, 14, 11, 14),
         hit_die_value=8,
         hit_die_count=10,
@@ -400,10 +541,36 @@ def create_bandit_captain(
     )
     _equip(
         entity,
-        armor=create_studded_leather(entity.uuid),
-        melee=create_scimitar(entity.uuid),
-        offhand=create_dagger(entity.uuid),
-        ranged=_simple_weapon(entity.uuid, "Thrown Dagger", 4, 1, DamageType.PIERCING, RangeType.RANGE, 20, 60, (WeaponProperty.RANGED,), visual_item_name="Dagger"),
+        armor=_default_possession(
+            context,
+            STUDDED_LEATHER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SCIMITAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        offhand=_default_possession(
+            context,
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES[
+                "bandit_captain_thrown_dagger"
+            ],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
     )
     register_multiattack(entity, "Bandit Captain Multiattack: Melee", ((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1)))
     register_multiattack(entity, "Bandit Captain Multiattack: Ranged", ((WeaponSlot.RANGED_MAIN, 2),))
@@ -411,19 +578,11 @@ def create_bandit_captain(
     return entity
 
 
-def create_priest(
-    source_id: Optional[UUID] = None,
-    name: str = "Priest",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_priest(context: CreatureBuildContext) -> Entity:
     """Create an SRD Priest."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A divine support caster with healing, radiant pressure, and aura options.",
-        position=position,
-        faction=faction,
         abilities=(10, 10, 12, 13, 16, 13),
         hit_die_value=8,
         hit_die_count=5,
@@ -433,24 +592,32 @@ def create_priest(
         skills={"medicine": True, "persuasion": True, "religion": True},
     )
     register_spells_by_name(entity, ["Sacred Flame", "Cure Wounds", "Guiding Bolt", "Sanctuary", "Lesser Restoration", "Spirit Guardians"], caster_level=5)
-    _equip(entity, armor=create_chain_shirt(entity.uuid), melee=create_mace(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            CHAIN_SHIRT_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            MACE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_divine_eminence(entity)
     return entity
 
 
-def create_cult_fanatic(
-    source_id: Optional[UUID] = None,
-    name: str = "Cult Fanatic",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
     """Create an SRD Cult Fanatic."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A low-mid control caster with dagger fallback.",
-        position=position,
-        faction=faction,
         abilities=(11, 14, 12, 10, 13, 14),
         hit_die_value=8,
         hit_die_count=6,
@@ -460,31 +627,62 @@ def create_cult_fanatic(
         skills={"deception": True, "persuasion": True, "religion": True},
     )
     register_spells_by_name(entity, ["Sacred Flame", "Command", "Inflict Wounds", "Shield of Faith", "Hold Person"], caster_level=4)
-    _equip(entity, armor=create_leather_armor(entity.uuid), melee=create_dagger(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            LEATHER_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_dark_devotion(entity)
     register_multiattack(entity, "Cult Fanatic Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
     return entity
 
 
-def create_knight(
-    source_id: Optional[UUID] = None,
-    name: str = "Knight",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_knight(context: CreatureBuildContext) -> Entity:
     """Create an SRD Knight."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A plate-armored heavy melee combatant.",
-        position=position,
-        faction=faction,
         abilities=(16, 11, 14, 11, 11, 15),
         hit_die_value=8,
         hit_die_count=8,
         proficiency_bonus=2,
     )
-    _equip(entity, armor=create_plate_armor(entity.uuid), melee=create_greatsword(entity.uuid), ranged=create_heavy_crossbow(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            PLATE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            GREATSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            HEAVY_CROSSBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_brave(entity)
     register_leadership(entity)
     register_parry(entity)
@@ -492,44 +690,58 @@ def create_knight(
     return entity
 
 
-def create_veteran(
-    source_id: Optional[UUID] = None,
-    name: str = "Veteran",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_veteran(context: CreatureBuildContext) -> Entity:
     """Create an SRD Veteran."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A disciplined martial enemy with melee and heavy-crossbow modes.",
-        position=position,
-        faction=faction,
         abilities=(16, 13, 14, 10, 11, 10),
         hit_die_value=8,
         hit_die_count=9,
         proficiency_bonus=2,
         skills={"athletics": True, "perception": True},
     )
-    _equip(entity, armor=create_splint_armor(entity.uuid), melee=create_longsword(entity.uuid), offhand=create_shortsword(entity.uuid), ranged=create_heavy_crossbow(entity.uuid))
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            SPLINT_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            LONGSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        offhand=_default_possession(
+            context,
+            SHORTSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            HEAVY_CROSSBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_multiattack(entity, "Veteran Multiattack: Melee", ((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1)))
     register_multiattack(entity, "Veteran Multiattack: Ranged", ((WeaponSlot.RANGED_MAIN, 2),))
     return entity
 
 
-def create_mage(
-    source_id: Optional[UUID] = None,
-    name: str = "Mage",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_mage(context: CreatureBuildContext) -> Entity:
     """Create an SRD Mage."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A high-slot arcane caster for resource and counterspell pressure.",
-        position=position,
-        faction=faction,
         abilities=(9, 14, 11, 17, 12, 11),
         hit_die_value=8,
         hit_die_count=9,
@@ -541,23 +753,24 @@ def create_mage(
     register_spells_by_name(entity, ["Fire Bolt", "Magic Missile", "Mage Armor", "Misty Step", "Fireball", "Greater Invisibility", "Ice Storm", "Cone of Cold"], caster_level=9)
     register_shield_reaction(entity)
     register_counterspell_reaction(entity)
-    _equip(entity, melee=create_dagger(entity.uuid))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     return entity
 
 
-def create_orc(
-    source_id: Optional[UUID] = None,
-    name: str = "Orc",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_orc(context: CreatureBuildContext) -> Entity:
     """Create an SRD Orc."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A strong darkvision charger with axe and javelin pressure.",
-        position=position,
-        faction=faction,
         abilities=(16, 12, 16, 7, 11, 10),
         hit_die_value=8,
         hit_die_count=2,
@@ -567,51 +780,80 @@ def create_orc(
     )
     _equip(
         entity,
-        armor=create_hide_armor(entity.uuid),
-        melee=create_greataxe(entity.uuid),
-        ranged=_simple_weapon(entity.uuid, "Thrown Javelin", 6, 1, DamageType.PIERCING, RangeType.RANGE, 30, 120, (WeaponProperty.RANGED,), visual_item_name="Javelin"),
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            GREATAXE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
     )
     register_aggressive(entity)
     return entity
 
 
-def create_hobgoblin(
-    source_id: Optional[UUID] = None,
-    name: str = "Hobgoblin",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_hobgoblin(context: CreatureBuildContext) -> Entity:
     """Create an SRD Hobgoblin."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A heavily armored goblinoid soldier with sword and bow.",
-        position=position,
-        faction=faction,
         abilities=(13, 12, 12, 10, 10, 9),
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
         darkvision=True,
     )
-    _equip(entity, armor=create_chain_mail(entity.uuid), melee=create_longsword(entity.uuid), ranged=create_longbow(entity.uuid), shield=True)
+    _equip(
+        entity,
+        armor=_default_possession(
+            context,
+            CHAIN_MAIL_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            LONGSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            LONGBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        shield=(
+            context.possession_mode
+            == CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
+    )
     register_martial_advantage(entity)
     return entity
 
 
-def create_bugbear(
-    source_id: Optional[UUID] = None,
-    name: str = "Bugbear",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_bugbear(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bugbear."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A stealthy goblinoid bruiser.",
-        position=position,
-        faction=faction,
         abilities=(15, 14, 13, 8, 11, 9),
         hit_die_value=8,
         hit_die_count=5,
@@ -621,29 +863,42 @@ def create_bugbear(
     )
     _equip(
         entity,
-        armor=create_hide_armor(entity.uuid),
-        melee=_simple_weapon(entity.uuid, "Morningstar", 8, 1, DamageType.PIERCING, visual_item_name="Morningstar"),
-        ranged=_simple_weapon(entity.uuid, "Thrown Javelin", 6, 1, DamageType.PIERCING, RangeType.RANGE, 30, 120, (WeaponProperty.RANGED,), visual_item_name="Javelin"),
-        shield=True,
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["bugbear_morningstar"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        shield=(
+            context.possession_mode
+            == CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
     )
     register_brute(entity)
     register_surprise_attack(entity)
     return entity
 
 
-def create_gnoll(
-    source_id: Optional[UUID] = None,
-    name: str = "Gnoll",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_gnoll(context: CreatureBuildContext) -> Entity:
     """Create an SRD Gnoll."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A shielded savage with spear and longbow choices.",
-        position=position,
-        faction=faction,
         abilities=(14, 12, 11, 6, 10, 7),
         hit_die_value=8,
         hit_die_count=5,
@@ -652,29 +907,42 @@ def create_gnoll(
     )
     _equip(
         entity,
-        armor=create_hide_armor(entity.uuid),
-        melee=create_spear(entity.uuid),
-        ranged=create_longbow(entity.uuid),
-        shield=True,
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SPEAR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            LONGBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        shield=(
+            context.possession_mode
+            == CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
     )
     register_natural_bite(entity)
     register_rampage(entity)
     return entity
 
 
-def create_ogre(
-    source_id: Optional[UUID] = None,
-    name: str = "Ogre",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_ogre(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ogre."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A large giant with high HP and heavy bludgeoning pressure.",
-        position=position,
-        faction=faction,
         abilities=(19, 8, 16, 5, 7, 7),
         hit_die_value=10,
         hit_die_count=7,
@@ -687,26 +955,36 @@ def create_ogre(
     )
     _equip(
         entity,
-        armor=create_hide_armor(entity.uuid),
-        melee=_simple_weapon(entity.uuid, "Greatclub", 8, 2, DamageType.BLUDGEONING, visual_item_name="Club"),
-        ranged=_simple_weapon(entity.uuid, "Thrown Javelin", 6, 2, DamageType.PIERCING, RangeType.RANGE, 30, 120, (WeaponProperty.RANGED,), visual_item_name="Javelin"),
+        armor=_default_possession(
+            context,
+            HIDE_ARMOR_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+        melee=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["ogre_greatclub"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        ranged=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES["ogre_thrown_javelin"],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
     )
     return entity
 
 
-def create_wolf(
-    source_id: Optional[UUID] = None,
-    name: str = "Wolf",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_wolf(context: CreatureBuildContext) -> Entity:
     """Create an SRD Wolf."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A fast beast with natural bite pressure.",
-        position=position,
-        faction=faction,
         abilities=(12, 15, 12, 3, 12, 6),
         hit_die_value=8,
         hit_die_count=2,
@@ -715,26 +993,30 @@ def create_wolf(
         movement=40,
         skills={"perception": True, "stealth": True},
     )
-    _equip(entity, armor=_fixed_ac_armor(entity.uuid, "Natural Armor", 13), melee=_simple_weapon(entity.uuid, "Bite", 4, 2, DamageType.PIERCING, equipped_visual_policy=EquippedVisualPolicy.HIDDEN))
-    register_keen_perception(entity, name="Keen Hearing and Smell", modes=("hearing", "smell"))
+    _equip(
+        entity,
+        armor=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["wolf_natural_armor"],
+            entity.uuid,
+            expected_type=BodyArmor,
+        ),
+        melee=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["wolf_bite"],
+            entity.uuid,
+            expected_type=Weapon,
+        ),
+    )
+    register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)
-    register_bite_prone_rider(entity, dc=11)
+    register_wolf_bite_prone_rider(entity)
     return entity
 
 
-def create_dire_wolf(
-    source_id: Optional[UUID] = None,
-    name: str = "Dire Wolf",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_dire_wolf(context: CreatureBuildContext) -> Entity:
     """Create an SRD Dire Wolf."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A large fast beast for melee-pack and pursuit tests.",
-        position=position,
-        faction=faction,
         abilities=(17, 15, 15, 3, 12, 7),
         hit_die_value=10,
         hit_die_count=5,
@@ -745,26 +1027,30 @@ def create_dire_wolf(
         weight=250,
         skills={"perception": True, "stealth": True},
     )
-    _equip(entity, armor=_fixed_ac_armor(entity.uuid, "Natural Armor", 14), melee=_simple_weapon(entity.uuid, "Bite", 6, 2, DamageType.PIERCING, equipped_visual_policy=EquippedVisualPolicy.HIDDEN))
-    register_keen_perception(entity, name="Keen Hearing and Smell", modes=("hearing", "smell"))
+    _equip(
+        entity,
+        armor=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_natural_armor"],
+            entity.uuid,
+            expected_type=BodyArmor,
+        ),
+        melee=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_bite"],
+            entity.uuid,
+            expected_type=Weapon,
+        ),
+    )
+    register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)
-    register_bite_prone_rider(entity, dc=13)
+    register_dire_wolf_bite_prone_rider(entity)
     return entity
 
 
-def create_zombie(
-    source_id: Optional[UUID] = None,
-    name: str = "Zombie",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_zombie(context: CreatureBuildContext) -> Entity:
     """Create an SRD Zombie."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A slow undead body that stresses pursuit and poison immunity.",
-        position=position,
-        faction=faction,
         abilities=(13, 6, 16, 3, 6, 5),
         hit_die_value=8,
         hit_die_count=3,
@@ -775,24 +1061,23 @@ def create_zombie(
         immunities=(DamageType.POISON,),
     )
     entity.add_condition_immunity("Poisoned", immunity_name="Zombie")
-    _equip(entity, melee=_simple_weapon(entity.uuid, "Slam", 6, 1, DamageType.BLUDGEONING, equipped_visual_policy=EquippedVisualPolicy.HIDDEN))
+    _equip(
+        entity,
+        melee=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["zombie_slam"],
+            entity.uuid,
+            expected_type=Weapon,
+        ),
+    )
     register_undead_fortitude(entity)
     return entity
 
 
-def create_ogre_zombie(
-    source_id: Optional[UUID] = None,
-    name: str = "Ogre Zombie",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_ogre_zombie(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ogre Zombie."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A large undead bruiser with huge HP and slow cognition.",
-        position=position,
-        faction=faction,
         abilities=(19, 6, 18, 3, 6, 5),
         hit_die_value=10,
         hit_die_count=9,
@@ -804,24 +1089,27 @@ def create_ogre_zombie(
         immunities=(DamageType.POISON,),
     )
     entity.add_condition_immunity("Poisoned", immunity_name="Ogre Zombie")
-    _equip(entity, melee=_simple_weapon(entity.uuid, "Morningstar", 8, 2, DamageType.BLUDGEONING, visual_item_name="Morningstar"))
+    _equip(
+        entity,
+        melee=_default_possession(
+            context,
+            SRD_CREATURE_POSSESSION_RECIPES[
+                "ogre_zombie_morningstar"
+            ],
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+    )
     register_undead_fortitude(entity)
     return entity
 
 
-def create_ghoul(
-    source_id: Optional[UUID] = None,
-    name: str = "Ghoul",
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
+def _configure_ghoul(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ghoul."""
     entity = _create_srd_entity(
-        source_id=source_id,
-        name=name,
+        context=context,
         description="A fast undead attacker with bite and claw modes.",
-        position=position,
-        faction=faction,
         abilities=(13, 15, 10, 7, 10, 6),
         hit_die_value=8,
         hit_die_count=5,
@@ -835,115 +1123,217 @@ def create_ghoul(
     entity.add_condition_immunity("Poisoned", immunity_name="Ghoul")
     _equip(
         entity,
-        melee=_simple_weapon(entity.uuid, "Claws", 4, 2, DamageType.SLASHING, equipped_visual_policy=EquippedVisualPolicy.HIDDEN),
-        offhand=_simple_weapon(entity.uuid, "Bite", 6, 2, DamageType.PIERCING, properties=(WeaponProperty.LIGHT,), equipped_visual_policy=EquippedVisualPolicy.HIDDEN),
+        melee=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["ghoul_claws"],
+            entity.uuid,
+            expected_type=Weapon,
+        ),
+        offhand=_intrinsic_possession(
+            SRD_CREATURE_POSSESSION_RECIPES["ghoul_bite"],
+            entity.uuid,
+            expected_type=Weapon,
+        ),
     )
     register_ghoul_claws_paralysis(entity)
     return entity
 
 
-SRD_MONSTER_SPECS: tuple[SrdMonsterSpec, ...] = (
-    SrdMonsterSpec(monster_id="commoner", display_name="Commoner", challenge_rating="0", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("civilian", "melee")),
-    SrdMonsterSpec(monster_id="bandit", display_name="Bandit", challenge_rating="1/8", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "ranged", "melee")),
-    SrdMonsterSpec(monster_id="cultist", display_name="Cultist", challenge_rating="1/8", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "melee", "social"), represented_traits=("Dark Devotion",)),
-    SrdMonsterSpec(monster_id="guard", display_name="Guard", challenge_rating="1/8", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "defender", "shield")),
-    SrdMonsterSpec(monster_id="tribal_warrior", display_name="Tribal Warrior", challenge_rating="1/8", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "melee", "pack"), represented_traits=("Pack Tactics",)),
-    SrdMonsterSpec(monster_id="kobold", display_name="Kobold", challenge_rating="1/8", source_path="to_archive/interactive_ruleset/Monsters/Kobold.md", role_tags=("humanoid", "small", "darkvision", "ranged"), represented_traits=("Pack Tactics", "Sunlight Sensitivity")),
-    SrdMonsterSpec(monster_id="acolyte", display_name="Acolyte", challenge_rating="1/4", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "support", "caster"), represented_traits=("Spellcasting",)),
-    SrdMonsterSpec(monster_id="zombie", display_name="Zombie", challenge_rating="1/4", source_path="to_archive/interactive_ruleset/Monsters (Alt)/Monsters Z.md", role_tags=("undead", "slow", "melee"), represented_traits=("Poison immunity", "Undead Fortitude")),
-    SrdMonsterSpec(monster_id="wolf", display_name="Wolf", challenge_rating="1/4", source_path="to_archive/interactive_ruleset/Monsters/Wolf (Creature).md", role_tags=("beast", "fast", "pack"), represented_traits=("Keen Hearing and Smell", "Pack Tactics", "Bite prone rider")),
-    SrdMonsterSpec(monster_id="scout", display_name="Scout", challenge_rating="1/2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "ranged", "perception"), represented_traits=("Keen Hearing and Sight", "Multiattack")),
-    SrdMonsterSpec(monster_id="thug", display_name="Thug", challenge_rating="1/2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "bruiser", "ranged"), represented_traits=("Pack Tactics", "Multiattack")),
-    SrdMonsterSpec(monster_id="orc", display_name="Orc", challenge_rating="1/2", source_path="to_archive/interactive_ruleset/Monsters/Orc.md", role_tags=("humanoid", "darkvision", "charger"), represented_traits=("Aggressive",)),
-    SrdMonsterSpec(monster_id="hobgoblin", display_name="Hobgoblin", challenge_rating="1/2", source_path="to_archive/interactive_ruleset/Monsters/Hobgoblin.md", role_tags=("humanoid", "shield", "ranged", "darkvision"), represented_traits=("Martial Advantage",)),
-    SrdMonsterSpec(monster_id="gnoll", display_name="Gnoll", challenge_rating="1/2", source_path="to_archive/interactive_ruleset/Monsters/Gnoll.md", role_tags=("humanoid", "shield", "ranged", "darkvision"), represented_traits=("Bite", "Rampage")),
-    SrdMonsterSpec(monster_id="spy", display_name="Spy", challenge_rating="1", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "skirmisher", "ranged"), represented_traits=("Cunning Action", "Sneak Attack", "Multiattack")),
-    SrdMonsterSpec(monster_id="bugbear", display_name="Bugbear", challenge_rating="1", source_path="to_archive/interactive_ruleset/Monsters/Bugbear.md", role_tags=("humanoid", "bruiser", "stealth", "darkvision"), represented_traits=("Brute", "Surprise Attack")),
-    SrdMonsterSpec(monster_id="dire_wolf", display_name="Dire Wolf", challenge_rating="1", source_path="to_archive/interactive_ruleset/Monsters/Dire Wolf (Creature).md", role_tags=("beast", "large", "fast", "pack"), represented_traits=("Keen Hearing and Smell", "Pack Tactics", "Bite prone rider")),
-    SrdMonsterSpec(monster_id="ghoul", display_name="Ghoul", challenge_rating="1", source_path="to_archive/interactive_ruleset/Monsters/Ghoul.md", role_tags=("undead", "melee", "condition-threat"), represented_traits=("Poison immunity", "condition immunities", "Claws paralysis rider")),
-    SrdMonsterSpec(monster_id="berserker", display_name="Berserker", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "bruiser", "melee"), represented_traits=("Reckless",)),
-    SrdMonsterSpec(monster_id="bandit_captain", display_name="Bandit Captain", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "leader", "duelist"), represented_traits=("Multiattack", "Parry")),
-    SrdMonsterSpec(monster_id="cult_fanatic", display_name="Cult Fanatic", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "control", "caster"), represented_traits=("Spellcasting", "Dark Devotion", "Multiattack")),
-    SrdMonsterSpec(monster_id="priest", display_name="Priest", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "support", "healing", "caster"), represented_traits=("Spellcasting", "Divine Eminence")),
-    SrdMonsterSpec(monster_id="ogre", display_name="Ogre", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters/Ogre.md", role_tags=("giant", "large", "bruiser", "darkvision")),
-    SrdMonsterSpec(monster_id="ogre_zombie", display_name="Ogre Zombie", challenge_rating="2", source_path="to_archive/interactive_ruleset/Monsters (Alt)/Monsters Z.md", role_tags=("undead", "large", "bruiser"), represented_traits=("Poison immunity", "Undead Fortitude")),
-    SrdMonsterSpec(monster_id="knight", display_name="Knight", challenge_rating="3", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "elite", "heavy-armor"), represented_traits=("Brave", "Leadership", "Parry", "Multiattack")),
-    SrdMonsterSpec(monster_id="veteran", display_name="Veteran", challenge_rating="3", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "elite", "weapon-modes"), represented_traits=("Multiattack",)),
-    SrdMonsterSpec(monster_id="mage", display_name="Mage", challenge_rating="6", source_path="to_archive/interactive_ruleset/Monsters (Alt)/NPCs.md", role_tags=("humanoid", "arcane", "caster", "counterspell"), represented_traits=("Spellcasting", "Shield reaction", "Counterspell reaction")),
+_SRD_CREATURE_FACTS: tuple[_SrdCreatureFacts, ...] = (
+    _SrdCreatureFacts(creature_id="commoner", display_name="Commoner", description="A noncombatant pressed into danger.", challenge_rating="0", source_anchor="SRD 5.1 (CC-BY-4.0), p. 398, Appendix MM-B: Commoner", role_tags=("civilian", "melee"), sort_order=10),
+    _SrdCreatureFacts(creature_id="bandit", display_name="Bandit", description="A lightly armored raider with melee and crossbow pressure.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 396, Appendix MM-B: Bandit", role_tags=("humanoid", "melee", "ranged"), sort_order=20),
+    _SrdCreatureFacts(creature_id="cultist", display_name="Cultist", description="A zealot with a scimitar and social skill pressure.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 398, Appendix MM-B: Cultist", role_tags=("humanoid", "melee", "social"), represented_traits=("Dark Devotion",), sort_order=30),
+    _SrdCreatureFacts(creature_id="guard", display_name="Guard", description="A defensive sentry with shielded spear pressure.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 399, Appendix MM-B: Guard", role_tags=("defender", "humanoid", "shield"), sort_order=40),
+    _SrdCreatureFacts(creature_id="tribal_warrior", display_name="Tribal Warrior", description="A light skirmisher that pressures pack-melee scenarios.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 402, Appendix MM-B: Tribal Warrior", role_tags=("humanoid", "melee", "pack"), represented_traits=("Pack Tactics",), sort_order=50),
+    _SrdCreatureFacts(creature_id="kobold", display_name="Kobold", description="A fragile darkvision skirmisher.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 324, Monsters A-Z: Kobold", role_tags=("darkvision", "humanoid", "ranged", "small"), represented_traits=("Pack Tactics", "Sunlight Sensitivity"), sort_order=60),
+    _SrdCreatureFacts(creature_id="acolyte", display_name="Acolyte", description="A junior divine caster useful for low-CR support tests.", challenge_rating="1/4", source_anchor="SRD 5.1 (CC-BY-4.0), p. 395, Appendix MM-B: Acolyte", role_tags=("caster", "humanoid", "support"), represented_traits=("Spellcasting",), sort_order=70),
+    _SrdCreatureFacts(creature_id="scout", display_name="Scout", description="A perception-heavy ranged scout.", challenge_rating="1/2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 401, Appendix MM-B: Scout", role_tags=("humanoid", "perception", "ranged"), represented_traits=("Keen Hearing and Sight", "Multiattack"), sort_order=80),
+    _SrdCreatureFacts(creature_id="thug", display_name="Thug", description="A durable low-CR bruiser with crossbow fallback.", challenge_rating="1/2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 402, Appendix MM-B: Thug", role_tags=("bruiser", "humanoid", "ranged"), represented_traits=("Pack Tactics", "Multiattack"), sort_order=90),
+    _SrdCreatureFacts(creature_id="spy", display_name="Spy", description="A mobile infiltrator with shortsword and hand-crossbow pressure.", challenge_rating="1", source_anchor="SRD 5.1 (CC-BY-4.0), p. 402, Appendix MM-B: Spy", role_tags=("humanoid", "ranged", "skirmisher"), represented_traits=("Cunning Action", "Sneak Attack", "Multiattack"), sort_order=100),
+    _SrdCreatureFacts(creature_id="berserker", display_name="Berserker", description="A high-HP axe charger for melee pressure tests.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 397, Appendix MM-B: Berserker", role_tags=("bruiser", "humanoid", "melee"), represented_traits=("Reckless",), sort_order=110),
+    _SrdCreatureFacts(creature_id="bandit_captain", display_name="Bandit Captain", description="A durable duelist leader with melee and thrown-dagger pressure.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 397, Appendix MM-B: Bandit Captain", role_tags=("duelist", "humanoid", "leader"), represented_traits=("Multiattack", "Parry"), sort_order=120),
+    _SrdCreatureFacts(creature_id="priest", display_name="Priest", description="A divine support caster with healing, radiant pressure, and aura options.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 401, Appendix MM-B: Priest", role_tags=("caster", "healing", "humanoid", "support"), represented_traits=("Spellcasting", "Divine Eminence"), sort_order=130),
+    _SrdCreatureFacts(creature_id="cult_fanatic", display_name="Cult Fanatic", description="A low-mid control caster with dagger fallback.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 398, Appendix MM-B: Cult Fanatic", role_tags=("caster", "control", "humanoid"), represented_traits=("Spellcasting", "Dark Devotion", "Multiattack"), sort_order=140),
+    _SrdCreatureFacts(creature_id="knight", display_name="Knight", description="A plate-armored heavy melee combatant.", challenge_rating="3", source_anchor="SRD 5.1 (CC-BY-4.0), p. 400, Appendix MM-B: Knight", role_tags=("elite", "heavy-armor", "humanoid"), represented_traits=("Brave", "Leadership", "Parry", "Multiattack"), sort_order=150),
+    _SrdCreatureFacts(creature_id="veteran", display_name="Veteran", description="A disciplined martial enemy with melee and heavy-crossbow modes.", challenge_rating="3", source_anchor="SRD 5.1 (CC-BY-4.0), p. 403, Appendix MM-B: Veteran", role_tags=("elite", "humanoid", "weapon-modes"), represented_traits=("Multiattack",), sort_order=160),
+    _SrdCreatureFacts(creature_id="mage", display_name="Mage", description="A high-slot arcane caster for resource and counterspell pressure.", challenge_rating="6", source_anchor="SRD 5.1 (CC-BY-4.0), p. 400, Appendix MM-B: Mage", role_tags=("arcane", "caster", "counterspell", "humanoid"), represented_traits=("Spellcasting", "Shield reaction", "Counterspell reaction"), sort_order=170),
+    _SrdCreatureFacts(creature_id="orc", display_name="Orc", description="A strong darkvision charger with axe and javelin pressure.", challenge_rating="1/2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 339, Monsters A-Z: Orc", role_tags=("charger", "darkvision", "humanoid"), represented_traits=("Aggressive",), sort_order=180),
+    _SrdCreatureFacts(creature_id="hobgoblin", display_name="Hobgoblin", description="A heavily armored goblinoid soldier with sword and bow.", challenge_rating="1/2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 322, Monsters A-Z: Hobgoblin", role_tags=("darkvision", "humanoid", "ranged", "shield"), represented_traits=("Martial Advantage",), sort_order=190),
+    _SrdCreatureFacts(creature_id="bugbear", display_name="Bugbear", description="A stealthy goblinoid bruiser.", challenge_rating="1", source_anchor="SRD 5.1 (CC-BY-4.0), p. 266, Monsters A-Z: Bugbear", role_tags=("bruiser", "darkvision", "humanoid", "stealth"), represented_traits=("Brute", "Surprise Attack"), sort_order=200),
+    _SrdCreatureFacts(creature_id="gnoll", display_name="Gnoll", description="A shielded savage with spear and longbow choices.", challenge_rating="1/2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 314, Monsters A-Z: Gnoll", role_tags=("darkvision", "humanoid", "ranged", "shield"), represented_traits=("Bite", "Rampage"), sort_order=210),
+    _SrdCreatureFacts(creature_id="ogre", display_name="Ogre", description="A large giant with high HP and heavy bludgeoning pressure.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 336, Monsters A-Z: Ogre", role_tags=("bruiser", "darkvision", "giant", "large"), sort_order=220),
+    _SrdCreatureFacts(creature_id="wolf", display_name="Wolf", description="A fast beast with natural bite pressure.", challenge_rating="1/4", source_anchor="SRD 5.1 (CC-BY-4.0), p. 393, Appendix MM-A: Wolf", role_tags=("beast", "fast", "pack"), represented_traits=("Keen Hearing and Smell", "Pack Tactics", "Bite prone rider"), sort_order=230),
+    _SrdCreatureFacts(creature_id="dire_wolf", display_name="Dire Wolf", description="A large fast beast for melee-pack and pursuit tests.", challenge_rating="1", source_anchor="SRD 5.1 (CC-BY-4.0), p. 371, Appendix MM-A: Dire Wolf", role_tags=("beast", "fast", "large", "pack"), represented_traits=("Keen Hearing and Smell", "Pack Tactics", "Bite prone rider"), sort_order=240),
+    _SrdCreatureFacts(creature_id="zombie", display_name="Zombie", description="A slow undead body that stresses pursuit and poison immunity.", challenge_rating="1/4", source_anchor="SRD 5.1 (CC-BY-4.0), p. 356, Monsters A-Z: Zombie", role_tags=("melee", "slow", "undead"), represented_traits=("Poison immunity", "Undead Fortitude"), sort_order=250),
+    _SrdCreatureFacts(creature_id="ogre_zombie", display_name="Ogre Zombie", description="A large undead bruiser with huge HP and slow cognition.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 357, Monsters A-Z: Ogre Zombie", role_tags=("bruiser", "large", "undead"), represented_traits=("Poison immunity", "Undead Fortitude"), sort_order=260),
+    _SrdCreatureFacts(creature_id="ghoul", display_name="Ghoul", description="A fast undead attacker with bite and claw modes.", challenge_rating="1", source_anchor="SRD 5.1 (CC-BY-4.0), p. 312, Monsters A-Z: Ghoul", role_tags=("condition-threat", "melee", "undead"), represented_traits=("Poison immunity", "condition immunities", "Claws paralysis rider"), sort_order=270),
 )
 
-SRD_MONSTER_FACTORIES: dict[str, MonsterFactory] = {
-    "commoner": create_commoner,
-    "bandit": create_bandit,
-    "cultist": create_cultist,
-    "guard": create_guard,
-    "tribal_warrior": create_tribal_warrior,
-    "kobold": create_kobold,
-    "acolyte": create_acolyte,
-    "scout": create_scout,
-    "thug": create_thug,
-    "spy": create_spy,
-    "berserker": create_berserker,
-    "bandit_captain": create_bandit_captain,
-    "priest": create_priest,
-    "cult_fanatic": create_cult_fanatic,
-    "knight": create_knight,
-    "veteran": create_veteran,
-    "mage": create_mage,
-    "orc": create_orc,
-    "hobgoblin": create_hobgoblin,
-    "bugbear": create_bugbear,
-    "gnoll": create_gnoll,
-    "ogre": create_ogre,
-    "wolf": create_wolf,
-    "dire_wolf": create_dire_wolf,
-    "zombie": create_zombie,
-    "ogre_zombie": create_ogre_zombie,
-    "ghoul": create_ghoul,
-}
+_CONFIGURE_SRD_CREATURE_BY_ID = MappingProxyType({
+    "commoner": _configure_commoner,
+    "bandit": _configure_bandit,
+    "cultist": _configure_cultist,
+    "guard": _configure_guard,
+    "tribal_warrior": _configure_tribal_warrior,
+    "kobold": _configure_kobold,
+    "acolyte": _configure_acolyte,
+    "scout": _configure_scout,
+    "thug": _configure_thug,
+    "spy": _configure_spy,
+    "berserker": _configure_berserker,
+    "bandit_captain": _configure_bandit_captain,
+    "priest": _configure_priest,
+    "cult_fanatic": _configure_cult_fanatic,
+    "knight": _configure_knight,
+    "veteran": _configure_veteran,
+    "mage": _configure_mage,
+    "orc": _configure_orc,
+    "hobgoblin": _configure_hobgoblin,
+    "bugbear": _configure_bugbear,
+    "gnoll": _configure_gnoll,
+    "ogre": _configure_ogre,
+    "wolf": _configure_wolf,
+    "dire_wolf": _configure_dire_wolf,
+    "zombie": _configure_zombie,
+    "ogre_zombie": _configure_ogre_zombie,
+    "ghoul": _configure_ghoul,
+})
+
+_ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID = MappingProxyType({
+    "bandit_captain": (MultiattackAction,),
+    "berserker": (RecklessAttack,),
+    "cult_fanatic": (MultiattackAction,),
+    "gnoll": (NaturalAttack,),
+    "knight": (LeadershipAction, MultiattackAction),
+    "orc": (AggressiveMoveAction,),
+    "priest": (DivineEminenceAction,),
+    "scout": (MultiattackAction,),
+    "spy": (MultiattackAction,),
+    "thug": (MultiattackAction,),
+    "veteran": (MultiattackAction,),
+})
 
 
-def list_srd_monster_specs() -> tuple[SrdMonsterSpec, ...]:
-    """Return the SRD-derived roster metadata."""
-    return SRD_MONSTER_SPECS
+def _root_owned_action_dependencies(
+    creature_id: str,
+) -> tuple[ContentDependency, ...]:
+    """Declare non-universal actions installed by one SRD stat block."""
+    return tuple(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[
+                action_type
+            ].ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes="Installed by this exact SRD creature composition.",
+        )
+        for action_type in _ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID.get(
+            creature_id,
+            (),
+        )
+    )
 
 
-def create_srd_monster(
-    monster_id: str,
-    source_id: Optional[UUID] = None,
-    name: Optional[str] = None,
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
-) -> Entity:
-    """Create one SRD-derived monster by stable roster id.
+def _declare_srd_creature(
+    facts: _SrdCreatureFacts,
+    configure: Callable[[CreatureBuildContext], Entity],
+) -> ContentDeclaration:
+    descriptor = ContentDescriptorSpec(
+        display_name=facts.display_name,
+        description=facts.description,
+        tags=tuple(sorted({
+            "creature",
+            "srd",
+            f"cr_{facts.challenge_rating.replace('/', '_')}",
+            *facts.role_tags,
+            *(f"trait:{trait.casefold().replace(' ', '_')}" for trait in facts.represented_traits),
+        })),
+        visibility=ContentVisibility.PUBLIC,
+        presentation=ContentPresentation(
+            icon_key=f"creature.{facts.creature_id}",
+            portrait_key=f"creature.{facts.creature_id}",
+            visual_variant_key=facts.creature_id,
+            ui_group="creatures.srd",
+        ),
+        ordering=ContentOrdering(
+            sort_group="creatures.srd",
+            sort_order=facts.sort_order,
+        ),
+    )
+    provenance = ContentProvenance(
+        primary_source_id="wotc.srd_5_1_cc",
+        source_anchor=facts.source_anchor,
+        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+        fidelity=ContentFidelity.PARTIAL,
+        review_status=ContentReviewStatus.REVIEWED,
+        notes=(
+            "Playable current-engine representation. Descriptor trait tags "
+            "identify the implemented package without claiming full stat-block parity."
+        ),
+    )
 
-    Args:
-        monster_id: Stable id from `SRD_MONSTER_FACTORIES`.
-        source_id: Optional explicit entity UUID.
-        name: Optional display name override.
-        position: Starting grid position.
-        faction: Optional faction identifier.
+    def factory(
+        raw_context: object,
+        parameters: SrdCreatureParameters,
+    ) -> Entity:
+        _ = parameters
+        return configure(CreatureBuildContext.model_validate(raw_context))
 
-    Returns:
-        Configured entity.
+    factory.__name__ = f"_build_{facts.creature_id}"
+    factory.__qualname__ = factory.__name__
+    declared_factory = creature_factory(
+        pack_id="content.srd_5_1_cc",
+        content_id=f"creature.{facts.creature_id}",
+        version=1,
+        parameters=SrdCreatureParameters,
+        descriptor=descriptor,
+        provenance=provenance,
+        dependencies=_root_owned_action_dependencies(facts.creature_id),
+    )(factory)
+    return get_content_declaration(declared_factory)
 
-    Raises:
-        ValueError: If the roster id is unknown.
-    """
-    factory = SRD_MONSTER_FACTORIES.get(monster_id)
-    if factory is None:
-        raise ValueError(f"Unknown SRD monster id: {monster_id}")
-    display_name = name or next(spec.display_name for spec in SRD_MONSTER_SPECS if spec.monster_id == monster_id)
-    return factory(source_id, display_name, position, faction)
+
+def _build_srd_creature_declarations() -> tuple[ContentDeclaration, ...]:
+    ids = tuple(facts.creature_id for facts in _SRD_CREATURE_FACTS)
+    displays = tuple(facts.display_name for facts in _SRD_CREATURE_FACTS)
+    orders = tuple(facts.sort_order for facts in _SRD_CREATURE_FACTS)
+    if (
+        len(ids) != 27
+        or len(ids) != len(set(ids))
+        or len(displays) != len(set(displays))
+        or len(orders) != len(set(orders))
+        or set(ids) != set(_CONFIGURE_SRD_CREATURE_BY_ID)
+    ):
+        raise RuntimeError(
+            "SRD creature declarations require 27 unique identities, display "
+            "names, order values, and matching private configuration helpers",
+        )
+    return tuple(
+        _declare_srd_creature(
+            facts,
+            _CONFIGURE_SRD_CREATURE_BY_ID[facts.creature_id],
+        )
+        for facts in _SRD_CREATURE_FACTS
+    )
+
+
+SRD_CREATURE_DECLARATIONS = _build_srd_creature_declarations()
+SRD_CREATURE_DECLARATIONS_BY_ID = MappingProxyType({
+    declaration.ref.content_id.removeprefix("creature."): declaration
+    for declaration in SRD_CREATURE_DECLARATIONS
+})
+SRD_CREATURE_RECIPES_BY_ID = MappingProxyType({
+    creature_id: ContentRecipe.create(
+        ref=declaration.ref,
+        parameters={},
+    )
+    for creature_id, declaration in SRD_CREATURE_DECLARATIONS_BY_ID.items()
+})
 
 
 def _create_srd_entity(
     *,
-    source_id: Optional[UUID],
-    name: str,
+    context: CreatureBuildContext,
     description: str,
-    position: tuple[int, int],
-    faction: Optional[str],
     abilities: tuple[int, int, int, int, int, int],
     hit_die_value: HitDieValue,
     hit_die_count: int,
@@ -959,7 +1349,7 @@ def _create_srd_entity(
     immunities: tuple[DamageType, ...] = (),
 ) -> Entity:
     """Create a configured entity using shared SRD roster defaults."""
-    entity_uuid = source_id or uuid4()
+    entity_uuid = context.runtime_entity_uuid
     strength, dexterity, constitution, intelligence, wisdom, charisma = abilities
     skill_config = {
         skill_name: SkillConfig(proficiency=True)
@@ -967,7 +1357,7 @@ def _create_srd_entity(
         if enabled
     }
     entity = Entity.create(
-        name=name,
+        name=context.display_name,
         source_entity_uuid=entity_uuid,
         description=description,
         config=EntityConfig(
@@ -997,18 +1387,56 @@ def _create_srd_entity(
             ),
             spellcasting=SpellcastingConfig(spellcasting_ability=spellcasting_ability) if spellcasting_ability else None,
             proficiency_bonus=proficiency_bonus,
-            position=position,
-            faction=faction,
+            position=context.position,
+            faction=context.faction,
             weight=weight,
             creature_type=creature_type,
             size=size,
             appearance=_default_srd_appearance(creature_type, size),
         ),
+        content_ref=context.requested_ref,
     )
     setup_standard_actions(entity)
     if darkvision:
         entity.senses.sense_modes.append(SenseMode(sense_type=SensesType.DARKVISION, range_feet=60))
     return entity
+
+
+def _default_possession(
+    context: CreatureBuildContext,
+    recipe: ContentRecipe,
+    source_entity_uuid: UUID,
+    *,
+    origin: ItemRuntimeOrigin,
+    expected_type: type[_ItemT],
+) -> _ItemT | None:
+    """Materialize an authored loadout item only when deployment permits it."""
+    if (
+        context.possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return None
+    return materialize_item_from_installed_runtime(
+        recipe,
+        source_entity_uuid,
+        origin=origin,
+        expected_type=expected_type,
+    )
+
+
+def _intrinsic_possession(
+    recipe: ContentRecipe,
+    source_entity_uuid: UUID,
+    *,
+    expected_type: type[_ItemT],
+) -> _ItemT:
+    """Materialize a creature-owned intrinsic in every possession mode."""
+    return materialize_item_from_installed_runtime(
+        recipe,
+        source_entity_uuid,
+        origin=ItemRuntimeOrigin.INTRINSIC,
+        expected_type=expected_type,
+    )
 
 
 def _equip(
@@ -1028,57 +1456,17 @@ def _equip(
     if offhand is not None:
         entity.equipment.equip(offhand, WeaponSlot.MELEE_OFF)
     if shield:
-        entity.equipment.equip(create_shield(entity.uuid), WeaponSlot.MELEE_OFF)
+        entity.equipment.equip(
+            materialize_item_from_installed_runtime(
+                SHIELD_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Shield,
+            ),
+            WeaponSlot.MELEE_OFF,
+        )
     if ranged is not None:
         entity.equipment.equip(ranged, WeaponSlot.RANGED_MAIN)
-
-
-def _simple_weapon(
-    source_id: UUID,
-    name: str,
-    damage_dice: WeaponDieValue,
-    dice_numbers: int,
-    damage_type: DamageType,
-    range_type: RangeType = RangeType.REACH,
-    normal_range: int = 5,
-    long_range: Optional[int] = None,
-    properties: tuple[WeaponProperty, ...] = (),
-    *,
-    visual_item_name: Optional[str] = None,
-    equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE,
-) -> Weapon:
-    """Create a direct weapon for natural attacks and SRD gaps."""
-    return Weapon(
-        source_entity_uuid=source_id,
-        name=name,
-        description=f"SRD-derived {name.lower()} attack.",
-        damage_dice=damage_dice,
-        dice_numbers=dice_numbers,
-        damage_type=damage_type,
-        properties=list(properties),
-        range=Range(type=range_type, normal=normal_range, long=long_range),
-        attack_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Attack Bonus"),
-        extra_damage_dices=[],
-        extra_damage_dices_numbers=[],
-        extra_damage_bonus=[],
-        extra_damage_type=[],
-        visual_item_name=visual_item_name,
-        equipped_visual_policy=equipped_visual_policy,
-    )
-
-
-def _fixed_ac_armor(source_id: UUID, name: str, armor_class: int) -> BodyArmor:
-    """Create fixed-AC pseudo-armor for natural armor."""
-    return BodyArmor(
-        source_entity_uuid=source_id,
-        name=name,
-        description=f"Fixed AC {armor_class} natural protection.",
-        type=ArmorType.LIGHT,
-        body_part=BodyPart.BODY,
-        ac=ModifiableValue.create(source_entity_uuid=source_id, base_value=armor_class, value_name="Armor Class"),
-        max_dex_bonus=ModifiableValue.create(source_entity_uuid=source_id, base_value=0, value_name="Max Dex Bonus"),
-        equipped_visual_policy=EquippedVisualPolicy.HIDDEN,
-    )
 
 
 def _default_srd_appearance(creature_type: CreatureType, size: Size) -> AppearanceConfig:

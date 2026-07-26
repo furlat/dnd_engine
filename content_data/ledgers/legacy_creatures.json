@@ -1,0 +1,1291 @@
+{
+  "rows": [
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.commoner",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_commoner",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[commoner]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.commoner",
+        "content_version": 1,
+        "definition_contract_hash": "9a48eff027b5b0781b134adc91bce1f73a8c821aa96f9c85262b60f959b9bd62",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.commoner",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.bandit",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bandit",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[bandit]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.bandit",
+        "content_version": 1,
+        "definition_contract_hash": "88cf1b52219ebab2e562faf2cdb85909c7b7877fa02d66b44173492a7fbf8df7",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.bandit",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.cultist",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_cultist",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[cultist]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.cultist",
+        "content_version": 1,
+        "definition_contract_hash": "a3b1a7c114c240278d3bb5a99be5e2a7234816dd5300068ff163981806ba1fb4",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.cultist",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.guard",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_guard",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[guard]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.guard",
+        "content_version": 1,
+        "definition_contract_hash": "8c04ba14bcffcb391a9434440bf0e02beb3e7df15fd56ac93c5c0df345233a2f",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.guard",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.tribal_warrior",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_tribal_warrior",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[tribal_warrior]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.tribal_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "7bbed23fc03c557fe2602a72273eeeb69f1b5b2e97f77fc94c9bc53be1287112",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.tribal_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.kobold",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_kobold",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[kobold]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.kobold",
+        "content_version": 1,
+        "definition_contract_hash": "81377757453bdb589b23058c7620c625e01e255b262c22b5f5dd8c992be3b4b2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.kobold",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.acolyte",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_acolyte",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[acolyte]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "034f52290131d61b2e700bbbf7a4031b27a2b3cde7a5bbcc975a6a1173370842",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.scout",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_scout",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[scout]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.scout",
+        "content_version": 1,
+        "definition_contract_hash": "ffa5963628533ab5af614ca6c5d21b3240f7b2dca88759f32cc4eb0b6d7265b0",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.scout",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.thug",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_thug",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[thug]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.thug",
+        "content_version": 1,
+        "definition_contract_hash": "3ecc585b223182a02806cf10f94023310f4d3f19d671a7c27a0cc45aeda8c27a",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.thug",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.spy",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_spy",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[spy]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.spy",
+        "content_version": 1,
+        "definition_contract_hash": "aa373db44f10dc498dd521048f7578edd45174138c7cdbd62503ef65ab90e987",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.spy",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.berserker",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_berserker",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[berserker]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.berserker",
+        "content_version": 1,
+        "definition_contract_hash": "c21cf6ec28d47178aa4a3cddd2a8550186943c086cc974239ea94c459bf0f2dc",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.berserker",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.bandit_captain",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bandit_captain",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[bandit_captain]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.bandit_captain",
+        "content_version": 1,
+        "definition_contract_hash": "7dc3bf43d5cc67c6d8961ef148c608fe7b0b1a72cd5815f249842e3c66f878cf",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.bandit_captain",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.priest",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_priest",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[priest]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.priest",
+        "content_version": 1,
+        "definition_contract_hash": "d1faff501fb6598c2d61221e2b7cd964059a09f305802ff2f7554e57846f8194",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.priest",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.cult_fanatic",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_cult_fanatic",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[cult_fanatic]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "267dd76a8156251ef1aadb18d623b011b136049376ca56176fa489b1cedcc323",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.knight",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_knight",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[knight]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.knight",
+        "content_version": 1,
+        "definition_contract_hash": "10f1f0829f88ba61c21ba258b9ecfcbe99b4ef5ec74424e93bec3ea4fcf09786",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.knight",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.veteran",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_veteran",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[veteran]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.veteran",
+        "content_version": 1,
+        "definition_contract_hash": "f4b4b5296a63c2191cab65a9687b918d818758eb73feb812892c46993684f75c",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.veteran",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.mage",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_mage",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[mage]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.mage",
+        "content_version": 1,
+        "definition_contract_hash": "585db34e9786d07fffef63724b37cd0a85d8af8ac5af2c4bb48347fdd46bf677",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.mage",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.orc",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_orc",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[orc]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.orc",
+        "content_version": 1,
+        "definition_contract_hash": "ff9476e66e8a2a69cb4f152043fdc314064ad7c17892d47f1055bf5de4cfcb8c",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.orc",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.hobgoblin",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_hobgoblin",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[hobgoblin]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.hobgoblin",
+        "content_version": 1,
+        "definition_contract_hash": "8caf5b01ff267aea840e9d69188af05df9f7ddced904100a151671bf52ad137f",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.hobgoblin",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.bugbear",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bugbear",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[bugbear]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "a4ebce67f7317c04b5c35fdebff292dcca9b3bd26a5e586a95ce3259ce3e73c7",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.gnoll",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_gnoll",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[gnoll]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.gnoll",
+        "content_version": 1,
+        "definition_contract_hash": "2cd8b2f023305bced5460ec539161c7199f306a44e94cb5240f5543476896838",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.gnoll",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.ogre",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ogre",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[ogre]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.ogre",
+        "content_version": 1,
+        "definition_contract_hash": "f6e2565c058070b48900edc0e2edc96ab5ea92b616a7e2fde994275c4646cec3",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.ogre",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.wolf",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_wolf",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[wolf]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.wolf",
+        "content_version": 1,
+        "definition_contract_hash": "014c8bfee7782c6350957cfb9902751bc8021cb15a31683cd8c3ea68f0cc9fa1",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.wolf",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.dire_wolf",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_dire_wolf",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[dire_wolf]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.dire_wolf",
+        "content_version": 1,
+        "definition_contract_hash": "d043e27ac15f2cc7e2c5f21a092967bbf870ec764e67ae3f5ac40a9cbb147fbc",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.dire_wolf",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.zombie",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_zombie",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[zombie]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.zombie",
+        "content_version": 1,
+        "definition_contract_hash": "eeaee10a9dc764368d69c12be4fa158850a09ef19296d0afdda91ef4994d66da",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.zombie",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.ogre_zombie",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ogre_zombie",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[ogre_zombie]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.ogre_zombie",
+        "content_version": 1,
+        "definition_contract_hash": "efe1d811343f8e3b96f318d65cdae1d89fe42968c5976f407d924a697e0e5f95",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.ogre_zombie",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.srd.ghoul",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ghoul",
+        "dnd/monsters/srd_roster.py:SRD_MONSTER_FACTORIES[ghoul]",
+        "dnd/monsters/srd_roster.py:create_srd_monster"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_51_srd_monster_roster.py::test_each_srd_monster_builds_with_legal_actions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.ghoul",
+        "content_version": 1,
+        "definition_contract_hash": "9a081bce23bef1d017cd4deed540efa2aca63d809e38e72e7c00df69ce7faaf6",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.ghoul",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.goblin",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_goblin",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[goblin]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_16_monsters_preset_actors.py::test_base_goblin_and_skeleton_factories_encode_monster_state"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.goblin",
+        "content_version": 1,
+        "definition_contract_hash": "7529fee2148649c3717eec595164ef9af8a7dbf192cb54816818cd46998267e1",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.goblin",
+        "content_version": 1,
+        "definition_contract_hash": "2f93d97aff126395c7fbb59e7acfdc5e355041a40c296b48959c222bf02aa3d3",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.skeleton",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_skeleton"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_16_monsters_preset_actors.py::test_base_goblin_and_skeleton_factories_encode_monster_state"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.skeleton",
+        "content_version": 1,
+        "definition_contract_hash": "e71b788d57968d456926e134c3a8d323d9310f2f4f3791efb251f4bdc21e8cf3",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "creature.skeleton",
+        "content_version": 1,
+        "definition_contract_hash": "e792a0211b1733549488e14e98b896d8fdfaa7fbd95b34ee1e19bcbe4a2c4c5c",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.goblin_archer",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_goblin_archer",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[goblin_archer]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_37_ai_validation_arenas.py::test_goblin_water_skirmish_samples_goblins_caster_and_route_blockers"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.goblin_archer",
+        "content_version": 1,
+        "definition_contract_hash": "2d4b906ec6cb07168979f1fcc4aed0de7e8651d81b3b41e59d324c535bb26cb0",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.goblin_archer",
+        "content_version": 1,
+        "definition_contract_hash": "59f083e677a50ed93313e007bc0c8a8a87cf28b23b6982bd7b76b04236796f39",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.caster",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_caster",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[caster]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_16_monsters_preset_actors.py::test_generic_caster_preset_wires_spells_reaction_gear_and_potions"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.generic_caster",
+        "content_version": 1,
+        "definition_contract_hash": "c000226fddac22a98e884fc11854910bb77ac56cf43ac4f9ca597c353ad0afac",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.generic_caster",
+        "content_version": 1,
+        "definition_contract_hash": "c2dba7e9e7fb83811bf17a05c9865ca7159d326cd4ab3106a5304e3fda6a00f6",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.skeleton_warrior",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_skeleton_warrior",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[skeleton_warrior]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_138_skeleton_units_legacy_contract.py::test_specialized_skeleton_presets_preserve_identity_and_arena_interop"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.skeleton_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "c161d76e61113a84d8e44bfa6996216b98047044405144751279dff7439b1054",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.skeleton_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "f31bb189457e3789e003944f48ce3682cde4a3f967b5b86cde4b3530a5b5601c",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.skeleton_archer",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_skeleton_archer",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[skeleton_archer]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_138_skeleton_units_legacy_contract.py::test_specialized_skeleton_presets_preserve_identity_and_arena_interop"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.skeleton_archer",
+        "content_version": 1,
+        "definition_contract_hash": "38dd29b4165babeaffc31337020a7addb77ee169ba9503447b125fca742f41f4",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.skeleton_archer",
+        "content_version": 1,
+        "definition_contract_hash": "f31bb189457e3789e003944f48ce3682cde4a3f967b5b86cde4b3530a5b5601c",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.bestiary.skeleton_warlock",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_skeleton_warlock",
+        "dnd/scenarios/evaluation/assembler.py:_build_bestiary_actor[skeleton_warlock]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_138_skeleton_units_legacy_contract.py::test_specialized_skeleton_presets_preserve_identity_and_arena_interop"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.skeleton_warlock",
+        "content_version": 1,
+        "definition_contract_hash": "b7ad73fe3b080ac1c24ff762ea2e98cfe5e1dad23ba6c37df4861faffa9e98ab",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.skeleton_warlock",
+        "content_version": 1,
+        "definition_contract_hash": "f31bb189457e3789e003944f48ce3682cde4a3f967b5b86cde4b3530a5b5601c",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.player.barbarian",
+      "legacy_locators": [
+        "dnd/classes/barbarian_factory.py:create_barbarian",
+        "dnd/scenarios/evaluation/assembler.py:_build_class_actor[BarbarianActorBlueprint]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.player.barbarian",
+        "content_version": 1,
+        "definition_contract_hash": "252a611d6c50100a038b129c2e9961835c018cd516715f225c2e3293c8a6e6f4",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.player.barbarian",
+        "content_version": 1,
+        "definition_contract_hash": "44e3814fe4924806f7ce3f4974bcbe292f49d690c4fc5246617144519cc21945",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.player.fighter",
+      "legacy_locators": [
+        "dnd/classes/fighter_factory.py:create_fighter",
+        "dnd/scenarios/evaluation/assembler.py:_build_class_actor[FighterActorBlueprint]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.player.fighter",
+        "content_version": 1,
+        "definition_contract_hash": "f458e3fa0fa85548eac9159a2c94be7a4a72718ea5e65d4d1198d7ef28ab838c",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.player.fighter",
+        "content_version": 1,
+        "definition_contract_hash": "8db29778a3f0547e101125cb88525726a57777880c713bbd620a87209d2e4e9e",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.player.sorcerer",
+      "legacy_locators": [
+        "dnd/classes/sorcerer_factory.py:create_sorcerer",
+        "dnd/scenarios/evaluation/assembler.py:_build_class_actor[SorcererActorBlueprint]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
+        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+      ],
+      "migration_status": "migrated",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.player.sorcerer",
+        "content_version": 1,
+        "definition_contract_hash": "64f05f725fb4449ef2ebb055888a97574860a8a6997df78cbe089ba312ef8522",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "creature.player.sorcerer",
+        "content_version": 1,
+        "definition_contract_hash": "d899ae6ed9e1fd2497fb1dc2797483b9a3f84712755193c236c2127f62a7d80e",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.extension.circus_warrior",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_warrior"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_extension_and_special_factory_roots_remain_accounted"
+      ],
+      "migration_status": "inventoried",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.circus_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "d76187dc0561d6f3ba72eea1f52bc379843f0639a97ebe7160d58d112a565ba9",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": null
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.extension.aegis_spell_feature_actor",
+      "legacy_locators": [
+        "dnd/extensions/aegis_spark.py:create_spell_feature_actor",
+        "dnd/extensions/__init__.py:create_spell_feature_actor"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_extension_and_special_factory_roots_remain_accounted",
+        "tests/manual/test_21_spell_and_feature_extensions.py::test_feature_factory_scene_composes_actor_ally_enemy_and_template"
+      ],
+      "migration_status": "inventoried",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.aegis_spell_feature_actor",
+        "content_version": 1,
+        "definition_contract_hash": "ec5dbe41fcf74a64afde08bd970fc6c42060e233019528550c2fcce4ca1ebc76",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": null
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "creature",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.creature.extension.field_medic",
+      "legacy_locators": [
+        "dnd/extensions/field_focus.py:create_field_medic",
+        "dnd/extensions/__init__.py:create_field_medic"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_157_legacy_creature_migration_ledger.py::test_extension_and_special_factory_roots_remain_accounted",
+        "tests/manual/test_20_content_extension_basics.py::test_actor_and_scene_factories_compose_the_content_pack"
+      ],
+      "migration_status": "inventoried",
+      "notes": "",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "creature.field_medic",
+        "content_version": 1,
+        "definition_contract_hash": "8ab34ddf71d93944af5827addfa45433053240cf6c43e587c2a630b87b3a1e01",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": null
+    }
+  ],
+  "schema_version": 1
+}

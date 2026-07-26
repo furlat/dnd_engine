@@ -54,7 +54,7 @@ def test_fresh_migration_configures_sqlite_and_is_restart_idempotent(tmp_path: P
 
     assert version_row is not None
     assert version_row[0] == LATEST_SCHEMA_VERSION
-    assert version_row[1] == "subjective_replay_artifact"
+    assert version_row[1] == "character_revisions_and_deployment_leases"
     assert len(version_row[2]) == 64
     assert journal_mode == "wal"
     assert {
@@ -75,6 +75,9 @@ def test_fresh_migration_configures_sqlite_and_is_restart_idempotent(tmp_path: P
         "principal_credentials",
         "characters",
         "character_deployments",
+        "character_definitions",
+        "character_holdings_revisions",
+        "character_deployment_leases",
     }.issubset(foreign_key_tables)
 
     restarted = _open(database_path)

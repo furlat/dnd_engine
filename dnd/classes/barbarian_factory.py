@@ -16,21 +16,30 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import EquipmentConfig, Shield, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.materialization import CreaturePossessionMode
 from dnd.core.equipment_types import UnarmoredAc, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.events import AbilityName
 
-from dnd.items import (
-    create_greataxe,
-    create_handaxe,
-    create_longsword,
-    create_shield,
-    create_javelin,
-    create_dagger,
+from dnd.items.armors import SHIELD_RECIPE
+from dnd.items.consumables import (
+    HASTE_POTION_RECIPE,
+    HEALING_POTION_RECIPE,
 )
-from dnd.items.test_items import create_potion_of_haste, create_healing_potion
+from dnd.items.weapons import (
+    DAGGER_RECIPE,
+    GREATAXE_RECIPE,
+    HANDAXE_RECIPE,
+    JAVELIN_RECIPE,
+    LONGSWORD_RECIPE,
+)
 
 from dnd.classes.rage import (
     RageFeature,
@@ -342,21 +351,46 @@ def apply_equipment(entity: Entity, preset: EquipmentPreset):
 
     melee_main = preset_config.get("melee_main")
     if melee_main == "greataxe":
-        weapon = create_greataxe(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            GREATAXE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
     elif melee_main == "handaxe":
-        weapon = create_handaxe(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            HANDAXE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
     elif melee_main == "longsword":
-        weapon = create_longsword(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            LONGSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
     melee_off = preset_config.get("melee_off")
     if melee_off == "handaxe":
-        weapon = create_handaxe(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            HANDAXE_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_OFF)
     elif melee_off == "shield":
-        shield = create_shield(entity.uuid)
+        shield = materialize_item_from_installed_runtime(
+            SHIELD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Shield,
+        )
         entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
 
@@ -461,7 +495,15 @@ def apply_barbarian_features(entity: Entity, config: BarbarianConfig):
         ))
 
 
-def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) -> Entity:
+def create_barbarian(
+    config: BarbarianConfig,
+    source_id: Optional[UUID] = None,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
+) -> Entity:
     """
     Create a Barbarian entity at the specified level with all features applied.
 
@@ -529,33 +571,71 @@ def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) 
         name=config.name,
         source_entity_uuid=source_id,
         description=f"Level {config.level} Barbarian{path_name}",
-        config=entity_config
+        config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
+
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        apply_barbarian_features(entity, config)
+        return entity
 
     apply_equipment(entity, config.equipment_preset)
 
     apply_barbarian_features(entity, config)
 
-    haste_potion = create_potion_of_haste(entity.uuid)
+    haste_potion = materialize_item_from_installed_runtime(
+        HASTE_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     entity.loot_item(haste_potion)
-    entity.loot_item(create_healing_potion(entity.uuid))
-    entity.loot_item(create_healing_potion(entity.uuid))
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
 
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     spare_weapons = [
-        ("Handaxe", create_handaxe),
-        ("Javelin", create_javelin),
-        ("Dagger", create_dagger),
-        ("Longsword", create_longsword),
+        ("Handaxe", HANDAXE_RECIPE),
+        ("Javelin", JAVELIN_RECIPE),
+        ("Dagger", DAGGER_RECIPE),
+        ("Longsword", LONGSWORD_RECIPE),
     ]
-    for weapon_name, factory_fn in spare_weapons:
+    for weapon_name, recipe in spare_weapons:
         if weapon_name not in equipped_names:
-            entity.loot_item(factory_fn(entity.uuid))
+            entity.loot_item(
+                materialize_item_from_installed_runtime(
+                    recipe,
+                    entity.uuid,
+                    origin=ItemRuntimeOrigin.STARTER,
+                    expected_type=Weapon,
+                ),
+            )
 
     if "Shield" not in equipped_names:
-        entity.loot_item(create_shield(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                SHIELD_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Shield,
+            ),
+        )
 
     return entity
 

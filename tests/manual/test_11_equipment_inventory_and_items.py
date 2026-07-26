@@ -6,9 +6,11 @@ from dnd.actions_functional import execute_use_action
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem, ItemChargeConsumptionEvent
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
@@ -26,14 +28,19 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items import create_healing_potion
-from dnd.items.test_items import (
-    create_potion_of_greater_invisibility,
-    create_potion_of_haste,
+from dnd.items.consumables import (
+    GREATER_INVISIBILITY_POTION_RECIPE,
+    HASTE_POTION_RECIPE,
+    HEALING_POTION_RECIPE,
+    healing_potion_recipe,
 )
-from dnd.items.armors import create_chain_mail, create_shield
+from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
 from dnd.items.environment import DirectionalDoor as TutorialDoor
-from dnd.items.weapons import create_greatsword, create_shortbow, create_shortsword
+from dnd.items.weapons import (
+    GREATSWORD_RECIPE,
+    SHORTBOW_RECIPE,
+    SHORTSWORD_RECIPE,
+)
 from dnd.conditions import GreaterInvisibilityEffect
 from dnd.spells.transmutation import HasteEffect
 
@@ -295,9 +302,21 @@ def test_inventory_stacks_and_capacity_are_atomic(capsys) -> None:
     """Stack merges consume incoming objects only when the full insert succeeds."""
     reset_item_tutorial_state()
     alchemist = create_tutorial_actor("Alchemist")
-    first = create_healing_potion(alchemist.uuid, heal_amount=7)
-    second = create_healing_potion(alchemist.uuid, heal_amount=7)
-    third = create_healing_potion(alchemist.uuid, heal_amount=7)
+    first = materialize_item(
+        HEALING_POTION_RECIPE,
+        alchemist.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    second = materialize_item(
+        HEALING_POTION_RECIPE,
+        alchemist.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    third = materialize_item(
+        HEALING_POTION_RECIPE,
+        alchemist.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     first.stack_count = 8
     second.stack_count = 2
     third.stack_count = 5
@@ -333,8 +352,16 @@ def test_inventory_stacks_and_capacity_are_atomic(capsys) -> None:
         name="Tight Pack",
         weight_capacity=10,
     )
-    existing = create_healing_potion(alchemist.uuid, heal_amount=4)
-    incoming = create_healing_potion(alchemist.uuid, heal_amount=4)
+    existing = materialize_item(
+        healing_potion_recipe(heal_amount=4),
+        alchemist.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    incoming = materialize_item(
+        healing_potion_recipe(heal_amount=4),
+        alchemist.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     existing.stack_count = 8
     incoming.stack_count = 5
     existing.weight = 1
@@ -385,9 +412,24 @@ def test_equipment_moves_items_and_applies_equipment_effects(capsys) -> None:
     """Equipping gear moves it out of inventory and applies item hooks."""
     reset_item_tutorial_state()
     guard = create_tutorial_actor("Guard", strength=10)
-    sword = create_shortsword(guard.uuid)
-    shield = create_shield(guard.uuid)
-    armor = create_chain_mail(guard.uuid)
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        guard.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shield = materialize_item(
+        SHIELD_RECIPE,
+        guard.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
+    armor = materialize_item(
+        CHAIN_MAIL_RECIPE,
+        guard.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     put_in_inventory(guard, sword)
     put_in_inventory(guard, shield)
     put_in_inventory(guard, armor)
@@ -491,8 +533,18 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     """Melee hand conflicts displace older gear; ranged slots are independent."""
     reset_item_tutorial_state()
     warrior = create_tutorial_actor("Warrior")
-    greatsword = create_greatsword(warrior.uuid)
-    shield = create_shield(warrior.uuid)
+    greatsword = materialize_item(
+        GREATSWORD_RECIPE,
+        warrior.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    shield = materialize_item(
+        SHIELD_RECIPE,
+        warrior.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
     put_in_inventory(warrior, greatsword)
     put_in_inventory(warrior, shield)
 
@@ -515,8 +567,18 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     )
 
     second = create_tutorial_actor("Second Warrior", position=(2, 0))
-    second_greatsword = create_greatsword(second.uuid)
-    second_shield = create_shield(second.uuid)
+    second_greatsword = materialize_item(
+        GREATSWORD_RECIPE,
+        second.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    second_shield = materialize_item(
+        SHIELD_RECIPE,
+        second.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
     put_in_inventory(second, second_greatsword)
     put_in_inventory(second, second_shield)
 
@@ -539,9 +601,24 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     )
 
     skirmisher = create_tutorial_actor("Skirmisher", position=(4, 0))
-    sword = create_shortsword(skirmisher.uuid)
-    skirmisher_shield = create_shield(skirmisher.uuid)
-    bow = create_shortbow(skirmisher.uuid)
+    sword = materialize_item(
+        SHORTSWORD_RECIPE,
+        skirmisher.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    skirmisher_shield = materialize_item(
+        SHIELD_RECIPE,
+        skirmisher.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
+    bow = materialize_item(
+        SHORTBOW_RECIPE,
+        skirmisher.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     main_crossbow = create_tutorial_hand_crossbow(skirmisher.uuid)
     off_crossbow = create_tutorial_hand_crossbow(skirmisher.uuid)
     for item in [sword, skirmisher_shield, bow, main_crossbow, off_crossbow]:
@@ -628,7 +705,11 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
     """Usable items clone actions with user and item identity at use time."""
     reset_item_tutorial_state()
     patient = create_tutorial_actor("Patient")
-    potion = create_healing_potion(patient.uuid, heal_amount=7)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        patient.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     potion.stack_count = 2
     put_in_inventory(patient, potion)
 
@@ -781,7 +862,11 @@ def test_condition_potion_keeps_presentation_and_condition_log_in_one_lineage() 
     """A condition potion exposes one drink action with a readable child effect."""
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Potion Tester")
-    potion = create_potion_of_haste(actor.uuid)
+    potion = materialize_item(
+        HASTE_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     put_in_inventory(actor, potion)
 
     completion = execute_use_action(actor, potion.uuid, "Drink Haste Potion")
@@ -811,7 +896,11 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
     """Magic-item conditions retain their origin and exact removal behavior."""
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Magic Potion Tester")
-    haste_potion = create_potion_of_haste(actor.uuid)
+    haste_potion = materialize_item(
+        HASTE_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     put_in_inventory(actor, haste_potion)
     haste_potion_uuid = haste_potion.uuid
     base_speed = actor.action_economy.movement.normalized_score
@@ -848,7 +937,11 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
 
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Invisibility Potion Tester")
-    invisibility_potion = create_potion_of_greater_invisibility(actor.uuid)
+    invisibility_potion = materialize_item(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     put_in_inventory(actor, invisibility_potion)
 
     invisibility_completion = execute_use_action(

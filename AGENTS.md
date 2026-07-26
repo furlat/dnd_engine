@@ -108,6 +108,20 @@ concrete conditions, runtime services, or policy. Transport-only DTOs belong in
 the structural `CreatureTransformTarget` surface in `dnd/creature_transforms.py`;
 that module must not import `Entity`.
 
+The dependency-neutral content contracts live in exact leaves under
+`dnd/core/content/`. `ContentDefinitionKind` identifies authored definitions;
+`RuntimeBehaviorKind` classifies runtime dispatch evidence. Do not collapse the
+two or reintroduce Python paths/display names as content identity.
+
+Trusted administrator-installed content packs have exactly one dynamic-import
+exception: the audited top-level function in
+`dnd/content_system/import_boundary.py`, called only by the cold startup loader
+after manifest, path, dependency, source, digest, and static import validation.
+No gameplay path, content factory, test, server route, or pack implementation
+may call `importlib`, `__import__`, use a function-local import, or hide an edge
+behind `TYPE_CHECKING`. A pack load failure aborts startup; it never creates a
+fallback registry or skips the broken pack.
+
 ## Common Commands
 
 ```bash

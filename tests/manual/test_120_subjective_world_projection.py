@@ -5,6 +5,9 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.base_block import LightLevel
 from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
@@ -12,9 +15,15 @@ from dnd.core.gridmap import GridMap
 from dnd.core.item_types import EquippedVisualPolicy
 from dnd.encounter import CombatantState, Encounter, EncounterState
 from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import StorageChest, Torch, create_torch
+from dnd.items.test_items import StorageChest
+from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.items.weapons import create_dagger
+from dnd.items.environment_content import (
+    directional_door_recipe,
+    directional_wall_recipe,
+    storage_chest_recipe,
+)
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
@@ -63,7 +72,12 @@ def subjective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Entity, Torch,
         name="Hidden target",
         config=EntityConfig(position=(3, 1), faction="monsters"),
     )
-    torch = create_torch(observer.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     torch.is_lit = True
     grid.place_object(torch.uuid, (1, 1))
 
@@ -77,7 +91,12 @@ def subjective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Entity, Torch,
     visible.senses.entities = {hidden.uuid: hidden.position}
     visible.senses.objects = {}
 
-    dagger = create_dagger(observer.uuid)
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert observer.loot_item(dagger)
     assert observer.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
 
@@ -272,10 +291,11 @@ def test_storage_chest_projects_as_container_with_explicit_visual_key(
     subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
 ) -> None:
     grid, observer, visible, hidden, _, encounter = subjective_scene
-    chest = StorageChest(
-        source_entity_uuid=observer.uuid,
-        visual_item_name="OakChest",
-        visual_variant_id="iron_bands",
+    chest = materialize_item(
+        storage_chest_recipe(display_name="Oak Chest"),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=StorageChest,
     )
     grid.place_object(chest.uuid, (0, 1))
     observer.senses.objects[chest.uuid] = (0, 1)
@@ -291,8 +311,8 @@ def test_storage_chest_projects_as_container_with_explicit_visual_key(
 
     projected = next(row for row in world.state.floor_objects if row.uuid == str(chest.uuid))
     assert projected.object_kind is FloorObjectProjectionKind.CONTAINER
-    assert projected.visual_item_name == "OakChest"
-    assert projected.visual_variant_id == "iron_bands"
+    assert projected.visual_item_name == "Oak Chest"
+    assert projected.visual_variant_id is None
 
 
 def test_unseen_cell_uses_last_observed_facts_until_reobserved(
@@ -359,11 +379,15 @@ def test_directional_structure_is_visible_and_remembered_without_senses_object_e
     subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
 ) -> None:
     grid, observer, visible, hidden, _, encounter = subjective_scene
-    wall = DirectionalWall(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="StoneWallEdge",
+    wall = materialize_item(
+        directional_wall_recipe(
+            display_name="Stone Wall Edge",
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalWall,
     )
     grid.place_object(wall.uuid, (1, 0))
     assert wall.uuid not in observer.senses.objects
@@ -379,7 +403,7 @@ def test_directional_structure_is_visible_and_remembered_without_senses_object_e
     )
     projected = next(row for row in observed.state.floor_objects if row.uuid == str(wall.uuid))
     assert projected.object_kind is FloorObjectProjectionKind.DIRECTIONAL_STRUCTURE
-    assert projected.visual_item_name == "StoneWallEdge"
+    assert projected.visual_item_name == "Stone Wall Edge"
 
     observer.senses.visible[(1, 0)] = False
     grid.remove_object(wall.uuid)
@@ -390,7 +414,16 @@ def test_directional_structure_is_visible_and_remembered_without_senses_object_e
         encounter=encounter,
         memory=memory,
     )
-    assert str(wall.uuid) in {row.uuid for row in hidden_world.state.floor_objects}
+    remembered = next(
+        row
+        for row in hidden_world.state.floor_objects
+        if row.uuid == str(wall.uuid)
+    )
+    assert remembered == projected
+    assert (
+        remembered.safe_presentation_ref
+        == projected.safe_presentation_ref
+    )
 
     observer.senses.visible[(1, 0)] = True
     refreshed = build_subjective_world(
@@ -539,10 +572,14 @@ def test_visible_door_edge_tracks_authorized_open_and_closed_state() -> None:
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
-    door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
+    door = materialize_item(
+        directional_door_recipe(
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     grid.place_object(door.uuid, (1, 1))
     perspective = _participant(observer)
@@ -661,11 +698,15 @@ def test_open_door_world_diff_drives_the_canonical_presentation_cue(
 ) -> None:
     """The one world diff is the mapper's typed source for door presentation."""
     grid, observer, visible, hidden, _, encounter = subjective_scene
-    door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="DirectionalDoor",
+    door = materialize_item(
+        directional_door_recipe(
+            display_name="Directional Door",
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     grid.place_object(door.uuid, (1, 0))
     observer.senses.objects[door.uuid] = (1, 0)

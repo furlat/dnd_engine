@@ -8,6 +8,7 @@ from typing import Callable, Literal, Optional
 from uuid import UUID, uuid4
 
 from dnd.actions_functional import register_spells_by_name
+from dnd.blocks.equipment import Weapon
 from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian as _create_barbarian
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
 from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
@@ -16,6 +17,13 @@ from dnd.conditions import Blinded, Poisoned
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
+from dnd.content_system.creature_materialization import materialize_creature
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
@@ -43,28 +51,39 @@ from dnd.monsters.bestiary import (
     create_skeleton_warrior,
     register_goblin_nimble_escape,
 )
-from dnd.monsters.srd_roster import create_srd_monster as _create_srd_monster
+from dnd.monsters.srd_roster import (
+    SRD_CREATURE_DECLARATIONS_BY_ID,
+    SRD_CREATURE_RECIPES_BY_ID,
+)
 from dnd.items.environment import DirectionalDoor, DirectionalWall
+from dnd.items.environment_content import (
+    WALL_TORCH_RECIPE,
+    directional_door_recipe,
+    directional_wall_recipe,
+    fireball_cannon_recipe,
+    storage_chest_recipe,
+)
+from dnd.items.consumables import (
+    FIRE_WEAPON_COAT_RECIPE,
+    GREATER_INVISIBILITY_POTION_RECIPE,
+    HASTE_POTION_RECIPE,
+    LIGHTNING_WEAPON_COAT_RECIPE,
+    healing_potion_recipe,
+)
+from dnd.items.spell_items import (
+    ACID_FLASK_RECIPE,
+    FIREBALL_SCROLL_RECIPE,
+    HOLD_PERSON_SCROLL_RECIPE,
+    MAGIC_MISSILE_SCROLL_RECIPE,
+    SPIKE_GROWTH_SCROLL_RECIPE,
+    WAND_OF_MAGIC_MISSILES_RECIPE,
+    wand_of_fire_recipe,
+)
 from dnd.items.test_items import (
-    create_fireball_cannon,
-    create_healing_potion,
-    create_lightning_weapon_coat,
-    create_potion_of_haste,
-    create_potion_of_greater_invisibility,
-    create_acid_flask,
-    create_scroll_of_fireball,
-    create_scroll_of_hold_person,
-    create_scroll_of_magic_missile,
-    create_scroll_of_spike_growth,
-    create_torch,
-    create_wand_of_fire,
-    create_wand_of_magic_missiles,
-    create_wall_torch,
-    create_weapon_coat,
-    LootAllAction,
     StorageChest,
 )
-from dnd.items.weapons import create_club, create_longbow, create_shortsword
+from dnd.items.torches import TORCH_RECIPE, Torch, WallTorch
+from dnd.items.weapons import CLUB_RECIPE, LONGBOW_RECIPE, SHORTSWORD_RECIPE
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.abjuration import register_counterspell_reaction, register_shield_reaction
 from dnd.scenarios.evaluation.wardrobes import (
@@ -118,15 +137,27 @@ def create_goblin_archer(
     return equip_wardrobe(entity, BESTIARY_WARDROBES["goblin_archer"])
 
 
-def create_srd_monster(
+def _materialize_srd_monster(
     monster_id: str,
-    source_id: Optional[UUID] = None,
-    name: Optional[str] = None,
-    position: tuple[int, int] = (0, 0),
-    faction: Optional[str] = None,
+    *,
+    source_id: Optional[UUID],
+    name: Optional[str],
+    position: tuple[int, int],
+    faction: Optional[str],
+    deployment_role: CreatureDeploymentRole,
+    possession_mode: CreaturePossessionMode,
 ) -> Entity:
-    """Build a legacy-setting SRD creature with its catalog wardrobe, when any."""
-    entity = _create_srd_monster(monster_id, source_id, name, position, faction)
+    """Materialize an exact SRD recipe and apply scenario-only wardrobe facts."""
+    declaration = SRD_CREATURE_DECLARATIONS_BY_ID[monster_id]
+    entity = materialize_creature(
+        SRD_CREATURE_RECIPES_BY_ID[monster_id],
+        runtime_entity_uuid=source_id or uuid4(),
+        display_name=name or declaration.descriptor.display_name,
+        faction=faction,
+        position=position,
+        deployment_role=deployment_role,
+        possession_mode=possession_mode,
+    )
     return equip_wardrobe(entity, SRD_WARDROBES.get(monster_id, ()))
 
 
@@ -1120,8 +1151,17 @@ def create_arcane_device_control_arena() -> ValidationArena:
     reset_ai_validation_arena_state()
     grid = get_map()
     create_standard_arena_floor(grid)
-    cannon = create_fireball_cannon(uuid4(), position=(7, 7), charges=2)
-    potion = create_healing_potion(uuid4(), heal_amount=12)
+    cannon = materialize_item(
+        fireball_cannon_recipe(charges=2),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+    )
+    cannon.place_on_grid((7, 7))
+    potion = materialize_item(
+        healing_potion_recipe(heal_amount=12),
+        uuid4(),
+        origin=ItemRuntimeOrigin.LOOT,
+    )
     potion.place_on_grid((6, 7))
 
     hero = _create_level_5_sorcerer("Validation Device Sorcerer", (3, 7))
@@ -1198,12 +1238,28 @@ def create_buff_consumable_ambush_arena() -> ValidationArena:
 
     hero = _create_level_5_barbarian("Validation Ambush Barbarian", (2, 7))
     ambush_mage = create_caster(name="Validation Ambush Mage", position=(12, 7), faction="monsters", level=5)
-    ambush_mage.loot_item(create_scroll_of_hold_person(ambush_mage.uuid))
+    ambush_mage.loot_item(materialize_item(
+        HOLD_PERSON_SCROLL_RECIPE,
+        ambush_mage.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
     goblin_archer = create_goblin_archer(name="Validation Ambush Goblin Archer", position=(10, 5), faction="monsters")
     register_goblin_nimble_escape(goblin_archer)
-    goblin_archer.loot_item(create_potion_of_haste(goblin_archer.uuid))
+    goblin_archer.loot_item(
+        materialize_item(
+            HASTE_POTION_RECIPE,
+            goblin_archer.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     guard = create_skeleton_warrior(name="Validation Ambush Guard", position=(10, 9), faction="monsters", darkvision=True)
-    guard.loot_item(create_potion_of_greater_invisibility(guard.uuid))
+    guard.loot_item(
+        materialize_item(
+            GREATER_INVISIBILITY_POTION_RECIPE,
+            guard.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     monsters = (guard, goblin_archer, ambush_mage)
 
     encounter, controllers = _start_passive_validation_encounter(
@@ -1364,8 +1420,20 @@ def create_support_attrition_cache_arena() -> ValidationArena:
         ["Bless", "Bane", "Aid", "Healing Word", "Shield of Faith", "Sanctuary"],
         caster_level=5,
     )
-    support_caster.loot_item(create_healing_potion(support_caster.uuid, heal_amount=14))
-    support_caster.loot_item(create_lightning_weapon_coat(support_caster.uuid))
+    support_caster.loot_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=14),
+            support_caster.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    support_caster.loot_item(
+        materialize_item(
+            LIGHTNING_WEAPON_COAT_RECIPE,
+            support_caster.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     archer = create_skeleton_archer(name="Validation Attrition Archer", position=(10, 5), faction="monsters", darkvision=True)
     monsters = (wounded_guard, archer, support_caster)
 
@@ -1936,7 +2004,13 @@ def create_necrotic_anti_healing_duel_arena() -> ValidationArena:
     create_standard_arena_floor(get_map())
     hero = _create_level_5_shield_fighter("Validation Anti-Heal Fighter", (5, 7))
     hero.health.take_damage(8, DamageType.NECROTIC, uuid4())
-    hero.loot_item(create_healing_potion(hero.uuid, heal_amount=14))
+    hero.loot_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=14),
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
 
     guard = create_skeleton_warrior(name="Validation Necrotic Guard", position=(8, 7), faction="monsters", darkvision=True)
     archer = create_skeleton_archer(name="Validation Necrotic Archer", position=(10, 5), faction="monsters", darkvision=True)
@@ -2002,8 +2076,24 @@ def create_damage_affinity_weapon_lab_arena() -> ValidationArena:
     )
     crusher.equipment.unequip(WeaponSlot.MELEE_MAIN)
     crusher.equipment.unequip(WeaponSlot.MELEE_OFF)
-    crusher.equipment.equip(create_shortsword(crusher.uuid), WeaponSlot.MELEE_MAIN)
-    crusher.equipment.equip(create_club(crusher.uuid), WeaponSlot.MELEE_OFF)
+    crusher.equipment.equip(
+        materialize_item(
+            SHORTSWORD_RECIPE,
+            crusher.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
+    crusher.equipment.equip(
+        materialize_item(
+            CLUB_RECIPE,
+            crusher.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_OFF,
+    )
 
     monsters = (
         crusher,
@@ -2067,8 +2157,24 @@ def create_resistance_weapon_counterplay_arena() -> ValidationArena:
     )
     counter_fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
     counter_fighter.equipment.unequip(WeaponSlot.MELEE_OFF)
-    counter_fighter.equipment.equip(create_shortsword(counter_fighter.uuid), WeaponSlot.MELEE_MAIN)
-    counter_fighter.equipment.equip(create_club(counter_fighter.uuid), WeaponSlot.MELEE_OFF)
+    counter_fighter.equipment.equip(
+        materialize_item(
+            SHORTSWORD_RECIPE,
+            counter_fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
+    counter_fighter.equipment.equip(
+        materialize_item(
+            CLUB_RECIPE,
+            counter_fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_OFF,
+    )
 
     monsters = (
         counter_fighter,
@@ -2107,16 +2213,44 @@ def create_field_cache_loot_race_arena() -> ValidationArena:
     create_standard_arena_floor(grid)
 
     hero = _create_level_5_archer_fighter("Validation Cache Runner", (4, 7))
-    chest = StorageChest(
-        source_entity_uuid=uuid4(),
-        name="Validation Field Cache",
-        use_action_templates=[LootAllAction(source_entity_uuid=uuid4(), template=True)],
+    chest = materialize_item(
+        storage_chest_recipe(
+            display_name="Validation Field Cache",
+            include_loot_all_action=True,
+        ),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=StorageChest,
     )
-    chest.chest_inventory.add_item(create_scroll_of_fireball(chest.uuid))
-    chest.chest_inventory.add_item(create_scroll_of_magic_missile(chest.uuid))
-    chest.chest_inventory.add_item(create_acid_flask(chest.uuid))
-    chest.chest_inventory.add_item(create_healing_potion(chest.uuid, heal_amount=14))
-    chest.chest_inventory.add_item(create_weapon_coat(chest.uuid))
+    chest.chest_inventory.add_item(materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(materialize_item(
+        ACID_FLASK_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=14),
+            chest.uuid,
+            origin=ItemRuntimeOrigin.LOOT,
+        )
+    )
+    chest.chest_inventory.add_item(
+        materialize_item(
+            FIRE_WEAPON_COAT_RECIPE,
+            chest.uuid,
+            origin=ItemRuntimeOrigin.LOOT,
+        )
+    )
     chest.place_on_grid((5, 7))
 
     monsters = (
@@ -2413,17 +2547,46 @@ def create_multi_object_control_room_arena() -> ValidationArena:
     environment.barrier.door.open()
 
     hero = _create_level_5_archer_fighter("Validation Object Controller", (5, 11))
-    create_wall_torch(position=(4, 10), owner_uuid=uuid4(), lit=True)
-    cannon = create_fireball_cannon(uuid4(), position=(6, 11), charges=2)
-
-    chest = StorageChest(
-        source_entity_uuid=uuid4(),
-        name="Validation Control Cache",
-        use_action_templates=[LootAllAction(source_entity_uuid=uuid4(), template=True)],
+    wall_torch = materialize_item(
+        WALL_TORCH_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=WallTorch,
     )
-    chest.chest_inventory.add_item(create_scroll_of_magic_missile(chest.uuid))
-    chest.chest_inventory.add_item(create_acid_flask(chest.uuid))
-    chest.chest_inventory.add_item(create_healing_potion(chest.uuid, heal_amount=12))
+    wall_torch.mount((4, 10), lit=True)
+    cannon = materialize_item(
+        fireball_cannon_recipe(charges=2),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+    )
+    cannon.place_on_grid((6, 11))
+
+    chest = materialize_item(
+        storage_chest_recipe(
+            display_name="Validation Control Cache",
+            include_loot_all_action=True,
+        ),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=StorageChest,
+    )
+    chest.chest_inventory.add_item(materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(materialize_item(
+        ACID_FLASK_RECIPE,
+        chest.uuid,
+        origin=ItemRuntimeOrigin.LOOT,
+    ))
+    chest.chest_inventory.add_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=12),
+            chest.uuid,
+            origin=ItemRuntimeOrigin.LOOT,
+        )
+    )
     chest.place_on_grid((5, 10))
 
     monsters = (
@@ -2465,13 +2628,17 @@ def create_srd_low_cr_patrol_arena() -> ValidationArena:
     reset_ai_validation_arena_state()
     create_standard_arena_floor(get_map())
     hero = _create_level_5_archer_fighter("Validation SRD Patrol Archer", (3, 7))
-    hero.loot_item(create_scroll_of_magic_missile(hero.uuid))
+    hero.loot_item(materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
     monsters = (
-        create_srd_monster("bandit", name="SRD Patrol Bandit", position=(10, 4), faction="monsters"),
-        create_srd_monster("guard", name="SRD Patrol Guard", position=(9, 7), faction="monsters"),
-        create_srd_monster("kobold", name="SRD Patrol Kobold", position=(11, 9), faction="monsters"),
-        create_srd_monster("wolf", name="SRD Patrol Wolf", position=(8, 10), faction="monsters"),
-        create_srd_monster("acolyte", name="SRD Patrol Acolyte", position=(12, 6), faction="monsters"),
+        _materialize_srd_monster("bandit", source_id=None, name="SRD Patrol Bandit", position=(10, 4), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_low_cr_patrol.bandit"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("guard", source_id=None, name="SRD Patrol Guard", position=(9, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_low_cr_patrol.guard"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("kobold", source_id=None, name="SRD Patrol Kobold", position=(11, 9), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_low_cr_patrol.kobold"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("wolf", source_id=None, name="SRD Patrol Wolf", position=(8, 10), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_low_cr_patrol.wolf"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("acolyte", source_id=None, name="SRD Patrol Acolyte", position=(12, 6), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_low_cr_patrol.acolyte"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
     )
     encounter, controllers = _start_passive_validation_encounter(
         "AI Validation: SRD Low-CR Patrol",
@@ -2504,12 +2671,18 @@ def create_srd_undead_crypt_arena() -> ValidationArena:
     create_standard_arena_floor(grid)
     darken_arena(grid)
     hero = _create_level_5_shield_fighter("Validation Crypt Fighter", (3, 7))
-    hero.loot_item(create_healing_potion(hero.uuid, heal_amount=16))
+    hero.loot_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=16),
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     monsters = (
-        create_srd_monster("zombie", name="SRD Crypt Zombie", position=(10, 5), faction="monsters"),
-        create_srd_monster("ghoul", name="SRD Crypt Ghoul", position=(9, 7), faction="monsters"),
+        _materialize_srd_monster("zombie", source_id=None, name="SRD Crypt Zombie", position=(10, 5), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_undead_crypt.zombie"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("ghoul", source_id=None, name="SRD Crypt Ghoul", position=(9, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_undead_crypt.ghoul"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
         create_skeleton_archer(name="SRD Crypt Skeleton Archer", position=(11, 9), faction="monsters", darkvision=True),
-        create_srd_monster("ogre_zombie", name="SRD Crypt Ogre Zombie", position=(12, 7), faction="monsters"),
+        _materialize_srd_monster("ogre_zombie", source_id=None, name="SRD Crypt Ogre Zombie", position=(12, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_undead_crypt.ogre_zombie"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
     )
     encounter, controllers = _start_passive_validation_encounter(
         "AI Validation: SRD Undead Crypt",
@@ -2542,12 +2715,16 @@ def create_srd_goblinoid_warband_arena() -> ValidationArena:
     environment.barrier.door.open()
     hero = _create_level_5_barbarian("Validation Warband Barbarian", (2, 7))
     monsters = (
-        create_srd_monster("kobold", name="SRD Warband Kobold", position=(9, 4), faction="monsters"),
-        create_srd_monster("hobgoblin", name="SRD Warband Hobgoblin", position=(9, 7), faction="monsters"),
-        create_srd_monster("bugbear", name="SRD Warband Bugbear", position=(11, 6), faction="monsters"),
-        create_srd_monster("gnoll", name="SRD Warband Gnoll", position=(12, 9), faction="monsters"),
+        _materialize_srd_monster("kobold", source_id=None, name="SRD Warband Kobold", position=(9, 4), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_goblinoid_warband.kobold"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("hobgoblin", source_id=None, name="SRD Warband Hobgoblin", position=(9, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_goblinoid_warband.hobgoblin"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("bugbear", source_id=None, name="SRD Warband Bugbear", position=(11, 6), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_goblinoid_warband.bugbear"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("gnoll", source_id=None, name="SRD Warband Gnoll", position=(12, 9), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_goblinoid_warband.gnoll"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
     )
-    monsters[0].loot_item(create_acid_flask(monsters[0].uuid))
+    monsters[0].loot_item(materialize_item(
+        ACID_FLASK_RECIPE,
+        monsters[0].uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
     encounter, controllers = _start_passive_validation_encounter(
         "AI Validation: SRD Goblinoid Warband",
         hero,
@@ -2579,15 +2756,31 @@ def create_srd_divine_cult_cell_arena() -> ValidationArena:
     reset_ai_validation_arena_state()
     create_standard_arena_floor(get_map())
     hero = _create_level_5_sorcerer("Validation Cult-Cell Sorcerer", (3, 7))
-    hero.loot_item(create_scroll_of_hold_person(hero.uuid))
+    hero.loot_item(materialize_item(
+        HOLD_PERSON_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
     monsters = (
-        create_srd_monster("cultist", name="SRD Cell Cultist", position=(8, 7), faction="monsters"),
-        create_srd_monster("guard", name="SRD Cell Guard", position=(9, 6), faction="monsters"),
-        create_srd_monster("cult_fanatic", name="SRD Cell Fanatic", position=(11, 7), faction="monsters"),
-        create_srd_monster("priest", name="SRD Cell Priest", position=(12, 9), faction="monsters"),
+        _materialize_srd_monster("cultist", source_id=None, name="SRD Cell Cultist", position=(8, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_divine_cult_cell.cultist"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("guard", source_id=None, name="SRD Cell Guard", position=(9, 6), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_divine_cult_cell.guard"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("cult_fanatic", source_id=None, name="SRD Cell Fanatic", position=(11, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_divine_cult_cell.cult_fanatic"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("priest", source_id=None, name="SRD Cell Priest", position=(12, 9), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_divine_cult_cell.priest"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
     )
-    monsters[2].loot_item(create_potion_of_haste(monsters[2].uuid))
-    monsters[3].loot_item(create_healing_potion(monsters[3].uuid, heal_amount=18))
+    monsters[2].loot_item(
+        materialize_item(
+            HASTE_POTION_RECIPE,
+            monsters[2].uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    monsters[3].loot_item(
+        materialize_item(
+            healing_potion_recipe(heal_amount=18),
+            monsters[3].uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     encounter, controllers = _start_passive_validation_encounter(
         "AI Validation: SRD Divine Cult Cell",
         hero,
@@ -2617,14 +2810,26 @@ def create_srd_elite_mercenary_contract_arena() -> ValidationArena:
     reset_ai_validation_arena_state()
     create_standard_arena_floor(get_map())
     hero = _create_level_9_sorcerer("Validation Elite-Contract Sorcerer", (3, 7))
-    hero.loot_item(create_potion_of_greater_invisibility(hero.uuid))
-    monsters = (
-        create_srd_monster("knight", name="SRD Contract Knight", position=(8, 7), faction="monsters"),
-        create_srd_monster("veteran", name="SRD Contract Veteran", position=(10, 5), faction="monsters"),
-        create_srd_monster("mage", name="SRD Contract Mage", position=(12, 7), faction="monsters"),
-        create_srd_monster("bandit_captain", name="SRD Contract Captain", position=(10, 9), faction="monsters"),
+    hero.loot_item(
+        materialize_item(
+            GREATER_INVISIBILITY_POTION_RECIPE,
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
     )
-    monsters[1].loot_item(create_weapon_coat(monsters[1].uuid))
+    monsters = (
+        _materialize_srd_monster("knight", source_id=None, name="SRD Contract Knight", position=(8, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_elite_mercenary_contract.knight"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("veteran", source_id=None, name="SRD Contract Veteran", position=(10, 5), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_elite_mercenary_contract.veteran"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("mage", source_id=None, name="SRD Contract Mage", position=(12, 7), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_elite_mercenary_contract.mage"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+        _materialize_srd_monster("bandit_captain", source_id=None, name="SRD Contract Captain", position=(10, 9), faction="monsters", deployment_role=CreatureDeploymentRole(role_id="arena.srd_elite_mercenary_contract.bandit_captain"), possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS),
+    )
+    monsters[1].loot_item(
+        materialize_item(
+            FIRE_WEAPON_COAT_RECIPE,
+            monsters[1].uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
     encounter, controllers = _start_passive_validation_encounter(
         "AI Validation: SRD Elite Mercenary Contract",
         hero,
@@ -2722,7 +2927,15 @@ def _create_level_5_shield_fighter(name: str, position: tuple[int, int]) -> Enti
             asi_4=[("strength", 2)],
         )
     )
-    hero.equipment.equip(create_longbow(hero.uuid), WeaponSlot.RANGED_MAIN)
+    hero.equipment.equip(
+        materialize_item(
+            LONGBOW_RECIPE,
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.RANGED_MAIN,
+    )
     _give_lit_torch(hero)
     return hero
 
@@ -2763,7 +2976,12 @@ def _create_level_5_barbarian(name: str, position: tuple[int, int]) -> Entity:
 
 def _give_lit_torch(hero: Entity) -> None:
     """Give a validation hero the standard lit arena torch."""
-    torch = create_torch(hero.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     hero.loot_item(torch)
     torch.ignite(hero.uuid)
 
@@ -2788,13 +3006,45 @@ def _add_static_damage_affinity(
 
 def _give_item_gauntlet_loadout(hero: Entity) -> None:
     """Give a validation hero varied item-backed actions."""
-    hero.loot_item(create_wand_of_magic_missiles(hero.uuid, charges=3))
-    hero.loot_item(create_wand_of_fire(hero.uuid, charges=4))
-    hero.loot_item(create_scroll_of_fireball(hero.uuid))
-    hero.loot_item(create_scroll_of_magic_missile(hero.uuid))
-    hero.loot_item(create_scroll_of_spike_growth(hero.uuid))
-    hero.loot_item(create_potion_of_greater_invisibility(hero.uuid))
-    hero.loot_item(create_weapon_coat(hero.uuid))
+    hero.loot_item(materialize_item(
+        WAND_OF_MAGIC_MISSILES_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
+    hero.loot_item(materialize_item(
+        wand_of_fire_recipe(charges=4),
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
+    hero.loot_item(materialize_item(
+        FIREBALL_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
+    hero.loot_item(materialize_item(
+        MAGIC_MISSILE_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
+    hero.loot_item(materialize_item(
+        SPIKE_GROWTH_SCROLL_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    ))
+    hero.loot_item(
+        materialize_item(
+            GREATER_INVISIBILITY_POTION_RECIPE,
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    hero.loot_item(
+        materialize_item(
+            FIRE_WEAPON_COAT_RECIPE,
+            hero.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
 
 
 def _place_validation_directional_barrier(
@@ -2821,20 +3071,28 @@ def _place_validation_directional_barrier(
         position = (column, y)
         grid.set_tile(position[0], position[1], walkable=True, visible=True, name="Floor")
         if position == door_position:
-            door = DirectionalDoor(
-                source_entity_uuid=uuid4(),
-                name=f"{label} Door",
-                blocked_directions=("west",),
-                blocked_channels=STANDARD_BLOCKING_CHANNELS,
-                is_open=False,
+            door = materialize_item(
+                directional_door_recipe(
+                    display_name=f"{label} Door",
+                    blocked_directions=("west",),
+                    blocked_channels=STANDARD_BLOCKING_CHANNELS,
+                    is_open=False,
+                ),
+                uuid4(),
+                origin=ItemRuntimeOrigin.ENVIRONMENT,
+                expected_type=DirectionalDoor,
             )
             door.place_on_grid(position)
             continue
-        wall = DirectionalWall(
-            source_entity_uuid=uuid4(),
-            name=f"{label} Wall",
-            blocked_directions=("west",),
-            blocked_channels=STANDARD_BLOCKING_CHANNELS,
+        wall = materialize_item(
+            directional_wall_recipe(
+                display_name=f"{label} Wall",
+                blocked_directions=("west",),
+                blocked_channels=STANDARD_BLOCKING_CHANNELS,
+            ),
+            uuid4(),
+            origin=ItemRuntimeOrigin.ENVIRONMENT,
+            expected_type=DirectionalWall,
         )
         wall.place_on_grid(position)
         walls.append(wall)

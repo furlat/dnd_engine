@@ -21,6 +21,7 @@ from dnd.core.events import (
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.core.item_types import (
     EquippedVisualPolicy,
+    ItemContentRefSnapshot,
     ItemLocation,
     ItemPresentationKind,
     ItemPresentationState,
@@ -28,7 +29,11 @@ from dnd.core.item_types import (
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import ActionEvent, BaseAction
-from dnd.core.content import ContentKind
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.runtime import (
+    RuntimeBehaviorKind,
+    bind_runtime_behavior_child,
+)
 
 
 class ItemLocationStateEvent(Event):
@@ -88,8 +93,14 @@ class BaseItem(BaseBlock):
         default=None,
         description="Stable rules-content identity; defaults to the item class identity.",
     )
-    content_kind: ContentKind = Field(
-        default=ContentKind.ITEM,
+    content_ref: Optional[ContentRef] = Field(
+        default=None,
+        frozen=True,
+        exclude=True,
+        description="Exact authored definition used to construct this runtime item.",
+    )
+    content_kind: RuntimeBehaviorKind = Field(
+        default=RuntimeBehaviorKind.ITEM,
         description="Rules-content family represented by this item.",
     )
     description: Optional[str] = Field(
@@ -168,6 +179,8 @@ class BaseItem(BaseBlock):
 
     def get_semantic_key(self) -> str:
         """Return an explicit key or the stable item class identity."""
+        if self.content_ref is not None:
+            return self.content_ref.identity_key
         if self.semantic_key:
             return self.semantic_key
         return f"{type(self).__module__}.{type(self).__name__}"
@@ -185,6 +198,13 @@ class BaseItem(BaseBlock):
         """
         return ItemPresentationState(
             item_uuid=self.uuid,
+            content_ref=(
+                ItemContentRefSnapshot.model_validate(
+                    self.content_ref.model_dump(mode="python")
+                )
+                if self.content_ref is not None
+                else None
+            ),
             semantic_key=self.get_semantic_key(),
             name=self.name,
             description=self.description,
@@ -759,6 +779,20 @@ class UsableItem(BaseItem):
         default_factory=list,
         description="Action templates cloned and rebound when this item is used.",
     )
+
+    def bind_dynamic_use_action(self, action: BaseAction) -> BaseAction:
+        """Bind one state-dependent action through this exact item provider.
+
+        Static ``use_action_templates`` bind during canonical item
+        materialization. Overrides of ``get_use_actions`` use this narrow
+        admission method before returning actions constructed on demand.
+        """
+        bind_runtime_behavior_child(
+            action,
+            provider=self,
+            runtime_owner_uuid=self.uuid,
+        )
+        return action
 
     def to_item_presentation_state(
         self,

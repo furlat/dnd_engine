@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -22,11 +22,7 @@ from dnd.ai.contracts.semantics import (
     TruthValue,
 )
 from dnd.ai.contracts.control import ActionAffordance, OpportunityAttackExposure
-from dnd.ai.contracts.decision import (
-    EndTurnIntent,
-    ExecuteIntent,
-    PolicyIntent,
-)
+from dnd.ai.contracts.decision import PolicyIntent
 
 
 class PolicyModel(BaseModel):

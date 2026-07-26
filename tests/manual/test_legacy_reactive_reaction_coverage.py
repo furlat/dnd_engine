@@ -18,11 +18,13 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import GreaterInvisibilityEffect
-from dnd.core.base_actions import AvailableTarget
+from dnd.core.base_actions import ActionEvent, AvailableTarget
 from dnd.core.condition_types import DurationType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
@@ -39,11 +41,12 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.items import create_shortsword
+from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
+from dnd.items.environment_content import door_recipe
+from dnd.items.spell_items import SpellGrantingItem, invisibility_scroll_recipe
+from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.items.test_items import (
     TestDoorA as DoorFixture,
-    create_potion_of_greater_invisibility,
-    create_scroll_of_invisibility,
 )
 from dnd.items.test_reactions import (
     DodgeRollFeature,
@@ -340,7 +343,15 @@ def create_melee_fighter(
         ),
     )
     setup_standard_actions(actor)
-    actor.equipment.equip(create_shortsword(actor.uuid), WeaponSlot.MELEE_MAIN)
+    actor.equipment.equip(
+        materialize_item(
+            SHORTSWORD_RECIPE,
+            actor.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
+        WeaponSlot.MELEE_MAIN,
+    )
     return actor
 
 
@@ -374,7 +385,12 @@ def apply_invisibility_origin(actor: Entity, origin: str) -> None:
             cast_at_level=2,
         ).apply()
     else:
-        scroll = create_scroll_of_invisibility(actor.uuid, cast_level=2)
+        scroll = materialize_item(
+            invisibility_scroll_recipe(cast_level=2),
+            actor.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=SpellGrantingItem,
+        )
         actor.loot_item(scroll)
         template = scroll.get_use_actions(actor.uuid)[0]
         result = execute_use_action(
@@ -400,7 +416,11 @@ def apply_greater_invisibility_origin(actor: Entity, origin: str) -> None:
             cast_at_level=4,
         ).apply()
     else:
-        potion = create_potion_of_greater_invisibility(actor.uuid)
+        potion = materialize_item(
+            GREATER_INVISIBILITY_POTION_RECIPE,
+            actor.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
         actor.loot_item(potion)
         stored_potion = next(
             item
@@ -753,10 +773,42 @@ def test_prepare_intercept_prepays_action_and_distance() -> None:
 
     result = prepare.apply()
 
-    assert result is not None and not result.canceled
+    assert isinstance(result, ActionEvent) and not result.canceled
+    assert [
+        (cost.cost_type, cost.cost)
+        for cost in result.costs
+    ] == [
+        ("actions", 1),
+        ("movement", 15),
+    ]
     assert "Intercepting" in fighter.active_conditions
     assert fighter.action_economy.actions.normalized_score == action_before - 1
     assert fighter.action_economy.movement.normalized_score == movement_before - 15
+
+
+def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> None:
+    """The typed movement cost blocks preparation without spending the action."""
+    reset_arena()
+    fighter = create_melee_fighter("Tired Fighter", (2, 2), "heroes")
+    Entity.update_all_entities_senses(max_distance=20)
+    fighter.action_economy.movement.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=fighter.uuid,
+            target_entity_uuid=fighter.uuid,
+            name="Only ten feet remain",
+            value=-20,
+        )
+    )
+    action_before = fighter.action_economy.actions.normalized_score
+    prepare = PrepareIntercept(source_entity_uuid=fighter.uuid)
+    prepare.set_target_position((5, 2))
+
+    result = prepare.apply()
+
+    assert result is None
+    assert "Intercepting" not in fighter.active_conditions
+    assert fighter.action_economy.actions.normalized_score == action_before
+    assert fighter.action_economy.movement.normalized_score == 10
 
 
 def test_intercept_blocks_the_triggering_step_and_charges_only_committed_steps() -> None:
@@ -852,11 +904,13 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     door_closer = create_melee_fighter("Door Closer", (4, 3), "neutral")
     enemy = create_melee_fighter("Enemy", (9, 2), "monsters")
-    door = DoorFixture(source_entity_uuid=uuid4(), position=(4, 2))
+    door = materialize_item(
+        door_recipe(is_open=True),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DoorFixture,
+    )
     door.place_on_grid((4, 2))
-    door.is_open = True
-    door.blocks_movement = False
-    door.blocks_vision_field = False
     arm_intercept(interceptor, (6, 2))
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -963,7 +1017,12 @@ def test_open_door_is_authoritative_when_dodge_roll_triggers() -> None:
     attacker = create_melee_fighter("Attacker", (3, 2), "monsters")
     defender = create_melee_fighter("Defender", (4, 2), "heroes")
     opener = create_melee_fighter("Door Opener", (5, 3), "heroes")
-    door = DoorFixture(source_entity_uuid=uuid4(), position=(5, 2))
+    door = materialize_item(
+        door_recipe(),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DoorFixture,
+    )
     door.place_on_grid((5, 2))
     defender.add_condition(
         DodgeRollFeature(
