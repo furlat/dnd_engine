@@ -396,6 +396,10 @@ class ZoneControlCondition(BaseCondition):
                 target_entity_uuid=tile.uuid,
                 tags=self.tags,
             )
+            if self.behavior_binding is not None:
+                marker.behavior_binding = self.behavior_binding.model_copy(
+                    update={"runtime_owner_uuid": tile.uuid},
+                )
             tile.add_condition(marker, event=parent_event)
             self.add_linked_condition(tile.uuid, marker.uuid)
 

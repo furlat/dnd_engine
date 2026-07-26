@@ -14,6 +14,12 @@ from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range,
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
+from dnd.core.content.runtime import (
+    AuthoredBehaviorAttribution,
+    BehaviorBinding,
+    active_runtime_behavior_binding,
+    runtime_behavior_provider,
+)
 from dnd.core.aoe import AoEShape
 from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.modifiers import AdvantageStatus
@@ -86,6 +92,16 @@ class ActionCategory(str, Enum):
     MOVEMENT = "movement"
 
 
+class ActionAvailabilityStatus(str, Enum):
+    """Closed reason why one authored action row can or cannot execute."""
+
+    AVAILABLE = "available"
+    SOURCE_UNAFFORDABLE = "source_unaffordable"
+    REQUIREMENTS_UNMET = "requirements_unmet"
+    NO_VALID_TARGETS = "no_valid_targets"
+    TARGET_COST_UNAFFORDABLE = "target_cost_unaffordable"
+
+
 class PositionDiscoveryContract(BaseModel):
     """Subjective prerequisites for discovering position targets.
 
@@ -106,13 +122,30 @@ class PositionDiscoveryContract(BaseModel):
         default=False,
         description="Whether the observer must not perceive an occupant in the cell.",
     )
+    requires_axis_or_diagonal_alignment: bool = Field(
+        default=False,
+        description=(
+            "Whether the candidate must share an axis or exact diagonal with "
+            "the source."
+        ),
+    )
+    requires_subjective_traversable_path: bool = Field(
+        default=False,
+        description=(
+            "Whether every disclosed traversal step must be subjectively "
+            "walkable."
+        ),
+    )
     exclude_source_position: bool = Field(
         default=True,
         description="Whether the acting entity's current cell is excluded.",
     )
     bounded_by_remaining_movement: bool = Field(
         default=False,
-        description="Whether candidate distance may not exceed current movement.",
+        description=(
+            "Whether target movement cost must fit current movement before the "
+            "candidate becomes executable."
+        ),
     )
     distance_is_movement_cost: bool = Field(
         default=False,
@@ -530,6 +563,15 @@ class Cost(BaseCost):
 class ActionEvent(Event):
     """Event emitted by the base action pipeline."""
 
+    behavior_binding: Optional[BehaviorBinding] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description=(
+            "Immutable authored behavior identity captured before this event "
+            "version enters the queue."
+        ),
+    )
     costs: List[BaseCost] = Field(default_factory=list, description="Serializable action costs.")
     source_item_uuid: Optional[UUID] = Field(
         default=None,
@@ -582,6 +624,12 @@ class ActionEvent(Event):
         default=None,
         description="Grid position targeted by a position-AoE action.",
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Freeze active authored identity before the event is registered."""
+        if self.behavior_binding is None:
+            self.behavior_binding = active_runtime_behavior_binding()
+        super().model_post_init(__context)
 
     def add_cost(self, cost: Cost) -> None:
         """Append a serializable copy of a runtime action cost.
@@ -774,6 +822,15 @@ class BaseAction(BaseObject):
         default=None,
         description="Optional stable semantic registry key overriding the action's class identity.",
     )
+    behavior_binding: Optional[BehaviorBinding] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description=(
+            "Validated runtime content binding installed once before this "
+            "action becomes observable."
+        ),
+    )
     parent_event: Optional[Event] = Field(
         default=None,
         description="Optional parent event used to nest action-created events.",
@@ -830,7 +887,12 @@ class BaseAction(BaseObject):
         return self.action_category == ActionCategory.MOVEMENT
 
     def get_semantic_key(self) -> str:
-        """Return a stable action-family key independent of execution and display names."""
+        """Return the rules-family key used by mechanics and policy.
+
+        Authored catalog identity is carried separately by
+        ``behavior_binding``.  Keeping the two axes independent prevents
+        content attribution from changing action dispatch or AI policy.
+        """
         if self.semantic_key is not None:
             return self.semantic_key
         action_class = type(self)
@@ -968,50 +1030,95 @@ class BaseAction(BaseObject):
         """Target type with alt override applied."""
         return self.alt_target_type if self.alt_target_type is not None else self.target_type
 
-    @property
-    def effective_costs(self) -> List["Cost"]:
-        """Build costs incorporating all active overrides."""
-        costs = list(self.costs)
+    def get_source_dynamic_costs(self) -> List["Cost"]:
+        """Resolve source-state-dependent costs owned by this action.
+
+        Static costs remain in ``costs``. Subclasses override this hook only
+        when the exact typed cost depends on the acting entity but not on a
+        selected target. These costs participate in authored-row affordability
+        as well as execution.
+        """
+        return []
+
+    def get_target_dynamic_costs(self) -> List["Cost"]:
+        """Resolve costs that require an explicitly selected target.
+
+        Discovery evaluates these costs only on a target-specialized copy.
+        Target-independent authored-row affordability must never read this
+        hook, because a reusable template may retain a prior selected target.
+        """
+        return []
+
+    def _transform_costs(self, base_costs: Sequence["Cost"]) -> List["Cost"]:
+        """Apply temporary overrides and restricted grants to one cost set."""
+        costs = list(base_costs)
         if self.alt_cost_type is not None:
-            costs = [c.model_copy(update={"cost_type": self.alt_cost_type})
-                     if c.cost_type == "actions" else c for c in costs]
+            costs = [
+                cost.model_copy(update={"cost_type": self.alt_cost_type})
+                if cost.cost_type == "actions"
+                else cost
+                for cost in costs
+            ]
         if self.alt_skip_slot:
-            costs = [c for c in costs if not c.cost_type.startswith("spell_slot")]
+            costs = [
+                cost
+                for cost in costs
+                if not cost.cost_type.startswith("spell_slot")
+            ]
         costs.extend(self.alt_extra_costs)
         grant = self._restricted_action_grant
-        if grant is not None:
-            transformed_costs: List["Cost"] = []
-            grant_bound = False
-            for cost in costs:
-                if (
-                    not grant_bound
-                    and cost.cost_type in grant.replaced_cost_types
-                    and cost.cost > 0
-                    and cost.resource_name is None
-                    and cost.resource_cost == 0
-                ):
-                    transformed_costs.append(
-                        cost.model_copy(
-                            update={
-                                "cost": 0,
-                                "resource_name": grant.resource_name,
-                                "resource_cost": 1,
-                                "resource_evaluator": (
-                                    block_action_resource_cost_evaluator
-                                ),
-                            }
-                        )
+        if grant is None:
+            return costs
+
+        transformed_costs: List["Cost"] = []
+        grant_bound = False
+        for cost in costs:
+            if (
+                not grant_bound
+                and cost.cost_type in grant.replaced_cost_types
+                and cost.cost > 0
+                and cost.resource_name is None
+                and cost.resource_cost == 0
+            ):
+                transformed_costs.append(
+                    cost.model_copy(
+                        update={
+                            "cost": 0,
+                            "resource_name": grant.resource_name,
+                            "resource_cost": 1,
+                            "resource_evaluator": (
+                                block_action_resource_cost_evaluator
+                            ),
+                        }
                     )
-                    grant_bound = True
-                else:
-                    transformed_costs.append(cost)
-            if not grant_bound:
-                raise ValueError(
-                    f"{self.name or 'action'} cannot bind restricted grant "
-                    f"{grant.grant_id!r}"
                 )
-            costs = transformed_costs
-        return costs
+                grant_bound = True
+            else:
+                transformed_costs.append(cost)
+        if not grant_bound:
+            raise ValueError(
+                f"{self.name or 'action'} cannot bind restricted grant "
+                f"{grant.grant_id!r}"
+            )
+        return transformed_costs
+
+    @property
+    def target_independent_effective_costs(self) -> List["Cost"]:
+        """Return exact source-owned costs without selected-target costs."""
+        return self._transform_costs(
+            [*self.costs, *self.get_source_dynamic_costs()]
+        )
+
+    @property
+    def effective_costs(self) -> List["Cost"]:
+        """Build source and selected-target costs with all active transforms."""
+        return self._transform_costs(
+            [
+                *self.costs,
+                *self.get_source_dynamic_costs(),
+                *self.get_target_dynamic_costs(),
+            ]
+        )
 
     def set_target_entity(self, target_uuid: UUID) -> None:
         """Set target entity for ENTITY, MULTI_ENTITY, or OBJECT type actions.
@@ -1299,7 +1406,7 @@ class BaseAction(BaseObject):
                 and cost.cost > 0
                 and cost.resource_name is None
                 and cost.resource_cost == 0
-                for cost in self.effective_costs
+                for cost in self.target_independent_effective_costs
             ):
                 continue
             variant = self.model_copy(
@@ -1339,9 +1446,21 @@ class BaseAction(BaseObject):
 
     def check_costs(self) -> bool:
         """Check whether the acting entity can afford all effective costs."""
-        if self._source_cannot_take_actions():
+        costs = self.effective_costs
+        if self._source_cannot_take_actions(costs):
             return False
-        for cost in self.effective_costs:
+        return self._costs_are_affordable(costs)
+
+    def check_target_independent_costs(self) -> bool:
+        """Check source affordability without consulting selected-target state."""
+        costs = self.target_independent_effective_costs
+        if self._source_cannot_take_actions(costs):
+            return False
+        return self._costs_are_affordable(costs)
+
+    def _costs_are_affordable(self, costs: Sequence["Cost"]) -> bool:
+        """Evaluate one already-transformed cost sequence."""
+        for cost in costs:
             if cost.evaluator is not None and not cost.evaluator(self.source_entity_uuid, cost.cost_type, cost.cost):
                 return False
             if cost.resource_cost > 0 and cost.resource_name:
@@ -1350,7 +1469,7 @@ class BaseAction(BaseObject):
                         return False
         return True
 
-    def _source_cannot_take_actions(self) -> bool:
+    def _source_cannot_take_actions(self, costs: Sequence["Cost"]) -> bool:
         """Return whether the source's neutral permission gate denies actions."""
         if self.allow_while_incapacitated:
             return False
@@ -1362,7 +1481,7 @@ class BaseAction(BaseObject):
 
         positive_costs = [
             cost
-            for cost in self.effective_costs
+            for cost in costs
             if cost.cost > 0
         ]
         is_pure_reaction = (
@@ -1454,10 +1573,13 @@ class BaseAction(BaseObject):
             status_message=f"Succesfully validated action{self.name} for {declaration_event.source_entity_uuid}"
         )
 
-    def pre_validate(self)-> bool:
-        """Validate the action without registering a declaration event."""
-        if not self.check_costs():
-            return False
+    def validate_requirements_for_discovery(self) -> bool:
+        """Validate non-cost execution requirements for action discovery.
+
+        This surface deliberately excludes action-economy and resource
+        affordability. Discovery uses it to calculate target legality while
+        reporting affordability independently through ``check_costs()``.
+        """
         declaration_event = self._create_declaration_event(parent_event=None, use_register=False)
         if declaration_event is None:
             return False
@@ -1467,6 +1589,14 @@ class BaseAction(BaseObject):
         if validation_event is None or validation_event.canceled:
             return False
         return True
+
+    def pre_validate(self) -> bool:
+        """Validate affordability and non-cost requirements without execution."""
+        return (
+            self.check_costs()
+            and self.validate_requirements_for_discovery()
+        )
+
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the action's effects.
 
@@ -1534,8 +1664,9 @@ class BaseAction(BaseObject):
         Returns:
             The terminal action event, or None when application cannot begin.
         """
-        with EventQueue.batch_on_event_callbacks():
-            return self._apply_action(parent_event)
+        with runtime_behavior_provider(self):
+            with EventQueue.batch_on_event_callbacks():
+                return self._apply_action(parent_event)
 
     def _apply_action(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """Main entry point for applying an action. This method orchestrates the flow
@@ -1807,7 +1938,10 @@ class AvailableTarget(BaseModel):
     position: Optional[Tuple[int, int]] = Field(default=None, description="Grid cell for POSITION targets and entity/object target cells")
     target_name: Optional[str] = Field(default=None, description="Entity name if ENTITY action")
     distance: Optional[int] = Field(default=None, description="Distance in feet")
-    path_cost: Optional[int] = Field(default=None, description="Movement cost if POSITION action")
+    path_cost: Optional[int] = Field(
+        default=None,
+        description="Exact selected-target movement cost for a position action.",
+    )
     extra_target_uuids: Optional[List[UUID]] = Field(default=None, description="Additional targets for MULTI_ENTITY actions")
     is_path_hazardous: bool = Field(default=False, description="Whether shortest path crosses a hazardous tile")
     safe_path_cost: Optional[int] = Field(default=None, description="Movement cost of safe alternative path (None if no safe path)")
@@ -1833,19 +1967,58 @@ class AvailableActionInfo(BaseModel):
     This is returned by Entity.get_available_actions() and contains everything
     needed to display the action in UI and execute it.
     """
-    template_name: str = Field(description="Name of the template for execution")
+    template_name: str = Field(
+        description=(
+            "Engine command token for execution; never authored presentation "
+            "identity."
+        ),
+    )
     semantic_key: str = Field(
         default="action.unclassified",
-        description="Stable action-family key supplied by the registered action definition.",
+        description=(
+            "Rules/mechanics family key retained for policy and diagnosis; "
+            "never authored presentation identity."
+        ),
+    )
+    behavior_attribution: AuthoredBehaviorAttribution = Field(
+        description=(
+            "Exact authored behavior identity used for catalog-backed "
+            "presentation; execution and display names are not identity."
+        ),
     )
     target_type: TargetType = Field(description="What kind of target this action needs")
-    valid_targets: List[AvailableTarget] = Field(default_factory=list, description="All valid targets with indices")
-    can_afford: bool = Field(description="Can afford base cost (action/bonus/etc)")
+    availability_status: ActionAvailabilityStatus = Field(
+        description=(
+            "Closed reason this authored row is executable or unavailable; "
+            "clients never infer the reason from an empty target list."
+        ),
+    )
+    valid_targets: List[AvailableTarget] = Field(
+        default_factory=list,
+        description=(
+            "Currently executable targets with stable indices. Target-bound "
+            "costs are evaluated before a target enters this list."
+        ),
+    )
+    can_afford: bool = Field(
+        description=(
+            "Whether the neutral source permission gate and all "
+            "target-independent action-economy or named-resource costs permit "
+            "execution. Consult availability_status for target-bound costs and "
+            "requirements."
+        ),
+    )
     display_name: str = Field(description="Human-readable name (e.g., 'Scimitar')")
     description: str = Field(default="", description="Action description")
     cost_type: CostType = Field(description="Type of cost (actions, bonus_actions, etc.)")
     cost_amount: int = Field(default=1, description="Cost amount (usually 1)")
-    costs: List[BaseCost] = Field(default_factory=list, description="Full action economy and resource costs for this row.")
+    costs: List[BaseCost] = Field(
+        default_factory=list,
+        description=(
+            "Target-independent action-economy and named-resource costs for "
+            "this row; selected movement cost is carried by target.path_cost."
+        ),
+    )
     weapon_slot: Optional[str] = Field(default=None, description="Weapon slot for attacks")
     weapon_name: Optional[str] = Field(default=None, description="Weapon name for display (e.g., 'Scimitar')")
     damage_types: List[str] = Field(default_factory=list, description="Damage type labels this action can deal when known.")
@@ -1868,7 +2041,10 @@ class AvailableActionInfo(BaseModel):
     action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Classification of this action")
     base_template_name: Optional[str] = Field(
         default=None,
-        description="Registered template name that produced this discovery row when it differs from template_name.",
+        description=(
+            "Registered execution-token family when it differs from "
+            "template_name; never authored presentation identity."
+        ),
     )
     spell_level: Optional[int] = Field(default=None, description="Base spell level for spell actions.")
     cast_at_level: Optional[int] = Field(default=None, description="Spell slot level used by this action row.")
@@ -1902,6 +2078,28 @@ class AvailableActionInfo(BaseModel):
     )
     _execution_template: Optional[BaseAction] = PrivateAttr(default=None)
 
+    @model_validator(mode="after")
+    def _validate_availability_status(self) -> "AvailableActionInfo":
+        """Reject contradictory affordability and closed status facts."""
+        source_unaffordable = (
+            self.availability_status
+            is ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+        )
+        if source_unaffordable == self.can_afford:
+            raise ValueError(
+                "source_unaffordable requires can_afford=false, while every "
+                "other availability status requires can_afford=true"
+            )
+        available = (
+            self.availability_status is ActionAvailabilityStatus.AVAILABLE
+        )
+        if available != bool(self.valid_targets):
+            raise ValueError(
+                "available requires at least one executable target, while "
+                "every unavailable status requires an empty target list"
+            )
+        return self
+
     @property
     def execution_template(self) -> Optional[BaseAction]:
         """Return the exact action object that produced this discovery row."""
@@ -1916,6 +2114,12 @@ class AvailableHandlerInfo(BaseModel):
     """Player-toggleable event handler exposed with available actions."""
 
     name: str = Field(description="Handler display name.")
+    behavior_attribution: AuthoredBehaviorAttribution = Field(
+        description=(
+            "Exact authored behavior identity used for catalog-backed "
+            "reaction presentation."
+        ),
+    )
     uuid: UUID = Field(description="Stable handler UUID.")
     enabled: bool = Field(description="Whether the handler is currently enabled.")
     trigger_event: str = Field(description="Primary trigger event type, when declared.")

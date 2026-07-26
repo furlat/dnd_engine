@@ -118,8 +118,169 @@ not override a status recorded here.
   `/tmp/dnd-final-pytest-shard1of3-yUDNMR`, and
   `/tmp/dnd-pytest-final-shard2-e5lAVl`.
 
+### Public content catalog has 23 unauthored game-icon assets
+
+- **Found**: 2026-07-26 while reconciling the authenticated built-in icon
+  ledger with the pinned 455-asset NeuroClient atlas.
+- **Behavior**: `23` public definitions have the exact
+  `missing_asset` disposition (`17` items, `4` actions, `1` spell, and `1`
+  reaction); there are no ambiguous rows. The missing item roots propagate to
+  `40` recipe-preset rows through exact definition inheritance. No condition
+  definition is missing an icon.
+- **Exact roots**: the item roots are `armor.cloth`,
+  `armor.circus.performer_leather`, `apparel.bracers`,
+  `apparel.chain_coif`, `apparel.cloth_hood`, `apparel.fine_clothes`,
+  `apparel.gauntlets`, `apparel.great_helm`, `apparel.horned_helmet`,
+  `apparel.leather_gloves`, `apparel.leather_hood`,
+  `apparel.monster_hands`, `apparel.monster_helm`, `gear.field_kit`,
+  `weapon.double_bladed_sword`, `weapon.sickle`, and `weapon.trident`.
+  The behavior roots are `action.item.field_kit.deploy`,
+  `action.core.drop`, `action.core.drop_prone`, `action.core.stand_up`,
+  `spell.aegis_spark`, and
+  `reaction.class_feature.paladin.divine_smite`.
+- **Cause**: none of these exact authored identities or presentation keys
+  exists in the pinned game-icon index. This is not a binding/import defect.
+  Actor `equipment_sprites` belong to a separate renderer asset domain and
+  cannot be substituted for inventory/action `icon_key` values.
+- **Reachability**: the missing roots intersect neither the three approved
+  premade templates nor any of the `20` hero and `38` monster-party current
+  game-creation configurations. They remain public catalog/authoring content,
+  so the gap must not be hidden with aliases or an inferred generic icon.
+- **Minimum closure**: author and authenticate `22` definition-level atlas
+  assets/binding decisions. The Field Kit item binding propagates to
+  `action.item.field_kit.deploy` through its exact `GRANTS_ACTION` dependency,
+  and the `14` variant-bearing root bindings close all `40` preset rows without
+  variant-specific icon aliases.
+- **Exact reproducer**:
+  `tests/manual/test_183_content_icon_bindings.py::test_every_public_builtin_has_no_unresolved_icon_assets`
+  is a strict xfail for this title and asserts that public `missing_asset` and
+  `ambiguous` rows are empty. An unexpected pass fails the suite until this
+  entry and marker are removed.
+- **Status**: OPEN.
+
 ### Recently resolved engine and rules defects
 
+### Weapon attack affordances dropped their exact dynamic icon provider
+
+- **Found**: 2026-07-26 during the isolated live schema-5 NeuroClient
+  action-bar gate.
+- **Behavior**: `core.rules:action:action.attack@1` is deliberately
+  `intentional_dynamic_provider`, but an armed Attack row exposed neither a
+  catalog icon nor the equipped weapon UUID. Exact clients therefore had no
+  lawful item presentation join and failed closed to `action.unavailable`.
+- **Cause**: `Entity._collect_entity_actions()` read the equipped weapon for
+  its display name and damage types but did not pass that same weapon instance
+  into `AvailableActionInfo.source_item_uuid`.
+- **Exact reproducer**:
+  `tests/manual/test_181_affordance_content_identity.py::test_weapon_attack_affordance_names_its_exact_equipped_item_provider`
+  asserts both the deliberate null action icon and the exact equipped
+  `Weapon.uuid` on every weapon-slot affordance.
+- **Resolution**: Weapon-slot affordances now carry the equipped weapon UUID
+  while retaining `is_item_use=false`; Attack, Extra Attack, Frenzied Strike,
+  and other weapon-slot variants share the same collector path. No wire shape
+  or generic icon alias was added.
+- **Status**: RESOLVED 2026-07-26.
+
+### AI performance regressions encoded two retired discovery assumptions
+
+- **Found**: 2026-07-26 in the focused post-fix AI/epoch matrix.
+- **Behavior**:
+  `test_required_target_aoe_prefilter_uses_action_relationship_filter`
+  constructed an unauthored `BaseAction`, which the canonical content boundary
+  correctly rejects, while
+  `test_full_budget_move_refreshes_visibility_without_full_path_radius`
+  still expected an exhausted Move action to disappear.
+- **Resolution**: The AoE performance probe now uses the authored Fireball
+  action contract with its relationship filter specialized for the test. The
+  movement test now asserts the active stable-row contract:
+  `target_cost_unaffordable` with no executable targets. Neither assertion was
+  weakened; both still measure their original path-radius/prefilter behavior.
+- **Exact reproducers**:
+  `tests/manual/test_43_ai_runtime_performance.py::test_required_target_aoe_prefilter_uses_action_relationship_filter`
+  and
+  `tests/manual/test_43_ai_runtime_performance.py::test_full_budget_move_refreshes_visibility_without_full_path_radius`.
+- **Status**: RESOLVED 2026-07-26.
+
+### Synthetic game-summary evidence retained a legacy condition identity
+
+- **Found**: 2026-07-26 while running the focused objective-summary reducer
+  regression after the condition-content hard cut.
+- **Behavior**: The synthetic Prone application in
+  `tests/manual/test_102_game_summary.py` bypassed the normal condition
+  lifecycle and therefore reduced to an unbound Python-path identity instead
+  of `core.rules:condition:condition.prone@1`.
+- **Resolution**: The fixture now uses the canonical runtime behavior-binding
+  gateway before constructing its synthetic completion event, and its terminal
+  snapshot and summary assertions use the same authenticated condition
+  identity. Production condition application and the summary reducer were
+  unchanged.
+- **Verification**: `tests/manual/test_102_game_summary.py` passes (`6 passed`).
+- **Status**: RESOLVED 2026-07-26.
+
+### Objective parity guessed weapon stance from occupied slots
+
+- **Found**: 2026-07-26 from live render-parity diagnostics for actors with
+  both melee and ranged loadouts.
+- **Behavior**: The canonical subjective world correctly projected the
+  engine-selected ranged stance, while the independent parity oracle reported
+  melee because it treated the presence of any melee-slot item as selection.
+- **Cause**: `APIEquipmentOverview` exposed occupied slots but omitted the
+  authoritative selected `WeaponSet`, so the objective oracle could only make
+  a lossy inference.
+- **Resolution**: `APIEquipmentOverview.active_weapon_set` is now a required
+  dependency-neutral state fact projected directly from `Equipment`; both
+  objective parity oracles consume it instead of inspecting slot occupancy.
+- **Verification**:
+  `tests/manual/test_125_subjective_objective_render_parity.py::test_parity_preserves_selected_ranged_stance_with_both_weapon_sets`
+  reproduces the dual-loadout selected-ranged case and the complete parity
+  file passes (`8 passed`). `tests/manual/test_125_active_weapon_stance.py`
+  remains green (`3 passed`).
+- **Status**: RESOLVED 2026-07-26.
+
+### Environment-item regressions still constructed unbound legacy fixtures
+
+- **Found**: 2026-07-26 while validating the action-discovery affordability
+  separation.
+- **Behavior**: Six maintained environment-item selectors failed closed in
+  `BehaviorBinder` or `Entity._make_action_info()` because direct
+  `TestDoorA`, `TrapLever`, `StorageChest`, and `UsableItem` constructors
+  supplied actions with no authenticated item root:
+  `test_override_and_default_door_actions_toggle_spatial_state`,
+  `test_lever_depletion_removes_only_its_linked_trap`,
+  `test_chest_discovery_loot_and_empty_state_are_one_contract`, and
+  `test_multi_action_environment_item_executes_and_depletes` in
+  `tests/manual/test_134_stackable_usable_item_legacy_contract.py`, plus
+  `test_closed_door_invalidates_prepared_intercept_path_at_trigger_time` and
+  `test_open_door_is_authoritative_when_dodge_roll_triggers` in
+  `tests/manual/test_legacy_reactive_reaction_coverage.py`.
+- **Cause**: The behavioral regressions predated the item-content hard cut and
+  bypassed canonical recipe materialization. Production map-editor and runtime
+  construction already used bound environment recipes.
+- **Resolution**: The tests now materialize exact Door, Trap Lever, Storage
+  Chest, Campfire, and nested Potion recipes. The encounter-local trap link is
+  attached through `UsableItem.bind_dynamic_use_action()`, preserving the
+  reviewed provider dependency without weakening or bypassing the binder.
+- **Verification**:
+  `tests/manual/test_134_stackable_usable_item_legacy_contract.py` and
+  `tests/manual/test_131_inventory_use_actions_legacy_contract.py` pass
+  together (`26 passed`), including all four original selectors. The complete
+  reactive-reaction file passes (`27 passed`) and
+  `tests/manual/test_180_environment_content_identity.py` passes
+  (`7 passed`), including both additional door selectors.
+- **Status**: RESOLVED 2026-07-26.
+
+- **Spell catalog composition no longer creates a cold-start import cycle.**
+  During closure of the public spell catalog, the native
+  `dnd.spells.catalog_content` leaf briefly imported the extension package to
+  include Aegis Spark. A fresh process then failed while importing
+  `dnd.actions_functional` through the chain content bootstrap → class content
+  factories → sorcerer → actions functional → spells catalog → extensions →
+  field focus → bestiary. The extension join now lives at the higher
+  `dnd.content_system.spell_catalog_composition` boundary; the native spell
+  catalog has no extension dependency. The deterministic cold-start
+  reproducer and an AST import-boundary assertion are
+  `tests/architecture/test_spell_catalog_composition.py`.
+  **Status: RESOLVED 2026-07-26.**
 - **Encounter-start projection no longer poisons a bootstrapped player
   journal.** The staged game-creation regression bootstrapped a player before
   activation, then the first `EncounterStartEvent` was incorrectly mapped
@@ -613,6 +774,20 @@ not override a status recorded here.
   `test_spell_epoch_rows_expose_full_spell_slot_costs` and
   `test_concentration_requirement_reaches_typed_epoch_and_human_api` pass.
 - **Status**: RESOLVED 2026-07-24.
+
+### Policy contracts retain three unused typing imports
+- **Found**: 2026-07-25 while validating the environment-content hard cut.
+- **Automated reproducer**: `uv run pyright ai/policy/contracts.py`.
+- **Expected diagnostic**: Pyright reports exactly three
+  `reportUnusedImport` errors: `Union` on line 6, `EndTurnIntent` on line 26,
+  and `ExecuteIntent` on line 27.
+- **Hypothesis**: The policy intent contract was narrowed to `PolicyIntent`,
+  leaving the prior union members and `typing.Union` import behind.
+- **Resolution**: Removed only the three unused imports; the live contract
+  continues to import and use `PolicyIntent`.
+- **Verification**: `uv run pyright ai/policy/contracts.py` reports
+  `0 errors, 0 warnings, 0 informations`.
+- **Status**: RESOLVED 2026-07-25.
 
 ### Combined affordance rows do not support sequence-value equality
 - **Found**: 2026-07-22 during focused AI/server ownership-migration validation; confirmed pre-existing from the HEAD sources.
@@ -2406,3 +2581,189 @@ not override a status recorded here.
   passes alongside EB-15-009, EB-15-010, EB-15-020, EB-15-022, and the
   spell/spatial manifest unit.
 - **Status**: RESOLVED 2026-07-24.
+
+### Weapon-coat variants collapsed to one generic condition identity
+
+- **Found**: 2026-07-26 while closing the exact condition-content inventory.
+- **Behavior**: Applying the fire, lightning, concentration-fire, or timed-fire
+  weapon coat created mechanically distinct effects, but an applied condition
+  reported the generic authored identity
+  `content.neurodragon:condition:condition.weapon_coat@1`. The fire gameplay
+  regression expected its exact
+  `condition.consumable.weapon_coat.fire` identity and failed.
+- **Cause**: All variants instantiated one declared `_WeaponCoatCondition` and
+  attempted to distinguish it with an instance `semantic_key`. An authenticated
+  behavior binding correctly takes precedence over an untrusted instance
+  string, so every variant resolved to the class's one generic declaration.
+- **Resolution**: `_WeaponCoatCondition` is now an undeclared internal mechanic.
+  Four concrete player-visible leaves own the exact fire, lightning,
+  concentration-fire, and timed-fire definitions. The apply action declares a
+  closed `APPLIES_CONDITION` dependency to all four and binds the selected
+  condition through the action and originating item before admission.
+- **Verification**:
+  `tests/manual/test_170_neurodragon_consumable_content_factories.py::test_weapon_coat_condition_variants_own_exact_closed_identities`
+  asserts the closed declaration/dependency set, while
+  `tests/manual/test_170_neurodragon_consumable_content_factories.py::test_weapon_coat_variants_keep_exact_actions_conditions_and_cleanup`
+  executes the fire coat and asserts its definition, immediate provider,
+  durable item root, owner, mechanics, and removal cleanup. The condition and
+  migration inventories remain guarded by `test_179_condition_content_identity.py`
+  and `test_161_legacy_behavior_migration_ledger.py`.
+- **Status**: RESOLVED 2026-07-26.
+
+### Map-editor item identity retained a parallel legacy string catalog
+
+- **Found**: 2026-07-26 during the final item/content coexistence audit.
+- **Behavior**: Public placement requests and schema-1 saved maps selected
+  items and environment objects through `catalog_id` strings. A separate
+  reverse reference map and `legacy_item_recipes.py` rebuilt those strings
+  beside the frozen content registry, so installed pack content was absent
+  from discovery and save/load identity could diverge from the authenticated
+  runtime binding.
+- **Cause**: The experimental map editor predated `ContentRecipe`,
+  `content_set_digest`, item persistence policy, and registry-owned recipe
+  presets. Its compatibility layer remained after gameplay construction had
+  completed the canonical content hard cut.
+- **Resolution**: Map-editor object and loot discovery now reads the frozen
+  registry directly. It exposes exactly the 14 public environment roots, 97
+  public possession defaults, and 203 non-alias named variants. Placement,
+  binding, and schema-2 save/load use the exact self-authenticating recipe and
+  content-set digest; mutable door, light, charge, and regenerated trap-link
+  state is separate. The reverse map, legacy loot branch, source-module
+  projection, schema-1 acceptance, and `legacy_item_recipes.py` were deleted.
+- **Verification**:
+  `tests/manual/test_182_mapeditor_content_recipe_hard_cut.py` asserts exact
+  discovery and deduplication, generically materializes all 111 default public
+  roots, exercises integrity/kind/policy/content-set rejection, round-trips
+  schema-2 runtime state, and statically proves the compatibility code is
+  absent. `tests/manual/test_147_mapeditor_legacy_contract.py` retains the
+  complete entity-free crypt save/load and regenerated trap-link lifecycle.
+- **Status**: RESOLVED 2026-07-26.
+
+### Spell-created environment objects exposed fake icon identities
+
+- **Found**: 2026-07-26 while running the complete environment-content
+  identity regression after the exact icon-ledger cut.
+- **Behavior**:
+  `test_bootstrap_registers_exact_public_environment_presentations` failed
+  because Guardian of Faith and Heroes' Feast no longer retained their former
+  content-ID placeholders, but their environment-object definitions had not
+  yet received authenticated atlas keys.
+- **Cause**: The old descriptors treated any non-null string as an icon key.
+  Neither object content ID names a real frontend asset. The owning spell
+  definitions already had the exact reviewed `spell.guardian-of-faith` and
+  `spell.heroes-feast` assets, but the object definitions had no authenticated
+  presentation link to them.
+- **Resolution**: The offline icon importer now follows only exact
+  `CREATES_OBJECT` dependency edges whose provider has one authenticated asset.
+  Both object descriptors receive the owning spell asset during their original
+  construction; the binding ledger pins the provider ref, key, and asset
+  digest. No runtime name or display inference was added.
+- **Verification**:
+  `tests/manual/test_180_environment_content_identity.py::test_bootstrap_registers_exact_public_environment_presentations`
+  passes for all 16 public environment roots, while
+  `tests/manual/test_183_content_icon_bindings.py` verifies dependency-backed
+  bindings, atlas membership, tamper rejection, and original declaration
+  object identity.
+- **Status**: RESOLVED 2026-07-26.
+
+### Position action discovery conflates no target with target-cost unaffordability
+
+- **Found**: 2026-07-26 while auditing target-dependent typed action costs.
+- **Behavior**: Jump and Prepare Intercept can disappear from the authored
+  action surface when there is no destination, while a previously selected
+  destination can leak its movement cost into the next target-independent
+  affordability check. The response cannot distinguish no rules-valid
+  destination from rules-valid destinations blocked only by remaining
+  movement.
+- **Resolution**: Discovery now owns one required closed availability status,
+  checks source and source-dynamic costs without consulting selected-target
+  state, and evaluates target-dynamic costs only on target-specialized copies.
+  Jump and Prepare Intercept share the typed declared-position path; authored
+  rows remain stable while `legal_only` remains executable-only.
+- **Verification**:
+  `tests/manual/test_09_action_discovery_and_costs.py::test_position_action_rows_report_no_rules_valid_targets`
+  and
+  `tests/manual/test_09_action_discovery_and_costs.py::test_position_action_rows_report_target_cost_unaffordable`
+  pass for both Jump and Prepare Intercept.
+- **Status**: RESOLVED 2026-07-26.
+
+### Entity action discovery mutates registered targets
+
+- **Found**: 2026-07-26 during independent review of the availability hard cut.
+- **Behavior**: Entity target validation calls `set_target_entity()` on the
+  registered action template. A discovery read therefore leaves Shake Awake,
+  Shove, and other reusable templates carrying the last candidate UUID.
+- **Resolution**: Entity target validation now uses a target-specialized deep
+  copy for both requirements and target-bound cost evaluation. Registered
+  templates remain immutable across discovery calls.
+- **Verification**:
+  `tests/manual/test_09_action_discovery_and_costs.py::test_entity_action_discovery_does_not_retain_candidate_targets`
+  passes for both Shake Awake and Shove.
+- **Status**: RESOLVED 2026-07-26.
+
+### Path movement row omits exact unavailable status
+
+- **Found**: 2026-07-26 during independent review of the availability hard cut.
+- **Behavior**: Move disappears when remaining movement is zero and when no
+  rules-valid route exists, so the authored response cannot distinguish
+  target-cost exhaustion from route absence.
+- **Resolution**: Path discovery now probes only visible adjacent subjective
+  transitions to distinguish route existence from movement-budget
+  exhaustion. Default discovery retains the authored Move row with an exact
+  status; `legal_only` continues to omit non-executable rows.
+- **Verification**:
+  `tests/manual/test_09_action_discovery_and_costs.py::test_move_row_reports_no_rules_valid_routes`
+  and
+  `tests/manual/test_09_action_discovery_and_costs.py::test_move_row_reports_movement_budget_exhaustion`
+  pass.
+- **Status**: RESOLVED 2026-07-26.
+
+### Targetless registered AoE rows claim availability
+
+- **Found**: 2026-07-26 during independent review of the availability hard cut.
+- **Behavior**: Self-origin required-target AoEs such as Burning Hands,
+  Thunderwave, and Lightning Bolt emit `available` with no executable target
+  when no enemy is visible, and survive `legal_only`; execution by index then
+  has no legal index.
+- **Resolution**: Registered AoE discovery now emits one stable authored row
+  after both cached and computed previews. An empty executable target set is
+  `no_valid_targets` and is omitted by `legal_only`; contextual item AoEs stay
+  sparse rather than emitting disabled rows.
+- **Verification**:
+  `tests/manual/test_remaining_spell_legacy_contract.py::test_self_range_aoe_discovery_survives_zero_visible_enemies`
+  passes for Burning Hands, Thunderwave, and Lightning Bolt before and after a
+  visible target enters the scene.
+- **Status**: RESOLVED 2026-07-26.
+
+### Generic position status confuses requirements and target cost
+
+- **Found**: 2026-07-26 during independent review of generic position
+  discovery.
+- **Behavior**: A POSITION/POSITION_PATH action with subjective routes but no
+  candidate passing its action requirements is labeled
+  `target_cost_unaffordable`, even when it declares no target-bound cost.
+- **Resolution**: Generic position discovery now counts candidates only after
+  their non-cost requirements pass. Fast Move keeps its route-existence
+  specialization; other POSITION/POSITION_PATH rows report target-cost
+  exhaustion only when at least one rules-valid candidate then fails cost.
+- **Verification**:
+  `tests/manual/test_09_action_discovery_and_costs.py::test_generic_position_row_reports_requirements_not_target_cost`
+  passes using a fresh Misty Step template.
+- **Status**: RESOLVED 2026-07-26.
+
+### Entity target cost failure is labeled no target
+
+- **Found**: 2026-07-26 during independent review of entity-target
+  availability status.
+- **Behavior**: Entity target validation filters out a rules-valid target whose
+  target-dependent cost is unaffordable, but the collector loses that
+  distinction and reports `no_valid_targets`.
+- **Resolution**: Entity target validation now returns both affordable targets
+  and the count whose non-cost requirements passed. Registered entity-owned
+  rows report target-cost exhaustion only when that count is nonzero;
+  contextual item rows consume the same validation result but remain sparse.
+- **Verification**:
+  `tests/manual/test_09_action_discovery_and_costs.py::test_entity_row_reports_target_cost_unaffordable`
+  passes with an adjacent armed attacker and an injected typed target movement
+  cost.
+- **Status**: RESOLVED 2026-07-26.

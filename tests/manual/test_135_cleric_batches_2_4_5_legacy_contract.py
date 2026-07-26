@@ -12,6 +12,9 @@ import pytest
 
 from dnd.actions import Attack, Move, SpellEvent
 from dnd.actions_functional import setup_standard_actions
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import Frightened, Poisoned
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
@@ -27,7 +30,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
 )
 from dnd.entity import Entity
-from dnd.items.weapons import create_dagger
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (
     Aid,
     BeaconOfHope,
@@ -82,7 +85,12 @@ def _make_difficult(position: tuple[int, int]) -> None:
 def _equip_dagger(entity: Entity) -> None:
     """Give an actor one deterministic melee attack surface."""
     entity.equipment.equip(
-        create_dagger(entity.uuid),
+        materialize_item(
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(entity)

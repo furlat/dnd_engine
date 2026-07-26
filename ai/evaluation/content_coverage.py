@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dnd.blocks.base_item import BaseItem, ItemChargeConsumptionEvent
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.base_object import BaseObject
-from dnd.core.content import HandlerDispatchEvidence
+from dnd.core.content.runtime import HandlerDispatchEvidence
 from dnd.core.events import Event, EventPhase, EventQueue
 
 

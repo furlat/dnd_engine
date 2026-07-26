@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from dnd.actions import Attack, Disengage, Dodge, Hide, Move
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.equipment import BodyArmor, Weapon
 from dnd.conditions import (
     GreaterInvisibilityEffect,
     Hidden,
@@ -40,14 +41,14 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import AdvantageStatus, DamageType
 from dnd.core.values import BaseValue
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.items.armors import create_chain_mail, create_leather_armor
-from dnd.items.test_items import (
-    create_potion_of_greater_invisibility,
-    create_torch,
-)
-from dnd.items.weapons import create_assassin_dagger
+from dnd.items.armors import CHAIN_MAIL_RECIPE, LEATHER_ARMOR_RECIPE
+from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
+from dnd.items.torches import TORCH_RECIPE, Torch
+from dnd.items.weapons import ASSASSIN_DAGGER_RECIPE
 from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility
@@ -599,8 +600,18 @@ def test_armor_stealth_traits_are_item_specific() -> None:
     """Leather remains neutral while chain mail owns reversible disadvantage."""
     reset_stealth_world()
     actor = create_skeleton(name="Scout", position=(1, 1), darkvision=False)
-    leather = create_leather_armor(actor.uuid)
-    chain_mail = create_chain_mail(actor.uuid)
+    leather = materialize_item(
+        LEATHER_ARMOR_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+    chain_mail = materialize_item(
+        CHAIN_MAIL_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
     assert actor.loot_item(leather)
     assert actor.loot_item(chain_mail)
 
@@ -931,8 +942,16 @@ def test_greater_invisibility_potion_stack_consumes_one_legal_use_at_a_time() ->
     """A stacked potion spends one item and one bonus action per legal use."""
     reset_stealth_world()
     actor = create_skeleton(name="Drinker", position=(1, 1), darkvision=False)
-    first = create_potion_of_greater_invisibility(actor.uuid)
-    second = create_potion_of_greater_invisibility(actor.uuid)
+    first = materialize_item(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    second = materialize_item(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        actor.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
     assert actor.loot_item(first)
     assert actor.loot_item(second)
     assert actor.inventory.item_count == 1
@@ -999,10 +1018,15 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
         faction="monsters",
         darkvision=False,
     )
-    dagger = create_assassin_dagger(attacker.uuid)
+    dagger = materialize_item(
+        ASSASSIN_DAGGER_RECIPE,
+        attacker.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert attacker.loot_item(dagger)
     assert attacker.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
-    handler_uuid = dagger._handler_uuid
+    handler_uuid = getattr(dagger, "_handler_uuid")
     assert handler_uuid is not None
     assert attacker.get_event_handler_by_name("Unseen Strike") is not None
     assert EventHandler.get(handler_uuid) is not None
@@ -1046,7 +1070,7 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
     assert target_hp - target.get_hp() == 9
 
     assert attacker.unequip_item(WeaponSlot.MELEE_MAIN) is dagger
-    assert dagger._handler_uuid is None
+    assert getattr(dagger, "_handler_uuid") is None
     assert attacker.get_event_handler_by_name("Unseen Strike") is None
     assert handler_uuid not in EventQueue._event_handlers
 
@@ -1112,7 +1136,12 @@ def test_torch_zones_preserve_bright_hidden_and_reveal_very_bright_hidden() -> N
     )
     add_hidden(near_hidden, 99)
     add_hidden(bright_hidden, 99)
-    torch = create_torch(carrier.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        carrier.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     assert carrier.loot_item(torch)
 
     torch.ignite(carrier.uuid)
@@ -1196,7 +1225,12 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
     )
     Entity.update_all_entities_senses(max_distance=16)
     add_hidden(hidden_enemy, carrier.get_passive_perception() - 1)
-    torch = create_torch(carrier.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        carrier.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     assert carrier.loot_item(torch)
     torch.ignite(carrier.uuid)
     assert hidden_enemy.uuid not in carrier.senses.entities

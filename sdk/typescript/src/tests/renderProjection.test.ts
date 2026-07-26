@@ -18,6 +18,10 @@ import {
 } from "../index.js";
 import { bootstrap } from "./fixtures.js";
 
+const safePresentationRef = {
+  presentation_contract_hash: "a".repeat(64),
+};
+
 test("structural edge wire model rejects malformed or identity-bearing rows", () => {
   const base = required(bootstrap().world.state.grid.tiles[0]);
   assert.throws(
@@ -246,6 +250,7 @@ test("controlled equipment detail remains separate from safe actor loadouts", ()
       slot_type: "weapon",
       item: item("hero-private-sword", "Hero Private Sword", "Hero Sword"),
     }],
+    active_weapon_set: "melee",
     ac: 17,
     inventory: [item("hero-private-potion", "Private Potion", "Potion")],
   };
@@ -259,6 +264,7 @@ test("controlled equipment detail remains separate from safe actor loadouts", ()
         layers: [{
           slot: "weapon_ranged_main",
           item_kind: "weapon",
+          safe_presentation_ref: safePresentationRef,
           visual_item_name: "Enemy Bow",
           visual_variant_id: "bow-a",
           equipped_visual_policy: "visible",
@@ -270,6 +276,7 @@ test("controlled equipment detail remains separate from safe actor loadouts", ()
         layers: [{
           slot: "weapon_melee_main",
           item_kind: "weapon",
+          safe_presentation_ref: safePresentationRef,
           visual_item_name: "Hero Sword",
           visual_variant_id: null,
           equipped_visual_policy: "visible",
@@ -290,6 +297,10 @@ test("controlled equipment detail remains separate from safe actor loadouts", ()
   assert.equal(
     rendered.equipment.visual_loadout_by_entity.monster?.layers[0]?.visual_item_name,
     "Enemy Bow",
+  );
+  assert.deepEqual(
+    rendered.equipment.visual_loadout_by_entity.monster?.layers[0]?.safe_presentation_ref,
+    safePresentationRef,
   );
   assert.ok(rendered.equipment.details_by_entity.hero?.inventory.length);
 });
@@ -367,6 +378,7 @@ test("objective diagnostics normalize into the same render structure", () => {
       slot_type: "weapon",
       item: item("bow", "Longbow", "Longbow"),
     }],
+    active_weapon_set: "ranged",
     ac: 15,
     inventory: [],
   };
@@ -393,12 +405,18 @@ test("objective diagnostics normalize into the same render structure", () => {
           blocks_vision_field: false,
           visual_item_name: "DirectionalDoor",
           visual_variant_id: null,
+          safe_presentation_ref: safePresentationRef,
         },
       }],
     },
     visibility: seed.world.visibility,
     equipment_by_entity: {
-      monster: { slots: [], ac: 15, inventory: [] },
+      monster: {
+        slots: [],
+        active_weapon_set: "none",
+        ac: 15,
+        inventory: [],
+      },
       hero: heroEquipment,
     },
   };
@@ -429,6 +447,7 @@ test("objective diagnostics normalize into the same render structure", () => {
     position: [0, 0],
     map_char: "D",
     object_kind: "door",
+    safe_presentation_ref: safePresentationRef,
     visual_item_name: "DirectionalDoor",
     visual_variant_id: null,
     blocks_movement: false,
@@ -445,7 +464,7 @@ test("objective diagnostics normalize into the same render structure", () => {
   assert.ok(rendered.state.grid.structural_edges.length > 0);
 });
 
-test("objective loadout derivation follows the canonical melee-first slot rule", () => {
+test("objective loadout derivation preserves the authoritative selected stance", () => {
   const equipment: APIEquipmentOverview = {
     slots: [
       {
@@ -459,13 +478,14 @@ test("objective loadout derivation follows the canonical melee-first slot rule",
         item: item("sword", "Sword", "Sword"),
       },
     ],
+    active_weapon_set: "ranged",
     ac: 15,
     inventory: [],
   };
 
   const loadout = deriveVisualLoadout("hero", equipment);
 
-  assert.equal(loadout.active_weapon_set, "melee");
+  assert.equal(loadout.active_weapon_set, "ranged");
   assert.deepEqual(
     loadout.layers.map((layer) => layer.slot),
     ["weapon_melee_main", "weapon_ranged_main"],
@@ -514,6 +534,18 @@ function item(
 ): APIItemSummary {
   return {
     uuid,
+    content_ref: {
+      pack_id: "content.test",
+      definition_kind: "item",
+      content_id: `item.${uuid}`,
+      content_version: 1,
+      definition_contract_hash: "b".repeat(64),
+    },
+    recipe_ref: {
+      recipe_digest: "c".repeat(64),
+      preset_ref: null,
+    },
+    safe_presentation_ref: safePresentationRef,
     name,
     description: `${name} details`,
     item_type: "weapon",

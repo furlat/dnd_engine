@@ -41,6 +41,7 @@ from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.tile_conditions import ZoneControlCondition
 from dnd.core.gridmap import get_map
 from dnd.core.events import SpatialChangeEvent
+from dnd.spells.content_metadata import srd_spell_identity
 
 
 class BlurEffect(BaseCondition):
@@ -807,6 +808,15 @@ class ColorSpray(SpellAction):
         )
 
 
+@srd_spell_identity(
+    content_id="spell.invisibility",
+    display_name="Invisibility",
+    description="Make a creature invisible until the effect ends.",
+    school="illusion",
+    level=2,
+    source_page=157,
+    sort_order=10,
+)
 class Invisibility(SpellAction):
     """Invisibility - 2nd level Illusion (Concentration)
 

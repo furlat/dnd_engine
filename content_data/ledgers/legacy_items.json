@@ -1,0 +1,4001 @@
+{
+  "rows": [
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.club",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_club",
+        "dnd/items/__init__.py:WEAPONS[club]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.club",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.club",
+        "content_version": 1,
+        "definition_contract_hash": "f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.dagger",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_dagger",
+        "dnd/items/__init__.py:WEAPONS[dagger]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.dagger",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.dagger",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.handaxe",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_handaxe",
+        "dnd/items/__init__.py:WEAPONS[handaxe]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.handaxe",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.handaxe",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.javelin",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_javelin",
+        "dnd/items/__init__.py:WEAPONS[javelin]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.javelin",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.javelin",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.mace",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_mace",
+        "dnd/items/__init__.py:WEAPONS[mace]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.mace",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.mace",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.quarterstaff",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_quarterstaff",
+        "dnd/items/__init__.py:WEAPONS[quarterstaff]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.quarterstaff",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.quarterstaff",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.spear",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_spear",
+        "dnd/items/__init__.py:WEAPONS[spear]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.spear",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.spear",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.light_crossbow",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_light_crossbow",
+        "dnd/items/__init__.py:WEAPONS[light_crossbow]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.light_crossbow",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.light_crossbow",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.shortbow",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_shortbow",
+        "dnd/items/__init__.py:WEAPONS[shortbow]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.shortbow",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.shortbow",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.battleaxe",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_battleaxe",
+        "dnd/items/__init__.py:WEAPONS[battleaxe]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.battleaxe",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.battleaxe",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.greatsword",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_greatsword",
+        "dnd/items/__init__.py:WEAPONS[greatsword]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.greatsword",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.greatsword",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.greataxe",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_greataxe",
+        "dnd/items/__init__.py:WEAPONS[greataxe]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.greataxe",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.greataxe",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.longsword",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_longsword",
+        "dnd/items/__init__.py:WEAPONS[longsword]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.longsword",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.longsword",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.rapier",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_rapier",
+        "dnd/items/__init__.py:WEAPONS[rapier]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.rapier",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.rapier",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.scimitar",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_scimitar",
+        "dnd/items/__init__.py:WEAPONS[scimitar]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.scimitar",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.scimitar",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.shortsword",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_shortsword",
+        "dnd/items/__init__.py:WEAPONS[shortsword]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.shortsword",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.shortsword",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.warhammer",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_warhammer",
+        "dnd/items/__init__.py:WEAPONS[warhammer]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.warhammer",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.warhammer",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.longbow",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_longbow",
+        "dnd/items/__init__.py:WEAPONS[longbow]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.longbow",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.longbow",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.heavy_crossbow",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_heavy_crossbow",
+        "dnd/items/__init__.py:WEAPONS[heavy_crossbow]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.heavy_crossbow",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.heavy_crossbow",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.assassin_dagger",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_assassin_dagger"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; custom weapon; unseen-strike equip hook",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.assassin_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.assassin_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "6baf6955f426dd520838af360e20cecc30b2ce6367c5e547fdd96ffc555b9f62",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.weapon.arcane_staff",
+      "legacy_locators": [
+        "dnd/items/weapons.py:create_arcane_staff"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; custom weapon; spell-attack equip modifier",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.arcane_staff",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.arcane_staff",
+        "content_version": 1,
+        "definition_contract_hash": "ac17a4e8272bf2e282a07f8f5d835534d316e11cac3f883af389388c21eed171",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.padded_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_padded_armor",
+        "dnd/items/__init__.py:ARMORS[padded]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.padded",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.padded",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.leather_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_leather_armor",
+        "dnd/items/__init__.py:ARMORS[leather]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.leather",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.leather",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.studded_leather",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_studded_leather",
+        "dnd/items/__init__.py:ARMORS[studded_leather]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.studded_leather",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.studded_leather",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.hide_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_hide_armor",
+        "dnd/items/__init__.py:ARMORS[hide]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.hide",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.hide",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.chain_shirt",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_chain_shirt",
+        "dnd/items/__init__.py:ARMORS[chain_shirt]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.chain_shirt",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.chain_shirt",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.scale_mail",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_scale_mail",
+        "dnd/items/__init__.py:ARMORS[scale_mail]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.scale_mail",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.scale_mail",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.breastplate",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_breastplate",
+        "dnd/items/__init__.py:ARMORS[breastplate]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.breastplate",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.breastplate",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.half_plate",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_half_plate",
+        "dnd/items/__init__.py:ARMORS[half_plate]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.half_plate",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.half_plate",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.ring_mail",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_ring_mail",
+        "dnd/items/__init__.py:ARMORS[ring_mail]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.ring_mail",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.ring_mail",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.chain_mail",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_chain_mail",
+        "dnd/items/__init__.py:ARMORS[chain_mail]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.chain_mail",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.chain_mail",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.splint_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_splint_armor",
+        "dnd/items/__init__.py:ARMORS[splint]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.splint",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.splint",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.armor.plate_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_plate_armor",
+        "dnd/items/__init__.py:ARMORS[plate]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; source_scope=srd_5_1_cc",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.plate",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "armor.plate",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.cloth_armor",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_cloth_armor"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.cloth",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "armor.cloth",
+        "content_version": 1,
+        "definition_contract_hash": "1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.common_clothes",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_common_clothes",
+        "dnd/items/__init__.py:ARMORS[common_clothes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[common_clothes|82000001|Farmhand's Tunic]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[common_clothes|82000009|Peasant's Rags]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.common_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.common_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.travelers_clothes",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_travelers_clothes",
+        "dnd/items/__init__.py:ARMORS[travelers_clothes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[travelers_clothes|84000006|Thief's Garb]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.travelers_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.travelers_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.costume",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_costume",
+        "dnd/items/__init__.py:ARMORS[costume]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[costume|85000004|Pit Fighter's Wrap]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.costume",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.costume",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.robes",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_robes",
+        "dnd/items/__init__.py:ARMORS[robes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|8100000b|Hedge Wizard's Robe]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|81000008|Dark Cultist Robes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|81000003|Priest's Vestments]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|81000004|Necromancer's Robe]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|81000007|Acolyte's Vestments]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[robes|81000001|Wizard's Robe]",
+        "dnd/classes/sorcerer_factory.py:create_robes[81000005]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.robes",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.robes",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.cloth_shoes",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_cloth_shoes",
+        "dnd/items/__init__.py:ARMORS[cloth_shoes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[cloth_shoes|b0000003|Dark Cloth Shoes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[cloth_shoes|b0000005|Blue Cloth Shoes]",
+        "dnd/classes/sorcerer_factory.py:create_cloth_shoes[b0000004]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.cloth_shoes",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.cloth_shoes",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.leather_boots",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_leather_boots",
+        "dnd/items/__init__.py:ARMORS[leather_boots]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[leather_boots|b0000008|Dark Boots]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[leather_boots|b0000009|Brown Boots]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.leather_boots",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.leather_boots",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.sandals",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_sandals",
+        "dnd/items/__init__.py:ARMORS[sandals]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[sandals|b0000002|Rope Sandals]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.sandals",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.sandals",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.leather_shoes",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_leather_shoes",
+        "dnd/items/__init__.py:ARMORS[leather_shoes]",
+        "dnd/scenarios/evaluation/wardrobes.py:ApparelGrant[leather_shoes|b0000007|Brown Leather Shoes]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.leather_shoes",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.leather_shoes",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.armored_boots",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_armored_boots",
+        "dnd/items/__init__.py:ARMORS[armored_boots]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.armored_boots",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.armored_boots",
+        "content_version": 1,
+        "definition_contract_hash": "d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.iron_helmet",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_iron_helmet",
+        "dnd/items/__init__.py:ARMORS[iron_helmet]",
+        "dnd/classes/fighter_factory.py:create_iron_helmet[h0000008]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.iron_helmet",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.iron_helmet",
+        "content_version": 1,
+        "definition_contract_hash": "ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.wizard_hat",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_wizard_hat",
+        "dnd/items/__init__.py:ARMORS[wizard_hat]",
+        "dnd/classes/sorcerer_factory.py:create_wizard_hat[h0000011]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.wizard_hat",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.wizard_hat",
+        "content_version": 1,
+        "definition_contract_hash": "ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.apparel.crown",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_crown",
+        "dnd/items/__init__.py:ARMORS[crown]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; visual_variant_id is recipe data, not a separate definition",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "apparel.crown",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "apparel.crown",
+        "content_version": 1,
+        "definition_contract_hash": "ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.shield.shield",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_shield",
+        "dnd/items/__init__.py:SHIELDS[shield]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_migrated_item_roots_use_exact_content_refs"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "shield.shield",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "shield.shield",
+        "content_version": 1,
+        "definition_contract_hash": "17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.shield.wooden_shield",
+      "legacy_locators": [
+        "dnd/items/armors.py:create_wooden_shield",
+        "dnd/items/__init__.py:SHIELDS[wooden_shield]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_legacy_lookup_maps_have_exact_ledger_coverage"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "shield.wooden",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "shield.wooden",
+        "content_version": 1,
+        "definition_contract_hash": "cbd1206590f5d371380629e18a10857333791e252d7945b82a998dee38eab137",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_fireball",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_fireball"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_fireball",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_fireball",
+        "content_version": 1,
+        "definition_contract_hash": "76b2b15a5445424eabac876a6752e4f8b834689c3918ee98a2e2a84c1b980b65",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_magic_missile",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_magic_missile"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_magic_missile",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_magic_missile",
+        "content_version": 1,
+        "definition_contract_hash": "27b7a2cd25d6e850f7abf839ef62355c4a093747c710635bdf24453a3be199ce",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_hold_person",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_hold_person"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_hold_person",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_hold_person",
+        "content_version": 1,
+        "definition_contract_hash": "020693730c67a5675efbe80fd9ca3a663a2e08fd623dca79c61c6afdcc180008",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_mage_armor",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_mage_armor"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_mage_armor",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_mage_armor",
+        "content_version": 1,
+        "definition_contract_hash": "6a6910a1a1bf83a47d0839f0119d3a36f21f1b50b0c7c1ab7c1701dacb16f371",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_spike_growth",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_spike_growth"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_spike_growth",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_spike_growth",
+        "content_version": 1,
+        "definition_contract_hash": "49c7551892e7eb905da2dbb7bf41a0d47f29ad4c0090a1255c2e1b3e44d1a21f",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_fire_bolt",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_fire_bolt"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=caster_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_fire_bolt",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_fire_bolt",
+        "content_version": 1,
+        "definition_contract_hash": "13420c23a62088081ba5530869639924c7854d136616bbfaef9328496dc55445",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.wand_of_magic_missiles",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_wand_of_magic_missiles"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=charges; observed_charges=3",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.wand_magic_missiles",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.wand_magic_missiles",
+        "content_version": 1,
+        "definition_contract_hash": "53291ac1c476a81560953c1a5a6551f8bfb0c133a06a7b84590fd4f3b0e05bb9",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.wand_of_fire",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_wand_of_fire"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=charges; observed_charges=4,7",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.wand_fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.wand_fire",
+        "content_version": 1,
+        "definition_contract_hash": "69fb95677b37dcc4d23c129412cecbd7e7a6e220d2f5a411ff847fe9350b8a3f",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.acid_flask",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_acid_flask"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.acid_flask",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.acid_flask",
+        "content_version": 1,
+        "definition_contract_hash": "05c324b1db243a36bb44de74e32ba6a1f0ae0e1a9b043df7d3f3f072f215e5b0",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.scroll_of_invisibility",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_scroll_of_invisibility"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=cast_level",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "spell_item.scroll_invisibility",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "spell_item.scroll_invisibility",
+        "content_version": 1,
+        "definition_contract_hash": "334ff1960d2217b08e9e9b8366b46fd43c712d5e73fd8eac2235f865f13326b0",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.arcane_machine_gun",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_arcane_machine_gun"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; parameters=position",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.arcane_machine_gun",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.arcane_machine_gun",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.fireball_cannon",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_fireball_cannon"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; parameters=position,charges",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.fireball_cannon",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.fireball_cannon",
+        "content_version": 1,
+        "definition_contract_hash": "4680ed96e2aad9079627ccefa9b7d8c29929236a16d609832383b565cc53b055",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.healing_potion",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_healing_potion"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=heal_amount; observed=7,10,12,14,16,18",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.healing_potion",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.healing_potion",
+        "content_version": 1,
+        "definition_contract_hash": "69906b30dff31885bcc5e5e079afd475b5231821a0fa535cf7b60487c8173d83",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.weapon_coat",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_weapon_coat"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.weapon_coat.fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.weapon_coat.fire",
+        "content_version": 1,
+        "definition_contract_hash": "d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.lightning_weapon_coat",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_lightning_weapon_coat"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.weapon_coat.lightning",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.weapon_coat.lightning",
+        "content_version": 1,
+        "definition_contract_hash": "d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.flaming_weapon_spell_coat",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_flaming_weapon_spell_coat"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.weapon_coat.concentration_fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.weapon_coat.concentration_fire",
+        "content_version": 1,
+        "definition_contract_hash": "d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.timed_weapon_coat",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_timed_weapon_coat"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=rounds",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.weapon_coat.timed_fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.weapon_coat.timed_fire",
+        "content_version": 1,
+        "definition_contract_hash": "723d3fa1e47abd475685cd805b5a9d3b2520400209c6a77718c0ea4effd77b08",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.arcane_device",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_arcane_device"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; parameters=position",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.arcane_device",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.arcane_device",
+        "content_version": 1,
+        "definition_contract_hash": "fda604d02349a52f014ddc2c0399832fcdd0081ed53e2a25bdbc2330a8a74cf2",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.potion_of_greater_invisibility",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_potion_of_greater_invisibility"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.potion_greater_invisibility",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.potion_greater_invisibility",
+        "content_version": 1,
+        "definition_contract_hash": "d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.torch",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_torch"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; lit is durable item state",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "gear.torch",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "equipment.portable_torch",
+        "content_version": 1,
+        "definition_contract_hash": "fd434261d1d600fc65359f1f30ba389e0d5de5ba34ac5fedf0a133c39a7b8374",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.wall_torch",
+      "legacy_locators": [
+        "dnd/items/torches.py:create_wall_torch"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; parameters=position,lit",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.wall_torch",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.wall_torch",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.factory.test_items.potion_of_haste",
+      "legacy_locators": [
+        "dnd/items/test_items.py:create_potion_of_haste"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_primary_item_factory_inventory_is_exact",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "consumable.potion_haste",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "consumable.potion_haste",
+        "content_version": 1,
+        "definition_contract_hash": "d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.directional_wall",
+      "legacy_locators": [
+        "dnd/items/environment.py:DirectionalWall"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.directional_wall",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.directional_wall",
+        "content_version": 1,
+        "definition_contract_hash": "77eaa1ae5b4be3228a01b62f68cbff93d8361c4ebb1649562e003b85b81665a7",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.directional_door",
+      "legacy_locators": [
+        "dnd/items/environment.py:DirectionalDoor"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.directional_door",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.directional_door",
+        "content_version": 1,
+        "definition_contract_hash": "6e16c65b95be90b3a9177a1f2d9223776fcc6d7c1ebac7a3713786fdec083ca8",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.test_door_a",
+      "legacy_locators": [
+        "dnd/items/test_items.py:TestDoorA",
+        "server/mapeditor_support.py:place_catalog_object[door]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.door",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.door",
+        "content_version": 1,
+        "definition_contract_hash": "8b4eb75737ec1ed86cafdd6bfcfbcbaf9feea14359cc8bb5c4453fc080303927",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.trap_lever",
+      "legacy_locators": [
+        "dnd/items/test_items.py:TrapLever",
+        "server/mapeditor_support.py:place_catalog_object[trap_lever]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; linked handler/tile UUIDs are encounter state",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.trap_lever",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.trap_lever",
+        "content_version": 1,
+        "definition_contract_hash": "0f6a86982ae1c0472a075f1ec68f7b9d58ccd8c64065d3154cf2729a35c66616",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.storage_chest",
+      "legacy_locators": [
+        "dnd/items/test_items.py:StorageChest",
+        "server/mapeditor_support.py:place_catalog_object[storage_chest]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment; chest contents are encounter recipes/state",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.storage_chest",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.storage_chest",
+        "content_version": 1,
+        "definition_contract_hash": "054f0de68dcdc3672b0d088b8bcc98fe57d9a50b06e732c9f31577ef40d96482",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.campfire",
+      "legacy_locators": [
+        "server/mapeditor_support.py:place_catalog_object[campfire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.campfire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.campfire",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.blocker.crate",
+      "legacy_locators": [
+        "server/mapeditor_support.py:_create_blocker[crate]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.blocker.crate",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.blocker.crate",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.blocker.boulder",
+      "legacy_locators": [
+        "server/mapeditor_support.py:_create_blocker[boulder]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.blocker.boulder",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.blocker.boulder",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.blocker.barricade",
+      "legacy_locators": [
+        "server/mapeditor_support.py:_create_blocker[barricade]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.blocker.barricade",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.blocker.barricade",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.environment.blocker.oil_barrel",
+      "legacy_locators": [
+        "server/mapeditor_support.py:_create_blocker[oil_barrel]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=environment",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.blocker.oil_barrel",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "environment.blocker.oil_barrel",
+        "content_version": 1,
+        "definition_contract_hash": "685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.extension.field_kit",
+      "legacy_locators": [
+        "dnd/extensions/field_focus.py:create_field_kit"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; parameters=charges",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "gear.field_kit",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "gear.field_kit",
+        "content_version": 1,
+        "definition_contract_hash": "de0cd0292067e61c4dc9675492f91cdd268fd69507f7754ba1f166cf59a01206",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.bestiary.armor_scraps",
+      "legacy_locators": [
+        "dnd/monsters/bestiary.py:create_armor_scraps"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.armor_scraps",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "armor.armor_scraps",
+        "content_version": 1,
+        "definition_contract_hash": "370bee3252b8d936c988ebcd859c75030680399cdbe9a538625c62cfb8b77963",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.circus.rusty_dagger",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_dagger"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.circus.rusty_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.circus.rusty_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.circus.flaming_scimitar",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_flaming_scimitar"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.circus.flaming_scimitar",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.circus.flaming_scimitar",
+        "content_version": 1,
+        "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.circus.performer_armor",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_light_armor"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "armor.circus.performer_leather",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "armor.circus.performer_leather",
+        "content_version": 1,
+        "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.circus.longsword_plus_one",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_longsword_plus_one"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; currently unreferenced but implemented",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.circus.longsword_plus_one",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.circus.longsword_plus_one",
+        "content_version": 1,
+        "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.circus.soul_draining_morningstar",
+      "legacy_locators": [
+        "dnd/monsters/circus_fighter.py:create_morningstar"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; currently unreferenced but implemented",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "weapon.circus.soul_draining_morningstar",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "replacement_ref": {
+        "content_id": "weapon.circus.soul_draining_morningstar",
+        "content_version": 1,
+        "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      }
+    },
+    {
+      "classification": "fixture_only",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.fixture.item.test_door_b",
+      "legacy_locators": [
+        "dnd/items/test_items.py:TestDoorB"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified"
+      ],
+      "migration_status": "inventoried",
+      "notes": "persistence_policy=environment; test fixture only",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.test_door_b",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.fixture_internal"
+      },
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.kobold_sling",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_kobold[_simple_weapon:Sling]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Sling d4 bludgeoning 30/120",
+      "provided_by_ref": {
+        "content_id": "monster.kobold",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.kobold_sling",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.spy_hand_crossbow",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_spy[_simple_weapon:Hand Crossbow]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Hand Crossbow d6 piercing 30/120",
+      "provided_by_ref": {
+        "content_id": "monster.spy",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.spy_hand_crossbow",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.bandit_captain_thrown_dagger",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bandit_captain[_simple_weapon:Thrown Dagger]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Thrown Dagger d4 piercing 20/60",
+      "provided_by_ref": {
+        "content_id": "monster.bandit_captain",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.bandit_captain_thrown_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.orc_thrown_javelin",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_orc[_simple_weapon:Thrown Javelin]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Thrown Javelin d6 piercing 30/120",
+      "provided_by_ref": {
+        "content_id": "monster.orc",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.thrown_javelin",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.bugbear_morningstar",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bugbear[_simple_weapon:Morningstar]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Morningstar d8 piercing",
+      "provided_by_ref": {
+        "content_id": "monster.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.bugbear_morningstar",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.bugbear_thrown_javelin",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_bugbear[_simple_weapon:Thrown Javelin]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Thrown Javelin d6 piercing 30/120",
+      "provided_by_ref": {
+        "content_id": "monster.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.thrown_javelin",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.ogre_greatclub",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ogre[_simple_weapon:Greatclub]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Greatclub 2d8 bludgeoning",
+      "provided_by_ref": {
+        "content_id": "monster.ogre",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.ogre_greatclub",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.ogre_thrown_javelin",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ogre[_simple_weapon:Thrown Javelin]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Thrown Javelin 2d6 piercing 30/120",
+      "provided_by_ref": {
+        "content_id": "monster.ogre",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.ogre_thrown_javelin",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.wolf_bite",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_wolf[_simple_weapon:Bite]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Bite 2d4 piercing hidden",
+      "provided_by_ref": {
+        "content_id": "monster.wolf",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.wolf_bite",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.dire_wolf_bite",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_dire_wolf[_simple_weapon:Bite]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Bite 2d6 piercing hidden",
+      "provided_by_ref": {
+        "content_id": "monster.dire_wolf",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.dire_wolf_bite",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.zombie_slam",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_zombie[_simple_weapon:Slam]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Slam d6 bludgeoning hidden",
+      "provided_by_ref": {
+        "content_id": "monster.zombie",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.zombie_slam",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.ogre_zombie_morningstar",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ogre_zombie[_simple_weapon:Morningstar]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=possession; Morningstar 2d8 bludgeoning",
+      "provided_by_ref": {
+        "content_id": "monster.ogre_zombie",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.ogre_zombie_morningstar",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.ghoul_claws",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ghoul[_simple_weapon:Claws]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Claws 2d4 slashing hidden",
+      "provided_by_ref": {
+        "content_id": "monster.ghoul",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.ghoul_claws",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.ghoul_bite",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_ghoul[_simple_weapon:Bite]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Bite 2d6 piercing light hidden",
+      "provided_by_ref": {
+        "content_id": "monster.ghoul",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "weapon.creature.ghoul_bite",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.wolf_natural_armor",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_wolf[_fixed_ac_armor:13]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Natural Armor AC 13 hidden",
+      "provided_by_ref": {
+        "content_id": "monster.wolf",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "armor.creature.wolf_natural",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "item",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.item.intrinsic.dire_wolf_natural_armor",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:create_dire_wolf[_fixed_ac_armor:14]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_srd_creature_possession_roots_resolve_to_canonical_items",
+        "tests/manual/test_180_srd_creature_possession_bindings.py::test_every_equipped_srd_creature_item_has_an_exact_runtime_binding"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=intrinsic; Natural Armor AC 14 hidden",
+      "provided_by_ref": {
+        "content_id": "monster.dire_wolf",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": {
+        "content_id": "armor.creature.dire_wolf_natural",
+        "content_version": 1,
+        "definition_contract_hash": "6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [
+        {
+          "content_id": "spell.guardian_of_faith",
+          "content_version": 1,
+          "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+          "definition_kind": "spell",
+          "pack_id": "content.srd_5_1_cc"
+        }
+      ],
+      "legacy_id": "legacy.environment.spell_object.guardian_of_faith",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:GuardianOfFaithObject"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=encounter_only; spell-created spatial object",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.spell_object.guardian_of_faith",
+        "content_version": 1,
+        "definition_contract_hash": "d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4",
+        "definition_kind": "environment_object",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "environment.spell_object.guardian_of_faith",
+        "content_version": 1,
+        "definition_contract_hash": "d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4",
+        "definition_kind": "environment_object",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "independent_definition",
+      "definition_kind": "environment_object",
+      "deletion_rationale": "",
+      "dependency_refs": [
+        {
+          "content_id": "spell.heroes_feast",
+          "content_version": 1,
+          "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+          "definition_kind": "spell",
+          "pack_id": "content.srd_5_1_cc"
+        }
+      ],
+      "legacy_id": "legacy.environment.spell_object.heroes_feast",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:HeroesFeastObject"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_additional_item_and_environment_roots_are_explicitly_classified",
+        "tests/manual/test_180_environment_content_identity.py::test_production_environment_inventory_is_exact_and_fully_migrated"
+      ],
+      "migration_status": "migrated",
+      "notes": "persistence_policy=encounter_only; spell-created usable object",
+      "provided_by_ref": null,
+      "provisional_ref": {
+        "content_id": "environment.spell_object.heroes_feast",
+        "content_version": 1,
+        "definition_contract_hash": "d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4",
+        "definition_kind": "environment_object",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "replacement_ref": {
+        "content_id": "environment.spell_object.heroes_feast",
+        "content_version": 1,
+        "definition_contract_hash": "d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4",
+        "definition_kind": "environment_object",
+        "pack_id": "content.srd_5_1_cc"
+      }
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.assassin_dagger_unseen_strike",
+      "legacy_locators": [
+        "dnd/items/weapons.py:UnseenStrikeDagger[equip_hook]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "attack rider handler installed/removed with equip lifecycle",
+      "provided_by_ref": {
+        "content_id": "weapon.assassin_dagger",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.arcane_staff_spell_attack",
+      "legacy_locators": [
+        "dnd/items/weapons.py:ArcaneStaff[equip_hook]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "spell attack modifier installed/removed with equip lifecycle",
+      "provided_by_ref": {
+        "content_id": "weapon.arcane_staff",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.acid_flask_spell",
+      "legacy_locators": [
+        "dnd/items/test_items.py:AcidFlaskSpell"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "private Dex-save 2d4 acid spell behavior",
+      "provided_by_ref": {
+        "content_id": "consumable.acid_flask",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.healing_potion_drink",
+      "legacy_locators": [
+        "dnd/items/test_items.py:DrinkPotionAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "bonus-action heal and charge/stack consumption",
+      "provided_by_ref": {
+        "content_id": "consumable.healing_potion",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.weapon_coat_apply_fire",
+      "legacy_locators": [
+        "dnd/items/test_items.py:ApplyCoatAction[fire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies fire WeaponCoatCondition",
+      "provided_by_ref": {
+        "content_id": "consumable.weapon_coat.fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.weapon_coat_apply_lightning",
+      "legacy_locators": [
+        "dnd/items/test_items.py:ApplyCoatAction[lightning]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies lightning WeaponCoatCondition",
+      "provided_by_ref": {
+        "content_id": "consumable.weapon_coat.lightning",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.weapon_coat_apply_concentration",
+      "legacy_locators": [
+        "dnd/items/test_items.py:ApplyCoatAction[concentration_fire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies coat plus Concentrating lifecycle",
+      "provided_by_ref": {
+        "content_id": "consumable.weapon_coat.concentration_fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.weapon_coat_apply_timed",
+      "legacy_locators": [
+        "dnd/items/test_items.py:ApplyCoatAction[timed_fire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies duration-bound coat",
+      "provided_by_ref": {
+        "content_id": "consumable.weapon_coat.timed_fire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.arcane_device_activate",
+      "legacy_locators": [
+        "dnd/items/test_items.py:ActivateDeviceAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "Arcana-gated activation and heal",
+      "provided_by_ref": {
+        "content_id": "environment.arcane_device",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.greater_invisibility_potion_drink",
+      "legacy_locators": [
+        "dnd/items/test_items.py:DrinkGreaterInvisibilityPotionAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies GreaterInvisibilityEffect",
+      "provided_by_ref": {
+        "content_id": "consumable.potion_greater_invisibility",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.torch_state_actions",
+      "legacy_locators": [
+        "dnd/items/test_items.py:Torch[get_use_actions]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "state-derived ignite/extinguish and exposed-flame behavior",
+      "provided_by_ref": {
+        "content_id": "gear.torch",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.wall_torch_state_actions",
+      "legacy_locators": [
+        "dnd/items/test_items.py:WallTorch[get_use_actions]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "state-derived ignite/extinguish light behavior",
+      "provided_by_ref": {
+        "content_id": "environment.wall_torch",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.haste_potion_drink",
+      "legacy_locators": [
+        "dnd/items/test_items.py:DrinkHastePotionAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies HasteEffect and restricted-action closure",
+      "provided_by_ref": {
+        "content_id": "consumable.potion_haste",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.directional_door_state_actions",
+      "legacy_locators": [
+        "dnd/items/environment.py:DirectionalDoor[get_use_actions]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "state-derived open/close actions",
+      "provided_by_ref": {
+        "content_id": "environment.directional_door",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.test_door_a_state_actions",
+      "legacy_locators": [
+        "dnd/items/test_items.py:TestDoorA[get_use_actions]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "open/close fixture-compatible environment actions",
+      "provided_by_ref": {
+        "content_id": "environment.door",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.test_door_b_interact",
+      "legacy_locators": [
+        "dnd/items/test_items.py:TestDoorB[get_use_actions]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "fixture-only interaction action",
+      "provided_by_ref": {
+        "content_id": "environment.test_door_b",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.fixture_internal"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.trap_lever_pull",
+      "legacy_locators": [
+        "dnd/items/test_items.py:PullLeverAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "removes linked spatial handler and trap tile conditions",
+      "provided_by_ref": {
+        "content_id": "environment.trap_lever",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.storage_chest_loot_all",
+      "legacy_locators": [
+        "dnd/items/test_items.py:LootAllAction"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "transfers nested chest inventory",
+      "provided_by_ref": {
+        "content_id": "environment.storage_chest",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.campfire_rest",
+      "legacy_locators": [
+        "server/mapeditor_support.py:RestAction[campfire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "campfire-owned rest action",
+      "provided_by_ref": {
+        "content_id": "environment.campfire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.campfire_cook",
+      "legacy_locators": [
+        "server/mapeditor_support.py:CookAction[campfire]"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "campfire-owned cook action",
+      "provided_by_ref": {
+        "content_id": "environment.campfire",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "environment_object",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.item_owned.field_kit_deploy",
+      "legacy_locators": [
+        "dnd/extensions/field_focus.py:DeployFieldFocus"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "applies FieldFocus movement and AC modifiers",
+      "provided_by_ref": {
+        "content_id": "gear.field_kit",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "condition",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.spell_object.guardian_warded",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:GuardianWarded"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "Guardian aura target condition",
+      "provided_by_ref": {
+        "content_id": "spell.guardian_of_faith",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "action",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.spell_object.heroes_feast_eat",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:EatFromFeast"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "feast-owned consume action",
+      "provided_by_ref": {
+        "content_id": "spell.heroes_feast",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    },
+    {
+      "classification": "root_owned_behavior",
+      "definition_kind": "condition",
+      "deletion_rationale": "",
+      "dependency_refs": [],
+      "legacy_id": "legacy.behavior.spell_object.heroes_feast_buff",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:HeroesFeastBuff"
+      ],
+      "measuring_test_nodeids": [
+        "tests/manual/test_156_legacy_item_migration_ledger.py::test_important_recipe_variants_and_behavior_providers_are_frozen"
+      ],
+      "migration_status": "inventoried",
+      "notes": "feast-owned resulting buff",
+      "provided_by_ref": {
+        "content_id": "spell.heroes_feast",
+        "content_version": 1,
+        "definition_contract_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "provisional_ref": null,
+      "replacement_ref": null
+    }
+  ],
+  "schema_version": 1
+}

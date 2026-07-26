@@ -18,6 +18,24 @@ from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Dama
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import RestrictedActionKind
+from dnd.core.content.descriptors import (
+    ContentDescriptorSpec,
+    ContentOrdering,
+    ContentPresentation,
+    ContentVisibility,
+)
+from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.content.provenance import (
+    ContentFidelity,
+    ContentProvenance,
+    ContentProvenanceRelation,
+    ContentReviewStatus,
+)
+from dnd.core.content.registration import (
+    behavior_identity,
+    get_content_declaration,
+)
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.life_types import LifeState
 from dnd.core.action_execution import (
     MovementContinuationDecision,
@@ -48,12 +66,59 @@ from dnd.core.combat_log import (
     md_color
 )
 from pydantic import BaseModel, Field, model_validator
-from typing import Any, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
+
+
+_CoreActionDefinition = TypeVar("_CoreActionDefinition")
+
+
+def _core_action_identity(
+    *,
+    content_id: str,
+    display_name: str,
+    description: str,
+    source_anchor: str,
+    sort_order: int,
+) -> Callable[[_CoreActionDefinition], _CoreActionDefinition]:
+    """Declare one independently provided standard core action."""
+    return behavior_identity(
+        definition_kind=ContentDefinitionKind.ACTION,
+        runtime_behavior_kind=RuntimeBehaviorKind.ACTION,
+        pack_id="core.rules",
+        content_id=content_id,
+        version=1,
+        descriptor=ContentDescriptorSpec(
+            display_name=display_name,
+            description=description,
+            tags=("action", "core", "srd"),
+            visibility=ContentVisibility.PUBLIC,
+            presentation=ContentPresentation(
+                icon_key=content_id,
+                visual_variant_key=content_id.removeprefix("action."),
+                ui_group="actions.standard",
+            ),
+            ordering=ContentOrdering(
+                sort_group="actions.standard",
+                sort_order=sort_order,
+            ),
+        ),
+        provenance=ContentProvenance(
+            primary_source_id="wotc.srd_5_1_cc",
+            source_anchor=source_anchor,
+            relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+            fidelity=ContentFidelity.PARTIAL,
+            review_status=ContentReviewStatus.REVIEWED,
+            notes=(
+                "Playable core action identity; implementation-specific "
+                "targeting and presentation remain engine adaptations."
+            ),
+        ),
+    )
 
 
 def entity_resource_cost_evaluator(entity_uuid: UUID, resource_name: str, resource_cost: int) -> bool:
@@ -159,6 +224,27 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
 
+def _consume_entity_action_economy_costs(
+    completion_event: PolymorphicActionEvent,
+    source_entity_uuid: UUID,
+    *,
+    excluded_cost_types: AbstractSet[CostType] = frozenset(),
+) -> PolymorphicActionEvent:
+    """Consume serialized costs without advancing the event lifecycle."""
+    entity = Entity.get(source_entity_uuid)
+    if entity is None or not isinstance(entity, Entity):
+        return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
+    for cost in completion_event.costs:
+        if cost.cost_type not in excluded_cost_types and cost.cost > 0:
+            entity.action_economy.consume(cost.cost_type, cost.cost)
+        if cost.resource_cost > 0 and cost.resource_name:
+            if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
+                return completion_event.cancel(
+                    status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
+                )
+    return completion_event
+
+
 def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> PolymorphicActionEvent:
     """Consume turn-based and named-resource costs after action completion.
 
@@ -170,19 +256,12 @@ def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent,
         Completion event advanced after costs, or canceled on failed resource
         consumption.
     """
-    entity = Entity.get(source_entity_uuid)
-    if entity is None or not isinstance(entity, Entity):
-        return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
-    for cost in completion_event.costs:
-        if cost.cost > 0:
-            entity.action_economy.consume(cost.cost_type, cost.cost)
-        if cost.resource_cost > 0 and cost.resource_name:
-            if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
-                return completion_event.cancel(
-                    status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
-                )
-    if completion_event.canceled:
-        return completion_event
+    cost_event = _consume_entity_action_economy_costs(
+        completion_event,
+        source_entity_uuid,
+    )
+    if cost_event.canceled:
+        return cost_event
     return completion_event.phase_to(
         new_phase=EventPhase.COMPLETION,
         status_message=f"Successfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
@@ -282,6 +361,13 @@ class MovementEvent(ActionEvent):
         )
 
 
+@_core_action_identity(
+    content_id="action.move",
+    display_name="Move",
+    description="Move along a traversable battlefield path.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Movement and Position",
+    sort_order=10,
+)
 class Move(BaseAction):
     """Path-based movement action that walks cell by cell.
 
@@ -816,20 +902,13 @@ class Move(BaseAction):
         Skip movement cost here since cell-by-cell movement already deducts
         movement per step. Only apply non-movement costs (if any).
         """
-        entity = Entity.get(self.source_entity_uuid)
-        if entity is None or not isinstance(entity, Entity):
-            return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
-
-        for cost in completion_event.costs:
-            if cost.cost_type == "movement":
-                continue
-            if cost.cost > 0:
-                entity.action_economy.consume(cost.cost_type, cost.cost)
-            if cost.resource_cost > 0 and cost.resource_name:
-                if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
-                    return completion_event.cancel(
-                        status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
-                    )
+        cost_event = _consume_entity_action_economy_costs(
+            completion_event,
+            self.source_entity_uuid,
+            excluded_cost_types=frozenset({"movement"}),
+        )
+        if cost_event.canceled:
+            return cost_event
 
         return completion_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -842,6 +921,13 @@ class Move(BaseAction):
         return cast(MovementEvent, result) if result else None
 
 
+@_core_action_identity(
+    content_id="action.swim",
+    display_name="Swim",
+    description="Move through water using swimming movement.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Adventuring: Special Types of Movement — Swimming",
+    sort_order=20,
+)
 class Swim(Move):
     """Path-based swimming action that uses swimming terrain costs."""
 
@@ -1137,6 +1223,13 @@ def create_weapon_attack_declaration_event(
     )
 
 
+@_core_action_identity(
+    content_id="action.attack",
+    display_name="Attack",
+    description="Make a weapon attack against a creature.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Attack",
+    sort_order=30,
+)
 class Attack(BaseAction):
     """Weapon attack action.
 
@@ -1616,6 +1709,13 @@ class Attack(BaseAction):
         return cast(AttackEvent, result) if result else None
 
 
+@_core_action_identity(
+    content_id="action.dash",
+    display_name="Dash",
+    description="Gain additional movement equal to current speed.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Dash",
+    sort_order=40,
+)
 class Dash(BaseAction):
     """Dash action that grants extra movement for the current turn.
 
@@ -1687,6 +1787,13 @@ class Dash(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
+@_core_action_identity(
+    content_id="action.dodge",
+    display_name="Dodge",
+    description="Focus on defense until the start of the next turn.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Dodge",
+    sort_order=50,
+)
 class Dodge(BaseAction):
     """Dodge action that applies the Dodging condition for one round.
 
@@ -1762,6 +1869,13 @@ class Dodge(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
+@_core_action_identity(
+    content_id="action.disengage",
+    display_name="Disengage",
+    description="Move without provoking opportunity attacks for the turn.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Disengage",
+    sort_order=60,
+)
 class Disengage(BaseAction):
     """Disengage action that suppresses opportunity attacks for one round.
 
@@ -1832,6 +1946,13 @@ class Disengage(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
+@_core_action_identity(
+    content_id="action.drop_concentration",
+    display_name="Drop Concentration",
+    description="Voluntarily end concentration on an active spell.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Spellcasting: Concentration",
+    sort_order=70,
+)
 class DropConcentration(BaseAction):
     """Drop concentration on a spell voluntarily.
 
@@ -1914,6 +2035,13 @@ class DropConcentration(BaseAction):
         return completion_event
 
 
+@_core_action_identity(
+    content_id="action.shake_awake",
+    display_name="Shake Awake",
+    description="Use an action to wake an adjacent magically sleeping creature.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Spell Descriptions: Sleep",
+    sort_order=80,
+)
 class ShakeAwake(BaseAction):
     """Wake a magically sleeping creature by spending an action."""
     name: str = Field(default="Shake Awake", description="Action name for waking a sleeping creature.")
@@ -1991,6 +2119,13 @@ class ShakeAwake(BaseAction):
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
+@_core_action_identity(
+    content_id="action.hide",
+    display_name="Hide",
+    description="Attempt a Dexterity (Stealth) check to become hidden.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Hide",
+    sort_order=90,
+)
 class Hide(BaseAction):
     """Take the Hide action - roll Stealth to become Hidden.
 
@@ -2304,6 +2439,13 @@ class JumpEvent(ActionEvent):
         )
 
 
+@_core_action_identity(
+    content_id="action.jump",
+    display_name="Jump",
+    description="Jump to a visible landing position.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Adventuring: Special Types of Movement — Jumping",
+    sort_order=100,
+)
 class Jump(BaseAction):
     """Jump to a visible position using bonus action and movement.
 
@@ -2337,6 +2479,23 @@ class Jump(BaseAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs required by Jump.")
+
+    def get_target_dynamic_costs(self) -> List[Cost]:
+        """Declare the selected landing distance as a typed movement cost."""
+        if self.end_position is None:
+            return []
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return []
+        distance = entity.senses.get_feet_distance(self.end_position)
+        return [
+            Cost(
+                name="Jump Movement Cost",
+                cost_type="movement",
+                cost=int(distance),
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ]
 
     def get_range(self) -> Optional[Range]:
         """Calculate jump range: (15 + STR_bonus + additive) * multiplier.
@@ -2404,52 +2563,6 @@ class Jump(BaseAction):
 
         return valid
 
-    def set_target_position(self, position: Tuple[int, int]) -> None:
-        """Set target position for jump."""
-        super().set_target_position(position)
-        self._setup_movement_cost()
-
-    def _setup_movement_cost(self) -> None:
-        """Set up movement cost based on jump distance."""
-        if self.end_position is None:
-            return
-
-        entity = Entity.get(self.source_entity_uuid)
-        if entity is None:
-            return
-
-        distance = entity.senses.get_feet_distance(self.end_position)
-
-        self.costs = [c for c in self.costs if c.cost_type != "movement"]
-
-        self.costs.append(Cost(
-            name="Jump Movement Cost",
-            cost_type="movement",
-            cost=int(distance),
-            evaluator=entity_action_economy_cost_evaluator
-        ))
-
-    def instantiate(self, **overrides) -> "Jump":
-        """Create an executable Jump instance from this template.
-
-        Uses model_copy() to preserve object types. Costs are reset and
-        movement cost is recalculated based on new end_position.
-        """
-        if not self.template:
-            raise ValueError("Can only instantiate from a template")
-
-        update_dict: dict = {
-            "uuid": uuid4(),
-            "template": False,
-            "use_register": False,
-            "costs": [Cost(name="Jump Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
-        }
-        update_dict.update(overrides)
-
-        instance = self.model_copy(deep=True, update=update_dict)
-        instance._setup_movement_cost()
-        return instance
-
     def get_disclosed_movement_path(
         self,
         start_position: Tuple[int, int],
@@ -2494,8 +2607,6 @@ class Jump(BaseAction):
         end_position: Tuple[int, int] = self.end_position
         distance = source_entity.senses.get_feet_distance(end_position)
 
-        self._setup_movement_cost()
-
         line_path = self.get_disclosed_movement_path(
             source_entity.position,
             end_position,
@@ -2534,10 +2645,6 @@ class Jump(BaseAction):
         distance = source_entity.senses.get_feet_distance(end_pos)
         if distance > max_range:
             return declaration_event.cancel(status_message=f"Position {end_pos} out of jump range ({distance}ft > {max_range}ft)")
-
-        movement_available = source_entity.action_economy.movement.normalized_score
-        if distance > movement_available:
-            return declaration_event.cancel(status_message=f"Not enough movement ({distance}ft > {movement_available}ft)")
 
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
@@ -2653,19 +2760,11 @@ class Jump(BaseAction):
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action). Movement consumed per-step in _apply()."""
-        entity = Entity.get(self.source_entity_uuid)
-        if entity is None or not isinstance(entity, Entity):
-            return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
-
-        if not entity.can_take_actions():
-            return completion_event
-
-        for cost in completion_event.costs:
-            if cost.cost_type == "movement":
-                continue
-            if cost.cost > 0:
-                entity.action_economy.consume(cost.cost_type, cost.cost)
-        return completion_event
+        return _consume_entity_action_economy_costs(
+            completion_event,
+            self.source_entity_uuid,
+            excluded_cost_types=frozenset({"movement"}),
+        )
 
 
 POUNDS_PER_KILOGRAM = 2.2046226218487757
@@ -2770,6 +2869,13 @@ class ShoveEvent(ActionEvent):
         )
 
 
+@_core_action_identity(
+    content_id="action.shove",
+    display_name="Shove",
+    description="Contest an adjacent creature to push it or knock it prone.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Making an Attack — Shoving a Creature",
+    sort_order=110,
+)
 class Shove(BaseAction):
     """BG3-style shove action that pushes or knocks prone.
 
@@ -2933,30 +3039,6 @@ class Shove(BaseAction):
             path.append(current)
 
         return path
-
-    def pre_validate(self) -> bool:
-        """Run cheap validation for action discovery."""
-        if not super().pre_validate():
-            return False
-
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source or not target:
-            return False
-
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > 5:
-            return False
-
-        max_weight = self.get_max_shove_weight(source)
-        if target.weight > max_weight:
-            return False
-
-        if target.uuid not in source.senses.entities:
-            return False
-
-        return True
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ShoveEvent]:
         """Create declaration event for shove."""
@@ -4083,6 +4165,13 @@ class SpellAction(BaseAction):
         return 1
 
 
+@_core_action_identity(
+    content_id="action.pick_up",
+    display_name="Pick Up",
+    description="Pick up an adjacent portable object.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Other Activity on Your Turn",
+    sort_order=120,
+)
 class PickUp(BaseAction):
     """Pick up an item from the ground. Free action (no cost).
 
@@ -4140,6 +4229,13 @@ class PickUp(BaseAction):
         )
 
 
+@_core_action_identity(
+    content_id="action.attack_object",
+    display_name="Attack Object",
+    description="Make a melee weapon attack against a breakable object.",
+    source_anchor="SRD 5.1 (CC-BY-4.0), Combat: Actions in Combat — Attack",
+    sort_order=130,
+)
 class AttackObject(BaseAction):
     """Attack a breakable object. Costs 1 action. Auto-hit, rolls weapon damage.
 
@@ -4289,3 +4385,23 @@ class Drop(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Dropped {dropped.name}"
         )
+
+
+CORE_STANDARD_ACTION_DECLARATIONS = tuple(
+    get_content_declaration(action_type)
+    for action_type in (
+        Move,
+        Swim,
+        Attack,
+        Dash,
+        Dodge,
+        Disengage,
+        DropConcentration,
+        ShakeAwake,
+        Hide,
+        Jump,
+        Shove,
+        PickUp,
+        AttackObject,
+    )
+)

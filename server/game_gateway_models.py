@@ -82,10 +82,13 @@ class PlayerProfileResponse(GatewayModel):
 
 
 class CreateCharacterRequest(GatewayModel):
-    """Create one persistent character from a supported preset."""
+    """Create one persistent character from an approved premade template."""
 
     display_name: str = Field(min_length=1, max_length=80, description="Character name.")
-    preset_configuration_id: str = Field(min_length=1, description="Supported hero preset identifier.")
+    premade_id: str = Field(
+        min_length=1,
+        description="Approved premade template identifier resolved by the server.",
+    )
 
 
 class GuestPrincipalRequest(GatewayModel):

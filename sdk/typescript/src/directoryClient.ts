@@ -1,12 +1,15 @@
 import type {
   AttachHostedGameRequest,
   AttachHostedGameResponse,
+  CharacterDefinitionRecord,
   CharacterRecord,
   CreateCharacterRequest,
   CreateAgentGrantRequest,
   CreateAgentGrantResponse,
   CreateHostedGameRequest,
   CreateHostedGameResponse,
+  ContentCatalogResponse,
+  ContentManifestResponse,
   FinalSummaryRecord,
   GameRecord,
   GuestPrincipalRequest,
@@ -74,6 +77,22 @@ export class GameDirectoryClient {
     this.fetchImplementation = (options.fetchImplementation ?? globalThis.fetch).bind(globalThis);
   }
 
+  async getContentManifest(signal?: AbortSignal): Promise<ContentManifestResponse> {
+    return this.requestModel(
+      "ContentManifestResponse",
+      "/content/manifest",
+      requestOptions("GET", signal),
+    );
+  }
+
+  async getContentCatalog(signal?: AbortSignal): Promise<ContentCatalogResponse> {
+    return this.requestModel(
+      "ContentCatalogResponse",
+      "/content/catalog",
+      requestOptions("GET", signal),
+    );
+  }
+
   async createGuest(
     request: GuestPrincipalRequest,
     signal?: AbortSignal,
@@ -116,6 +135,18 @@ export class GameDirectoryClient {
       "CharacterRecord",
       "/directory/characters",
       requestOptions("POST", signal, JSON.stringify(request), principalHeaders(credential)),
+    );
+  }
+
+  async getCharacterDefinition(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterDefinitionRecord> {
+    return this.requestModel(
+      "CharacterDefinitionRecord",
+      `/directory/characters/${encodeURIComponent(characterId)}/definition`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
     );
   }
 

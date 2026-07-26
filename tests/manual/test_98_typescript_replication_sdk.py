@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 from devtools.generate_typescript_sdk import build_sdk_manifest, render_typescript
+from dnd.core.content.descriptors import EquipmentSpritePresentation
+from dnd.core.equipment_types import EquipmentRenderLayer
 from dnd.core.events import EventQueue, SensoryUpdateEvent
 from dnd.core.combat_log import AttackLogData, DiceRollDisplay
 from fastapi.routing import APIRoute
@@ -16,6 +18,7 @@ from server.api_models import (
     GameCreationStartResponse,
     ToggleHandlerResponse,
 )
+from server.content_catalog import ContentCatalogResponse
 from server.world_contracts import APIEntityVisibility
 from server.event_server import app
 from server.objective_replay import ObjectiveReplayBundle
@@ -212,6 +215,59 @@ def test_sdk_descriptors_preserve_player_field_constraints() -> None:
             {"kind": "integer", "minimum": 0},
             {"kind": "null"},
         ],
+    }
+
+
+def test_sdk_preserves_exact_compound_equipment_presentation_contract() -> None:
+    """Catalog rows distinguish loadout ownership from rendered actor layers."""
+    manifest = build_sdk_manifest()
+    models = manifest["models"]
+    row_path = (
+        f"{EquipmentSpritePresentation.__module__}."
+        f"{EquipmentSpritePresentation.__qualname__}"
+    )
+    fields = models[row_path]["fields"]
+
+    assert set(fields) == {
+        "equipment_slot",
+        "render_layer",
+        "sprite_key",
+        "tint_rgb",
+    }
+    assert fields["equipment_slot"] == {
+        "kind": "enum",
+        "ref": "dnd.core.equipment_types.VisualLoadoutSlot",
+    }
+    assert fields["render_layer"] == {
+        "kind": "enum",
+        "ref": "dnd.core.equipment_types.EquipmentRenderLayer",
+    }
+    assert fields["tint_rgb"] == {
+        "kind": "integer",
+        "minimum": 0,
+        "maximum": 0xFFFFFF,
+    }
+    enum_path = (
+        f"{EquipmentRenderLayer.__module__}."
+        f"{EquipmentRenderLayer.__qualname__}"
+    )
+    assert manifest["enums"][enum_path]["values"] == [
+        "belt",
+        "chest",
+        "hands",
+        "helmet",
+        "legs",
+        "offhand",
+        "shoes",
+        "weapon",
+    ]
+    catalog_path = (
+        f"{ContentCatalogResponse.__module__}."
+        f"{ContentCatalogResponse.__qualname__}"
+    )
+    assert models[catalog_path]["fields"]["schema_version"] == {
+        "kind": "union",
+        "items": [{"kind": "literal", "value": 5}],
     }
 
 

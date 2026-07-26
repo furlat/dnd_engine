@@ -21,6 +21,8 @@ from dnd.core.action_types import ActionPresentationKind
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import position_evidence_key
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
@@ -43,6 +45,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import (
     EquippedVisualPolicy,
+    ItemContentRefSnapshot,
     ItemLocation,
     ItemPresentationKind,
     ItemPresentationState,
@@ -57,6 +60,7 @@ from dnd.core.presentation_geometry import (
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
+from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.utils import force_attack_miss, reset_combat_state
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.mapper import (
@@ -68,8 +72,12 @@ from server.player_replication.mapper import (
 from server.player_replication_contract import (
     ActiveWeaponSet,
     AttackPresentationCue,
+    BehaviorPresentationRole,
     ConeAreaGeometry,
     CubeAreaGeometry,
+    CounterspellAutomaticSuccess,
+    CounterspellCheckFailure,
+    CounterspellPresentationCue,
     DamagePresentationCue,
     DoorPresentationCue,
     DoorStatePatch,
@@ -90,16 +98,49 @@ from server.player_replication_contract import (
     PresentationDamageType,
     PresentationProjectile,
     ShovePresentationCue,
+    RootedBehaviorPresentationAttribution,
+    SourceItemPresentationAttribution,
     SpellDelivery,
     SpellPresentationCue,
     SubjectivePerspective,
     SubjectiveReplicationFrame,
     VisualLoadoutReplacePatch,
+    UnrootedBehaviorPresentationAttribution,
 )
 
 
 MAPPER = CanonicalSubjectivePresentationMapper()
 _EventT = TypeVar("_EventT", bound=Event)
+
+
+def _content_ref(
+    *,
+    kind: ContentDefinitionKind,
+    content_id: str,
+    digest_char: str,
+) -> ContentRef:
+    return ContentRef(
+        pack_id="fixture.presentation_mapper",
+        definition_kind=kind,
+        content_id=content_id,
+        content_version=1,
+        definition_contract_hash=digest_char * 64,
+    )
+
+
+def _binding(
+    *,
+    definition_ref: ContentRef,
+    owner_uuid: UUID,
+    provided_by_ref: ContentRef | None = None,
+    origin_root_ref: ContentRef | None = None,
+) -> BehaviorBinding:
+    return BehaviorBinding(
+        definition_ref=definition_ref,
+        provided_by_ref=provided_by_ref or definition_ref,
+        origin_root_ref=origin_root_ref,
+        runtime_owner_uuid=owner_uuid,
+    )
 
 
 def _perspective(
@@ -545,9 +586,18 @@ def test_missed_attack_keeps_ordered_element_categories_without_damage_children(
     """Miss VFX dispatch uses attack-owned immutable damage types."""
     actor = uuid4()
     target = uuid4()
+    action_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.longbow_attack",
+        digest_char="a",
+    )
     event = AttackEvent(
         source_entity_uuid=actor,
         target_entity_uuid=target,
+        behavior_binding=_binding(
+            definition_ref=action_ref,
+            owner_uuid=actor,
+        ),
         weapon_slot=WeaponSlot.RANGED_MAIN,
         attack_outcome=AttackOutcome.MISS,
         damage_types=[DamageType.FIRE, DamageType.PIERCING],
@@ -569,6 +619,13 @@ def test_missed_attack_keeps_ordered_element_categories_without_damage_children(
         PresentationDamageType.PIERCING,
     )
     assert cue.impact_effect_presentation_ids == ()
+    assert cue.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=action_ref,
+            provided_by_ref=action_ref,
+        ),
+    )
 
 
 def test_duplicate_spell_targets_keep_distinct_projection_applications() -> None:
@@ -655,8 +712,21 @@ def test_drink_uses_frozen_item_state_after_registry_loss() -> None:
     actor = uuid4()
     item_uuid = uuid4()
     perspective = _perspective(actor)
+    item_ref = _content_ref(
+        kind=ContentDefinitionKind.ITEM,
+        content_id="item.healing_potion.crimson",
+        digest_char="b",
+    )
+    action_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.drink_potion",
+        digest_char="c",
+    )
     snapshot = ItemPresentationState(
         item_uuid=item_uuid,
+        content_ref=ItemContentRefSnapshot.model_validate(
+            item_ref.model_dump(mode="python")
+        ),
         semantic_key="healing_potion",
         name="Potion of Healing",
         item_kind=ItemPresentationKind.USABLE,
@@ -676,6 +746,12 @@ def test_drink_uses_frozen_item_state_after_registry_loss() -> None:
         target_entity_uuid=actor,
         source_item_uuid=item_uuid,
         source_item_presentation=snapshot,
+        behavior_binding=_binding(
+            definition_ref=action_ref,
+            provided_by_ref=item_ref,
+            origin_root_ref=item_ref,
+            owner_uuid=item_uuid,
+        ),
         presentation_kind=ActionPresentationKind.DRINK,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -701,7 +777,211 @@ def test_drink_uses_frozen_item_state_after_registry_loss() -> None:
     assert item.item_kind is ItemPresentationKind.USABLE
     assert isinstance(frame.presentation[1], HealPresentationCue)
     assert item.effect_presentation_ids == (frame.presentation[1].presentation_id,)
+    assert item.content_attributions == (
+        RootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=action_ref,
+            provided_by_ref=item_ref,
+            origin_root_ref=item_ref,
+        ),
+        SourceItemPresentationAttribution(definition_ref=item_ref),
+    )
     _assert_closed_graph(frame)
+
+
+def test_condition_cue_projects_exact_bound_definition_without_name_inference() -> None:
+    """Condition display labels remain separate from authenticated identity."""
+    actor = uuid4()
+    target = uuid4()
+    condition_ref = _content_ref(
+        kind=ContentDefinitionKind.CONDITION,
+        content_id="condition.prone",
+        digest_char="d",
+    )
+    condition = Prone(
+        source_entity_uuid=actor,
+        target_entity_uuid=target,
+        behavior_binding=_binding(
+            definition_ref=condition_ref,
+            owner_uuid=target,
+        ),
+        use_register=False,
+    )
+    event = ConditionApplicationEvent(
+        source_entity_uuid=actor,
+        target_entity_uuid=target,
+        condition=condition,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    event = _visible(event, actor, identified=(target,))
+
+    frame = MAPPER.project_frame(
+        _batch(event),
+        _context(_perspective(actor)),
+    )
+
+    cue = frame.presentation[0]
+    assert cue.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=condition_ref,
+            provided_by_ref=condition_ref,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("automatic", "succeeded", "incoming_level", "slot_level", "total", "dc", "resolution_type"),
+    (
+        (True, True, 3, 3, None, None, CounterspellAutomaticSuccess),
+        (False, False, 5, 3, 14, 15, CounterspellCheckFailure),
+    ),
+)
+def test_counterspell_maps_closed_reaction_and_trigger_identity(
+    automatic: bool,
+    succeeded: bool,
+    incoming_level: int,
+    slot_level: int,
+    total: int | None,
+    dc: int | None,
+    resolution_type: type[CounterspellAutomaticSuccess] | type[CounterspellCheckFailure],
+) -> None:
+    """Counterspell survives without exposing an engine event or name-derived key."""
+    caster = uuid4()
+    reactor = uuid4()
+    spell_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.fireball",
+        digest_char="e",
+    )
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.spell.counterspell",
+        digest_char="f",
+    )
+    incoming = SpellEvent(
+        name="Display Name May Change",
+        spell_id="fireball",
+        source_entity_uuid=caster,
+        target_entity_uuid=reactor,
+        spell_school="evocation",
+        spell_level=incoming_level,
+        cast_at_level=incoming_level,
+        range_type="ranged",
+        behavior_binding=_binding(
+            definition_ref=spell_ref,
+            owner_uuid=caster,
+        ),
+        phase=EventPhase.EXECUTION,
+        use_register=False,
+    )
+    reaction = CounterspellReactionEvent(
+        source_entity_uuid=reactor,
+        target_entity_uuid=caster,
+        triggered_event_uuid=incoming.uuid,
+        triggered_lineage_uuid=incoming.lineage_uuid,
+        incoming_spell_name=incoming.name,
+        incoming_spell_level=incoming_level,
+        counterspell_slot_level=slot_level,
+        automatic=automatic,
+        check_total=total,
+        check_dc=dc,
+        succeeded=succeeded,
+        behavior_binding=_binding(
+            definition_ref=reaction_ref,
+            owner_uuid=reactor,
+        ),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = _visible(
+        reaction,
+        caster,
+        identified=(caster, reactor),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(incoming, reaction),
+        _context(_perspective(caster)),
+    )
+
+    assert len(frame.presentation) == 1
+    cue = frame.presentation[0]
+    assert isinstance(cue, CounterspellPresentationCue)
+    assert cue.reactor_uuid == str(reactor)
+    assert cue.incoming_caster_uuid == str(caster)
+    assert isinstance(cue.resolution, resolution_type)
+    assert cue.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=reaction_ref,
+            provided_by_ref=reaction_ref,
+        ),
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.TRIGGER_BEHAVIOR,
+            definition_ref=spell_ref,
+            provided_by_ref=spell_ref,
+        ),
+    )
+    assert "event" not in cue.model_dump()
+
+
+def test_counterspell_with_hidden_reactor_fails_closed() -> None:
+    """An identified incoming caster never implies identity of the reactor."""
+    caster = uuid4()
+    reactor = uuid4()
+    spell_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.fireball",
+        digest_char="1",
+    )
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.spell.counterspell",
+        digest_char="2",
+    )
+    incoming = SpellEvent(
+        name="Fireball",
+        spell_id="fireball",
+        source_entity_uuid=caster,
+        target_entity_uuid=reactor,
+        spell_school="evocation",
+        spell_level=3,
+        cast_at_level=3,
+        range_type="ranged",
+        behavior_binding=_binding(
+            definition_ref=spell_ref,
+            owner_uuid=caster,
+        ),
+        phase=EventPhase.EXECUTION,
+        use_register=False,
+    )
+    reaction = CounterspellReactionEvent(
+        source_entity_uuid=reactor,
+        target_entity_uuid=caster,
+        triggered_event_uuid=incoming.uuid,
+        triggered_lineage_uuid=incoming.lineage_uuid,
+        incoming_spell_name=incoming.name,
+        incoming_spell_level=3,
+        counterspell_slot_level=3,
+        automatic=True,
+        succeeded=True,
+        behavior_binding=_binding(
+            definition_ref=reaction_ref,
+            owner_uuid=reactor,
+        ),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = _visible(reaction, caster, identified=(caster,))
+
+    frame = MAPPER.project_frame(
+        _batch(incoming, reaction),
+        _context(_perspective(caster)),
+    )
+
+    assert frame.presentation == ()
 
 
 def test_shove_owns_its_exact_forced_movement_child() -> None:
@@ -1250,6 +1530,11 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
     item_uuid = uuid4()
     door_uuid = uuid4()
     perspective = _perspective(actor)
+    prone_ref = _content_ref(
+        kind=ContentDefinitionKind.CONDITION,
+        content_id="condition.prone",
+        digest_char="3",
+    )
     snapshot = ItemPresentationState(
         item_uuid=item_uuid,
         semantic_key="test_sword",
@@ -1309,6 +1594,10 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
         condition=Prone(
             source_entity_uuid=actor,
             target_entity_uuid=target,
+            behavior_binding=_binding(
+                definition_ref=prone_ref,
+                owner_uuid=target,
+            ),
             use_register=False,
         ),
         phase=EventPhase.COMPLETION,
@@ -1351,7 +1640,7 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
     assert terminal.terminal_barrier is True
     assert terminal.projected_combatant_uuids == (str(actor), str(target))
     condition_cue = next(cue for cue in frame.presentation if cue.kind == "condition")
-    assert condition_cue.condition_semantic_key == "dnd.conditions.Prone"
+    assert condition_cue.condition_semantic_key == prone_ref.identity_key
     _assert_closed_graph(frame)
 
 

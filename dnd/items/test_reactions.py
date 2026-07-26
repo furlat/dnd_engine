@@ -16,6 +16,7 @@ from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
     BaseCost,
+    PositionDiscoveryContract,
     TargetType,
     Cost,
 )
@@ -26,6 +27,8 @@ from dnd.core.events import (
     EventPhase,
     EventType,
     EventHandler,
+    Range,
+    RangeType,
     Trigger,
     StepMovementEvent,
 )
@@ -255,6 +258,62 @@ class PrepareIntercept(BaseAction):
         ],
         description="Action economy costs paid when preparing an intercept.",
     )
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=lambda: PositionDiscoveryContract(
+            requires_subjective_walkable=True,
+            requires_subjective_unoccupied=True,
+            requires_axis_or_diagonal_alignment=True,
+            requires_subjective_traversable_path=True,
+            bounded_by_remaining_movement=True,
+            distance_is_movement_cost=True,
+        ),
+        description="Subjective destination and prepaid movement contract.",
+    )
+
+    def get_target_dynamic_costs(self) -> List[Cost]:
+        """Declare movement prepaid for the selected charge destination."""
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None or self.end_position is None:
+            return []
+        distance_cells = max(
+            abs(self.end_position[0] - entity.position[0]),
+            abs(self.end_position[1] - entity.position[1]),
+        )
+        return [
+            Cost(
+                name="Intercept Movement Cost",
+                cost_type="movement",
+                cost=distance_cells * 5,
+                evaluator=entity_action_economy_cost_evaluator,
+            )
+        ]
+
+    def get_range(self) -> Range:
+        """Expose the five-cell intercept declaration range."""
+        return Range(type=RangeType.REACH, normal=25)
+
+    def get_disclosed_movement_path(
+        self,
+        start_position: Tuple[int, int],
+        end_position: Tuple[int, int],
+    ) -> Optional[List[Tuple[int, int]]]:
+        """Return the exact axis-or-diagonal charge path."""
+        dx = end_position[0] - start_position[0]
+        dy = end_position[1] - start_position[1]
+        if dx != 0 and dy != 0 and abs(dx) != abs(dy):
+            return None
+        distance_cells = max(abs(dx), abs(dy))
+        if distance_cells == 0:
+            return None
+        step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
+        step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
+        return [
+            (
+                start_position[0] + step_x * step_index,
+                start_position[1] + step_y * step_index,
+            )
+            for step_index in range(distance_cells + 1)
+        ]
 
     def _create_declaration_event(
         self,
@@ -281,7 +340,10 @@ class PrepareIntercept(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
+            costs=[
+                BaseCost.model_validate(cost)
+                for cost in self.effective_costs
+            ],
             use_register=use_register,
             source_entity_name=source_name,
         )
@@ -318,18 +380,13 @@ class PrepareIntercept(BaseAction):
                 return declaration_event.cancel(status_message=f"Path blocked at {next_pos}")
             current = next_pos
 
-        distance_feet = distance_cells * 5
-        remaining = entity.action_economy.movement.normalized_score
-        if remaining < distance_feet:
-            return declaration_event.cancel(status_message=f"Not enough movement ({remaining}/{distance_feet}ft)")
-
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
             status_message=f"Validated {self.name}",
         )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
-        """Apply movement prepayment and install the one-round condition.
+        """Install the one-round condition before declared costs are paid.
 
         Args:
             execution_event: Validated execution event.
@@ -341,12 +398,6 @@ class PrepareIntercept(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity or not self.end_position:
             return execution_event.cancel(status_message="Entity not found")
-
-        distance_cells = max(
-            abs(self.end_position[0] - entity.position[0]),
-            abs(self.end_position[1] - entity.position[1]),
-        )
-        entity.action_economy.consume("movement", distance_cells * 5)
 
         intercepting = Intercepting(
             source_entity_uuid=self.source_entity_uuid,

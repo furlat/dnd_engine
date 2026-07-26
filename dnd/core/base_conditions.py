@@ -14,9 +14,14 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import BaseHandler, Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    RuntimeBehaviorKind,
+    bind_runtime_behavior,
+    runtime_behavior_provider,
+)
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
@@ -256,8 +261,17 @@ class BaseCondition(BaseObject):
         default=None,
         description="Stable rules-content identity; defaults to the condition class identity.",
     )
-    content_kind: ContentKind = Field(
-        default=ContentKind.CONDITION,
+    behavior_binding: Optional[BehaviorBinding] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description=(
+            "Validated runtime content binding installed once before this "
+            "condition becomes observable."
+        ),
+    )
+    content_kind: RuntimeBehaviorKind = Field(
+        default=RuntimeBehaviorKind.CONDITION,
         description="Rules-content family represented by this condition.",
     )
     effect_origin: Optional[EffectOrigin] = Field(
@@ -274,23 +288,25 @@ class BaseCondition(BaseObject):
         return f"{{cyan:{target_name}}} gains **{self.name or 'Unknown'}**"
 
     def get_semantic_key(self) -> str:
-        """Return an explicit key or the stable condition class identity."""
+        """Return authored identity, explicit legacy key, or an unbound marker."""
+        if self.behavior_binding is not None:
+            return self.behavior_binding.definition_ref.identity_key
         if self.semantic_key:
             return self.semantic_key
-        return f"{type(self).__module__}.{type(self).__name__}"
+        return f"unbound:{type(self).__module__}.{type(self).__name__}"
 
-    def get_content_kind(self) -> ContentKind:
+    def get_content_kind(self) -> RuntimeBehaviorKind:
         """Return the declared or source-domain-derived rules-content family."""
-        if self.content_kind != ContentKind.CONDITION:
+        if self.content_kind != RuntimeBehaviorKind.CONDITION:
             return self.content_kind
         module = type(self).__module__
         if module == "dnd.classes.feats":
-            return ContentKind.FEAT
+            return RuntimeBehaviorKind.FEAT
         if module.startswith("dnd.monsters"):
-            return ContentKind.TRAIT
+            return RuntimeBehaviorKind.TRAIT
         if module.startswith("dnd.classes"):
-            return ContentKind.CLASS_FEATURE
-        return ContentKind.CONDITION
+            return RuntimeBehaviorKind.CLASS_FEATURE
+        return RuntimeBehaviorKind.CONDITION
 
     condition_category: ConditionCategory = Field(
         default=ConditionCategory.CONDITION,
@@ -596,13 +612,29 @@ class BaseCondition(BaseObject):
         """
         if self.applied or self.duration.is_expired:
             return None
+        runtime_owner_uuid = (
+            self.target_entity_uuid
+            if self.target_entity_uuid is not None
+            else self.source_entity_uuid
+        )
+        bind_runtime_behavior(
+            self,
+            runtime_owner_uuid=runtime_owner_uuid,
+        )
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
 
         if declaration_event.canceled:
             return None
 
-        modifers_uuids, event_handlers_uuids, sub_conditions_uuids, spatial_handler_uuids, effect_event = self._apply(declaration_event)
+        with runtime_behavior_provider(self):
+            (
+                modifers_uuids,
+                event_handlers_uuids,
+                sub_conditions_uuids,
+                spatial_handler_uuids,
+                effect_event,
+            ) = self._apply(declaration_event)
 
         if not effect_event:
             return declaration_event.cancel(status_message=f"Condition {self.name} was not applied - _apply() returned no effect event")
@@ -613,18 +645,6 @@ class BaseCondition(BaseObject):
             self.modifers_uuids[block_uuid].append(modifiers_uuids)
 
         for event_handler_uuid in event_handlers_uuids:
-            handler = BaseObject.get(event_handler_uuid)
-            if isinstance(handler, BaseHandler):
-                if handler.content_kind == ContentKind.UNCLASSIFIED:
-                    handler.content_kind = self.get_content_kind()
-                if handler.semantic_key is None:
-                    handler_name = "_".join(
-                        part for part in "".join(
-                            character.lower() if character.isalnum() else "_"
-                            for character in handler.name
-                        ).split("_") if part
-                    )
-                    handler.semantic_key = f"{self.get_semantic_key()}.handler.{handler_name or 'effect'}"
             if event_handler_uuid not in self.event_handlers_uuids:
                 self.event_handlers_uuids.append(event_handler_uuid)
         for sub_condition_uuid in sub_conditions_uuids:

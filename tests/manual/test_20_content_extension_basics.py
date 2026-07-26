@@ -3,6 +3,9 @@
 from uuid import uuid4
 
 from dnd.actions_functional import execute_by_index, get_available_actions
+from dnd.blocks.base_item import UsableItem
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_actions import ActionEvent, TargetType
@@ -13,10 +16,11 @@ from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
+    FIELD_KIT_RECIPE,
     FieldFocus,
-    create_field_kit,
     create_field_medic,
     create_field_training_scene,
+    field_kit_recipe,
     find_action_info,
     find_item_action,
     inventory_item_named,
@@ -41,8 +45,21 @@ def reset_content_extension_state(width: int = 8, height: int = 6) -> None:
     get_map().create_rectangle(0, 0, width, height)
 
 
+def _materialize_field_kit(
+    owner_uuid,
+    *,
+    charges: int = 1,
+) -> UsableItem:
+    return materialize_item(
+        field_kit_recipe(charges=charges),
+        owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=UsableItem,
+    )
+
+
 def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
-    """The extension module exposes the content-pack condition, action, and factories."""
+    """The extension module exposes behavior and canonical recipe surfaces."""
     source_uuid = uuid4()
     condition = FieldFocus(source_entity_uuid=source_uuid, target_entity_uuid=source_uuid)
     action = DeployFieldFocus(source_entity_uuid=source_uuid)
@@ -54,7 +71,8 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
     assert action.name == "Deploy Field Focus"
     assert action.target_type == TargetType.SELF
     assert action.costs[0].cost_type == "bonus_actions"
-    assert callable(create_field_kit)
+    assert FIELD_KIT_RECIPE.ref.content_id == "gear.field_kit"
+    assert callable(field_kit_recipe)
     assert callable(create_field_medic)
     assert callable(create_field_training_scene)
 
@@ -73,8 +91,8 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
             f"field={FieldFocus.model_fields['movement_bonus'].description}"
         ),
         (
-            "factories: "
-            f"kit={'yes' if callable(create_field_kit) else 'no'}, "
+            "composition: "
+            f"kit_recipe={'yes' if callable(field_kit_recipe) else 'no'}, "
             f"medic={'yes' if callable(create_field_medic) else 'no'}, "
             f"scene={'yes' if callable(create_field_training_scene) else 'no'}"
         ),
@@ -82,7 +100,7 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
     expected_lines = [
         "module surfaces: condition=Field Focus, action=Deploy Field Focus, target=self, cost=bonus_actions",
         "condition defaults: movement=+10, armor=+1, field=Bonus feet of movement while focused.",
-        "factories: kit=yes, medic=yes, scene=yes",
+        "composition: kit_recipe=yes, medic=yes, scene=yes",
     ]
 
     print("\n".join(readout_lines))
@@ -206,7 +224,7 @@ def test_usable_item_packages_the_same_action_template(capsys) -> None:
     """A usable item can expose the custom action through discovery."""
     reset_content_extension_state()
     hero = create_goblin(name="Kit Carrier", position=(1, 1), faction="heroes")
-    kit = create_field_kit(hero.uuid)
+    kit = _materialize_field_kit(hero.uuid)
     loot_result = hero.loot_item(kit)
     assert loot_result
 
@@ -273,7 +291,7 @@ def test_floor_object_use_action_comes_from_nearby_sensed_item(capsys) -> None:
     """A floor item can expose the custom use action when the actor is nearby."""
     reset_content_extension_state()
     hero = create_goblin(name="Floor Kit User", position=(1, 1), faction="heroes")
-    kit = create_field_kit(hero.uuid)
+    kit = _materialize_field_kit(hero.uuid)
     kit.place_on_grid((1, 2))
     Entity.update_all_entities_senses(max_distance=20)
 

@@ -1,4 +1,4 @@
-from dnd.monsters.srd_roster import SRD_MONSTER_FACTORIES
+from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
 from dnd.scenarios.evaluation.combatant_catalog import (
     HERO_CONFIGURATIONS,
     MONSTER_PARTY_CONFIGURATIONS,
@@ -130,8 +130,8 @@ def test_every_srd_monster_factory_is_represented_in_a_configuration() -> None:
         if isinstance(member, SrdMonsterActorBlueprint)
     }
 
-    assert len(SRD_MONSTER_FACTORIES) == 27
-    assert configured_monster_ids == set(SRD_MONSTER_FACTORIES)
+    assert len(SRD_CREATURE_RECIPES_BY_ID) == 27
+    assert configured_monster_ids == set(SRD_CREATURE_RECIPES_BY_ID)
 
 
 def test_new_srd_parties_have_exact_members_and_rating_metadata() -> None:

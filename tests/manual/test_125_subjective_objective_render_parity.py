@@ -24,11 +24,15 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity, EntityConfig
-from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.items.test_items import create_torch
-from dnd.items.weapons import create_dagger, create_shortbow
+from dnd.items.environment import DirectionalDoor
+from dnd.items.environment_content import directional_door_recipe
+from dnd.items.torches import TORCH_RECIPE, Torch
+from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from server.objective_state import build_objective_world
 from server.player_replication.world_projection import (
@@ -66,10 +70,6 @@ _OPPOSITE_DIRECTION: dict[str, str] = {
     "east": "west",
     "west": "east",
 }
-_MELEE_SLOTS = frozenset({"weapon_melee_main", "weapon_melee_off"})
-_RANGED_SLOTS = frozenset({"weapon_ranged_main", "weapon_ranged_off"})
-
-
 def _position_key(position: tuple[int, int]) -> str:
     return f"{position[0]},{position[1]}"
 
@@ -222,28 +222,24 @@ def _expected_visual_loadout(
 ) -> dict[str, Any]:
     """Derive renderer-safe layers solely from the objective equipment DTO."""
     layers: list[dict[str, Any]] = []
-    occupied_slots: set[str] = set()
     for slot in equipment.slots:
         if slot.item is None:
             continue
-        occupied_slots.add(slot.slot)
         layers.append(
             {
                 "slot": slot.slot,
                 "item_kind": slot.item.item_type,
+                "safe_presentation_ref": (
+                    slot.item.safe_presentation_ref.model_dump(mode="json")
+                ),
                 "visual_item_name": slot.item.visual_item_name,
                 "visual_variant_id": slot.item.visual_variant_id,
                 "equipped_visual_policy": slot.item.equipped_visual_policy,
             }
         )
-    active_weapon_set = "none"
-    if occupied_slots & _MELEE_SLOTS:
-        active_weapon_set = "melee"
-    elif occupied_slots & _RANGED_SLOTS:
-        active_weapon_set = "ranged"
     return {
         "entity_uuid": entity_uuid,
-        "active_weapon_set": active_weapon_set,
+        "active_weapon_set": equipment.active_weapon_set.value,
         "layers": layers,
     }
 
@@ -392,7 +388,14 @@ def _subjective_manifest(world: SubjectiveReplicatedWorld) -> dict[str, Any]:
         ),
         "floor_objects": {
             obj.uuid: {
-                **obj.model_dump(mode="json"),
+                # APIFloorObject intentionally remains the objective debug
+                # envelope and does not own the player-safe catalog ref. That
+                # authentication boundary has its own focused regression.
+                **{
+                    key: value
+                    for key, value in obj.model_dump(mode="json").items()
+                    if key != "safe_presentation_ref"
+                },
                 "blocked_directions": tuple(
                     direction.value for direction in obj.blocked_directions
                 ),
@@ -423,9 +426,19 @@ def _equip(
     slot: WeaponSlot,
 ) -> None:
     weapon = (
-        create_shortbow(entity.uuid)
+        materialize_item(
+            SHORTBOW_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         if slot is WeaponSlot.RANGED_MAIN
-        else create_dagger(entity.uuid)
+        else materialize_item(
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
     )
     assert entity.loot_item(weapon)
     assert entity.equip_item(weapon.uuid, slot)
@@ -490,19 +503,32 @@ def test_subjective_seed_equals_objective_checkpoint_plus_censorship() -> None:
     }
     observer_b.senses.objects = {}
 
-    visible_door = DirectionalDoor(
-        source_entity_uuid=observer_a.uuid,
-        blocked_directions=("north",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="VisibleDoor",
+    visible_door = materialize_item(
+        directional_door_recipe(
+            display_name="Visible Door",
+            blocked_directions=("north",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer_a.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
-    hidden_door = DirectionalDoor(
-        source_entity_uuid=hidden_contact.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="HiddenDoor",
+    hidden_door = materialize_item(
+        directional_door_recipe(
+            display_name="Hidden Door",
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        hidden_contact.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
-    torch = create_torch(observer_b.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        observer_b.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     torch.is_lit = True
     grid.place_object(visible_door.uuid, (0, 3))
     grid.place_object(hidden_door.uuid, (3, 4))
@@ -629,6 +655,71 @@ def test_subjective_seed_equals_objective_checkpoint_plus_censorship() -> None:
         reset_engine_runtime()
 
 
+def test_parity_preserves_selected_ranged_stance_with_both_weapon_sets() -> None:
+    """Parity reads the selected stance instead of guessing from occupied slots."""
+    grid = reset_engine_runtime(grid_size=(3, 3))
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Dual-loadout observer",
+        config=EntityConfig(position=(1, 1), faction="heroes"),
+    )
+    _equip(observer, slot=WeaponSlot.MELEE_MAIN)
+    _equip(observer, slot=WeaponSlot.RANGED_MAIN)
+    observer.equipment.activate_weapon_slot(WeaponSlot.RANGED_MAIN)
+    observer.senses.visible = {(1, 1): True}
+    observer.senses.seen = {(1, 1)}
+    observer.senses.entities = {}
+    observer.senses.objects = {}
+    perspective = SubjectivePerspective(
+        perspective_epoch_id="dual-loadout-ranged",
+        kind=PerspectiveKind.CONTROLLED_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(str(observer.uuid),),
+        observer_entity_uuids=(str(observer.uuid),),
+        active_observer_uuid=str(observer.uuid),
+    )
+
+    try:
+        objective = build_objective_world(
+            grid=grid,
+            entities=(observer,),
+            encounter=None,
+        )
+        subjective = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=(observer,),
+            encounter=None,
+            memory=SubjectiveSpatialMemory(
+                perspective_epoch_id=perspective.perspective_epoch_id,
+            ),
+        )
+        report = build_subjective_render_parity_diagnostics(
+            objective=objective,
+            subjective=subjective,
+            perspective=perspective,
+            watermarks=PlayerReplicationWatermarks(
+                source_event_cursor=0,
+                observation_cursor=0,
+                presentation_cursor=0,
+                combat_log_cursor=0,
+            ),
+            source_stream_id="dual-loadout-ranged",
+            generation_id="dual-loadout-ranged-generation",
+            grid=grid,
+        )
+
+        assert (
+            subjective.visual_loadout_by_entity[
+                str(observer.uuid)
+            ].active_weapon_set.value
+            == "ranged"
+        )
+        assert report.matches is True
+        assert report.mismatches == ()
+    finally:
+        reset_engine_runtime()
+
+
 @pytest.mark.parametrize(
     ("neighbor_position", "neighbor_direction", "visible_direction"),
     (
@@ -654,11 +745,15 @@ def test_each_hidden_neighbor_door_edge_matches_objective_censorship(
     observer.senses.seen = {(1, 1)}
     observer.senses.entities = {}
     observer.senses.objects = {}
-    door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=(neighbor_direction,),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="HiddenNeighborDoor",
+    door = materialize_item(
+        directional_door_recipe(
+            display_name="Hidden Neighbor Door",
+            blocked_directions=(neighbor_direction,),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
     grid.place_object(door.uuid, neighbor_position)
     perspective = SubjectivePerspective(
@@ -721,12 +816,17 @@ def test_live_oracle_censors_an_imperceivable_structural_object() -> None:
     observer.senses.seen = {(1, 1)}
     observer.senses.entities = {}
     observer.senses.objects = {}
-    private_door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("west",),
-        blocked_channels=("movement", "vision"),
-        is_invisible=True,
+    private_door = materialize_item(
+        directional_door_recipe(
+            display_name="Private Door",
+            blocked_directions=("west",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
+    private_door.is_invisible = True
     grid.place_object(private_door.uuid, (2, 1))
     perspective = SubjectivePerspective(
         perspective_epoch_id="private-edge",

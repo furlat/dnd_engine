@@ -8,6 +8,9 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from dnd.core.content.recipes import ContentRecipe
+from dnd.core.equipment_types import WeaponSlot
+
 
 AbilityName = Literal["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
 SideKind = Literal["hero", "monster_party"]
@@ -64,27 +67,17 @@ class SpellGrant(BaseModel):
 class ItemGrant(BaseModel):
     """Inventory item granted to an actor before combat."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["item_grant"] = Field(default="item_grant", description="Discriminator for item augmentation.")
-    item_id: Literal[
-        "acid_flask",
-        "healing_potion",
-        "lightning_weapon_coat",
-        "potion_greater_invisibility",
-        "potion_haste",
-        "scroll_fireball",
-        "scroll_hold_person",
-        "scroll_magic_missile",
-        "scroll_spike_growth",
-        "torch_lit",
-        "wand_fire",
-        "wand_magic_missiles",
-        "weapon_coat",
-    ] = Field(description="Stable item factory identifier.")
+    recipe: ContentRecipe = Field(
+        description="Exact installed item recipe materialized for this grant.",
+    )
     count: int = Field(default=1, ge=1, description="Number of identical items granted.")
-    charges: int | None = Field(default=None, description="Optional item charge override.")
-    heal_amount: int | None = Field(default=None, ge=1, description="Optional healing amount override.")
+    on_grant: Literal["none", "ignite"] = Field(
+        default="none",
+        description="Typed post-loot setup behavior, when explicitly authored.",
+    )
 
 
 class ReactionGrant(BaseModel):
@@ -142,38 +135,27 @@ class DamageAffinity(BaseModel):
 class EquipmentGrant(BaseModel):
     """Weapon granted and equipped into an explicit combat loadout slot."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["equipment_grant"] = Field(default="equipment_grant", description="Discriminator for equipment grant.")
-    item_id: Literal["club", "longbow", "shortsword"] = Field(description="Stable equipment factory identifier.")
-    slot: Literal["melee_main", "melee_off", "ranged_main", "ranged_off"] = Field(description="Target weapon slot.")
+    recipe: ContentRecipe = Field(
+        description="Exact installed equippable-item recipe.",
+    )
+    slot: WeaponSlot = Field(description="Target weapon slot.")
     replace: bool = Field(default=False, description="Whether an occupied target slot is unequipped before the grant.")
 
 
 class ApparelGrant(BaseModel):
     """Clothing or footwear equipped as part of a configured loadout."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["apparel_grant"] = Field(default="apparel_grant", description="Discriminator for apparel grant.")
-    item_id: Literal[
-        "armored_boots",
-        "cloth_shoes",
-        "common_clothes",
-        "costume",
-        "leather_boots",
-        "leather_shoes",
-        "robes",
-        "sandals",
-        "travelers_clothes",
-    ] = Field(description="Stable apparel factory identifier.")
-    visual_variant_id: str | None = Field(
-        default=None,
-        description="Exact optional NeuroClient visual variant identifier.",
-    )
-    display_name: str | None = Field(
-        default=None,
-        description="RPG-facing item label; the factory's exact renderer key remains authoritative.",
+    recipe: ContentRecipe = Field(
+        description=(
+            "Exact content definition and typed visual/name parameters for "
+            "the equipped apparel instance."
+        ),
     )
 
 

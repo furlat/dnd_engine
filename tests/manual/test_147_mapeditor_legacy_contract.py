@@ -72,6 +72,26 @@ MAPEDITOR_LEGACY_CASES: dict[str, LegacyCoverage] = {
 }
 
 
+def _placement_payload(
+    client: TestClient,
+    content_id: str,
+    position: tuple[int, int],
+) -> dict[str, object]:
+    """Select one exact default recipe from the live mapeditor catalog."""
+    catalog = client.get("/mapeditor/catalog").json()
+    row = next(
+        entry
+        for entry in (*catalog["objects"], *catalog["loot"])
+        if entry["recipe"]["ref"]["content_id"] == content_id
+        and entry["recipe_preset_ref"] is None
+    )
+    return {
+        "recipe": row["recipe"],
+        "content_set_digest": row["content_set_digest"],
+        "position": list(position),
+    }
+
+
 def test_mapeditor_manifest_accounts_for_all_4_cases() -> None:
     """Every archived mapeditor case has one exact maintained disposition."""
     assert len(MAPEDITOR_LEGACY_CASES) == 4
@@ -96,10 +116,37 @@ def test_mapeditor_catalog_and_forgotten_crypt_preset_are_complete() -> None:
     assert "forgotten_crypt_arena" in {
         row["id"] for row in catalog["presets"]
     }
-    object_ids = {row["id"] for row in catalog["objects"]}
-    loot_ids = {row["id"] for row in catalog["loot"]}
-    assert {"wall_torch", "door"} <= object_ids
-    assert {"longsword", "healing_potion"} <= loot_ids
+    object_ids = {
+        row["recipe"]["ref"]["content_id"]
+        for row in catalog["objects"]
+    }
+    loot_by_id = {
+        row["recipe"]["ref"]["content_id"]: row
+        for row in catalog["loot"]
+        if row["recipe_preset_ref"] is None
+    }
+    loot_ids = set(loot_by_id)
+    assert {"environment.wall_torch", "environment.door"} <= object_ids
+    assert {
+        "weapon.longsword",
+        "armor.plate",
+        "shield.shield",
+        "consumable.healing_potion",
+    } <= loot_ids
+    assert (
+        loot_by_id["weapon.longsword"]["ordering"]["sort_group"],
+        loot_by_id["weapon.longsword"]["presentation"][
+            "visual_variant_key"
+        ],
+    ) == ("weapons.martial_melee", "longsword")
+    assert (
+        loot_by_id["armor.plate"]["ordering"]["sort_group"],
+        loot_by_id["armor.plate"]["presentation"]["visual_variant_key"],
+    ) == ("armor.heavy", "plate")
+    assert (
+        loot_by_id["shield.shield"]["ordering"]["sort_group"],
+        loot_by_id["shield.shield"]["presentation"]["visual_variant_key"],
+    ) == ("armor.shields", "shield")
 
     preset_response = client.post(
         "/mapeditor/maps",
@@ -219,7 +266,11 @@ def test_mapeditor_scratch_layers_are_visible_on_every_objective_surface() -> No
 
     door_response = client.post(
         "/mapeditor/map/objects",
-        json={"catalog_id": "door", "position": [0, 1]},
+        json=_placement_payload(
+            client,
+            "environment.door",
+            (0, 1),
+        ),
     )
     assert door_response.status_code == 200
     assert door_response.json()["name"] == "Door"
@@ -407,7 +458,11 @@ def test_mapeditor_save_lifecycle_and_crypt_roundtrip_are_exact(
     assert tile_response.status_code == 200
     door_response = client.post(
         "/mapeditor/map/objects",
-        json={"catalog_id": "door", "position": [2, 1]},
+        json=_placement_payload(
+            client,
+            "environment.door",
+            (2, 1),
+        ),
     )
     assert door_response.status_code == 200
 

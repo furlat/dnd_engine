@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import Disengage, Jump
+from dnd.actions import Disengage, Jump, entity_resource_cost_evaluator
 from dnd.actions_functional import get_available_actions, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import Cost, TargetType
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
@@ -153,6 +153,71 @@ def test_jump_moves_and_spends_bonus_action_and_distance() -> None:
         == initial_bonus_actions - 1
     )
     assert jumper.action_economy.movement.normalized_score == initial_movement - 15
+
+
+def test_jump_declares_bonus_action_before_target_distance_cost() -> None:
+    """Jump owns one ordered typed cost list before the event enters the queue."""
+    _reset_state()
+    jumper = _create_jumper(strength=16)
+    Entity.update_all_entities_senses()
+    jump = Jump(
+        source_entity_uuid=jumper.uuid,
+        end_position=(8, 5),
+        template=False,
+    )
+
+    effective_costs = [
+        (cost.cost_type, cost.cost)
+        for cost in jump.effective_costs
+    ]
+    declaration = jump._create_declaration_event(use_register=False)
+
+    assert effective_costs == [
+        ("bonus_actions", 1),
+        ("movement", 15),
+    ]
+    assert declaration is not None
+    assert [
+        (cost.cost_type, cost.cost)
+        for cost in declaration.costs
+    ] == effective_costs
+    assert [
+        (cost.cost_type, cost.cost)
+        for cost in jump.costs
+    ] == [("bonus_actions", 1)]
+
+
+def test_jump_pays_named_resources_without_double_spending_movement() -> None:
+    """The movement exception still uses the canonical named-resource payer."""
+    _reset_state()
+    jumper = _create_jumper(strength=16)
+    jumper.action_economy.add_resource(
+        "jump_tokens",
+        maximum=1,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    Entity.update_all_entities_senses()
+    jump = Jump(
+        source_entity_uuid=jumper.uuid,
+        end_position=(8, 5),
+        template=False,
+        alt_extra_costs=[
+            Cost(
+                name="Jump Token",
+                cost_type="bonus_actions",
+                cost=0,
+                resource_name="jump_tokens",
+                resource_cost=1,
+                resource_evaluator=entity_resource_cost_evaluator,
+            )
+        ],
+    )
+
+    result = jump.apply()
+
+    assert result is not None and not result.canceled
+    assert jumper.action_economy.get_resource_current("jump_tokens") == 0
+    assert jumper.action_economy.movement.normalized_score == 15
 
 
 def test_jump_rejects_an_occupied_landing_position() -> None:

@@ -16,7 +16,13 @@ from dnd.actions_functional import setup_standard_actions, register_spells_by_na
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import BodyArmor, Boots, EquipmentConfig, Helmet, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_runtime_materialization import (
+    materialize_item_from_installed_runtime,
+)
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.materialization import CreaturePossessionMode
 from dnd.core.equipment_types import UnarmoredAc, WeaponSlot
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
@@ -25,9 +31,18 @@ from dnd.core.events import AbilityName
 from dnd.core.modifiers import DamageType
 from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
 
-from dnd.items.weapons import create_dagger, create_quarterstaff
-from dnd.items.armors import create_cloth_shoes, create_robes, create_wizard_hat
-from dnd.items.test_items import create_healing_potion, create_potion_of_haste
+from dnd.items.weapons import DAGGER_RECIPE, QUARTERSTAFF_RECIPE
+from dnd.items.apparel_presets import (
+    BLUE_CLOTH_SHOES_PRESET,
+    RED_CLOTH_SHOES_PRESET,
+    RED_MAGE_ROBE_PRESET,
+    RED_WIZARD_HAT_PRESET,
+    WIZARD_ROBE_PRESET,
+)
+from dnd.items.consumables import (
+    HASTE_POTION_RECIPE,
+    HEALING_POTION_RECIPE,
+)
 
 from dnd.classes.sorcerer import (
     DraconicResilience,
@@ -91,6 +106,12 @@ EQUIPMENT_PRESETS = {
     "dagger": {"melee_main": "dagger"},
     "quarterstaff": {"melee_main": "quarterstaff"},
 }
+
+_SORCERER_EQUIPPED_ROBES_RECIPE = RED_MAGE_ROBE_PRESET.recipe
+_SORCERER_EQUIPPED_SHOES_RECIPE = RED_CLOTH_SHOES_PRESET.recipe
+_SORCERER_SPARE_ROBES_RECIPE = WIZARD_ROBE_PRESET.recipe
+_SORCERER_SPARE_SHOES_RECIPE = BLUE_CLOTH_SHOES_PRESET.recipe
+_SORCERER_WIZARD_HAT_RECIPE = RED_WIZARD_HAT_PRESET.recipe
 
 
 class SorcererConfig(BaseModel):
@@ -313,10 +334,20 @@ def apply_equipment(entity: Entity, preset: SorcererEquipmentPreset) -> None:
     preset_config = EQUIPMENT_PRESETS[preset]
     melee_main = preset_config.get("melee_main")
     if melee_main == "dagger":
-        weapon = create_dagger(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            DAGGER_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
     elif melee_main == "quarterstaff":
-        weapon = create_quarterstaff(entity.uuid)
+        weapon = materialize_item_from_installed_runtime(
+            QUARTERSTAFF_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        )
         entity.equipment.equip(weapon, WeaponSlot.MELEE_MAIN)
 
 
@@ -348,7 +379,15 @@ def apply_sorcerer_features(entity: Entity, config: SorcererConfig) -> None:
         ))
 
 
-def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) -> Entity:
+def create_sorcerer(
+    config: SorcererConfig,
+    source_id: Optional[UUID] = None,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
+) -> Entity:
     """Create a Sorcerer entity at the specified level with all features applied.
 
     Flow:
@@ -424,13 +463,42 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
         source_entity_uuid=source_id,
         description=f"Level {config.level} Sorcerer{origin_name}",
         config=entity_config,
+        content_ref=content_ref,
     )
 
     setup_standard_actions(entity)
 
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        apply_sorcerer_features(entity, config)
+        spell_list = config.spell_names or get_default_spells(config.level)
+        register_spells_by_name(
+            entity,
+            spell_list,
+            caster_level=config.level,
+        )
+        register_shield_reaction(entity)
+        return entity
+
     apply_equipment(entity, config.equipment_preset)
-    entity.equipment.equip(create_robes(entity.uuid, visual_variant_id="81000005"))
-    entity.equipment.equip(create_cloth_shoes(entity.uuid, visual_variant_id="b0000004"))
+    entity.equipment.equip(
+        materialize_item_from_installed_runtime(
+            _SORCERER_EQUIPPED_ROBES_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+    )
+    entity.equipment.equip(
+        materialize_item_from_installed_runtime(
+            _SORCERER_EQUIPPED_SHOES_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Boots,
+        ),
+    )
 
     apply_sorcerer_features(entity, config)
 
@@ -439,18 +507,71 @@ def create_sorcerer(config: SorcererConfig, source_id: Optional[UUID] = None) ->
 
     register_shield_reaction(entity)
 
-    entity.loot_item(create_potion_of_haste(entity.uuid))
-    entity.loot_item(create_healing_potion(entity.uuid))
-    entity.loot_item(create_healing_potion(entity.uuid))
-    entity.loot_item(create_robes(entity.uuid, visual_variant_id="81000001"))
-    entity.loot_item(create_cloth_shoes(entity.uuid, visual_variant_id="b0000005"))
-    entity.loot_item(create_wizard_hat(entity.uuid, visual_variant_id="h0000011"))
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HASTE_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            HEALING_POTION_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+        )
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            _SORCERER_SPARE_ROBES_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=BodyArmor,
+        ),
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            _SORCERER_SPARE_SHOES_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Boots,
+        ),
+    )
+    entity.loot_item(
+        materialize_item_from_installed_runtime(
+            _SORCERER_WIZARD_HAT_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Helmet,
+        ),
+    )
 
     equipped_names = {i.name for i in entity.equipment.get_all_equipped_items()}
     if "Dagger" not in equipped_names:
-        entity.loot_item(create_dagger(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                DAGGER_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Weapon,
+            ),
+        )
     if "Quarterstaff" not in equipped_names:
-        entity.loot_item(create_quarterstaff(entity.uuid))
+        entity.loot_item(
+            materialize_item_from_installed_runtime(
+                QUARTERSTAFF_RECIPE,
+                entity.uuid,
+                origin=ItemRuntimeOrigin.STARTER,
+                expected_type=Weapon,
+            ),
+        )
 
     return entity
 

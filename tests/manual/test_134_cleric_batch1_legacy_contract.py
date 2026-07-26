@@ -16,6 +16,9 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.actions_functional import get_available_actions, setup_standard_actions
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import Hidden
 from dnd.core.base_actions import BaseAction, Cost
 from dnd.core.base_block import BaseBlock, LightLevel
@@ -32,7 +35,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.entity import Entity
-from dnd.items.weapons import create_dagger
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.conjuration import (
     GuardianOfFaith,
@@ -494,7 +497,12 @@ def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:
         "monsters",
     )
     watcher.equipment.equip(
-        create_dagger(watcher.uuid),
+        materialize_item(
+            DAGGER_RECIPE,
+            watcher.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     add_opportunity_attack_handler(watcher)
@@ -554,7 +562,12 @@ def test_command_halt_closes_haste_and_zero_cost_paths_but_not_reactions() -> No
         "monsters",
     )
     target.equipment.equip(
-        create_dagger(target.uuid),
+        materialize_item(
+            DAGGER_RECIPE,
+            target.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(target)

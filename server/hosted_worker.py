@@ -11,11 +11,16 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 from uuid import UUID, uuid4
 
 import httpx
 from pydantic import BaseModel, Field
+
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.core.content.identities import validate_sha256
+from dnd.content_system.pack_loader import ENGINE_CONTENT_API_VERSION
+
 
 class HostedWorkerError(RuntimeError):
     """Raised when a hosted game worker cannot be started or contacted."""
@@ -53,6 +58,21 @@ class HostedWorkerAssignment(BaseModel):
         min_length=1,
         description="Public gateway runtime URL used by external controllers.",
     )
+
+
+class HostedWorkerReadiness(BaseModel):
+    """Private worker identity checked before admission to the warm pool."""
+
+    status: Literal["ready", "content_mismatch"] = "ready"
+    content_api_version: int = Field(ge=1)
+    content_set_digest: str = Field(min_length=64, max_length=64)
+    built_in_artifact_digest: str = Field(min_length=64, max_length=64)
+    expected_content_set_digest: str | None = Field(
+        default=None,
+        min_length=64,
+        max_length=64,
+    )
+    external_pack_ids: tuple[str, ...] = ()
 
 
 @dataclass
@@ -102,6 +122,7 @@ class HostedWorkerManager:
         socket_root: Path | None = None,
         worker_cwd: Path | None = None,
         worker_application: HostedWorkerApplication = CORE_HOSTED_WORKER_APPLICATION,
+        expected_content_set_digest: str | None = None,
         startup_timeout_seconds: float = 20.0,
         terminate_grace_seconds: float = 2.0,
         warm_pool_size: int = 0,
@@ -115,6 +136,9 @@ class HostedWorkerManager:
             worker_cwd: Repository root used as the worker working directory.
             worker_application: Explicit ASGI composition imported by each
                 worker process.
+            expected_content_set_digest: Exact parent-frozen content identity.
+                When omitted, the manager resolves it through the same shared
+                bootstrap before spawning any worker.
             startup_timeout_seconds: Maximum wait for worker readiness.
             terminate_grace_seconds: Grace period before forced process-group kill.
             warm_pool_size: Number of imported, unclaimed workers kept ready.
@@ -125,6 +149,14 @@ class HostedWorkerManager:
         ).resolve()
         self._worker_cwd = (worker_cwd or Path(__file__).resolve().parents[1]).resolve()
         self._worker_application = worker_application
+        self._expected_content_set_digest = validate_sha256(
+            (
+                bootstrap_content_system().content_set_digest
+                if expected_content_set_digest is None
+                else expected_content_set_digest
+            ),
+            "expected_content_set_digest",
+        )
         self._startup_timeout_seconds = startup_timeout_seconds
         self._terminate_grace_seconds = terminate_grace_seconds
         self._warm_pool_size = max(0, warm_pool_size)
@@ -134,6 +166,11 @@ class HostedWorkerManager:
         self._prewarm_lock = asyncio.Lock()
         self._replenishment_task: asyncio.Task[None] | None = None
         self._closing = False
+
+    @property
+    def expected_content_set_digest(self) -> str:
+        """Return the exact content identity required from every worker."""
+        return self._expected_content_set_digest
 
     @property
     def application_import_path(self) -> str:
@@ -320,6 +357,9 @@ class HostedWorkerManager:
             "DND_WORKER_INSTANCE_ID": str(worker_instance_id),
             "DND_PUBLIC_GAME_BASE_URL": public_game_base_url.rstrip("/"),
             "DND_WORKER_UNIX_SOCKET": str(socket_path),
+            "DND_EXPECTED_CONTENT_SET_DIGEST": (
+                self._expected_content_set_digest
+            ),
         })
         command = [
             sys.executable,
@@ -441,8 +481,37 @@ class HostedWorkerManager:
             if socket_path.exists():
                 try:
                     async with self._client_for_handle(handle, timeout=0.5) as client:
-                        status_response = await client.get("/game/status")
+                        status_response = await client.get(
+                            "/hosted/readiness",
+                        )
                     if status_response.status_code == 200:
+                        readiness = HostedWorkerReadiness.model_validate_json(
+                            status_response.content,
+                        )
+                        if readiness.status == "content_mismatch":
+                            raise HostedWorkerError(
+                                "Worker content set mismatch: expected "
+                                f"{self._expected_content_set_digest}, "
+                                f"received {readiness.content_set_digest}",
+                            )
+                        if (
+                            readiness.content_api_version
+                            != ENGINE_CONTENT_API_VERSION
+                        ):
+                            raise HostedWorkerError(
+                                "Worker content API mismatch: expected "
+                                f"{ENGINE_CONTENT_API_VERSION}, received "
+                                f"{readiness.content_api_version}",
+                            )
+                        if (
+                            readiness.content_set_digest
+                            != self._expected_content_set_digest
+                        ):
+                            raise HostedWorkerError(
+                                "Worker content set mismatch: expected "
+                                f"{self._expected_content_set_digest}, "
+                                f"received {readiness.content_set_digest}",
+                            )
                         handle.placement.state = HostedWorkerState.READY
                         handle.placement.ready_at = time.time()
                         return

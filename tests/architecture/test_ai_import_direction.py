@@ -272,8 +272,8 @@ def test_deleted_server_owned_ai_contract_modules_are_not_imported() -> None:
     assert violations == []
 
 
-def test_ai_action_dispatch_has_one_authoritative_core_consumer() -> None:
-    """Native and registered providers share one validator/dispatcher."""
+def test_engine_and_server_action_execution_share_the_core_dispatcher() -> None:
+    """HTTP and AI execution are the only consumers of the core dispatcher."""
     consumers: list[Path] = []
     for path in _production_paths():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -287,4 +287,65 @@ def test_ai_action_dispatch_has_one_authoritative_core_consumer() -> None:
                 for alias in node.names
             ):
                 consumers.append(path.relative_to(REPOSITORY_ROOT))
-    assert consumers == [Path("dnd/ai/runtime/execution.py")]
+    assert consumers == [
+        Path("dnd/ai/runtime/execution.py"),
+        Path("server/event_server.py"),
+    ]
+
+
+def test_execute_available_action_is_private_to_the_core_dispatch_boundary() -> None:
+    """Only the dispatcher and documented convenience wrapper call the primitive."""
+    importers: list[Path] = []
+    call_sites: list[tuple[Path, str]] = []
+    for path in _production_paths():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        parents: dict[ast.AST, ast.AST] = {}
+        for parent in ast.walk(tree):
+            for child in ast.iter_child_nodes(parent):
+                parents[child] = parent
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "dnd.actions_functional"
+                and any(
+                    alias.name == "execute_available_action"
+                    for alias in node.names
+                )
+            ):
+                importers.append(path.relative_to(REPOSITORY_ROOT))
+            if not isinstance(node, ast.Call):
+                continue
+            if not (
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "execute_available_action"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "execute_available_action"
+                )
+            ):
+                continue
+            enclosing = parents.get(node)
+            while enclosing is not None and not isinstance(
+                enclosing,
+                (ast.FunctionDef, ast.AsyncFunctionDef),
+            ):
+                enclosing = parents.get(enclosing)
+            call_sites.append(
+                (
+                    path.relative_to(REPOSITORY_ROOT),
+                    enclosing.name
+                    if isinstance(
+                        enclosing,
+                        (ast.FunctionDef, ast.AsyncFunctionDef),
+                    )
+                    else "<module>",
+                )
+            )
+
+    assert importers == [Path("dnd/action_dispatch.py")]
+    assert call_sites == [
+        (Path("dnd/action_dispatch.py"), "dispatch_available_action"),
+        (Path("dnd/actions_functional.py"), "execute_by_index"),
+    ]

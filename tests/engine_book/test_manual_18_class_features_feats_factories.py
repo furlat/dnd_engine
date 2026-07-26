@@ -13,8 +13,11 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.feats import LuckyFeature
 from dnd.classes.fighter import ActionSurge, ActionSurgeFeature, SecondWind, SecondWindFeature
 from dnd.classes.fighter_factory import FighterConfig, create_fighter
@@ -29,7 +32,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items import create_longsword
+from dnd.items.weapons import LONGSWORD_RECIPE
 from dnd.spells import FireBolt
 from dnd.utils import reset_combat_state
 
@@ -213,7 +216,12 @@ def test_lucky_feat_adds_resource_and_modifies_a_low_d20_attack_roll() -> None:
     reset_class_tutorial_state()
     attacker = create_class_actor("Lucky Duelist", (0, 0))
     target = create_class_actor("Training Target", (1, 0), "monsters")
-    sword = create_longsword(attacker.uuid)
+    sword = materialize_item(
+        LONGSWORD_RECIPE,
+        attacker.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     attacker.loot_item(sword)
     attacker.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN)
     setup_standard_actions(attacker)

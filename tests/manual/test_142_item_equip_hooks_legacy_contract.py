@@ -7,7 +7,9 @@ from uuid import UUID, uuid4
 from pydantic import PrivateAttr
 
 from dnd.blocks.base_item import BaseItem, EquippableItem
-from dnd.blocks.equipment import Cloak, Weapon
+from dnd.blocks.equipment import BodyArmor, Cloak, Shield, Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.equipment_types import (
     ArmorType,
@@ -19,8 +21,8 @@ from dnd.core.events import AbilityName, Event, EventPhase, Range, RangeType
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.items.armors import create_leather_armor, create_wooden_shield
-from dnd.items.weapons import create_longsword
+from dnd.items.armors import LEATHER_ARMOR_RECIPE, WOODEN_SHIELD_RECIPE
+from dnd.items.weapons import LONGSWORD_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from tests.engine_book.test_chapter_13_items_inventory_equipment import (
     put_in_inventory,
@@ -326,9 +328,25 @@ def test_direct_equipment_tracks_concrete_items_slots_containers_and_positions()
         position=(2, 2),
         darkvision=False,
     )
-    sword = create_longsword(uuid4())
-    armor = create_leather_armor(uuid4())
-    shield = create_wooden_shield(uuid4())
+    sword = materialize_item(
+        LONGSWORD_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    armor_owner_uuid = uuid4()
+    armor = materialize_item(
+        LEATHER_ARMOR_RECIPE,
+        armor_owner_uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=BodyArmor,
+    )
+    shield = materialize_item(
+        WOODEN_SHIELD_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Shield,
+    )
 
     assert isinstance(sword, EquippableItem)
     assert isinstance(armor, EquippableItem)

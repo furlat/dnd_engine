@@ -5,11 +5,14 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.core.gridmap import GridMap
 from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import Torch, create_torch
-from dnd.items.weapons import create_dagger
+from dnd.items.torches import TORCH_RECIPE, Torch
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from server.objective_state import (
     build_current_objective_game_state,
@@ -37,7 +40,12 @@ def objective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Torch]]:
         name="Target",
         config=EntityConfig(position=(1, 0), faction="monsters"),
     )
-    torch = create_torch(observer.uuid)
+    torch = materialize_item(
+        TORCH_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
     torch.name = "Debug Torch"
     torch.is_lit = True
     grid.place_object(torch.uuid, (1, 1))
@@ -159,7 +167,12 @@ def test_objective_world_includes_one_equipment_reducer_seed_per_entity(
 ) -> None:
     """World capture keeps equipment in the same live/replay reducer seed."""
     grid, observer, target, _ = objective_scene
-    dagger = create_dagger(observer.uuid)
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert observer.loot_item(dagger)
 
     equipment = build_objective_equipment(entities=[observer, target])

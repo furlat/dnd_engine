@@ -1,6 +1,6 @@
 from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, PrivateAttr, computed_field
+from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
 from contextlib import contextmanager
 import time
@@ -12,11 +12,18 @@ from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
 from dnd.core.action_types import RestrictedActionGrant
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.runtime import (
+    AuthoredBehaviorAttribution,
+    BehaviorBinding,
+    bind_runtime_action_before_admission,
+    bind_runtime_root_owned_behavior,
+)
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
-    Damage, Event, EventPhase, EventQueue, Range, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
+    Damage, Event, EventPhase, EventQueue, Range, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
     LifeStateChangeEvent, ReviveEvent,
@@ -56,7 +63,8 @@ from dnd.creature_transforms import (
     remove_modifier_ownership,
 )
 from dnd.core.base_actions import (
-    AttackRollBaseline, BaseAction, BaseCost, DamageRollProfile, TargetType,
+    ActionAvailabilityStatus, AttackRollBaseline, BaseAction, BaseCost,
+    DamageRollProfile, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo,
     OpportunityAttackExposure,
     PositionDiscoveryContract, target_resolution_sort_key,
@@ -220,6 +228,12 @@ class Entity(BaseBlock):
     """
 
     name: str = Field(default="Entity", description="Display name for this entity.")
+    content_ref: Optional[ContentRef] = Field(
+        default=None,
+        frozen=True,
+        exclude=True,
+        description="Exact authored creature definition used for this runtime entity.",
+    )
     ability_scores: AbilityScores = Field(
         default_factory=lambda: AbilityScores.create(source_entity_uuid=uuid4()),
         description="Ability score block owned by this entity."
@@ -367,6 +381,19 @@ class Entity(BaseBlock):
     _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
     _LIFE_STATE_LIGHT_SUPPRESSION_TOKEN: ClassVar[str] = "entity.life_state.dead"
 
+    @field_validator("content_ref")
+    @classmethod
+    def _validate_creature_content_ref(
+        cls,
+        value: Optional[ContentRef],
+    ) -> Optional[ContentRef]:
+        if (
+            value is not None
+            and value.definition_kind != ContentDefinitionKind.CREATURE
+        ):
+            raise ValueError("Entity content_ref must identify a creature")
+        return value
+
     def model_post_init(self, __context: Any) -> None:
         """Register entity identity, position, grid, and senses callbacks."""
         super().model_post_init(__context)
@@ -451,7 +478,8 @@ class Entity(BaseBlock):
         source_entity_uuid: UUID,
         name: str = "Entity",
         description: Optional[str] = None,
-        config: Optional[EntityConfig] = None
+        config: Optional[EntityConfig] = None,
+        content_ref: Optional[ContentRef] = None,
     ) -> 'Entity':
         """Create an entity whose UUID and source UUID match.
 
@@ -461,6 +489,8 @@ class Entity(BaseBlock):
             description: Optional entity description.
             config: Optional component configuration. When omitted, the
                 canonical minimal configuration is used.
+            content_ref: Exact authored creature definition, when constructed
+                through the canonical content materializer.
 
         Returns:
             Newly created entity.
@@ -500,6 +530,7 @@ class Entity(BaseBlock):
             source_entity_uuid=source_entity_uuid,
             name=name,
             description=description,
+            content_ref=content_ref,
             ability_scores=ability_scores,
             skill_set=skill_set,
             saving_throws=saving_throws,
@@ -625,6 +656,11 @@ class Entity(BaseBlock):
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
             condition.target_entity_uuid = self.uuid
+        bind_runtime_root_owned_behavior(
+            condition,
+            origin_root_ref=self.content_ref,
+            runtime_owner_uuid=self.uuid,
+        )
         if context is not None:
             condition.set_context(context)
 
@@ -2388,6 +2424,24 @@ class Entity(BaseBlock):
             return False
         return slot_attr.normalized_score >= 1
 
+    def has_spell_slot_capacity(self, level: int) -> bool:
+        """Return whether the actor owns a slot pool at the requested level.
+
+        This structural capability is independent of how many slots have been
+        spent. Action requirements use it to distinguish an unsupported slot
+        level from an affordable or exhausted typed slot cost.
+        """
+        if level < 1 or level > 9:
+            return False
+        slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
+        if slot_attr is None:
+            return False
+        base_modifier = slot_attr.get_base_modifier()
+        return bool(
+            base_modifier is not None
+            and base_modifier.normalized_value > 0
+        )
+
     def get_lowest_spell_slot(self, min_level: int) -> Optional[int]:
         """Find lowest available slot at or above min_level.
 
@@ -3616,6 +3670,11 @@ class Entity(BaseBlock):
         """
         if not action.template:
             raise ValueError("Can only register templates (template=True)")
+        bind_runtime_action_before_admission(
+            action,
+            origin_root_ref=self.content_ref,
+            runtime_owner_uuid=self.uuid,
+        )
         self.registered_actions.append(action)
 
     def unregister_action(self, name: str) -> None:
@@ -3668,6 +3727,7 @@ class Entity(BaseBlock):
         target_type: TargetType,
         valid_targets: List[AvailableTarget],
         can_afford: bool,
+        availability_status: ActionAvailabilityStatus,
         template: BaseAction,
         display_name: Optional[str] = None,
         description: Optional[str] = None,
@@ -3684,7 +3744,8 @@ class Entity(BaseBlock):
             template_name: Name used to execute the template.
             target_type: Effective target type exposed for discovery.
             valid_targets: Valid targets already validated for this template.
-            can_afford: Whether the acting entity can pay the primary costs.
+            can_afford: Whether the actor can pay target-independent costs.
+            availability_status: Closed executable/unavailable row status.
             template: Registered action template.
             display_name: Optional display label.
             description: Optional display description.
@@ -3697,8 +3758,18 @@ class Entity(BaseBlock):
 
         Returns:
             Available action metadata for UI or controller selection.
+
+        Raises:
+            ValueError: If the execution template has no authenticated
+                authored behavior binding.
         """
-        eff_costs = template.effective_costs
+        behavior_binding = template.behavior_binding
+        if not isinstance(behavior_binding, BehaviorBinding):
+            raise ValueError(
+                f"Action template {template_name!r} has no exact authored "
+                "behavior binding"
+            )
+        eff_costs = template.target_independent_effective_costs
         cost_type = eff_costs[0].cost_type if eff_costs else "actions"
         cost_amount = eff_costs[0].cost if eff_costs else 0
         discovery_template_name = template.get_discovery_template_name()
@@ -3719,7 +3790,11 @@ class Entity(BaseBlock):
         action_info = AvailableActionInfo(
             template_name=template_name,
             semantic_key=template.get_semantic_key(),
+            behavior_attribution=AuthoredBehaviorAttribution.from_binding(
+                behavior_binding,
+            ),
             target_type=target_type,
+            availability_status=availability_status,
             valid_targets=valid_targets,
             can_afford=can_afford,
             display_name=display_name or template_name,
@@ -3750,6 +3825,44 @@ class Entity(BaseBlock):
         )
         action_info.set_execution_template(template)
         return action_info
+
+    def get_player_toggleable_handler_infos(
+        self,
+    ) -> List[AvailableHandlerInfo]:
+        """Project toggleable handlers with their exact authored identity.
+
+        Returns:
+            Handler affordances in block registration order.
+
+        Raises:
+            ValueError: If a toggleable handler was admitted without an
+                authenticated authored behavior binding.
+        """
+        infos: List[AvailableHandlerInfo] = []
+        for handler in self.event_handlers.values():
+            if not handler.player_toggleable:
+                continue
+            behavior_binding = handler.behavior_binding
+            if not isinstance(behavior_binding, BehaviorBinding):
+                raise ValueError(
+                    f"Player-toggleable handler {handler.name!r} has no exact "
+                    "authored behavior binding"
+                )
+            trigger_event = ""
+            if handler.trigger_conditions:
+                trigger_event = handler.trigger_conditions[0].event_type.value
+            infos.append(AvailableHandlerInfo(
+                name=handler.name,
+                behavior_attribution=(
+                    AuthoredBehaviorAttribution.from_binding(
+                        behavior_binding,
+                    )
+                ),
+                uuid=handler.uuid,
+                enabled=handler.enabled,
+                trigger_event=trigger_event,
+            ))
+        return infos
 
     @staticmethod
     def _timing_label(value: object) -> str:
@@ -3827,7 +3940,7 @@ class Entity(BaseBlock):
         self,
         template: BaseAction,
         target_pool: Dict[UUID, Tuple[int, int]],
-    ) -> List[AvailableTarget]:
+    ) -> Tuple[List[AvailableTarget], int]:
         """Validate candidate entity targets against a template.
 
         Args:
@@ -3835,23 +3948,30 @@ class Entity(BaseBlock):
             target_pool: Candidate positions keyed by target UUID.
 
         Returns:
-            Valid targets with stable discovery indexes.
+            Affordable valid targets with stable indexes, plus the count of
+            targets whose non-cost requirements passed.
         """
         valid_targets: List[AvailableTarget] = []
-        idx = 0
+        rules_valid_count = 0
         for target_uuid, target_pos in target_pool.items():
-            template.set_target_entity(target_uuid)
-            if template.pre_validate():
-                target_entity = Entity.get(target_uuid)
-                valid_targets.append(AvailableTarget(
-                    index=idx,
-                    target_uuid=target_uuid,
-                    position=target_pos,
-                    target_name=target_entity.name if target_entity else None,
-                    distance=self.senses.get_feet_distance(target_pos)
-                ))
-                idx += 1
-        return valid_targets
+            targeted_template = template.model_copy(
+                deep=True,
+                update={"target_entity_uuid": target_uuid},
+            )
+            if not targeted_template.validate_requirements_for_discovery():
+                continue
+            rules_valid_count += 1
+            if not targeted_template.check_costs():
+                continue
+            target_entity = Entity.get(target_uuid)
+            valid_targets.append(AvailableTarget(
+                index=len(valid_targets),
+                target_uuid=target_uuid,
+                position=target_pos,
+                target_name=target_entity.name if target_entity else None,
+                distance=self.senses.get_feet_distance(target_pos)
+            ))
+        return valid_targets, rules_valid_count
 
     def _compute_aoe_at_position(
         self,
@@ -4183,19 +4303,37 @@ class Entity(BaseBlock):
             for template in variants:
                 template_name = template.get_discovery_template_name()
                 display_name = template.get_discovery_display_name()
-                can_afford = template.check_costs()
+                can_afford = template.check_target_independent_costs()
                 if legal_only and not can_afford:
                     continue
-                is_valid = can_afford and template.pre_validate()
-                if is_valid or not can_afford:
-                    actions.append(self._make_action_info(
-                        template_name=template_name,
-                        target_type=TargetType.SELF,
-                        valid_targets=[AvailableTarget(index=0)] if is_valid else [],
-                        can_afford=can_afford,
-                        template=template,
-                        display_name=display_name,
-                    ))
+                requirements_met = (
+                    can_afford
+                    and template.validate_requirements_for_discovery()
+                )
+                if legal_only and not requirements_met:
+                    continue
+                availability_status = (
+                    ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                    if not can_afford
+                    else (
+                        ActionAvailabilityStatus.AVAILABLE
+                        if requirements_met
+                        else ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                    )
+                )
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.SELF,
+                    valid_targets=(
+                        [AvailableTarget(index=0)]
+                        if requirements_met
+                        else []
+                    ),
+                    can_afford=can_afford,
+                    availability_status=availability_status,
+                    template=template,
+                    display_name=display_name,
+                ))
         return actions
 
     def _collect_entity_actions(
@@ -4250,7 +4388,7 @@ class Entity(BaseBlock):
                     )
 
                 started = time.perf_counter() if timing else 0.0
-                can_afford = template.check_costs()
+                can_afford = template.check_target_independent_costs()
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.check_costs.{template_label}_ms",
@@ -4261,10 +4399,12 @@ class Entity(BaseBlock):
                     continue
 
                 started = time.perf_counter() if timing else 0.0
-                target_pool = self._compute_target_pool(
-                    template.valid_target_filter, include_dead,
-                    template.include_self, potential_targets, target_pool_cache
-                )
+                target_pool: Dict[UUID, Tuple[int, int]] = {}
+                if can_afford:
+                    target_pool = self._compute_target_pool(
+                        template.valid_target_filter, include_dead,
+                        template.include_self, potential_targets, target_pool_cache
+                    )
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.target_pool.{template_label}_ms",
@@ -4273,7 +4413,11 @@ class Entity(BaseBlock):
                     record_action_timing("available_actions.entity_actions.target_pool_total_ms", started)
 
                 started = time.perf_counter() if timing else 0.0
-                valid_targets = self._validate_entity_targets(template, target_pool)
+                valid_targets, rules_valid_count = (
+                    self._validate_entity_targets(template, target_pool)
+                    if can_afford
+                    else ([], 0)
+                )
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.validate_targets.{template_label}_ms",
@@ -4281,19 +4425,29 @@ class Entity(BaseBlock):
                     )
                     record_action_timing("available_actions.entity_actions.validate_targets_total_ms", started)
 
-                if not valid_targets:
+                if legal_only and not valid_targets:
                     continue
 
                 started = time.perf_counter() if timing else 0.0
                 weapon_name: Optional[str] = None
                 weapon_slot_str: Optional[str] = None
                 damage_types: List[str] = []
+                attack_source_item_uuid: Optional[UUID] = None
 
                 weapon_slot_attr = getattr(template, 'weapon_slot', None)
                 if weapon_slot_attr is not None:
                     weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
                     weapon_metadata = self.equipment.get_weapon_metadata(weapon_slot_attr)
                     if weapon_metadata is not None:
+                        equipped_weapon = self.equipment.get_weapon(
+                            weapon_slot_attr,
+                        )
+                        if equipped_weapon is None:
+                            raise ValueError(
+                                "weapon metadata exists without an equipped "
+                                f"weapon in slot {weapon_slot_attr}",
+                            )
+                        attack_source_item_uuid = equipped_weapon.uuid
                         weapon_name, damage_types = weapon_metadata
                         if template_name.startswith("Extra Attack"):
                             display_name = f"Extra Attack ({weapon_name})"
@@ -4318,11 +4472,25 @@ class Entity(BaseBlock):
                     target_type=template.effective_target_type,
                     valid_targets=valid_targets,
                     can_afford=can_afford,
+                    availability_status=(
+                        ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                        if not can_afford
+                        else (
+                            ActionAvailabilityStatus.AVAILABLE
+                            if valid_targets
+                            else (
+                                ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                                if rules_valid_count > 0
+                                else ActionAvailabilityStatus.NO_VALID_TARGETS
+                            )
+                        )
+                    ),
                     template=template,
                     display_name=display_name,
                     weapon_slot=weapon_slot_str,
                     weapon_name=weapon_name,
                     damage_types=damage_types,
+                    source_item_uuid=attack_source_item_uuid,
                 ))
                 if timing:
                     record_action_timing(
@@ -4342,7 +4510,6 @@ class Entity(BaseBlock):
         self._prepare_position_preview_cache(caster_visible_positions)
         action_range = template.get_range()
         max_range = action_range.normal if action_range is not None else 0
-        remaining_movement = self.action_economy.movement.normalized_score
         threat_domains = (
             self._visible_hostile_threat_domains()
             if template.is_movement
@@ -4359,7 +4526,6 @@ class Entity(BaseBlock):
             template.get_semantic_key(),
             contract.model_dump_json(),
             max_range,
-            remaining_movement if contract.bounded_by_remaining_movement else None,
             threat_signature,
         )
         cached_targets = self._position_preview_cache.get(cache_key)
@@ -4384,8 +4550,11 @@ class Entity(BaseBlock):
             if max_range > 0 and distance > max_range:
                 continue
             if (
-                contract.bounded_by_remaining_movement
-                and distance > remaining_movement
+                contract.requires_axis_or_diagonal_alignment
+                and position[0] != self.position[0]
+                and position[1] != self.position[1]
+                and abs(position[0] - self.position[0])
+                != abs(position[1] - self.position[1])
             ):
                 continue
             if (
@@ -4402,6 +4571,14 @@ class Entity(BaseBlock):
                 self.position,
                 position,
             )
+            if contract.requires_subjective_traversable_path and (
+                disclosed_path is None
+                or any(
+                    not self._is_subjectively_walkable_position(step)
+                    for step in disclosed_path[1:]
+                )
+            ):
+                continue
             targets.append(
                 AvailableTarget(
                     index=len(targets),
@@ -4425,6 +4602,50 @@ class Entity(BaseBlock):
             )
         self._position_preview_cache[cache_key] = tuple(targets)
         return targets
+
+    def _filter_targets_by_selected_cost(
+        self,
+        template: BaseAction,
+        contract: PositionDiscoveryContract,
+        candidates: Sequence[AvailableTarget],
+    ) -> List[AvailableTarget]:
+        """Retain candidates whose target-specialized costs are affordable."""
+        executable: List[AvailableTarget] = []
+        remaining_movement = self.action_economy.movement.normalized_score
+        for candidate in candidates:
+            if candidate.position is None:
+                continue
+            if (
+                contract.bounded_by_remaining_movement
+                and candidate.path_cost is not None
+                and candidate.path_cost > remaining_movement
+            ):
+                continue
+            targeted_template = template.model_copy(
+                deep=True,
+                update={"end_position": candidate.position},
+            )
+            target_costs = targeted_template.effective_costs
+            if not targeted_template.check_costs():
+                continue
+            movement_cost = sum(
+                cost.cost
+                for cost in target_costs
+                if cost.cost_type == "movement"
+            )
+            executable.append(
+                candidate.model_copy(
+                    update={
+                        "index": len(executable),
+                        "path_cost": (
+                            movement_cost
+                            if movement_cost > 0
+                            else candidate.path_cost
+                        ),
+                    }
+                )
+            )
+        return executable
 
     def _prepare_position_preview_cache(
         self,
@@ -4558,7 +4779,7 @@ class Entity(BaseBlock):
                 if target_type not in (TargetType.POSITION, TargetType.POSITION_PATH):
                     continue
 
-                can_afford = template.check_costs()
+                can_afford = template.check_target_independent_costs()
                 template_name = template.get_discovery_template_name()
                 display_name = template.get_discovery_display_name()
                 if not can_afford:
@@ -4569,6 +4790,9 @@ class Entity(BaseBlock):
                         target_type=target_type,
                         valid_targets=[],
                         can_afford=False,
+                        availability_status=(
+                            ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                        ),
                         template=template,
                         display_name=display_name,
                     ))
@@ -4576,15 +4800,49 @@ class Entity(BaseBlock):
 
                 valid_positions: List[AvailableTarget] = []
                 if target_type == TargetType.POSITION and template.position_discovery is not None:
-                    valid_positions = self._collect_declared_position_targets(
+                    candidates = self._collect_declared_position_targets(
                         template,
                         template.position_discovery,
                         caster_visible_positions,
                     )
+                    valid_positions = self._filter_targets_by_selected_cost(
+                        template,
+                        template.position_discovery,
+                        candidates,
+                    )
+                    availability_status = (
+                        ActionAvailabilityStatus.AVAILABLE
+                        if valid_positions
+                        else (
+                            ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                            if candidates
+                            else ActionAvailabilityStatus.NO_VALID_TARGETS
+                        )
+                    )
+                    if legal_only and (
+                        availability_status
+                        is not ActionAvailabilityStatus.AVAILABLE
+                    ):
+                        continue
+                    actions.append(self._make_action_info(
+                        template_name=template_name,
+                        target_type=target_type,
+                        valid_targets=valid_positions,
+                        can_afford=True,
+                        availability_status=availability_status,
+                        template=template,
+                        display_name=display_name,
+                    ))
+                    continue
                 else:
                     movement_mode = getattr(template, "movement_mode", MovementMode.WALKING)
+                    rules_route_exists = self._has_subjective_path_destination(
+                        movement_mode,
+                    )
+                    rules_valid_count = 0
                     if template.is_movement and remaining_movement <= 0:
                         valid_positions = []
+                        rules_valid_count = int(rules_route_exists)
                     elif movement_mode == MovementMode.WALKING:
                         paths_by_position = self.senses.paths
                     else:
@@ -4613,22 +4871,30 @@ class Entity(BaseBlock):
                             remaining_movement,
                             movement_mode,
                         )
+                        rules_valid_count = (
+                            len(valid_positions)
+                            if valid_positions
+                            else int(rules_route_exists)
+                        )
                     else:
                         map_has_hazards = grid.has_any_hazards()
                         threat_domains = self._visible_hostile_threat_domains()
                         for position, normal_path in paths_by_position.items():
                             if position == self.senses.position:
                                 continue
-                            template.set_target_position(position)
-                            if not template.pre_validate():
+                            targeted_template = template.model_copy(
+                                deep=True,
+                                update={"end_position": position},
+                            )
+                            if not targeted_template.validate_requirements_for_discovery():
                                 continue
-                            path_cost = next(
-                                (
-                                    cost.cost
-                                    for cost in template.effective_costs
-                                    if cost.cost_type == "movement"
-                                ),
-                                0,
+                            rules_valid_count += 1
+                            if not targeted_template.check_costs():
+                                continue
+                            path_cost = sum(
+                                cost.cost
+                                for cost in targeted_template.effective_costs
+                                if cost.cost_type == "movement"
                             )
                             is_hazardous = (
                                 map_has_hazards
@@ -4676,22 +4942,65 @@ class Entity(BaseBlock):
                                 ),
                             ))
 
-                if valid_positions:
-                    actions.append(self._make_action_info(
-                        template_name=template_name,
-                        target_type=target_type,
-                        valid_targets=valid_positions,
-                        can_afford=True,
-                        template=template,
-                        display_name=display_name,
-                    ))
+                availability_status = (
+                    ActionAvailabilityStatus.AVAILABLE
+                    if valid_positions
+                    else (
+                        ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                        if rules_valid_count > 0
+                        else ActionAvailabilityStatus.NO_VALID_TARGETS
+                    )
+                )
+                if legal_only and (
+                    availability_status is not ActionAvailabilityStatus.AVAILABLE
+                ):
+                    continue
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=target_type,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    availability_status=availability_status,
+                    template=template,
+                    display_name=display_name,
+                ))
         return actions
+
+    def _has_subjective_path_destination(
+        self,
+        movement_mode: MovementMode,
+    ) -> bool:
+        """Return whether one visible adjacent movement transition is known."""
+        grid = get_map()
+        for delta_x in (-1, 0, 1):
+            for delta_y in (-1, 0, 1):
+                if delta_x == 0 and delta_y == 0:
+                    continue
+                position = (
+                    self.position[0] + delta_x,
+                    self.position[1] + delta_y,
+                )
+                if not self.senses.visible.get(position, False):
+                    continue
+                if grid.can_transition(
+                    self.position,
+                    position,
+                    requesting_entity_uuid=self.uuid,
+                    movement_mode=movement_mode,
+                    subjective=True,
+                    collision_blocked=self.senses.collision_blocked,
+                    directional_collision_blocked=(
+                        self.senses.directional_collision_blocked
+                    ),
+                ):
+                    return True
+        return False
 
     def _can_fast_collect_move_targets(self, template: BaseAction, movement_mode: MovementMode) -> bool:
         """Return whether path action discovery can use cached senses paths."""
         if template.effective_target_type != TargetType.POSITION_PATH:
             return False
-        if template.effective_costs:
+        if template.target_independent_effective_costs:
             return False
         return template.is_movement
 
@@ -4907,54 +5216,107 @@ class Entity(BaseBlock):
             for template in variants:
                 if template.effective_target_type != TargetType.POSITION_LOS:
                     continue
-                can_afford = template.check_costs()
-                if template.position_discovery is not None:
-                    valid_positions = (
-                        self._collect_declared_position_targets(
-                            template,
-                            template.position_discovery,
-                            caster_visible_positions,
-                        )
-                        if can_afford
-                        else []
-                    )
-                    if valid_positions or not can_afford:
-                        if legal_only and not can_afford:
-                            continue
-                        actions.append(self._make_action_info(
-                            template_name=template.get_discovery_template_name(),
-                            target_type=TargetType.POSITION_LOS,
-                            valid_targets=valid_positions,
-                            can_afford=can_afford,
-                            template=template,
-                            display_name=template.get_discovery_display_name(),
-                        ))
-                    continue
-                valid_pos_list = template.get_valid_positions()
-                valid_positions: List[AvailableTarget] = []
-                idx = 0
-                if legal_only and not can_afford:
-                    continue
-                for pos in valid_pos_list:
-                    template.set_target_position(pos)
-                    if template.pre_validate():
-                        valid_positions.append(AvailableTarget(
-                            index=idx,
-                            position=pos,
-                            distance=self.senses.get_feet_distance(pos),
-                            path_cost=None
-                        ))
-                        idx += 1
-
-                if valid_positions:
+                can_afford = template.check_target_independent_costs()
+                template_name = template.get_discovery_template_name()
+                display_name = template.get_discovery_display_name()
+                if not can_afford:
+                    if legal_only:
+                        continue
                     actions.append(self._make_action_info(
-                        template_name=template.get_discovery_template_name(),
+                        template_name=template_name,
+                        target_type=TargetType.POSITION_LOS,
+                        valid_targets=[],
+                        can_afford=False,
+                        availability_status=(
+                            ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                        ),
+                        template=template,
+                        display_name=display_name,
+                    ))
+                    continue
+
+                if template.position_discovery is not None:
+                    candidates = self._collect_declared_position_targets(
+                        template,
+                        template.position_discovery,
+                        caster_visible_positions,
+                    )
+                    valid_positions = self._filter_targets_by_selected_cost(
+                        template,
+                        template.position_discovery,
+                        candidates,
+                    )
+                    availability_status = (
+                        ActionAvailabilityStatus.AVAILABLE
+                        if valid_positions
+                        else (
+                            ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                            if candidates
+                            else ActionAvailabilityStatus.NO_VALID_TARGETS
+                        )
+                    )
+                    if legal_only and (
+                        availability_status
+                        is not ActionAvailabilityStatus.AVAILABLE
+                    ):
+                        continue
+                    actions.append(self._make_action_info(
+                        template_name=template_name,
                         target_type=TargetType.POSITION_LOS,
                         valid_targets=valid_positions,
-                        can_afford=can_afford,
+                        can_afford=True,
+                        availability_status=availability_status,
                         template=template,
-                        display_name=template.get_discovery_display_name(),
+                        display_name=display_name,
                     ))
+                    continue
+
+                valid_pos_list = template.get_valid_positions()
+                valid_positions: List[AvailableTarget] = []
+                rules_valid_count = 0
+                for pos in valid_pos_list:
+                    targeted_template = template.model_copy(
+                        deep=True,
+                        update={"end_position": pos},
+                    )
+                    if not targeted_template.validate_requirements_for_discovery():
+                        continue
+                    rules_valid_count += 1
+                    if not targeted_template.check_costs():
+                        continue
+                    valid_positions.append(AvailableTarget(
+                        index=len(valid_positions),
+                        position=pos,
+                        distance=self.senses.get_feet_distance(pos),
+                        path_cost=sum(
+                            cost.cost
+                            for cost in targeted_template.effective_costs
+                            if cost.cost_type == "movement"
+                        ) or None,
+                    ))
+
+                availability_status = (
+                    ActionAvailabilityStatus.AVAILABLE
+                    if valid_positions
+                    else (
+                        ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                        if rules_valid_count
+                        else ActionAvailabilityStatus.NO_VALID_TARGETS
+                    )
+                )
+                if legal_only and (
+                    availability_status is not ActionAvailabilityStatus.AVAILABLE
+                ):
+                    continue
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_LOS,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    availability_status=availability_status,
+                    template=template,
+                    display_name=display_name,
+                ))
         return actions
 
     def _collect_aoe_actions(
@@ -4997,7 +5359,7 @@ class Entity(BaseBlock):
                 if shape_template is None:
                     continue
 
-                can_afford = template.check_costs()
+                can_afford = template.check_target_independent_costs()
                 template_name = template.get_discovery_template_name()
                 display_name = template.get_discovery_display_name()
 
@@ -5009,6 +5371,9 @@ class Entity(BaseBlock):
                         target_type=TargetType.POSITION_AOE,
                         valid_targets=[],
                         can_afford=False,
+                        availability_status=(
+                            ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                        ),
                         template=template,
                         display_name=display_name,
                     ))
@@ -5043,13 +5408,15 @@ class Entity(BaseBlock):
                             self._aoe_nearby_candidates_cache[nearby_key] = candidates
                         valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
                     else:
-                        action_range = template.get_range()
-                        if action_range and action_range.type == RangeType.SELF:
+                        if not legal_only:
                             actions.append(self._make_action_info(
                                 template_name=template_name,
                                 target_type=TargetType.POSITION_AOE,
                                 valid_targets=[],
                                 can_afford=True,
+                                availability_status=(
+                                    ActionAvailabilityStatus.NO_VALID_TARGETS
+                                ),
                                 template=template,
                                 display_name=display_name,
                             ))
@@ -5067,40 +5434,44 @@ class Entity(BaseBlock):
                     shape_definition_key,
                 )
                 if cache_key in self._aoe_preview_cache:
-                    cached_targets = self._aoe_preview_cache[cache_key]
-                    if cached_targets:
-                        actions.append(self._make_action_info(
-                            template_name=template_name,
-                            target_type=TargetType.POSITION_AOE,
-                            valid_targets=list(cached_targets),
-                            can_afford=True,
-                            template=template,
-                            display_name=display_name,
-                        ))
+                    valid_positions = list(self._aoe_preview_cache[cache_key])
+                else:
+                    valid_positions = []
+                    preview_shape = shape_template.model_copy()
+                    for pos in valid_pos_list:
+                        target = self._compute_aoe_at_position(
+                            preview_shape,
+                            shape_definition_key,
+                            pos,
+                            template,
+                            include_dead,
+                            visible_position_set,
+                            fov_cache,
+                            barrier_positions,
+                            len(valid_positions),
+                        )
+                        if target is not None:
+                            valid_positions.append(target)
+                    self._aoe_preview_cache[cache_key] = tuple(valid_positions)
+
+                availability_status = (
+                    ActionAvailabilityStatus.AVAILABLE
+                    if valid_positions
+                    else ActionAvailabilityStatus.NO_VALID_TARGETS
+                )
+                if legal_only and (
+                    availability_status is not ActionAvailabilityStatus.AVAILABLE
+                ):
                     continue
-
-                valid_positions: List[AvailableTarget] = []
-                idx = 0
-                preview_shape = shape_template.model_copy()
-                for pos in valid_pos_list:
-                    target = self._compute_aoe_at_position(
-                        preview_shape, shape_definition_key, pos, template, include_dead,
-                        visible_position_set, fov_cache, barrier_positions, idx
-                    )
-                    if target is not None:
-                        valid_positions.append(target)
-                        idx += 1
-
-                self._aoe_preview_cache[cache_key] = tuple(valid_positions)
-                if valid_positions:
-                    actions.append(self._make_action_info(
-                        template_name=template_name,
-                        target_type=TargetType.POSITION_AOE,
-                        valid_targets=valid_positions,
-                        can_afford=True,
-                        template=template,
-                        display_name=display_name,
-                    ))
+                actions.append(self._make_action_info(
+                    template_name=template_name,
+                    target_type=TargetType.POSITION_AOE,
+                    valid_targets=valid_positions,
+                    can_afford=True,
+                    availability_status=availability_status,
+                    template=template,
+                    display_name=display_name,
+                ))
         return actions
 
     def _collect_object_actions(self, legal_only: bool = False) -> List[AvailableActionInfo]:
@@ -5109,16 +5480,22 @@ class Entity(BaseBlock):
         for template in self.object_actions:
             valid_targets: List[AvailableTarget] = []
             idx = 0
-            can_afford = template.check_costs()
-            if legal_only and not can_afford:
+            can_afford = template.check_target_independent_costs()
+            if not can_afford:
                 continue
 
             for obj_uuid, obj_pos in self.senses.objects.items():
                 obj_block = BaseBlock.get(obj_uuid)
                 if obj_block is not None and not obj_block.should_include_in_available_object_actions():
                     continue
-                template.set_target_entity(obj_uuid)
-                if template.pre_validate():
+                targeted_template = template.model_copy(
+                    deep=True,
+                    update={"target_entity_uuid": obj_uuid},
+                )
+                if (
+                    targeted_template.validate_requirements_for_discovery()
+                    and targeted_template.check_costs()
+                ):
                     obj_name = obj_block.name if obj_block else "Object"
                     distance = self.senses.get_feet_distance(obj_pos)
                     valid_targets.append(AvailableTarget(
@@ -5137,6 +5514,7 @@ class Entity(BaseBlock):
                     target_type=TargetType.OBJECT,
                     valid_targets=valid_targets,
                     can_afford=can_afford,
+                    availability_status=ActionAvailabilityStatus.AVAILABLE,
                     template=template,
                 ))
         return actions
@@ -5203,18 +5581,19 @@ class Entity(BaseBlock):
             stack_suffix = f" x{item_stack}" if item_stack and item_stack > 1 else ""
             display_name = f"{base_name} ({item_name}{stack_suffix})"
             stack_count_field = item_stack if item_stack and item_stack > 1 else None
-            can_afford = use_template.check_costs()
-            if legal_only and not can_afford:
+            can_afford = use_template.check_target_independent_costs()
+            if not can_afford:
                 continue
 
             if use_template.target_type == TargetType.SELF:
-                if not use_template.pre_validate():
+                if not use_template.validate_requirements_for_discovery():
                     continue
                 result.self_actions.append(self._make_action_info(
                     template_name=template_name,
                     target_type=TargetType.SELF,
                     valid_targets=[AvailableTarget(index=0)],
                     can_afford=can_afford,
+                    availability_status=ActionAvailabilityStatus.AVAILABLE,
                     template=use_template,
                     display_name=display_name,
                     is_item_use=True,
@@ -5227,13 +5606,17 @@ class Entity(BaseBlock):
                     use_template.valid_target_filter, include_dead,
                     use_template.include_self, potential_targets, target_pool_cache
                 )
-                valid_targets = self._validate_entity_targets(use_template, target_pool)
+                valid_targets, _ = self._validate_entity_targets(
+                    use_template,
+                    target_pool,
+                )
                 if valid_targets:
                     result.entity_actions.append(self._make_action_info(
                         template_name=template_name,
                         target_type=use_template.effective_target_type,
                         valid_targets=valid_targets,
                         can_afford=can_afford,
+                        availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
                         display_name=display_name,
                         is_item_use=True,
@@ -5244,22 +5627,6 @@ class Entity(BaseBlock):
             elif use_template.target_type == TargetType.POSITION_AOE:
                 use_shape_template = use_template.aoe_shape
                 if use_shape_template is None:
-                    continue
-
-                if not can_afford:
-                    if legal_only:
-                        continue
-                    result.position_actions.append(self._make_action_info(
-                        template_name=template_name,
-                        target_type=TargetType.POSITION_AOE,
-                        valid_targets=[],
-                        can_afford=False,
-                        template=use_template,
-                        display_name=display_name,
-                        is_item_use=True,
-                        source_item_uuid=item_uuid,
-                        item_stack_count=stack_count_field,
-                    ))
                     continue
 
                 valid_pos_list = use_template.get_valid_positions()
@@ -5283,19 +5650,6 @@ class Entity(BaseBlock):
                             self._aoe_nearby_candidates_cache[nearby_key] = candidates
                         valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
                     else:
-                        use_action_range = use_template.get_range()
-                        if use_action_range and use_action_range.type == RangeType.SELF:
-                            result.position_actions.append(self._make_action_info(
-                                template_name=template_name,
-                                target_type=TargetType.POSITION_AOE,
-                                valid_targets=[],
-                                can_afford=True,
-                                template=use_template,
-                                display_name=display_name,
-                                is_item_use=True,
-                                source_item_uuid=item_uuid,
-                                item_stack_count=stack_count_field,
-                            ))
                         continue
 
                 valid_pos_list = self._compact_aoe_candidate_positions(
@@ -5319,6 +5673,9 @@ class Entity(BaseBlock):
                             target_type=TargetType.POSITION_AOE,
                             valid_targets=list(cached_targets),
                             can_afford=True,
+                            availability_status=(
+                                ActionAvailabilityStatus.AVAILABLE
+                            ),
                             template=use_template,
                             display_name=display_name,
                             is_item_use=True,
@@ -5350,6 +5707,7 @@ class Entity(BaseBlock):
                         target_type=TargetType.POSITION_AOE,
                         valid_targets=use_valid_positions,
                         can_afford=True,
+                        availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
                         display_name=display_name,
                         is_item_use=True,
@@ -5362,8 +5720,14 @@ class Entity(BaseBlock):
                 use_valid_positions_los: List[AvailableTarget] = []
                 use_idx = 0
                 for pos in use_valid_pos_list:
-                    use_template.set_target_position(pos)
-                    if use_template.pre_validate():
+                    targeted_template = use_template.model_copy(
+                        deep=True,
+                        update={"end_position": pos},
+                    )
+                    if (
+                        targeted_template.validate_requirements_for_discovery()
+                        and targeted_template.check_costs()
+                    ):
                         use_valid_positions_los.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
@@ -5376,6 +5740,7 @@ class Entity(BaseBlock):
                         target_type=TargetType.POSITION_LOS,
                         valid_targets=use_valid_positions_los,
                         can_afford=can_afford,
+                        availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
                         display_name=display_name,
                         is_item_use=True,
@@ -5396,8 +5761,14 @@ class Entity(BaseBlock):
                     dist = self.senses.get_feet_distance(pos)
                     if max_range > 0 and dist > max_range:
                         continue
-                    use_template.set_target_position(pos)
-                    if use_template.pre_validate():
+                    targeted_template = use_template.model_copy(
+                        deep=True,
+                        update={"end_position": pos},
+                    )
+                    if (
+                        targeted_template.validate_requirements_for_discovery()
+                        and targeted_template.check_costs()
+                    ):
                         use_valid_positions_pos.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
@@ -5410,6 +5781,7 @@ class Entity(BaseBlock):
                         target_type=use_template.effective_target_type,
                         valid_targets=use_valid_positions_pos,
                         can_afford=can_afford,
+                        availability_status=ActionAvailabilityStatus.AVAILABLE,
                         template=use_template,
                         display_name=display_name,
                         is_item_use=True,
@@ -5429,7 +5801,9 @@ class Entity(BaseBlock):
         includes indexed targets for controller commands.
 
         The method is agnostic of specific action subclasses; it iterates over
-        registered templates by target type and calls `pre_validate()`.
+        registered templates by target type, checks affordability once, and
+        validates target-specific non-cost requirements only for affordable
+        candidates.
 
         Args:
             target_filter: Which entities to show as targets for entity actions.
@@ -5584,18 +5958,9 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.collect_use_actions_ms", started)
 
         started = time.perf_counter() if timing else 0.0
-        for handler in self.event_handlers.values():
-            if not handler.player_toggleable:
-                continue
-            trigger_event = ""
-            if handler.trigger_conditions:
-                trigger_event = handler.trigger_conditions[0].event_type.value
-            result.handler_details.append(AvailableHandlerInfo(
-                name=handler.name,
-                uuid=handler.uuid,
-                enabled=handler.enabled,
-                trigger_event=trigger_event,
-            ))
+        result.handler_details.extend(
+            self.get_player_toggleable_handler_infos(),
+        )
         if timing:
             record_action_timing("available_actions.handler_details_ms", started)
 

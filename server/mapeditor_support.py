@@ -13,45 +13,47 @@ from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.content_system.item_bindings import (
+    ITEM_RUNTIME_BINDINGS,
+    ItemRuntimeOrigin,
+)
+from dnd.content_system.item_materialization import (
+    materialize_item,
+    resolve_item_recipe,
+)
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import Tile, difficult_terrain_factory
+from dnd.core.content.descriptors import (
+    ContentOrdering,
+    ContentPresentation,
+    ContentVisibility,
+)
+from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.content.item_definitions import ItemPersistencePolicy
+from dnd.core.content.recipe_presets import ContentRecipePresetRef
+from dnd.core.content.recipes import ContentRecipe
+from dnd.core.content.registration import ContentDeclaration
+from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
-from dnd.runtime_reset import reset_engine_runtime
-from dnd.items import ARMORS, SHIELDS, WEAPONS
+from dnd.core.values import BaseValue
+from dnd.items.environment_content import TRAP_LEVER_DECLARATION
+from dnd.items.environment import DirectionalDoor
 from dnd.items.test_items import (
-    CookAction,
     PullLeverAction,
-    RestAction,
-    StorageChest,
     TestDoorA,
     TrapLever,
-    create_acid_flask,
-    create_arcane_device,
-    create_arcane_machine_gun,
-    create_fireball_cannon,
-    create_healing_potion,
-    create_potion_of_greater_invisibility,
-    create_potion_of_haste,
-    create_scroll_of_fire_bolt,
-    create_scroll_of_fireball,
-    create_scroll_of_hold_person,
-    create_scroll_of_invisibility,
-    create_scroll_of_mage_armor,
-    create_scroll_of_magic_missile,
-    create_scroll_of_spike_growth,
-    create_torch,
-    create_wall_torch,
-    create_wand_of_fire,
-    create_wand_of_magic_missiles,
-    create_weapon_coat,
 )
-from dnd.items.environment import DIRECTIONAL_CHANNELS, DIRECTIONS, DirectionalDoor, DirectionalWall
-from dnd.maps.arena_layout import DOOR_DIRECTIONS, build_standard_arena_environment
+from dnd.items.torches import WallTorch
+from dnd.maps.arena_layout import build_standard_arena_environment
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.tiles import create_spike_zone
 from server.api_models import (
     MapEditorCatalog,
     MapEditorCatalogEntry,
+    MapEditorContentCatalogEntry,
     MapEditorCreateMapRequest,
     MapEditorGridBounds,
     MapEditorLightCell,
@@ -59,6 +61,7 @@ from server.api_models import (
     MapEditorMapSnapshot,
     MapEditorObjectDeleteRequest,
     MapEditorObjectPlaceRequest,
+    MapEditorObjectRuntimeState,
     MapEditorSaveMapRequest,
     MapEditorSavedMapDocument,
     MapEditorSavedMapList,
@@ -83,7 +86,7 @@ _BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
     "values_dict_uuid_name",
 }
 _ALREADY_SERIALIZED = {"uuid", "name", "map_char"}
-_SAVE_SCHEMA_VERSION = 1
+_SAVE_SCHEMA_VERSION = 2
 
 
 def reset_editor_world() -> None:
@@ -144,6 +147,7 @@ def save_current_editor_map(request: MapEditorSaveMapRequest) -> MapEditorSavedM
     """Persist the current entity-free editor map snapshot to a local JSON file."""
     snapshot = get_editor_snapshot()
     object_placements = _saved_object_placements(snapshot.floor_objects)
+    durable_snapshot = snapshot.model_copy(update={"floor_objects": []})
     map_id = _save_id(request.id) if request.id else _unique_save_id(request.name)
     now = _utc_now()
     path = _save_path(map_id)
@@ -170,10 +174,12 @@ def save_current_editor_map(request: MapEditorSaveMapRequest) -> MapEditorSavedM
     )
     document = MapEditorSavedMapDocument(
         schema_version=_SAVE_SCHEMA_VERSION,
+        content_set_digest=SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest,
         metadata=metadata,
-        snapshot=snapshot,
+        snapshot=durable_snapshot,
         object_placements=object_placements,
     )
+    _preflight_saved_editor_map(document, validate_runtime_state=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(document.model_dump_json(indent=2), encoding="utf-8")
     return metadata
@@ -205,7 +211,17 @@ def get_saved_editor_map(map_id: str) -> MapEditorSavedMapDocument:
 def load_saved_editor_map(map_id: str) -> MapEditorMapSnapshot:
     """Load a saved editor map into GridMap, rebuilding map state only."""
     document = get_saved_editor_map(map_id)
-    _load_editor_snapshot(document.snapshot, document.object_placements)
+    installed_digest = SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest
+    if document.content_set_digest != installed_digest:
+        raise ValueError(
+            "saved map content set does not match the installed content set",
+        )
+    _preflight_saved_editor_map(document, validate_runtime_state=True)
+    _load_editor_snapshot(
+        document.snapshot,
+        document.object_placements,
+        document.content_set_digest,
+    )
     return get_editor_snapshot()
 
 
@@ -218,29 +234,52 @@ def delete_saved_editor_map(map_id: str) -> None:
 
 
 def build_catalog() -> MapEditorCatalog:
-    """Build the normalized mapeditor catalog."""
+    """Discover the exact public mapeditor palette from the frozen registry."""
+    loaded = SERVER_CONTENT_SYSTEM_RUNTIME.require()
     presets = [
-        _entry("scratch", "Blank Map", "presets", "map_preset", "server.mapeditor_support", placement="map"),
+        _entry(
+            "scratch",
+            "Blank Map",
+            "presets",
+            "map_preset",
+            placement="map",
+        ),
         _entry(
             "forgotten_crypt_arena",
             "Forgotten Crypt Arena",
             "presets",
             "map_preset",
-            "server.mapeditor_support",
             placement="map",
             default_state={"has_entities": False},
         ),
     ]
     tiles = [
-        _entry("floor", "Floor", "tiles", "tile", "dnd.core.gridmap", flags={"walkable": True, "blocks_vision": False}),
-        _entry("wall", "Wall", "tiles", "tile", "dnd.core.gridmap", flags={"walkable": False, "blocks_vision": True}),
-        _entry("water", "Water", "tiles", "tile", "dnd.core.gridmap", flags={"walkable": False, "blocks_vision": False}),
+        _entry(
+            "floor",
+            "Floor",
+            "tiles",
+            "tile",
+            flags={"walkable": True, "blocks_vision": False},
+        ),
+        _entry(
+            "wall",
+            "Wall",
+            "tiles",
+            "tile",
+            flags={"walkable": False, "blocks_vision": True},
+        ),
+        _entry(
+            "water",
+            "Water",
+            "tiles",
+            "tile",
+            flags={"walkable": False, "blocks_vision": False},
+        ),
         _entry(
             "difficult_terrain",
             "Difficult Terrain",
             "tiles",
             "tile",
-            "dnd.core.base_tiles",
             flags={"walkable": True, "walking_cost": 2},
         ),
         _entry(
@@ -248,47 +287,105 @@ def build_catalog() -> MapEditorCatalog:
             "Spike Zone",
             "tiles",
             "hazard_zone",
-            "dnd.tiles",
             placement="zone",
             flags={"walkable": True, "hazardous": True},
         ),
     ]
+    default_rows: list[MapEditorContentCatalogEntry] = []
+    for declaration in loaded.registry.declarations.values():
+        descriptor = declaration.descriptor
+        item_definition = declaration.item_definition
+        construction = declaration.construction
+        if (
+            descriptor.visibility is not ContentVisibility.PUBLIC
+            or item_definition is None
+            or construction is None
+            or item_definition.persistence_policy
+            not in {
+                ItemPersistencePolicy.POSSESSION,
+                ItemPersistencePolicy.ENVIRONMENT,
+            }
+        ):
+            continue
+        parameters = construction.parameter_model.model_validate(
+            {},
+        ).model_dump(mode="json")
+        default_rows.append(
+            _content_catalog_entry(
+                recipe=ContentRecipe.create(
+                    ref=declaration.ref,
+                    parameters=parameters,
+                ),
+                content_set_digest=loaded.content_set_digest,
+                display_name=descriptor.display_name,
+                description=descriptor.description,
+                tags=descriptor.tags,
+                presentation=descriptor.presentation,
+                ordering=descriptor.ordering,
+            ),
+        )
+
     objects = [
-        _entry("door", "Door", "environment", "door", "dnd.items.test_items", map_char="pi", flags=_flags(False, False, True, False, True, True)),
-        _entry("wall_torch", "Wall Torch", "environment", "light", "dnd.items.test_items", map_char="diamond", flags=_flags(False, False, True, False, False, False, emits_light=True)),
-        _entry("trap_lever", "Trap Lever", "environment", "device", "dnd.items.test_items", map_char="lambda", flags=_flags(False, False, True, False, False, False), actions=["Pull Lever"]),
-        _entry("storage_chest", "Chest", "environment", "container", "dnd.items.test_items", map_char="Omega", flags=_flags(False, False, True, False, False, False), actions=["Loot All"]),
-        _entry("campfire", "Campfire", "environment", "camp", "dnd.items.test_items", map_char="*", flags=_flags(False, False, True, False, False, False), actions=["Rest", "Cook"]),
-        _entry("arcane_device", "Arcane Device", "environment", "device", "dnd.items.test_items", map_char="phi", flags=_flags(False, False, True, False, False, False), actions=["Activate Device"]),
-        _entry("arcane_machine_gun", "Arcane Machine Gun", "environment", "device", "dnd.items.test_items", map_char="sigma", flags=_flags(False, False, True, False, False, False), actions=["Magic Missile"], stability="demo"),
-        _entry("fireball_cannon", "Fireball Cannon", "environment", "device", "dnd.items.test_items", map_char="sigma", flags=_flags(False, False, True, False, False, False), actions=["Fireball"], stability="demo"),
-        _entry("crate", "Crate", "breakables", "breakable", "server.mapeditor_support", map_char="box", flags=_flags(False, False, False, False, False, False, targetable=True), stability="candidate", default_state={"hp": 20}),
-        _entry("boulder", "Boulder", "breakables", "blocker", "server.mapeditor_support", map_char="rock", flags=_flags(False, False, False, False, True, False), stability="candidate"),
-        _entry("barricade", "Barricade", "breakables", "blocker", "server.mapeditor_support", map_char="bar", flags=_flags(False, False, False, False, True, True, targetable=True), stability="candidate", default_state={"hp": 20}),
-        _entry("oil_barrel", "Oil Barrel", "breakables", "breakable", "server.mapeditor_support", map_char="barrel", flags=_flags(False, False, False, False, True, False, targetable=True), stability="candidate", default_state={"hp": 12}),
+        row
+        for row in default_rows
+        if row.recipe.ref.definition_kind
+        is ContentDefinitionKind.ENVIRONMENT_OBJECT
     ]
-    loot = []
-    loot.extend(_registry_entries(WEAPONS, "loot/weapons", "weapon", "dnd.items.weapons", "dagger", equippable=True))
-    loot.extend(_registry_entries(ARMORS, "loot/armor", "armor", "dnd.items.armors", "armor", equippable=True))
-    loot.extend(_registry_entries(SHIELDS, "loot/armor", "shield", "dnd.items.armors", "shield", equippable=True))
-    loot.extend([
-        _entry("healing_potion", "Potion of Healing", "loot/consumables", "consumable", "dnd.items.test_items", map_char="theta", flags=_flags(True, False, True, True, False, False), actions=["Drink Potion"]),
-        _entry("potion_of_greater_invisibility", "Potion of Greater Invisibility", "loot/consumables", "consumable", "dnd.items.test_items", map_char="theta", flags=_flags(True, False, True, True, False, False), actions=["Drink Greater Invisibility Potion"]),
-        _entry("potion_of_haste", "Potion of Haste", "loot/consumables", "consumable", "dnd.items.test_items", map_char="theta", flags=_flags(True, False, True, True, False, False), actions=["Drink Haste Potion"]),
-        _entry("acid_flask", "Acid Flask", "loot/consumables", "consumable", "dnd.items.test_items", map_char="!", flags=_flags(True, False, True, True, False, False), actions=["Acid Flask"]),
-        _entry("weapon_coat", "Weapon Coat", "loot/consumables", "consumable", "dnd.items.test_items", map_char="phi", flags=_flags(True, False, True, True, False, False), actions=["Coat Main Hand", "Coat Off Hand"]),
-        _entry("torch", "Torch", "loot/spell_items", "light", "dnd.items.test_items", map_char="diamond", flags=_flags(True, False, True, False, False, False, emits_light=True), actions=["Ignite Torch"]),
-        _entry("scroll_of_fireball", "Scroll of Fireball", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Fireball"]),
-        _entry("scroll_of_magic_missile", "Scroll of Magic Missile", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Magic Missile"]),
-        _entry("scroll_of_hold_person", "Scroll of Hold Person", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Hold Person"]),
-        _entry("scroll_of_mage_armor", "Scroll of Mage Armor", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Mage Armor"]),
-        _entry("scroll_of_spike_growth", "Scroll of Spike Growth", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Spike Growth"]),
-        _entry("scroll_of_fire_bolt", "Scroll of Fire Bolt", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Fire Bolt"]),
-        _entry("scroll_of_invisibility", "Scroll of Invisibility", "loot/spell_items", "scroll", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, True, False, False), actions=["Invisibility"]),
-        _entry("wand_of_magic_missiles", "Wand of Magic Missiles", "loot/spell_items", "wand", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, False, False, False), actions=["Magic Missile"]),
-        _entry("wand_of_fire", "Wand of Fire", "loot/spell_items", "wand", "dnd.items.test_items", map_char="sigma", flags=_flags(True, False, True, False, False, False), actions=["Burning Hands", "Fireball"]),
-    ])
-    return MapEditorCatalog(presets=presets, tiles=tiles, objects=objects, loot=loot)
+    loot = [
+        row
+        for row in default_rows
+        if row.recipe.ref.definition_kind is ContentDefinitionKind.ITEM
+    ]
+    root_recipe_digests = {
+        row.recipe.recipe_digest
+        for row in loot
+    }
+    for preset in loaded.registry.recipe_presets.values():
+        declaration = loaded.registry.resolve_factory(preset.recipe.ref)
+        descriptor = preset.descriptor
+        item_definition = declaration.item_definition
+        if (
+            descriptor.visibility is not ContentVisibility.PUBLIC
+            or item_definition is None
+            or item_definition.persistence_policy
+            is not ItemPersistencePolicy.POSSESSION
+            or preset.recipe.recipe_digest in root_recipe_digests
+        ):
+            continue
+        loot.append(
+            _content_catalog_entry(
+                recipe=preset.recipe,
+                content_set_digest=loaded.content_set_digest,
+                recipe_preset_ref=preset.ref,
+                display_name=descriptor.display_name,
+                description=descriptor.description,
+                tags=descriptor.tags,
+                presentation=descriptor.presentation,
+                ordering=descriptor.ordering,
+            ),
+        )
+
+    def content_row_key(
+        row: MapEditorContentCatalogEntry,
+    ) -> tuple[str, int, str]:
+        identity = (
+            row.recipe_preset_ref.identity_key
+            if row.recipe_preset_ref is not None
+            else row.recipe.ref.identity_key
+        )
+        return (
+            row.ordering.sort_group,
+            row.ordering.sort_order,
+            identity,
+        )
+
+    return MapEditorCatalog(
+        content_set_digest=loaded.content_set_digest,
+        presets=presets,
+        tiles=tiles,
+        objects=sorted(objects, key=content_row_key),
+        loot=sorted(loot, key=content_row_key),
+    )
 
 
 def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSnapshot:
@@ -345,99 +442,245 @@ def _apply_directional_tile_patch(grid: Any, patch: MapEditorTilePatch) -> None:
 
 
 def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject:
-    """Place a catalog object or loot item on the grid."""
-    catalog_id = _normalize_id(request.catalog_id)
-    position = request.position
-    owner = uuid4()
+    """Validate and place one exact public item recipe on the grid."""
+    loaded = SERVER_CONTENT_SYSTEM_RUNTIME.require()
+    if request.content_set_digest != loaded.content_set_digest:
+        raise ValueError(
+            "requested content set does not match the installed content set",
+        )
     grid = get_map()
-
-    if catalog_id == "door":
-        item = TestDoorA(source_entity_uuid=owner)
-        item.place_on_grid(position)
-    elif catalog_id == "directional_wall":
-        item = DirectionalWall(
-            source_entity_uuid=owner,
-            blocked_directions=tuple(request.options.get("blocked_directions", DIRECTIONS)),
-            blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
+    if grid.get_tile(request.position[0], request.position[1]) is None:
+        raise ValueError(
+            f"mapeditor placement requires an existing tile at {request.position}",
         )
-        item.place_on_grid(position)
-    elif catalog_id == "directional_door":
-        item = DirectionalDoor(
-            source_entity_uuid=owner,
-            name=request.options.get("name", "Door"),
-            is_open=bool(request.options.get("is_open", False)),
-            blocked_directions=tuple(request.options.get("blocked_directions", DOOR_DIRECTIONS)),
-            blocked_channels=tuple(request.options.get("blocked_channels", DIRECTIONAL_CHANNELS)),
+    _declaration, origin = _resolve_placeable_editor_recipe(request.recipe)
+    registry_snapshot = _capture_editor_materialization_state()
+    try:
+        item = materialize_item(
+            request.recipe,
+            uuid4(),
+            origin=origin,
         )
-        item.place_on_grid(position)
-    elif catalog_id == "wall_torch":
-        item = create_wall_torch(position=position, owner_uuid=owner, lit=bool(request.options.get("lit", True)))
-    elif catalog_id == "trap_lever":
-        trap_handler_uuid = request.options.get("trap_handler_uuid")
-        trap_tile_uuids = request.options.get("trap_tile_uuids", [])
-        use_action_templates: List[BaseAction] = (
-            [
-                PullLeverAction(
-                    source_entity_uuid=uuid4(),
-                    trap_handler_uuid=UUID(str(trap_handler_uuid)),
-                    trap_tile_uuids=[
-                        UUID(str(tile_uuid))
-                        for tile_uuid in trap_tile_uuids
-                    ],
-                    template=True,
-                ),
-            ]
-            if trap_handler_uuid is not None
-            else []
+        trap_link = _validate_editor_runtime_state(
+            item,
+            request.runtime_state,
         )
-        item = TrapLever(
-            source_entity_uuid=owner,
-            charges=int(request.options.get("charges", 1)),
-            use_action_templates=use_action_templates,
+        _apply_editor_runtime_state(
+            item,
+            request.position,
+            request.runtime_state,
+            trap_link=trap_link,
         )
-        item.place_on_grid(position)
-    elif catalog_id == "storage_chest":
-        item = StorageChest(source_entity_uuid=owner)
-        item.place_on_grid(position)
-    elif catalog_id == "campfire":
-        item = UsableItem(
-            source_entity_uuid=owner,
-            name="Campfire",
-            is_pickable=False,
-            map_char="*",
-            use_action_templates=[
-                RestAction(source_entity_uuid=uuid4(), template=True),
-                CookAction(source_entity_uuid=uuid4(), template=True),
-            ],
-        )
-        item.place_on_grid(position)
-    elif catalog_id == "arcane_device":
-        item = create_arcane_device(owner, position=position)
-    elif catalog_id == "arcane_machine_gun":
-        item = create_arcane_machine_gun(owner, position=position)
-    elif catalog_id == "fireball_cannon":
-        item = create_fireball_cannon(owner, position=position, charges=int(request.options.get("charges", 3)))
-    elif catalog_id in {"crate", "boulder", "barricade", "oil_barrel"}:
-        item = _create_blocker(catalog_id, owner, position)
-    elif catalog_id in WEAPONS:
-        item = WEAPONS[catalog_id](owner)
-        item.place_on_grid(position)
-    elif catalog_id in ARMORS:
-        item = ARMORS[catalog_id](owner)
-        item.place_on_grid(position)
-    elif catalog_id in SHIELDS:
-        item = SHIELDS[catalog_id](owner)
-        item.place_on_grid(position)
-    else:
-        item = _create_loot_item(catalog_id, owner)
-        if item is None:
-            raise ValueError(f"unknown mapeditor catalog id: {request.catalog_id}")
-        item.place_on_grid(position)
-
+    except Exception:
+        _rollback_editor_materialization(registry_snapshot)
+        raise
     obj_pos = grid.get_object_position(item.uuid)
     if obj_pos is None:
-        obj_pos = position
+        _rollback_editor_materialization(registry_snapshot)
+        raise ValueError("mapeditor item factory did not place its object")
     return _floor_object(item.uuid, obj_pos)
+
+
+def _resolve_placeable_editor_recipe(
+    recipe: ContentRecipe,
+) -> tuple[ContentDeclaration, ItemRuntimeOrigin]:
+    """Resolve and type-check a recipe before any runtime construction."""
+    recipe.verify_integrity()
+    try:
+        declaration = resolve_item_recipe(recipe)
+    except (KeyError, TypeError) as error:
+        raise ValueError(str(error).strip("'")) from error
+    definition = declaration.item_definition
+    if (
+        declaration.descriptor.visibility is not ContentVisibility.PUBLIC
+        or definition is None
+    ):
+        raise ValueError(f"content {recipe.ref.identity_key} is not placeable")
+    construction = declaration.construction
+    if construction is None:
+        raise ValueError(f"content {recipe.ref.identity_key} is not constructible")
+    construction.parameter_model.model_validate(recipe.parameters)
+    if (
+        recipe.ref.definition_kind is ContentDefinitionKind.ITEM
+        and definition.persistence_policy is ItemPersistencePolicy.POSSESSION
+    ):
+        return declaration, ItemRuntimeOrigin.LOOT
+    if (
+        recipe.ref.definition_kind is ContentDefinitionKind.ENVIRONMENT_OBJECT
+        and definition.persistence_policy is ItemPersistencePolicy.ENVIRONMENT
+    ):
+        return declaration, ItemRuntimeOrigin.ENVIRONMENT
+    raise ValueError(f"content {recipe.ref.identity_key} is not placeable")
+
+
+def _capture_editor_materialization_state(
+) -> tuple[
+    frozenset[UUID],
+    frozenset[UUID],
+    frozenset[UUID],
+    frozenset[UUID],
+    frozenset[UUID],
+]:
+    """Capture registries that a provisional item construction may extend."""
+    return (
+        frozenset(BaseBlock._registry),
+        frozenset(BaseObject._registry),
+        frozenset(BaseValue._registry),
+        frozenset(ITEM_RUNTIME_BINDINGS.bindings),
+        frozenset(get_map()._object_positions),
+    )
+
+
+def _rollback_editor_materialization(
+    snapshot: tuple[
+        frozenset[UUID],
+        frozenset[UUID],
+        frozenset[UUID],
+        frozenset[UUID],
+        frozenset[UUID],
+    ],
+) -> None:
+    """Remove every provisional block, value, binding, and grid placement."""
+    (
+        blocks_before,
+        base_objects_before,
+        values_before,
+        bindings_before,
+        objects_before,
+    ) = snapshot
+    grid = get_map()
+    for object_uuid in set(grid._object_positions) - set(objects_before):
+        grid.remove_object(object_uuid)
+    for block_uuid in set(BaseBlock._registry) - set(blocks_before):
+        grid.cleanup_block_light_sources(block_uuid)
+        BaseBlock._registry.pop(block_uuid, None)
+    for object_uuid in set(BaseObject._registry) - set(base_objects_before):
+        BaseObject._registry.pop(object_uuid, None)
+    for value_uuid in set(BaseValue._registry) - set(values_before):
+        BaseValue._registry.pop(value_uuid, None)
+    for binding_uuid in set(ITEM_RUNTIME_BINDINGS.bindings) - set(
+        bindings_before,
+    ):
+        ITEM_RUNTIME_BINDINGS.discard(binding_uuid)
+
+
+def _validate_editor_runtime_state(
+    item: BaseItem,
+    state: MapEditorObjectRuntimeState,
+) -> tuple[UUID, tuple[UUID, ...]] | None:
+    """Validate every mutable fact before the item mutates the active grid."""
+    if state.charges is not None:
+        if not isinstance(item, UsableItem):
+            raise ValueError("charges are only valid for usable items")
+        if item.max_charges >= 0 and state.charges < 0:
+            raise ValueError("finite-charge items cannot use charges=-1")
+        if item.max_charges >= 0 and state.charges > item.max_charges:
+            raise ValueError("current charges cannot exceed maximum charges")
+
+    if state.is_open is not None and not isinstance(
+        item,
+        (TestDoorA, DirectionalDoor),
+    ):
+        raise ValueError("is_open is only valid for door objects")
+    if state.is_lit is not None and not isinstance(item, WallTorch):
+        raise ValueError("is_lit is only valid for wall torches")
+
+    if state.trap_handler_uuid is None:
+        return None
+    if not isinstance(item, TrapLever):
+        raise ValueError("trap linkage is only valid for trap levers")
+    try:
+        handler_uuid = UUID(state.trap_handler_uuid)
+        tile_uuids = tuple(UUID(value) for value in state.trap_tile_uuids)
+    except ValueError as error:
+        raise ValueError("trap linkage contains an invalid UUID") from error
+    handler = (
+        EventQueue._spatial_handlers.get(handler_uuid)
+        or EventQueue._event_handlers.get(handler_uuid)
+    )
+    handler_index = EventQueue._handler_positions.get(handler_uuid)
+    if handler is None or handler_index is None:
+        raise ValueError("trap linkage references an unknown spatial handler")
+    tiles = tuple(BaseBlock.get(tile_uuid) for tile_uuid in tile_uuids)
+    if any(not isinstance(tile, Tile) for tile in tiles):
+        raise ValueError("trap linkage references an unknown trap tile")
+    tile_positions = {
+        tile.position
+        for tile in tiles
+        if isinstance(tile, Tile)
+    }
+    _event_key, handler_positions = handler_index
+    if tile_positions != set(handler_positions):
+        raise ValueError(
+            "trap linkage tiles must exactly match the spatial handler",
+        )
+    return handler_uuid, tile_uuids
+
+
+def _apply_editor_runtime_state(
+    item: BaseItem,
+    position: Tuple[int, int],
+    state: MapEditorObjectRuntimeState,
+    *,
+    trap_link: tuple[UUID, tuple[UUID, ...]] | None,
+) -> None:
+    """Apply the narrow mutable state supported after generic construction."""
+    if state.charges is not None:
+        if not isinstance(item, UsableItem):
+            raise AssertionError("runtime state was not validated")
+        item.charges = state.charges
+
+    if isinstance(item, TestDoorA):
+        if state.is_open is not None:
+            item.is_open = state.is_open
+            item.blocks_movement = not state.is_open
+            item.blocks_vision_field = not state.is_open
+    elif isinstance(item, DirectionalDoor):
+        pass
+
+    if isinstance(item, WallTorch):
+        item.mount(
+            position,
+            lit=True if state.is_lit is None else state.is_lit,
+        )
+    else:
+        item.place_on_grid(position)
+
+    if isinstance(item, DirectionalDoor) and state.is_open is not None:
+        if state.is_open:
+            item.open()
+        else:
+            item.close()
+
+    if trap_link is not None:
+        if not isinstance(item, TrapLever):
+            raise AssertionError("runtime state was not validated")
+        handler_uuid, tile_uuids = trap_link
+        _bind_trap_link(
+            item,
+            handler_uuid,
+            tile_uuids,
+        )
+
+
+def _bind_trap_link(
+    item: TrapLever,
+    trap_handler_uuid: UUID,
+    trap_tile_uuids: tuple[UUID, ...],
+) -> None:
+    """Attach the sole runtime-only trap linkage after materialization."""
+    action: BaseAction = PullLeverAction(
+        source_entity_uuid=uuid4(),
+        trap_handler_uuid=trap_handler_uuid,
+        trap_tile_uuids=list(trap_tile_uuids),
+        template=True,
+    )
+    SERVER_CONTENT_SYSTEM_RUNTIME.bind_child(
+        action,
+        provider=item,
+        runtime_owner_uuid=item.uuid,
+    )
+    item.use_action_templates.append(action)
 
 
 def delete_catalog_object(request: MapEditorObjectDeleteRequest) -> MapEditorMapSnapshot:
@@ -495,7 +738,67 @@ def get_objective_light() -> MapEditorLightResponse:
     )
 
 
-def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: List[MapEditorSavedObjectPlacement]) -> None:
+def _preflight_saved_editor_map(
+    document: MapEditorSavedMapDocument,
+    *,
+    validate_runtime_state: bool,
+) -> None:
+    """Validate the complete temporary save before replacing the active world."""
+    tile_positions = {
+        (tile.x, tile.y)
+        for tile in document.snapshot.tiles
+    }
+    trap_lever_count = 0
+    for placement in document.object_placements:
+        if placement.position not in tile_positions:
+            raise ValueError(
+                "saved map object placement requires an existing snapshot tile "
+                f"at {placement.position}",
+            )
+        declaration, origin = _resolve_placeable_editor_recipe(
+            placement.recipe,
+        )
+        if declaration.ref == TRAP_LEVER_DECLARATION.ref:
+            trap_lever_count += 1
+        if placement.runtime_state.trap_handler_uuid is not None:
+            raise ValueError(
+                "saved map trap linkage is derived from its single trap network",
+            )
+        if not validate_runtime_state:
+            continue
+        registry_snapshot = _capture_editor_materialization_state()
+        try:
+            item = materialize_item(
+                placement.recipe,
+                uuid4(),
+                origin=origin,
+            )
+            _validate_editor_runtime_state(
+                item,
+                placement.runtime_state,
+            )
+        finally:
+            _rollback_editor_materialization(registry_snapshot)
+    if trap_lever_count > 1:
+        raise ValueError(
+            "temporary mapeditor saves support at most one trap lever "
+            "for their one trap network",
+        )
+    has_spike_network = any(
+        tile.is_hazardous or "Spike Trap" in tile.conditions
+        for tile in document.snapshot.tiles
+    )
+    if trap_lever_count == 1 and not has_spike_network:
+        raise ValueError(
+            "temporary mapeditor trap lever requires one spike network",
+        )
+
+
+def _load_editor_snapshot(
+    snapshot: MapEditorMapSnapshot,
+    object_placements: List[MapEditorSavedObjectPlacement],
+    content_set_digest: str,
+) -> None:
     """Rebuild GridMap from a saved editor snapshot without entities."""
     reset_editor_world()
     grid = get_map()
@@ -537,23 +840,21 @@ def _load_editor_snapshot(snapshot: MapEditorMapSnapshot, object_placements: Lis
                     break
 
     for placement in object_placements:
-        options = dict(placement.state)
-        if (
-            placement.catalog_id == "trap_lever"
-            and spike_handler_uuid is not None
-        ):
-            options["trap_handler_uuid"] = str(spike_handler_uuid)
-            options["trap_tile_uuids"] = [
-                str(tile_uuid)
-                for tile_uuid in spike_tile_uuids
-            ]
-        place_catalog_object(
+        placed = place_catalog_object(
             MapEditorObjectPlaceRequest(
-                catalog_id=placement.catalog_id,
+                recipe=placement.recipe,
+                content_set_digest=content_set_digest,
                 position=placement.position,
-                options=options,
+                runtime_state=placement.runtime_state,
             )
         )
+        item = BaseBlock.get(UUID(placed.uuid))
+        if isinstance(item, TrapLever) and spike_handler_uuid is not None:
+            _bind_trap_link(
+                item,
+                spike_handler_uuid,
+                tuple(spike_tile_uuids),
+            )
 
 
 def _restore_directional_tile_state(grid: Any, tile_data: APITile) -> None:
@@ -612,47 +913,49 @@ def _get_floor_object_state(obj: BaseBlock) -> Dict[str, Any]:
 
 
 def _saved_object_placements(floor_objects: List[APIFloorObject]) -> List[MapEditorSavedObjectPlacement]:
-    return [
-        MapEditorSavedObjectPlacement(
-            catalog_id=_catalog_id_for_floor_object(obj),
-            name=obj.name,
-            position=(obj.position[0], obj.position[1]),
-            state=obj.state,
+    placements: list[MapEditorSavedObjectPlacement] = []
+    installed_digest = SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest
+    for obj in floor_objects:
+        runtime_object = BaseBlock.get(UUID(obj.uuid))
+        if not isinstance(runtime_object, BaseItem):
+            raise ValueError(
+                f"cannot save non-item mapeditor object: {obj.uuid}",
+            )
+        binding = ITEM_RUNTIME_BINDINGS.require(runtime_object.uuid)
+        if runtime_object.content_ref != binding.recipe.ref:
+            raise ValueError(
+                "mapeditor object content identity differs from its runtime "
+                f"binding: {obj.uuid}",
+            )
+        if binding.content_set_digest != installed_digest:
+            raise ValueError(
+                "mapeditor object binding belongs to a different content set",
+            )
+        runtime_state = MapEditorObjectRuntimeState(
+            is_open=(
+                runtime_object.is_open
+                if isinstance(runtime_object, (TestDoorA, DirectionalDoor))
+                else None
+            ),
+            is_lit=(
+                runtime_object.is_lit
+                if isinstance(runtime_object, WallTorch)
+                else None
+            ),
+            charges=(
+                runtime_object.charges
+                if isinstance(runtime_object, UsableItem)
+                else None
+            ),
         )
-        for obj in floor_objects
-    ]
-
-
-def _catalog_id_for_floor_object(obj: APIFloorObject) -> str:
-    if "blocked_directions" in obj.state:
-        normalized_directional_name = _normalize_id(obj.name)
-        if normalized_directional_name in {"door", "directional_door"}:
-            return "directional_door"
-        if normalized_directional_name in {"directional_wall", "wall"}:
-            return "directional_wall"
-
-    explicit = {
-        "door": "door",
-        "wall_torch": "wall_torch",
-        "trap_lever": "trap_lever",
-        "potion_of_healing": "healing_potion",
-        "chest": "storage_chest",
-        "campfire": "campfire",
-        "arcane_device": "arcane_device",
-        "arcane_machine_gun": "arcane_machine_gun",
-        "fireball_cannon": "fireball_cannon",
-        "crate": "crate",
-        "boulder": "boulder",
-        "barricade": "barricade",
-        "oil_barrel": "oil_barrel",
-    }
-    normalized_name = _normalize_id(obj.name)
-    if normalized_name in explicit:
-        return explicit[normalized_name]
-    catalog_ids = {entry.id for entry in build_catalog().objects + build_catalog().loot}
-    if normalized_name in catalog_ids:
-        return normalized_name
-    raise ValueError(f"cannot save unknown mapeditor object: {obj.name}")
+        placements.append(
+            MapEditorSavedObjectPlacement(
+                recipe=binding.recipe,
+                position=(obj.position[0], obj.position[1]),
+                runtime_state=runtime_state,
+            ),
+        )
+    return placements
 
 
 def _save_dir() -> Path:
@@ -704,56 +1007,11 @@ def _normalize_id(value: str) -> str:
     return value.strip().lower().replace(" ", "_").replace("-", "_")
 
 
-def _create_blocker(catalog_id: str, owner: UUID, position: Tuple[int, int]) -> BaseItem:
-    config = {
-        "crate": {"name": "Crate", "hp": 20, "blocks_movement": False, "blocks_vision_field": False, "map_char": "C"},
-        "boulder": {"name": "Boulder", "hp": 30, "blocks_movement": True, "blocks_vision_field": False, "map_char": "B"},
-        "barricade": {"name": "Barricade", "hp": 20, "blocks_movement": True, "blocks_vision_field": True, "map_char": "X"},
-        "oil_barrel": {"name": "Oil Barrel", "hp": 12, "blocks_movement": True, "blocks_vision_field": False, "map_char": "O"},
-    }[catalog_id]
-    health = BaseItem.create_item_health(owner, config["hp"])
-    item = BaseItem(
-        source_entity_uuid=owner,
-        name=config["name"],
-        is_pickable=False,
-        is_targetable=True,
-        health=health,
-        map_char=config["map_char"],
-        blocks_movement=config["blocks_movement"],
-        blocks_vision_field=config["blocks_vision_field"],
-    )
-    item.place_on_grid(position)
-    return item
-
-
-def _create_loot_item(catalog_id: str, owner: UUID) -> Optional[BaseItem]:
-    factories = {
-        "healing_potion": lambda: create_healing_potion(owner, heal_amount=10),
-        "potion_of_greater_invisibility": lambda: create_potion_of_greater_invisibility(owner),
-        "potion_of_haste": lambda: create_potion_of_haste(owner),
-        "acid_flask": lambda: create_acid_flask(owner),
-        "weapon_coat": lambda: create_weapon_coat(owner),
-        "torch": lambda: create_torch(owner),
-        "scroll_of_fireball": lambda: create_scroll_of_fireball(owner),
-        "scroll_of_magic_missile": lambda: create_scroll_of_magic_missile(owner),
-        "scroll_of_hold_person": lambda: create_scroll_of_hold_person(owner),
-        "scroll_of_mage_armor": lambda: create_scroll_of_mage_armor(owner),
-        "scroll_of_spike_growth": lambda: create_scroll_of_spike_growth(owner),
-        "scroll_of_fire_bolt": lambda: create_scroll_of_fire_bolt(owner),
-        "scroll_of_invisibility": lambda: create_scroll_of_invisibility(owner),
-        "wand_of_magic_missiles": lambda: create_wand_of_magic_missiles(owner),
-        "wand_of_fire": lambda: create_wand_of_fire(owner),
-    }
-    factory = factories.get(catalog_id)
-    return factory() if factory else None
-
-
 def _entry(
     id: str,
     name: str,
     group: str,
     category: str,
-    source_module: str,
     *,
     stability: Literal["stable", "candidate", "demo"] = "stable",
     placement: str = "single_tile",
@@ -768,7 +1026,6 @@ def _entry(
         name=name,
         group=group,
         category=category,
-        source_module=source_module,
         stability=stability,
         placement=placement,
         map_char=map_char,
@@ -779,41 +1036,25 @@ def _entry(
     )
 
 
-def _registry_entries(registry: Dict[str, Any], group: str, category: str, source_module: str, map_char: str, *, equippable: bool) -> List[MapEditorCatalogEntry]:
-    entries = []
-    for key in sorted(registry):
-        entries.append(
-            _entry(
-                key,
-                key.replace("_", " ").title(),
-                group,
-                category,
-                source_module,
-                map_char=map_char,
-                flags=_flags(True, equippable, False, False, False, False),
-            )
-        )
-    return entries
-
-
-def _flags(
-    pickable: bool,
-    equippable: bool,
-    usable: bool,
-    consumable: bool,
-    blocks_movement: bool,
-    blocks_vision: bool,
+def _content_catalog_entry(
     *,
-    emits_light: bool = False,
-    targetable: bool = False,
-) -> Dict[str, Any]:
-    return {
-        "pickable": pickable,
-        "equippable": equippable,
-        "usable": usable,
-        "consumable": consumable,
-        "targetable": targetable,
-        "blocks_movement": blocks_movement,
-        "blocks_vision": blocks_vision,
-        "emits_light": emits_light,
-    }
+    recipe: ContentRecipe,
+    content_set_digest: str,
+    display_name: str,
+    description: str,
+    tags: tuple[str, ...],
+    presentation: ContentPresentation,
+    ordering: ContentOrdering,
+    recipe_preset_ref: ContentRecipePresetRef | None = None,
+) -> MapEditorContentCatalogEntry:
+    """Project one registry-owned recipe without Python implementation facts."""
+    return MapEditorContentCatalogEntry(
+        recipe=recipe,
+        content_set_digest=content_set_digest,
+        recipe_preset_ref=recipe_preset_ref,
+        display_name=display_name,
+        description=description,
+        tags=tags,
+        presentation=presentation,
+        ordering=ordering,
+    )

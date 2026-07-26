@@ -64,10 +64,10 @@ test("controlled affordance reads carry the session in an encoded query", async 
         entity_uuid: "entity/a",
         entity_actions: [],
         position_actions: [],
-        self_actions: [],
+        self_actions: [availableAction()],
         object_actions: [],
         remaining_movement: 0,
-        handler_details: [],
+        handler_details: [availableHandler()],
         actions_remaining: 0,
         bonus_actions_remaining: 0,
         reactions_remaining: 0,
@@ -77,22 +77,78 @@ test("controlled affordance reads carry the session in an encoded query", async 
       }
       : url.includes("/equippable-items?")
         ? { entity_uuid: "entity/a", equippable: {} }
-        : { entity_uuid: "entity/a", handlers: [] };
+        : { entity_uuid: "entity/a", handlers: [availableHandler()] };
     return new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json" },
     });
   };
   const client = new DndEngineClient("/api", { fetchImplementation });
 
-  await client.getAvailableActions("entity/a", "session/a b");
+  const actions = await client.getAvailableActions("entity/a", "session/a b");
   await client.getEquippableItems("entity/a", "session/a b");
-  await client.getEntityHandlers("entity/a", "session/a b");
+  const handlers = await client.getEntityHandlers("entity/a", "session/a b");
 
+  assert.equal(
+    actions.self_actions[0]?.behavior_attribution.definition_ref.content_id,
+    "action.dash",
+  );
+  assert.equal(
+    actions.handler_details[0]?.behavior_attribution.definition_ref.content_id,
+    "reaction.lucky",
+  );
+  assert.equal(
+    handlers.handlers[0]?.behavior_attribution.definition_ref.content_id,
+    "reaction.lucky",
+  );
   assert.deepEqual(urls, [
     "/api/entity/entity%2Fa/available-actions?session_id=session%2Fa+b",
     "/api/entity/entity%2Fa/equippable-items?session_id=session%2Fa+b",
     "/api/entity/entity%2Fa/handlers?session_id=session%2Fa+b",
   ]);
+});
+
+test("affordance decoders reject rows without exact behavior attribution", async () => {
+  const action = availableAction();
+  const { behavior_attribution: _removed, ...unattributedAction } = action;
+  const client = new DndEngineClient("/api", {
+    fetchImplementation: async () => new Response(JSON.stringify({
+      entity_uuid: "entity-a",
+      entity_actions: [unattributedAction],
+      position_actions: [],
+      self_actions: [],
+      object_actions: [],
+      remaining_movement: 0,
+      handler_details: [],
+      actions_remaining: 1,
+      bonus_actions_remaining: 1,
+      reactions_remaining: 1,
+      extra_attacks_remaining: 0,
+      spell_slots: {},
+      resources: {},
+    }), {
+      headers: { "Content-Type": "application/json" },
+    }),
+  });
+
+  await assert.rejects(
+    client.getAvailableActions("entity-a", "session-a"),
+    ContractValidationError,
+  );
+
+  const handler = availableHandler();
+  const { behavior_attribution: _handlerAttribution, ...unattributedHandler } = handler;
+  const handlerClient = new DndEngineClient("/api", {
+    fetchImplementation: async () => new Response(JSON.stringify({
+      entity_uuid: "entity-a",
+      handlers: [unattributedHandler],
+    }), {
+      headers: { "Content-Type": "application/json" },
+    }),
+  });
+  await assert.rejects(
+    handlerClient.getEntityHandlers("entity-a", "session-a"),
+    ContractValidationError,
+  );
 });
 
 test("game-scoped subjective client uses the one unversioned bootstrap route", async () => {
@@ -305,11 +361,37 @@ test("player identity, profile, and character routes stay typed and credential-s
     character_id: "00000000-0000-0000-0000-000000000002",
     owner_principal_id: principal.principal_id,
     display_name: "Sol",
-    preset_configuration_id: "hero.sorcerer_l5_standard_torch",
     status: "active",
+    revision_state: "canonical",
+    current_definition_revision: 1,
+    current_definition_digest: "definition-digest",
+    current_holdings_revision: 1,
+    current_holdings_digest: "holdings-digest",
     created_at: "2026-07-21T18:01:00Z",
     updated_at: "2026-07-21T18:01:00Z",
     row_version: 1,
+  };
+  const definitionRecord = {
+    definition: {
+      character_id: character.character_id,
+      schema_version: 1,
+      definition_revision: 1,
+      creature_recipe: {
+        ref: {
+          pack_id: "content.neurodragon",
+          definition_kind: "creature",
+          content_id: "creature.premade.sorcerer_l5_standard_torch",
+          content_version: 1,
+          definition_contract_hash: "a".repeat(64),
+        },
+        parameters: {},
+        recipe_digest: "b".repeat(64),
+      },
+      premade_id: "hero.sorcerer_l5_standard_torch",
+      content_set_digest: "c".repeat(64),
+      definition_digest: "d".repeat(64),
+    },
+    created_at: "2026-07-21T18:01:00Z",
   };
   const requests: Array<{ url: string; method: string; capability: string | null }> = [];
   const fetchImplementation: typeof fetch = async (input, init) => {
@@ -329,7 +411,9 @@ test("player identity, profile, and character routes stay typed and credential-s
         }
       : url.endsWith("/directory/players/me")
         ? { principal, characters: [character], game_seats: [] }
-        : character;
+        : url.endsWith("/definition")
+          ? definitionRecord
+          : character;
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -348,16 +432,26 @@ test("player identity, profile, and character routes stay typed and credential-s
   const profile = await directory.getPlayerProfile(credential);
   const created = await directory.createCharacter(credential, {
     display_name: "Sol",
-    preset_configuration_id: "hero.sorcerer_l5_standard_torch",
+    premade_id: "hero.sorcerer_l5_standard_torch",
   });
+  const definition = await directory.getCharacterDefinition(
+    credential,
+    character.character_id,
+  );
 
   assert.equal(identity.principal.principal_id, principal.principal_id);
   assert.equal(profile.characters[0]?.character_id, character.character_id);
-  assert.equal(created.preset_configuration_id, character.preset_configuration_id);
+  assert.equal(created.revision_state, "canonical");
+  assert.equal(definition.definition.premade_id, "hero.sorcerer_l5_standard_torch");
   assert.deepEqual(requests, [
     { url: "/gateway-api/directory/players/identify", method: "POST", capability: null },
     { url: "/gateway-api/directory/players/me", method: "GET", capability: "browser-secret" },
     { url: "/gateway-api/directory/characters", method: "POST", capability: "browser-secret" },
+    {
+      url: `/gateway-api/directory/characters/${character.character_id}/definition`,
+      method: "GET",
+      capability: "browser-secret",
+    },
   ]);
 });
 
@@ -521,6 +615,77 @@ test("directory follower stops cleanly after the caller aborts", async () => {
 
   assert.deepEqual(seen, ["directory_event"]);
 });
+
+function availableAction() {
+  return {
+    template_name: "Dash",
+    semantic_key: "dash",
+    behavior_attribution: behaviorAttribution("action", "action.dash"),
+    target_type: "self",
+    availability_status: "source_unaffordable",
+    valid_targets: [],
+    can_afford: false,
+    display_name: "Dash",
+    description: "Gain extra movement for this turn.",
+    cost_type: "actions",
+    cost_amount: 1,
+    costs: [{
+      name: "Action",
+      cost_type: "actions",
+      cost: 1,
+      resource_name: null,
+      resource_cost: 0,
+    }],
+    weapon_slot: null,
+    weapon_name: null,
+    damage_types: [],
+    outcome_profile: null,
+    self_setup_profile: null,
+    target_effect_profile: null,
+    world_effect_profile: null,
+    action_category: "ability",
+    base_template_name: null,
+    spell_level: null,
+    cast_at_level: null,
+    is_spell_variant: false,
+    requires_concentration: false,
+    num_projectiles: null,
+    allow_same_target: null,
+    is_item_use: false,
+    source_item_uuid: null,
+    item_stack_count: null,
+    item_charge_cost: 0,
+    fixed_healing: null,
+  };
+}
+
+function availableHandler() {
+  return {
+    name: "Lucky",
+    behavior_attribution: behaviorAttribution("reaction", "reaction.lucky"),
+    uuid: "handler-lucky",
+    enabled: true,
+    trigger_event: "d20_roll_result",
+  };
+}
+
+function behaviorAttribution(
+  definitionKind: "action" | "reaction",
+  contentId: string,
+) {
+  const ref = {
+    pack_id: "content.srd_5_1_cc",
+    definition_kind: definitionKind,
+    content_id: contentId,
+    content_version: 1,
+    definition_contract_hash: "a".repeat(64),
+  };
+  return {
+    definition_ref: ref,
+    provided_by_ref: ref,
+    origin_root_ref: null,
+  };
+}
 
 function directoryEventStreamBody(): string {
   return [

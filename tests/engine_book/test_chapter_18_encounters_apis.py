@@ -17,6 +17,9 @@ from fastapi.testclient import TestClient
 from pydantic import Field
 
 from dnd.actions import Attack, Move
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.controller import (
     CodexController,
     Controller,
@@ -35,8 +38,8 @@ from dnd.core.modifiers import DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
-from dnd.items import create_dagger
-from dnd.items.test_items import create_healing_potion
+from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.weapons import DAGGER_RECIPE
 from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.utils import (
@@ -1080,8 +1083,17 @@ def test_eb_18_011_entity_and_handler_errors_report_current_choices() -> None:
 def test_eb_18_012_equipment_errors_report_slots_inventory_and_loadout() -> None:
     """EB-18-012: equipment errors expose slots, inventory, and loadout state."""
     client, session_id, hero, _monster = create_action_api_session()
-    potion = create_healing_potion(hero.uuid)
-    dagger = create_dagger(hero.uuid)
+    potion = materialize_item(
+        HEALING_POTION_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert hero.inventory.add_item(potion)
     assert hero.inventory.add_item(dagger)
 
@@ -1919,7 +1931,12 @@ def test_eb_18_035_handler_toggle_round_trip_exposes_only_player_choices() -> No
 def test_eb_18_036_equipment_mutations_acknowledge_and_replicate_loadout() -> None:
     """EB-18-036: equipment commands acknowledge; replication owns state."""
     client, session_id, hero, _monster = create_action_api_session()
-    dagger = create_dagger(hero.uuid)
+    dagger = materialize_item(
+        DAGGER_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
     assert hero.inventory.add_item(dagger)
 
     before_equip = player_replication_seed(client, session_id)

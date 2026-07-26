@@ -13,7 +13,7 @@ from ai.evaluation.elo_contract import ArenaManifest, EntityRosterRow
 from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.modifiers import DamageType, ResistanceStatus
 from dnd.entity import Entity
 from dnd.scenarios.ai_validation_arenas import ValidationArena, create_ai_validation_arena
@@ -232,7 +232,11 @@ def _item_summary(item: Any, *, equipped: bool) -> dict[str, Any]:
             else f"{type(item).__module__}.{type(item).__name__}"
         ),
         "content_kind": str(
-            getattr(getattr(item, "content_kind", ContentKind.ITEM), "value", ContentKind.ITEM.value)
+            getattr(
+                getattr(item, "content_kind", RuntimeBehaviorKind.ITEM),
+                "value",
+                RuntimeBehaviorKind.ITEM.value,
+            )
         ),
         "equipped": equipped,
         "slot": getattr(item, "equipped_slot", None),
@@ -364,7 +368,7 @@ def _object_summary(grid: Any) -> list[dict[str, Any]]:
             "name": block.name,
             "class": type(block).__name__,
             "semantic_key": _content_semantic_key(block),
-            "content_kind": ContentKind.ENVIRONMENT_INTERACTION.value,
+            "content_kind": RuntimeBehaviorKind.ENVIRONMENT_INTERACTION.value,
             "position": position,
             "blocks_walking": bool(block.blocks_walking()),
             "blocks_vision": bool(block.blocks_vision()),

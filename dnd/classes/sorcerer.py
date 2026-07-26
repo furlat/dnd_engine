@@ -290,16 +290,6 @@ class QuickenedSpell(BaseAction):
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Sorcery point cost required to activate Quickened Spell.")
 
-    def pre_validate(self) -> bool:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-        if "MetamagicActive" in entity.active_conditions:
-            return False
-        if not self.check_costs():
-            return False
-        return True
-
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -352,16 +342,6 @@ class TwinnedSpell(BaseAction):
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Base sorcery point cost required to activate Twinned Spell.")
 
-    def pre_validate(self) -> bool:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-        if "MetamagicActive" in entity.active_conditions:
-            return False
-        if not self.check_costs():
-            return False
-        return True
-
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -413,16 +393,6 @@ class DistantSpell(BaseAction):
         evaluator=entity_action_economy_cost_evaluator,
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Sorcery point cost required to activate Distant Spell.")
-
-    def pre_validate(self) -> bool:
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-        if "MetamagicActive" in entity.active_conditions:
-            return False
-        if not self.check_costs():
-            return False
-        return True
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -552,15 +522,14 @@ class ConvertSPToSlot(BaseAction):
             ),
         ]
 
-    def pre_validate(self) -> bool:
+    def validate_requirements_for_discovery(self) -> bool:
+        """Require a class-owned slot family independently of current costs."""
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return False
-        slot_value = entity.action_economy._get_spell_slot_value(self.slot_level)
-        base_mod = slot_value.get_base_modifier()
-        if not base_mod or base_mod.normalized_value <= 0:
+        if not entity.has_spell_slot_capacity(self.slot_level):
             return False
-        return self.check_costs()
+        return super().validate_requirements_for_discovery()
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level} validated")

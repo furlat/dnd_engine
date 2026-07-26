@@ -38,6 +38,7 @@ from dnd.creature_transforms import (
     apply_turn_spent_transform,
     apply_unconscious_transform,
 )
+from dnd.spells.content_metadata import srd_spell_identity
 from dnd.spells.spell_utils import validate_line_of_sight
 
 
@@ -304,6 +305,15 @@ class HoldPersonEffect(BaseCondition):
         )
 
 
+@srd_spell_identity(
+    content_id="spell.hold_person",
+    display_name="Hold Person",
+    description="Paralyze a humanoid that fails its saving throw.",
+    school="enchantment",
+    level=2,
+    source_page=154,
+    sort_order=10,
+)
 class HoldPerson(SpellAction):
     """Paralyze a humanoid after a failed Wisdom save."""
     name: str = Field(default="Hold Person", description="Spell name.")

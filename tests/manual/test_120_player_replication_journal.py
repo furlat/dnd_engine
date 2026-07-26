@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from server.world_contracts import (
     APIAppearance,
@@ -245,7 +246,12 @@ def _world() -> SubjectiveReplicatedWorld:
             }
         ),
         equipment_by_entity={
-            "hero": APIEquipmentOverview(slots=[], ac=13, inventory=[])
+            "hero": APIEquipmentOverview(
+                slots=[],
+                active_weapon_set=WeaponSet.NONE,
+                ac=13,
+                inventory=[],
+            )
         },
         visual_loadout_by_entity={
             "hero": EntityVisualLoadout(

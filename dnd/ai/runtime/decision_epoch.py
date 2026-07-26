@@ -14,6 +14,7 @@ from dnd.action_timing import reset_action_timing_recorder, set_action_timing_re
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
     AvailableActionInfo,
     AvailableActionsResult,
     AvailableTarget,
@@ -560,11 +561,17 @@ def _action_capability_from_template(
     weapon_slot = _enum_value(weapon_slot_value) if weapon_slot_value is not None else None
     row = available_row
     if row is None:
+        can_afford = template.check_target_independent_costs()
         row = actor._make_action_info(
             template_name=template.get_discovery_template_name(),
             target_type=template.effective_target_type,
             valid_targets=[],
-            can_afford=template.check_costs(),
+            can_afford=can_afford,
+            availability_status=(
+                ActionAvailabilityStatus.NO_VALID_TARGETS
+                if can_afford
+                else ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+            ),
             template=template,
             display_name=template.get_discovery_display_name(),
             weapon_slot=weapon_slot,

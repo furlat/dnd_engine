@@ -16,6 +16,10 @@
         },
         {
           "kind": "model",
+          "ref": "server.player_replication_contract.CounterspellPresentationCue"
+        },
+        {
+          "kind": "model",
           "ref": "server.player_replication_contract.ItemActionPresentationCue"
         },
         {
@@ -145,7 +149,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "f49fd34571d998f9350f0bc3c914af99b54c401f6eac9ff6c5ddbb834bf1c8b6",
+  "contract_hash": "145fb508ee81dd9b00fb49bbc534a33b0fccf3bfadc367305ded5b4f2dc3b056",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -193,6 +197,17 @@
       "values": [
         "default",
         "drink"
+      ]
+    },
+    "dnd.core.base_actions.ActionAvailabilityStatus": {
+      "python": "dnd.core.base_actions.ActionAvailabilityStatus",
+      "typescript": "ActionAvailabilityStatus",
+      "values": [
+        "available",
+        "source_unaffordable",
+        "requirements_unmet",
+        "no_valid_targets",
+        "target_cost_unaffordable"
       ]
     },
     "dnd.core.base_actions.ActionCategory": {
@@ -406,9 +421,133 @@
         "non_source"
       ]
     },
-    "dnd.core.content.ContentKind": {
-      "python": "dnd.core.content.ContentKind",
-      "typescript": "ContentKind",
+    "dnd.core.content.dependencies.ContentDependencyPhase": {
+      "python": "dnd.core.content.dependencies.ContentDependencyPhase",
+      "typescript": "ContentDependencyPhase",
+      "values": [
+        "construction",
+        "runtime_reference"
+      ]
+    },
+    "dnd.core.content.dependencies.ContentDependencyRelation": {
+      "python": "dnd.core.content.dependencies.ContentDependencyRelation",
+      "typescript": "ContentDependencyRelation",
+      "values": [
+        "grants_action",
+        "grants_spell",
+        "applies_condition",
+        "installs_handler",
+        "creates_zone",
+        "creates_object",
+        "creates_item",
+        "equips_item",
+        "summons_creature",
+        "requires_primitive"
+      ]
+    },
+    "dnd.core.content.descriptors.ContentVisibility": {
+      "python": "dnd.core.content.descriptors.ContentVisibility",
+      "typescript": "ContentVisibility",
+      "values": [
+        "public",
+        "observed",
+        "developer",
+        "internal"
+      ]
+    },
+    "dnd.core.content.identities.ContentDefinitionKind": {
+      "python": "dnd.core.content.identities.ContentDefinitionKind",
+      "typescript": "ContentDefinitionKind",
+      "values": [
+        "item",
+        "creature",
+        "action",
+        "spell",
+        "condition",
+        "trait",
+        "reaction",
+        "feat",
+        "class_feature",
+        "environment_object",
+        "rule_primitive"
+      ]
+    },
+    "dnd.core.content.item_definitions.ItemPersistencePolicy": {
+      "python": "dnd.core.content.item_definitions.ItemPersistencePolicy",
+      "typescript": "ItemPersistencePolicy",
+      "values": [
+        "possession",
+        "intrinsic",
+        "encounter_only",
+        "environment"
+      ]
+    },
+    "dnd.core.content.item_definitions.ItemStackCompatibility": {
+      "python": "dnd.core.content.item_definitions.ItemStackCompatibility",
+      "typescript": "ItemStackCompatibility",
+      "values": [
+        "recipe_digest"
+      ]
+    },
+    "dnd.core.content.provenance.ContentFidelity": {
+      "python": "dnd.core.content.provenance.ContentFidelity",
+      "typescript": "ContentFidelity",
+      "values": [
+        "complete",
+        "partial",
+        "blocked"
+      ]
+    },
+    "dnd.core.content.provenance.ContentProvenanceRelation": {
+      "python": "dnd.core.content.provenance.ContentProvenanceRelation",
+      "typescript": "ContentProvenanceRelation",
+      "values": [
+        "faithful_implementation",
+        "compatible_adaptation",
+        "derived_content",
+        "original_content"
+      ]
+    },
+    "dnd.core.content.provenance.ContentReviewStatus": {
+      "python": "dnd.core.content.provenance.ContentReviewStatus",
+      "typescript": "ContentReviewStatus",
+      "values": [
+        "reviewed",
+        "unreviewed"
+      ]
+    },
+    "dnd.core.content.provenance.ContentSourceFamily": {
+      "python": "dnd.core.content.provenance.ContentSourceFamily",
+      "typescript": "ContentSourceFamily",
+      "values": [
+        "srd_5_1_cc",
+        "srd_5_2_1_cc",
+        "neurodragon_original",
+        "third_party_open",
+        "fixture_internal",
+        "provenance_unverified"
+      ]
+    },
+    "dnd.core.content.provenance.RulesBaseline": {
+      "python": "dnd.core.content.provenance.RulesBaseline",
+      "typescript": "RulesBaseline",
+      "values": [
+        "2014",
+        "2024",
+        "engine_neutral"
+      ]
+    },
+    "dnd.core.content.registration.ContentDeclarationMode": {
+      "python": "dnd.core.content.registration.ContentDeclarationMode",
+      "typescript": "ContentDeclarationMode",
+      "values": [
+        "factory",
+        "behavior_identity"
+      ]
+    },
+    "dnd.core.content.runtime.RuntimeBehaviorKind": {
+      "python": "dnd.core.content.runtime.RuntimeBehaviorKind",
+      "typescript": "RuntimeBehaviorKind",
       "values": [
         "action",
         "spell",
@@ -469,12 +608,54 @@
         "Cloak"
       ]
     },
+    "dnd.core.equipment_types.EquipmentRenderLayer": {
+      "python": "dnd.core.equipment_types.EquipmentRenderLayer",
+      "typescript": "EquipmentRenderLayer",
+      "values": [
+        "belt",
+        "chest",
+        "hands",
+        "helmet",
+        "legs",
+        "offhand",
+        "shoes",
+        "weapon"
+      ]
+    },
     "dnd.core.equipment_types.RingSlot": {
       "python": "dnd.core.equipment_types.RingSlot",
       "typescript": "RingSlot",
       "values": [
         "Left Ring",
         "Right Ring"
+      ]
+    },
+    "dnd.core.equipment_types.VisualLoadoutSlot": {
+      "python": "dnd.core.equipment_types.VisualLoadoutSlot",
+      "typescript": "VisualLoadoutSlot",
+      "values": [
+        "weapon_melee_main",
+        "weapon_melee_off",
+        "weapon_ranged_main",
+        "weapon_ranged_off",
+        "helmet",
+        "body_armor",
+        "gauntlets",
+        "greaves",
+        "boots",
+        "amulet",
+        "cloak",
+        "ring_left",
+        "ring_right"
+      ]
+    },
+    "dnd.core.equipment_types.WeaponSet": {
+      "python": "dnd.core.equipment_types.WeaponSet",
+      "typescript": "WeaponSet",
+      "values": [
+        "none",
+        "melee",
+        "ranged"
       ]
     },
     "dnd.core.equipment_types.WeaponSlot": {
@@ -761,6 +942,14 @@
         "See Invisible"
       ]
     },
+    "server.content_catalog.ContentPackOrigin": {
+      "python": "server.content_catalog.ContentPackOrigin",
+      "typescript": "ContentPackOrigin",
+      "values": [
+        "built_in",
+        "external"
+      ]
+    },
     "server.game_directory.contracts.ArtifactKind": {
       "python": "server.game_directory.contracts.ArtifactKind",
       "typescript": "ArtifactKind",
@@ -784,6 +973,22 @@
         "disconnected",
         "expired",
         "revoked"
+      ]
+    },
+    "server.game_directory.contracts.CharacterDeploymentPinState": {
+      "python": "server.game_directory.contracts.CharacterDeploymentPinState",
+      "typescript": "CharacterDeploymentPinState",
+      "values": [
+        "legacy_pending",
+        "pinned"
+      ]
+    },
+    "server.game_directory.contracts.CharacterRevisionState": {
+      "python": "server.game_directory.contracts.CharacterRevisionState",
+      "typescript": "CharacterRevisionState",
+      "values": [
+        "legacy_pending",
+        "canonical"
       ]
     },
     "server.game_directory.contracts.CharacterStatus": {
@@ -980,6 +1185,14 @@
         "miss",
         "critical",
         "critical_miss"
+      ]
+    },
+    "server.player_replication_contract.BehaviorPresentationRole": {
+      "python": "server.player_replication_contract.BehaviorPresentationRole",
+      "typescript": "BehaviorPresentationRole",
+      "values": [
+        "behavior",
+        "trigger_behavior"
       ]
     },
     "server.player_replication_contract.ConditionOperation": {
@@ -1180,25 +1393,6 @@
         "projectile",
         "missile_volley",
         "aoe"
-      ]
-    },
-    "server.player_replication_contract.VisualLoadoutSlot": {
-      "python": "server.player_replication_contract.VisualLoadoutSlot",
-      "typescript": "VisualLoadoutSlot",
-      "values": [
-        "weapon_melee_main",
-        "weapon_melee_off",
-        "weapon_ranged_main",
-        "weapon_ranged_off",
-        "helmet",
-        "body_armor",
-        "gauntlets",
-        "greaves",
-        "boots",
-        "amulet",
-        "cloak",
-        "ring_left",
-        "ring_right"
       ]
     },
     "server.timeline_contracts.CombatLogProjection": {
@@ -1633,7 +1827,7 @@
       "typescript": "CounterspellReactionEvent"
     }
   },
-  "event_contract_hash": "b7f684cb72038721b995586b7e178620e258b7d607f9e59f22fa0d3b43215887",
+  "event_contract_hash": "ee47e6b50cfd502a2417a4ba21a73adc4e0771fb08bf7a01d59a082ef6cb32fa",
   "event_contract_version": 1,
   "models": {
     "dnd.actions.AttackEvent": {
@@ -7319,6 +7513,10 @@
           ],
           "kind": "union"
         },
+        "availability_status": {
+          "kind": "enum",
+          "ref": "dnd.core.base_actions.ActionAvailabilityStatus"
+        },
         "base_template_name": {
           "items": [
             {
@@ -7329,6 +7527,10 @@
             }
           ],
           "kind": "union"
+        },
+        "behavior_attribution": {
+          "kind": "model",
+          "ref": "dnd.core.content.runtime.AuthoredBehaviorAttribution"
         },
         "can_afford": {
           "kind": "boolean"
@@ -7586,6 +7788,10 @@
     },
     "dnd.core.base_actions.AvailableHandlerInfo": {
       "fields": {
+        "behavior_attribution": {
+          "kind": "model",
+          "ref": "dnd.core.content.runtime.AuthoredBehaviorAttribution"
+        },
         "enabled": {
           "kind": "boolean"
         },
@@ -8144,7 +8350,7 @@
         },
         "content_kind": {
           "kind": "enum",
-          "ref": "dnd.core.content.ContentKind"
+          "ref": "dnd.core.content.runtime.RuntimeBehaviorKind"
         },
         "context": {
           "items": [
@@ -9805,6 +10011,549 @@
       "python": "dnd.core.combat_log.TurnLogData",
       "root_model": false,
       "typescript": "TurnLogData"
+    },
+    "dnd.core.content.dependencies.ContentDependency": {
+      "fields": {
+        "notes": {
+          "kind": "string"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.content.dependencies.ContentDependencyPhase"
+        },
+        "relation": {
+          "kind": "enum",
+          "ref": "dnd.core.content.dependencies.ContentDependencyRelation"
+        },
+        "required": {
+          "kind": "boolean"
+        },
+        "target_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        }
+      },
+      "python": "dnd.core.content.dependencies.ContentDependency",
+      "root_model": false,
+      "typescript": "ContentDependency"
+    },
+    "dnd.core.content.descriptors.ContentOrdering": {
+      "fields": {
+        "sort_group": {
+          "kind": "string"
+        },
+        "sort_order": {
+          "kind": "integer"
+        }
+      },
+      "python": "dnd.core.content.descriptors.ContentOrdering",
+      "root_model": false,
+      "typescript": "ContentOrdering"
+    },
+    "dnd.core.content.descriptors.ContentPresentation": {
+      "fields": {
+        "audio_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "equipment_sprites": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.descriptors.EquipmentSpritePresentation"
+          },
+          "kind": "array"
+        },
+        "icon_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "portrait_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "sprite_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tint_rgb": {
+          "items": [
+            {
+              "kind": "integer",
+              "maximum": 16777215,
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "ui_group": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "vfx_profile": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "visual_variant_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.content.descriptors.ContentPresentation",
+      "root_model": false,
+      "typescript": "ContentPresentation"
+    },
+    "dnd.core.content.descriptors.EquipmentSpritePresentation": {
+      "fields": {
+        "equipment_slot": {
+          "kind": "enum",
+          "ref": "dnd.core.equipment_types.VisualLoadoutSlot"
+        },
+        "render_layer": {
+          "kind": "enum",
+          "ref": "dnd.core.equipment_types.EquipmentRenderLayer"
+        },
+        "sprite_key": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "tint_rgb": {
+          "kind": "integer",
+          "maximum": 16777215,
+          "minimum": 0
+        }
+      },
+      "python": "dnd.core.content.descriptors.EquipmentSpritePresentation",
+      "root_model": false,
+      "typescript": "EquipmentSpritePresentation"
+    },
+    "dnd.core.content.durable_characters.CharacterDefinitionRevision": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "content_set_digest": {
+          "kind": "string"
+        },
+        "creature_recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "definition_digest": {
+          "kind": "string"
+        },
+        "definition_revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "premade_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 1
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.content.durable_characters.CharacterDefinitionRevision",
+      "root_model": false,
+      "typescript": "CharacterDefinitionRevision"
+    },
+    "dnd.core.content.durable_characters.CharacterHoldingsRevision": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "holdings_digest": {
+          "kind": "string"
+        },
+        "holdings_revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "items": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.durable_characters.CharacterItemV1"
+          },
+          "kind": "array"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 1
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.content.durable_characters.CharacterHoldingsRevision",
+      "root_model": false,
+      "typescript": "CharacterHoldingsRevision"
+    },
+    "dnd.core.content.durable_characters.CharacterItemV1": {
+      "fields": {
+        "character_item_digest": {
+          "kind": "string"
+        },
+        "character_item_id": {
+          "kind": "string"
+        },
+        "durability_damage": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "durable_augmentations": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.durable_characters.ItemAugmentationRecord"
+          },
+          "kind": "array"
+        },
+        "equipped_slot": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.equipment_types.WeaponSlot"
+            },
+            {
+              "kind": "enum",
+              "ref": "dnd.core.equipment_types.BodyPart"
+            },
+            {
+              "kind": "enum",
+              "ref": "dnd.core.equipment_types.RingSlot"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "quantity": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "remaining_charges": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 1
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.content.durable_characters.CharacterItemV1",
+      "root_model": false,
+      "typescript": "CharacterItemV1"
+    },
+    "dnd.core.content.durable_characters.ItemAugmentationRecord": {
+      "fields": {
+        "augmentation_digest": {
+          "kind": "string"
+        },
+        "content_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "durable_state": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "parameters": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        }
+      },
+      "python": "dnd.core.content.durable_characters.ItemAugmentationRecord",
+      "root_model": false,
+      "typescript": "ItemAugmentationRecord"
+    },
+    "dnd.core.content.identities.ContentRef": {
+      "fields": {
+        "content_id": {
+          "kind": "string"
+        },
+        "content_version": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "definition_contract_hash": {
+          "kind": "string"
+        },
+        "definition_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.content.identities.ContentDefinitionKind"
+        },
+        "pack_id": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.content.identities.ContentRef",
+      "root_model": false,
+      "typescript": "ContentRef"
+    },
+    "dnd.core.content.item_definitions.ItemDefinition": {
+      "fields": {
+        "persistence_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.content.item_definitions.ItemPersistencePolicy"
+        },
+        "stack_compatibility": {
+          "kind": "enum",
+          "ref": "dnd.core.content.item_definitions.ItemStackCompatibility"
+        }
+      },
+      "python": "dnd.core.content.item_definitions.ItemDefinition",
+      "root_model": false,
+      "typescript": "ItemDefinition"
+    },
+    "dnd.core.content.provenance.ContentProvenance": {
+      "fields": {
+        "adapted_from_source_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "fidelity": {
+          "kind": "enum",
+          "ref": "dnd.core.content.provenance.ContentFidelity"
+        },
+        "notes": {
+          "kind": "string"
+        },
+        "primary_source_id": {
+          "kind": "string"
+        },
+        "relation": {
+          "kind": "enum",
+          "ref": "dnd.core.content.provenance.ContentProvenanceRelation"
+        },
+        "review_status": {
+          "kind": "enum",
+          "ref": "dnd.core.content.provenance.ContentReviewStatus"
+        },
+        "source_anchor": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "dnd.core.content.provenance.ContentProvenance",
+      "root_model": false,
+      "typescript": "ContentProvenance"
+    },
+    "dnd.core.content.provenance.ContentSource": {
+      "fields": {
+        "attribution_text": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "canonical_uri": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "document_digest": {
+          "kind": "string"
+        },
+        "license_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "notices": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "rules_baseline": {
+          "kind": "enum",
+          "ref": "dnd.core.content.provenance.RulesBaseline"
+        },
+        "source_family": {
+          "kind": "enum",
+          "ref": "dnd.core.content.provenance.ContentSourceFamily"
+        },
+        "source_id": {
+          "kind": "string"
+        },
+        "source_version": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "title": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "dnd.core.content.provenance.ContentSource",
+      "root_model": false,
+      "typescript": "ContentSource"
+    },
+    "dnd.core.content.recipe_presets.ContentRecipePresetRef": {
+      "fields": {
+        "pack_id": {
+          "kind": "string"
+        },
+        "preset_contract_hash": {
+          "kind": "string"
+        },
+        "preset_id": {
+          "kind": "string"
+        },
+        "preset_version": {
+          "kind": "integer",
+          "minimum": 1
+        }
+      },
+      "python": "dnd.core.content.recipe_presets.ContentRecipePresetRef",
+      "root_model": false,
+      "typescript": "ContentRecipePresetRef"
+    },
+    "dnd.core.content.recipes.ContentRecipe": {
+      "fields": {
+        "parameters": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "recipe_digest": {
+          "kind": "string"
+        },
+        "ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        }
+      },
+      "python": "dnd.core.content.recipes.ContentRecipe",
+      "root_model": false,
+      "typescript": "ContentRecipe"
+    },
+    "dnd.core.content.runtime.AuthoredBehaviorAttribution": {
+      "fields": {
+        "definition_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "origin_root_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.identities.ContentRef"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "provided_by_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        }
+      },
+      "python": "dnd.core.content.runtime.AuthoredBehaviorAttribution",
+      "root_model": false,
+      "typescript": "AuthoredBehaviorAttribution"
     },
     "dnd.core.damage.DamageComponentResolution": {
       "fields": {
@@ -18074,6 +18823,39 @@
       "root_model": false,
       "typescript": "WindExposureEvent"
     },
+    "dnd.core.item_types.ItemContentRefSnapshot": {
+      "fields": {
+        "content_id": {
+          "kind": "string"
+        },
+        "content_version": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "definition_contract_hash": {
+          "kind": "string"
+        },
+        "definition_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "item"
+            },
+            {
+              "kind": "literal",
+              "value": "environment_object"
+            }
+          ],
+          "kind": "union"
+        },
+        "pack_id": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.item_types.ItemContentRefSnapshot",
+      "root_model": false,
+      "typescript": "ItemContentRefSnapshot"
+    },
     "dnd.core.item_types.ItemPresentationState": {
       "fields": {
         "armor_ac": {
@@ -18103,6 +18885,18 @@
             {
               "kind": "integer",
               "minimum": -1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "content_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.item_types.ItemContentRefSnapshot"
             },
             {
               "kind": "null"
@@ -20735,58 +21529,6 @@
     },
     "dnd.scenarios.evaluation.models.ApparelGrant": {
       "fields": {
-        "display_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "item_id": {
-          "items": [
-            {
-              "kind": "literal",
-              "value": "armored_boots"
-            },
-            {
-              "kind": "literal",
-              "value": "cloth_shoes"
-            },
-            {
-              "kind": "literal",
-              "value": "common_clothes"
-            },
-            {
-              "kind": "literal",
-              "value": "costume"
-            },
-            {
-              "kind": "literal",
-              "value": "leather_boots"
-            },
-            {
-              "kind": "literal",
-              "value": "leather_shoes"
-            },
-            {
-              "kind": "literal",
-              "value": "robes"
-            },
-            {
-              "kind": "literal",
-              "value": "sandals"
-            },
-            {
-              "kind": "literal",
-              "value": "travelers_clothes"
-            }
-          ],
-          "kind": "union"
-        },
         "kind": {
           "items": [
             {
@@ -20796,16 +21538,9 @@
           ],
           "kind": "union"
         },
-        "visual_variant_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
         }
       },
       "python": "dnd.scenarios.evaluation.models.ApparelGrant",
@@ -21568,23 +22303,6 @@
     },
     "dnd.scenarios.evaluation.models.EquipmentGrant": {
       "fields": {
-        "item_id": {
-          "items": [
-            {
-              "kind": "literal",
-              "value": "club"
-            },
-            {
-              "kind": "literal",
-              "value": "longbow"
-            },
-            {
-              "kind": "literal",
-              "value": "shortsword"
-            }
-          ],
-          "kind": "union"
-        },
         "kind": {
           "items": [
             {
@@ -21594,29 +22312,16 @@
           ],
           "kind": "union"
         },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
         "replace": {
           "kind": "boolean"
         },
         "slot": {
-          "items": [
-            {
-              "kind": "literal",
-              "value": "melee_main"
-            },
-            {
-              "kind": "literal",
-              "value": "melee_off"
-            },
-            {
-              "kind": "literal",
-              "value": "ranged_main"
-            },
-            {
-              "kind": "literal",
-              "value": "ranged_off"
-            }
-          ],
-          "kind": "union"
+          "kind": "enum",
+          "ref": "dnd.core.equipment_types.WeaponSlot"
         }
       },
       "python": "dnd.scenarios.evaluation.models.EquipmentGrant",
@@ -21870,89 +22575,9 @@
     },
     "dnd.scenarios.evaluation.models.ItemGrant": {
       "fields": {
-        "charges": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
         "count": {
           "kind": "integer",
           "minimum": 1
-        },
-        "heal_amount": {
-          "items": [
-            {
-              "kind": "integer",
-              "minimum": 1
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "item_id": {
-          "items": [
-            {
-              "kind": "literal",
-              "value": "acid_flask"
-            },
-            {
-              "kind": "literal",
-              "value": "healing_potion"
-            },
-            {
-              "kind": "literal",
-              "value": "lightning_weapon_coat"
-            },
-            {
-              "kind": "literal",
-              "value": "potion_greater_invisibility"
-            },
-            {
-              "kind": "literal",
-              "value": "potion_haste"
-            },
-            {
-              "kind": "literal",
-              "value": "scroll_fireball"
-            },
-            {
-              "kind": "literal",
-              "value": "scroll_hold_person"
-            },
-            {
-              "kind": "literal",
-              "value": "scroll_magic_missile"
-            },
-            {
-              "kind": "literal",
-              "value": "scroll_spike_growth"
-            },
-            {
-              "kind": "literal",
-              "value": "torch_lit"
-            },
-            {
-              "kind": "literal",
-              "value": "wand_fire"
-            },
-            {
-              "kind": "literal",
-              "value": "wand_magic_missiles"
-            },
-            {
-              "kind": "literal",
-              "value": "weapon_coat"
-            }
-          ],
-          "kind": "union"
         },
         "kind": {
           "items": [
@@ -21962,6 +22587,23 @@
             }
           ],
           "kind": "union"
+        },
+        "on_grant": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "none"
+            },
+            {
+              "kind": "literal",
+              "value": "ignite"
+            }
+          ],
+          "kind": "union"
+        },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
         }
       },
       "python": "dnd.scenarios.evaluation.models.ItemGrant",
@@ -24625,17 +25267,20 @@
     },
     "server.api_models.MapEditorCatalog": {
       "fields": {
+        "content_set_digest": {
+          "kind": "string"
+        },
         "loot": {
           "items": {
             "kind": "model",
-            "ref": "server.api_models.MapEditorCatalogEntry"
+            "ref": "server.api_models.MapEditorContentCatalogEntry"
           },
           "kind": "array"
         },
         "objects": {
           "items": {
             "kind": "model",
-            "ref": "server.api_models.MapEditorCatalogEntry"
+            "ref": "server.api_models.MapEditorContentCatalogEntry"
           },
           "kind": "array"
         },
@@ -24704,9 +25349,6 @@
         "placement": {
           "kind": "string"
         },
-        "source_module": {
-          "kind": "string"
-        },
         "stability": {
           "items": [
             {
@@ -24739,6 +25381,52 @@
       "python": "server.api_models.MapEditorCatalogEntry",
       "root_model": false,
       "typescript": "MapEditorCatalogEntry"
+    },
+    "server.api_models.MapEditorContentCatalogEntry": {
+      "fields": {
+        "content_set_digest": {
+          "kind": "string"
+        },
+        "description": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "ordering": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentOrdering"
+        },
+        "presentation": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentPresentation"
+        },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "recipe_preset_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.recipe_presets.ContentRecipePresetRef"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tags": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.api_models.MapEditorContentCatalogEntry",
+      "root_model": false,
+      "typescript": "MapEditorContentCatalogEntry"
     },
     "server.api_models.MapEditorCreateMapRequest": {
       "fields": {
@@ -24910,14 +25598,8 @@
     },
     "server.api_models.MapEditorObjectPlaceRequest": {
       "fields": {
-        "catalog_id": {
+        "content_set_digest": {
           "kind": "string"
-        },
-        "options": {
-          "kind": "record",
-          "values": {
-            "kind": "json"
-          }
         },
         "position": {
           "items": [
@@ -24929,11 +25611,77 @@
             }
           ],
           "kind": "tuple"
+        },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "runtime_state": {
+          "kind": "model",
+          "ref": "server.api_models.MapEditorObjectRuntimeState"
         }
       },
       "python": "server.api_models.MapEditorObjectPlaceRequest",
       "root_model": false,
       "typescript": "MapEditorObjectPlaceRequest"
+    },
+    "server.api_models.MapEditorObjectRuntimeState": {
+      "fields": {
+        "charges": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": -1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "is_lit": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "is_open": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "trap_handler_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "trap_tile_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.api_models.MapEditorObjectRuntimeState",
+      "root_model": false,
+      "typescript": "MapEditorObjectRuntimeState"
     },
     "server.api_models.MapEditorSaveMapRequest": {
       "fields": {
@@ -24961,6 +25709,9 @@
     },
     "server.api_models.MapEditorSavedMapDocument": {
       "fields": {
+        "content_set_digest": {
+          "kind": "string"
+        },
         "metadata": {
           "kind": "model",
           "ref": "server.api_models.MapEditorSavedMapMetadata"
@@ -24973,7 +25724,13 @@
           "kind": "array"
         },
         "schema_version": {
-          "kind": "integer"
+          "items": [
+            {
+              "kind": "literal",
+              "value": 2
+            }
+          ],
+          "kind": "union"
         },
         "snapshot": {
           "kind": "model",
@@ -25032,12 +25789,6 @@
     },
     "server.api_models.MapEditorSavedObjectPlacement": {
       "fields": {
-        "catalog_id": {
-          "kind": "string"
-        },
-        "name": {
-          "kind": "string"
-        },
         "position": {
           "items": [
             {
@@ -25049,11 +25800,13 @@
           ],
           "kind": "tuple"
         },
-        "state": {
-          "kind": "record",
-          "values": {
-            "kind": "json"
-          }
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "runtime_state": {
+          "kind": "model",
+          "ref": "server.api_models.MapEditorObjectRuntimeState"
         }
       },
       "python": "server.api_models.MapEditorSavedObjectPlacement",
@@ -25387,11 +26140,16 @@
           ],
           "kind": "union"
         },
-        "aliases": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
+        "aoe_height_ft": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "aoe_length_ft": {
           "items": [
@@ -25471,6 +26229,10 @@
         "concentration": {
           "kind": "boolean"
         },
+        "content_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
         "damage_types": {
           "items": {
             "kind": "string"
@@ -25478,15 +26240,8 @@
           "kind": "array"
         },
         "description": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "string",
+          "min_length": 1
         },
         "healing": {
           "kind": "boolean"
@@ -25573,37 +26328,22 @@
           "kind": "union"
         },
         "range_ft": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "integer",
+          "minimum": 0
         },
         "range_type": {
           "items": [
             {
-              "items": [
-                {
-                  "kind": "literal",
-                  "value": "self"
-                },
-                {
-                  "kind": "literal",
-                  "value": "touch"
-                },
-                {
-                  "kind": "literal",
-                  "value": "ranged"
-                }
-              ],
-              "kind": "union"
+              "kind": "literal",
+              "value": "self"
             },
             {
-              "kind": "null"
+              "kind": "literal",
+              "value": "touch"
+            },
+            {
+              "kind": "literal",
+              "value": "ranged"
             }
           ],
           "kind": "union"
@@ -25611,17 +26351,12 @@
         "ritual": {
           "kind": "boolean"
         },
-        "saving_throw": {
-          "items": [
-            {
-              "kind": "model",
-              "ref": "server.api_models.SpellCatalogSavingThrow"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+        "saving_throws": {
+          "items": {
+            "kind": "model",
+            "ref": "server.api_models.SpellCatalogSavingThrow"
+          },
+          "kind": "array"
         },
         "school": {
           "kind": "string"
@@ -25638,15 +26373,8 @@
           "kind": "union"
         },
         "source": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "string",
+          "min_length": 1
         },
         "subclasses": {
           "items": {
@@ -25661,16 +26389,8 @@
           "kind": "boolean"
         },
         "vfx": {
-          "items": [
-            {
-              "kind": "model",
-              "ref": "server.api_models.SpellCatalogVfx"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "model",
+          "ref": "server.api_models.SpellCatalogVfx"
         }
       },
       "python": "server.api_models.SpellCatalogEntry",
@@ -25759,15 +26479,39 @@
     "server.api_models.SpellCatalogSavingThrow": {
       "fields": {
         "ability": {
-          "kind": "string"
+          "items": [
+            {
+              "kind": "literal",
+              "value": "strength"
+            },
+            {
+              "kind": "literal",
+              "value": "dexterity"
+            },
+            {
+              "kind": "literal",
+              "value": "constitution"
+            },
+            {
+              "kind": "literal",
+              "value": "intelligence"
+            },
+            {
+              "kind": "literal",
+              "value": "wisdom"
+            },
+            {
+              "kind": "literal",
+              "value": "charisma"
+            }
+          ],
+          "kind": "union"
         },
         "dc_source": {
           "items": [
             {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
+              "kind": "literal",
+              "value": "caster_spell_save_dc"
             }
           ],
           "kind": "union"
@@ -26261,6 +27005,294 @@
       "root_model": false,
       "typescript": "UnequipRequest"
     },
+    "server.content_catalog.ContentCatalogEntry": {
+      "fields": {
+        "definition_mode": {
+          "kind": "enum",
+          "ref": "dnd.core.content.registration.ContentDeclarationMode"
+        },
+        "dependencies": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.dependencies.ContentDependency"
+          },
+          "kind": "array"
+        },
+        "description": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "item_definition": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.item_definitions.ItemDefinition"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "ordering": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentOrdering"
+        },
+        "parameter_schema": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "presentation": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentPresentation"
+        },
+        "provenance": {
+          "kind": "model",
+          "ref": "dnd.core.content.provenance.ContentProvenance"
+        },
+        "ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "related_content_refs": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.identities.ContentRef"
+          },
+          "kind": "array"
+        },
+        "runtime_behavior_kind": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.content.runtime.RuntimeBehaviorKind"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tags": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "visibility": {
+          "kind": "enum",
+          "ref": "dnd.core.content.descriptors.ContentVisibility"
+        }
+      },
+      "python": "server.content_catalog.ContentCatalogEntry",
+      "root_model": false,
+      "typescript": "ContentCatalogEntry"
+    },
+    "server.content_catalog.ContentCatalogResponse": {
+      "fields": {
+        "catalog_digest": {
+          "kind": "string"
+        },
+        "content_set_digest": {
+          "kind": "string"
+        },
+        "entries": {
+          "items": {
+            "kind": "model",
+            "ref": "server.content_catalog.ContentCatalogEntry"
+          },
+          "kind": "array"
+        },
+        "presets": {
+          "items": {
+            "kind": "model",
+            "ref": "server.content_catalog.ContentRecipePresetCatalogEntry"
+          },
+          "kind": "array"
+        },
+        "safe_presentations": {
+          "items": {
+            "kind": "model",
+            "ref": "server.content_catalog.SafeContentPresentationCatalogEntry"
+          },
+          "kind": "array"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 5
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.content_catalog.ContentCatalogResponse",
+      "root_model": false,
+      "typescript": "ContentCatalogResponse"
+    },
+    "server.content_catalog.ContentManifestResponse": {
+      "fields": {
+        "built_in_artifact_digest": {
+          "kind": "string"
+        },
+        "content_set_digest": {
+          "kind": "string"
+        },
+        "engine_content_api": {
+          "kind": "integer"
+        },
+        "packs": {
+          "items": {
+            "kind": "model",
+            "ref": "server.content_catalog.ContentPackManifestEntry"
+          },
+          "kind": "array"
+        },
+        "schema_version": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": 2
+            }
+          ],
+          "kind": "union"
+        },
+        "sources": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.provenance.ContentSource"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "server.content_catalog.ContentManifestResponse",
+      "root_model": false,
+      "typescript": "ContentManifestResponse"
+    },
+    "server.content_catalog.ContentPackManifestEntry": {
+      "fields": {
+        "dependencies": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "manifest_contract_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "origin": {
+          "kind": "enum",
+          "ref": "server.content_catalog.ContentPackOrigin"
+        },
+        "pack_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "pack_id": {
+          "kind": "string"
+        },
+        "pack_version": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.content_catalog.ContentPackManifestEntry",
+      "root_model": false,
+      "typescript": "ContentPackManifestEntry"
+    },
+    "server.content_catalog.ContentRecipePresetCatalogEntry": {
+      "fields": {
+        "description": {
+          "kind": "string"
+        },
+        "display_name": {
+          "kind": "string"
+        },
+        "ordering": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentOrdering"
+        },
+        "presentation": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentPresentation"
+        },
+        "provenance": {
+          "kind": "model",
+          "ref": "dnd.core.content.provenance.ContentProvenance"
+        },
+        "recipe": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipes.ContentRecipe"
+        },
+        "ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.recipe_presets.ContentRecipePresetRef"
+        },
+        "related_content_refs": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.identities.ContentRef"
+          },
+          "kind": "array"
+        },
+        "tags": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "visibility": {
+          "kind": "enum",
+          "ref": "dnd.core.content.descriptors.ContentVisibility"
+        }
+      },
+      "python": "server.content_catalog.ContentRecipePresetCatalogEntry",
+      "root_model": false,
+      "typescript": "ContentRecipePresetCatalogEntry"
+    },
+    "server.content_catalog.SafeContentPresentationCatalogEntry": {
+      "fields": {
+        "presentation": {
+          "kind": "model",
+          "ref": "dnd.core.content.descriptors.ContentPresentation"
+        },
+        "ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.SafeContentPresentationRef"
+        }
+      },
+      "python": "server.content_catalog.SafeContentPresentationCatalogEntry",
+      "root_model": false,
+      "typescript": "SafeContentPresentationCatalogEntry"
+    },
     "server.directory_event_stream.DirectoryStreamHeartbeat": {
       "fields": {
         "cursor": {
@@ -26736,10 +27768,27 @@
       "root_model": false,
       "typescript": "AttachmentRecord"
     },
-    "server.game_directory.contracts.CharacterCreate": {
+    "server.game_directory.contracts.CanonicalCharacterRecord": {
       "fields": {
         "character_id": {
           "kind": "string"
+        },
+        "created_at": {
+          "kind": "string"
+        },
+        "current_definition_digest": {
+          "kind": "string"
+        },
+        "current_definition_revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "current_holdings_digest": {
+          "kind": "string"
+        },
+        "current_holdings_revision": {
+          "kind": "integer",
+          "minimum": 1
         },
         "display_name": {
           "kind": "string",
@@ -26749,18 +27798,74 @@
         "owner_principal_id": {
           "kind": "string"
         },
-        "preset_configuration_id": {
+        "revision_state": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "canonical"
+            }
+          ],
+          "kind": "union"
+        },
+        "row_version": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.CharacterStatus"
+        },
+        "updated_at": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.CanonicalCharacterRecord",
+      "root_model": false,
+      "typescript": "CanonicalCharacterRecord"
+    },
+    "server.game_directory.contracts.CharacterBootstrapCreate": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "definition": {
+          "kind": "model",
+          "ref": "dnd.core.content.durable_characters.CharacterDefinitionRevision"
+        },
+        "display_name": {
           "kind": "string",
+          "max_length": 80,
           "min_length": 1
+        },
+        "owner_principal_id": {
+          "kind": "string"
+        },
+        "starter_holdings": {
+          "kind": "model",
+          "ref": "dnd.core.content.durable_characters.CharacterHoldingsRevision"
         },
         "status": {
           "kind": "enum",
           "ref": "server.game_directory.contracts.CharacterStatus"
         }
       },
-      "python": "server.game_directory.contracts.CharacterCreate",
+      "python": "server.game_directory.contracts.CharacterBootstrapCreate",
       "root_model": false,
-      "typescript": "CharacterCreate"
+      "typescript": "CharacterBootstrapCreate"
+    },
+    "server.game_directory.contracts.CharacterDefinitionRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "definition": {
+          "kind": "model",
+          "ref": "dnd.core.content.durable_characters.CharacterDefinitionRevision"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterDefinitionRecord",
+      "root_model": false,
+      "typescript": "CharacterDefinitionRecord"
     },
     "server.game_directory.contracts.CharacterDeploymentCreate": {
       "fields": {
@@ -26784,10 +27889,97 @@
       "root_model": false,
       "typescript": "CharacterDeploymentCreate"
     },
+    "server.game_directory.contracts.CharacterDeploymentLeaseCreate": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "lease_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterDeploymentLeaseCreate",
+      "root_model": false,
+      "typescript": "CharacterDeploymentLeaseCreate"
+    },
+    "server.game_directory.contracts.CharacterDeploymentLeaseRecord": {
+      "fields": {
+        "acquired_at": {
+          "kind": "string"
+        },
+        "character_id": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "lease_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "release_reason": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "released_at": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterDeploymentLeaseRecord",
+      "root_model": false,
+      "typescript": "CharacterDeploymentLeaseRecord"
+    },
     "server.game_directory.contracts.CharacterDeploymentRecord": {
       "fields": {
         "character_id": {
           "kind": "string"
+        },
+        "definition_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "definition_revision": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "deployed_at": {
           "kind": "string"
@@ -26801,13 +27993,65 @@
         "game_id": {
           "kind": "string"
         },
+        "holdings_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "holdings_revision": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "lease_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "membership_id": {
           "kind": "string"
+        },
+        "pin_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.CharacterDeploymentPinState"
         }
       },
       "python": "server.game_directory.contracts.CharacterDeploymentRecord",
       "root_model": false,
       "typescript": "CharacterDeploymentRecord"
+    },
+    "server.game_directory.contracts.CharacterHoldingsRecord": {
+      "fields": {
+        "created_at": {
+          "kind": "string"
+        },
+        "holdings": {
+          "kind": "model",
+          "ref": "dnd.core.content.durable_characters.CharacterHoldingsRevision"
+        }
+      },
+      "python": "server.game_directory.contracts.CharacterHoldingsRecord",
+      "root_model": false,
+      "typescript": "CharacterHoldingsRecord"
     },
     "server.game_directory.contracts.CharacterRecord": {
       "fields": {
@@ -26817,6 +28061,52 @@
         "created_at": {
           "kind": "string"
         },
+        "current_definition_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "current_definition_revision": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "current_holdings_digest": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "current_holdings_revision": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "display_name": {
           "kind": "string",
           "max_length": 80,
@@ -26825,9 +28115,9 @@
         "owner_principal_id": {
           "kind": "string"
         },
-        "preset_configuration_id": {
-          "kind": "string",
-          "min_length": 1
+        "revision_state": {
+          "kind": "enum",
+          "ref": "server.game_directory.contracts.CharacterRevisionState"
         },
         "row_version": {
           "kind": "integer",
@@ -27631,6 +28921,82 @@
       "python": "server.game_directory.contracts.MembershipRecord",
       "root_model": false,
       "typescript": "MembershipRecord"
+    },
+    "server.game_directory.contracts.PinnedCharacterDeploymentCreate": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "deployment_id": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "lease_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.game_directory.contracts.PinnedCharacterDeploymentCreate",
+      "root_model": false,
+      "typescript": "PinnedCharacterDeploymentCreate"
+    },
+    "server.game_directory.contracts.PinnedCharacterDeploymentRecord": {
+      "fields": {
+        "character_id": {
+          "kind": "string"
+        },
+        "definition_digest": {
+          "kind": "string"
+        },
+        "definition_revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "deployed_at": {
+          "kind": "string"
+        },
+        "deployment_id": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "game_id": {
+          "kind": "string"
+        },
+        "holdings_digest": {
+          "kind": "string"
+        },
+        "holdings_revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "lease_id": {
+          "kind": "string"
+        },
+        "membership_id": {
+          "kind": "string"
+        },
+        "pin_state": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "pinned"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.game_directory.contracts.PinnedCharacterDeploymentRecord",
+      "root_model": false,
+      "typescript": "PinnedCharacterDeploymentRecord"
     },
     "server.game_directory.contracts.PlayerIdentityRecord": {
       "fields": {
@@ -28519,7 +29885,7 @@
           "max_length": 80,
           "min_length": 1
         },
-        "preset_configuration_id": {
+        "premade_id": {
           "kind": "string",
           "min_length": 1
         }
@@ -29212,6 +30578,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "damage_types": {
           "items": {
             "kind": "enum",
@@ -29329,6 +30715,26 @@
         "condition_semantic_key": {
           "kind": "string",
           "min_length": 1
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
         },
         "kind": {
           "items": [
@@ -29450,6 +30856,172 @@
       "root_model": false,
       "typescript": "ControlledEquipmentReplacePatch"
     },
+    "server.player_replication_contract.CounterspellAutomaticSuccess": {
+      "fields": {
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "automatic_success"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.player_replication_contract.CounterspellAutomaticSuccess",
+      "root_model": false,
+      "typescript": "CounterspellAutomaticSuccess"
+    },
+    "server.player_replication_contract.CounterspellCheckFailure": {
+      "fields": {
+        "check_dc": {
+          "exclusive_minimum": 0,
+          "kind": "integer"
+        },
+        "check_total": {
+          "kind": "integer"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "check_failure"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.player_replication_contract.CounterspellCheckFailure",
+      "root_model": false,
+      "typescript": "CounterspellCheckFailure"
+    },
+    "server.player_replication_contract.CounterspellCheckSuccess": {
+      "fields": {
+        "check_dc": {
+          "exclusive_minimum": 0,
+          "kind": "integer"
+        },
+        "check_total": {
+          "kind": "integer"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "check_success"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.player_replication_contract.CounterspellCheckSuccess",
+      "root_model": false,
+      "typescript": "CounterspellCheckSuccess"
+    },
+    "server.player_replication_contract.CounterspellPresentationCue": {
+      "fields": {
+        "child_presentation_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
+        "counterspell_slot_level": {
+          "kind": "integer",
+          "maximum": 9,
+          "minimum": 3
+        },
+        "incoming_caster_uuid": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "incoming_spell_level": {
+          "kind": "integer",
+          "maximum": 9,
+          "minimum": 0
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "counterspell"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_presentation_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "presentation_cursor": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "presentation_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "reactor_uuid": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "resolution": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "server.player_replication_contract.CounterspellAutomaticSuccess"
+            },
+            {
+              "kind": "model",
+              "ref": "server.player_replication_contract.CounterspellCheckSuccess"
+            },
+            {
+              "kind": "model",
+              "ref": "server.player_replication_contract.CounterspellCheckFailure"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_event_cursor": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "source_event_uuid": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.player_replication_contract.CounterspellPresentationCue",
+      "root_model": false,
+      "typescript": "CounterspellPresentationCue"
+    },
     "server.player_replication_contract.CubeAreaGeometry": {
       "fields": {
         "centered": {
@@ -29550,6 +31122,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "damage_types": {
           "items": {
             "kind": "enum",
@@ -29622,6 +31214,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -29762,6 +31374,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -29936,6 +31568,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "entity_uuid": {
           "kind": "string",
           "min_length": 1
@@ -30045,6 +31697,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "duration_ms": {
           "exclusive_minimum": 0,
           "kind": "integer"
@@ -30145,6 +31817,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "kind": {
           "items": [
             {
@@ -30226,6 +31918,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -30311,6 +32023,26 @@
           },
           "kind": "array"
         },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
         "current": {
           "kind": "enum",
           "ref": "dnd.core.life_types.LifeState"
@@ -30377,6 +32109,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -30460,6 +32212,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -30568,6 +32340,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -30742,6 +32534,38 @@
       "root_model": false,
       "typescript": "PlayerReplicationWatermarks"
     },
+    "server.player_replication_contract.RootedBehaviorPresentationAttribution": {
+      "fields": {
+        "definition_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "rooted_behavior"
+            }
+          ],
+          "kind": "union"
+        },
+        "origin_root_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "provided_by_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "role": {
+          "kind": "enum",
+          "ref": "server.player_replication_contract.BehaviorPresentationRole"
+        }
+      },
+      "python": "server.player_replication_contract.RootedBehaviorPresentationAttribution",
+      "root_model": false,
+      "typescript": "RootedBehaviorPresentationAttribution"
+    },
     "server.player_replication_contract.ShovePresentationCue": {
       "fields": {
         "actor_clip": {
@@ -30766,6 +32590,26 @@
         "contact_frame": {
           "kind": "integer",
           "minimum": 0
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
         },
         "forced_movement_presentation_id": {
           "items": [
@@ -30842,6 +32686,26 @@
       "root_model": false,
       "typescript": "ShovePresentationCue"
     },
+    "server.player_replication_contract.SourceItemPresentationAttribution": {
+      "fields": {
+        "definition_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "source_item"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.player_replication_contract.SourceItemPresentationAttribution",
+      "root_model": false,
+      "typescript": "SourceItemPresentationAttribution"
+    },
     "server.player_replication_contract.SpellPresentationCue": {
       "fields": {
         "actor_uuid": {
@@ -30884,6 +32748,26 @@
         "child_presentation_ids": {
           "items": {
             "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
           },
           "kind": "array"
         },
@@ -31354,6 +33238,10 @@
           ],
           "kind": "tuple"
         },
+        "safe_presentation_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.SafeContentPresentationRef"
+        },
         "uuid": {
           "kind": "string",
           "min_length": 1
@@ -31665,6 +33553,10 @@
               },
               {
                 "kind": "model",
+                "ref": "server.player_replication_contract.CounterspellPresentationCue"
+              },
+              {
+                "kind": "model",
                 "ref": "server.player_replication_contract.ItemActionPresentationCue"
               },
               {
@@ -31781,6 +33673,34 @@
       "root_model": false,
       "typescript": "TileUpsertPatch"
     },
+    "server.player_replication_contract.UnrootedBehaviorPresentationAttribution": {
+      "fields": {
+        "definition_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "unrooted_behavior"
+            }
+          ],
+          "kind": "union"
+        },
+        "provided_by_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "role": {
+          "kind": "enum",
+          "ref": "server.player_replication_contract.BehaviorPresentationRole"
+        }
+      },
+      "python": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution",
+      "root_model": false,
+      "typescript": "UnrootedBehaviorPresentationAttribution"
+    },
     "server.player_replication_contract.VisualEquipmentLayer": {
       "fields": {
         "equipped_visual_policy": {
@@ -31791,9 +33711,13 @@
           "kind": "enum",
           "ref": "dnd.core.item_types.ItemPresentationKind"
         },
+        "safe_presentation_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.SafeContentPresentationRef"
+        },
         "slot": {
           "kind": "enum",
-          "ref": "server.player_replication_contract.VisualLoadoutSlot"
+          "ref": "dnd.core.equipment_types.VisualLoadoutSlot"
         },
         "visual_item_name": {
           "kind": "string",
@@ -32303,6 +34227,10 @@
         "category": {
           "kind": "string"
         },
+        "content_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.APIContentRefSnapshot"
+        },
         "description": {
           "kind": "string",
           "min_length": 1
@@ -32333,6 +34261,75 @@
       "python": "server.world_contracts.APIConditionSummary",
       "root_model": false,
       "typescript": "APIConditionSummary"
+    },
+    "server.world_contracts.APIContentRefSnapshot": {
+      "fields": {
+        "content_id": {
+          "kind": "string"
+        },
+        "content_version": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "definition_contract_hash": {
+          "kind": "string"
+        },
+        "definition_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "item"
+            },
+            {
+              "kind": "literal",
+              "value": "creature"
+            },
+            {
+              "kind": "literal",
+              "value": "action"
+            },
+            {
+              "kind": "literal",
+              "value": "spell"
+            },
+            {
+              "kind": "literal",
+              "value": "condition"
+            },
+            {
+              "kind": "literal",
+              "value": "trait"
+            },
+            {
+              "kind": "literal",
+              "value": "reaction"
+            },
+            {
+              "kind": "literal",
+              "value": "feat"
+            },
+            {
+              "kind": "literal",
+              "value": "class_feature"
+            },
+            {
+              "kind": "literal",
+              "value": "environment_object"
+            },
+            {
+              "kind": "literal",
+              "value": "rule_primitive"
+            }
+          ],
+          "kind": "union"
+        },
+        "pack_id": {
+          "kind": "string"
+        }
+      },
+      "python": "server.world_contracts.APIContentRefSnapshot",
+      "root_model": false,
+      "typescript": "APIContentRefSnapshot"
     },
     "server.world_contracts.APIDirectionalBlockMap": {
       "fields": {
@@ -32546,6 +34543,10 @@
         "ac": {
           "kind": "integer"
         },
+        "active_weapon_set": {
+          "kind": "enum",
+          "ref": "dnd.core.equipment_types.WeaponSet"
+        },
         "inventory": {
           "items": {
             "kind": "model",
@@ -32686,6 +34687,28 @@
       "root_model": false,
       "typescript": "APIGrid"
     },
+    "server.world_contracts.APIItemRuntimeRecipeRefSnapshot": {
+      "fields": {
+        "preset_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "server.world_contracts.APIRecipePresetRefSnapshot"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "recipe_digest": {
+          "kind": "string"
+        }
+      },
+      "python": "server.world_contracts.APIItemRuntimeRecipeRefSnapshot",
+      "root_model": false,
+      "typescript": "APIItemRuntimeRecipeRefSnapshot"
+    },
     "server.world_contracts.APIItemSummary": {
       "fields": {
         "armor_ac": {
@@ -32720,6 +34743,10 @@
             }
           ],
           "kind": "union"
+        },
+        "content_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.APIContentRefSnapshot"
         },
         "damage_dice": {
           "items": [
@@ -32804,6 +34831,14 @@
         "rarity": {
           "kind": "string"
         },
+        "recipe_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.APIItemRuntimeRecipeRefSnapshot"
+        },
+        "safe_presentation_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.SafeContentPresentationRef"
+        },
         "shield_ac_bonus": {
           "items": [
             {
@@ -32856,6 +34891,26 @@
       "python": "server.world_contracts.APIItemSummary",
       "root_model": false,
       "typescript": "APIItemSummary"
+    },
+    "server.world_contracts.APIRecipePresetRefSnapshot": {
+      "fields": {
+        "pack_id": {
+          "kind": "string"
+        },
+        "preset_contract_hash": {
+          "kind": "string"
+        },
+        "preset_id": {
+          "kind": "string"
+        },
+        "preset_version": {
+          "kind": "integer",
+          "minimum": 1
+        }
+      },
+      "python": "server.world_contracts.APIRecipePresetRefSnapshot",
+      "root_model": false,
+      "typescript": "APIRecipePresetRefSnapshot"
     },
     "server.world_contracts.APITile": {
       "fields": {
@@ -32994,6 +35049,16 @@
       "root_model": false,
       "typescript": "DirectionalStructuralEdgeMap"
     },
+    "server.world_contracts.SafeContentPresentationRef": {
+      "fields": {
+        "presentation_contract_hash": {
+          "kind": "string"
+        }
+      },
+      "python": "server.world_contracts.SafeContentPresentationRef",
+      "root_model": false,
+      "typescript": "SafeContentPresentationRef"
+    },
     "server.world_contracts.StructuralEdgeAppearance": {
       "fields": {
         "is_open": {
@@ -33017,11 +35082,11 @@
       "typescript": "StructuralEdgeAppearance"
     }
   },
-  "objective_replay_contract_hash": "fd92450d2391f781ce5644b935a9d3c69f80c0cca5245c1800950fcfc7544ba0",
+  "objective_replay_contract_hash": "61909c2da9db36b6f611c87abba49296907895caa396a66ff184f34292ceb04b",
   "objective_replay_contract_version": 1,
-  "player_replay_contract_hash": "a58a79da9f42231103a0bbcd6b3dc9203f162b5add4cd9b32fec8792cd0700a3",
+  "player_replay_contract_hash": "6a2f71d2ec6e293dce3ebcf83fb7145603a31cda345d841ff1c1e7a991ae698d",
   "player_replay_contract_version": 1,
-  "player_replication_contract_hash": "490eb9e780aad664e4de9fda50c09402056d21900cff5ac6de813588088ea864",
+  "player_replication_contract_hash": "5cac036886f225c4e32abe9e0affc61eb6fab1272a5dd8db12106543556472e3",
   "player_replication_contract_version": 1,
   "roots": [
     "server.api_models.AIProviderCatalogEntry",
@@ -33064,6 +35129,7 @@
     "server.api_models.JoinGameResponse",
     "server.api_models.MapEditorCatalog",
     "server.api_models.MapEditorCatalogEntry",
+    "server.api_models.MapEditorContentCatalogEntry",
     "server.api_models.MapEditorCreateMapRequest",
     "server.api_models.MapEditorGridBounds",
     "server.api_models.MapEditorLightCell",
@@ -33071,6 +35137,7 @@
     "server.api_models.MapEditorMapSnapshot",
     "server.api_models.MapEditorObjectDeleteRequest",
     "server.api_models.MapEditorObjectPlaceRequest",
+    "server.api_models.MapEditorObjectRuntimeState",
     "server.api_models.MapEditorSaveMapRequest",
     "server.api_models.MapEditorSavedMapDocument",
     "server.api_models.MapEditorSavedMapList",
@@ -33102,6 +35169,12 @@
     "server.api_models.ToggleHandlerRequest",
     "server.api_models.ToggleHandlerResponse",
     "server.api_models.UnequipRequest",
+    "server.content_catalog.ContentCatalogEntry",
+    "server.content_catalog.ContentCatalogResponse",
+    "server.content_catalog.ContentManifestResponse",
+    "server.content_catalog.ContentPackManifestEntry",
+    "server.content_catalog.ContentRecipePresetCatalogEntry",
+    "server.content_catalog.SafeContentPresentationCatalogEntry",
     "server.game_gateway_models.AttachHostedGameRequest",
     "server.game_gateway_models.AttachHostedGameResponse",
     "server.game_gateway_models.AttachmentSummary",
@@ -33133,9 +35206,14 @@
     "server.game_directory.contracts.ArtifactRecord",
     "server.game_directory.contracts.AttachmentCreate",
     "server.game_directory.contracts.AttachmentRecord",
-    "server.game_directory.contracts.CharacterCreate",
+    "server.game_directory.contracts.CanonicalCharacterRecord",
+    "server.game_directory.contracts.CharacterBootstrapCreate",
+    "server.game_directory.contracts.CharacterDefinitionRecord",
     "server.game_directory.contracts.CharacterDeploymentCreate",
+    "server.game_directory.contracts.CharacterDeploymentLeaseCreate",
+    "server.game_directory.contracts.CharacterDeploymentLeaseRecord",
     "server.game_directory.contracts.CharacterDeploymentRecord",
+    "server.game_directory.contracts.CharacterHoldingsRecord",
     "server.game_directory.contracts.CharacterRecord",
     "server.game_directory.contracts.DirectoryEventRecord",
     "server.game_directory.contracts.DirectoryModel",
@@ -33149,6 +35227,8 @@
     "server.game_directory.contracts.MembershipCapabilities",
     "server.game_directory.contracts.MembershipCreate",
     "server.game_directory.contracts.MembershipRecord",
+    "server.game_directory.contracts.PinnedCharacterDeploymentCreate",
+    "server.game_directory.contracts.PinnedCharacterDeploymentRecord",
     "server.game_directory.contracts.PlayerIdentityRecord",
     "server.game_directory.contracts.PrincipalCreate",
     "server.game_directory.contracts.PrincipalCredentialCreate",

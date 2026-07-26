@@ -282,6 +282,12 @@ export function assertSubjectiveFrame(frame: SubjectiveReplicationFrame): void {
 }
 
 function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: string): void {
+  const attributionRoles = cue.content_attributions.map((attribution) => (
+    attribution.kind === "source_item" ? attribution.kind : attribution.role
+  ));
+  if (new Set(attributionRoles).size !== attributionRoles.length) {
+    throw new ContractValidationError(path, "presentation content-attribution roles must be unique");
+  }
   switch (cue.kind) {
     case "movement": {
       const representedSteps = cue.trajectory.length - 1;
@@ -346,6 +352,58 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
         throw new ContractValidationError(path, "item effects must exactly equal ordered children");
       }
       return;
+    case "counterspell": {
+      if (cue.child_presentation_ids.length !== 0) {
+        throw new ContractValidationError(path, "Counterspell presentation must be a leaf");
+      }
+      const behaviorRoles = cue.content_attributions.flatMap((attribution) => (
+        attribution.kind === "source_item" ? [] : [attribution.role]
+      ));
+      if (
+        behaviorRoles.length !== 2
+        || !behaviorRoles.includes("behavior")
+        || !behaviorRoles.includes("trigger_behavior")
+      ) {
+        throw new ContractValidationError(
+          path,
+          "Counterspell requires reaction and incoming-spell behavior attribution",
+        );
+      }
+      if (cue.content_attributions.some((attribution) => attribution.kind === "source_item")) {
+        throw new ContractValidationError(path, "Counterspell cannot carry source-item attribution");
+      }
+      if (cue.resolution.kind === "automatic_success") {
+        if (cue.counterspell_slot_level < cue.incoming_spell_level) {
+          throw new ContractValidationError(
+            path,
+            "automatic Counterspell requires a sufficient slot level",
+          );
+        }
+      } else {
+        if (cue.counterspell_slot_level >= cue.incoming_spell_level) {
+          throw new ContractValidationError(
+            path,
+            "checked Counterspell requires a lower slot than the incoming spell",
+          );
+        }
+        if (cue.resolution.check_dc !== 10 + cue.incoming_spell_level) {
+          throw new ContractValidationError(path, "Counterspell check DC is inconsistent");
+        }
+        if (
+          cue.resolution.kind === "check_success"
+          && cue.resolution.check_total < cue.resolution.check_dc
+        ) {
+          throw new ContractValidationError(path, "successful Counterspell check is below its DC");
+        }
+        if (
+          cue.resolution.kind === "check_failure"
+          && cue.resolution.check_total >= cue.resolution.check_dc
+        ) {
+          throw new ContractValidationError(path, "failed Counterspell check meets its DC");
+        }
+      }
+      return;
+    }
     case "forced_movement":
       if (cue.parent_presentation_id !== cue.actor_action_presentation_id) {
         throw new ContractValidationError(path, "forced movement must attach to its actor action");
@@ -680,6 +738,7 @@ function assertPresentationGraphSemantics(
       return;
     }
     case "movement":
+    case "counterspell":
     case "damage":
     case "heal":
     case "condition":

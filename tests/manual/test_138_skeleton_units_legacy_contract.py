@@ -18,7 +18,6 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventQueue
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
-from dnd.items.test_items import AcidFlaskSpell
 from dnd.monsters.bestiary import (
     create_skeleton,
     create_skeleton_archer,
@@ -38,6 +37,7 @@ from dnd.utils import (
     set_hp,
 )
 from tests.engine_book.test_chapter_17_monsters_presets import (
+    get_inventory_item,
     reset_monster_state,
 )
 
@@ -430,13 +430,11 @@ def test_acid_flask_affects_every_creature_in_its_area() -> None:
     )
     Entity.update_all_entities_senses(max_distance=100)
     before = (get_hp(first), get_hp(second))
+    flask = get_inventory_item(warrior, "Acid Flask")
+    action = flask.get_use_actions(warrior.uuid)[0].instantiate(end_position=(5, 5))
 
     with fixed_dice_faces(*([1] * 20)):
-        event = AcidFlaskSpell(
-            source_entity_uuid=warrior.uuid,
-            caster_level=1,
-            end_position=(5, 5),
-        ).apply()
+        event = action.apply()
 
     assert event is not None and not event.canceled
     assert get_hp(first) < before[0]

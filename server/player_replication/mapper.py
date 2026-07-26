@@ -32,6 +32,8 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.combat_log import position_evidence_key
 from dnd.core.condition_types import ConditionCategory
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.dice import AttackOutcome as EngineAttackOutcome
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
@@ -64,6 +66,7 @@ from dnd.core.presentation_geometry import (
     LinePresentationGeometry,
     SpherePresentationGeometry,
 )
+from dnd.spells.abjuration import CounterspellReactionEvent
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.presentation import (
     PresentationNodeCoordinates,
@@ -78,7 +81,13 @@ from server.player_replication_contract import (
     AttackPresentationCue,
     ConditionOperation,
     ConditionPresentationCue,
+    BehaviorPresentationRole,
     ConeAreaGeometry,
+    CounterspellAutomaticSuccess,
+    CounterspellCheckFailure,
+    CounterspellCheckSuccess,
+    CounterspellPresentationCue,
+    CounterspellResolution,
     CubeAreaGeometry,
     CylinderAreaGeometry,
     DamagePresentationCue,
@@ -104,11 +113,14 @@ from server.player_replication_contract import (
     MovementPresentationCue,
     PlayerReplicationWatermarks,
     PresentationDamageType,
+    PresentationContentAttribution,
     PresentationProjectile,
     PresentationSpellSchool,
     PresentationWeaponSlot,
     ShoveOutcome,
     ShovePresentationCue,
+    RootedBehaviorPresentationAttribution,
+    SourceItemPresentationAttribution,
     SphereAreaGeometry,
     SpellApplicationOutcome,
     SpellDelivery,
@@ -119,6 +131,7 @@ from server.player_replication_contract import (
     SubjectiveReplicationFrame,
     SubjectiveWorldPatch,
     VisualLoadoutReplacePatch,
+    UnrootedBehaviorPresentationAttribution,
 )
 
 
@@ -183,6 +196,7 @@ class _NodeKind(str, Enum):
     MOVEMENT = "movement"
     ATTACK = "attack"
     SPELL = "spell"
+    COUNTERSPELL = "counterspell"
     ITEM = "item"
     SHOVE = "shove"
     FORCED = "forced"
@@ -245,6 +259,15 @@ class _ItemPayload:
     actor_uuid: str
     item_uuid: str
     item_kind: ItemPresentationKind
+
+
+@dataclass(frozen=True)
+class _CounterspellPayload:
+    reactor_uuid: str
+    incoming_caster_uuid: str
+    incoming_spell_level: int
+    counterspell_slot_level: int
+    resolution: CounterspellResolution
 
 
 @dataclass(frozen=True)
@@ -342,6 +365,7 @@ _Payload = (
     _MovementPayload
     | _AttackPayload
     | _SpellPayload
+    | _CounterspellPayload
     | _ItemPayload
     | _ShovePayload
     | _ForcedPayload
@@ -365,6 +389,7 @@ class _NodeSpec:
     payload: _Payload
     lineage: str
     order_key: tuple[int, ...]
+    content_attributions: tuple[PresentationContentAttribution, ...] = ()
     parent_key: Optional[str] = None
 
 
@@ -381,9 +406,11 @@ class _BatchIndex:
         self.completion_by_lineage: dict[str, ProjectedEventSlot] = {}
         self.first_cursor_by_lineage: dict[str, int] = {}
         event_lineage_by_uuid: dict[UUID, str] = {}
+        self.slot_by_event_uuid: dict[UUID, ProjectedEventSlot] = {}
         for slot in batch.slots:
             lineage = str(slot.event.lineage_uuid)
             event_lineage_by_uuid[slot.event.uuid] = lineage
+            self.slot_by_event_uuid[slot.event.uuid] = slot
             self.first_cursor_by_lineage.setdefault(lineage, slot.source_event_cursor)
             if slot.event.phase is EventPhase.COMPLETION and not slot.event.canceled:
                 self.completion_by_lineage[lineage] = slot
@@ -521,6 +548,12 @@ def _build_semantic_nodes(
             continue
         if isinstance(event, ShoveEvent):
             node = _shove_node(slot, index=index, perspective=perspective)
+        elif isinstance(event, CounterspellReactionEvent):
+            node = _counterspell_node(
+                slot,
+                index=index,
+                perspective=perspective,
+            )
         elif isinstance(event, AttackEvent):
             node = _attack_node(slot, index=index, perspective=perspective)
         elif isinstance(event, SpellEvent):
@@ -775,6 +808,11 @@ def _add_movement_nodes(
                     first.path_index,
                     segment_index,
                 ),
+                content_attributions=_behavior_content_attributions(
+                    root_event.behavior_binding
+                    if root_event is not None
+                    else None,
+                ),
             )
             add_node(node, map_lineage=False)
             for step_slot in segment:
@@ -846,6 +884,101 @@ def _attack_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
+        content_attributions=_behavior_content_attributions(
+            event.behavior_binding,
+        ),
+    )
+
+
+def _counterspell_node(
+    slot: ProjectedEventSlot,
+    *,
+    index: _BatchIndex,
+    perspective: SubjectivePerspective,
+) -> Optional[_NodeSpec]:
+    """Project one fully attributed Counterspell reaction or fail closed."""
+    event = slot.event
+    if not isinstance(event, CounterspellReactionEvent):
+        return None
+    if event.target_entity_uuid is None:
+        return None
+    if not _identity_allowed(event, event.source_entity_uuid, perspective):
+        return None
+    if not _identity_allowed(event, event.target_entity_uuid, perspective):
+        return None
+
+    incoming_slot = index.slot_by_event_uuid.get(event.triggered_event_uuid)
+    if incoming_slot is None or not isinstance(incoming_slot.event, SpellEvent):
+        return None
+    incoming = incoming_slot.event
+    if incoming.lineage_uuid != event.triggered_lineage_uuid:
+        return None
+    if incoming.source_entity_uuid != event.target_entity_uuid:
+        return None
+
+    behavior = _behavior_content_attributions(
+        event.behavior_binding,
+        role=BehaviorPresentationRole.BEHAVIOR,
+    )
+    trigger = _behavior_content_attributions(
+        incoming.behavior_binding,
+        role=BehaviorPresentationRole.TRIGGER_BEHAVIOR,
+    )
+    if len(behavior) != 1 or len(trigger) != 1:
+        return None
+
+    incoming_level = event.incoming_spell_level
+    if event.automatic:
+        if (
+            not event.succeeded
+            or event.check_total is not None
+            or event.check_dc is not None
+            or event.counterspell_slot_level < incoming_level
+        ):
+            return None
+        resolution: CounterspellResolution = CounterspellAutomaticSuccess()
+    else:
+        if (
+            event.check_total is None
+            or event.check_dc is None
+            or event.check_dc != 10 + incoming_level
+            or event.counterspell_slot_level >= incoming_level
+        ):
+            return None
+        if event.succeeded:
+            if event.check_total < event.check_dc:
+                return None
+            resolution = CounterspellCheckSuccess(
+                check_total=event.check_total,
+                check_dc=event.check_dc,
+            )
+        else:
+            if event.check_total >= event.check_dc:
+                return None
+            resolution = CounterspellCheckFailure(
+                check_total=event.check_total,
+                check_dc=event.check_dc,
+            )
+
+    lineage = str(event.lineage_uuid)
+    return _NodeSpec(
+        key=f"counterspell:{event.uuid}",
+        kind=_NodeKind.COUNTERSPELL,
+        slot=slot,
+        payload=_CounterspellPayload(
+            reactor_uuid=str(event.source_entity_uuid),
+            incoming_caster_uuid=str(event.target_entity_uuid),
+            incoming_spell_level=incoming_level,
+            counterspell_slot_level=event.counterspell_slot_level,
+            resolution=resolution,
+        ),
+        lineage=lineage,
+        order_key=(
+            index.root_order_cursor(lineage, slot.source_event_cursor),
+            20,
+            slot.source_event_cursor,
+        ),
+        content_attributions=behavior + trigger,
     )
 
 
@@ -961,6 +1094,9 @@ def _spell_node(
         payload=payload,
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
+        content_attributions=_behavior_content_attributions(
+            event.behavior_binding,
+        ),
     )
     return node, applications
 
@@ -980,6 +1116,15 @@ def _item_node(
     if not _identity_allowed(event, event.source_entity_uuid, perspective):
         return None
     lineage = str(event.lineage_uuid)
+    attributions = list(_behavior_content_attributions(event.behavior_binding))
+    if snapshot.content_ref is not None:
+        attributions.append(
+            SourceItemPresentationAttribution(
+                definition_ref=ContentRef.model_validate(
+                    snapshot.content_ref.model_dump(mode="python")
+                ),
+            )
+        )
     return _NodeSpec(
         key=f"item:{event.uuid}",
         kind=_NodeKind.ITEM,
@@ -991,6 +1136,7 @@ def _item_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
+        content_attributions=tuple(attributions),
     )
 
 
@@ -1030,6 +1176,9 @@ def _shove_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
+        content_attributions=_behavior_content_attributions(
+            event.behavior_binding,
+        ),
     )
 
 
@@ -1215,6 +1364,9 @@ def _condition_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 40, slot.source_event_cursor),
+        content_attributions=_behavior_content_attributions(
+            event.condition.behavior_binding,
+        ),
     )
 
 
@@ -1804,6 +1956,7 @@ def _materialize_node(
         "child_presentation_ids": coordinates.child_presentation_ids,
         "source_event_cursor": node.slot.source_event_cursor,
         "source_event_uuid": str(node.slot.event.uuid),
+        "content_attributions": node.content_attributions,
     }
     payload = node.payload
     if isinstance(payload, _MovementPayload):
@@ -1855,6 +2008,15 @@ def _materialize_node(
             targets=targets,
             projectile_type=payload.projectile_type,
             area=payload.area,
+        )
+    if isinstance(payload, _CounterspellPayload):
+        return CounterspellPresentationCue(
+            **common,
+            reactor_uuid=payload.reactor_uuid,
+            incoming_caster_uuid=payload.incoming_caster_uuid,
+            incoming_spell_level=payload.incoming_spell_level,
+            counterspell_slot_level=payload.counterspell_slot_level,
+            resolution=payload.resolution,
         )
     if isinstance(payload, _ItemPayload):
         return ItemActionPresentationCue(
@@ -2103,6 +2265,32 @@ def _identified_uuid_or_none(
     perspective: SubjectivePerspective,
 ) -> Optional[str]:
     return str(entity_uuid) if _identity_allowed(event, entity_uuid, perspective) else None
+
+
+def _behavior_content_attributions(
+    binding: BehaviorBinding | None,
+    *,
+    role: BehaviorPresentationRole = BehaviorPresentationRole.BEHAVIOR,
+) -> tuple[PresentationContentAttribution, ...]:
+    """Convert one authenticated runtime binding without fabricating identity."""
+    if binding is None:
+        return ()
+    if binding.origin_root_ref is None:
+        return (
+            UnrootedBehaviorPresentationAttribution(
+                role=role,
+                definition_ref=binding.definition_ref,
+                provided_by_ref=binding.provided_by_ref,
+            ),
+        )
+    return (
+        RootedBehaviorPresentationAttribution(
+            role=role,
+            definition_ref=binding.definition_ref,
+            provided_by_ref=binding.provided_by_ref,
+            origin_root_ref=binding.origin_root_ref,
+        ),
+    )
 
 
 def _attack_outcome(value: EngineAttackOutcome) -> Optional[AttackOutcome]:

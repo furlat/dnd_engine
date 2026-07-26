@@ -1,0 +1,14 @@
+{
+  "source_id": "wotc.srd_5_1_cc",
+  "source_family": "srd_5_1_cc",
+  "title": "System Reference Document 5.1",
+  "source_version": "5.1",
+  "rules_baseline": "2014",
+  "license_id": "CC-BY-4.0",
+  "canonical_uri": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+  "document_digest": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+  "attribution_text": "This work includes material from the System Reference Document 5.1 by Wizards of the Coast LLC, available under the Creative Commons Attribution 4.0 International License.",
+  "notices": [
+    "Dungeons & Dragons and Wizards of the Coast are trademarks of Wizards of the Coast LLC."
+  ]
+}

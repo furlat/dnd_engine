@@ -89,6 +89,7 @@ from dnd.blocks.sensory import spatial_senses_system
 import dnd.core.gridmap as gridmap_module
 from dnd.entity import Entity
 from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
+from dnd.spells.evocation import Fireball
 from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
 from server.session import SessionManager
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
@@ -664,7 +665,7 @@ def test_epoch_build_expands_registered_action_variants_once(
     monkeypatch.setattr(SpellAction, "get_discovery_variants", track_spell_variants)
     monkeypatch.setattr(Entity, "_make_action_info", track_make_info)
 
-    actions = archmage.get_available_actions()
+    actions = archmage.get_available_actions(legal_only=True)
     row_build_make_info_calls = make_info_calls
     affordances = _build_affordance_set_from_actions(archmage, actions, 42)
     capability_make_info_calls = make_info_calls - row_build_make_info_calls
@@ -1073,7 +1074,7 @@ def test_required_target_aoe_prefilter_uses_action_relationship_filter(
     }
     assert arena.hero.uuid in mage.senses.entities
     assert ally_positions & set(mage.senses.entities.values())
-    probe = BaseAction(
+    probe = Fireball(
         name="Enemy Filter Probe",
         source_entity_uuid=mage.uuid,
         target_type=TargetType.POSITION_AOE,
@@ -1104,7 +1105,9 @@ def test_required_target_aoe_prefilter_uses_action_relationship_filter(
         barrier_positions: set[tuple[int, int]],
         idx: int,
     ) -> Any:
-        if template.get_discovery_template_name() == "Enemy Filter Probe":
+        if template.get_discovery_template_name().startswith(
+            "Enemy Filter Probe",
+        ):
             probe_candidate_positions.append(pos)
         return original_compute(
             self,
@@ -1125,12 +1128,14 @@ def test_required_target_aoe_prefilter_uses_action_relationship_filter(
     probe_row = next(
         row
         for row in actions.position_actions
-        if row.template_name == "Enemy Filter Probe"
+        if row.base_template_name == "Enemy Filter Probe"
     )
     probe_variant = next(
         variant
         for variant in actions.registered_action_variants
-        if variant.get_discovery_template_name() == "Enemy Filter Probe"
+        if variant.get_discovery_template_name().startswith(
+            "Enemy Filter Probe",
+        )
     )
     assert probe_variant.aoe_shape is not None
     radius = probe_variant.aoe_shape._get_max_radius_tiles()
@@ -1829,7 +1834,14 @@ def test_full_budget_move_refreshes_visibility_without_full_path_radius() -> Non
     assert actor.senses._paths_dirty is False
     assert actor.senses.visible
     assert after.remaining_movement == 0
-    assert all(action.template_name != "Move" for action in after.position_actions)
+    exhausted_move = next(
+        action
+        for action in after.position_actions
+        if action.template_name == "Move"
+    )
+    assert exhausted_move.can_afford is True
+    assert exhausted_move.availability_status == "target_cost_unaffordable"
+    assert exhausted_move.valid_targets == []
 
 
 def test_grid_compute_paths_reuses_same_revision_result(

@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_fi
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
+from dnd.core.content.runtime import (
+    bind_runtime_behavior,
+    bind_runtime_handler_before_admission,
+)
 from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
 from dnd.core.senses import SenseMode as SenseMode, SensesType as SensesType
 
@@ -718,6 +722,7 @@ class BaseBlock(BaseModel):
         """
         if not self.allow_events_conditions:
             return None
+        bind_runtime_handler_before_admission(event_handler)
         event_handler.owner_block = self
         self.event_handlers[event_handler.uuid] = event_handler
         for trigger in event_handler.trigger_conditions:
@@ -979,6 +984,10 @@ class BaseBlock(BaseModel):
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
             condition.target_entity_uuid = self.uuid
+        bind_runtime_behavior(
+            condition,
+            runtime_owner_uuid=self.uuid,
+        )
         if context is not None:
             condition.set_context(context)
 

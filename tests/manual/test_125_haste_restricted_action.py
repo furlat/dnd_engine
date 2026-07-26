@@ -13,7 +13,10 @@ from dnd.actions_functional import (
     update_weapon_templates,
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.fighter import (
     ActionSurge,
     ActionSurgeFeature,
@@ -31,7 +34,7 @@ from dnd.core.events import Event
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import create_dagger, create_greatsword
+from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect
 from dnd.utils import reset_combat_state
@@ -78,7 +81,12 @@ def _create_creature(
         ),
     )
     entity.equipment.equip(
-        create_greatsword(entity.uuid),
+        materialize_item(
+            GREATSWORD_RECIPE,
+            entity.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(entity)
@@ -299,11 +307,21 @@ def test_haste_weapon_attack_can_use_an_equipped_off_hand_weapon() -> None:
     fighter, target = _create_hasted_fighter(extra_attacks=1)
     fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
     fighter.equipment.equip(
-        create_dagger(fighter.uuid),
+        materialize_item(
+            DAGGER_RECIPE,
+            fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_MAIN,
     )
     fighter.equipment.equip(
-        create_dagger(fighter.uuid),
+        materialize_item(
+            DAGGER_RECIPE,
+            fighter.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Weapon,
+        ),
         WeaponSlot.MELEE_OFF,
     )
     update_weapon_templates(fighter)

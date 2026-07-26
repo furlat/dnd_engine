@@ -5,13 +5,16 @@ from typing import Literal
 
 from dnd.actions import Attack, Move
 from dnd.actions_functional import setup_standard_actions
+from dnd.blocks.equipment import Shield
 from dnd.classes.fighter import FightingStyleProtection
 from dnd.conditions import InvisibilityEffect
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
-from dnd.items.armors import create_shield
+from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.utils import force_attack_miss, get_hp, remove_attack_modifier
@@ -174,7 +177,12 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
         faction="heroes",
     )
     protector.equipment.equip(
-        create_shield(protector.uuid),
+        materialize_item(
+            SHIELD_RECIPE,
+            protector.uuid,
+            origin=ItemRuntimeOrigin.STARTER,
+            expected_type=Shield,
+        ),
         WeaponSlot.MELEE_OFF,
     )
     protection = FightingStyleProtection(

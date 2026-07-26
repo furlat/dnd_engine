@@ -4,7 +4,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
-from dnd.core.content import ContentKind
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
 from uuid import UUID
 from typing import Optional
@@ -60,7 +60,13 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     return event
 
 
-def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
+class OpportunityAttackHandler(EventHandler):
+    """Direct player-toggleable reaction with one authored behavior identity."""
+
+
+def create_opportunity_attack_handler(
+    source_entity_uuid: UUID,
+) -> OpportunityAttackHandler:
     """Create an opportunity-attack handler for one entity.
 
     Args:
@@ -69,10 +75,10 @@ def create_opportunity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
     Returns:
         Player-toggleable step-movement handler.
     """
-    return EventHandler(
+    return OpportunityAttackHandler(
         name="Opportunity Attack Handler",
         semantic_key="reaction.opportunity_attack",
-        content_kind=ContentKind.REACTION,
+        content_kind=RuntimeBehaviorKind.REACTION,
         trigger_conditions=[Trigger(
             name="Opportunity Attack Trigger",
             event_type=EventType.STEP_MOVEMENT,

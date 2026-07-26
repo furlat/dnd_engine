@@ -7,6 +7,12 @@ from typing import get_args
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from dnd.core.content.descriptors import (
+    ContentPresentation,
+    compute_safe_content_presentation_hash,
+)
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from server.world_contracts import (
@@ -18,6 +24,7 @@ from server.world_contracts import (
     APIGrid,
     APITile,
     APIVisibilityResponse,
+    SafeContentPresentationRef,
     StructuralEdgeAppearance,
     StructuralEdgeKind,
 )
@@ -32,6 +39,10 @@ from server.player_replication_contract import (
     ConeAreaGeometry,
     ConditionOperation,
     ConditionPresentationCue,
+    CounterspellAutomaticSuccess,
+    CounterspellCheckFailure,
+    CounterspellCheckSuccess,
+    CounterspellPresentationCue,
     CubeAreaGeometry,
     DamagePresentationCue,
     DeathSaveOutcome,
@@ -60,11 +71,14 @@ from server.player_replication_contract import (
     PlayerReplicationProtocolIdentity,
     PlayerReplicationWatermarks,
     PresentationDamageType,
+    BehaviorPresentationRole,
     PresentationProjectile,
     PresentationSpellSchool,
     PresentationWeaponSlot,
     ShoveOutcome,
     ShovePresentationCue,
+    RootedBehaviorPresentationAttribution,
+    SourceItemPresentationAttribution,
     SphereAreaGeometry,
     SpellApplicationOutcome,
     SpellDelivery,
@@ -87,10 +101,36 @@ from server.player_replication_contract import (
     SubjectiveWorldPatch,
     VisualEquipmentLayer,
     VisualLoadoutSlot,
+    UnrootedBehaviorPresentationAttribution,
     player_replication_contract_summary,
     player_replication_wire_schema,
 )
 from server.timeline_contracts import CombatLogFramesResponse, CombatLogProjection
+
+
+def _safe_presentation_ref(
+    presentation: ContentPresentation,
+) -> SafeContentPresentationRef:
+    return SafeContentPresentationRef(
+        presentation_contract_hash=compute_safe_content_presentation_hash(
+            presentation,
+        ),
+    )
+
+
+def _content_ref(
+    *,
+    kind: ContentDefinitionKind,
+    content_id: str,
+    digest_char: str,
+) -> ContentRef:
+    return ContentRef(
+        pack_id="fixture.player_replication",
+        definition_kind=kind,
+        content_id=content_id,
+        content_version=1,
+        definition_contract_hash=digest_char * 64,
+    )
 
 
 def _blocks() -> APIDirectionalBlockMap:
@@ -185,6 +225,9 @@ def _loadout(entity_uuid: str, visual_item_name: str | None = None) -> EntityVis
             VisualEquipmentLayer(
                 slot=VisualLoadoutSlot.WEAPON_MELEE_MAIN,
                 item_kind=ItemPresentationKind.WEAPON,
+                safe_presentation_ref=_safe_presentation_ref(
+                    ContentPresentation(sprite_key=visual_item_name),
+                ),
                 visual_item_name=visual_item_name,
                 visual_variant_id=None,
                 equipped_visual_policy=EquippedVisualPolicy.VISIBLE,
@@ -200,7 +243,12 @@ def _loadout(entity_uuid: str, visual_item_name: str | None = None) -> EntityVis
 
 
 def _equipment(ac: int = 13) -> APIEquipmentOverview:
-    return APIEquipmentOverview(slots=[], ac=ac, inventory=[])
+    return APIEquipmentOverview(
+        slots=[],
+        active_weapon_set=WeaponSet.NONE,
+        ac=ac,
+        inventory=[],
+    )
 
 
 def _perspective(
@@ -460,6 +508,12 @@ def test_floor_objects_use_a_closed_typed_world_and_patch_projection() -> None:
         position=(1, 0),
         map_char="D",
         object_kind=FloorObjectProjectionKind.DOOR,
+        safe_presentation_ref=_safe_presentation_ref(
+            ContentPresentation(
+                sprite_key="DirectionalDoor",
+                visual_variant_key="stone",
+            ),
+        ),
         visual_item_name="DirectionalDoor",
         visual_variant_id="stone",
         blocks_movement=True,
@@ -827,6 +881,127 @@ def test_presentation_union_covers_renderer_semantics_without_raw_events() -> No
     payload["event"] = {"wire_type": "dnd.core.events.Event"}
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         SubjectiveReplicationFrame.model_validate(payload)
+
+
+def test_content_attribution_is_exact_rooted_or_unrooted_without_nullable_refs() -> None:
+    """Authenticated content roles never reconstruct identity from cue labels."""
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.counterspell",
+        digest_char="a",
+    )
+    spell_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.fireball",
+        digest_char="b",
+    )
+    item_ref = _content_ref(
+        kind=ContentDefinitionKind.ITEM,
+        content_id="item.red_cloak",
+        digest_char="c",
+    )
+    direct = UnrootedBehaviorPresentationAttribution(
+        role=BehaviorPresentationRole.BEHAVIOR,
+        definition_ref=reaction_ref,
+        provided_by_ref=reaction_ref,
+    )
+    rooted = RootedBehaviorPresentationAttribution(
+        role=BehaviorPresentationRole.TRIGGER_BEHAVIOR,
+        definition_ref=spell_ref,
+        provided_by_ref=spell_ref,
+        origin_root_ref=item_ref,
+    )
+    source_item = SourceItemPresentationAttribution(definition_ref=item_ref)
+
+    assert "origin_root_ref" not in type(direct).model_fields
+    assert rooted.origin_root_ref == item_ref
+    assert source_item.definition_ref.content_id == "item.red_cloak"
+
+    invalid_rooted = rooted.model_dump(mode="python")
+    invalid_rooted.pop("origin_root_ref")
+    with pytest.raises(ValidationError, match="origin_root_ref"):
+        RootedBehaviorPresentationAttribution.model_validate(invalid_rooted)
+    with pytest.raises(ValidationError, match="item or environment-object"):
+        SourceItemPresentationAttribution(
+            definition_ref=spell_ref,
+        )
+
+
+def test_counterspell_is_a_closed_attributed_nonmovement_reaction() -> None:
+    """Counterspell check shape and both causal content roles are explicit."""
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.counterspell",
+        digest_char="d",
+    )
+    spell_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.fireball",
+        digest_char="e",
+    )
+    attributions = (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=reaction_ref,
+            provided_by_ref=reaction_ref,
+        ),
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.TRIGGER_BEHAVIOR,
+            definition_ref=spell_ref,
+            provided_by_ref=spell_ref,
+        ),
+    )
+    automatic = CounterspellPresentationCue.model_validate({
+        **_cue_base(1, presentation_id="counterspell"),
+        "reactor_uuid": "abjurer",
+        "incoming_caster_uuid": "wizard",
+        "incoming_spell_level": 3,
+        "counterspell_slot_level": 3,
+        "resolution": CounterspellAutomaticSuccess(),
+        "content_attributions": attributions,
+    })
+    restored = TypeAdapter(SubjectivePresentationCue).validate_json(
+        automatic.model_dump_json()
+    )
+    assert isinstance(restored, CounterspellPresentationCue)
+    assert isinstance(restored.resolution, CounterspellAutomaticSuccess)
+
+    checked = automatic.model_copy(update={
+        "incoming_spell_level": 5,
+        "resolution": CounterspellCheckSuccess(
+            check_total=15,
+            check_dc=15,
+        ),
+    })
+    assert isinstance(checked.resolution, CounterspellCheckSuccess)
+    failed = automatic.model_copy(update={
+        "incoming_spell_level": 5,
+        "resolution": CounterspellCheckFailure(
+            check_total=14,
+            check_dc=15,
+        ),
+    })
+    assert isinstance(failed.resolution, CounterspellCheckFailure)
+
+    missing_trigger = automatic.model_dump(mode="python")
+    missing_trigger["content_attributions"] = attributions[:1]
+    with pytest.raises(ValidationError, match="incoming-spell behavior attribution"):
+        CounterspellPresentationCue.model_validate(missing_trigger)
+
+    duplicate_role = automatic.model_dump(mode="python")
+    duplicate_role["content_attributions"] = (attributions[0], attributions[0])
+    with pytest.raises(ValidationError, match="roles must be unique"):
+        CounterspellPresentationCue.model_validate(duplicate_role)
+
+    invalid_checked = automatic.model_dump(mode="python")
+    invalid_checked["incoming_spell_level"] = 5
+    invalid_checked["resolution"] = {
+        "kind": "check_failure",
+        "check_total": 15,
+        "check_dc": 15,
+    }
+    with pytest.raises(ValidationError, match="below its DC"):
+        CounterspellPresentationCue.model_validate(invalid_checked)
 
 
 def test_presentation_graph_rejects_dangling_duplicate_and_wrongly_reparented_nodes() -> None:
@@ -1458,6 +1633,9 @@ def test_active_weapon_set_allows_hidden_and_unarmed_presentations() -> None:
             VisualEquipmentLayer(
                 slot=VisualLoadoutSlot.WEAPON_RANGED_MAIN,
                 item_kind=ItemPresentationKind.WEAPON,
+                safe_presentation_ref=_safe_presentation_ref(
+                    ContentPresentation(sprite_key="Longbow"),
+                ),
                 visual_item_name="Longbow",
                 equipped_visual_policy=EquippedVisualPolicy.HIDDEN,
             ),

@@ -1,5 +1,5 @@
 {
-  "contract_hash": "b7f684cb72038721b995586b7e178620e258b7d607f9e59f22fa0d3b43215887",
+  "contract_hash": "ee47e6b50cfd502a2417a4ba21a73adc4e0771fb08bf7a01d59a082ef6cb32fa",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -82,9 +82,9 @@
         "non_source"
       ]
     },
-    "dnd.core.content.ContentKind": {
-      "python": "dnd.core.content.ContentKind",
-      "typescript": "ContentKind",
+    "dnd.core.content.runtime.RuntimeBehaviorKind": {
+      "python": "dnd.core.content.runtime.RuntimeBehaviorKind",
+      "typescript": "RuntimeBehaviorKind",
       "values": [
         "action",
         "spell",
@@ -5093,7 +5093,7 @@
         },
         "content_kind": {
           "kind": "enum",
-          "ref": "dnd.core.content.ContentKind"
+          "ref": "dnd.core.content.runtime.RuntimeBehaviorKind"
         },
         "context": {
           "items": [
@@ -14030,6 +14030,37 @@
       "python": "dnd.core.events.WindExposureEvent",
       "typescript": "WindExposureEvent"
     },
+    "dnd.core.item_types.ItemContentRefSnapshot": {
+      "fields": {
+        "content_id": {
+          "kind": "string"
+        },
+        "content_version": {
+          "kind": "number"
+        },
+        "definition_contract_hash": {
+          "kind": "string"
+        },
+        "definition_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "item"
+            },
+            {
+              "kind": "literal",
+              "value": "environment_object"
+            }
+          ],
+          "kind": "union"
+        },
+        "pack_id": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.item_types.ItemContentRefSnapshot",
+      "typescript": "ItemContentRefSnapshot"
+    },
     "dnd.core.item_types.ItemPresentationState": {
       "fields": {
         "armor_ac": {
@@ -14058,6 +14089,18 @@
           "items": [
             {
               "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "content_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.item_types.ItemContentRefSnapshot"
             },
             {
               "kind": "null"
