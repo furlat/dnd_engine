@@ -136,7 +136,7 @@ class CharmPerson(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         is_fighting = self._is_target_fighting_caster(target, caster)
 
         advantage_mod_uuid: Optional[UUID] = None
@@ -342,7 +342,7 @@ class HoldPerson(SpellAction):
                     disposition=TargetEffectDisposition.HARMFUL,
                     included_creature_types=frozenset({CreatureType.HUMANOID.value}),
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=("selected_target.condition.paralyzed",),
                     condition_semantic_keys=frozenset({
@@ -389,7 +389,7 @@ class HoldPerson(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         concentration = self.ensure_concentration(execution_event)
 
         effect_event, _, success = self.resolve_saving_throw(
@@ -572,7 +572,7 @@ class HoldMonster(SpellAction):
                     disposition=TargetEffectDisposition.HARMFUL,
                     excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=("selected_target.condition.paralyzed",),
                     condition_semantic_keys=frozenset({
@@ -616,7 +616,7 @@ class HoldMonster(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         concentration_condition = self.ensure_concentration(execution_event)
 
@@ -1201,7 +1201,7 @@ class PowerWordStun(SpellAction):
         )
 
         if current_hp <= self.hp_threshold:
-            dc = caster.spell_save_dc()
+            dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
             stun_effect = PowerWordStunEffect(
                 source_entity_uuid=caster.uuid,
@@ -1389,7 +1389,7 @@ class Bane(SpellAction):
                     effect_id="control.bane.penalty",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="charisma",
                     condition_fact_ids=("selected_target.condition.bane",),
                     condition_semantic_keys=frozenset({"dnd.spells.enchantment.BaneEffect"}),
@@ -1420,7 +1420,7 @@ class Bane(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         concentration = self.ensure_concentration(execution_event)
 
@@ -1859,7 +1859,7 @@ class Command(SpellAction):
                     disposition=TargetEffectDisposition.HARMFUL,
                     excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=(condition_fact,),
                     condition_semantic_keys=condition_keys,
@@ -1896,7 +1896,7 @@ class Command(SpellAction):
                 status_message=f"Command has no effect on undead {target.name}"
             )
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,

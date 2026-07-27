@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import inspect
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -31,11 +32,16 @@ from dnd.core.events import Event
 from dnd.core import combat_log
 from server import (
     api_models,
+    character_directory_contracts,
     content_catalog,
+    game_history_contracts,
     game_gateway_models,
     game_summary_store,
 )
-from server.game_directory import contracts as game_directory_contracts
+from server.game_directory.contracts import (
+    DirectoryEventRecord,
+    FinalSummaryRecord,
+)
 from server.event_stream import EvictedPayload
 from server.directory_event_stream import DirectoryStreamHeartbeat, DirectoryStreamSync
 from server.agent_protocol.objective_diagnostics import (
@@ -86,6 +92,7 @@ STREAM_MODELS = (
     EvictedPayload,
     DirectoryStreamSync,
     DirectoryStreamHeartbeat,
+    DirectoryEventRecord,
 )
 OBJECTIVE_DIAGNOSTICS_MODELS = (
     ObjectiveDiagnosticsBootstrap,
@@ -107,6 +114,7 @@ REPLAY_MODELS = (
     ObjectiveReplayBundle,
     SubjectivePlayerReplayBundle,
 )
+GAME_HISTORY_MODELS = (FinalSummaryRecord,)
 PLAYER_REPLICATION_ALIASES = {
     "SubjectiveWorldPatch": SubjectiveWorldPatch,
     "SubjectivePresentationCue": SubjectivePresentationCue,
@@ -209,13 +217,15 @@ def build_sdk_manifest() -> Dict[str, Any]:
     builder = SdkContractBuilder()
     roots = [
         *api_model_roots(),
+        *declared_model_roots(character_directory_contracts),
         *declared_model_roots(content_catalog),
+        *declared_model_roots(game_history_contracts),
         *declared_model_roots(game_gateway_models),
         *declared_model_roots(game_summary_store),
-        *declared_model_roots(game_directory_contracts),
         *declared_model_roots(combat_log),
         *PLAYER_REPLICATION_MODELS,
         *REPLAY_MODELS,
+        *GAME_HISTORY_MODELS,
         *STREAM_MODELS,
         *OBJECTIVE_DIAGNOSTICS_MODELS,
     ]
@@ -475,16 +485,24 @@ def main() -> None:
     """Write or verify all generated backend and TypeScript contracts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--sdk-only", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    if args.sdk_only:
+        sdk_manifest = build_sdk_manifest()
+        sdk_text = json.dumps(sdk_manifest, indent=2, sort_keys=True) + "\n"
+        write_or_check(SDK_MANIFEST_PATH, sdk_text, args.check)
+        write_or_check(SDK_TYPES_PATH, render_typescript(sdk_manifest), args.check)
+        return
 
     event_manifest = build_event_manifest()
     event_text = json.dumps(event_manifest, indent=2, sort_keys=True) + "\n"
     write_or_check(SERVER_MANIFEST_PATH, event_text, args.check)
 
-    sdk_manifest = build_sdk_manifest()
-    sdk_text = json.dumps(sdk_manifest, indent=2, sort_keys=True) + "\n"
-    write_or_check(SDK_MANIFEST_PATH, sdk_text, args.check)
-    write_or_check(SDK_TYPES_PATH, render_typescript(sdk_manifest), args.check)
+    command = [sys.executable, str(Path(__file__).resolve()), "--sdk-only"]
+    if args.check:
+        command.append("--check")
+    subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

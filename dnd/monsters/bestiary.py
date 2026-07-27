@@ -518,7 +518,7 @@ def create_caster(
     """
     Create a generic spellcaster with AoE spells (Fireball, Magic Missile, etc.).
 
-    No class features — use sorcerer_factory.create_sorcerer() for a real Sorcerer.
+    No class features — durable Sorcerers use schema-2 character composition.
 
     Full-caster progression with:
     - CHA 18 (primary casting stat)

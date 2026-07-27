@@ -13,7 +13,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.runtime import (
+    ContentSystemRuntime,
     SERVER_CONTENT_SYSTEM_RUNTIME,
 )
 from dnd.actions import (
@@ -37,7 +39,16 @@ from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentVisibility,
 )
-from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.content.effects import (
+    AuthoredConditionEffect,
+    AuthoredConditionEffectBranch,
+    AuthoredConditionEffectProfile,
+    AutomaticConditionEffectGate,
+    ConditionEffectDisposition,
+    ConditionEffectOperation,
+    ConditionEffectTarget,
+)
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.item_definitions import (
     ItemDefinition,
     ItemPersistencePolicy,
@@ -52,6 +63,7 @@ from dnd.core.content.provenance import (
     RulesBaseline,
 )
 from dnd.core.content.registration import (
+    behavior_content_ref,
     behavior_identity,
     get_content_declaration,
     item_factory,
@@ -63,7 +75,9 @@ from dnd.core.content.registry import (
 from dnd.core.content.runtime import (
     BehaviorBinding,
     RuntimeBehaviorKind,
+    bind_runtime_action_before_admission,
     bind_runtime_behavior_child,
+    bind_runtime_handler_before_admission,
     runtime_behavior_binding_gateway,
     runtime_behavior_provider,
 )
@@ -142,6 +156,40 @@ class _ClockworkChargeCondition(BaseCondition):
 _CONDITION_REF = get_content_declaration(_ClockworkChargeCondition).ref
 
 
+def _automatic_apply_profile(
+    *,
+    source_ref: ContentRef,
+    target: ConditionEffectTarget,
+) -> AuthoredConditionEffectProfile:
+    return AuthoredConditionEffectProfile(
+        branches=(
+            AuthoredConditionEffectBranch(
+                branch_id="clockwork-charge",
+                disposition=ConditionEffectDisposition.BENEFICIAL,
+                gates=(AutomaticConditionEffectGate(),),
+                effects=(
+                    AuthoredConditionEffect(
+                        effect_id="apply-clockwork-charge",
+                        source_ref=source_ref,
+                        operation=ConditionEffectOperation.APPLY,
+                        condition_ref=_CONDITION_REF,
+                        target=target,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+_ACTION_DECLARED_REF = behavior_content_ref(
+    definition_kind=ContentDefinitionKind.ACTION,
+    runtime_behavior_kind=RuntimeBehaviorKind.ACTION,
+    pack_id=_PACK_ID,
+    content_id="action.wind_clockwork",
+    version=1,
+)
+
+
 @behavior_identity(
     definition_kind=ContentDefinitionKind.ACTION,
     runtime_behavior_kind=RuntimeBehaviorKind.ACTION,
@@ -158,6 +206,10 @@ _CONDITION_REF = get_content_declaration(_ClockworkChargeCondition).ref
             relation=ContentDependencyRelation.APPLIES_CONDITION,
             target_ref=_CONDITION_REF,
         ),
+    ),
+    condition_effect_profile=_automatic_apply_profile(
+        source_ref=_ACTION_DECLARED_REF,
+        target=ConditionEffectTarget.SELECTED_TARGET,
     ),
 )
 class _WindClockworkAction(BaseAction):
@@ -221,6 +273,52 @@ def _build_unrelated(
 _UNRELATED_ROOT_REF = get_content_declaration(_build_unrelated).ref
 
 
+_FEATURE_DECLARED_REF = behavior_content_ref(
+    definition_kind=ContentDefinitionKind.CLASS_FEATURE,
+    runtime_behavior_kind=RuntimeBehaviorKind.CLASS_FEATURE,
+    pack_id=_PACK_ID,
+    content_id="class_feature.clockwork_training",
+    version=1,
+)
+
+
+@behavior_identity(
+    definition_kind=ContentDefinitionKind.CLASS_FEATURE,
+    runtime_behavior_kind=RuntimeBehaviorKind.CLASS_FEATURE,
+    pack_id=_PACK_ID,
+    content_id="class_feature.clockwork_training",
+    version=1,
+    descriptor=ContentDescriptorSpec(
+        display_name="Clockwork Training",
+        visibility=ContentVisibility.PUBLIC,
+    ),
+    provenance=_PROVENANCE,
+    dependencies=(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=_ACTION_REF,
+        ),
+        ContentDependency(
+            relation=ContentDependencyRelation.APPLIES_CONDITION,
+            target_ref=_CONDITION_REF,
+        ),
+        ContentDependency(
+            relation=ContentDependencyRelation.INSTALLS_HANDLER,
+            target_ref=_HANDLER_REF,
+        ),
+    ),
+    condition_effect_profile=_automatic_apply_profile(
+        source_ref=_FEATURE_DECLARED_REF,
+        target=ConditionEffectTarget.ACTOR,
+    ),
+)
+class _ClockworkTrainingFeature:
+    pass
+
+
+_FEATURE_REF = get_content_declaration(_ClockworkTrainingFeature).ref
+
+
 def _registry():
     builder = ContentRegistryBuilder()
     builder.add_source(_SOURCE)
@@ -230,6 +328,7 @@ def _registry():
         _WindClockworkAction,
         _build_clockwork,
         _build_unrelated,
+        _ClockworkTrainingFeature,
     ):
         builder.add_declaration(get_content_declaration(declaration_source))
     return builder.freeze(pack_dependencies={_PACK_ID: frozenset()})
@@ -359,6 +458,187 @@ def test_explicit_provider_child_binding_uses_item_and_action_dependency_closure
                 provider=unrelated,
                 runtime_owner_uuid=unrelated.uuid,
             )
+
+
+def test_structural_provider_ref_binds_declared_behaviors_without_fake_provider() -> None:
+    """Structural grants attribute declared behaviors to one exact feature."""
+    owner_uuid = uuid4()
+    action, condition, handler = _runtime_chain(owner_uuid)
+    binder = BehaviorBinder(_registry())
+
+    action_binding = binder.bind_granted(
+        action,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+    condition_binding = binder.bind_granted(
+        condition,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+    handler_binding = binder.bind_granted(
+        handler,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+    assert action_binding == BehaviorBinding(
+        definition_ref=_ACTION_REF,
+        provided_by_ref=_FEATURE_REF,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner_uuid,
+    )
+    assert condition_binding == BehaviorBinding(
+        definition_ref=_CONDITION_REF,
+        provided_by_ref=_FEATURE_REF,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner_uuid,
+    )
+    assert handler_binding == BehaviorBinding(
+        definition_ref=_HANDLER_REF,
+        provided_by_ref=_FEATURE_REF,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+
+def test_structural_provider_ref_gives_private_handler_stable_identity() -> None:
+    """An undeclared implementation handler inherits only its exact provider."""
+    owner_uuid = uuid4()
+    handler = EventHandler(
+        name="Clockwork Recharge",
+        source_entity_uuid=owner_uuid,
+        event_processor=_processor,
+        use_register=False,
+    )
+    binder = BehaviorBinder(_registry())
+
+    binding = binder.bind_granted(
+        handler,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+    assert binding == BehaviorBinding(
+        definition_ref=_FEATURE_REF,
+        provided_by_ref=_FEATURE_REF,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner_uuid,
+    )
+    assert handler.content_kind is RuntimeBehaviorKind.CLASS_FEATURE
+    assert handler.semantic_key == (
+        f"{_FEATURE_REF.identity_key}#handler.clockwork_recharge"
+    )
+
+    invalid = EventHandler(
+        name="Clockwork Inventory",
+        content_kind=RuntimeBehaviorKind.ITEM,
+        source_entity_uuid=owner_uuid,
+        event_processor=_processor,
+        use_register=False,
+    )
+    with pytest.raises(ValueError, match="not a supported runtime behavior"):
+        binder.bind_granted(
+            invalid,
+            provider_ref=_FEATURE_REF,
+            runtime_owner_uuid=owner_uuid,
+        )
+
+
+def test_structural_provider_ref_requires_exact_dependency_reachability() -> None:
+    owner_uuid = uuid4()
+    action, _, _ = _runtime_chain(owner_uuid)
+
+    with pytest.raises(ValueError, match="not reachable from provider"):
+        BehaviorBinder(_registry()).bind_granted(
+            action,
+            provider_ref=_UNRELATED_ROOT_REF,
+            runtime_owner_uuid=owner_uuid,
+        )
+
+
+def test_content_runtime_exposes_structural_provider_binding() -> None:
+    owner_uuid = uuid4()
+    action, _, _ = _runtime_chain(owner_uuid)
+    runtime = ContentSystemRuntime()
+    runtime.install(LoadedContentSystem(
+        registry=_registry(),
+        packs=(),
+        built_in_artifact_digest="a" * 64,
+        content_set_digest="b" * 64,
+    ))
+
+    binding = runtime.bind_granted_behavior(
+        action,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+    assert binding == BehaviorBinding(
+        definition_ref=_ACTION_REF,
+        provided_by_ref=_FEATURE_REF,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+
+def test_structural_bindings_survive_action_and_handler_admission() -> None:
+    """Admission preserves exact pre-bound grants and fences runtime owners."""
+    reset_engine_runtime(grid_size=(4, 4))
+    entity = _core_entity()
+    owner_uuid = entity.uuid
+    action, active_condition, _ = _runtime_chain(owner_uuid)
+    action.template = True
+    handler = EventHandler(
+        name="Clockwork Recharge",
+        source_entity_uuid=owner_uuid,
+        event_processor=_processor,
+        use_register=False,
+    )
+    binder = BehaviorBinder(_registry())
+    action_binding = binder.bind_granted(
+        action,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+    handler_binding = binder.bind_granted(
+        handler,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+    binder.bind_granted(
+        active_condition,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+    with runtime_behavior_binding_gateway(binder):
+        with runtime_behavior_provider(active_condition):
+            entity.register_action(action)
+            entity.add_event_handler(handler)
+
+    assert entity.registered_actions[-1] is action
+    assert action.behavior_binding is action_binding
+    assert entity.event_handlers[handler.uuid] is handler
+    assert handler.behavior_binding is handler_binding
+    with pytest.raises(ValueError, match="different owner"):
+        bind_runtime_action_before_admission(
+            action,
+            runtime_owner_uuid=uuid4(),
+        )
+    mismatched_handler = EventHandler(
+        name="Clockwork Mismatch",
+        source_entity_uuid=uuid4(),
+        event_processor=_processor,
+        use_register=False,
+    )
+    binder.bind_granted(
+        mismatched_handler,
+        provider_ref=_FEATURE_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+    with pytest.raises(ValueError, match="different owner"):
+        bind_runtime_handler_before_admission(mismatched_handler)
 
 
 def test_provider_owned_handler_keeps_distinct_reaction_kind() -> None:

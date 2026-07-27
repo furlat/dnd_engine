@@ -439,7 +439,7 @@ class SacredFlame(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -915,7 +915,7 @@ class Fireball(SpellAction):
         record_phase("resolve_entities", started)
 
         started = start_phase()
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         record_phase("spell_save_dc", started)
 
         started = start_phase()
@@ -1073,7 +1073,7 @@ class BurningHands(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1207,7 +1207,7 @@ class LightningBolt(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1404,7 +1404,7 @@ class Thunderwave(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1584,7 +1584,7 @@ class Shatter(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1716,7 +1716,7 @@ class CircleOfDeath(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1834,7 +1834,7 @@ class ConeOfCold(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -2054,7 +2054,7 @@ class Sunburst(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         has_disadvantage = target.creature_type in [CreatureType.UNDEAD, CreatureType.OOZE]
 
@@ -2940,7 +2940,7 @@ class GustOfWind(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2965,7 +2965,7 @@ class GustOfWind(SpellAction):
         if not caster:
             return
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         target_pos = self.end_position or (caster.senses.position[0] + 1, caster.senses.position[1])
 
         dx = target_pos[0] - caster.senses.position[0]
@@ -3054,7 +3054,7 @@ class IceStorm(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
 
         save_request = caster.create_saving_throw_request(
@@ -3286,7 +3286,7 @@ class Sunbeam(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -3355,7 +3355,7 @@ class ChainLightning(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
         max_secondaries = 3 + upcast_bonus
         base_dice = 10 + upcast_bonus
@@ -3619,7 +3619,7 @@ class PrismaticSpray(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -3816,7 +3816,7 @@ class FlameStrike(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
 
         save_request = caster.create_saving_throw_request(

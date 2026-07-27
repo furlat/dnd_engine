@@ -324,6 +324,24 @@ class Health(BaseBlock):
             raise ValueError(f"Hit dice index {hit_dice_index} out of range")
         return self.hit_dices[hit_dice_index]
 
+    def add_hit_dice(self, hit_dice: HitDice) -> None:
+        """Attach one exact source-owned hit-dice block."""
+        if hit_dice.source_entity_uuid != self.source_entity_uuid:
+            raise ValueError("hit dice must belong to the health block owner")
+        if any(existing.uuid == hit_dice.uuid for existing in self.hit_dices):
+            raise ValueError(f"hit dice {hit_dice.uuid} is already attached")
+        self.hit_dices.append(hit_dice)
+
+    def remove_hit_dice_by_uuid(self, hit_dice_uuid: UUID) -> bool:
+        """Detach and unregister exactly one hit-dice source."""
+        for index, hit_dice in enumerate(self.hit_dices):
+            if hit_dice.uuid != hit_dice_uuid:
+                continue
+            del self.hit_dices[index]
+            type(hit_dice).unregister(hit_dice.uuid)
+            return True
+        return False
+
     def spend_hit_die(
         self,
         constitution_modifier: int,

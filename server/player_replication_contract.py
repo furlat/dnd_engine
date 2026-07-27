@@ -757,6 +757,52 @@ class MovementPresentationCue(PresentationCueBase):
         return self
 
 
+class ActionPresentationCue(PresentationCueBase):
+    """Exact authored action root over already-recorded engine causality."""
+
+    kind: Literal["action"] = "action"
+    actor_uuid: str = Field(min_length=1)
+    action_name: str = Field(min_length=1)
+    target_uuids: Tuple[str, ...] = Field(default_factory=tuple)
+    trigger_presentation_id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact delivered action-like cue that caused this reactive action, "
+            "when that trigger survived subjective projection."
+        ),
+    )
+    effect_presentation_ids: Tuple[str, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_action_root(self) -> "ActionPresentationCue":
+        if len(set(self.target_uuids)) != len(self.target_uuids):
+            raise ValueError("action targets must be unique and ordered")
+        if self.effect_presentation_ids != self.child_presentation_ids:
+            raise ValueError(
+                "action effects must exactly match ordered presentation children"
+            )
+        if self.trigger_presentation_id == self.presentation_id:
+            raise ValueError("action cannot cite itself as its trigger")
+        if self.trigger_presentation_id in self.child_presentation_ids:
+            raise ValueError("action trigger cannot also be one of its effects")
+        if not any(
+            isinstance(
+                attribution,
+                (
+                    UnrootedBehaviorPresentationAttribution,
+                    RootedBehaviorPresentationAttribution,
+                ),
+            )
+            and attribution.role is BehaviorPresentationRole.BEHAVIOR
+            for attribution in self.content_attributions
+        ):
+            raise ValueError(
+                "action presentation requires exact behavior attribution"
+            )
+        return self
+
+
 class PresentationProjectile(str, Enum):
     """Closed projectile dispatch categories supported by the renderer."""
 
@@ -1402,6 +1448,7 @@ class EncounterPresentationCue(PresentationCueBase):
 SubjectivePresentationCue: TypeAlias = Annotated[
     Union[
         MovementPresentationCue,
+        ActionPresentationCue,
         ForcedMovementPresentationCue,
         ShovePresentationCue,
         CounterspellPresentationCue,
@@ -1494,6 +1541,120 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
                         raise ValueError(
                             "movement reactions must resolve before the owning segment commits"
                         )
+            elif isinstance(cue, ActionPresentationCue):
+                allowed_targets = {
+                    cue.actor_uuid,
+                    *cue.target_uuids,
+                }
+                if cue.trigger_presentation_id is not None:
+                    trigger = by_id.get(cue.trigger_presentation_id)
+                    if not isinstance(
+                        trigger,
+                        (
+                            MovementPresentationCue,
+                            ActionPresentationCue,
+                            AttackPresentationCue,
+                            SpellPresentationCue,
+                            ShovePresentationCue,
+                        ),
+                    ):
+                        raise ValueError(
+                            "action trigger must identify a delivered action-like cue"
+                        )
+                    trigger_targets: set[str] = set()
+                    if isinstance(trigger, MovementPresentationCue):
+                        trigger_targets.add(trigger.entity_uuid)
+                    elif isinstance(trigger, ActionPresentationCue):
+                        trigger_targets.update(trigger.target_uuids)
+                    elif isinstance(trigger, (AttackPresentationCue, ShovePresentationCue)):
+                        trigger_targets.add(trigger.target_uuid)
+                    elif isinstance(trigger, SpellPresentationCue):
+                        trigger_targets.update(
+                            target.target_uuid
+                            for target in trigger.targets
+                            if target.target_uuid is not None
+                        )
+                    if trigger_targets and not trigger_targets.intersection(allowed_targets):
+                        raise ValueError(
+                            "action trigger must share an authorized action participant"
+                        )
+                for child_id in cue.child_presentation_ids:
+                    child = by_id[child_id]
+                    if not isinstance(
+                        child,
+                        (
+                            AttackPresentationCue,
+                            SpellPresentationCue,
+                            ShovePresentationCue,
+                            ForcedMovementPresentationCue,
+                            DamagePresentationCue,
+                            HealPresentationCue,
+                            ConditionPresentationCue,
+                            DoorPresentationCue,
+                            LightPresentationCue,
+                            EquipmentPresentationCue,
+                        ),
+                    ):
+                        raise ValueError(
+                            "action children must be typed delivered action effects"
+                        )
+                    if isinstance(
+                        child,
+                        (
+                            AttackPresentationCue,
+                            SpellPresentationCue,
+                            ShovePresentationCue,
+                        ),
+                    ) and child.actor_uuid != cue.actor_uuid:
+                        raise ValueError(
+                            "nested action actor must match its owning action"
+                        )
+                    if (
+                        isinstance(child, AttackPresentationCue)
+                        and child.target_uuid not in allowed_targets
+                    ):
+                        raise ValueError(
+                            "nested attack target must match its owning action"
+                        )
+                    if (
+                        isinstance(child, ShovePresentationCue)
+                        and child.target_uuid not in allowed_targets
+                    ):
+                        raise ValueError(
+                            "nested shove target must match its owning action"
+                        )
+                    if isinstance(child, SpellPresentationCue) and any(
+                        target.target_uuid is not None
+                        and target.target_uuid not in allowed_targets
+                        for target in child.targets
+                    ):
+                        raise ValueError(
+                            "nested spell target must match its owning action"
+                        )
+                    if isinstance(
+                        child,
+                        (DamagePresentationCue, HealPresentationCue),
+                    ):
+                        if (
+                            child.source_uuid != cue.actor_uuid
+                            or child.target_uuid not in allowed_targets
+                        ):
+                            raise ValueError(
+                                "action impact source/target must match its action"
+                            )
+                    if isinstance(child, ConditionPresentationCue):
+                        if child.target_uuid not in allowed_targets:
+                            raise ValueError(
+                                "action condition target must match its action"
+                            )
+                    if isinstance(child, ForcedMovementPresentationCue):
+                        if (
+                            child.source_uuid != cue.actor_uuid
+                            or child.entity_uuid not in allowed_targets
+                        ):
+                            raise ValueError(
+                                "action forced movement must match its action"
+                            )
             elif isinstance(cue, ShovePresentationCue):
                 if cue.outcome is ShoveOutcome.SUCCEEDED_PUSH:
                     forced_id = cue.forced_movement_presentation_id
@@ -1831,6 +1992,7 @@ def player_replication_contract_summary() -> dict[str, object]:
 
 __all__ = [
     "ActiveWeaponSet",
+    "ActionPresentationCue",
     "ActorVisualSlot",
     "AreaGeometry",
     "AreaShape",

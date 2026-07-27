@@ -320,20 +320,29 @@ class SessionManager:
                 game.remove_player(session_id)
             del self.sessions[session_id]
 
-    def create_game(self, encounter: Optional[Encounter] = None) -> GameSession:
+    def create_game(
+        self,
+        encounter: Optional[Encounter] = None,
+        *,
+        game_id: UUID | None = None,
+    ) -> GameSession:
         """
         Create a new game session.
 
         Args:
-            encounter: Optional encounter to associate with the game
+            encounter: Optional encounter to associate with the game.
+            game_id: Optional durable directory identity selected by the
+                composition root. Direct engine callers receive a fresh UUID.
 
         Returns:
             The created GameSession
         """
         game = GameSession(
-            game_id=uuid4(),
+            game_id=uuid4() if game_id is None else game_id,
             encounter=encounter
         )
+        if game.game_id in self.games:
+            raise ValueError(f"Game session {game.game_id} already exists")
         self.games[game.game_id] = game
         self.active_game = game
         return game

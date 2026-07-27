@@ -32,6 +32,7 @@ from server.player_replication_contract import (
     PLAYER_REPLICATION_CONTRACT_HASH,
     PLAYER_REPLICATION_CONTRACT_VERSION,
     ActiveWeaponSet,
+    ActionPresentationCue,
     ActorVisualSlot,
     AttackDelivery,
     AttackOutcome,
@@ -573,6 +574,11 @@ def _cue_base(
 
 def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
     enemy_loadout = _loadout("enemy", "RustySword")
+    action_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.dodge",
+        digest_char="f",
+    )
     return (
         MovementPresentationCue.model_validate({
             **_cue_base(1, presentation_id="movement"),
@@ -794,6 +800,20 @@ def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
             "terminal_barrier": True,
             "projected_combatant_uuids": ("hero", "enemy"),
         }),
+        ActionPresentationCue.model_validate({
+            **_cue_base(18, presentation_id="generic-action"),
+            "actor_uuid": "hero",
+            "action_name": "Dodge",
+            "target_uuids": ("hero",),
+            "effect_presentation_ids": (),
+            "content_attributions": (
+                UnrootedBehaviorPresentationAttribution(
+                    role=BehaviorPresentationRole.BEHAVIOR,
+                    definition_ref=action_ref,
+                    provided_by_ref=action_ref,
+                ),
+            ),
+        }),
     )
 
 
@@ -832,6 +852,7 @@ def test_presentation_union_covers_renderer_semantics_without_raw_events() -> No
         "light",
         "equipment",
         "encounter",
+        "action",
     ]
     movement = restored.presentation[0]
     assert isinstance(movement, MovementPresentationCue)
@@ -868,9 +889,13 @@ def test_presentation_union_covers_renderer_semantics_without_raw_events() -> No
     assert forced.actor_action_presentation_id == shove.presentation_id
     assert resisted.outcome is ShoveOutcome.RESISTED
     assert resisted.forced_movement_presentation_id is None
-    terminal = restored.presentation[-1]
+    terminal = restored.presentation[-2]
     assert isinstance(terminal, EncounterPresentationCue)
     assert terminal.terminal_barrier is True
+    action = restored.presentation[-1]
+    assert isinstance(action, ActionPresentationCue)
+    assert action.action_name == "Dodge"
+    assert action.target_uuids == ("hero",)
 
     cue_adapter = TypeAdapter(SubjectivePresentationCue)
     assert cue_adapter.json_schema()["discriminator"]["propertyName"] == "kind"
@@ -1010,7 +1035,7 @@ def test_presentation_graph_rejects_dangling_duplicate_and_wrongly_reparented_no
         source_stream_id="stream-1",
         generation_id="generation-1",
         perspective_epoch_id="perspective-1",
-        watermarks=_watermarks(source=50, observation=1, presentation=17),
+        watermarks=_watermarks(source=50, observation=1, presentation=18),
         presentation_from_cursor=0,
         presentation=_all_presentation_cues(),
     )
@@ -1019,7 +1044,7 @@ def test_presentation_graph_rejects_dangling_duplicate_and_wrongly_reparented_no
     dangling["presentation"] = [
         cue for cue in dangling["presentation"] if cue["presentation_id"] != "attack-damage"
     ]
-    dangling["watermarks"]["presentation_cursor"] = 16
+    dangling["watermarks"]["presentation_cursor"] = 17
     for cursor, cue in enumerate(dangling["presentation"], start=1):
         cue["presentation_cursor"] = cursor
     with pytest.raises(ValidationError, match="dangling child"):
@@ -1112,7 +1137,7 @@ def test_presentation_graph_rejects_action_effect_ownership_mismatches() -> None
         source_stream_id="stream-1",
         generation_id="generation-1",
         perspective_epoch_id="perspective-1",
-        watermarks=_watermarks(source=50, observation=1, presentation=17),
+        watermarks=_watermarks(source=50, observation=1, presentation=18),
         presentation_from_cursor=0,
         presentation=_all_presentation_cues(),
     )
@@ -1137,6 +1162,162 @@ def test_presentation_graph_rejects_action_effect_ownership_mismatches() -> None
     position_only_effect["presentation"][4]["targets"][0]["position"] = (2, 0)
     with pytest.raises(ValidationError, match="explicit target UUID"):
         SubjectiveReplicationFrame.model_validate(position_only_effect)
+
+
+def test_generic_action_root_requires_exact_attribution_and_owned_effects() -> None:
+    """Generic actions preserve authored identity and their existing causal effects."""
+
+    action_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.rage",
+        digest_char="a",
+    )
+    attribution = UnrootedBehaviorPresentationAttribution(
+        role=BehaviorPresentationRole.BEHAVIOR,
+        definition_ref=action_ref,
+        provided_by_ref=action_ref,
+    )
+    action = ActionPresentationCue.model_validate({
+        **_cue_base(
+            1,
+            presentation_id="rage",
+            child_presentation_ids=("raging",),
+        ),
+        "actor_uuid": "hero",
+        "action_name": "Rage",
+        "target_uuids": ("hero",),
+        "effect_presentation_ids": ("raging",),
+        "content_attributions": (attribution,),
+    })
+    condition = ConditionPresentationCue.model_validate({
+        **_cue_base(
+            2,
+            presentation_id="raging",
+            parent_presentation_id="rage",
+        ),
+        "target_uuid": "hero",
+        "condition_semantic_key": "feature.raging",
+        "condition_name": "Raging",
+        "condition_category": "beneficial",
+        "operation": ConditionOperation.APPLIED,
+    })
+    valid = SubjectiveReplicationFrame(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+        perspective_epoch_id="perspective-1",
+        watermarks=_watermarks(source=30, observation=1, presentation=2),
+        presentation_from_cursor=0,
+        presentation=(action, condition),
+    )
+    assert valid.presentation == (action, condition)
+
+    unattributed = action.model_dump(mode="python")
+    unattributed["content_attributions"] = ()
+    with pytest.raises(ValidationError, match="exact behavior attribution"):
+        ActionPresentationCue.model_validate(unattributed)
+
+    mismatched_effects = action.model_dump(mode="python")
+    mismatched_effects["effect_presentation_ids"] = ()
+    with pytest.raises(ValidationError, match="exactly match ordered"):
+        ActionPresentationCue.model_validate(mismatched_effects)
+
+    wrong_target = valid.model_dump(mode="python")
+    wrong_target["presentation"][1]["target_uuid"] = "bystander"
+    with pytest.raises(ValidationError, match="action condition target"):
+        SubjectiveReplicationFrame.model_validate(wrong_target)
+
+    action_with_attack = action.model_copy(update={
+        "child_presentation_ids": ("nested-attack",),
+        "effect_presentation_ids": ("nested-attack",),
+    })
+    nested_attack = AttackPresentationCue.model_validate({
+        **_cue_base(
+            2,
+            presentation_id="nested-attack",
+            parent_presentation_id="rage",
+        ),
+        "actor_uuid": "hero",
+        "target_uuid": "bystander",
+        "action_name": "Reactive Strike",
+        "outcome": AttackOutcome.MISS,
+        "delivery": AttackDelivery.MELEE,
+        "weapon_slot": PresentationWeaponSlot.MELEE_MAIN,
+        "damage_types": (PresentationDamageType.SLASHING,),
+        "projectile_type": None,
+        "impact_effect_presentation_ids": (),
+    })
+    with pytest.raises(ValidationError, match="nested attack target"):
+        SubjectiveReplicationFrame(
+            source_stream_id="stream-1",
+            generation_id="generation-1",
+            perspective_epoch_id="perspective-1",
+            watermarks=_watermarks(source=30, observation=1, presentation=2),
+            presentation_from_cursor=0,
+            presentation=(action_with_attack, nested_attack),
+        )
+
+
+def test_reactive_action_trigger_is_an_exact_closed_same_frame_reference() -> None:
+    """Handler-backed actions cite their delivered trigger without owning it."""
+
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.spell.shield",
+        digest_char="b",
+    )
+    action = ActionPresentationCue.model_validate({
+        **_cue_base(1, presentation_id="shield"),
+        "actor_uuid": "hero",
+        "action_name": "Shield",
+        "target_uuids": ("hero",),
+        "trigger_presentation_id": "incoming-attack",
+        "effect_presentation_ids": (),
+        "content_attributions": (
+            UnrootedBehaviorPresentationAttribution(
+                role=BehaviorPresentationRole.BEHAVIOR,
+                definition_ref=reaction_ref,
+                provided_by_ref=reaction_ref,
+            ),
+        ),
+    })
+    attack = AttackPresentationCue.model_validate({
+        **_cue_base(2, presentation_id="incoming-attack"),
+        "actor_uuid": "enemy",
+        "target_uuid": "hero",
+        "action_name": "Attack",
+        "outcome": AttackOutcome.MISS,
+        "delivery": AttackDelivery.MELEE,
+        "weapon_slot": PresentationWeaponSlot.MELEE_MAIN,
+        "damage_types": (PresentationDamageType.SLASHING,),
+        "projectile_type": None,
+        "impact_effect_presentation_ids": (),
+    })
+    valid = SubjectiveReplicationFrame(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+        perspective_epoch_id="perspective-1",
+        watermarks=_watermarks(source=30, observation=1, presentation=2),
+        presentation_from_cursor=0,
+        presentation=(action, attack),
+    )
+    validated_action = valid.presentation[0]
+    assert isinstance(validated_action, ActionPresentationCue)
+    assert validated_action.trigger_presentation_id == "incoming-attack"
+
+    dangling = valid.model_dump(mode="python")
+    dangling["presentation"][0]["trigger_presentation_id"] = "missing"
+    with pytest.raises(ValidationError, match="action-like cue"):
+        SubjectiveReplicationFrame.model_validate(dangling)
+
+    wrong_participant = valid.model_dump(mode="python")
+    wrong_participant["presentation"][1]["target_uuid"] = "bystander"
+    with pytest.raises(ValidationError, match="authorized action participant"):
+        SubjectiveReplicationFrame.model_validate(wrong_participant)
+
+    self_trigger = action.model_dump(mode="python")
+    self_trigger["trigger_presentation_id"] = "shield"
+    with pytest.raises(ValidationError, match="cannot cite itself"):
+        ActionPresentationCue.model_validate(self_trigger)
 
 
 def test_presentation_ids_remain_unique_across_an_observation_page() -> None:

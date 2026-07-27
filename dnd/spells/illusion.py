@@ -313,7 +313,7 @@ class Fear(SpellAction):
                     effect_id="control.fear",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=("selected_target.condition.frightened",),
                     condition_semantic_keys=frozenset({
@@ -344,7 +344,7 @@ class Fear(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -536,7 +536,7 @@ class HypnoticPattern(SpellAction):
                     effect_id="control.hypnotic_pattern",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=("selected_target.condition.hypnotic_pattern",),
                     condition_semantic_keys=frozenset({
@@ -575,7 +575,7 @@ class HypnoticPattern(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,

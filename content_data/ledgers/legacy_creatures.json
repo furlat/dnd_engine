@@ -1126,7 +1126,7 @@
       ],
       "measuring_test_nodeids": [
         "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
-        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+        "tests/manual/test_remaining_creature_content_factories.py::test_all_ten_roots_materialize_both_possession_modes"
       ],
       "migration_status": "migrated",
       "notes": "",
@@ -1141,7 +1141,7 @@
       "replacement_ref": {
         "content_id": "creature.player.barbarian",
         "content_version": 1,
-        "definition_contract_hash": "44e3814fe4924806f7ce3f4974bcbe292f49d690c4fc5246617144519cc21945",
+        "definition_contract_hash": "353dcbb37a167c3137e09825e2f3d22165d865722fee5351901ded94627aaede",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       }
@@ -1158,7 +1158,7 @@
       ],
       "measuring_test_nodeids": [
         "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
-        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+        "tests/manual/test_remaining_creature_content_factories.py::test_all_ten_roots_materialize_both_possession_modes"
       ],
       "migration_status": "migrated",
       "notes": "",
@@ -1173,7 +1173,7 @@
       "replacement_ref": {
         "content_id": "creature.player.fighter",
         "content_version": 1,
-        "definition_contract_hash": "8db29778a3f0547e101125cb88525726a57777880c713bbd620a87209d2e4e9e",
+        "definition_contract_hash": "12ae73097601f47ca19214df530d657489f588bb0f5588386dc4a9cc5c1d8133",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       }
@@ -1190,7 +1190,7 @@
       ],
       "measuring_test_nodeids": [
         "tests/manual/test_157_legacy_creature_migration_ledger.py::test_current_creature_factory_inventory_matches_ledger",
-        "tests/manual/test_15_class_features.py::test_first_class_feature_example_prints_factory_actor_state"
+        "tests/manual/test_remaining_creature_content_factories.py::test_all_ten_roots_materialize_both_possession_modes"
       ],
       "migration_status": "migrated",
       "notes": "",
@@ -1205,7 +1205,7 @@
       "replacement_ref": {
         "content_id": "creature.player.sorcerer",
         "content_version": 1,
-        "definition_contract_hash": "d899ae6ed9e1fd2497fb1dc2797483b9a3f84712755193c236c2127f62a7d80e",
+        "definition_contract_hash": "7b059f6bc3024680bf400878e1e1e82aba2dc79c7291de95184adb955615ee29",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       }

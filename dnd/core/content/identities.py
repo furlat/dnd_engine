@@ -26,6 +26,12 @@ class ContentDefinitionKind(str, Enum):
     REACTION = "reaction"
     FEAT = "feat"
     CLASS_FEATURE = "class_feature"
+    CLASS = "class"
+    SUBCLASS = "subclass"
+    SPECIES = "species"
+    SPECIES_VARIANT = "species_variant"
+    BACKGROUND = "background"
+    STARTING_EQUIPMENT_PACKAGE = "starting_equipment_package"
     ENVIRONMENT_OBJECT = "environment_object"
     RULE_PRIMITIVE = "rule_primitive"
 

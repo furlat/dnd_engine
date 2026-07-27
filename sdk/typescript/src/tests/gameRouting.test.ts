@@ -345,7 +345,7 @@ test("directory discovery keeps principal capability out of the URL", async () =
   }]);
 });
 
-test("player identity, profile, and character routes stay typed and credential-scoped", async () => {
+test("player identity route stays typed", async () => {
   const principal = {
     principal_id: "00000000-0000-0000-0000-000000000001",
     principal_kind: "human",
@@ -357,42 +357,6 @@ test("player identity, profile, and character routes stay typed and credential-s
     last_seen_at: null,
     disabled_at: null,
   };
-  const character = {
-    character_id: "00000000-0000-0000-0000-000000000002",
-    owner_principal_id: principal.principal_id,
-    display_name: "Sol",
-    status: "active",
-    revision_state: "canonical",
-    current_definition_revision: 1,
-    current_definition_digest: "definition-digest",
-    current_holdings_revision: 1,
-    current_holdings_digest: "holdings-digest",
-    created_at: "2026-07-21T18:01:00Z",
-    updated_at: "2026-07-21T18:01:00Z",
-    row_version: 1,
-  };
-  const definitionRecord = {
-    definition: {
-      character_id: character.character_id,
-      schema_version: 1,
-      definition_revision: 1,
-      creature_recipe: {
-        ref: {
-          pack_id: "content.neurodragon",
-          definition_kind: "creature",
-          content_id: "creature.premade.sorcerer_l5_standard_torch",
-          content_version: 1,
-          definition_contract_hash: "a".repeat(64),
-        },
-        parameters: {},
-        recipe_digest: "b".repeat(64),
-      },
-      premade_id: "hero.sorcerer_l5_standard_torch",
-      content_set_digest: "c".repeat(64),
-      definition_digest: "d".repeat(64),
-    },
-    created_at: "2026-07-21T18:01:00Z",
-  };
   const requests: Array<{ url: string; method: string; capability: string | null }> = [];
   const fetchImplementation: typeof fetch = async (input, init) => {
     const url = String(input);
@@ -402,56 +366,26 @@ test("player identity, profile, and character routes stay typed and credential-s
       method: init?.method ?? "GET",
       capability: headers.get("x-dnd-principal-capability"),
     });
-    const payload = url.endsWith("/directory/players/identify")
-      ? {
-          principal,
-          credential_id: "00000000-0000-0000-0000-000000000003",
-          principal_capability: "x".repeat(40),
-          authentication_kind: "name_only_local",
-        }
-      : url.endsWith("/directory/players/me")
-        ? { principal, characters: [character], game_seats: [] }
-        : url.endsWith("/definition")
-          ? definitionRecord
-          : character;
-    return new Response(JSON.stringify(payload), {
+    return new Response(JSON.stringify({
+      principal,
+      credential_id: "00000000-0000-0000-0000-000000000003",
+      principal_capability: "x".repeat(40),
+      authentication_kind: "name_only_local",
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   };
   const directory = new GameDirectoryClient("/gateway-api", { fetchImplementation });
-  const credential = {
-    principalId: principal.principal_id,
-    principalCapability: "browser-secret",
-  };
 
   const identity = await directory.identifyPlayer({
     display_name: "Tommaso",
     client_instance_id: "browser-a",
   });
-  const profile = await directory.getPlayerProfile(credential);
-  const created = await directory.createCharacter(credential, {
-    display_name: "Sol",
-    premade_id: "hero.sorcerer_l5_standard_torch",
-  });
-  const definition = await directory.getCharacterDefinition(
-    credential,
-    character.character_id,
-  );
 
   assert.equal(identity.principal.principal_id, principal.principal_id);
-  assert.equal(profile.characters[0]?.character_id, character.character_id);
-  assert.equal(created.revision_state, "canonical");
-  assert.equal(definition.definition.premade_id, "hero.sorcerer_l5_standard_torch");
   assert.deepEqual(requests, [
     { url: "/gateway-api/directory/players/identify", method: "POST", capability: null },
-    { url: "/gateway-api/directory/players/me", method: "GET", capability: "browser-secret" },
-    { url: "/gateway-api/directory/characters", method: "POST", capability: "browser-secret" },
-    {
-      url: `/gateway-api/directory/characters/${character.character_id}/definition`,
-      method: "GET",
-      capability: "browser-secret",
-    },
   ]);
 });
 
@@ -621,6 +555,7 @@ function availableAction() {
     template_name: "Dash",
     semantic_key: "dash",
     behavior_attribution: behaviorAttribution("action", "action.dash"),
+    configured_action_ref: null,
     target_type: "self",
     availability_status: "source_unaffordable",
     valid_targets: [],

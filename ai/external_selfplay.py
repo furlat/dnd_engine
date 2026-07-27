@@ -44,6 +44,8 @@ from dnd.ai.contracts.control import (
 from server.runtime_performance import latency_sensitive_gc
 from ai.subjective.store import ApplyResultKind, SubjectiveStore
 from dnd.controller import Controller, ControllerExecutionMode
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import EventPhase, EventQueue, SensoryUpdateEvent
 from dnd.encounter import EncounterState
@@ -524,6 +526,8 @@ def _run_external_selfplay(
     policy_implementations_by_faction: Optional[Mapping[str, PolicyImplementation]] = None,
 ) -> ExternalSelfPlayResult:
     """Execute one self-play run using the active random generator."""
+    if not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
     started = time.perf_counter()
     reset_standard_arena_runtime()
     opening_faction = "heroes" if hero_first else "monsters"

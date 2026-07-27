@@ -4,22 +4,38 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 import dnd.core.base_conditions as base_conditions_module
 from dnd.classes.fighter import SecondWindFeature
 from dnd.classes.rage import RageFeature
 from dnd.core.gridmap import get_map
+from dnd.entity import Entity, EntityConfig
+from dnd.runtime_reset import reset_engine_runtime
 from tests.engine_book.test_chapter_07_condition_lifecycle import (
     EngineBookMarkerCondition,
     reset_condition_state,
 )
-from tests.engine_book.test_manual_18_class_features_feats_factories import (
-    create_class_actor,
-    reset_class_tutorial_state,
-)
 
 
 CoverageStatus = Literal["active", "strengthened", "stale"]
+
+
+def reset_class_tutorial_state() -> None:
+    """Reset the focused feature-cleanup fixture without a book dependency."""
+    reset_engine_runtime(grid_size=(12, 6))
+
+
+def create_class_actor(
+    name: str,
+    position: tuple[int, int],
+) -> Entity:
+    """Build the minimal actor required by feature-cleanup regressions."""
+    return Entity.create(
+        source_entity_uuid=uuid4(),
+        name=name,
+        config=EntityConfig(position=position, faction="heroes"),
+    )
 
 
 @dataclass(frozen=True)

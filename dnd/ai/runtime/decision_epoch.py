@@ -1253,6 +1253,7 @@ def _build_action_economy_state_from_actor(
 
     started = time.perf_counter()
     spell_slots = {}
+    installed_capacities = ae.get_normal_spell_slot_capacities()
     for level in range(1, 10):
         slot_started = time.perf_counter()
         slot_attr = getattr(ae, f"spell_slot_{level}", None)
@@ -1262,7 +1263,10 @@ def _build_action_economy_state_from_actor(
         slot_started = time.perf_counter()
         base_mod = slot_attr.get_base_modifier()
         _record_timing(record_timing, f"action_economy.spell_slot_{level}.base_modifier_ms", slot_started)
-        max_val = base_mod.value if base_mod else 0
+        max_val = installed_capacities.get(
+            level,
+            base_mod.value if base_mod else 0,
+        )
         if max_val > 0:
             slot_started = time.perf_counter()
             current = slot_attr.normalized_score

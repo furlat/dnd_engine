@@ -1,8 +1,21 @@
 import type {
+  AdminCharacterAdvancementAwardRequest,
   AttachHostedGameRequest,
   AttachHostedGameResponse,
+  CharacterAdvancementResponse,
+  CharacterBuildValidationRequest,
+  CharacterBuildValidationResponse,
+  CharacterCreationCatalogResponse,
+  CharacterDefinitionHistoryResponse,
   CharacterDefinitionRecord,
-  CharacterRecord,
+  CharacterHoldingsRecord,
+  CharacterLevelUpRequest,
+  CharacterListResponse,
+  CharacterLoadoutMutationRequest,
+  CharacterLoadoutRecord,
+  CharacterProfileResponse,
+  CharacterRespecRequest,
+  CharacterSnapshotResponse,
   CreateCharacterRequest,
   CreateAgentGrantRequest,
   CreateAgentGrantResponse,
@@ -15,20 +28,22 @@ import type {
   GuestPrincipalRequest,
   GuestPrincipalResponse,
   HostedGameConnection,
-  HostedGameListResponse,
+  GameHistoryListResponse,
   ObserveHostedGameRequest,
   ObserveHostedGameResponse,
   ObjectiveReplayBundle,
   PlayerIdentityRequest,
   PlayerIdentityResponse,
-  PlayerProfileResponse,
+  ProfileSettingsRecord,
   ReconnectHostedGameRequest,
   ReconnectHostedGameResponse,
   SdkModelByName,
   SdkModelName,
+  StandaloneLocalProfileResponse,
   StopHostedGameRequest,
   StopHostedGameResponse,
   SubjectivePlayerReplayBundle,
+  UpdateCharacterProfileSettingsRequest,
 } from "./generated/contracts.generated.js";
 import { DndEngineClient, DndHttpError } from "./client.js";
 import {
@@ -93,6 +108,26 @@ export class GameDirectoryClient {
     );
   }
 
+  async getCharacterCreationCatalog(
+    signal?: AbortSignal,
+  ): Promise<CharacterCreationCatalogResponse> {
+    return this.requestModel(
+      "CharacterCreationCatalogResponse",
+      "/character-creation/catalog",
+      requestOptions("GET", signal),
+    );
+  }
+
+  async getStandaloneLocalProfile(
+    signal?: AbortSignal,
+  ): Promise<StandaloneLocalProfileResponse> {
+    return this.requestModel(
+      "StandaloneLocalProfileResponse",
+      "/directory/local-profile",
+      requestOptions("GET", signal),
+    );
+  }
+
   async createGuest(
     request: GuestPrincipalRequest,
     signal?: AbortSignal,
@@ -115,14 +150,48 @@ export class GameDirectoryClient {
     );
   }
 
-  async getPlayerProfile(
+  async getCharacterProfile(
     credential: DirectoryPrincipalCredential,
     signal?: AbortSignal,
-  ): Promise<PlayerProfileResponse> {
+  ): Promise<CharacterProfileResponse> {
     return this.requestModel(
-      "PlayerProfileResponse",
+      "CharacterProfileResponse",
       "/directory/players/me",
       requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async updateCharacterProfileSettings(
+    credential: DirectoryPrincipalCredential,
+    request: UpdateCharacterProfileSettingsRequest,
+    signal?: AbortSignal,
+  ): Promise<ProfileSettingsRecord> {
+    return this.requestModel(
+      "ProfileSettingsRecord",
+      "/directory/players/me/settings",
+      requestOptions(
+        "PUT",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async validateCharacterBuild(
+    credential: DirectoryPrincipalCredential,
+    request: CharacterBuildValidationRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterBuildValidationResponse> {
+    return this.requestModel(
+      "CharacterBuildValidationResponse",
+      "/character-builds/validate",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
     );
   }
 
@@ -130,11 +199,39 @@ export class GameDirectoryClient {
     credential: DirectoryPrincipalCredential,
     request: CreateCharacterRequest,
     signal?: AbortSignal,
-  ): Promise<CharacterRecord> {
+  ): Promise<CharacterSnapshotResponse> {
     return this.requestModel(
-      "CharacterRecord",
+      "CharacterSnapshotResponse",
       "/directory/characters",
-      requestOptions("POST", signal, JSON.stringify(request), principalHeaders(credential)),
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async listCharacters(
+    credential: DirectoryPrincipalCredential,
+    signal?: AbortSignal,
+  ): Promise<CharacterListResponse> {
+    return this.requestModel(
+      "CharacterListResponse",
+      "/directory/characters",
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getCharacter(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterSnapshotResponse> {
+    return this.requestModel(
+      "CharacterSnapshotResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
     );
   }
 
@@ -150,12 +247,186 @@ export class GameDirectoryClient {
     );
   }
 
+  async getCharacterDefinitionHistory(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterDefinitionHistoryResponse> {
+    return this.requestModel(
+      "CharacterDefinitionHistoryResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/definitions`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getCharacterHoldings(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterHoldingsRecord> {
+    return this.requestModel(
+      "CharacterHoldingsRecord",
+      `/directory/characters/${encodeURIComponent(characterId)}/holdings`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getCharacterLoadout(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterLoadoutRecord> {
+    return this.requestModel(
+      "CharacterLoadoutRecord",
+      `/directory/characters/${encodeURIComponent(characterId)}/loadout`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getCharacterAdvancement(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterAdvancementResponse> {
+    return this.requestModel(
+      "CharacterAdvancementResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/advancement`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async grantAdminCharacterAdvancementAward(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: AdminCharacterAdvancementAwardRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterAdvancementResponse> {
+    return this.requestModel(
+      "CharacterAdvancementResponse",
+      `/admin/characters/${encodeURIComponent(characterId)}/advancement-awards`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async validateCharacterLevelUp(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterLevelUpRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterBuildValidationResponse> {
+    return this.requestModel(
+      "CharacterBuildValidationResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/level-up/validate`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async levelUpCharacter(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterLevelUpRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterSnapshotResponse> {
+    return this.requestModel(
+      "CharacterSnapshotResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/level-up`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async validateCharacterRespec(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterRespecRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterBuildValidationResponse> {
+    return this.requestModel(
+      "CharacterBuildValidationResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/respec/validate`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async respecCharacter(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterRespecRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterSnapshotResponse> {
+    return this.requestModel(
+      "CharacterSnapshotResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/respec`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async validateCharacterLoadout(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterLoadoutMutationRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterBuildValidationResponse> {
+    return this.requestModel(
+      "CharacterBuildValidationResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/loadout/validate`,
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async updateCharacterLoadout(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: CharacterLoadoutMutationRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterSnapshotResponse> {
+    return this.requestModel(
+      "CharacterSnapshotResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/loadout`,
+      requestOptions(
+        "PUT",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
   async listGames(
     credential?: DirectoryPrincipalCredential,
     signal?: AbortSignal,
-  ): Promise<HostedGameListResponse> {
+  ): Promise<GameHistoryListResponse> {
     return this.requestModel(
-      "HostedGameListResponse",
+      "GameHistoryListResponse",
       "/games",
       requestOptions("GET", signal, undefined, principalHeaders(credential)),
     );

@@ -33,7 +33,11 @@ from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemoval
 from dnd.core.combat_log import position_evidence_key
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import BehaviorBinding
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    EffectiveHandlerPresentation,
+    HandlerDispatchOutcome,
+)
 from dnd.core.dice import AttackOutcome as EngineAttackOutcome
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
@@ -74,6 +78,7 @@ from server.player_replication.presentation import (
     materialize_presentation_graph,
 )
 from server.player_replication_contract import (
+    ActionPresentationCue,
     ActorVisualSlot,
     AreaGeometry,
     AttackDelivery,
@@ -194,6 +199,7 @@ class CausalEventBatch:
 
 class _NodeKind(str, Enum):
     MOVEMENT = "movement"
+    ACTION = "action"
     ATTACK = "attack"
     SPELL = "spell"
     COUNTERSPELL = "counterspell"
@@ -218,6 +224,14 @@ class _MovementPayload:
     trajectory: tuple[tuple[int, int], ...]
     path_start_index: int
     path_total_steps: int
+
+
+@dataclass(frozen=True)
+class _ActionPayload:
+    actor_uuid: str
+    action_name: str
+    target_uuids: tuple[str, ...]
+    trigger_key: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -363,6 +377,7 @@ class _EncounterPayload:
 
 _Payload = (
     _MovementPayload
+    | _ActionPayload
     | _AttackPayload
     | _SpellPayload
     | _CounterspellPayload
@@ -544,7 +559,7 @@ def _build_semantic_nodes(
     for slot in index.completions:
         event = slot.event
         node: Optional[_NodeSpec] = None
-        if isinstance(event, MovementEvent) or isinstance(event, StepMovementEvent):
+        if isinstance(event, (MovementEvent, JumpEvent, StepMovementEvent)):
             continue
         if isinstance(event, ShoveEvent):
             node = _shove_node(slot, index=index, perspective=perspective)
@@ -572,6 +587,8 @@ def _build_semantic_nodes(
             and event.presentation_kind is ActionPresentationKind.DRINK
         ):
             node = _item_node(slot, index=index, perspective=perspective)
+        elif isinstance(event, ActionEvent):
+            node = _action_node(slot, index=index, perspective=perspective)
         elif isinstance(event, DamageAppliedEvent):
             node = _damage_node(slot, index=index, perspective=perspective)
         elif isinstance(event, ForcedMovementEvent):
@@ -607,6 +624,13 @@ def _build_semantic_nodes(
         perspective=perspective,
         add=add,
     )
+    handler_parent_by_lineage = _add_effective_handler_nodes(
+        batch,
+        index=index,
+        perspective=perspective,
+        nodes=nodes,
+        add=add,
+    )
 
     _attach_semantic_nodes(
         nodes=nodes,
@@ -615,6 +639,7 @@ def _build_semantic_nodes(
         spell_application_by_lineage=spell_application_by_lineage,
         index=index,
         perspective=perspective,
+        handler_parent_by_lineage=handler_parent_by_lineage,
         add=add,
     )
     reactive_step_lineage_by_node_key = _pre_edge_reactive_step_lineages(
@@ -1370,6 +1395,56 @@ def _condition_node(
     )
 
 
+def _action_node(
+    slot: ProjectedEventSlot,
+    *,
+    index: _BatchIndex,
+    perspective: SubjectivePerspective,
+) -> Optional[_NodeSpec]:
+    event = slot.event
+    if not isinstance(event, ActionEvent):
+        return None
+    if event.behavior_binding is None:
+        return None
+    if not _identity_allowed(event, event.source_entity_uuid, perspective):
+        return None
+    targets: list[str] = []
+    for target_uuid in (
+        *((event.target_entity_uuid,) if event.target_entity_uuid else ()),
+        *event.declared_target_entity_uuids,
+    ):
+        target = str(target_uuid)
+        if (
+            target not in targets
+            and _identity_allowed(event, target_uuid, perspective)
+        ):
+            targets.append(target)
+    actor = str(event.source_entity_uuid)
+    if actor not in targets and event.target_entity_uuid == event.source_entity_uuid:
+        targets.insert(0, actor)
+    lineage = str(event.lineage_uuid)
+    return _NodeSpec(
+        key=f"action:{event.uuid}",
+        kind=_NodeKind.ACTION,
+        slot=slot,
+        payload=_ActionPayload(
+            actor_uuid=actor,
+            action_name=event.name or "Action",
+            target_uuids=tuple(targets),
+            trigger_key=None,
+        ),
+        lineage=lineage,
+        order_key=(
+            index.root_order_cursor(lineage, slot.source_event_cursor),
+            10,
+            slot.source_event_cursor,
+        ),
+        content_attributions=_behavior_content_attributions(
+            event.behavior_binding,
+        ),
+    )
+
+
 def _light_node(
     slot: ProjectedEventSlot,
     *,
@@ -1557,6 +1632,202 @@ def _add_patch_backed_nodes(
             )
 
 
+def _add_effective_handler_nodes(
+    batch: CausalEventBatch,
+    *,
+    index: _BatchIndex,
+    perspective: SubjectivePerspective,
+    nodes: list[_NodeSpec],
+    add: object,
+) -> dict[str, str]:
+    """Project exact state-changing reactions that have no specialized cue.
+
+    Handler execution stays an internal engine concern. Only authenticated
+    reaction evidence retained on the causal event lineage reaches this
+    boundary, where it becomes the same closed action-root DTO used by ordinary
+    authored actions. A specialized cue that already carries the handler as its
+    behavior/provider remains the single presentation root.
+    """
+
+    add_node = add
+    if not callable(add_node):
+        raise TypeError("handler presentation node sink must be callable")
+
+    parent_by_emitted_lineage: dict[str, str] = {}
+    evidence_by_dispatch: dict[
+        int,
+        tuple[EffectiveHandlerPresentation, ProjectedEventSlot],
+    ] = {}
+    for carrier_slot in batch.slots:
+        for evidence in carrier_slot.event.effective_handler_presentations:
+            current = evidence_by_dispatch.get(evidence.dispatch_index)
+            if (
+                current is None
+                or carrier_slot.event.phase is EventPhase.COMPLETION
+                or carrier_slot.source_event_cursor > current[1].source_event_cursor
+            ):
+                evidence_by_dispatch[evidence.dispatch_index] = (
+                    evidence,
+                    carrier_slot,
+                )
+
+    for evidence, carrier_slot in evidence_by_dispatch.values():
+        trigger_slot = index.slot_by_event_uuid.get(
+            evidence.triggering_event_uuid,
+        )
+        if trigger_slot is None:
+            continue
+        trigger = trigger_slot.event
+        visibility_event = carrier_slot.event
+        if not _identity_allowed(
+            visibility_event,
+            evidence.source_entity_uuid,
+            perspective,
+        ):
+            continue
+        if _specialized_node_represents_handler(nodes, evidence):
+            continue
+        if (
+            evidence.outcome is HandlerDispatchOutcome.EMITTED_EVENTS
+            and not _handler_has_delivered_emission(nodes, evidence)
+        ):
+            continue
+
+        actor_uuid = str(evidence.source_entity_uuid)
+        targets: list[str] = []
+        target_uuid = trigger.target_entity_uuid
+        if (
+            target_uuid is not None
+            and _identity_allowed(visibility_event, target_uuid, perspective)
+        ):
+            targets.append(str(target_uuid))
+        if target_uuid == evidence.source_entity_uuid and actor_uuid not in targets:
+            targets.insert(0, actor_uuid)
+
+        key = (
+            f"handler-action:{evidence.dispatch_index}:"
+            f"{evidence.triggering_event_uuid}"
+        )
+        lineage = (
+            f"handler:{evidence.dispatch_index}:"
+            f"{evidence.triggering_lineage_uuid}"
+        )
+        node = _NodeSpec(
+            key=key,
+            kind=_NodeKind.ACTION,
+            slot=trigger_slot,
+            payload=_ActionPayload(
+                actor_uuid=actor_uuid,
+                action_name=evidence.handler_name,
+                target_uuids=tuple(targets),
+                trigger_key=_nearest_visible_handler_trigger_key(
+                    nodes,
+                    index=index,
+                    triggering_lineage=str(evidence.triggering_lineage_uuid),
+                ),
+            ),
+            lineage=lineage,
+            order_key=(
+                index.root_order_cursor(
+                    str(evidence.triggering_lineage_uuid),
+                    trigger_slot.source_event_cursor,
+                ),
+                15,
+                trigger_slot.source_event_cursor,
+                evidence.dispatch_index,
+            ),
+            content_attributions=_behavior_content_attributions(
+                evidence.behavior_binding,
+            ),
+        )
+        add_node(node)
+        for emitted_lineage_uuid in evidence.emitted_lineage_uuids:
+            emitted_lineage = str(emitted_lineage_uuid)
+            existing = parent_by_emitted_lineage.get(emitted_lineage)
+            if existing is not None and existing != key:
+                raise SubjectiveEventProjectionError(
+                    "one emitted handler lineage cannot belong to two reactions"
+                )
+            parent_by_emitted_lineage[emitted_lineage] = key
+    return parent_by_emitted_lineage
+
+
+def _handler_has_delivered_emission(
+    nodes: list[_NodeSpec],
+    evidence: EffectiveHandlerPresentation,
+) -> bool:
+    """Require emission-only reactions to retain a visible semantic result."""
+
+    emitted_lineages = {
+        str(lineage_uuid) for lineage_uuid in evidence.emitted_lineage_uuids
+    }
+    return any(node.lineage in emitted_lineages for node in nodes)
+
+
+def _nearest_visible_handler_trigger_key(
+    nodes: list[_NodeSpec],
+    *,
+    index: _BatchIndex,
+    triggering_lineage: str,
+) -> Optional[str]:
+    """Resolve the nearest delivered action-like cue that caused a reaction."""
+
+    trigger_kinds = {
+        _NodeKind.ACTION,
+        _NodeKind.ATTACK,
+        _NodeKind.SPELL,
+        _NodeKind.SHOVE,
+        _NodeKind.MOVEMENT,
+    }
+    for lineage in index.ancestors(triggering_lineage, include_self=True):
+        candidates = [
+            node
+            for node in nodes
+            if node.lineage == lineage and node.kind in trigger_kinds
+        ]
+        if candidates:
+            return min(candidates, key=lambda node: (node.order_key, node.key)).key
+    return None
+
+
+def _specialized_node_represents_handler(
+    nodes: list[_NodeSpec],
+    evidence: EffectiveHandlerPresentation,
+) -> bool:
+    """Return whether a first-class cue already authenticates this reaction."""
+
+    specialized_kinds = {
+        _NodeKind.ATTACK,
+        _NodeKind.SPELL,
+        _NodeKind.COUNTERSPELL,
+        _NodeKind.ITEM,
+        _NodeKind.SHOVE,
+    }
+    emitted_lineages = {
+        str(lineage_uuid) for lineage_uuid in evidence.emitted_lineage_uuids
+    }
+    definition_ref = evidence.behavior_binding.definition_ref
+    return any(
+        node.lineage in emitted_lineages
+        and node.kind in specialized_kinds
+        and any(
+            isinstance(
+                attribution,
+                (
+                    UnrootedBehaviorPresentationAttribution,
+                    RootedBehaviorPresentationAttribution,
+                ),
+            )
+            and (
+                attribution.definition_ref == definition_ref
+                or attribution.provided_by_ref == definition_ref
+            )
+            for attribution in node.content_attributions
+        )
+        for node in nodes
+    )
+
+
 def _attach_semantic_nodes(
     *,
     nodes: list[_NodeSpec],
@@ -1565,6 +1836,7 @@ def _attach_semantic_nodes(
     spell_application_by_lineage: dict[str, tuple[str, _SpellApplication]],
     index: _BatchIndex,
     perspective: SubjectivePerspective,
+    handler_parent_by_lineage: dict[str, str],
     add: object,
 ) -> None:
     """Reparent visible descendants across hidden technical engine nodes."""
@@ -1575,22 +1847,50 @@ def _attach_semantic_nodes(
 
     for node in tuple(nodes):
         if node.kind in {
-            _NodeKind.DOOR,
-            _NodeKind.LIGHT,
-            _NodeKind.EQUIPMENT,
             _NodeKind.ENCOUNTER,
             _NodeKind.MOVEMENT,
             _NodeKind.LIFECYCLE_CAUSE,
             _NodeKind.LIFE,
         }:
             continue
-        parent_key = _nearest_compatible_parent(
-            node,
-            semantic_key_by_lineage=semantic_key_by_lineage,
-            nodes_by_key=nodes_by_key,
-            index=index,
+        handler_parent_key = handler_parent_by_lineage.get(node.lineage)
+        handler_parent = (
+            nodes_by_key.get(handler_parent_key)
+            if handler_parent_key is not None
+            else None
+        )
+        parent_key = (
+            handler_parent.key
+            if handler_parent is not None
+            and _can_parent(handler_parent, node)
+            else _nearest_compatible_parent(
+                node,
+                semantic_key_by_lineage=semantic_key_by_lineage,
+                nodes_by_key=nodes_by_key,
+                index=index,
+            )
         )
         node.parent_key = parent_key
+
+    for action in [
+        node for node in nodes if node.kind is _NodeKind.ACTION
+    ]:
+        payload = action.payload
+        if not isinstance(payload, _ActionPayload):
+            continue
+        targets = list(payload.target_uuids)
+        for child in nodes:
+            if child.parent_key != action.key:
+                continue
+            for child_target in _action_child_target_uuids(child):
+                if child_target not in targets:
+                    targets.append(child_target)
+        action.payload = _ActionPayload(
+            actor_uuid=payload.actor_uuid,
+            action_name=payload.action_name,
+            target_uuids=tuple(targets),
+            trigger_key=payload.trigger_key,
+        )
 
     damage_nodes = [node for node in nodes if node.kind is _NodeKind.DAMAGE]
     life_nodes = [node for node in nodes if node.kind is _NodeKind.LIFE]
@@ -1848,6 +2148,40 @@ def _matching_damage_parent(
 
 def _can_parent(parent: _NodeSpec, child: _NodeSpec) -> bool:
     parent_kind = parent.kind
+    if parent_kind is _NodeKind.ACTION:
+        parent_payload = parent.payload
+        if not isinstance(parent_payload, _ActionPayload):
+            return False
+        if child.kind in {
+            _NodeKind.ATTACK,
+            _NodeKind.SPELL,
+            _NodeKind.SHOVE,
+        }:
+            child_payload = child.payload
+            child_actor = (
+                child_payload.actor_uuid
+                if isinstance(
+                    child_payload,
+                    (_AttackPayload, _SpellPayload, _ShovePayload),
+                )
+                else None
+            )
+            return child_actor == parent_payload.actor_uuid
+        if child.kind in {
+            _NodeKind.DOOR,
+            _NodeKind.LIGHT,
+            _NodeKind.EQUIPMENT,
+        }:
+            return True
+        if isinstance(child.payload, _DamagePayload):
+            return child.payload.source_uuid == parent_payload.actor_uuid
+        if isinstance(child.payload, _HealPayload):
+            return child.payload.source_uuid == parent_payload.actor_uuid
+        if isinstance(child.payload, _ConditionPayload):
+            return True
+        if isinstance(child.payload, _ForcedPayload):
+            return child.payload.source_uuid == parent_payload.actor_uuid
+        return False
     if parent_kind is _NodeKind.MOVEMENT:
         return child.kind in {_NodeKind.ATTACK, _NodeKind.SPELL, _NodeKind.SHOVE}
     if parent_kind in {_NodeKind.ATTACK, _NodeKind.ITEM}:
@@ -1888,6 +2222,27 @@ def _can_parent(parent: _NodeSpec, child: _NodeSpec) -> bool:
     }:
         return child.kind is _NodeKind.LIFE
     return False
+
+
+def _action_child_target_uuids(child: _NodeSpec) -> tuple[str, ...]:
+    payload = child.payload
+    if isinstance(payload, (_AttackPayload, _ShovePayload)):
+        return (payload.target_uuid,)
+    if isinstance(payload, _SpellPayload):
+        return tuple(
+            application.target_uuid
+            for application in payload.applications
+            if application.target_uuid is not None
+        )
+    if isinstance(payload, (_DamagePayload, _HealPayload, _ConditionPayload)):
+        return (payload.target_uuid,)
+    if isinstance(payload, _ForcedPayload):
+        return (payload.entity_uuid,)
+    if isinstance(payload, _EquipmentPayload):
+        return (payload.entity_uuid,)
+    if isinstance(payload, _LightPayload):
+        return (payload.observer_uuid,)
+    return ()
 
 
 def _action_effect_ownership_matches(parent: _NodeSpec, child: _NodeSpec) -> bool:
@@ -1968,6 +2323,19 @@ def _materialize_node(
             path_start_index=payload.path_start_index,
             path_total_steps=payload.path_total_steps,
             perception_commit="observation_frame",
+        )
+    if isinstance(payload, _ActionPayload):
+        return ActionPresentationCue(
+            **common,
+            actor_uuid=payload.actor_uuid,
+            action_name=payload.action_name,
+            target_uuids=payload.target_uuids,
+            trigger_presentation_id=(
+                coordinates.presentation_ids_by_key[payload.trigger_key]
+                if payload.trigger_key is not None
+                else None
+            ),
+            effect_presentation_ids=coordinates.child_presentation_ids,
         )
     if isinstance(payload, _AttackPayload):
         return AttackPresentationCue(

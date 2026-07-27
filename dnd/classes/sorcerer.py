@@ -9,12 +9,12 @@ Implements:
 - Draconic Bloodline: DraconicResilience, ElementalAffinity
 """
 
-from typing import Any, Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict, Literal
 from uuid import UUID
 from pydantic import Field
 
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionCategory
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
     ActionEvent, spell_slot_cost_type,
@@ -32,10 +32,14 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
     entity_action_economy_cost_applier,
+    Move,
+    MovementEvent,
     SpellAction,
 )
 from dnd.actions_functional import apply_action_overrides, clear_action_overrides
 from dnd.blocks.action_economy import RechargeType
+from dnd.core.base_block import MovementMode
+from dnd.conditions import Charmed, Concentrating, Frightened
 
 
 class DraconicResilience(BaseCondition):
@@ -96,50 +100,568 @@ class DraconicResilience(BaseCondition):
         return {}
 
 
-class ElementalAffinity(BaseCondition):
-    """Apply draconic ancestry resistance.
+class ElementalAffinityResistance(BaseCondition):
+    """Temporary ancestry resistance purchased with one sorcery point."""
 
-    Attributes:
-        name: Display name for the draconic elemental affinity feature.
-        description: Rules summary for the ancestry resistance benefit.
-        damage_type: Damage type associated with the sorcerer's ancestry.
-    """
-    name: str = Field(default="Elemental Affinity", description="Display name for the draconic elemental affinity feature.")
-    description: str = Field(default="Resistance to draconic ancestry damage type", description="Rules summary for the ancestry resistance benefit.")
-    damage_type: DamageType = Field(default=DamageType.FIRE, description="Damage type associated with the sorcerer's draconic ancestry.")
+    name: str = Field(
+        default="Elemental Affinity Resistance",
+        description="Player-facing temporary resistance name.",
+    )
+    description: str = Field(
+        default=(
+            "Gain resistance to the damage type associated with your "
+            "draconic ancestry for 1 hour."
+        ),
+        description="Rules summary for the temporary resistance.",
+    )
+    damage_type: DamageType = Field(
+        default=DamageType.FIRE,
+        description="Ancestry damage type resisted by this instance.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.name = (
+            f"Elemental Affinity Resistance ({self.damage_type.value})"
+        )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
         List[UUID],
         List[UUID],
         List[UUID],
-        Optional[Event]
+        Optional[Event],
     ]:
-        if not self.target_entity_uuid:
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if target is None:
             return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
+                status_message="Elemental Affinity target does not exist",
             )
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        resist_mod = ResistanceModifier(
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            name="Elemental Affinity",
+        modifier = ResistanceModifier(
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid,
+            name=self.name,
             value=ResistanceStatus.RESISTANCE,
             damage_type=self.damage_type,
         )
-        mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
-
-        effect_event = declaration_event.phase_to(
+        modifier_uuid = (
+            target.health.damage_reduction.self_static
+            .add_resistance_modifier(modifier)
+        )
+        return [
+            (target.health.damage_reduction.uuid, modifier_uuid),
+        ], [], [], [], declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
-            status_message=f"Elemental Affinity ({self.damage_type.value}) applied",
+            status_message=(
+                f"{target.name} gains {self.damage_type.value} resistance "
+                "from Elemental Affinity"
+            ),
         )
-        return [(target.health.damage_reduction.uuid, mod_uuid)], [], [], [], effect_event
+
+
+class ElementalAffinityResistanceAction(BaseAction):
+    """Spend one sorcery point for one hour of ancestry resistance."""
+
+    name: str = Field(
+        default="Elemental Affinity Resistance",
+        description="Human-readable Elemental Affinity action name.",
+    )
+    description: str = Field(
+        default=(
+            "Spend 1 sorcery point to gain your ancestry damage resistance "
+            "for 1 hour."
+        ),
+        description="Rules summary for the resistance decision.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Elemental Affinity affects only the sorcerer.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ABILITY,
+        description="Elemental Affinity is a class ability.",
+    )
+    damage_type: DamageType = Field(
+        default=DamageType.FIRE,
+        description="Selected ancestry damage type.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(
+                name="Elemental Affinity Resistance",
+                cost_type="actions",
+                cost=0,
+                resource_name="sorcery_points",
+                resource_cost=1,
+                evaluator=entity_action_economy_cost_evaluator,
+                resource_evaluator=entity_resource_cost_evaluator,
+            ),
+        ],
+        description="One sorcery point and no action-economy cost.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.name = (
+            f"Elemental Affinity ({self.damage_type.value} Resistance)"
+        )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message="Elemental Affinity resistance validated",
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return execution_event.cancel(status_message="Entity not found")
+        effect = ElementalAffinityResistance(
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
+            damage_type=self.damage_type,
+            duration=Duration(
+                duration=600,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=entity.uuid,
+                target_entity_uuid=entity.uuid,
+            ),
+        )
+        entity.add_condition(effect, parent_event=execution_event)
+        if not effect.applied:
+            return execution_event.cancel(
+                status_message="Elemental Affinity resistance failed",
+            )
+        return execution_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=(
+                f"Elemental Affinity grants {self.damage_type.value} "
+                "resistance for 1 hour"
+            ),
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
+        )
+
+
+class DragonWingsActive(BaseCondition):
+    """Mark manifested draconic wings as an evented creature state."""
+
+    name: str = Field(
+        default="Dragon Wings",
+        description="Player-facing name for manifested dragon wings.",
+    )
+    description: str = Field(
+        default="Manifested wings permit flying movement at normal speed.",
+        description="Rules summary for the active wing state.",
+    )
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        if self.target_entity_uuid is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Dragon Wings target is missing",
+            )
+        target = Entity.get(self.target_entity_uuid)
+        if target is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Dragon Wings target does not exist",
+            )
+        return [], [], [], [], declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=f"{target.name} manifests dragon wings",
+        )
+
+
+class Fly(Move):
+    """Use manifested dragon wings for ordinary movement expenditure."""
+
+    name: str = Field(
+        default="Fly",
+        description="Human-readable flying movement action name.",
+    )
+    description: str = Field(
+        default="Move through traversable space using manifested wings.",
+        description="Rules summary for Dragon Wings movement.",
+    )
+    movement_mode: MovementMode = Field(
+        default=MovementMode.FLYING,
+        description="Dragon Wings always use flying traversal costs.",
+    )
+
+    def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None or "Dragon Wings" not in entity.active_conditions:
+            return declaration_event.cancel(
+                status_message="Dragon Wings are not manifested",
+            )
+        return super()._validate(declaration_event)
+
+
+class DragonWings(BaseAction):
+    """Manifest or dismiss the Draconic Bloodline's wings."""
+
+    name: str = Field(
+        default="Dragon Wings",
+        description="Human-readable Dragon Wings action name.",
+    )
+    description: str = Field(
+        default="Manifest or dismiss wings as a bonus action.",
+        description="Rules summary for the Dragon Wings toggle.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Dragon Wings affect only the sorcerer.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ABILITY,
+        description="Dragon Wings are a class ability.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(
+                name="Dragon Wings",
+                cost_type="bonus_actions",
+                cost=1,
+                evaluator=entity_action_economy_cost_evaluator,
+            ),
+        ],
+        description="Bonus-action cost to manifest or dismiss the wings.",
+    )
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message="Dragon Wings toggle validated",
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return execution_event.cancel(status_message="Entity not found")
+        active = entity.active_conditions.get("Dragon Wings")
+        if active is not None:
+            entity.remove_condition_by_uuid(
+                active.uuid,
+                parent_event=execution_event,
+            )
+            status = "Dragon wings dismissed"
+        else:
+            entity.add_condition(
+                DragonWingsActive(
+                    source_entity_uuid=entity.uuid,
+                    target_entity_uuid=entity.uuid,
+                ),
+                parent_event=execution_event,
+            )
+            status = "Dragon wings manifested"
+        return execution_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=status,
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
+        )
+
+
+DraconicPresenceMode = Literal["awe", "fear"]
+
+
+class DraconicPresenceImmunity(BaseCondition):
+    """Remember one creature's successful save against one sorcerer."""
+
+    name: str = Field(
+        default="Draconic Presence Immunity",
+        description="Source-specific Draconic Presence immunity marker.",
+    )
+    description: str = Field(
+        default=(
+            "This creature succeeded against one sorcerer's Draconic Presence "
+            "and is immune to that sorcerer's aura for 24 hours."
+        ),
+        description="Rules summary for the source-specific immunity.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.STATUS,
+        description="Visible rules state retained for its full duration.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.name = (
+            f"Draconic Presence Immunity:{self.source_entity_uuid}"
+        )
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        return [], [], [], [], declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message="Draconic Presence immunity applied",
+        )
+
+
+class DraconicPresenceAura(BaseCondition):
+    """Concentration-owned 60-foot aura of awe or fear."""
+
+    name: str = Field(
+        default="Draconic Presence",
+        description="Active Draconic Presence aura name.",
+    )
+    description: str = Field(
+        default=(
+            "Hostile creatures that start their turns within 60 feet must "
+            "save or become charmed by awe or frightened by fear."
+        ),
+        description="Rules summary for the active aura.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.STATUS,
+        description="Active class-feature state.",
+    )
+    mode: DraconicPresenceMode = Field(
+        default="awe",
+        description="Whether the aura charms through awe or frightens.",
+    )
+
+    @staticmethod
+    def _immunity_name(source_entity_uuid: UUID) -> str:
+        return f"Draconic Presence Immunity:{source_entity_uuid}"
+
+    def _on_hostile_turn_start(
+        self,
+        event: Event,
+        _source_entity_uuid: UUID,
+    ) -> Optional[Event]:
+        if event.event_type is not EventType.TURN_START:
+            return None
+        caster = (
+            Entity.get(self.source_entity_uuid)
+            if self.source_entity_uuid is not None
+            else None
+        )
+        target = (
+            Entity.get(event.source_entity_uuid)
+            if event.source_entity_uuid is not None
+            else None
+        )
+        if (
+            caster is None
+            or target is None
+            or not caster.is_enemy(target)
+            or caster.senses.get_feet_distance(target.position) > 60
+            or self._immunity_name(caster.uuid)
+            in target.active_conditions
+        ):
+            return None
+
+        effect_name = "Charmed" if self.mode == "awe" else "Frightened"
+        existing = target.active_conditions.get(effect_name)
+        if (
+            existing is not None
+            and existing.source_entity_uuid == caster.uuid
+        ):
+            return None
+
+        request = caster.create_saving_throw_request(
+            target_entity_uuid=target.uuid,
+            ability_name="wisdom",
+            dc=caster.spell_save_dc(),
+            parent_event=event.uuid,
+            condition_context=self.name,
+        )
+        _, _, success = target.saving_throw(request)
+        if success:
+            target.add_condition(
+                DraconicPresenceImmunity(
+                    source_entity_uuid=caster.uuid,
+                    target_entity_uuid=target.uuid,
+                    duration=Duration(
+                        duration=14_400,
+                        duration_type=DurationType.ROUNDS,
+                        source_entity_uuid=caster.uuid,
+                        target_entity_uuid=target.uuid,
+                    ),
+                ),
+                parent_event=event,
+            )
+            return None
+
+        effect_type = Charmed if self.mode == "awe" else Frightened
+        effect = effect_type(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        target.add_condition(effect, parent_event=event)
+        if effect.applied:
+            self.add_linked_condition(target.uuid, effect.uuid)
+        return None
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        if self.target_entity_uuid is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Draconic Presence target is missing",
+            )
+        caster = Entity.get(self.target_entity_uuid)
+        if caster is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Draconic Presence caster does not exist",
+            )
+        handler = EventHandler(
+            name=f"Draconic Presence ({self.mode})",
+            source_entity_uuid=caster.uuid,
+            trigger_conditions=[
+                Trigger(
+                    name="Hostile turn starts in Draconic Presence",
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                ),
+            ],
+            event_processor=self._on_hostile_turn_start,
+        )
+        caster.add_event_handler(handler)
+        return [], [handler.uuid], [], [], declaration_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+            status_message=(
+                f"{caster.name} projects a Draconic Presence aura of "
+                f"{self.mode}"
+            ),
+        )
+
+
+class DraconicPresence(BaseAction):
+    """Spend sorcery points to begin a concentration aura of awe or fear."""
+
+    name: str = Field(
+        default="Draconic Presence",
+        description="Human-readable Draconic Presence action name.",
+    )
+    description: str = Field(
+        default=(
+            "Spend 5 sorcery points and concentrate for up to 1 minute on a "
+            "60-foot aura of awe or fear."
+        ),
+        description="Rules summary for Draconic Presence.",
+    )
+    target_type: TargetType = Field(
+        default=TargetType.SELF,
+        description="Draconic Presence is centered on the sorcerer.",
+    )
+    action_category: ActionCategory = Field(
+        default=ActionCategory.ABILITY,
+        description="Draconic Presence is a class ability.",
+    )
+    mode: DraconicPresenceMode = Field(
+        default="awe",
+        description="Selected aura mode.",
+    )
+    costs: List[Cost] = Field(
+        default_factory=lambda: [
+            Cost(
+                name="Draconic Presence",
+                cost_type="actions",
+                cost=1,
+                resource_name="sorcery_points",
+                resource_cost=5,
+                evaluator=entity_action_economy_cost_evaluator,
+                resource_evaluator=entity_resource_cost_evaluator,
+            ),
+        ],
+        description="One action and five sorcery points.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.name = f"Draconic Presence ({self.mode.title()})"
+
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message=f"Draconic Presence ({self.mode}) validated",
+        )
+
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return execution_event.cancel(status_message="Entity not found")
+
+        concentration = Concentrating(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            spell_name=self.name,
+        )
+        caster.add_condition(concentration, parent_event=execution_event)
+        installed = caster.active_conditions.get("Concentrating")
+        if not isinstance(installed, Concentrating):
+            return execution_event.cancel(
+                status_message="Draconic Presence concentration failed",
+            )
+
+        aura = DraconicPresenceAura(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            mode=self.mode,
+            duration=Duration(
+                duration=10,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=caster.uuid,
+            ),
+        )
+        caster.add_condition(aura, parent_event=execution_event)
+        if not aura.applied:
+            installed.cleanup_if_no_effects(parent_event=execution_event)
+            return execution_event.cancel(
+                status_message="Draconic Presence aura failed",
+            )
+        installed.add_linked_condition(caster.uuid, aura.uuid)
+        return execution_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=(
+                f"Draconic Presence ({self.mode}) is active"
+            ),
+        )
+
+    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(
+            completion_event,
+            self.source_entity_uuid,
+        )
 
 
 class MetamagicActive(BaseCondition):

@@ -102,9 +102,12 @@ BaseObject, BaseBlock (base classes)
 
 **Dependency-neutral leaves** may be imported across engine and server layers:
 `dnd/core/condition_types.py`, `equipment_types.py`, `life_types.py`, and
-`effect_types.py`. They contain enums or immutable value objects, never Entity,
-concrete conditions, runtime services, or policy. Transport-only DTOs belong in
-`server/agent_protocol`. Shared creature mechanics that need several blocks use
+`effect_types.py`. The same rule applies to the character-progression leaves
+`dnd/core/proficiency_types.py`, `dnd/core/progression.py`, and
+`dnd/core/feature_grants.py`: they contain enums, immutable grants, or pure
+calculations, never Entity, concrete conditions, runtime services, or policy.
+Transport-only DTOs belong in `server/agent_protocol`. Shared creature
+mechanics that need several blocks use
 the structural `CreatureTransformTarget` surface in `dnd/creature_transforms.py`;
 that module must not import `Entity`.
 

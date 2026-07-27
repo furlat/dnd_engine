@@ -20,6 +20,7 @@ from dnd.core.content.runtime import (
     bind_runtime_root_owned_behavior,
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.spell_execution import current_spell_execution
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
@@ -40,6 +41,10 @@ from dnd.blocks.health import (
     HitDiceHealingResult,
 )
 from dnd.blocks.equipment import EquipmentConfig, Equipment
+from dnd.blocks.creature_proficiencies import (
+    CreatureProficiencies,
+    CreatureProficienciesConfig,
+)
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses, VisibilityComputationCache, spatial_senses_system
@@ -162,6 +167,10 @@ class EntityConfig(BaseModel):
         default_factory=EquipmentConfig,
         description="Equipment configuration for the entity."
     )
+    creature_proficiencies: CreatureProficienciesConfig = Field(
+        default_factory=CreatureProficienciesConfig,
+        description="Creature-owned weapon, armor, and shield training.",
+    )
     action_economy: ActionEconomyConfig = Field(
         default_factory=ActionEconomyConfig,
         description="Action economy and spell-slot configuration for the entity."
@@ -253,6 +262,12 @@ class Entity(BaseBlock):
     equipment: Equipment = Field(
         default_factory=lambda: Equipment.create(source_entity_uuid=uuid4()),
         description="Equipment block owned by this entity."
+    )
+    creature_proficiencies: CreatureProficiencies = Field(
+        default_factory=lambda: CreatureProficiencies.create(
+            source_entity_uuid=uuid4(),
+        ),
+        description="Creature-owned weapon, armor, and shield training.",
     )
     action_economy: ActionEconomy = Field(
         default_factory=lambda: ActionEconomy.create(source_entity_uuid=uuid4()),
@@ -506,6 +521,10 @@ class Entity(BaseBlock):
         saving_throws = SavingThrowSet.create(source_entity_uuid=source_entity_uuid, config=config.saving_throws)
         health = Health.create(source_entity_uuid=source_entity_uuid, config=config.health)
         equipment = Equipment.create(source_entity_uuid=source_entity_uuid, config=config.equipment)
+        creature_proficiencies = CreatureProficiencies.create(
+            source_entity_uuid=source_entity_uuid,
+            config=config.creature_proficiencies,
+        )
         senses = Senses.create(source_entity_uuid=source_entity_uuid, position=config.position)
         appearance = Appearance.create(source_entity_uuid=source_entity_uuid, config=config.appearance)
         action_economy = ActionEconomy.create(source_entity_uuid=source_entity_uuid, config=config.action_economy)
@@ -536,6 +555,7 @@ class Entity(BaseBlock):
             saving_throws=saving_throws,
             health=health,
             equipment=equipment,
+            creature_proficiencies=creature_proficiencies,
             senses=senses,
             inventory=inventory,
             appearance=appearance,
@@ -1397,12 +1417,34 @@ class Entity(BaseBlock):
         proficiency_bonus = self.proficiency_bonus
         skill = self.skill_set.get_skill(skill_name)
         skill_bonus = skill.skill_bonus
-        proficiency_bonus_multiplier_callable = skill._get_proficiency_converter()
         ability_name = skill.ability
-        ability_bonus = self.ability_scores.get_ability(ability_name).get_combined_values()
+        ability = self.ability_scores.get_ability(ability_name)
+        skill_proficiency_converter = skill._get_proficiency_converter()
+
+        def proficiency_bonus_multiplier_callable(bonus: int) -> int:
+            return max(
+                skill_proficiency_converter(bonus),
+                ability.check_proficiency_sources.apply(bonus),
+            )
+
+        ability_bonus = ability.get_combined_values()
         normalized_proficiency_bonus = proficiency_bonus.model_copy(deep=True)
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, skill_bonus, ability_bonus
+
+    def _get_bonuses_for_ability_check(
+        self,
+        ability_name: AbilityName,
+    ) -> Tuple[ModifiableValue, ModifiableValue]:
+        """Return proficiency and ability modifier for a raw ability check."""
+        ability = self.ability_scores.get_ability(ability_name)
+        normalized_proficiency_bonus = self.proficiency_bonus.model_copy(
+            deep=True,
+        )
+        normalized_proficiency_bonus.update_normalizers(
+            ability.check_proficiency_sources.converter(),
+        )
+        return normalized_proficiency_bonus, ability.get_combined_values()
 
     def _get_bonuses_for_saving_throw(self, ability_name: AbilityName) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
         """Return component values that make up an entity saving throw bonus.
@@ -1442,6 +1484,13 @@ class Entity(BaseBlock):
             )
         )
         proficiency_bonus = self.proficiency_bonus
+        weapon = self.equipment.get_weapon(weapon_slot)
+        if not self.creature_proficiencies.is_weapon_proficient(
+            weapon.properties if weapon is not None else None,
+            weapon.content_ref if weapon is not None else None,
+        ):
+            proficiency_bonus = proficiency_bonus.model_copy(deep=True)
+            proficiency_bonus.update_normalizers(lambda _bonus: 0)
 
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
 
@@ -1471,6 +1520,43 @@ class Entity(BaseBlock):
                 source_bonus.set_from_target(target_bonus)
             try:
                 return source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
+            finally:
+                for source_bonus in source_bonuses:
+                    source_bonus.reset_from_target()
+
+    def ability_check_bonus(
+        self,
+        target_entity_uuid: Optional[UUID],
+        ability_name: AbilityName,
+    ) -> ModifiableValue:
+        """Build the complete bonus for a raw ability check."""
+        if target_entity_uuid is None or target_entity_uuid == self.uuid:
+            bonuses = self._get_bonuses_for_ability_check(ability_name)
+            return bonuses[0].combine_values([bonuses[1]]).model_copy(
+                deep=True,
+            )
+
+        target_entity = Entity.get(target_entity_uuid)
+        if not isinstance(target_entity, Entity):
+            raise ValueError(f"Target entity {target_entity_uuid} not found")
+
+        with (
+            self._temporary_target(target_entity_uuid),
+            target_entity._temporary_target(self.uuid),
+        ):
+            source_bonuses = self._get_bonuses_for_ability_check(ability_name)
+            target_bonuses = target_entity._get_bonuses_for_ability_check(
+                ability_name,
+            )
+            for source_bonus, target_bonus in zip(
+                source_bonuses,
+                target_bonuses,
+            ):
+                source_bonus.set_from_target(target_bonus)
+            try:
+                return source_bonuses[0].combine_values(
+                    [source_bonuses[1]],
+                ).model_copy(deep=True)
             finally:
                 for source_bonus in source_bonuses:
                     source_bonus.reset_from_target()
@@ -1598,11 +1684,22 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
 
-        if self.equipment.is_unarmored():
-            unarmored_values = self.equipment.get_unarmored_ac_values()
-            abilities = self.equipment.get_unarmored_abilities()
+        formula = self.equipment.resolve_armor_class_formula_candidate(
+            self.ability_scores
+        )
+        formula_ac: Optional[ModifiableValue] = None
+        if formula is not None:
+            unarmored_values = self.equipment.get_unarmored_ac_values(formula)
+            abilities = self.equipment.get_unarmored_abilities(formula)
             ability_bonuses = [self.ability_scores.get_ability(ability).get_combined_values() for ability in abilities]
-            ac_bonus = unarmored_values[0].combine_values(unarmored_values[1:]+ability_bonuses)
+            formula_ac = unarmored_values[0].combine_values(
+                unarmored_values[1:] + ability_bonuses
+            )
+
+        if self.equipment.is_unarmored():
+            if formula_ac is None:
+                raise RuntimeError("unarmored entity has no Armor Class formula")
+            ac_bonus = formula_ac
         else:
             armored_values = self.equipment.get_armored_ac_values()
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
@@ -1612,6 +1709,11 @@ class Entity(BaseBlock):
                 combined_dexterity_bonus = max_dexterity_bonus
 
             ac_bonus = armored_values[0].combine_values(armored_values[1:]+[combined_dexterity_bonus])
+            if (
+                formula_ac is not None
+                and formula_ac.normalized_score > ac_bonus.normalized_score
+            ):
+                ac_bonus = formula_ac
 
         if should_clear_target:
             self.clear_target_entity()
@@ -1633,9 +1735,26 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
 
-        proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, _ = self._get_attack_bonuses(weapon_slot, override_ability=override_ability)
+        (
+            proficiency_bonus,
+            weapon_bonus,
+            attack_bonuses,
+            ability_bonuses,
+            weapon_range,
+        ) = self._get_attack_bonuses(
+            weapon_slot,
+            override_ability=override_ability,
+        )
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
+        source_attack_bonus.set_context({
+            "attack_ability": self.equipment.get_weapon_attack_ability_name(
+                self.ability_scores,
+                weapon_slot,
+                override_ability,
+            ),
+            "range_type": weapon_range.type.value,
+        })
 
         if should_clear_target:
             self.clear_target_entity()
@@ -1664,6 +1783,15 @@ class Entity(BaseBlock):
             weapon_slot,
             override_ability,
         )
+        weapon = self.equipment.get_weapon(weapon_slot)
+        proficiency_score = (
+            self.proficiency_bonus.normalized_score
+            if self.creature_proficiencies.is_weapon_proficient(
+                weapon.properties if weapon is not None else None,
+                weapon.content_ref if weapon is not None else None,
+            )
+            else 0
+        )
         advantage_sum = equipment_advantage + self.proficiency_bonus.advantage_sum
         if advantage_sum > 0:
             advantage = AdvantageStatus.ADVANTAGE
@@ -1672,7 +1800,7 @@ class Entity(BaseBlock):
         else:
             advantage = AdvantageStatus.NONE
         return AttackRollBaseline(
-            attack_bonus=equipment_bonus + self.proficiency_bonus.normalized_score,
+            attack_bonus=equipment_bonus + proficiency_score,
             advantage=advantage,
             critical_threshold=self.get_crit_threshold(weapon_slot),
             critical_extra_dice=self.get_crit_extra_dice(weapon_slot),
@@ -2277,7 +2405,12 @@ class Entity(BaseBlock):
             ))
         return exposures
 
-    def spell_attack_bonus(self, target_entity_uuid: Optional[UUID] = None) -> ModifiableValue:
+    def spell_attack_bonus(
+        self,
+        target_entity_uuid: Optional[UUID] = None,
+        *,
+        spellcasting_source_id: Optional[UUID] = None,
+    ) -> ModifiableValue:
         """Build combined spell attack bonus.
 
         Args:
@@ -2291,7 +2424,11 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
 
-        ability = self.ability_scores.get_ability(self.spellcasting.spellcasting_ability)
+        ability = self.ability_scores.get_ability(
+            self.spellcasting.resolve_spellcasting_ability(
+                spellcasting_source_id
+            )
+        )
         ability_bonus = ability.get_combined_values()
 
         combined = self.proficiency_bonus.combine_values([
@@ -2305,7 +2442,11 @@ class Entity(BaseBlock):
 
         return combined
 
-    def spell_attack_outcome_baseline(self) -> AttackRollBaseline:
+    def spell_attack_outcome_baseline(
+        self,
+        *,
+        spellcasting_source_id: Optional[UUID] = None,
+    ) -> AttackRollBaseline:
         """Read the actor-side spell attack model without allocating values.
 
         The baseline deliberately excludes target-owned AC and cross-entity
@@ -2315,7 +2456,11 @@ class Entity(BaseBlock):
         Returns:
             Typed attack-roll contribution for a spell action outcome profile.
         """
-        ability = self.ability_scores.get_ability(self.spellcasting.spellcasting_ability)
+        ability = self.ability_scores.get_ability(
+            self.spellcasting.resolve_spellcasting_ability(
+                spellcasting_source_id
+            )
+        )
         value_components = (
             self.proficiency_bonus,
             self.equipment.attack_bonus,
@@ -2339,7 +2484,11 @@ class Entity(BaseBlock):
             critical_extra_dice=self.get_spell_crit_extra_dice(),
         )
 
-    def spell_save_dc(self) -> int:
+    def spell_save_dc(
+        self,
+        *,
+        spellcasting_source_id: Optional[UUID] = None,
+    ) -> int:
         """Calculate spell save DC.
 
         DC = 8 + proficiency + ability_modifier + spell_dc_bonus
@@ -2348,7 +2497,9 @@ class Entity(BaseBlock):
             Spell save DC.
         """
         ability_mod = self.ability_scores.get_ability(
-            self.spellcasting.spellcasting_ability
+            self.spellcasting.resolve_spellcasting_ability(
+                spellcasting_source_id
+            )
         ).modifier
         return (8 +
                 self.proficiency_bonus.normalized_score +
@@ -2393,9 +2544,36 @@ class Entity(BaseBlock):
         Returns:
             Combined spell damage bonus.
         """
-        return self.equipment.damage_bonus.combine_values([
+        combined = self.equipment.damage_bonus.combine_values([
             self.spellcasting.spell_damage_bonus,
         ])
+        execution = current_spell_execution()
+        if (
+            execution is None
+            or execution.source_entity_uuid != self.uuid
+            or execution.lineage_uuid is None
+            or execution.damage_type is None
+        ):
+            return combined
+
+        ability_name = self.spellcasting.claim_spell_damage_affinity_ability(
+            spell_lineage_uuid=execution.lineage_uuid,
+            damage_type=execution.damage_type,
+        )
+        if ability_name is None:
+            return combined
+
+        ability_modifier = self.ability_scores.get_ability(ability_name).modifier
+        combined.self_static.add_value_modifier(
+            NumericalModifier(
+                source_entity_uuid=self.uuid,
+                target_entity_uuid=self.uuid,
+                name=f"{ability_name.title()} Spell Damage Affinity",
+                value=ability_modifier,
+                use_register=False,
+            ),
+        )
+        return combined
 
     def spell_damage_outcome_bonus(self) -> int:
         """Read the actor-side spell damage bonus without allocating values.
@@ -3685,6 +3863,16 @@ class Entity(BaseBlock):
         """
         self.registered_actions = [a for a in self.registered_actions if a.name != name]
 
+    def unregister_action_by_uuid(self, action_uuid: UUID) -> bool:
+        """Remove exactly one action template by runtime identity."""
+        for index, action in enumerate(self.registered_actions):
+            if action.uuid != action_uuid:
+                continue
+            del self.registered_actions[index]
+            action.remove_from_register()
+            return True
+        return False
+
     def get_action_template(self, name: str) -> Optional[BaseAction]:
         """Get a registered action template by name.
 
@@ -3793,6 +3981,7 @@ class Entity(BaseBlock):
             behavior_attribution=AuthoredBehaviorAttribution.from_binding(
                 behavior_binding,
             ),
+            configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             availability_status=availability_status,
             valid_targets=valid_targets,

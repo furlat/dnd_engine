@@ -213,6 +213,7 @@ export function objectiveStepFrame(cursor = 1): GameEventFrame {
     context: null,
     use_register: true,
     lineage_uuid: `lineage-${cursor}`,
+    turn_execution_id: null,
     timestamp: "2026-07-20T12:00:00",
     phase: "completion",
     modified: false,

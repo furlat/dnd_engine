@@ -9,7 +9,6 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
@@ -28,16 +27,20 @@ from server.game_directory.contracts import (
     GameLifecycleState,
     PrincipalCreate,
     PrincipalKind,
+    WorkerCreate,
+    WorkerState,
+    WorkerTransportKind,
 )
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_gateway import ENGINE_VERSION, GameGatewayService, create_gateway_app
-from server.game_summary_store import WorkerGameSummaryStore, WorkerSummaryEvidence
+from server.game_summary_store import WorkerGameSummaryStore
 from server.hosted_worker import HostedWorkerManager
 from server.live_replication import create_stream_scene, execute_stream_attack
 from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import SubjectivePlayerReplayArchive
 from server.runtime_authority import RuntimeAuthorityCache
 from server.worker_replay import build_worker_objective_replay
+from server.worker_terminal_spool import WorkerTerminalSpool
 
 
 PEPPER = b"gateway-test-capability-pepper"
@@ -172,7 +175,7 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
             app.state.content_system.content_set_digest
         )
         assert not any(
-            route.path.startswith("/content/v")
+            getattr(route, "path", "").startswith("/content/v")
             for route in app.routes
         )
         assert repository.list_games() == ()
@@ -379,8 +382,10 @@ def test_gateway_refuses_automatic_owner_side_before_spawning(tmp_path: Path) ->
     repository.close()
 
 
-def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path) -> None:
-    """The cold plane persists a worker summary only after EncounterEndEvent."""
+def test_ai_match_publishes_canonical_terminal_evidence_from_terminal_event(
+    tmp_path: Path,
+) -> None:
+    """A real worker publishes summary and both replays only after encounter end."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
@@ -393,6 +398,7 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
         repository=repository,
         worker_manager=workers,
         capability_pepper=PEPPER,
+        artifact_root=tmp_path / "artifacts",
     )
     with TestClient(app) as client:
         owner = client.post(
@@ -438,6 +444,35 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
             event.event_type == "summary_ready"
             for event in repository.list_directory_events(game_id=game_id, limit=100)
         )
+        artifacts = {
+            artifact.artifact_kind: artifact
+            for artifact in repository.list_artifacts(game_id)
+        }
+        assert {
+            ArtifactKind.REPLAY_BUNDLE,
+            ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
+        } <= artifacts.keys()
+        artifact_store = GameArtifactStore(tmp_path / "artifacts")
+        objective = ObjectiveReplayBundle.model_validate_json(
+            artifact_store.read_bytes(
+                artifacts[ArtifactKind.REPLAY_BUNDLE].content_digest
+            )
+        )
+        subjective = SubjectivePlayerReplayArchive.model_validate_json(
+            artifact_store.read_bytes(
+                artifacts[ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE].content_digest
+            )
+        )
+        assert objective.terminal_event_cursor == game.final_event_cursor
+        assert objective.terminal_combat_log_cursor == (
+            game.final_combat_log_cursor
+        )
+        assert subjective.terminal_source_event_cursor == (
+            game.final_event_cursor
+        )
+        assert subjective.terminal_combat_log_cursor == (
+            game.final_combat_log_cursor
+        )
 
         stopped = client.post(
             f"/games/{game_id}/stop",
@@ -448,128 +483,6 @@ def test_ai_match_publishes_canonical_summary_from_terminal_event(tmp_path: Path
         )
         assert stopped.status_code == 200
         assert stopped.json()["stopped"] is True
-
-    repository.close()
-
-
-def test_autonomous_composed_match_persists_complete_terminal_archives(
-    tmp_path: Path,
-) -> None:
-    """A real autonomous match durably retains both complete replay surfaces."""
-    repository = GameDirectoryRepository(
-        tmp_path / "directory.sqlite3",
-        capability_pepper=PEPPER,
-    )
-    workers = HostedWorkerManager(
-        tmp_path / "runtime",
-        startup_timeout_seconds=20.0,
-    )
-    app = create_gateway_app(
-        repository=repository,
-        worker_manager=workers,
-        capability_pepper=PEPPER,
-        artifact_root=tmp_path / "artifacts",
-    )
-    with TestClient(app) as client:
-        owner = client.post(
-            "/directory/principals/guest",
-            json={"display_name": "Fast Match Observer"},
-        ).json()
-        body = _creation_body(owner)
-        body["creation"] = {
-            "scenario": {
-                "kind": "composed",
-                "hero_configuration_id": "hero.sorcerer_l5_standard_torch",
-                "monster_configuration_id": "monsters.goblin_water_cell",
-                "battlefield_id": "battlefield.standard_hazards_closed",
-                "deployment_id": "neutral.battlefield.standard_hazards_closed",
-            },
-            "side_a": {"controller": "ai", "name": "Sorcerer AI"},
-            "side_b": {"controller": "ai", "name": "Goblin AI"},
-            "opening_side": "side_a",
-        }
-        body["owner_side"] = "observer"
-        body["client_instance_id"] = "fast-match-watcher"
-        created = client.post("/games", json=body)
-        assert created.status_code == 200, created.text
-        game_id = UUID(created.json()["game"]["game_id"])
-        owner_auth = {
-            "X-Dnd-Principal-Id": owner["principal"]["principal_id"],
-            "X-Dnd-Principal-Capability": owner["principal_capability"],
-        }
-
-        worker_ready_at: float | None = None
-        gateway_ready_at: float | None = None
-        summary_response = client.get(f"/games/{game_id}/summary", headers=owner_auth)
-        transport = httpx.HTTPTransport(uds=str(workers.socket_path(game_id)))
-        with httpx.Client(
-            transport=transport,
-            base_url="http://game-worker",
-            timeout=2.0,
-        ) as worker_client:
-            # Match duration is policy/scenario behavior, not the property
-            # measured here. Keep the worker request timeout tight while
-            # allowing the autonomous match to reach its terminal evidence;
-            # the gateway propagation assertion below remains 500 ms.
-            deadline = time.monotonic() + 60.0
-            while time.monotonic() < deadline:
-                if worker_ready_at is None:
-                    worker_response = worker_client.get("/game/evidence/summary")
-                    if worker_response.status_code == 200:
-                        worker_ready_at = time.monotonic()
-                if summary_response.status_code == 404:
-                    summary_response = client.get(
-                        f"/games/{game_id}/summary",
-                        headers=owner_auth,
-                    )
-                    if summary_response.status_code == 200:
-                        gateway_ready_at = time.monotonic()
-                if worker_ready_at is not None and gateway_ready_at is not None:
-                    break
-                time.sleep(0.01)
-
-        assert worker_ready_at is not None
-        assert summary_response.status_code == 200, summary_response.text
-        assert gateway_ready_at is not None
-        # This bound includes transferring, validating, canonicalizing, fsyncing,
-        # and indexing two multi-megabyte archives. The separate deterministic
-        # test below owns the sub-500-ms monitor/persistence responsiveness SLO.
-        assert gateway_ready_at - worker_ready_at < 3.0
-        summary_record = summary_response.json()
-        assert summary_record["summary"]["schema_version"] == 2
-        assert summary_record["summary"]["outcome"]["terminal_event_observed"] is True
-        game = repository.get_game(game_id)
-        assert game.lifecycle_state.value == "ended"
-        assert game.current_summary_digest == summary_record["summary_digest"]
-        artifacts = {
-            artifact.artifact_kind: artifact
-            for artifact in repository.list_artifacts(game_id)
-        }
-        assert {
-            ArtifactKind.REPLAY_BUNDLE,
-            ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
-        } <= artifacts.keys()
-        objective_artifact = artifacts[ArtifactKind.REPLAY_BUNDLE]
-        subjective_artifact = artifacts[ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE]
-        assert objective_artifact.byte_size > 100_000
-        assert subjective_artifact.byte_size > 100_000
-        artifact_store = GameArtifactStore(tmp_path / "artifacts")
-        objective = ObjectiveReplayBundle.model_validate_json(
-            artifact_store.read_bytes(objective_artifact.content_digest)
-        )
-        subjective = SubjectivePlayerReplayArchive.model_validate_json(
-            artifact_store.read_bytes(subjective_artifact.content_digest)
-        )
-        assert objective.terminal_event_cursor == game.final_event_cursor
-        assert objective.terminal_combat_log_cursor == game.final_combat_log_cursor
-        assert (
-            subjective.terminal_source_event_cursor
-            == game.final_event_cursor
-        )
-        assert (
-            subjective.terminal_combat_log_cursor
-            == game.final_combat_log_cursor
-        )
 
     repository.close()
 
@@ -620,9 +533,30 @@ def test_small_terminal_evidence_archival_persists_within_half_second(
             credential_hash=hash_capability(principal_capability, PEPPER),
         )
     )
+    service = GameGatewayService(
+        repository,
+        HostedWorkerManager(tmp_path / "runtime"),
+        RuntimeAuthorityCache(),
+        GameArtifactStore(tmp_path / "artifacts"),
+        capability_pepper=PEPPER,
+    )
+    worker_record = repository.create_worker(
+        WorkerCreate(
+            state=WorkerState.ACTIVE,
+            pid=999_999,
+            process_group_id=999_999,
+            host_id="terminal-fixture",
+            transport_kind=WorkerTransportKind.UNIX_SOCKET,
+            private_locator=str(tmp_path / "terminal-fixture.sock"),
+            protocol_hash="terminal-fixture",
+            engine_version=ENGINE_VERSION,
+        )
+    )
     game = repository.create_game(
         GameCreate(
             game_id=game_id,
+            worker_id=worker_record.worker_id,
+            worker_generation=worker_record.worker_generation,
             created_by_principal_id=principal.principal_id,
             scenario_kind="test",
             scenario_id="small-terminal-evidence",
@@ -633,39 +567,30 @@ def test_small_terminal_evidence_archival_persists_within_half_second(
             content_digest="small-terminal-evidence",
         )
     )
-    service = GameGatewayService(
-        repository,
-        HostedWorkerManager(tmp_path / "runtime"),
-        RuntimeAuthorityCache(),
-        GameArtifactStore(tmp_path / "artifacts"),
-        capability_pepper=PEPPER,
-    )
     repository.transition_game(
         game_id,
         expected_row_version=game.row_version,
         lifecycle_state=GameLifecycleState.ACTIVE,
     )
-    worker = FastAPI()
-
-    @worker.get("/game/evidence/summary", response_model=WorkerSummaryEvidence)
-    async def terminal_summary() -> WorkerSummaryEvidence:
-        return evidence
-
-    @worker.get("/game/evidence/objective-replay", response_model=ObjectiveReplayBundle)
-    async def terminal_objective_replay() -> ObjectiveReplayBundle:
-        return replay
-
-    @worker.get(
-        "/game/evidence/subjective-replay",
-        response_model=SubjectivePlayerReplayArchive,
+    WorkerTerminalSpool(
+        service.worker_manager.runtime_directory(game_id),
+    ).publish(
+        game_id=game_id,
+        worker_instance_id=worker_record.worker_id,
+        worker_generation=worker_record.worker_generation,
+        summary=evidence,
+        objective_replay=replay,
+        subjective_replay=subjective,
     )
-    async def terminal_subjective_replay() -> SubjectivePlayerReplayArchive:
-        return subjective
 
     async def persist() -> tuple[bool, float]:
-        transport = httpx.ASGITransport(app=worker)
+        def reject_http(request: httpx.Request) -> httpx.Response:
+            raise AssertionError(
+                f"durable terminal adoption called worker HTTP at {request.url.path}",
+            )
+
         async with httpx.AsyncClient(
-            transport=transport,
+            transport=httpx.MockTransport(reject_http),
             base_url="http://terminal-worker",
         ) as client:
             started_at = time.perf_counter()

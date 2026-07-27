@@ -84,6 +84,7 @@ const catalog: GameCreationCatalogResponse = {
 };
 
 const startRequest: GameCreationStartRequest = {
+  character_id: null,
   scenario: {
     kind: "composed",
     hero_configuration_id: compatibility.hero_configuration_id,

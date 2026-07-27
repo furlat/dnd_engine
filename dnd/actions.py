@@ -5,8 +5,8 @@ import time
 from dnd.core.base_actions import (
     ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
     Cost, CostType, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
-    PositionDiscoveryContract, SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType,
-    ActionTargetEffectProfile,
+    PositionDiscoveryContract, RESTRICTED_ACTION_TEMPLATE_SEPARATOR,
+    SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType, ActionTargetEffectProfile,
     spell_slot_cost_type,
 )
 from dnd.core.values import ModifiableValue
@@ -37,6 +37,12 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.life_types import LifeState
+from dnd.core.spell_execution import (
+    SpellExecutionState,
+    bind_spell_execution_lineage,
+    current_spell_execution,
+    spell_execution_scope,
+)
 from dnd.core.action_execution import (
     MovementContinuationDecision,
     MovementStepBoundary,
@@ -1616,6 +1622,7 @@ class Attack(BaseAction):
                 started = time.perf_counter()
                 damage_roll_event.phase_to(EventPhase.COMPLETION)
                 record_action_timing("attack.damage_roll_completion_ms", started)
+                damages = damage_roll_event.damages
                 started = time.perf_counter()
                 total_damage = sum(roll.total for roll in damage_rolls)
                 record_action_timing("attack.sum_damage_ms", started)
@@ -3676,6 +3683,13 @@ class SpellAction(BaseAction):
     is_variant: bool = Field(default=False, description="Whether this is an upcast variant")
 
     caster_level: int = Field(default=1, description="Level of the caster (for cantrip scaling)")
+    spellcasting_source_id: Optional[UUID] = Field(
+        default=None,
+        description=(
+            "Exact registered spellcasting source that owns this spell. "
+            "None retains the legacy default spellcasting ability."
+        ),
+    )
 
     cast_concentrating_uuid: Optional[UUID] = Field(
         default=None,
@@ -3692,6 +3706,43 @@ class SpellAction(BaseAction):
         default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
         description="Action cost for casting"
     )
+
+    def spell_execution_scope(self):
+        """Open the cast-local context used by low-level damage contributors."""
+
+        return spell_execution_scope(
+            source_entity_uuid=self.source_entity_uuid,
+            damage_type=self.spell_damage_type,
+        )
+
+    def bind_spell_execution_lineage(self, lineage_uuid: UUID) -> None:
+        """Bind the active cast context to its authoritative event lineage."""
+
+        bind_spell_execution_lineage(lineage_uuid)
+
+    def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
+        """Apply the spell within one isolated, bounded cast context."""
+
+        with self.spell_execution_scope() as execution:
+            try:
+                return super().apply(parent_event)
+            finally:
+                self._release_spell_execution(execution)
+
+    def _release_spell_execution(
+        self,
+        execution: SpellExecutionState,
+    ) -> None:
+        """Release ephemeral contribution claims after the cast completes."""
+
+        if execution.lineage_uuid is None:
+            return
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return
+        caster.spellcasting.release_spell_damage_affinity_execution(
+            execution.lineage_uuid,
+        )
 
     def model_post_init(self, __context: Any) -> None:
         """Set concentration flags and append slot costs for leveled spells."""
@@ -3737,7 +3788,9 @@ class SpellAction(BaseAction):
         flat_bonus: Optional[int] = None,
     ) -> ActionOutcomeProfile:
         """Build the actor-baseline model for a spell attack rule."""
-        baseline = caster.spell_attack_outcome_baseline()
+        baseline = caster.spell_attack_outcome_baseline(
+            spellcasting_source_id=self.spellcasting_source_id,
+        )
         advantage = baseline.advantage
         if self.get_range().type is RangeType.RANGE and caster.is_threatened():
             advantage = (
@@ -3780,7 +3833,10 @@ class SpellAction(BaseAction):
         Returns:
             Typed spell attack values, roll, outcome, and threat state.
         """
-        attack_bonus = caster.spell_attack_bonus(target.uuid)
+        attack_bonus = caster.spell_attack_bonus(
+            target.uuid,
+            spellcasting_source_id=self.spellcasting_source_id,
+        )
         target_ac = target.ac_bonus(caster.uuid)
         for modifier in extra_advantage_modifiers:
             attack_bonus.self_static.add_advantage_modifier(modifier)
@@ -3866,7 +3922,9 @@ class SpellAction(BaseAction):
                 flat_bonus=bonus,
                 damage_type=damage_type.value,
             )],
-            save_dc=caster.spell_save_dc(),
+            save_dc=caster.spell_save_dc(
+                spellcasting_source_id=self.spellcasting_source_id,
+            ),
             save_ability=save_ability,
             half_damage_on_save=half_damage_on_save,
         )
@@ -4014,15 +4072,34 @@ class SpellAction(BaseAction):
             The registered cantrip or slotless override template, or generated
             slot-level variants for leveled spells.
         """
+        spell_variants: List[BaseAction]
         if self.spell_level == 0 or self.alt_skip_slot:
-            return [self]
-        return list(self.generate_variants(entity))
+            spell_variants = [self]
+        else:
+            spell_variants = list(self.generate_variants(entity))
+        return [
+            variant
+            for spell_variant in spell_variants
+            for variant in BaseAction.get_discovery_variants(
+                spell_variant,
+                entity,
+            )
+        ]
 
     def get_discovery_template_name(self) -> str:
         """Return a stable execution name for this spell discovery row."""
         base_name = self.name or "Unknown"
         if self.is_variant and self.spell_level > 0:
-            return f"{base_name}{SPELL_SLOT_TEMPLATE_SEPARATOR}{self.cast_at_level}"
+            base_name = (
+                f"{base_name}{SPELL_SLOT_TEMPLATE_SEPARATOR}"
+                f"{self.cast_at_level}"
+            )
+        grant = self._restricted_action_grant
+        if grant is not None:
+            return (
+                f"{base_name}{RESTRICTED_ACTION_TEMPLATE_SEPARATOR}"
+                f"{grant.grant_id}"
+            )
         return base_name
 
     def get_discovery_display_name(self) -> str:
@@ -4138,6 +4215,8 @@ class SpellAction(BaseAction):
             declared_target_entity_uuids=self._declared_target_entity_uuids(),
         )
         event.item_charge_action_lineage_uuid = event.lineage_uuid
+        if current_spell_execution() is not None:
+            self.bind_spell_execution_lineage(event.lineage_uuid)
         return event
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:

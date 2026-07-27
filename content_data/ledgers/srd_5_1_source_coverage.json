@@ -5232,15 +5232,23 @@
       "source_name": "Crossbow, light"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "weapon.dart",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "item",
       "dependency_refs": [],
-      "implementation_status": "missing",
-      "legacy_locators": [],
+      "implementation_status": "playable",
+      "legacy_locators": [
+        "dnd/items/weapons.py:_build_dart"
+      ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "",
+      "mechanical_notes": "The migrated content definition is usable for attacks; playable does not claim complete cost, weight, or property parity.",
       "section": "weapons",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), pp. 65-66, Weapons table: Dart",
       "source_entry_id": "srd_5_1.weapon.dart",
@@ -10788,7 +10796,13 @@
       "source_name": "Control Weather"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "spell.counterspell",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "spell",
       "dependency_refs": [
         {
@@ -10799,14 +10813,14 @@
           "pack_id": "content.srd_5_1_cc"
         }
       ],
-      "implementation_status": "partial",
+      "implementation_status": "playable",
       "legacy_locators": [
         "dnd/spells/abjuration.py:CounterspellReactionHandler"
       ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "Source declaration: 3rd-level abjuration. The exact reaction behavior is playable, but the learnable spell root and spell-catalog entry are not implemented.",
+      "mechanical_notes": "Source declaration: 3rd-level abjuration. The exact learned spell root installs its exact playable reaction behavior.",
       "section": "spells",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), p. 131, Spell Descriptions: Counterspell",
       "source_entry_id": "srd_5_1.spell.counterspell",
@@ -14290,7 +14304,13 @@
       "source_name": "Shatter"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "spell.shield",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "spell",
       "dependency_refs": [
         {
@@ -14301,14 +14321,14 @@
           "pack_id": "content.srd_5_1_cc"
         }
       ],
-      "implementation_status": "partial",
+      "implementation_status": "playable",
       "legacy_locators": [
         "dnd/spells/abjuration.py:ShieldReactionHandler"
       ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "Source declaration: 1st-level abjuration. The exact reaction behavior is playable, but the learnable spell root and spell-catalog entry are not implemented.",
+      "mechanical_notes": "Source declaration: 1st-level abjuration. The exact learned spell root installs its exact playable reaction behavior.",
       "section": "spells",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), p. 179, Spell Descriptions: Shield",
       "source_entry_id": "srd_5_1.spell.shield",

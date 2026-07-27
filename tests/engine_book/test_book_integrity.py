@@ -46,9 +46,6 @@ ENCOUNTER_MODELS = {
     },
 }
 CLASS_FEATURE_DESCRIBED_MODEL_CLASSES = {
-    ROOT / "dnd" / "classes" / "fighter_factory.py": {"FighterConfig"},
-    ROOT / "dnd" / "classes" / "barbarian_factory.py": {"BarbarianConfig"},
-    ROOT / "dnd" / "classes" / "sorcerer_factory.py": {"SorcererConfig"},
     ROOT / "dnd" / "classes" / "fighter.py": {
         "FightingStyleArchery",
         "FightingStyleDefense",
@@ -112,9 +109,6 @@ CLASS_FEATURE_DESCRIBED_MODEL_CLASSES = {
     ROOT / "dnd" / "classes" / "feats.py": {"LuckyFeature"},
 }
 CLASS_FEATURE_GOOGLE_DOCSTRING_CLASSES = {
-    ROOT / "dnd" / "classes" / "fighter_factory.py": {"FighterConfig"},
-    ROOT / "dnd" / "classes" / "barbarian_factory.py": {"BarbarianConfig"},
-    ROOT / "dnd" / "classes" / "sorcerer_factory.py": {"SorcererConfig"},
     ROOT / "dnd" / "classes" / "fighter.py": {
         "FightingStyleArchery",
         "FightingStyleDefense",

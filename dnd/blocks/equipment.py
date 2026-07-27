@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier, DamageType
 from dnd.blocks.abilities import Ability, AbilityScores
@@ -543,6 +543,27 @@ class _PreparedEquipmentTransition:
 DamageProfileT = TypeVar("DamageProfileT")
 
 
+class ArmorClassFormulaCandidate(BaseModel):
+    """One exact source-owned unarmored Armor Class formula."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: UUID = Field(description="Owning progression grant UUID.")
+    base_ac: int = Field(ge=0, description="Formula base before ability modifiers.")
+    ability_names: Tuple[AbilityName, ...] = Field(
+        default_factory=tuple,
+        description="Ability modifiers included by this formula.",
+    )
+    requires_unarmored: bool = Field(
+        default=True,
+        description="Whether ordinary body armor makes this formula ineligible.",
+    )
+    allows_shield: bool = Field(
+        default=True,
+        description="Whether an equipped shield contributes to this formula.",
+    )
+
+
 class EquipmentConfig(BaseModel):
     """Configuration payload for equipment-wide combat modifiers."""
 
@@ -599,6 +620,10 @@ class Equipment(BaseBlock):
     unarmored_ac_type: UnarmoredAc = Field(
         default=UnarmoredAc.NONE,
         description="Unarmored AC formula active for this equipment block.",
+    )
+    armor_class_formula_candidates: dict[UUID, ArmorClassFormulaCandidate] = Field(
+        default_factory=dict,
+        description="Unarmored AC formulas keyed by exact progression source.",
     )
     unarmed_properties: List[WeaponProperty] = Field(
         default_factory=list,
@@ -859,6 +884,19 @@ class Equipment(BaseBlock):
             return strength if strength.modifier >= dexterity.modifier else dexterity
         return ability_block.strength
 
+    def get_weapon_attack_ability_name(
+        self,
+        ability_block: AbilityScores,
+        weapon_slot: WeaponSlot,
+        override_ability: Optional[AbilityName] = None,
+    ) -> str:
+        """Return the exact ability selected for one weapon attack."""
+        return self._select_weapon_attack_ability(
+            ability_block,
+            self.get_weapon(weapon_slot),
+            override_ability,
+        ).name
+
     def get_attack_bonus_components(
         self,
         ability_block: AbilityScores,
@@ -1098,15 +1136,23 @@ class Equipment(BaseBlock):
         """Combine unarmed, melee, equipment, and ability bonuses into one damage."""
         unarmed_damage_bonus = self.unarmed_damage_bonus
         if override_ability is not None:
-            ability_bonus = ability_block.get_ability(override_ability).get_combined_values()
+            ability = ability_block.get_ability(override_ability)
+            ability_bonus = ability.get_combined_values()
         else:
-            strength_bonus = ability_block.strength.get_combined_values()
+            ability = ability_block.strength
+            strength_bonus = ability.get_combined_values()
             ability_bonus = strength_bonus
             if WeaponProperty.FINESSE in self.unarmed_properties:
-                dexterity_bonus = ability_block.dexterity.get_combined_values()
+                dexterity = ability_block.dexterity
+                dexterity_bonus = dexterity.get_combined_values()
                 if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
+                    ability = dexterity
                     ability_bonus = dexterity_bonus
         combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
+        combined_bonus.set_context({
+            "attack_ability": ability.name,
+            "range_type": RangeType.REACH.value,
+        })
         unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
         return unarmed_damage
 
@@ -1121,9 +1167,24 @@ class Equipment(BaseBlock):
             if is_off_hand:
                 off_hand_ability_bonus = self.off_hand_ranged_ability_bonus if is_ranged else self.off_hand_melee_ability_bonus
 
-            return weapon.get_base_damage(self, ability_block, is_off_hand=is_off_hand,
-                                          off_hand_ability_bonus=off_hand_ability_bonus,
-                                          override_ability=override_ability)
+            damage = weapon.get_base_damage(
+                self,
+                ability_block,
+                is_off_hand=is_off_hand,
+                off_hand_ability_bonus=off_hand_ability_bonus,
+                override_ability=override_ability,
+            )
+            if damage.damage_bonus is not None:
+                ability = self._select_weapon_damage_ability(
+                    ability_block,
+                    weapon,
+                    override_ability,
+                )
+                damage.damage_bonus.set_context({
+                    "attack_ability": ability.name,
+                    "range_type": weapon.range.type.value,
+                })
+            return damage
         return None
 
     def _get_extra_weapon_damages(self, weapon_slot: WeaponSlot) -> List[Damage]:
@@ -1162,8 +1223,92 @@ class Equipment(BaseBlock):
             return weapon.damage_type
         return self.unarmed_damage_type
 
-    def get_unarmored_abilities(self) -> List[AbilityName]:
+    def add_armor_class_formula_candidate(
+        self,
+        candidate: ArmorClassFormulaCandidate,
+    ) -> None:
+        """Add one formula, rejecting source identity reuse with new rules."""
+        existing = self.armor_class_formula_candidates.get(candidate.source_id)
+        if existing is not None and existing != candidate:
+            raise ValueError(
+                f"armor class formula source {candidate.source_id} "
+                "already exists with a different contract"
+            )
+        self.armor_class_formula_candidates[candidate.source_id] = candidate
+
+    def remove_armor_class_formula_candidate(self, source_id: UUID) -> bool:
+        """Remove exactly one source-owned Armor Class formula."""
+        return self.armor_class_formula_candidates.pop(source_id, None) is not None
+
+    def _legacy_armor_class_formula_candidate(
+        self,
+    ) -> ArmorClassFormulaCandidate:
+        """Represent the existing singleton mode as a compatibility candidate."""
+        base_modifier = self.unarmored_ac.get_base_modifier()
+        base_ac = base_modifier.normalized_value if base_modifier is not None else 10
+        if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
+            abilities: Tuple[AbilityName, ...] = (
+                "dexterity",
+                "constitution",
+            )
+        elif self.unarmored_ac_type == UnarmoredAc.MONK:
+            abilities = ("dexterity", "strength")
+        else:
+            abilities = ("dexterity",)
+        if self.unarmored_ac_type in (
+            UnarmoredAc.DRACONIC_SORCERER,
+            UnarmoredAc.MAGIC_ARMOR,
+        ):
+            base_ac += 3
+        return ArmorClassFormulaCandidate(
+            source_id=self.uuid,
+            base_ac=base_ac,
+            ability_names=abilities,
+            requires_unarmored=True,
+            allows_shield=True,
+        )
+
+    def resolve_armor_class_formula_candidate(
+        self,
+        ability_block: AbilityScores,
+    ) -> Optional[ArmorClassFormulaCandidate]:
+        """Select the highest applicable formula, with stable first-source ties."""
+        candidates = [
+            self._legacy_armor_class_formula_candidate(),
+            *self.armor_class_formula_candidates.values(),
+        ]
+        applicable = [
+            candidate
+            for candidate in candidates
+            if not candidate.requires_unarmored or self.is_unarmored()
+        ]
+        if not applicable:
+            return None
+
+        def score(candidate: ArmorClassFormulaCandidate) -> int:
+            total = candidate.base_ac
+            total += sum(
+                ability_block.get_ability(
+                    ability_name
+                ).get_combined_values().normalized_score
+                for ability_name in candidate.ability_names
+            )
+            if (
+                candidate.allows_shield
+                and isinstance(self.weapon_melee_off, Shield)
+            ):
+                total += self.weapon_melee_off.ac_bonus.normalized_score
+            return total
+
+        return max(applicable, key=score)
+
+    def get_unarmored_abilities(
+        self,
+        candidate: Optional[ArmorClassFormulaCandidate] = None,
+    ) -> List[AbilityName]:
         """Return ability modifiers included in the active unarmored AC formula."""
+        if candidate is not None:
+            return list(candidate.ability_names)
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
             return ["dexterity", "constitution"]
         elif self.unarmored_ac_type == UnarmoredAc.MONK:
@@ -1175,17 +1320,42 @@ class Equipment(BaseBlock):
         """Return whether body armor is absent or cloth-only."""
         return self.body_armor is None or self.body_armor.type == ArmorType.CLOTH
 
-    def get_unarmored_ac_values(self) -> List[ModifiableValue]:
+    def get_unarmored_ac_values(
+        self,
+        candidate: Optional[ArmorClassFormulaCandidate] = None,
+    ) -> List[ModifiableValue]:
         """Return modifiable values that contribute to unarmored AC."""
         values = [self.ac_bonus]
-        if self.unarmored_ac_type in [UnarmoredAc.DRACONIC_SORCERER, UnarmoredAc.MAGIC_ARMOR]:
+        if candidate is not None:
+            temporary_value = copy.deepcopy(self.unarmored_ac)
+            base_modifier = self.unarmored_ac.get_base_modifier()
+            current_base = (
+                base_modifier.normalized_value
+                if base_modifier is not None
+                else 0
+            )
+            base_delta = candidate.base_ac - current_base
+            if base_delta:
+                temporary_value.self_static.add_value_modifier(
+                    NumericalModifier.create(
+                        source_entity_uuid=self.source_entity_uuid,
+                        name="armor_class_formula_base",
+                        value=base_delta,
+                    )
+                )
+            values.append(temporary_value)
+        elif self.unarmored_ac_type in [UnarmoredAc.DRACONIC_SORCERER, UnarmoredAc.MAGIC_ARMOR]:
             unarmored_ac_static_modifier = NumericalModifier.create(source_entity_uuid=self.source_entity_uuid, name="unarmored_ac_bonus", value=3)
             temporary_value = copy.deepcopy(self.unarmored_ac)
             temporary_value.self_static.add_value_modifier(unarmored_ac_static_modifier)
             values.append(temporary_value)
         else:
             values.append(self.unarmored_ac)
-        if self.weapon_melee_off and isinstance(self.weapon_melee_off, Shield):
+        if (
+            self.weapon_melee_off
+            and isinstance(self.weapon_melee_off, Shield)
+            and (candidate is None or candidate.allows_shield)
+        ):
             values.append(self.weapon_melee_off.ac_bonus)
         return values
 

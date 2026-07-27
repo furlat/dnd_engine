@@ -9,9 +9,12 @@ from uuid import UUID, uuid4
 
 from dnd.actions_functional import register_spells_by_name
 from dnd.blocks.equipment import Weapon
-from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian as _create_barbarian
-from dnd.classes.fighter_factory import FighterConfig, create_fighter
-from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
+from dnd.content_system.builtin_character_builds import (
+    BuiltinSingleClassBuild,
+)
+from dnd.content_system.builtin_character_materialization import (
+    materialize_builtin_character,
+)
 from dnd.controller import Controller, PassController
 from dnd.conditions import Blinded, Poisoned
 from dnd.core.equipment_types import WeaponSlot
@@ -21,6 +24,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
+from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -95,9 +99,114 @@ from dnd.scenarios.evaluation.wardrobes import (
 )
 
 
-def create_barbarian(config: BarbarianConfig, source_id: Optional[UUID] = None) -> Entity:
-    """Build a legacy-setting Barbarian with its annotated arena wardrobe."""
-    return equip_wardrobe(_create_barbarian(config, source_id), BERSERKER_WARDROBE)
+def _ability_increases(
+    increases: list[tuple[str, int]] | None,
+) -> tuple[tuple[AbilityScoreName, int], ...]:
+    return tuple(
+        (AbilityScoreName(ability), amount)
+        for ability, amount in (increases or ())
+    )
+
+
+def create_barbarian(
+    *,
+    level: int,
+    name: str,
+    position: tuple[int, int],
+    faction: str | None,
+    equipment_preset: str,
+    asi_4: list[tuple[str, int]] | None = None,
+    source_id: UUID | None = None,
+) -> Entity:
+    """Build one schema-2 Berserker with its arena wardrobe."""
+    entity = materialize_builtin_character(
+        build=BuiltinSingleClassBuild(
+            class_id="barbarian",
+            level=level,
+            equipment_preset=equipment_preset,
+            asi_by_level=(
+                ((4, _ability_increases(asi_4)),) if asi_4 else ()
+            ),
+        ),
+        display_name=name,
+        position=position,
+        faction=faction,
+        runtime_entity_uuid=source_id,
+    ).entity
+    return equip_wardrobe(entity, BERSERKER_WARDROBE)
+
+
+def create_fighter(
+    *,
+    level: int,
+    name: str,
+    position: tuple[int, int],
+    faction: str | None,
+    fighting_style: str,
+    equipment_preset: str,
+    asi_4: list[tuple[str, int]] | None = None,
+    source_id: UUID | None = None,
+) -> Entity:
+    """Build one schema-2 Champion fixture."""
+    return materialize_builtin_character(
+        build=BuiltinSingleClassBuild(
+            class_id="fighter",
+            level=level,
+            equipment_preset=equipment_preset,
+            fighting_style=fighting_style,
+            asi_by_level=(
+                ((4, _ability_increases(asi_4)),) if asi_4 else ()
+            ),
+        ),
+        display_name=name,
+        position=position,
+        faction=faction,
+        runtime_entity_uuid=source_id,
+    ).entity
+
+
+def create_sorcerer(
+    *,
+    level: int,
+    name: str,
+    position: tuple[int, int],
+    faction: str | None,
+    metamagic_choices: list[str],
+    spell_names: list[str],
+    asi_4: list[tuple[str, int]] | None = None,
+    asi_8: list[tuple[str, int]] | None = None,
+    source_id: UUID | None = None,
+) -> Entity:
+    """Build one schema-2 Draconic Sorcerer fixture."""
+    asi_rows = tuple(
+        (level_number, _ability_increases(increases))
+        for level_number, increases in ((4, asi_4), (8, asi_8))
+        if increases
+    )
+    entity = materialize_builtin_character(
+        build=BuiltinSingleClassBuild(
+            class_id="sorcerer",
+            level=level,
+            equipment_preset="dagger",
+            metamagic_choices=tuple(metamagic_choices),
+            spell_names=tuple(spell_names),
+            asi_by_level=asi_rows,
+        ),
+        display_name=name,
+        position=position,
+        faction=faction,
+        runtime_entity_uuid=source_id,
+    ).entity
+    # Evaluation arenas intentionally expose broader spell matrices than a
+    # legal spells-known ledger. Keep those scenario augmentations explicit
+    # and separate from the canonical Sorcerer structure.
+    extra_spells = [
+        spell_name
+        for spell_name in spell_names
+        if entity.get_action_template(spell_name) is None
+    ]
+    register_spells_by_name(entity, extra_spells, caster_level=level)
+    return entity
 
 
 def create_caster(
@@ -1506,15 +1615,12 @@ def create_sorcerer_barbarian_duel_arena() -> ValidationArena:
     create_standard_arena_floor(get_map())
     hero = _create_level_5_sorcerer("Validation Duel Sorcerer", (3, 7))
     barbarian = create_barbarian(
-        BarbarianConfig(
-            level=5,
-            name="Validation Duel Barbarian",
-            position=(11, 7),
-            faction="monsters",
-            primal_path=PrimalPathChoice.BERSERKER,
-            equipment_preset="greataxe",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name="Validation Duel Barbarian",
+        position=(11, 7),
+        faction="monsters",
+        equipment_preset="greataxe",
+        asi_4=[("strength", 2)],
     )
     monsters = (barbarian,)
     encounter, controllers = _start_passive_validation_encounter(
@@ -1546,47 +1652,40 @@ def create_class_party_mirror_scramble_arena() -> ValidationArena:
     create_standard_arena_floor(get_map())
     hero = _create_level_5_shield_fighter("Validation Mirror Shield Fighter", (5, 7))
     enemy_barbarian = create_barbarian(
-        BarbarianConfig(
-            level=5,
-            name="Validation Mirror Berserker",
-            position=(8, 7),
-            faction="monsters",
-            primal_path=PrimalPathChoice.BERSERKER,
-            equipment_preset="dual_axes",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name="Validation Mirror Berserker",
+        position=(8, 7),
+        faction="monsters",
+        equipment_preset="dual_axes",
+        asi_4=[("strength", 2)],
     )
     enemy_archer = create_fighter(
-        FighterConfig(
-            level=5,
-            name="Validation Mirror Archer",
-            position=(11, 5),
-            faction="monsters",
-            fighting_style="archery",
-            equipment_preset="archery",
-            asi_4=[("dexterity", 2)],
-        )
+        level=5,
+        name="Validation Mirror Archer",
+        position=(11, 5),
+        faction="monsters",
+        fighting_style="archery",
+        equipment_preset="archery",
+        asi_4=[("dexterity", 2)],
     )
     enemy_sorcerer = create_sorcerer(
-        SorcererConfig(
-            level=5,
-            name="Validation Mirror Sorcerer",
-            position=(11, 9),
-            faction="monsters",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Magic Missile",
-                "Scorching Ray",
-                "Hold Person",
-                "Haste",
-                "Slow",
-                "Fireball",
-                "Lightning Bolt",
-            ],
-        )
+        level=5,
+        name="Validation Mirror Sorcerer",
+        position=(11, 9),
+        faction="monsters",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Magic Missile",
+            "Scorching Ray",
+            "Hold Person",
+            "Haste",
+            "Slow",
+            "Fireball",
+            "Lightning Bolt",
+        ],
     )
     monsters = (enemy_barbarian, enemy_archer, enemy_sorcerer)
     encounter, controllers = _start_passive_validation_encounter(
@@ -1623,15 +1722,13 @@ def create_ranged_loadout_kiting_ring_arena() -> ValidationArena:
 
     hero = _create_level_5_barbarian("Validation Kiting Barbarian", (3, 7))
     archer_captain = create_fighter(
-        FighterConfig(
-            level=5,
-            name="Validation Kiting Archer Captain",
-            position=(11, 7),
-            faction="monsters",
-            fighting_style="archery",
-            equipment_preset="archery",
-            asi_4=[("dexterity", 2)],
-        )
+        level=5,
+        name="Validation Kiting Archer Captain",
+        position=(11, 7),
+        faction="monsters",
+        fighting_style="archery",
+        equipment_preset="archery",
+        asi_4=[("dexterity", 2)],
     )
     goblin_archer = create_goblin_archer(name="Validation Kiting Goblin Archer", position=(12, 5), faction="monsters")
     register_goblin_nimble_escape(goblin_archer)
@@ -1676,24 +1773,22 @@ def create_concentration_control_crossroads_arena() -> ValidationArena:
     hero = _create_level_5_sorcerer("Validation Crossroads Sorcerer", (4, 7))
     guard = create_skeleton_warrior(name="Validation Crossroads Guard", position=(7, 7), faction="monsters", darkvision=True)
     control_sorcerer = create_sorcerer(
-        SorcererConfig(
-            level=5,
-            name="Validation Crossroads Controller",
-            position=(11, 7),
-            faction="monsters",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Magic Missile",
-                "Hold Person",
-                "Web",
-                "Hypnotic Pattern",
-                "Slow",
-                "Fireball",
-            ],
-        )
+        level=5,
+        name="Validation Crossroads Controller",
+        position=(11, 7),
+        faction="monsters",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Magic Missile",
+            "Hold Person",
+            "Web",
+            "Hypnotic Pattern",
+            "Slow",
+            "Fireball",
+        ],
     )
     support_caster = create_caster(
         name="Validation Crossroads Support",
@@ -1941,25 +2036,26 @@ def create_condition_lock_sanctum_arena() -> ValidationArena:
     hero = _create_level_5_barbarian("Validation Lock Barbarian", (4, 7))
     guard = create_skeleton_warrior(name="Validation Lock Guard", position=(8, 7), faction="monsters", darkvision=True)
     controller = create_sorcerer(
-        SorcererConfig(
-            level=7,
-            name="Validation Lock Controller",
-            position=(11, 7),
-            faction="monsters",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Command",
-                "Hold Person",
-                "Fear",
-                "Hypnotic Pattern",
-                "Slow",
-                "Banishment",
-            ],
-        )
+        level=7,
+        name="Validation Lock Controller",
+        position=(11, 7),
+        faction="monsters",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Hold Person",
+            "Fear",
+            "Hypnotic Pattern",
+            "Slow",
+            "Banishment",
+        ],
     )
+    # Command is intentionally not a Sorcerer class spell. This arena grants
+    # it explicitly as scenario equipment/content instead of corrupting the
+    # durable Sorcerer spells-known ledger.
+    register_spells_by_name(controller, ["Command"], caster_level=7)
     support_caster = create_caster(
         name="Validation Lock Support",
         position=(10, 5),
@@ -2064,15 +2160,13 @@ def create_damage_affinity_weapon_lab_arena() -> ValidationArena:
         darkvision=True,
     )
     crusher = create_fighter(
-        FighterConfig(
-            level=5,
-            name="Validation Crusher Captain",
-            position=(7, 7),
-            faction="monsters",
-            fighting_style="two_weapon",
-            equipment_preset="dual_wield",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name="Validation Crusher Captain",
+        position=(7, 7),
+        faction="monsters",
+        fighting_style="two_weapon",
+        equipment_preset="dual_wield",
+        asi_4=[("strength", 2)],
     )
     crusher.equipment.unequip(WeaponSlot.MELEE_MAIN)
     crusher.equipment.unequip(WeaponSlot.MELEE_OFF)
@@ -2145,15 +2239,13 @@ def create_resistance_weapon_counterplay_arena() -> ValidationArena:
     )
 
     counter_fighter = create_fighter(
-        FighterConfig(
-            level=5,
-            name="Validation Counterplay Captain",
-            position=(7, 7),
-            faction="monsters",
-            fighting_style="two_weapon",
-            equipment_preset="dual_wield",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name="Validation Counterplay Captain",
+        position=(7, 7),
+        faction="monsters",
+        fighting_style="two_weapon",
+        equipment_preset="dual_wield",
+        asi_4=[("strength", 2)],
     )
     counter_fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
     counter_fighter.equipment.unequip(WeaponSlot.MELEE_OFF)
@@ -2386,20 +2478,18 @@ def create_multi_projectile_no_aoe_lab_arena() -> ValidationArena:
     reset_ai_validation_arena_state()
     create_standard_arena_floor(get_map())
     hero = create_sorcerer(
-        SorcererConfig(
-            level=5,
-            name="Validation Projectile Sorcerer",
-            position=(4, 7),
-            faction="heroes",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Magic Missile",
-                "Scorching Ray",
-            ],
-        )
+        level=5,
+        name="Validation Projectile Sorcerer",
+        position=(4, 7),
+        faction="heroes",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Magic Missile",
+            "Scorching Ray",
+        ],
     )
     _give_lit_torch(hero)
 
@@ -2852,27 +2942,25 @@ def create_srd_elite_mercenary_contract_arena() -> ValidationArena:
 def _create_level_5_sorcerer(name: str, position: tuple[int, int]) -> Entity:
     """Create the standard validation Sorcerer hero."""
     hero = create_sorcerer(
-        SorcererConfig(
-            level=5,
-            name=name,
-            position=position,
-            faction="heroes",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Magic Missile",
-                "Burning Hands",
-                "Thunderwave",
-                "Scorching Ray",
-                "Hold Person",
-                "Shatter",
-                "Invisibility",
-                "Fireball",
-                "Lightning Bolt",
-            ],
-        )
+        level=5,
+        name=name,
+        position=position,
+        faction="heroes",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Magic Missile",
+            "Burning Hands",
+            "Thunderwave",
+            "Scorching Ray",
+            "Hold Person",
+            "Shatter",
+            "Invisibility",
+            "Fireball",
+            "Lightning Bolt",
+        ],
     )
     _give_lit_torch(hero)
     return hero
@@ -2881,34 +2969,32 @@ def _create_level_5_sorcerer(name: str, position: tuple[int, int]) -> Entity:
 def _create_level_9_sorcerer(name: str, position: tuple[int, int]) -> Entity:
     """Create a higher-slot Sorcerer for resource-pressure validation."""
     hero = create_sorcerer(
-        SorcererConfig(
-            level=9,
-            name=name,
-            position=position,
-            faction="heroes",
-            metamagic_choices=["quickened", "twinned"],
-            asi_4=[("charisma", 2)],
-            asi_8=[("dexterity", 2)],
-            spell_names=[
-                "Fire Bolt",
-                "Ray of Frost",
-                "Magic Missile",
-                "Thunderwave",
-                "Scorching Ray",
-                "Hold Person",
-                "Shatter",
-                "Invisibility",
-                "Fireball",
-                "Lightning Bolt",
-                "Hypnotic Pattern",
-                "Slow",
-                "Haste",
-                "Banishment",
-                "Greater Invisibility",
-                "Cone of Cold",
-                "Cloudkill",
-            ],
-        )
+        level=9,
+        name=name,
+        position=position,
+        faction="heroes",
+        metamagic_choices=["quickened", "twinned"],
+        asi_4=[("charisma", 2)],
+        asi_8=[("dexterity", 2)],
+        spell_names=[
+            "Fire Bolt",
+            "Ray of Frost",
+            "Magic Missile",
+            "Thunderwave",
+            "Scorching Ray",
+            "Hold Person",
+            "Shatter",
+            "Invisibility",
+            "Fireball",
+            "Lightning Bolt",
+            "Hypnotic Pattern",
+            "Slow",
+            "Haste",
+            "Banishment",
+            "Greater Invisibility",
+            "Cone of Cold",
+            "Cloudkill",
+        ],
     )
     _give_lit_torch(hero)
     return hero
@@ -2917,15 +3003,13 @@ def _create_level_9_sorcerer(name: str, position: tuple[int, int]) -> Entity:
 def _create_level_5_shield_fighter(name: str, position: tuple[int, int]) -> Entity:
     """Create a durable sword-and-shield Fighter hero."""
     hero = create_fighter(
-        FighterConfig(
-            level=5,
-            name=name,
-            position=position,
-            faction="heroes",
-            fighting_style="dueling",
-            equipment_preset="sword_shield",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name=name,
+        position=position,
+        faction="heroes",
+        fighting_style="dueling",
+        equipment_preset="sword_shield",
+        asi_4=[("strength", 2)],
     )
     hero.equipment.equip(
         materialize_item(
@@ -2943,15 +3027,13 @@ def _create_level_5_shield_fighter(name: str, position: tuple[int, int]) -> Enti
 def _create_level_5_archer_fighter(name: str, position: tuple[int, int]) -> Entity:
     """Create a ranged Fighter hero for skirmish validation."""
     hero = create_fighter(
-        FighterConfig(
-            level=5,
-            name=name,
-            position=position,
-            faction="heroes",
-            fighting_style="archery",
-            equipment_preset="archery",
-            asi_4=[("dexterity", 2)],
-        )
+        level=5,
+        name=name,
+        position=position,
+        faction="heroes",
+        fighting_style="archery",
+        equipment_preset="archery",
+        asi_4=[("dexterity", 2)],
     )
     _give_lit_torch(hero)
     return hero
@@ -2960,15 +3042,12 @@ def _create_level_5_archer_fighter(name: str, position: tuple[int, int]) -> Enti
 def _create_level_5_barbarian(name: str, position: tuple[int, int]) -> Entity:
     """Create a melee Barbarian hero for crossfire validation."""
     hero = create_barbarian(
-        BarbarianConfig(
-            level=5,
-            name=name,
-            position=position,
-            faction="heroes",
-            primal_path=PrimalPathChoice.BERSERKER,
-            equipment_preset="greataxe",
-            asi_4=[("strength", 2)],
-        )
+        level=5,
+        name=name,
+        position=position,
+        faction="heroes",
+        equipment_preset="greataxe",
+        asi_4=[("strength", 2)],
     )
     _give_lit_torch(hero)
     return hero

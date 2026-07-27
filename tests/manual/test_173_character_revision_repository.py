@@ -11,15 +11,24 @@ import pytest
 from pydantic import JsonValue
 
 from dnd.core.content.durable_characters import (
-    CharacterDefinitionRevision,
+    AbilityScoreAllocation,
+    AbilityScoreName,
+    CharacterAppearanceSelection,
+    CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterItemV1,
+    CharacterLoadoutRevisionV1,
+    ClassLevelEntry,
+    ClassLevelId,
+    FlexibleAbilityBonusSelection,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import WeaponSlot
 from server.game_directory.canonical import canonical_digest, canonical_json
 from server.game_directory.contracts import (
+    CharacterAdvancementAwardCreate,
+    CharacterAdvancementSourceKind,
     CharacterBootstrapCreate,
     CharacterDeploymentLeaseCreate,
     CharacterRevisionState,
@@ -34,6 +43,7 @@ from server.game_directory.contracts import (
 )
 from server.game_directory.errors import ConflictError, StaleVersionError
 from server.game_directory.migrations import (
+    CHARACTER_PROFILE_PROGRESSION_FOUNDATION,
     CHARACTER_REVISIONS_AND_DEPLOYMENT_LEASES,
     MIGRATIONS,
     apply_migrations,
@@ -69,17 +79,52 @@ def _recipe(
     )
 
 
-def _definition(character_id: UUID = CHARACTER_ID) -> CharacterDefinitionRevision:
-    return CharacterDefinitionRevision.create(
+def _definition(
+    character_id: UUID = CHARACTER_ID,
+) -> CharacterDefinitionRevisionV2:
+    return CharacterDefinitionRevisionV2.create(
         character_id=character_id,
         definition_revision=1,
-        creature_recipe=_recipe(
+        body_recipe=_recipe(
             ContentDefinitionKind.CREATURE,
-            "creature.premade_barbarian",
-            parameters={"level": 5},
+            "creature.player_body",
+        ),
+        species_ref=_recipe(
+            ContentDefinitionKind.SPECIES,
+            "species.human",
+        ).ref,
+        background_ref=_recipe(
+            ContentDefinitionKind.BACKGROUND,
+            "background.acolyte",
+        ).ref,
+        appearance=CharacterAppearanceSelection(),
+        base_ability_scores=AbilityScoreAllocation(
+            strength=15,
+            dexterity=14,
+            constitution=13,
+            intelligence=10,
+            wisdom=12,
+            charisma=8,
+        ),
+        flexible_ability_bonuses=FlexibleAbilityBonusSelection(
+            plus_two=AbilityScoreName.STRENGTH,
+            plus_one=AbilityScoreName.CONSTITUTION,
+        ),
+        class_levels=(
+            ClassLevelEntry(
+                class_level_id=ClassLevelId(value="fighter.level_1"),
+                character_level=1,
+                class_ref=_recipe(
+                    ContentDefinitionKind.CLASS,
+                    "class.fighter",
+                ).ref,
+                resulting_class_level=1,
+            ),
         ),
         premade_id="premade.barbarian",
+        earned_character_level=1,
         content_set_digest="b" * 64,
+        ruleset_digest="c" * 64,
     )
 
 
@@ -109,6 +154,17 @@ def _holdings(
     )
 
 
+def _loadout(
+    *,
+    character_id: UUID = CHARACTER_ID,
+) -> CharacterLoadoutRevisionV1:
+    return CharacterLoadoutRevisionV1.create(
+        character_id=character_id,
+        loadout_revision=1,
+        based_on_definition_revision=1,
+    )
+
+
 def _bootstrap(
     owner_principal_id: UUID,
     *,
@@ -120,6 +176,13 @@ def _bootstrap(
         display_name="Stored Hero",
         definition=_definition(character_id),
         starter_holdings=_holdings(character_id=character_id),
+        starter_loadout=_loadout(character_id=character_id),
+        initial_advancement_award=CharacterAdvancementAwardCreate(
+            character_id=character_id,
+            level_delta=1,
+            source_kind=CharacterAdvancementSourceKind.CREATION,
+            source_id=f"character:{character_id}:creation",
+        ),
     )
 
 
@@ -165,7 +228,14 @@ def test_migration_marks_legacy_rows_pending_and_adds_immutable_revision_tables(
     database_path = tmp_path / "legacy.sqlite3"
     connection = sqlite3.connect(database_path, isolation_level=None)
     configure_connection(connection, 5_000)
-    apply_migrations(connection, NOW, migrations=MIGRATIONS[:-1])
+    character_revision_index = MIGRATIONS.index(
+        CHARACTER_REVISIONS_AND_DEPLOYMENT_LEASES,
+    )
+    apply_migrations(
+        connection,
+        NOW,
+        migrations=MIGRATIONS[:character_revision_index],
+    )
     timestamp = NOW.isoformat().replace("+00:00", "Z")
     principal_id = str(uuid4())
     character_id = str(uuid4())
@@ -237,7 +307,14 @@ def test_migration_marks_legacy_rows_pending_and_adds_immutable_revision_tables(
         ),
     )
 
-    apply_migrations(connection, NOW, migrations=MIGRATIONS)
+    profile_progression_index = MIGRATIONS.index(
+        CHARACTER_PROFILE_PROGRESSION_FOUNDATION,
+    )
+    apply_migrations(
+        connection,
+        NOW,
+        migrations=MIGRATIONS[: profile_progression_index + 1],
+    )
     with pytest.raises(sqlite3.IntegrityError, match="complete revision heads"):
         connection.execute(
             """
@@ -297,6 +374,7 @@ def test_migration_marks_legacy_rows_pending_and_adds_immutable_revision_tables(
     assert {
         "character_definitions",
         "character_holdings_revisions",
+        "character_loadout_revisions",
         "character_deployment_leases",
     }.issubset(tables)
     assert stored_migration[0] == "character_revisions_and_deployment_leases"
@@ -320,6 +398,10 @@ def test_atomic_bootstrap_stores_definition_and_starter_holdings_once(
         CHARACTER_ID,
         holdings_revision=1,
     )
+    loadout_row = repository.get_character_loadout_revision(
+        CHARACTER_ID,
+        loadout_revision=1,
+    )
     with pytest.raises(ConflictError):
         repository.create_character_with_revisions(request)
 
@@ -338,14 +420,29 @@ def test_atomic_bootstrap_stores_definition_and_starter_holdings_once(
         """,
         (str(CHARACTER_ID),),
     ).fetchone()[0]
+    loadout_json = raw.execute(
+        """
+        SELECT loadout_json FROM character_loadout_revisions
+        WHERE character_id = ? AND loadout_revision = 1
+        """,
+        (str(CHARACTER_ID),),
+    ).fetchone()[0]
     counts = raw.execute(
         """
         SELECT
           (SELECT COUNT(*) FROM characters WHERE character_id = ?),
           (SELECT COUNT(*) FROM character_definitions WHERE character_id = ?),
-          (SELECT COUNT(*) FROM character_holdings_revisions WHERE character_id = ?)
+          (SELECT COUNT(*) FROM character_holdings_revisions WHERE character_id = ?),
+          (SELECT COUNT(*) FROM character_loadout_revisions WHERE character_id = ?),
+          (SELECT COUNT(*) FROM character_advancement_awards WHERE character_id = ?)
         """,
-        (str(CHARACTER_ID), str(CHARACTER_ID), str(CHARACTER_ID)),
+        (
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+        ),
     ).fetchone()
     raw.close()
     repository.close()
@@ -355,14 +452,20 @@ def test_atomic_bootstrap_stores_definition_and_starter_holdings_once(
     assert character.current_definition_digest == request.definition.definition_digest
     assert character.current_holdings_revision == 1
     assert character.current_holdings_digest == request.starter_holdings.holdings_digest
+    assert character.current_loadout_revision == 1
+    assert character.current_loadout_digest == request.starter_loadout.loadout_digest
     assert definition_row.definition == request.definition
     assert holdings_row.holdings == request.starter_holdings
+    assert loadout_row.loadout == request.starter_loadout
     assert len(holdings_row.holdings.items) == 1
     assert definition_json == canonical_json(request.definition.model_dump(mode="json"))
     assert holdings_json == canonical_json(
         request.starter_holdings.model_dump(mode="json"),
     )
-    assert tuple(counts) == (1, 1, 1)
+    assert loadout_json == canonical_json(
+        request.starter_loadout.model_dump(mode="json"),
+    )
+    assert tuple(counts) == (1, 1, 1, 1, 1)
 
 
 def test_holdings_append_is_immutable_and_rejects_a_stale_cas(
@@ -426,6 +529,14 @@ def test_holdings_append_is_immutable_and_rejects_a_stale_cas(
             """
             UPDATE character_holdings_revisions SET holdings_digest = ?
             WHERE character_id = ? AND holdings_revision = 1
+            """,
+            ("d" * 64, str(CHARACTER_ID)),
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        raw.execute(
+            """
+            UPDATE character_loadout_revisions SET loadout_digest = ?
+            WHERE character_id = ? AND loadout_revision = 1
             """,
             ("d" * 64, str(CHARACTER_ID)),
         )
@@ -509,6 +620,8 @@ def test_exclusive_lease_release_reacquire_and_pinned_deployment(
     assert deployment.definition_digest == advanced.current_definition_digest
     assert deployment.holdings_revision == advanced.current_holdings_revision
     assert deployment.holdings_digest == advanced.current_holdings_digest
+    assert deployment.loadout_revision == advanced.current_loadout_revision
+    assert deployment.loadout_digest == advanced.current_loadout_digest
 
 
 def test_lease_requires_the_active_controlling_membership_of_the_character_owner(
@@ -716,7 +829,9 @@ def test_canonical_heads_and_all_pinned_deployment_lineage_are_immutable(
                 current_definition_revision = NULL,
                 current_definition_digest = NULL,
                 current_holdings_revision = NULL,
-                current_holdings_digest = NULL
+                current_holdings_digest = NULL,
+                current_loadout_revision = NULL,
+                current_loadout_digest = NULL
             WHERE character_id = ?
             """,
             (str(CHARACTER_ID),),
@@ -735,6 +850,8 @@ def test_canonical_heads_and_all_pinned_deployment_lineage_are_immutable(
         "definition_digest",
         "holdings_revision",
         "holdings_digest",
+        "loadout_revision",
+        "loadout_digest",
     )
     for column in immutable_columns:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
@@ -755,6 +872,11 @@ def test_canonical_heads_and_all_pinned_deployment_lineage_are_immutable(
         (
             "character_holdings_revisions",
             "character_id = ? AND holdings_revision = 1",
+            (str(CHARACTER_ID),),
+        ),
+        (
+            "character_loadout_revisions",
+            "character_id = ? AND loadout_revision = 1",
             (str(CHARACTER_ID),),
         ),
         (
@@ -805,11 +927,19 @@ def test_injected_mid_transaction_failure_leaves_no_partial_character_rows(
         SELECT
           (SELECT COUNT(*) FROM characters WHERE character_id = ?),
           (SELECT COUNT(*) FROM character_definitions WHERE character_id = ?),
-          (SELECT COUNT(*) FROM character_holdings_revisions WHERE character_id = ?)
+          (SELECT COUNT(*) FROM character_holdings_revisions WHERE character_id = ?),
+          (SELECT COUNT(*) FROM character_loadout_revisions WHERE character_id = ?),
+          (SELECT COUNT(*) FROM character_advancement_awards WHERE character_id = ?)
         """,
-        (str(CHARACTER_ID), str(CHARACTER_ID), str(CHARACTER_ID)),
+        (
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+            str(CHARACTER_ID),
+        ),
     ).fetchone()
     raw.close()
     repository.close()
 
-    assert tuple(counts) == (0, 0, 0)
+    assert tuple(counts) == (0, 0, 0, 0, 0)

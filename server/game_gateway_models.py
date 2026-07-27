@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 from typing import Literal
 from uuid import UUID
@@ -12,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from server.api_models import GameCreationStartRequest, GameCreationStartResponse
 from server.game_directory.contracts import (
     ClientKind,
-    CharacterRecord,
     GameRecord,
     MembershipRecord,
     ObserverPolicy,
@@ -50,44 +48,6 @@ class PlayerIdentityResponse(GatewayModel):
     authentication_kind: Literal["name_only_local"] = Field(
         default="name_only_local",
         description="Explicitly weak authentication mode used during local development.",
-    )
-
-
-class AttachmentSummary(GatewayModel):
-    """Non-secret summary of one concrete client attachment."""
-
-    attachment_id: UUID = Field(description="Stable attachment identifier.")
-    game_id: UUID = Field(description="Attached hosted game.")
-    membership_id: UUID = Field(description="Membership represented by the attachment.")
-    client_kind: ClientKind = Field(description="Kind of connected client.")
-    client_instance_id: str = Field(description="Browser or process instance identity.")
-    connected_at: datetime = Field(description="UTC connection time.")
-    expires_at: datetime | None = Field(default=None, description="UTC runtime-token expiry.")
-
-
-class PlayerGameSeat(GatewayModel):
-    """One reconnectable game membership owned by a player."""
-
-    membership: MembershipRecord = Field(description="Durable game authority.")
-    controlled_entity_uuids: list[UUID] = Field(description="Entities assigned to this seat.")
-    active_attachments: list[AttachmentSummary] = Field(description="Currently connected browser/process rows.")
-
-
-class PlayerProfileResponse(GatewayModel):
-    """Identity-owned characters and reconnectable game seats."""
-
-    principal: PrincipalRecord = Field(description="Authenticated durable player.")
-    characters: list[CharacterRecord] = Field(description="Persistent characters owned by the player.")
-    game_seats: list[PlayerGameSeat] = Field(description="Current and historical game memberships.")
-
-
-class CreateCharacterRequest(GatewayModel):
-    """Create one persistent character from an approved premade template."""
-
-    display_name: str = Field(min_length=1, max_length=80, description="Character name.")
-    premade_id: str = Field(
-        min_length=1,
-        description="Approved premade template identifier resolved by the server.",
     )
 
 
@@ -134,10 +94,6 @@ class CreateHostedGameRequest(GatewayModel):
         max_length=160,
         description="Client-generated browser or process identity.",
     )
-    character_id: UUID | None = Field(
-        default=None,
-        description="Optional persistent character deployed into the owner's hero seat.",
-    )
 
 
 class HostedGameConnection(GatewayModel):
@@ -182,13 +138,6 @@ class CreateHostedGameResponse(GatewayModel):
         min_length=32,
         description="Secret reconnect capability returned only to its owner.",
     )
-
-
-class HostedGameListResponse(GatewayModel):
-    """Directory listing of active or historical games."""
-
-    games: list[GameRecord] = Field(description="Games visible to this directory query.")
-    count: int = Field(ge=0, description="Number of returned games.")
 
 
 class AttachHostedGameRequest(GatewayModel):

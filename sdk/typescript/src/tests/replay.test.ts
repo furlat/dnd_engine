@@ -147,6 +147,7 @@ function objectiveReplay(): ObjectiveReplayBundle {
     context: null,
     use_register: true,
     lineage_uuid: "lineage-1",
+    turn_execution_id: null,
     timestamp: "2026-07-23T12:00:00Z",
     event_type: "encounter_end",
     phase: "completion",

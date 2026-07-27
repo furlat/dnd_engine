@@ -10,12 +10,18 @@ from enum import Enum
 from types import ModuleType
 from typing import TypeVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
+from pydantic_core import PydanticUndefined
 
 from dnd.core.content.dependencies import ContentDependency
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
+)
+from dnd.core.content.effects import (
+    AuthoredConditionEffectProfile,
+    AuthoredConditionLifecycle,
+    ConditionEffectCoverage,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.item_definitions import ItemDefinition
@@ -33,6 +39,29 @@ class ContentDeclarationMode(str, Enum):
 
     FACTORY = "factory"
     BEHAVIOR_IDENTITY = "behavior_identity"
+    TYPED_DEFINITION = "typed_definition"
+
+
+def behavior_content_ref(
+    *,
+    definition_kind: ContentDefinitionKind,
+    runtime_behavior_kind: RuntimeBehaviorKind,
+    pack_id: str,
+    content_id: str,
+    version: int,
+) -> ContentRef:
+    """Return the exact ref a behavior-identity declaration will own."""
+    return ContentRef(
+        pack_id=pack_id,
+        definition_kind=definition_kind,
+        content_id=content_id,
+        content_version=version,
+        definition_contract_hash=compute_definition_contract_hash(
+            mode=ContentDeclarationMode.BEHAVIOR_IDENTITY,
+            definition_kind=definition_kind,
+            runtime_behavior_kind=runtime_behavior_kind,
+        ),
+    )
 
 
 def compute_definition_contract_hash(
@@ -41,14 +70,18 @@ def compute_definition_contract_hash(
     definition_kind: ContentDefinitionKind,
     runtime_behavior_kind: RuntimeBehaviorKind | None = None,
     parameter_model: type[BaseModel] | None = None,
+    definition_model: type[BaseModel] | None = None,
     contract_version: int = 1,
 ) -> str:
     """Hash one domain-separated definition API contract."""
     if mode == ContentDeclarationMode.FACTORY:
         if parameter_model is None:
             raise ValueError("factory definition contract requires parameters")
+        if definition_model is not None:
+            raise ValueError("factory contract cannot own a typed definition")
         parameter_schema = parameter_model.model_json_schema(mode="validation")
-    else:
+        definition_schema = None
+    elif mode == ContentDeclarationMode.BEHAVIOR_IDENTITY:
         if parameter_model is not None:
             raise ValueError(
                 "behavior identity contract cannot have factory parameters",
@@ -58,6 +91,16 @@ def compute_definition_contract_hash(
                 "behavior identity contract requires runtime_behavior_kind",
             )
         parameter_schema = None
+        definition_schema = None
+    else:
+        if parameter_model is not None or runtime_behavior_kind is not None:
+            raise ValueError(
+                "typed definition contract cannot construct runtime behavior",
+            )
+        if definition_model is None:
+            raise ValueError("typed definition contract requires a model")
+        parameter_schema = None
+        definition_schema = definition_model.model_json_schema(mode="validation")
     payload = {
         "contract_version": contract_version,
         "mode": mode.value,
@@ -69,6 +112,8 @@ def compute_definition_contract_hash(
         ),
         "parameter_schema": parameter_schema,
     }
+    if definition_schema is not None:
+        payload["definition_schema"] = definition_schema
     encoded = json.dumps(
         payload,
         allow_nan=False,
@@ -124,6 +169,15 @@ _METADATA_ONLY_KINDS = frozenset({
     ContentDefinitionKind.CLASS_FEATURE,
     ContentDefinitionKind.RULE_PRIMITIVE,
 })
+_TYPED_DEFINITION_KINDS = frozenset({
+    ContentDefinitionKind.ACTION,
+    ContentDefinitionKind.CLASS,
+    ContentDefinitionKind.SUBCLASS,
+    ContentDefinitionKind.SPECIES,
+    ContentDefinitionKind.SPECIES_VARIANT,
+    ContentDefinitionKind.BACKGROUND,
+    ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
+})
 
 
 class ContentDeclaration(BaseModel):
@@ -141,7 +195,13 @@ class ContentDeclaration(BaseModel):
     provenance: ContentProvenance
     runtime_behavior_kind: RuntimeBehaviorKind | None = None
     item_definition: ItemDefinition | None = None
+    definition_payload: SerializeAsAny[BaseModel] | None = None
     dependencies: tuple[ContentDependency, ...] = ()
+    condition_effect_coverage: ConditionEffectCoverage = (
+        ConditionEffectCoverage.NONE
+    )
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None
+    condition_lifecycle: AuthoredConditionLifecycle | None = None
     construction: ContentConstruction | None = None
 
     @model_validator(mode="after")
@@ -173,7 +233,11 @@ class ContentDeclaration(BaseModel):
                     "item_definition is reserved for item and "
                     "environment_object declarations",
                 )
-        else:
+            if self.definition_payload is not None:
+                raise ValueError(
+                    "factory declaration cannot own typed definition",
+                )
+        elif self.mode == ContentDeclarationMode.BEHAVIOR_IDENTITY:
             if self.ref.definition_kind not in _METADATA_ONLY_KINDS:
                 raise ValueError(
                     "behavior_identity mode is reserved for behavior kinds",
@@ -196,10 +260,70 @@ class ContentDeclaration(BaseModel):
                 definition_kind=self.ref.definition_kind,
                 runtime_behavior_kind=self.runtime_behavior_kind,
             )
+            if self.definition_payload is not None:
+                raise ValueError(
+                    "behavior_identity declaration cannot own typed definition",
+                )
+        else:
+            if self.ref.definition_kind not in _TYPED_DEFINITION_KINDS:
+                raise ValueError(
+                    "typed_definition mode is reserved for structural build "
+                    "definitions and authored action configurations",
+                )
+            if self.definition_payload is None:
+                raise ValueError(
+                    "typed_definition declaration requires definition_payload",
+                )
+            if (
+                self.construction is not None
+                or self.item_definition is not None
+                or self.runtime_behavior_kind is not None
+            ):
+                raise ValueError(
+                    "typed_definition declaration cannot construct runtime "
+                    "behavior",
+                )
+            expected_contract_hash = compute_definition_contract_hash(
+                mode=self.mode,
+                definition_kind=self.ref.definition_kind,
+                definition_model=type(self.definition_payload),
+            )
         if self.ref.definition_contract_hash != expected_contract_hash:
             raise ValueError(
                 "content ref definition contract does not authenticate "
                 "the declaration",
+            )
+        if self.condition_effect_profile is not None:
+            source_refs = {
+                effect.source_ref.identity_key
+                for effect in self.condition_effect_profile.effects
+            }
+            if source_refs != {self.ref.identity_key}:
+                raise ValueError(
+                    "declaration-owned condition effects must use the "
+                    "declaration ref as their exact source",
+                )
+            if (
+                self.condition_effect_coverage
+                is not ConditionEffectCoverage.PROFILED
+            ):
+                raise ValueError(
+                    "authored condition effects require profiled coverage",
+                )
+        elif (
+            self.condition_effect_coverage
+            is ConditionEffectCoverage.PROFILED
+        ):
+            raise ValueError(
+                "profiled condition-effect coverage requires a profile",
+            )
+        if (
+            self.condition_lifecycle is not None
+            and self.runtime_behavior_kind != RuntimeBehaviorKind.CONDITION
+        ):
+            raise ValueError(
+                "condition lifecycle metadata requires condition runtime "
+                "behavior",
             )
         return self
 
@@ -216,6 +340,8 @@ def content_factory(
     runtime_behavior_kind: RuntimeBehaviorKind | None = None,
     item_definition: ItemDefinition | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
+    condition_lifecycle: AuthoredConditionLifecycle | None = None,
 ) -> Callable[[_Factory], _Factory]:
     """Return a pure decorator for one typed factory definition."""
     mode = ContentDeclarationMode.FACTORY
@@ -245,6 +371,17 @@ def content_factory(
             runtime_behavior_kind=runtime_behavior_kind,
             item_definition=item_definition,
             dependencies=dependencies,
+            condition_effect_coverage=(
+                ConditionEffectCoverage.PROFILED
+                if condition_effect_profile is not None
+                else (
+                    ConditionEffectCoverage.LIFECYCLE_ONLY
+                    if runtime_behavior_kind is RuntimeBehaviorKind.CONDITION
+                    else ConditionEffectCoverage.NONE
+                )
+            ),
+            condition_effect_profile=condition_effect_profile,
+            condition_lifecycle=condition_lifecycle,
             construction=ContentConstruction(
                 parameter_model=parameters,
                 factory=factory,
@@ -252,6 +389,56 @@ def content_factory(
         )
         setattr(factory, _DECLARATION_ATTRIBUTE, declaration)
         return factory
+
+    return decorate
+
+
+def typed_definition(
+    *,
+    definition_kind: ContentDefinitionKind,
+    pack_id: str,
+    content_id: str,
+    version: int,
+    descriptor: ContentDescriptorSpec,
+    provenance: ContentProvenance,
+    definition: BaseModel,
+    dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
+) -> Callable[[_Definition], _Definition]:
+    """Attach one immutable data definition to a local declaration marker."""
+    mode = ContentDeclarationMode.TYPED_DEFINITION
+    ref = ContentRef(
+        pack_id=pack_id,
+        definition_kind=definition_kind,
+        content_id=content_id,
+        content_version=version,
+        definition_contract_hash=compute_definition_contract_hash(
+            mode=mode,
+            definition_kind=definition_kind,
+            definition_model=type(definition),
+        ),
+    )
+    bound_descriptor = ContentDescriptor.from_spec(ref, descriptor)
+
+    def decorate(marker: _Definition) -> _Definition:
+        if _direct_content_declaration(marker) is not None:
+            raise ValueError(f"{marker!r} already has a content declaration")
+        declaration = ContentDeclaration(
+            ref=ref,
+            mode=mode,
+            descriptor=bound_descriptor,
+            provenance=provenance,
+            definition_payload=definition,
+            dependencies=dependencies,
+            condition_effect_coverage=(
+                ConditionEffectCoverage.PROFILED
+                if condition_effect_profile is not None
+                else ConditionEffectCoverage.NONE
+            ),
+            condition_effect_profile=condition_effect_profile,
+        )
+        setattr(marker, _DECLARATION_ATTRIBUTE, declaration)
+        return marker
 
     return decorate
 
@@ -266,19 +453,17 @@ def behavior_identity(
     descriptor: ContentDescriptorSpec,
     provenance: ContentProvenance,
     dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
+    condition_lifecycle: AuthoredConditionLifecycle | None = None,
 ) -> Callable[[_Definition], _Definition]:
     """Attach a resolvable, deliberately non-constructible behavior identity."""
     mode = ContentDeclarationMode.BEHAVIOR_IDENTITY
-    ref = ContentRef(
-        pack_id=pack_id,
+    ref = behavior_content_ref(
         definition_kind=definition_kind,
+        runtime_behavior_kind=runtime_behavior_kind,
+        pack_id=pack_id,
         content_id=content_id,
-        content_version=version,
-        definition_contract_hash=compute_definition_contract_hash(
-            mode=mode,
-            definition_kind=definition_kind,
-            runtime_behavior_kind=runtime_behavior_kind,
-        ),
+        version=version,
     )
     bound_descriptor = ContentDescriptor.from_spec(ref, descriptor)
 
@@ -287,6 +472,41 @@ def behavior_identity(
             raise ValueError(
                 f"{definition!r} already has a content declaration",
             )
+        resolved_condition_lifecycle = condition_lifecycle
+        if (
+            resolved_condition_lifecycle is None
+            and runtime_behavior_kind is RuntimeBehaviorKind.CONDITION
+        ):
+            model_fields = getattr(definition, "model_fields", None)
+            if not isinstance(model_fields, dict):
+                raise TypeError(
+                    "condition behavior identity requires a Pydantic model "
+                    "with lifecycle fields",
+                )
+
+            def field_default(field_name: str) -> object:
+                field = model_fields.get(field_name)
+                if field is None:
+                    raise TypeError(
+                        "condition behavior identity is missing lifecycle "
+                        f"field {field_name}",
+                    )
+                if field.default_factory is not None:
+                    return field.default_factory()
+                if field.default is PydanticUndefined:
+                    raise TypeError(
+                        "condition behavior identity lifecycle field has no "
+                        f"authored default: {field_name}",
+                    )
+                return field.default
+
+            resolved_condition_lifecycle = (
+                AuthoredConditionLifecycle.model_validate({
+                    "tags": field_default("tags"),
+                    "removal_triggers": field_default("removal_triggers"),
+                    "agency_denial": field_default("agency_denial"),
+                })
+            )
         declaration = ContentDeclaration(
             ref=ref,
             mode=mode,
@@ -294,6 +514,17 @@ def behavior_identity(
             provenance=provenance,
             runtime_behavior_kind=runtime_behavior_kind,
             dependencies=dependencies,
+            condition_effect_coverage=(
+                ConditionEffectCoverage.PROFILED
+                if condition_effect_profile is not None
+                else (
+                    ConditionEffectCoverage.LIFECYCLE_ONLY
+                    if runtime_behavior_kind is RuntimeBehaviorKind.CONDITION
+                    else ConditionEffectCoverage.NONE
+                )
+            ),
+            condition_effect_profile=condition_effect_profile,
+            condition_lifecycle=resolved_condition_lifecycle,
         )
         setattr(definition, _DECLARATION_ATTRIBUTE, declaration)
         return definition
@@ -311,6 +542,7 @@ def item_factory(
     provenance: ContentProvenance,
     item_definition: ItemDefinition,
     dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
 ) -> Callable[[_Factory], _Factory]:
     """Declare an item reconstruction factory."""
     return content_factory(
@@ -323,6 +555,7 @@ def item_factory(
         provenance=provenance,
         item_definition=item_definition,
         dependencies=dependencies,
+        condition_effect_profile=condition_effect_profile,
     )
 
 
@@ -336,6 +569,7 @@ def environment_object_factory(
     provenance: ContentProvenance,
     item_definition: ItemDefinition,
     dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
 ) -> Callable[[_Factory], _Factory]:
     """Declare a non-possession environment-object reconstruction factory."""
     return content_factory(
@@ -348,6 +582,7 @@ def environment_object_factory(
         provenance=provenance,
         item_definition=item_definition,
         dependencies=dependencies,
+        condition_effect_profile=condition_effect_profile,
     )
 
 
@@ -360,6 +595,7 @@ def creature_factory(
     descriptor: ContentDescriptorSpec,
     provenance: ContentProvenance,
     dependencies: tuple[ContentDependency, ...] = (),
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
 ) -> Callable[[_Factory], _Factory]:
     """Declare a creature reconstruction factory."""
     return content_factory(
@@ -371,6 +607,7 @@ def creature_factory(
         descriptor=descriptor,
         provenance=provenance,
         dependencies=dependencies,
+        condition_effect_profile=condition_effect_profile,
     )
 
 
@@ -384,6 +621,35 @@ def get_content_declaration(definition: object) -> ContentDeclaration:
     declaration = _direct_content_declaration(definition)
     if not isinstance(declaration, ContentDeclaration):
         raise ValueError(f"{definition!r} has no content declaration")
+    return declaration
+
+
+def replace_content_declaration_at_cold_startup(
+    definition: object,
+    declaration: ContentDeclaration,
+) -> ContentDeclaration:
+    """Replace one decorator result before registry freeze.
+
+    Built-in composition uses this once to add cross-module authored metadata
+    after every exact source and target declaration exists.  The source ref
+    and immutable definition contract cannot change.
+    """
+    existing = get_content_declaration(definition)
+    if existing.ref != declaration.ref:
+        raise ValueError(
+            "cold-start declaration replacement cannot change content ref",
+        )
+    if (
+        existing.mode != declaration.mode
+        or existing.runtime_behavior_kind
+        != declaration.runtime_behavior_kind
+        or existing.construction != declaration.construction
+        or existing.definition_payload != declaration.definition_payload
+    ):
+        raise ValueError(
+            "cold-start declaration replacement is metadata-only",
+        )
+    setattr(definition, _DECLARATION_ATTRIBUTE, declaration)
     return declaration
 
 

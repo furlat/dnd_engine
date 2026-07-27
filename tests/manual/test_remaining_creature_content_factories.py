@@ -10,14 +10,11 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.classes.barbarian_factory import BarbarianConfig, create_barbarian
 from dnd.classes.content_factories import (
     PLAYER_CLASS_CREATURE_DECLARATIONS,
     PLAYER_CLASS_CREATURE_DECLARATIONS_BY_ID,
     PLAYER_CLASS_CREATURE_RECIPES_BY_ID,
 )
-from dnd.classes.fighter_factory import FighterConfig, create_fighter
-from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -340,47 +337,14 @@ def test_all_ten_roots_materialize_both_possession_modes(
             "skeleton_warlock",
             BESTIARY_CREATURE_RECIPES_BY_ID["skeleton_warlock"],
         ),
-        (
-            lambda: create_barbarian(
-                BarbarianConfig(
-                    name="Legacy",
-                    position=(3, 4),
-                    faction="tests",
-                ),
-            ),
-            "barbarian",
-            PLAYER_CLASS_CREATURE_RECIPES_BY_ID["barbarian"],
-        ),
-        (
-            lambda: create_fighter(
-                FighterConfig(
-                    name="Legacy",
-                    position=(3, 4),
-                    faction="tests",
-                ),
-            ),
-            "fighter",
-            PLAYER_CLASS_CREATURE_RECIPES_BY_ID["fighter"],
-        ),
-        (
-            lambda: create_sorcerer(
-                SorcererConfig(
-                    name="Legacy",
-                    position=(3, 4),
-                    faction="tests",
-                ),
-            ),
-            "sorcerer",
-            PLAYER_CLASS_CREATURE_RECIPES_BY_ID["sorcerer"],
-        ),
     ),
 )
-def test_canonical_default_builds_match_the_existing_factories(
+def test_bestiary_catalog_roots_match_the_existing_constructors(
     legacy_builder: Callable[[], Entity],
     creature_id: str,
     recipe: ContentRecipe,
 ) -> None:
-    """The registry cut changes identity and invocation, not game mechanics."""
+    """The bestiary registry cut preserves its constructor semantics."""
     _compare_legacy_and_canonical(legacy_builder, creature_id, recipe)
 
 

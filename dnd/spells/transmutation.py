@@ -43,6 +43,7 @@ from dnd.core.content.dependencies import (
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.action_types import (
     ActionEconomyCostType,
+    HasteActionPolicy,
     RestrictedActionGrant,
     RestrictedActionKind,
 )
@@ -215,7 +216,7 @@ class SpikeGrowth(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -588,7 +589,7 @@ class Slow(SpellAction):
                     effect_id="control.slow.debuff",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=(
                         "selected_target.condition.slowed",
@@ -630,7 +631,7 @@ class Slow(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -774,24 +775,31 @@ class HasteEffect(BaseCondition):
         dex_mod_uuid = dex_save.bonus.self_static.add_advantage_modifier(dex_adv)
         outs.append((dex_save.bonus.uuid, dex_mod_uuid))
 
+        allowed_kinds = (
+            frozenset({RestrictedActionKind.STANDARD_ACTION})
+            if (
+                target.action_economy.haste_action_policy
+                is HasteActionPolicy.BG3_HONOUR
+            )
+            else frozenset(
+                {
+                    RestrictedActionKind.WEAPON_ATTACK,
+                    RestrictedActionKind.DASH,
+                    RestrictedActionKind.DISENGAGE,
+                    RestrictedActionKind.HIDE,
+                }
+            )
+        )
         target.action_economy.add_restricted_action_grant(
             RestrictedActionGrant(
                 grant_id="haste",
                 owner_uuid=self.uuid,
                 resource_name="haste_action",
                 display_name="Haste",
-                allowed_kinds=frozenset(
-                    {
-                        RestrictedActionKind.WEAPON_ATTACK,
-                        RestrictedActionKind.DASH,
-                        RestrictedActionKind.DISENGAGE,
-                        RestrictedActionKind.HIDE,
-                    }
-                ),
+                allowed_kinds=allowed_kinds,
                 replaced_cost_types=frozenset(
                     {
                         ActionEconomyCostType.ACTIONS,
-                        ActionEconomyCostType.BONUS_ACTIONS,
                     }
                 ),
             )
@@ -1097,7 +1105,7 @@ class Disintegrate(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         num_dice = self.get_damage_dice_count()
 
         save_request = caster.create_saving_throw_request(
@@ -1602,7 +1610,7 @@ class EnlargeReduce(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         if target.uuid != caster.uuid and caster.is_enemy(target):
             save_request = caster.create_saving_throw_request(
@@ -1959,7 +1967,7 @@ class Telekinesis(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

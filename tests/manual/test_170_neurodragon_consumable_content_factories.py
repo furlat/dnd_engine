@@ -33,6 +33,7 @@ from dnd.core.content.registration import (
     scan_module_content_declarations,
 )
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.modifiers import DamageType
 from dnd.entity import Entity
 from dnd.items.weapons import SHORTSWORD_RECIPE
@@ -229,6 +230,10 @@ def test_weapon_coat_condition_variants_own_exact_closed_identities() -> None:
     } == {
         declaration.ref.identity_key
         for declaration in declarations.values()
+    } | {
+        get_content_declaration(
+            consumable_definitions.Concentrating,
+        ).ref.identity_key,
     }
     assert all(
         dependency.relation
@@ -360,6 +365,21 @@ def test_weapon_coat_variants_keep_exact_actions_conditions_and_cleanup() -> Non
     assert sword.extra_damage_dices == [6]
     assert sword.extra_damage_dices_numbers == [1]
     assert sword.extra_damage_type == [DamageType.FIRE]
+    coat_events = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.CONDITION_APPLICATION,
+        )
+            if getattr(getattr(event, "condition", None), "uuid", None)
+            == coat.uuid
+            and event.phase is EventPhase.DECLARATION
+    ]
+    assert len(coat_events) == 1
+    coat_parent_uuid = coat_events[0].parent_event
+    assert coat_parent_uuid is not None
+    coat_parent = EventQueue.get_event_by_uuid(coat_parent_uuid)
+    assert coat_parent is not None
+    assert coat_parent.lineage_uuid == completion.lineage_uuid
 
     actor.remove_condition("Flaming Coat")
 

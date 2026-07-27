@@ -1,6 +1,6 @@
 {
-  "asset_index_digest": "b3a1207422be1f9456921522da32ad8aada9fef4698af4f0c9b818e9a842090a",
-  "binding_digest": "b9d8512893fd98d9ca5ba221c72455180a531a5fc7a5f1c07716bd82020ac2b1",
+  "asset_index_digest": "440314e68181847a1a29fcdffe5a8a5444449d478781afb5a24a3233546a3201",
+  "binding_digest": "4bf619374231245896efc18bf7ae5759b43502b6cb0040a0b1e8b5d767fc4fa6",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -171,7 +171,7 @@
       "icon_key": "action.light-wall-torch"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "d031f5306b4d5efd7c0730e7b1368795d2ac3c8c33d3d3e3cf769e95b30157d5",
       "content_ref": {
         "content_id": "action.item.field_kit.deploy",
         "content_version": 1,
@@ -179,10 +179,10 @@
         "definition_kind": "action",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:action:action.item.field_kit.deploy@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "content_dependency",
+      "evidence_token": "grants_action:content.neurodragon:item:gear.field_kit@1->content.neurodragon:action:action.item.field_kit.deploy@1",
+      "icon_key": "item.field-kit"
     },
     {
       "asset_sha256": "ea1a479122ab597030baa618c3f4ed226061156f86cd0477637cdb1b9bb61a15",
@@ -267,6 +267,34 @@
       "evidence_kind": "human_reviewed",
       "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:action:action.item.weapon_coat.apply@1->item.weapon-coat",
       "icon_key": "item.weapon-coat"
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "background.adventurer",
+        "content_version": 1,
+        "definition_contract_hash": "a6c220e89812efc6bcc9d0f9efb316803bfdc9b1c6a78144538425215ed1dc79",
+        "definition_kind": "background",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.neurodragon:background:background.adventurer@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": "4d4e14646f789b1d5a29357ce8e21de258fda996525c0e8ac85417e818187552",
+      "content_ref": {
+        "content_id": "condition.aegis_spark",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
+        "definition_kind": "condition",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:condition:condition.aegis_spark@1->spell.aegis-spark",
+      "icon_key": "spell.aegis-spark"
     },
     {
       "asset_sha256": "27509f6ebfb4c799e93600d4915f55c63708f852e5ed2d5c7b4d82ab59fecc57",
@@ -413,7 +441,7 @@
       "content_ref": {
         "content_id": "creature.player.barbarian",
         "content_version": 1,
-        "definition_contract_hash": "44e3814fe4924806f7ce3f4974bcbe292f49d690c4fc5246617144519cc21945",
+        "definition_contract_hash": "353dcbb37a167c3137e09825e2f3d22165d865722fee5351901ded94627aaede",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -427,7 +455,7 @@
       "content_ref": {
         "content_id": "creature.player.fighter",
         "content_version": 1,
-        "definition_contract_hash": "8db29778a3f0547e101125cb88525726a57777880c713bbd620a87209d2e4e9e",
+        "definition_contract_hash": "12ae73097601f47ca19214df530d657489f588bb0f5588386dc4a9cc5c1d8133",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -439,9 +467,23 @@
     {
       "asset_sha256": null,
       "content_ref": {
+        "content_id": "creature.player.humanoid_body",
+        "content_version": 1,
+        "definition_contract_hash": "6855af28b3a9f35fa22723347ca0c556ed2ae6071fc9d824c000aa7016fa05df",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:content.neurodragon:creature:creature.player.humanoid_body@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
         "content_id": "creature.player.sorcerer",
         "content_version": 1,
-        "definition_contract_hash": "d899ae6ed9e1fd2497fb1dc2797483b9a3f84712755193c236c2127f62a7d80e",
+        "definition_contract_hash": "7b059f6bc3024680bf400878e1e1e82aba2dc79c7291de95184adb955615ee29",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -455,7 +497,7 @@
       "content_ref": {
         "content_id": "creature.premade.barbarian_l5_berserker_torch",
         "content_version": 1,
-        "definition_contract_hash": "dc984a3d546e5e26d7dbfb04c6db2d6643218dd108dce813ac4dad68d77488a5",
+        "definition_contract_hash": "3b75ce2c7a39827863e8acd9f5443ef47018fb6c0c04017cda18ebcdbdf5c0bb",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -469,7 +511,7 @@
       "content_ref": {
         "content_id": "creature.premade.fighter_l5_shield_torch",
         "content_version": 1,
-        "definition_contract_hash": "dc984a3d546e5e26d7dbfb04c6db2d6643218dd108dce813ac4dad68d77488a5",
+        "definition_contract_hash": "3b75ce2c7a39827863e8acd9f5443ef47018fb6c0c04017cda18ebcdbdf5c0bb",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -483,7 +525,7 @@
       "content_ref": {
         "content_id": "creature.premade.sorcerer_l5_standard_torch",
         "content_version": 1,
-        "definition_contract_hash": "dc984a3d546e5e26d7dbfb04c6db2d6643218dd108dce813ac4dad68d77488a5",
+        "definition_contract_hash": "3b75ce2c7a39827863e8acd9f5443ef47018fb6c0c04017cda18ebcdbdf5c0bb",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -759,7 +801,7 @@
       "icon_key": "item.armored-boots"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "d6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b",
       "content_ref": {
         "content_id": "apparel.bracers",
         "content_version": 1,
@@ -767,13 +809,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.bracers@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.bracers@1->item.bracers",
+      "icon_key": "item.bracers"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "606a07b7219c6a5554672d95cd548e4f16abd2eb6f4ad621d9e33cc2d276c4ee",
       "content_ref": {
         "content_id": "apparel.chain_coif",
         "content_version": 1,
@@ -781,13 +823,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.chain_coif@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.chain_coif@1->item.chain-coif",
+      "icon_key": "item.chain-coif"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
       "content_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -795,10 +837,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.cloth_hood@1->item.cloth-hood",
+      "icon_key": "item.cloth-hood"
     },
     {
       "asset_sha256": "8c1b60f2e4e1580c8b1e37d9a432fdb2870680abcdaf97512113aa44ef32c3a7",
@@ -857,7 +899,7 @@
       "icon_key": "item.crown"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
       "content_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -865,13 +907,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.fine_clothes@1->item.fine-clothes",
+      "icon_key": "item.fine-clothes"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be",
       "content_ref": {
         "content_id": "apparel.gauntlets",
         "content_version": 1,
@@ -879,13 +921,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.gauntlets@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.gauntlets@1->item.gauntlets",
+      "icon_key": "item.gauntlets"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "71deba0a168030ccccf51c7893369170a122466ace1d9a78bc2836bcdb40bac6",
       "content_ref": {
         "content_id": "apparel.great_helm",
         "content_version": 1,
@@ -893,13 +935,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.great_helm@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.great_helm@1->item.great-helm",
+      "icon_key": "item.great-helm"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
       "content_ref": {
         "content_id": "apparel.horned_helmet",
         "content_version": 1,
@@ -907,10 +949,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.horned_helmet@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.horned_helmet@1->item.horned-helmet",
+      "icon_key": "item.horned-helmet"
     },
     {
       "asset_sha256": "634ee9859b3af68de828511a0813c2165e46b72f80444464d1e00277b1b6610a",
@@ -941,7 +983,7 @@
       "icon_key": "item.leather-boots"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6",
       "content_ref": {
         "content_id": "apparel.leather_gloves",
         "content_version": 1,
@@ -949,13 +991,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.leather_gloves@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.leather_gloves@1->item.leather-gloves",
+      "icon_key": "item.leather-gloves"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac",
       "content_ref": {
         "content_id": "apparel.leather_hood",
         "content_version": 1,
@@ -963,10 +1005,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.leather_hood@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.leather_hood@1->item.leather-hood",
+      "icon_key": "item.leather-hood"
     },
     {
       "asset_sha256": "5e268a5cd7d4e40cd51347e074b752276f7b83f278ed2dee117e79030b6a49d5",
@@ -983,7 +1025,7 @@
       "icon_key": "item.leather-shoes"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "0285b9b3b054f718f3f9210ffdc9fdc5832136ccda6fb371ba450d68de1a3be5",
       "content_ref": {
         "content_id": "apparel.monster_hands",
         "content_version": 1,
@@ -991,13 +1033,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.monster_hands@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.monster_hands@1->item.monster-hands",
+      "icon_key": "item.monster-hands"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "350f670d4e63cc9f0991504fbfffb4ba9e86e2dc1e3c66bddefa7879ee1cf639",
       "content_ref": {
         "content_id": "apparel.monster_helm",
         "content_version": 1,
@@ -1005,10 +1047,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:apparel.monster_helm@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.monster_helm@1->item.monster-helm",
+      "icon_key": "item.monster-helm"
     },
     {
       "asset_sha256": "e9bdd6c425209913ec4ca0acb4c22540ec199d2039c76c15d438fcf53a4c02be",
@@ -1081,7 +1123,7 @@
       "icon_key": "item.armor-scraps"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "788a14aceb1561f76365cbbc86f0d054b24abf2a6d8128831063e3c7903f73c4",
       "content_ref": {
         "content_id": "armor.circus.performer_leather",
         "content_version": 1,
@@ -1089,13 +1131,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:armor.circus.performer_leather@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:armor.circus.performer_leather@1->item.circus-performer-leather",
+      "icon_key": "item.circus-performer-leather"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "bebe8ba12b3ce6e74d60bd8700b3468b1bddab2f6158ea26b9c19d0874268b8a",
       "content_ref": {
         "content_id": "armor.cloth",
         "content_version": 1,
@@ -1103,10 +1145,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:armor.cloth@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:armor.cloth@1->item.cloth-armor",
+      "icon_key": "item.cloth-armor"
     },
     {
       "asset_sha256": "abf0444da4974bc8eea56ffbaf8665d08f961139558fbed39092c344758b377b",
@@ -1235,7 +1277,7 @@
       "icon_key": "item.torch"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "d031f5306b4d5efd7c0730e7b1368795d2ac3c8c33d3d3e3cf769e95b30157d5",
       "content_ref": {
         "content_id": "gear.field_kit",
         "content_version": 1,
@@ -1243,10 +1285,10 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:gear.field_kit@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:gear.field_kit@1->item.field-kit",
+      "icon_key": "item.field-kit"
     },
     {
       "asset_sha256": "684f395747f716d1911aee703dc7917c35fed23e0b01140b1813caa311827b7d",
@@ -1473,7 +1515,7 @@
       "icon_key": "item.morningstar"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "85826f6ab71a8b473556e101c5b3b0d42a34f71b6803849c87a03defffe08980",
       "content_ref": {
         "content_id": "weapon.double_bladed_sword",
         "content_version": 1,
@@ -1481,13 +1523,13 @@
         "definition_kind": "item",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:item:weapon.double_bladed_sword@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:weapon.double_bladed_sword@1->item.double-bladed-sword",
+      "icon_key": "item.double-bladed-sword"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "4d4e14646f789b1d5a29357ce8e21de258fda996525c0e8ac85417e818187552",
       "content_ref": {
         "content_id": "spell.aegis_spark",
         "content_version": 1,
@@ -1495,10 +1537,10 @@
         "definition_kind": "spell",
         "pack_id": "content.neurodragon"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.neurodragon:spell:spell.aegis_spark@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:spell:spell.aegis_spark@1->spell.aegis-spark",
+      "icon_key": "spell.aegis-spark"
     },
     {
       "asset_sha256": "148171f3d386fc202268269ff48ad6dd20c186623c91772a66f4306fec984445",
@@ -1767,6 +1809,62 @@
       "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
     },
     {
+      "asset_sha256": "3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2",
+      "content_ref": {
+        "content_id": "action.class.sorcerer.draconic_presence",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.class.sorcerer.draconic_presence@1->spell.fear",
+      "icon_key": "spell.fear"
+    },
+    {
+      "asset_sha256": "9bc7a1703e280a960f81cb502303d950eff33348cad06c8d41f78c76535847c9",
+      "content_ref": {
+        "content_id": "action.class.sorcerer.dragon_wings.fly",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.class.sorcerer.dragon_wings.fly@1->action.move",
+      "icon_key": "action.move"
+    },
+    {
+      "asset_sha256": "64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9",
+      "content_ref": {
+        "content_id": "action.class.sorcerer.dragon_wings.toggle",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.class.sorcerer.dragon_wings.toggle@1->spell.haste",
+      "icon_key": "spell.haste"
+    },
+    {
+      "asset_sha256": "bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675",
+      "content_ref": {
+        "content_id": "action.class.sorcerer.elemental_affinity.resistance",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.class.sorcerer.elemental_affinity.resistance@1->condition.dnd-classes-sorcerer-elementalaffinity",
+      "icon_key": "condition.dnd-classes-sorcerer-elementalaffinity"
+    },
+    {
       "asset_sha256": "d6d4624df50207d1374c4955291e20b3ab356d214310be36b4ff02f12a7fa702",
       "content_ref": {
         "content_id": "action.class.sorcerer.quickened_spell",
@@ -1795,7 +1893,7 @@
       "icon_key": "action.twinned-spell"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "249e18a0037f5dad5e0d1a81e2eb971553b5a47fd0cffc8dba89f5ac2bf9ffde",
       "content_ref": {
         "content_id": "action.core.drop",
         "content_version": 1,
@@ -1803,13 +1901,13 @@
         "definition_kind": "action",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:action:action.core.drop@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.core.drop@1->action.drop",
+      "icon_key": "action.drop"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "5f19292c317b81b2795e15cde271a0a5e94604271bf3c6ddd92287867ad799bb",
       "content_ref": {
         "content_id": "action.core.drop_prone",
         "content_version": 1,
@@ -1817,13 +1915,13 @@
         "definition_kind": "action",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:action:action.core.drop_prone@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.core.drop_prone@1->action.drop-prone",
+      "icon_key": "action.drop-prone"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "3e572272347020b2b9572345ce2ada80d63d7855bc0087cffbe1e0a5c1f2c9e3",
       "content_ref": {
         "content_id": "action.core.stand_up",
         "content_version": 1,
@@ -1831,10 +1929,10 @@
         "definition_kind": "action",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:action:action.core.stand_up@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.core.stand_up@1->action.stand-up",
+      "icon_key": "action.stand-up"
     },
     {
       "asset_sha256": "aca0e3548fec0518ca18e39da0e9558386375803994013179836e5bccb87cb0f",
@@ -1865,18 +1963,144 @@
       "icon_key": "action.extra-attack"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "c7ccd3b55cddd75c1be58fd9f4e82919c882e9ed18483d8b49b2a63a1258624f",
       "content_ref": {
-        "content_id": "action.monster.multiattack",
+        "content_id": "action.monster.multiattack.bandit_captain.melee",
         "content_version": 1,
-        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
         "definition_kind": "action",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "intentional_null",
-      "evidence_kind": "intentional_dynamic_provider",
-      "evidence_token": "provider_attributed_runtime_icon:content.srd_5_1_cc:action:action.monster.multiattack@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.melee@1->action.bandit-captain-multiattack-melee",
+      "icon_key": "action.bandit-captain-multiattack-melee"
+    },
+    {
+      "asset_sha256": "c2759b4864eabbbaf126a34b8d871149e2713d8f9eb5814ec3ceffed120a28aa",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.bandit_captain.ranged",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.ranged@1->action.bandit-captain-multiattack-ranged",
+      "icon_key": "action.bandit-captain-multiattack-ranged"
+    },
+    {
+      "asset_sha256": "54839e84bfc82656e6b2a84d93037ff4cbfc27fb5f3dd2c3f16b6cc7eb4be4ab",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.cult_fanatic@1->action.cult-fanatic-multiattack",
+      "icon_key": "action.cult-fanatic-multiattack"
+    },
+    {
+      "asset_sha256": "0b83e01a1e1cb8e31f7d0d51b80998a58f2eca51deceec7993137b715c124cc9",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.knight",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.knight@1->action.knight-multiattack",
+      "icon_key": "action.knight-multiattack"
+    },
+    {
+      "asset_sha256": "8f1171720705bb10155050076d7782428236956750426b4c32aa2f12547e0372",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.scout.longbow",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.scout.longbow@1->action.scout-multiattack-longbow",
+      "icon_key": "action.scout-multiattack-longbow"
+    },
+    {
+      "asset_sha256": "5920e363ce26521ff2a0760101f34f37e04dbb5ea18c28f5eecb1bb5a72a89ae",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.scout.shortsword",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.scout.shortsword@1->action.scout-multiattack-shortsword",
+      "icon_key": "action.scout-multiattack-shortsword"
+    },
+    {
+      "asset_sha256": "482b10d1f122fd70ee92549b6bb148b99b134d51adb567275671eb522d869922",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.spy",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.spy@1->action.spy-multiattack",
+      "icon_key": "action.spy-multiattack"
+    },
+    {
+      "asset_sha256": "aaa5ff51c82f45816f593f33d13b6b91af734cbc706124f8d47c4e353d0a1e0c",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.thug",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.thug@1->action.thug-multiattack",
+      "icon_key": "action.thug-multiattack"
+    },
+    {
+      "asset_sha256": "60cb261e339d011e083962e1d5572209b730f8958b475e79670312438ff3693d",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.veteran.melee",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.veteran.melee@1->action.veteran-multiattack-melee",
+      "icon_key": "action.veteran-multiattack-melee"
+    },
+    {
+      "asset_sha256": "156c638f0c62128fdb38747fe2637312c253d299fba3358f24c8ae517f96ac69",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.veteran.ranged",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.monster.multiattack.veteran.ranged@1->action.veteran-multiattack-ranged",
+      "icon_key": "action.veteran-multiattack-ranged"
     },
     {
       "asset_sha256": "08586fb57222f0d99a818fcf6cb3f8ffc1f5bd7dc6c0f46b08855d4aff10b30f",
@@ -2059,6 +2283,62 @@
       "evidence_kind": "runtime_action_class",
       "evidence_token": "dnd.monsters.traits.LeadershipAction",
       "icon_key": "action.leadership"
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "background.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "a6c220e89812efc6bcc9d0f9efb316803bfdc9b1c6a78144538425215ed1dc79",
+        "definition_kind": "background",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:background:background.acolyte@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": "b1a425b1325d82daabfc96bf3152a68a5e2faf65c32aa557035ff289330d1beb",
+      "content_ref": {
+        "content_id": "class.barbarian",
+        "content_version": 1,
+        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_kind": "class",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class:class.barbarian@1->action.rage",
+      "icon_key": "action.rage"
+    },
+    {
+      "asset_sha256": "6e5987a53a1f60dfe730d9748a36a4a0a50e54f93c682ea5048d18280ee29353",
+      "content_ref": {
+        "content_id": "class.fighter",
+        "content_version": 1,
+        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_kind": "class",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class:class.fighter@1->action.extra-attack",
+      "icon_key": "action.extra-attack"
+    },
+    {
+      "asset_sha256": "011c66a9f3c459efbccbd44f953ac96f5f64f078ace4ba13e99aec20a9f9afab",
+      "content_ref": {
+        "content_id": "class.sorcerer",
+        "content_version": 1,
+        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_kind": "class",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class:class.sorcerer@1->condition.dnd-classes-sorcerer-sorcerypointsfeature",
+      "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
     },
     {
       "asset_sha256": "88aa46d6fcd62e2b7b777930924aa8e9e637ad2cd3d69873d09c7327c2c74a30",
@@ -2313,6 +2593,20 @@
       "icon_key": "condition.dnd-classes-barbarian-retaliation"
     },
     {
+      "asset_sha256": "0cb8dd121c5b859f66f7fc793e6a9d3376411bfa05fe230a11a528adcffbd9d1",
+      "content_ref": {
+        "content_id": "class_feature.barbarian.unarmored_defense",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.unarmored_defense@1->item.natural-armor",
+      "icon_key": "item.natural-armor"
+    },
+    {
       "asset_sha256": "879297c0f375bf0db58b59af3b917df95e9d3c310c4f78256cc38688c32f3484",
       "content_ref": {
         "content_id": "class_feature.extra_attack",
@@ -2453,6 +2747,20 @@
       "icon_key": "condition.dnd-classes-fighter-indomitable"
     },
     {
+      "asset_sha256": "66b0c490c43dcabf0f81492d5561c7aee5c0999d099d0e9fe1f2658492be423c",
+      "content_ref": {
+        "content_id": "class_feature.fighter.remarkable_athlete",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.remarkable_athlete@1->action.jump",
+      "icon_key": "action.jump"
+    },
+    {
       "asset_sha256": "b06cdaaba580241884b22e6c4fee33552728ec51fb1cb039f631aff569d47215",
       "content_ref": {
         "content_id": "class_feature.fighter.second_wind",
@@ -2495,6 +2803,188 @@
       "icon_key": "condition.dnd-classes-fighter-survivor"
     },
     {
+      "asset_sha256": "1672149b73949e10481f6e143454dc07aa77721cf900109686958a5fbb15d88b",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.black",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.black@1->spell.acid-splash",
+      "icon_key": "spell.acid-splash"
+    },
+    {
+      "asset_sha256": "ba63e4f99006732fedfba85ab45a0a89606d4064b469720a2096d9c6e3be5755",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.blue",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.blue@1->spell.lightning-bolt",
+      "icon_key": "spell.lightning-bolt"
+    },
+    {
+      "asset_sha256": "703a3dccf405aa1bdd7c365bdf9ab161c5bfd9c81148fb5386b4a09e945e20ac",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.brass",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.brass@1->spell.fire-bolt",
+      "icon_key": "spell.fire-bolt"
+    },
+    {
+      "asset_sha256": "ba63e4f99006732fedfba85ab45a0a89606d4064b469720a2096d9c6e3be5755",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.bronze",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.bronze@1->spell.lightning-bolt",
+      "icon_key": "spell.lightning-bolt"
+    },
+    {
+      "asset_sha256": "1672149b73949e10481f6e143454dc07aa77721cf900109686958a5fbb15d88b",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.copper",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.copper@1->spell.acid-splash",
+      "icon_key": "spell.acid-splash"
+    },
+    {
+      "asset_sha256": "703a3dccf405aa1bdd7c365bdf9ab161c5bfd9c81148fb5386b4a09e945e20ac",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.gold",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.gold@1->spell.fire-bolt",
+      "icon_key": "spell.fire-bolt"
+    },
+    {
+      "asset_sha256": "68f548890a4263bc2df41b5c516076dfb432c93a5ff0b7d94747d8877e1a2451",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.green",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.green@1->spell.poison-spray",
+      "icon_key": "spell.poison-spray"
+    },
+    {
+      "asset_sha256": "703a3dccf405aa1bdd7c365bdf9ab161c5bfd9c81148fb5386b4a09e945e20ac",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.red",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.red@1->spell.fire-bolt",
+      "icon_key": "spell.fire-bolt"
+    },
+    {
+      "asset_sha256": "b23a7e2d97466bc2eff3705e71902f253bfab10e4fd2c7d48b09d6ba4074dd2b",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.silver",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.silver@1->spell.ray-of-frost",
+      "icon_key": "spell.ray-of-frost"
+    },
+    {
+      "asset_sha256": "b23a7e2d97466bc2eff3705e71902f253bfab10e4fd2c7d48b09d6ba4074dd2b",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_ancestry.white",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_ancestry.white@1->spell.ray-of-frost",
+      "icon_key": "spell.ray-of-frost"
+    },
+    {
+      "asset_sha256": "3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_presence.aura",
+        "content_version": 1,
+        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence.aura@1->spell.fear",
+      "icon_key": "spell.fear"
+    },
+    {
+      "asset_sha256": "3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_presence.immunity",
+        "content_version": 1,
+        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence.immunity@1->spell.fear",
+      "icon_key": "spell.fear"
+    },
+    {
+      "asset_sha256": "3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.draconic_presence",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence@1->spell.fear",
+      "icon_key": "spell.fear"
+    },
+    {
       "asset_sha256": "fbb2b9c054c24d70db59af5afb009d1c618cdc5d1b61673789dcc889bdbfd46d",
       "content_ref": {
         "content_id": "class_feature.sorcerer.draconic_resilience",
@@ -2509,18 +2999,172 @@
       "icon_key": "condition.dnd-classes-sorcerer-draconicresilience"
     },
     {
-      "asset_sha256": "bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675",
+      "asset_sha256": "64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9",
       "content_ref": {
-        "content_id": "class_feature.sorcerer.elemental_affinity",
+        "content_id": "class_feature.sorcerer.dragon_wings.active",
         "content_version": 1,
         "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.sorcerer.ElementalAffinity",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings.active@1->spell.haste",
+      "icon_key": "spell.haste"
+    },
+    {
+      "asset_sha256": "64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.dragon_wings",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings@1->spell.haste",
+      "icon_key": "spell.haste"
+    },
+    {
+      "asset_sha256": "bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.elemental_affinity.resistance",
+        "content_version": 1,
+        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity.resistance@1->condition.dnd-classes-sorcerer-elementalaffinity",
       "icon_key": "condition.dnd-classes-sorcerer-elementalaffinity"
+    },
+    {
+      "asset_sha256": "bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.elemental_affinity",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity@1->condition.dnd-classes-sorcerer-elementalaffinity",
+      "icon_key": "condition.dnd-classes-sorcerer-elementalaffinity"
+    },
+    {
+      "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.careful_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.careful_spell@1->condition.dnd-classes-sorcerer-metamagicactive",
+      "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "011c66a9f3c459efbccbd44f953ac96f5f64f078ace4ba13e99aec20a9f9afab",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.distant_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.distant_spell@1->condition.dnd-classes-sorcerer-sorcerypointsfeature",
+      "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
+    },
+    {
+      "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.empowered_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.empowered_spell@1->condition.dnd-classes-sorcerer-metamagicactive",
+      "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.extended_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.extended_spell@1->condition.dnd-classes-sorcerer-metamagicactive",
+      "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.heightened_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.heightened_spell@1->condition.dnd-classes-sorcerer-metamagicactive",
+      "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "d6d4624df50207d1374c4955291e20b3ab356d214310be36b4ff02f12a7fa702",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.quickened_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.quickened_spell@1->action.quickened-spell",
+      "icon_key": "action.quickened-spell"
+    },
+    {
+      "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.subtle_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.subtle_spell@1->condition.dnd-classes-sorcerer-metamagicactive",
+      "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "d4d5d8bc8e8c4b9baa06a37b9aee346509eb0a495a016530ad073c89b55b3f10",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.metamagic.twinned_spell",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic.twinned_spell@1->action.twinned-spell",
+      "icon_key": "action.twinned-spell"
     },
     {
       "asset_sha256": "be05441db2657e25240317bfb4857775e2091c460ae7eefc7e2f8d7e1753c797",
@@ -2535,6 +3179,20 @@
       "evidence_kind": "backend_condition_class",
       "evidence_token": "dnd.classes.sorcerer.MetamagicActive",
       "icon_key": "condition.dnd-classes-sorcerer-metamagicactive"
+    },
+    {
+      "asset_sha256": "011c66a9f3c459efbccbd44f953ac96f5f64f078ace4ba13e99aec20a9f9afab",
+      "content_ref": {
+        "content_id": "class_feature.sorcerer.sorcerous_restoration",
+        "content_version": 1,
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
+        "definition_kind": "class_feature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.sorcerous_restoration@1->condition.dnd-classes-sorcerer-sorcerypointsfeature",
+      "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
     },
     {
       "asset_sha256": "011c66a9f3c459efbccbd44f953ac96f5f64f078ace4ba13e99aec20a9f9afab",
@@ -4511,6 +5169,20 @@
       "icon_key": "item.dagger"
     },
     {
+      "asset_sha256": "929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e",
+      "content_ref": {
+        "content_id": "weapon.dart",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:weapon.dart@1->item.dagger",
+      "icon_key": "item.dagger"
+    },
+    {
       "asset_sha256": "1b76441a78ee647f24759fcdc16082da53ae80fc89da1a1a38843a94109fde50",
       "content_ref": {
         "content_id": "weapon.greataxe",
@@ -4721,7 +5393,7 @@
       "icon_key": "item.shortsword"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59",
       "content_ref": {
         "content_id": "weapon.sickle",
         "content_version": 1,
@@ -4729,10 +5401,10 @@
         "definition_kind": "item",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:item:weapon.sickle@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:weapon.sickle@1->item.sickle",
+      "icon_key": "item.sickle"
     },
     {
       "asset_sha256": "4d232e697d301cd150d4e2e0fd196e492f79aa93f9eedf6e6fd1c15ad71136b5",
@@ -4763,7 +5435,7 @@
       "icon_key": "item.spear"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef",
       "content_ref": {
         "content_id": "weapon.trident",
         "content_version": 1,
@@ -4771,10 +5443,10 @@
         "definition_kind": "item",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:item:weapon.trident@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:weapon.trident@1->item.trident",
+      "icon_key": "item.trident"
     },
     {
       "asset_sha256": "52d431331c9466653bc592a129aa2cb834e66979bb697f7d0c29fe68dc326ae5",
@@ -4791,7 +5463,7 @@
       "icon_key": "item.warhammer"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "e403d09e13b222e91651d052c18d93bdc64da60c962f13dfbb60588dfb7f894e",
       "content_ref": {
         "content_id": "reaction.class_feature.paladin.divine_smite",
         "content_version": 1,
@@ -4799,10 +5471,10 @@
         "definition_kind": "reaction",
         "pack_id": "content.srd_5_1_cc"
       },
-      "decision": "missing_asset",
-      "evidence_kind": "unresolved_uncovered",
-      "evidence_token": "new_asset_required:content.srd_5_1_cc:reaction:reaction.class_feature.paladin.divine_smite@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.class_feature.paladin.divine_smite@1->reaction.divine-smite",
+      "icon_key": "reaction.divine-smite"
     },
     {
       "asset_sha256": "3c34a44de377b26ec611560f65164b24959302eaeef6d8bf287d0271f00ef193",
@@ -4831,6 +5503,188 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:content.srd_5_1_cc:reaction:reaction.spell.shield@1",
       "icon_key": "reaction.shield"
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.dragonborn",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.dragonborn@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.dwarf",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.dwarf@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.elf",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.elf@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.gnome",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.gnome@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.half_elf",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.half_elf@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.half_orc",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.half_orc@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.halfling",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.halfling@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.human",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.human@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species.tiefling",
+        "content_version": 1,
+        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "definition_kind": "species",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.tiefling@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species_variant.dwarf.hill",
+        "content_version": 1,
+        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "definition_kind": "species_variant",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species_variant.elf.high",
+        "content_version": 1,
+        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "definition_kind": "species_variant",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.elf.high@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species_variant.gnome.rock",
+        "content_version": 1,
+        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "definition_kind": "species_variant",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.gnome.rock@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "species_variant.halfling.lightfoot",
+        "content_version": 1,
+        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "definition_kind": "species_variant",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.halfling.lightfoot@1",
+      "icon_key": null
     },
     {
       "asset_sha256": "1672149b73949e10481f6e143454dc07aa77721cf900109686958a5fbb15d88b",
@@ -5139,6 +5993,20 @@
       "evidence_kind": "backend_spell_catalog",
       "evidence_token": "backend_spell_catalog::continual_flame",
       "icon_key": "spell.continual-flame"
+    },
+    {
+      "asset_sha256": "3c34a44de377b26ec611560f65164b24959302eaeef6d8bf287d0271f00ef193",
+      "content_ref": {
+        "content_id": "spell.counterspell",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.counterspell@1->reaction.counterspell",
+      "icon_key": "reaction.counterspell"
     },
     {
       "asset_sha256": "e9caf990673b43fe9f839f108a33f29c781aed2d39e8e233e672718702419428",
@@ -6107,6 +6975,20 @@
       "icon_key": "spell.shatter"
     },
     {
+      "asset_sha256": "f679eedfae024e27329c14e0cd27aa32dc59540af7e446c0732ec279d2f51793",
+      "content_ref": {
+        "content_id": "spell.shield",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.shield@1->reaction.shield",
+      "icon_key": "reaction.shield"
+    },
+    {
       "asset_sha256": "b2bd654dcfedf12fb7003d15481cccb6ecebf668ead33235ad7342ad91df3b9c",
       "content_ref": {
         "content_id": "spell.shield_of_faith",
@@ -6343,6 +7225,174 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:content.srd_5_1_cc:spell:spell.web@1",
       "icon_key": "spell.web"
+    },
+    {
+      "asset_sha256": "82257dc130f6ecba74f3dc9819f78440e9b0ba32988ab2100765af968be4f67f",
+      "content_ref": {
+        "content_id": "starting_equipment.barbarian.dual_axes",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.dual_axes@1->item.handaxe",
+      "icon_key": "item.handaxe"
+    },
+    {
+      "asset_sha256": "1b76441a78ee647f24759fcdc16082da53ae80fc89da1a1a38843a94109fde50",
+      "content_ref": {
+        "content_id": "starting_equipment.barbarian.greataxe",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.greataxe@1->item.greataxe",
+      "icon_key": "item.greataxe"
+    },
+    {
+      "asset_sha256": "165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204",
+      "content_ref": {
+        "content_id": "starting_equipment.barbarian.sword_shield",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.sword_shield@1->item.longsword",
+      "icon_key": "item.longsword"
+    },
+    {
+      "asset_sha256": "51bd120ba023502d7ce66ef232a27ff9a053a70e2ff38a689a0c745e73ff8461",
+      "content_ref": {
+        "content_id": "starting_equipment.fighter.archery",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.archery@1->item.longbow",
+      "icon_key": "item.longbow"
+    },
+    {
+      "asset_sha256": "be9118bedd35d757d80b44980faebd9c2576a2e90288ef9db6c67a3d1c5d2368",
+      "content_ref": {
+        "content_id": "starting_equipment.fighter.dual_wield",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.dual_wield@1->item.shortsword",
+      "icon_key": "item.shortsword"
+    },
+    {
+      "asset_sha256": "cbc61ab5f0d0d8a191d96d36f0301fd3748778810208bf9b8f5cf7c7c8a14657",
+      "content_ref": {
+        "content_id": "starting_equipment.fighter.greatsword",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.greatsword@1->item.greatsword",
+      "icon_key": "item.greatsword"
+    },
+    {
+      "asset_sha256": "165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204",
+      "content_ref": {
+        "content_id": "starting_equipment.fighter.sword_shield",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.sword_shield@1->item.longsword",
+      "icon_key": "item.longsword"
+    },
+    {
+      "asset_sha256": "929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e",
+      "content_ref": {
+        "content_id": "starting_equipment.sorcerer.dagger",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.dagger@1->item.dagger",
+      "icon_key": "item.dagger"
+    },
+    {
+      "asset_sha256": "f665ea33a4b7d1a7df434d0ec80389671226bfaf075467636674bf0b10bf8146",
+      "content_ref": {
+        "content_id": "starting_equipment.sorcerer.quarterstaff",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.quarterstaff@1->item.quarterstaff",
+      "icon_key": "item.quarterstaff"
+    },
+    {
+      "asset_sha256": "b7078278f019a8966ca7dbf1b338bb6f1559be54220b77993ee262a82008397d",
+      "content_ref": {
+        "content_id": "subclass.barbarian.berserker",
+        "content_version": 1,
+        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_kind": "subclass",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:subclass:subclass.barbarian.berserker@1->condition.dnd-classes-rage-frenzyfeature",
+      "icon_key": "condition.dnd-classes-rage-frenzyfeature"
+    },
+    {
+      "asset_sha256": "5237efe57f75f076f43714b8037f2678f7b1f0fa4dc6f5a5658fb03cd1507c8f",
+      "content_ref": {
+        "content_id": "subclass.fighter.champion",
+        "content_version": 1,
+        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_kind": "subclass",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:subclass:subclass.fighter.champion@1->condition.dnd-classes-fighter-improvedcritical",
+      "icon_key": "condition.dnd-classes-fighter-improvedcritical"
+    },
+    {
+      "asset_sha256": "fbb2b9c054c24d70db59af5afb009d1c618cdc5d1b61673789dcc889bdbfd46d",
+      "content_ref": {
+        "content_id": "subclass.sorcerer.draconic_bloodline",
+        "content_version": 1,
+        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_kind": "subclass",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:subclass:subclass.sorcerer.draconic_bloodline@1->condition.dnd-classes-sorcerer-draconicresilience",
+      "icon_key": "condition.dnd-classes-sorcerer-draconicresilience"
     },
     {
       "asset_sha256": "d3e4817c25516cc6bbc51e2bb9e77c2052123e1a693fddcb10ab1c93a9552ae2",
@@ -7677,12 +8727,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "8761bb18c18edfdc3b84a677e4dffd1df2e2086d7c7ee8df6071e775fc6ad12e",
-      "decision": "missing_asset",
+      "asset_sha256": "d6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b",
+      "bound_preset_contract_hash": "b32a214880ce803a3983b37edca4a02a2c0f332f4a30d323ccf78ccae2e6334c",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.bracers@1",
-      "icon_key": null,
+      "icon_key": "item.bracers",
       "inherit_definition_ref": {
         "content_id": "apparel.bracers",
         "content_version": 1,
@@ -7692,18 +8742,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "8761bb18c18edfdc3b84a677e4dffd1df2e2086d7c7ee8df6071e775fc6ad12e",
+        "preset_contract_hash": "b32a214880ce803a3983b37edca4a02a2c0f332f4a30d323ccf78ccae2e6334c",
         "preset_id": "item_variant.bracers.bronze_bracers",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "6a0db8b0bf545791e75456bcb27a3f06675fbb1a47e752c2ff521553204913df",
-      "decision": "missing_asset",
+      "asset_sha256": "d6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b",
+      "bound_preset_contract_hash": "6f1092d7c5c50ad827e0adf9f881492da774e6d8d65bdddae45984188029e52e",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.bracers@1",
-      "icon_key": null,
+      "icon_key": "item.bracers",
       "inherit_definition_ref": {
         "content_id": "apparel.bracers",
         "content_version": 1,
@@ -7713,18 +8763,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "6a0db8b0bf545791e75456bcb27a3f06675fbb1a47e752c2ff521553204913df",
+        "preset_contract_hash": "6f1092d7c5c50ad827e0adf9f881492da774e6d8d65bdddae45984188029e52e",
         "preset_id": "item_variant.bracers.dark_bracers",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "6e3101bf9879b71630da52e7ec98f2e72416042ec366514217c83d31967f2cce",
-      "decision": "missing_asset",
+      "asset_sha256": "d6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b",
+      "bound_preset_contract_hash": "3753f37814d374c2e49dac5418e5ee5a2ecd02c09f02e2e9745bd708685b7765",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.bracers@1",
-      "icon_key": null,
+      "icon_key": "item.bracers",
       "inherit_definition_ref": {
         "content_id": "apparel.bracers",
         "content_version": 1,
@@ -7734,7 +8784,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "6e3101bf9879b71630da52e7ec98f2e72416042ec366514217c83d31967f2cce",
+        "preset_contract_hash": "3753f37814d374c2e49dac5418e5ee5a2ecd02c09f02e2e9745bd708685b7765",
         "preset_id": "item_variant.bracers.iron_bracers",
         "preset_version": 1
       }
@@ -7782,12 +8832,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "d1f13f547804256666e902b200263d58473457b889930b343b81e7bc48883903",
-      "decision": "missing_asset",
+      "asset_sha256": "606a07b7219c6a5554672d95cd548e4f16abd2eb6f4ad621d9e33cc2d276c4ee",
+      "bound_preset_contract_hash": "03074822906fef6044282ad935519205382f1bee7c75381fe3a02ab46b279de2",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.chain_coif@1",
-      "icon_key": null,
+      "icon_key": "item.chain-coif",
       "inherit_definition_ref": {
         "content_id": "apparel.chain_coif",
         "content_version": 1,
@@ -7797,7 +8847,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "d1f13f547804256666e902b200263d58473457b889930b343b81e7bc48883903",
+        "preset_contract_hash": "03074822906fef6044282ad935519205382f1bee7c75381fe3a02ab46b279de2",
         "preset_id": "item_variant.chain_coif.dark_coif",
         "preset_version": 1
       }
@@ -7908,12 +8958,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "74396df2d7386cd8bcda561fee04b74048c4b32a1710e88ce6d5dc8ac8dfc851",
-      "decision": "missing_asset",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "bound_preset_contract_hash": "25e628ff91d8f918c24767e2841e3406cc1b1f7ff0d2c7ceca72d0846e9ca26a",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null,
+      "icon_key": "item.cloth-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -7923,18 +8973,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "74396df2d7386cd8bcda561fee04b74048c4b32a1710e88ce6d5dc8ac8dfc851",
+        "preset_contract_hash": "25e628ff91d8f918c24767e2841e3406cc1b1f7ff0d2c7ceca72d0846e9ca26a",
         "preset_id": "item_variant.cloth_hood.dark_hood",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "6ea57a3efee7ac436296757d9451c9c070c8caac6f2214ca64fa95c9bfa46343",
-      "decision": "missing_asset",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "bound_preset_contract_hash": "5ec2e8e1417a322acfa40579e58f26c2f9da6af15d7da9cb8ed2c7abd6d3e455",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null,
+      "icon_key": "item.cloth-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -7944,18 +8994,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "6ea57a3efee7ac436296757d9451c9c070c8caac6f2214ca64fa95c9bfa46343",
+        "preset_contract_hash": "5ec2e8e1417a322acfa40579e58f26c2f9da6af15d7da9cb8ed2c7abd6d3e455",
         "preset_id": "item_variant.cloth_hood.green_hood",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "864d5422c5914acf625292b6b080dd8f9f35cb815ea72fd89b42e21704c852de",
-      "decision": "missing_asset",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "bound_preset_contract_hash": "e95263bdbc626711077888d40d5d1a36e6f8be4b4f4807249f66eae8ec7e61fd",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null,
+      "icon_key": "item.cloth-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -7965,18 +9015,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "864d5422c5914acf625292b6b080dd8f9f35cb815ea72fd89b42e21704c852de",
+        "preset_contract_hash": "e95263bdbc626711077888d40d5d1a36e6f8be4b4f4807249f66eae8ec7e61fd",
         "preset_id": "item_variant.cloth_hood.hooded_mantle",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "668fe0becdb08f6572a753f1112451c80054d3fb7dca6a5011cd4ee1959071b1",
-      "decision": "missing_asset",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "bound_preset_contract_hash": "6ee08988d31e9e46da5b9010224a029551f9bb22c7f83dc5853a4be9da8c7ff7",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null,
+      "icon_key": "item.cloth-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -7986,18 +9036,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "668fe0becdb08f6572a753f1112451c80054d3fb7dca6a5011cd4ee1959071b1",
+        "preset_contract_hash": "6ee08988d31e9e46da5b9010224a029551f9bb22c7f83dc5853a4be9da8c7ff7",
         "preset_id": "item_variant.cloth_hood.masked_hood",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "1861f846ad7d470d3d17332e3a5da1f62425bcaba5dea9f90fd7aec63d4cb210",
-      "decision": "missing_asset",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "bound_preset_contract_hash": "65e0309a246177e3923dffc22bc612d6d7c36ec437a6634d9e8404b4374e8071",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.cloth_hood@1",
-      "icon_key": null,
+      "icon_key": "item.cloth-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.cloth_hood",
         "content_version": 1,
@@ -8007,7 +9057,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "1861f846ad7d470d3d17332e3a5da1f62425bcaba5dea9f90fd7aec63d4cb210",
+        "preset_contract_hash": "65e0309a246177e3923dffc22bc612d6d7c36ec437a6634d9e8404b4374e8071",
         "preset_id": "item_variant.cloth_hood.wizard_s_hood",
         "preset_version": 1
       }
@@ -8454,12 +9504,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "04d6456c127a274f41038da35d1ed48a84f43ebe4fcb1a6c467cf3dafc0f24cf",
-      "decision": "missing_asset",
+      "asset_sha256": "85826f6ab71a8b473556e101c5b3b0d42a34f71b6803849c87a03defffe08980",
+      "bound_preset_contract_hash": "396a728d93d85b62ac03b3250e4c1edf1b24a89c1a1b079035d7b530857e0dd9",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:weapon.double_bladed_sword@1",
-      "icon_key": null,
+      "icon_key": "item.double-bladed-sword",
       "inherit_definition_ref": {
         "content_id": "weapon.double_bladed_sword",
         "content_version": 1,
@@ -8469,18 +9519,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "04d6456c127a274f41038da35d1ed48a84f43ebe4fcb1a6c467cf3dafc0f24cf",
+        "preset_contract_hash": "396a728d93d85b62ac03b3250e4c1edf1b24a89c1a1b079035d7b530857e0dd9",
         "preset_id": "item_variant.double_bladed_sword.dark_double_blade",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "e77766bac2df6da3257982493c83f27683fe70f40d9615e4c818f1b2b159bd52",
-      "decision": "missing_asset",
+      "asset_sha256": "85826f6ab71a8b473556e101c5b3b0d42a34f71b6803849c87a03defffe08980",
+      "bound_preset_contract_hash": "8d4432b6cdf77602d8e1dab3c54e9e1958115c8b77930016f8067bd973f785eb",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:weapon.double_bladed_sword@1",
-      "icon_key": null,
+      "icon_key": "item.double-bladed-sword",
       "inherit_definition_ref": {
         "content_id": "weapon.double_bladed_sword",
         "content_version": 1,
@@ -8490,18 +9540,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "e77766bac2df6da3257982493c83f27683fe70f40d9615e4c818f1b2b159bd52",
+        "preset_contract_hash": "8d4432b6cdf77602d8e1dab3c54e9e1958115c8b77930016f8067bd973f785eb",
         "preset_id": "item_variant.double_bladed_sword.flaming_double_blade",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "12ec096463373bee65794ec3a380bee9e9ec8084ad767b1ae86b4f60d318d74b",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "6cc77797b7b57a688e535f916216e903225bd161499947ecf6ffb5f5b1e8005d",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8511,18 +9561,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "12ec096463373bee65794ec3a380bee9e9ec8084ad767b1ae86b4f60d318d74b",
+        "preset_contract_hash": "6cc77797b7b57a688e535f916216e903225bd161499947ecf6ffb5f5b1e8005d",
         "preset_id": "item_variant.fine_clothes.court_dress",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "dc80c17cbb208f8ca5befbe97dad880af21699e020fc83d6359c8e69ba7e10a9",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "8a6d3dcda50a633ddad05283424795c038a203f26d9910888577d89fa1aceb38",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8532,18 +9582,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "dc80c17cbb208f8ca5befbe97dad880af21699e020fc83d6359c8e69ba7e10a9",
+        "preset_contract_hash": "8a6d3dcda50a633ddad05283424795c038a203f26d9910888577d89fa1aceb38",
         "preset_id": "item_variant.fine_clothes.merchant_s_clothes",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "a5d1cd8e45658a9b68a821e15c0850716e14944ef5d452067d6c6ff9ed68379d",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "c79db257bd6cc262643b3b9c3e76c32226f27fb725ef14092d01643e6466c075",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8553,18 +9603,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "a5d1cd8e45658a9b68a821e15c0850716e14944ef5d452067d6c6ff9ed68379d",
+        "preset_contract_hash": "c79db257bd6cc262643b3b9c3e76c32226f27fb725ef14092d01643e6466c075",
         "preset_id": "item_variant.fine_clothes.merchant_s_finery",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "9456468f8ab0320c3df62e997e1bef3cc8a87c6176e80cfdcd076d5023cb1557",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "0cf446eadc2f9520fb009a8bc6701e1cc419fa02aecda49728dc270527a0b979",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8574,18 +9624,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "9456468f8ab0320c3df62e997e1bef3cc8a87c6176e80cfdcd076d5023cb1557",
+        "preset_contract_hash": "0cf446eadc2f9520fb009a8bc6701e1cc419fa02aecda49728dc270527a0b979",
         "preset_id": "item_variant.fine_clothes.noble_s_attire",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "a99d904dc803c9475aa606d155c2424321552f728002ceb1a6bb8b15f84b20d0",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "36630d262485d1af9b61ec070251a07212025fbe0f29cc22e6a7bc99554b7643",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8595,18 +9645,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "a99d904dc803c9475aa606d155c2424321552f728002ceb1a6bb8b15f84b20d0",
+        "preset_contract_hash": "36630d262485d1af9b61ec070251a07212025fbe0f29cc22e6a7bc99554b7643",
         "preset_id": "item_variant.fine_clothes.sea_captain_s_coat",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "57850825d2af2ba01e2d794cafef33d885e8b3b8e3447e5b87193b0df9ecdeff",
-      "decision": "missing_asset",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "bound_preset_contract_hash": "4a1b0936ee05e74db692f0e7b119743230cee9c9426c7e6ba74885bc2696882a",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.fine_clothes@1",
-      "icon_key": null,
+      "icon_key": "item.fine-clothes",
       "inherit_definition_ref": {
         "content_id": "apparel.fine_clothes",
         "content_version": 1,
@@ -8616,18 +9666,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "57850825d2af2ba01e2d794cafef33d885e8b3b8e3447e5b87193b0df9ecdeff",
+        "preset_contract_hash": "4a1b0936ee05e74db692f0e7b119743230cee9c9426c7e6ba74885bc2696882a",
         "preset_id": "item_variant.fine_clothes.villager_s_sunday_best",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "fd6492ae72ac1ebc7db4bc3d4115947de627222eac30b9f3ce8a9fa0ae52f29b",
-      "decision": "missing_asset",
+      "asset_sha256": "81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be",
+      "bound_preset_contract_hash": "0869985bb4cafc764f2458b13e5e16590bdfcba65cee6ce5f0fcfc62798315b6",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.gauntlets@1",
-      "icon_key": null,
+      "icon_key": "item.gauntlets",
       "inherit_definition_ref": {
         "content_id": "apparel.gauntlets",
         "content_version": 1,
@@ -8637,18 +9687,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "fd6492ae72ac1ebc7db4bc3d4115947de627222eac30b9f3ce8a9fa0ae52f29b",
+        "preset_contract_hash": "0869985bb4cafc764f2458b13e5e16590bdfcba65cee6ce5f0fcfc62798315b6",
         "preset_id": "item_variant.gauntlets.dark_gauntlets",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "b6cad3eb4131b401d098a696c098fb8b20790258746a07779545d84eb738fa3f",
-      "decision": "missing_asset",
+      "asset_sha256": "81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be",
+      "bound_preset_contract_hash": "a0a44de73fd882921da8eb0a732471f6b085bcb7e8dd8f95e2f3bae5783e2782",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.gauntlets@1",
-      "icon_key": null,
+      "icon_key": "item.gauntlets",
       "inherit_definition_ref": {
         "content_id": "apparel.gauntlets",
         "content_version": 1,
@@ -8658,18 +9708,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "b6cad3eb4131b401d098a696c098fb8b20790258746a07779545d84eb738fa3f",
+        "preset_contract_hash": "a0a44de73fd882921da8eb0a732471f6b085bcb7e8dd8f95e2f3bae5783e2782",
         "preset_id": "item_variant.gauntlets.golden_gauntlets",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "39f558e9d72145f42e525537eb41db96f6a4e4ea78aff08a2bc32e602628ecb9",
-      "decision": "missing_asset",
+      "asset_sha256": "81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be",
+      "bound_preset_contract_hash": "06223a55e10cfd0330b831d987e3361d0434ea11eaeebb3a9e553dc0abb09a8a",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.gauntlets@1",
-      "icon_key": null,
+      "icon_key": "item.gauntlets",
       "inherit_definition_ref": {
         "content_id": "apparel.gauntlets",
         "content_version": 1,
@@ -8679,18 +9729,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "39f558e9d72145f42e525537eb41db96f6a4e4ea78aff08a2bc32e602628ecb9",
+        "preset_contract_hash": "06223a55e10cfd0330b831d987e3361d0434ea11eaeebb3a9e553dc0abb09a8a",
         "preset_id": "item_variant.gauntlets.silver_gauntlets",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "33b23aa18b755ae11d3d500e7ffa66c2f258e39e08ce452901b43aaa1ae77a9c",
-      "decision": "missing_asset",
+      "asset_sha256": "71deba0a168030ccccf51c7893369170a122466ace1d9a78bc2836bcdb40bac6",
+      "bound_preset_contract_hash": "6d439097266f4f6fb8ae13034abb7b8381f092f58935943b4e1f23f45255e97f",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.great_helm@1",
-      "icon_key": null,
+      "icon_key": "item.great-helm",
       "inherit_definition_ref": {
         "content_id": "apparel.great_helm",
         "content_version": 1,
@@ -8700,18 +9750,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "33b23aa18b755ae11d3d500e7ffa66c2f258e39e08ce452901b43aaa1ae77a9c",
+        "preset_contract_hash": "6d439097266f4f6fb8ae13034abb7b8381f092f58935943b4e1f23f45255e97f",
         "preset_id": "item_variant.great_helm.demon_helm",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "4f71a4156d4bc58715bc6b3d6b7b8388c8bc5eaf444965473d790af008a37db7",
-      "decision": "missing_asset",
+      "asset_sha256": "71deba0a168030ccccf51c7893369170a122466ace1d9a78bc2836bcdb40bac6",
+      "bound_preset_contract_hash": "52ab1ebb14791e29ecfbba4213403a8cf21a33745b697ebca09ed49baceca078",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.great_helm@1",
-      "icon_key": null,
+      "icon_key": "item.great-helm",
       "inherit_definition_ref": {
         "content_id": "apparel.great_helm",
         "content_version": 1,
@@ -8721,7 +9771,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "4f71a4156d4bc58715bc6b3d6b7b8388c8bc5eaf444965473d790af008a37db7",
+        "preset_contract_hash": "52ab1ebb14791e29ecfbba4213403a8cf21a33745b697ebca09ed49baceca078",
         "preset_id": "item_variant.great_helm.golden_great_helm",
         "preset_version": 1
       }
@@ -9021,12 +10071,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "e72dfa958b75d04c591509a78fb15844d04f3836981d19c87739f5fd41ab9913",
-      "decision": "missing_asset",
+      "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
+      "bound_preset_contract_hash": "19ff84c663f1c055385600c3119d630812e236616656ec27fb329d32e91ebd4a",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.horned_helmet@1",
-      "icon_key": null,
+      "icon_key": "item.horned-helmet",
       "inherit_definition_ref": {
         "content_id": "apparel.horned_helmet",
         "content_version": 1,
@@ -9036,18 +10086,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "e72dfa958b75d04c591509a78fb15844d04f3836981d19c87739f5fd41ab9913",
+        "preset_contract_hash": "19ff84c663f1c055385600c3119d630812e236616656ec27fb329d32e91ebd4a",
         "preset_id": "item_variant.horned_helmet.closed_horned",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "78cd9122ea68d1f3f03a81f49bee308363ab7ba45782ded71383af1bf0455a56",
-      "decision": "missing_asset",
+      "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
+      "bound_preset_contract_hash": "9d1dc99c9027c5a0e7f9595321259815cc7266aaf1d95b04eaefbcd48516d171",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.horned_helmet@1",
-      "icon_key": null,
+      "icon_key": "item.horned-helmet",
       "inherit_definition_ref": {
         "content_id": "apparel.horned_helmet",
         "content_version": 1,
@@ -9057,18 +10107,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "78cd9122ea68d1f3f03a81f49bee308363ab7ba45782ded71383af1bf0455a56",
+        "preset_contract_hash": "9d1dc99c9027c5a0e7f9595321259815cc7266aaf1d95b04eaefbcd48516d171",
         "preset_id": "item_variant.horned_helmet.open_horned",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "130bf4ca441a867d269ce41092784655b15c94cb4d60eaed45b313118bec6f73",
-      "decision": "missing_asset",
+      "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
+      "bound_preset_contract_hash": "50ae8bd2d8fdb267209de997b85f04d6fcacade1465e986147dbc752f7501773",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.horned_helmet@1",
-      "icon_key": null,
+      "icon_key": "item.horned-helmet",
       "inherit_definition_ref": {
         "content_id": "apparel.horned_helmet",
         "content_version": 1,
@@ -9078,7 +10128,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "130bf4ca441a867d269ce41092784655b15c94cb4d60eaed45b313118bec6f73",
+        "preset_contract_hash": "50ae8bd2d8fdb267209de997b85f04d6fcacade1465e986147dbc752f7501773",
         "preset_id": "item_variant.horned_helmet.war_horned",
         "preset_version": 1
       }
@@ -9231,12 +10281,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "3e997f634b9f79e2af75957ac7e96d583a1dbba47987233d584c4e2c02bff64c",
-      "decision": "missing_asset",
+      "asset_sha256": "95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6",
+      "bound_preset_contract_hash": "9bb170ccdbc73b5ee0443c51f2237a1d24737d884ce8b25a14975bc2c59e1837",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_gloves@1",
-      "icon_key": null,
+      "icon_key": "item.leather-gloves",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_gloves",
         "content_version": 1,
@@ -9246,18 +10296,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "3e997f634b9f79e2af75957ac7e96d583a1dbba47987233d584c4e2c02bff64c",
+        "preset_contract_hash": "9bb170ccdbc73b5ee0443c51f2237a1d24737d884ce8b25a14975bc2c59e1837",
         "preset_id": "item_variant.leather_gloves.brown_gloves",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "3657bd91e4d4f02b12f2f8499d3b5e945c5faacf69d975480d69f3dbdb5563c6",
-      "decision": "missing_asset",
+      "asset_sha256": "95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6",
+      "bound_preset_contract_hash": "526587d0eb8faa0ad77bd3d10603e45d8132f06ef293dfd3dadc809817616694",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_gloves@1",
-      "icon_key": null,
+      "icon_key": "item.leather-gloves",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_gloves",
         "content_version": 1,
@@ -9267,18 +10317,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "3657bd91e4d4f02b12f2f8499d3b5e945c5faacf69d975480d69f3dbdb5563c6",
+        "preset_contract_hash": "526587d0eb8faa0ad77bd3d10603e45d8132f06ef293dfd3dadc809817616694",
         "preset_id": "item_variant.leather_gloves.dark_gloves",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "f0789660b92386937393550e3815abc7fda302662a3dd14cb31ef4e007b38db2",
-      "decision": "missing_asset",
+      "asset_sha256": "95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6",
+      "bound_preset_contract_hash": "54182aadcdcbad74455dca0cd77670f1bde56c9b6eb1aaa0ecf7a4b223771bae",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_gloves@1",
-      "icon_key": null,
+      "icon_key": "item.leather-gloves",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_gloves",
         "content_version": 1,
@@ -9288,18 +10338,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "f0789660b92386937393550e3815abc7fda302662a3dd14cb31ef4e007b38db2",
+        "preset_contract_hash": "54182aadcdcbad74455dca0cd77670f1bde56c9b6eb1aaa0ecf7a4b223771bae",
         "preset_id": "item_variant.leather_gloves.red_gloves",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "de77ae3304450fe7d89407f767a8e9c7849f6a3ae9bf7eadaabd44245b6d571c",
-      "decision": "missing_asset",
+      "asset_sha256": "0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac",
+      "bound_preset_contract_hash": "19d2ab010245a531edb54d4d78114b126c6eb6d63e2fb8f4aa21607e78161f51",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_hood@1",
-      "icon_key": null,
+      "icon_key": "item.leather-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_hood",
         "content_version": 1,
@@ -9309,18 +10359,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "de77ae3304450fe7d89407f767a8e9c7849f6a3ae9bf7eadaabd44245b6d571c",
+        "preset_contract_hash": "19d2ab010245a531edb54d4d78114b126c6eb6d63e2fb8f4aa21607e78161f51",
         "preset_id": "item_variant.leather_hood.assassin_s_hood",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "bc679e0ed7eed03c4a7f2a291af68bfc017db876061d0b11606c8b85202fa810",
-      "decision": "missing_asset",
+      "asset_sha256": "0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac",
+      "bound_preset_contract_hash": "3009da936bfc83bdb48171f7e59001268af55503ddd047cdcbfe1fdf40227c59",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_hood@1",
-      "icon_key": null,
+      "icon_key": "item.leather-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_hood",
         "content_version": 1,
@@ -9330,18 +10380,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "bc679e0ed7eed03c4a7f2a291af68bfc017db876061d0b11606c8b85202fa810",
+        "preset_contract_hash": "3009da936bfc83bdb48171f7e59001268af55503ddd047cdcbfe1fdf40227c59",
         "preset_id": "item_variant.leather_hood.deep_hood",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "87dc695d4f871c965c265feae70894f4cad568436bc6baa9e4de1630d932ea25",
-      "decision": "missing_asset",
+      "asset_sha256": "0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac",
+      "bound_preset_contract_hash": "5aae5e3eae8675d626d503fe6221ea44f24a9cfea31732192fe22abfca9d2b25",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.leather_hood@1",
-      "icon_key": null,
+      "icon_key": "item.leather-hood",
       "inherit_definition_ref": {
         "content_id": "apparel.leather_hood",
         "content_version": 1,
@@ -9351,7 +10401,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "87dc695d4f871c965c265feae70894f4cad568436bc6baa9e4de1630d932ea25",
+        "preset_contract_hash": "5aae5e3eae8675d626d503fe6221ea44f24a9cfea31732192fe22abfca9d2b25",
         "preset_id": "item_variant.leather_hood.ranger_hood",
         "preset_version": 1
       }
@@ -9693,12 +10743,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "5f842c9955acf8757847a9046948ce06d077d869aa0ed11050040ad76ce8ca81",
-      "decision": "missing_asset",
+      "asset_sha256": "0285b9b3b054f718f3f9210ffdc9fdc5832136ccda6fb371ba450d68de1a3be5",
+      "bound_preset_contract_hash": "b660ad6dd514b4903c2897686069b869c3fb9a03d523a4d6fa1dc53c400271eb",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.monster_hands@1",
-      "icon_key": null,
+      "icon_key": "item.monster-hands",
       "inherit_definition_ref": {
         "content_id": "apparel.monster_hands",
         "content_version": 1,
@@ -9708,18 +10758,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "5f842c9955acf8757847a9046948ce06d077d869aa0ed11050040ad76ce8ca81",
+        "preset_contract_hash": "b660ad6dd514b4903c2897686069b869c3fb9a03d523a4d6fa1dc53c400271eb",
         "preset_id": "item_variant.monster_hands.green_monster_hands",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "6dc19a3b907e0657f5bf4bcc833da8dd33a59d7eed7d825bd707e7004291683f",
-      "decision": "missing_asset",
+      "asset_sha256": "0285b9b3b054f718f3f9210ffdc9fdc5832136ccda6fb371ba450d68de1a3be5",
+      "bound_preset_contract_hash": "f3635cf13d8393bc5006fb84202b072ab2c4c619e9b173d61ed6fa85de6e48d3",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.monster_hands@1",
-      "icon_key": null,
+      "icon_key": "item.monster-hands",
       "inherit_definition_ref": {
         "content_id": "apparel.monster_hands",
         "content_version": 1,
@@ -9729,18 +10779,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "6dc19a3b907e0657f5bf4bcc833da8dd33a59d7eed7d825bd707e7004291683f",
+        "preset_contract_hash": "f3635cf13d8393bc5006fb84202b072ab2c4c619e9b173d61ed6fa85de6e48d3",
         "preset_id": "item_variant.monster_hands.red_monster_hands",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "36f63d82934491eca98bb266765fcac096553b4a57a1e5babad86eb4e2495826",
-      "decision": "missing_asset",
+      "asset_sha256": "350f670d4e63cc9f0991504fbfffb4ba9e86e2dc1e3c66bddefa7879ee1cf639",
+      "bound_preset_contract_hash": "c388449fc837906d56eb77b89fd1cef2ddb965c91b87cdc6991fbd331bc166b4",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.monster_helm@1",
-      "icon_key": null,
+      "icon_key": "item.monster-helm",
       "inherit_definition_ref": {
         "content_id": "apparel.monster_helm",
         "content_version": 1,
@@ -9750,18 +10800,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "36f63d82934491eca98bb266765fcac096553b4a57a1e5babad86eb4e2495826",
+        "preset_contract_hash": "c388449fc837906d56eb77b89fd1cef2ddb965c91b87cdc6991fbd331bc166b4",
         "preset_id": "item_variant.monster_helm.green_monster_helm",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "d8695947afaf2b4b4b1f3bd0f3969a726253675dcf54e3401547d3bc8b538fa0",
-      "decision": "missing_asset",
+      "asset_sha256": "350f670d4e63cc9f0991504fbfffb4ba9e86e2dc1e3c66bddefa7879ee1cf639",
+      "bound_preset_contract_hash": "5bb6a37c797ae661617b1b37ebca1f26c26490356ef2018653404f2ad7b80ce8",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.neurodragon:item:apparel.monster_helm@1",
-      "icon_key": null,
+      "icon_key": "item.monster-helm",
       "inherit_definition_ref": {
         "content_id": "apparel.monster_helm",
         "content_version": 1,
@@ -9771,7 +10821,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "d8695947afaf2b4b4b1f3bd0f3969a726253675dcf54e3401547d3bc8b538fa0",
+        "preset_contract_hash": "5bb6a37c797ae661617b1b37ebca1f26c26490356ef2018653404f2ad7b80ce8",
         "preset_id": "item_variant.monster_helm.red_monster_helm",
         "preset_version": 1
       }
@@ -10008,12 +11058,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "5dfccf64802ae4b9ccaf5615104a019c6a02758ead3d4bead3f471b5a3f0491e",
-      "decision": "missing_asset",
+      "asset_sha256": "50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59",
+      "bound_preset_contract_hash": "39861178963f520614f26b31bff41c6d3f8053d6ed636d0f126cb4ab7c2a32cf",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.srd_5_1_cc:item:weapon.sickle@1",
-      "icon_key": null,
+      "icon_key": "item.sickle",
       "inherit_definition_ref": {
         "content_id": "weapon.sickle",
         "content_version": 1,
@@ -10023,7 +11073,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "5dfccf64802ae4b9ccaf5615104a019c6a02758ead3d4bead3f471b5a3f0491e",
+        "preset_contract_hash": "39861178963f520614f26b31bff41c6d3f8053d6ed636d0f126cb4ab7c2a32cf",
         "preset_id": "item_variant.off_hand_sickle.iron_sickle_off_hand",
         "preset_version": 1
       }
@@ -10932,12 +11982,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "933aa87f823dda2852d6eda01c6b137864289aa53ad8c7efd9d08431dfc5fa01",
-      "decision": "missing_asset",
+      "asset_sha256": "50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59",
+      "bound_preset_contract_hash": "8f6c4c8df9f73ae4d70707877116eb9b1e1f71c6d15824121107253900fa0965",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.srd_5_1_cc:item:weapon.sickle@1",
-      "icon_key": null,
+      "icon_key": "item.sickle",
       "inherit_definition_ref": {
         "content_id": "weapon.sickle",
         "content_version": 1,
@@ -10947,18 +11997,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "933aa87f823dda2852d6eda01c6b137864289aa53ad8c7efd9d08431dfc5fa01",
+        "preset_contract_hash": "8f6c4c8df9f73ae4d70707877116eb9b1e1f71c6d15824121107253900fa0965",
         "preset_id": "item_variant.sickle.druidic_sickle",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "75b4745c06f0ca5970651057cf05add37e46e499f111ce531baa8a12feffdbe2",
-      "decision": "missing_asset",
+      "asset_sha256": "50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59",
+      "bound_preset_contract_hash": "ea5a55271c8702d3f1d05b21cbbddacfb395628575abb417654a34c808939a42",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.srd_5_1_cc:item:weapon.sickle@1",
-      "icon_key": null,
+      "icon_key": "item.sickle",
       "inherit_definition_ref": {
         "content_id": "weapon.sickle",
         "content_version": 1,
@@ -10968,7 +12018,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "75b4745c06f0ca5970651057cf05add37e46e499f111ce531baa8a12feffdbe2",
+        "preset_contract_hash": "ea5a55271c8702d3f1d05b21cbbddacfb395628575abb417654a34c808939a42",
         "preset_id": "item_variant.sickle.rusty_sickle",
         "preset_version": 1
       }
@@ -11226,12 +12276,12 @@
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "495731496c37c9420e041494c45d19a94b6f5844d5d242d06dabc8155c1a788b",
-      "decision": "missing_asset",
+      "asset_sha256": "5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef",
+      "bound_preset_contract_hash": "3b88d7fa4a22eb2937a3b86956ea27084e5e960327f0e7f25f85b4b50c648f51",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.srd_5_1_cc:item:weapon.trident@1",
-      "icon_key": null,
+      "icon_key": "item.trident",
       "inherit_definition_ref": {
         "content_id": "weapon.trident",
         "content_version": 1,
@@ -11241,18 +12291,18 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "495731496c37c9420e041494c45d19a94b6f5844d5d242d06dabc8155c1a788b",
+        "preset_contract_hash": "3b88d7fa4a22eb2937a3b86956ea27084e5e960327f0e7f25f85b4b50c648f51",
         "preset_id": "item_variant.trident.coral_trident",
         "preset_version": 1
       }
     },
     {
-      "asset_sha256": null,
-      "bound_preset_contract_hash": "f55d27dac71b89625b79759b8534b3c163ffe32eba49cbbbb9f2937692452b3f",
-      "decision": "missing_asset",
+      "asset_sha256": "5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef",
+      "bound_preset_contract_hash": "fb675917bc324fa8a96612ce833815f27e7fc07bb574b97883c54bd7ed25f8c7",
+      "decision": "bind",
       "evidence_kind": "inherit_definition",
       "evidence_token": "content.srd_5_1_cc:item:weapon.trident@1",
-      "icon_key": null,
+      "icon_key": "item.trident",
       "inherit_definition_ref": {
         "content_id": "weapon.trident",
         "content_version": 1,
@@ -11262,7 +12312,7 @@
       },
       "preset_ref": {
         "pack_id": "content.neurodragon",
-        "preset_contract_hash": "f55d27dac71b89625b79759b8534b3c163ffe32eba49cbbbb9f2937692452b3f",
+        "preset_contract_hash": "fb675917bc324fa8a96612ce833815f27e7fc07bb574b97883c54bd7ed25f8c7",
         "preset_id": "item_variant.trident.golden_trident",
         "preset_version": 1
       }
@@ -11438,9 +12488,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 455,
+    "asset_count": 477,
     "schema_version": 3,
-    "sha256": "c154feeea3803fe3c023c7a89d4bf71cdc13624e2f6adf2be3429d4315815bea",
+    "sha256": "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc",
     "style_id": "fantasy-classic-v1"
   }
 }

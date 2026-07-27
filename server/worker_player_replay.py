@@ -51,9 +51,7 @@ def build_worker_subjective_replays(
     except SubjectiveReplayCaptureNotReadyError as exc:
         raise WorkerPlayerReplayNotReady(str(exc)) from exc
     except SubjectiveReplayCaptureError as exc:
-        raise WorkerPlayerReplayError(
-            "recorded player reducer inputs are incomplete or invalid"
-        ) from exc
+        raise WorkerPlayerReplayError(str(exc)) from exc
     return archive
 
 

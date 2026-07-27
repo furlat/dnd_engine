@@ -21,6 +21,146 @@ This section is the canonical status index as of 2026-07-24. The historical
 ledger below is preserved as discovery evidence, but an older `OPEN` label does
 not override a status recorded here.
 
+### Hosted character terminal evidence has release-only holdings disposition
+
+- **Found**: 2026-07-27 local-profile terminal-settlement convergence.
+- **Resolution**: hosted workers now project the same exact runtime holdings
+  evidence as the standalone lifecycle and include it in their
+  generation-fenced terminal spool. The gateway binds that evidence to the
+  pinned deployment and commits replay metadata, summary, the new holdings
+  revision, settlement receipt, lease release, ended transition, and manifest
+  adoption in one SQLite transaction. The release-only hosted disposition and
+  its retry path were deleted.
+- **Automated proof**:
+  `tests/manual/test_101_game_directory_evidence.py::test_hosted_terminal_settles_pinned_character_holdings`
+  now passes normally. It also injects a settlement failure after terminal
+  publication begins and proves the whole transaction rolls back before the
+  same staged manifest retries successfully.
+- **Status**: RESOLVED 2026-07-27.
+
+### Hosted terminal-ready evidence is not durable before gateway publication
+
+- **Found**: 2026-07-27 terminal crash/restart audit.
+- **Resolution**: each worker now fsyncs immutable summary, objective replay,
+  subjective replay, and optional holdings components before atomically
+  publishing a self-authenticating ready manifest last. The manifest is fenced
+  by game, worker identity, worker generation, terminal coordinates, component
+  schemas, byte sizes, and SHA-256 digests. Gateway startup imports and adopts
+  valid filesystem or previously staged manifests before orphan interruption.
+- **Automated proof**:
+  `tests/manual/test_110_gateway_restart.py::test_gateway_directory_has_durable_terminal_ready_manifest`
+  proves the immutable migration contract, and
+  `tests/manual/test_110_gateway_restart.py::test_gateway_restart_adopts_ready_manifest_before_orphan_interrupt`
+  proves a fresh gateway ends the game from the durable ready boundary instead
+  of marking it interrupted. `tests/manual/test_189_worker_terminal_spool.py`
+  covers ready-last ordering, incomplete writes, stale generations, component
+  corruption, manifest tampering, and terminal-coordinate mismatches.
+- **Status**: RESOLVED 2026-07-27.
+
+### Persistent player bodies incorrectly entered a non-terminal death-save loop
+
+- **Found**: 2026-07-27 live standalone AI game and NeuroClient terminal-flow
+  audit.
+- **Behavior**: the canonical schema-2 `PlayerCharacterBody` explicitly set
+  `uses_death_saves=True`. A character reduced to zero hit points therefore
+  entered `DYING` instead of `DEAD`; target discovery excluded the zero-HP
+  actor while encounter faction survival still counted every non-dead actor.
+  AI turns could continue without a lawful target, no `EncounterEndEvent` was
+  committed, and replay/summary publication never reached its terminal
+  barrier.
+- **Resolution**: canonical persistent player bodies now follow the selected
+  product rule `0 HP -> DEAD` and no longer opt into death saves. The ordinary
+  death event, life-state presentation cue, encounter faction check, AI stop,
+  replay close, and summary publication now share one terminal boundary.
+- **Automated proof**:
+  `tests/progression/test_player_character_body.py::test_player_body_is_public_but_owns_no_progression_or_possessions`
+  and
+  `tests/progression/test_schema2_character_materialization.py::test_schema2_player_zero_hp_commits_dead_and_terminal_encounter`
+  cover the production materializer and exact engine event order.
+  `tests/manual/test_187_standalone_local_game_lifecycle.py::test_ai_match_publishes_local_terminal_replays_and_game_history`
+  covers AI scheduling, portable replay artifacts, durable summary, and the
+  absence of terminal `DYING`/`STABLE` snapshots.
+  NeuroClient's `app/scripts/encounter-end-presentation-smoke.mjs` covers exact
+  `DEAD -> die -> encounterResult` ordering without inference.
+- **Status**: RESOLVED 2026-07-27.
+
+### Sorcerer runtime features without lawful engine primitives
+
+- **Found**: 2026-07-26 reversible Sorcerer composition tranche.
+- **Resolution**: Distant, Quickened, and Twinned Spell are the only
+  metamagics offered by the current build selector. The other five SRD rows
+  remain public future catalog content but are explicitly non-selectable and
+  fail closed if called directly. The authored progression therefore selects
+  two implemented options at Sorcerer 3 and the remaining implemented option
+  at Sorcerer 10; it does not advertise an impossible fourth option at level
+  17. Elemental Affinity now contributes the
+  ancestry-matching Charisma damage bonus exactly once per cast and removes it
+  by source receipt. Its optional half is an exact authored action that spends
+  one sorcery point for 600 rounds of the ancestry-matching resistance; no
+  permanent resistance condition survives materialization or respec. Draconic
+  Presence now owns two exact aura-mode actions, ordinary concentration, a
+  10-round 60-foot turn-start aura, source-specific 24-hour immunity, and
+  cross-entity cleanup during respec.
+- **Automated proof**:
+  `tests/progression/test_sorcerer_character_grant_appliers.py`,
+  `tests/progression/test_spell_damage_affinity_contributions.py`, and
+  `tests/progression/test_sorcerer_progression_definitions.py`.
+- **Status**: RESOLVED 2026-07-26.
+
+### Existing-class composition had no cross-class release owner
+
+- **Found**: 2026-07-27 pre-SDK character-progression release gate.
+- **Error**: Fighter 10-20 fixture composition omitted Champion's second
+  Fighting Style. Sorcerer 10-20 omitted its third implemented Metamagic and
+  reselected an already-known cantrip. No maintained test materialized every
+  Fighter, Barbarian, and Sorcerer level or the six ordered multiclass pairs,
+  so these authored-choice gaps and cross-class combination policy were not
+  measured together. Starting-equipment packages were also authored as ordinary
+  class-level-one choices, incorrectly requiring a second package when level
+  one of a later class was added.
+- **Resolution**: the built-in authored composer now supplies the exact
+  Fighter and Sorcerer choices, retains each newly learned cantrip, and uses
+  the honest three-option Metamagic progression. The existing reversible
+  structural installer is public as `apply_character_composition`, allowing
+  one Entity to remove and replace its composition without touching holdings,
+  identity, position, or unrelated body state. Starting equipment is now an
+  exact first-class creation choice only; multiclass entry cannot request or
+  grant it. An authored Fighter 2 / Sorcerer 3 premade proves that the general
+  schema-2 ledger, validator, holdings composer, materializer, and cleanup path
+  handle a real multiclass catalog build without a premade-only Entity path.
+- **Automated proof**:
+  `tests/progression/test_multiclass_composition.py` covers levels 1-20 for all
+  three classes, all ordered pairs, first-class saves, restricted entry
+  proficiencies, total-level proficiency, mixed HP/hit dice and short-rest
+  spending, Extra Attack rank overlap, AC candidate resolution, spell-source
+  retention, a three-class build, martial attack math, cleanup, and same-Entity
+  recomposition, first-class-only starting equipment, and the canonical
+  Fighter 2 / Sorcerer 3 premade.
+  `tests/progression/test_starting_equipment_packages.py` owns package creation
+  semantics, and
+  `tests/progression/test_sorcerer_progression_definitions.py` owns the bounded
+  Metamagic contract.
+- **Status**: RESOLVED 2026-07-27.
+
+### Neurodragon source digest was invalidated by a line-ending rewrite
+
+- **Found**: 2026-07-26 character-progression baseline.
+- **Automated reproducer**:
+  `uv run python -c "import dnd.content_system.builtin"` failed deterministically
+  before any pytest collection with `RuntimeError: Neurodragon original source
+  document digest does not match its content-source contract`.
+- **Cause**: the authenticated
+  `content_data/sources/neurodragon_original_b2b3930.txt` working-tree artifact
+  had been mechanically rewritten from LF to CRLF while its source contract
+  correctly retained the digest of the canonical LF bytes.
+- **Resolution requirement**: restore canonical LF bytes without weakening or
+  recomputing the provenance assertion, then prove the same import and the
+  focused content bootstrap test pass.
+- **Resolution**: restored the authenticated source document to canonical LF
+  bytes. The import reproducer now passes and
+  `tests/manual/test_162_content_system_bootstrap.py` is green (`6 passed`).
+- **Status**: RESOLVED 2026-07-26.
+
 ### Canonical AI hard cut
 
 - **Native AI no longer uses a subprocess or self-HTTP gameplay client.**
@@ -118,7 +258,7 @@ not override a status recorded here.
   `/tmp/dnd-final-pytest-shard1of3-yUDNMR`, and
   `/tmp/dnd-pytest-final-shard2-e5lAVl`.
 
-### Public content catalog has 23 unauthored game-icon assets
+### Public content catalog had 23 unauthored game-icon assets
 
 - **Found**: 2026-07-26 while reconciling the authenticated built-in icon
   ledger with the pinned 455-asset NeuroClient atlas.
@@ -151,14 +291,69 @@ not override a status recorded here.
   `action.item.field_kit.deploy` through its exact `GRANTS_ACTION` dependency,
   and the `14` variant-bearing root bindings close all `40` preset rows without
   variant-specific icon aliases.
+- **Resolution**: the pinned NeuroClient manifest now authenticates `477`
+  assets at SHA-256
+  `dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc`.
+  The `22` new semantic keys bind all `23` definitions, including exact
+  `item.field-kit` inheritance for the provider-owned deploy action. The
+  generated definition ledger has zero unresolved rows and the affected
+  recipe presets inherit their exact definition binding.
 - **Exact reproducer**:
   `tests/manual/test_183_content_icon_bindings.py::test_every_public_builtin_has_no_unresolved_icon_assets`
-  is a strict xfail for this title and asserts that public `missing_asset` and
-  `ambiguous` rows are empty. An unexpected pass fails the suite until this
-  entry and marker are removed.
-- **Status**: OPEN.
+  now runs as a normal regression and asserts that public `missing_asset` and
+  `ambiguous` rows are empty.
+- **Status**: RESOLVED 2026-07-27.
 
 ### Recently resolved engine and rules defects
+
+### Turn execution identity was request-context-local
+
+- **Found**: 2026-07-27 while restoring the active AI validation harness after
+  the character-factory hard cut.
+- **Behavior**: a turn opened by `advance_encounter()` in one async task could
+  not be closed by the later action/end-turn HTTP request, and events created
+  between those requests lost their causal turn identity.
+- **Cause**: `EventQueue` is the process-global owner of one event stream, but
+  its active turn identity was stored in a `ContextVar`, whose value does not
+  cross independent `asyncio.run()` or ASGI request contexts.
+- **Resolution**: the active turn identity is now ordinary protected
+  `EventQueue` state, reset and cold-load-audited alongside the rest of the
+  singleton event stream.
+- **Exact reproducer**:
+  `tests/manual/test_184_turn_execution_identity.py::test_turn_identity_survives_separate_async_request_contexts`.
+- **Status**: RESOLVED 2026-07-27.
+
+### Schema-2 spell slots disappeared from AI decision epochs
+
+- **Found**: 2026-07-27 after the request-context turn crash was fixed.
+- **Behavior**: schema-2 Sorcerers could spend normal spell slots, but their
+  subjective `ActionEconomyState.spell_slots` was empty. The policy therefore
+  valued capability transforms against incomplete resource facts.
+- **Cause**: normal multiclass spell-slot capacity is now an owned aggregate
+  modifier, while the decision-epoch projector still treated only the retired
+  base modifier as maximum capacity.
+- **Resolution**: `ActionEconomy` exposes the installed aggregate capacities,
+  and the AI projector uses those exact maxima while preserving current
+  post-cost values.
+- **Exact reproducers**:
+  `tests/progression/test_normal_spell_slot_capacity.py::test_normal_slot_capacity_sets_all_ranks_without_touching_turn_resources`
+  and
+  `tests/manual/test_39_ai_validation_harness.py::test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands`.
+- **Status**: RESOLVED 2026-07-27.
+
+### Standalone self-play omitted cold content startup
+
+- **Found**: 2026-07-27 in the retained cross-process deterministic replay
+  check.
+- **Behavior**: calling `run_external_selfplay()` from a fresh Python process
+  failed with `RuntimeError: Content system is not installed`; pytest masked
+  the defect through its session fixture.
+- **Resolution**: the standalone evaluator boundary installs the authenticated
+  content system exactly once before creating engine state, while installed
+  server/test processes retain the existing immutable runtime.
+- **Exact reproducer**:
+  `tests/manual/test_39_ai_validation_harness.py::test_external_selfplay_seed_replays_across_fresh_processes`.
+- **Status**: RESOLVED 2026-07-27.
 
 ### Weapon attack affordances dropped their exact dynamic icon provider
 
@@ -718,11 +913,11 @@ not override a status recorded here.
 
 ### Hosted AI match does not reach terminal summary before timeout
 - **Found**: 2026-07-23 while validating subjective replay persistence; reproduced twice and unrelated to the replay endpoints.
-- **Test file**: `tests/manual/test_110_multi_game_gateway.py::test_ai_match_publishes_canonical_summary_from_terminal_event`
+- **Test file**: `tests/manual/test_110_multi_game_gateway.py::test_ai_match_publishes_canonical_terminal_evidence_from_terminal_event`
 - **Error**: After 30 seconds the AI encounter had not published `EncounterEnd`; the game-directory row remained active until worker shutdown, and the worker returned only `terminal_summary_not_ready`. The new subjective replay endpoints were therefore never reached by this failing path.
 - **Hypothesis**: The hosted AI encounter or controller loop was failing to reach its terminal event within the test deadline.
 - **Verification**: Re-run on 2026-07-24:
-  `tests/manual/test_110_multi_game_gateway.py::test_ai_match_publishes_canonical_summary_from_terminal_event`
+  `tests/manual/test_110_multi_game_gateway.py::test_ai_match_publishes_canonical_terminal_evidence_from_terminal_event`
   passes.
 - **Status**: RESOLVED 2026-07-24; retained as historical timeout evidence.
 

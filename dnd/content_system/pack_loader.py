@@ -90,6 +90,7 @@ _EVENT_QUEUE_STATE_ATTRIBUTES = (
     "_events_by_target",
     "_all_events",
     "_generation_uuid",
+    "_active_turn_execution_id",
     "_event_handlers",
     "_event_handlers_by_trigger",
     "_event_handlers_by_simple_trigger",
@@ -1743,10 +1744,28 @@ def _content_set_digest(
                     if declaration.item_definition is not None
                     else None
                 ),
+                "definition_payload": (
+                    declaration.definition_payload.model_dump(mode="json")
+                    if declaration.definition_payload is not None
+                    else None
+                ),
                 "dependencies": [
                     dependency.model_dump(mode="json")
                     for dependency in declaration.dependencies
                 ],
+                "condition_effect_coverage": (
+                    declaration.condition_effect_coverage.value
+                ),
+                "condition_effect_profile": (
+                    declaration.condition_effect_profile.model_dump(mode="json")
+                    if declaration.condition_effect_profile is not None
+                    else None
+                ),
+                "condition_lifecycle": (
+                    declaration.condition_lifecycle.model_dump(mode="json")
+                    if declaration.condition_lifecycle is not None
+                    else None
+                ),
             }
             for declaration in sorted(
                 built_in_declarations,

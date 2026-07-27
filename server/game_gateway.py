@@ -24,16 +24,35 @@ from typing import AsyncIterator, Callable, Iterable, TypeVar
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, Header, Request, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.pack_loader import LoadedContentSystem
-from server.character_composition import (
-    PremadeCharacterNotFoundError,
-    compose_premade_character_bootstrap,
+from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
+from server.character_directory_contracts import (
+    CharacterAdvancementResponse,
+    CharacterBuildValidationRequest,
+    CharacterBuildValidationResponse,
+    CharacterDefinitionHistoryResponse,
+    CharacterLevelUpRequest,
+    CharacterLoadoutMutationRequest,
+    CharacterRespecRequest,
+    CharacterSnapshotResponse,
+    CreateCharacterRequest,
+)
+from server.character_directory_service import (
+    CharacterDirectoryBuildError,
+    CharacterDirectoryOwnershipError,
+    CharacterDirectoryService,
+)
+from server.character_directory_routes import create_character_directory_router
+from server.character_deployment import build_character_deployment_snapshot
+from server.character_settlement import (
+    WorkerCharacterHoldingsEvidence,
+    build_terminal_settlement_bundle,
 )
 from server.api_models import (
     GameCreationActivateRequest,
@@ -49,7 +68,10 @@ from server.api_models import (
     ServerCapabilitiesResponse,
 )
 from server.player_replication_contract import SubjectiveReplicationBootstrap
-from server.directory_event_stream import DirectoryEventStream
+from server.directory_event_stream import (
+    DirectoryEventStream,
+    create_directory_event_stream_router,
+)
 from server.content_catalog import (
     ContentCatalogResponse,
     ContentManifestResponse,
@@ -61,8 +83,6 @@ from server.event_contract import EVENT_CONTRACT_HASH
 from server.game_directory.canonical import hash_capability
 from server.game_directory.contracts import (
     AccessGrantCreate,
-    ArtifactCreate,
-    ArtifactKind,
     AttachmentState,
     AttachmentCreate,
     CharacterDeploymentLeaseCreate,
@@ -89,9 +109,11 @@ from server.game_directory.contracts import (
     PrincipalKind,
     PrincipalRecord,
     ProducerKind,
-    VisibilityPolicy,
+    ProfileSettingsRecord,
     WorkerCreate,
     WorkerState,
+    WorkerTerminalReadyManifestCreate,
+    WorkerTerminalReadyManifestRecord,
     WorkerTransportKind,
 )
 from server.game_directory.errors import (
@@ -104,10 +126,8 @@ from server.game_directory.repository import GameDirectoryRepository
 from server.game_artifact_store import GameArtifactStore, ArtifactStoreError
 from server.game_gateway_models import (
     AttachmentPolicy,
-    AttachmentSummary,
     AttachHostedGameRequest,
     AttachHostedGameResponse,
-    CreateCharacterRequest,
     CreateAgentGrantRequest,
     CreateAgentGrantResponse,
     CreateHostedGameRequest,
@@ -115,18 +135,21 @@ from server.game_gateway_models import (
     GuestPrincipalRequest,
     GuestPrincipalResponse,
     HostedGameConnection,
-    HostedGameListResponse,
     ObserveHostedGameRequest,
     ObserveHostedGameResponse,
-    PlayerGameSeat,
     PlayerIdentityRequest,
     PlayerIdentityResponse,
-    PlayerProfileResponse,
     ReconnectHostedGameRequest,
     ReconnectHostedGameResponse,
     StopHostedGameRequest,
     StopHostedGameResponse,
 )
+from server.game_history import (
+    GameHistoryQueryError,
+    GameHistoryQueryService,
+    create_game_history_router,
+)
+from server.game_history_contracts import GameHistoryListResponse
 from dnd.scenarios.evaluation.compatibility import CompatibilityReport
 from server.game_creation_catalog import (
     GameCreationCatalogError,
@@ -140,16 +163,21 @@ from server.hosted_worker import (
     HostedWorkerManager,
 )
 from server.game_summary_store import WorkerSummaryEvidence
-from server.objective_replay import (
-    OBJECTIVE_REPLAY_CONTRACT_HASH,
-    OBJECTIVE_REPLAY_CONTRACT_VERSION,
-    ObjectiveReplayBundle,
-)
+from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import (
-    PLAYER_REPLAY_CONTRACT_HASH,
-    PLAYER_REPLAY_CONTRACT_VERSION,
     SubjectivePlayerReplayArchive,
     SubjectivePlayerReplayBundle,
+)
+from server.game_runtime_identity import ENGINE_VERSION, RULESET_VERSION
+from server.terminal_evidence import (
+    TerminalEvidenceError,
+    store_terminal_artifacts,
+    validate_stored_terminal_artifacts,
+)
+from server.worker_terminal_spool import (
+    WorkerTerminalSpool,
+    WorkerTerminalSpoolError,
+    WorkerTerminalSpoolNotReady,
 )
 from server.runtime_authority import (
     RuntimeAuthorityCache,
@@ -161,19 +189,9 @@ from server.spell_catalog import build_spell_catalog
 from server.worker_proxy import proxy_runtime_request
 
 
-ENGINE_VERSION = "0.1.0"
-RULESET_VERSION = "single-videogame-ruleset-v1"
 DEFAULT_RUNTIME_TTL_SECONDS = 60 * 60
 TERMINAL_SUMMARY_READY_TIMEOUT_SECONDS = 5.0
 TERMINAL_SUMMARY_RETRY_INTERVAL_SECONDS = 0.01
-OBJECTIVE_REPLAY_SCHEMA_VERSION = (
-    f"dnd.objective-replay.v{OBJECTIVE_REPLAY_CONTRACT_VERSION}."
-    f"{OBJECTIVE_REPLAY_CONTRACT_HASH}"
-)
-SUBJECTIVE_REPLAY_SCHEMA_VERSION = (
-    f"dnd.subjective-player-replay.v{PLAYER_REPLAY_CONTRACT_VERSION}."
-    f"{PLAYER_REPLAY_CONTRACT_HASH}"
-)
 WorkerResponseT = TypeVar("WorkerResponseT", bound=BaseModel)
 logger = logging.getLogger("dnd_game_gateway")
 
@@ -206,9 +224,17 @@ class GameGatewayService:
         self.worker_manager = worker_manager
         self.authority_cache = authority_cache
         self.artifact_store = artifact_store
+        self.game_history = GameHistoryQueryService(
+            repository,
+            artifact_store,
+        )
         self.capability_pepper = capability_pepper
         self.content_system = content_system or bootstrap_content_system()
         self.content_set_digest = self.content_system.content_set_digest
+        self.character_directory = CharacterDirectoryService(
+            repository,
+            self.content_system,
+        )
         if (
             self.content_set_digest
             != worker_manager.expected_content_set_digest
@@ -217,6 +243,7 @@ class GameGatewayService:
                 "Gateway and worker manager content identities differ",
             )
         self.runtime_ttl_seconds = runtime_ttl_seconds
+        self._recover_worker_terminal_manifests()
         self._reconcile_orphaned_active_games()
         self.directory_stream = DirectoryEventStream(
             lambda since, limit: self.repository.list_directory_events(
@@ -227,6 +254,174 @@ class GameGatewayService:
         self._terminal_monitors: dict[UUID, asyncio.Task[None]] = {}
         self._terminal_persistence_locks: dict[UUID, asyncio.Lock] = {}
         self._publish_new_directory_events()
+
+    def _recover_worker_terminal_manifests(self) -> None:
+        """Adopt staged and worker-spooled terminal evidence before orphans."""
+
+        for manifest in (
+            self.repository.list_pending_worker_terminal_ready_manifests()
+        ):
+            try:
+                self._adopt_staged_worker_terminal_manifest(manifest)
+            except Exception:
+                logger.exception(
+                    "staged worker terminal manifest adoption failed for %s",
+                    manifest.game_id,
+                )
+        for game in self.repository.list_games(
+            lifecycle_state=GameLifecycleState.ACTIVE,
+            limit=1_000,
+        ):
+            if game.lifecycle_state is GameLifecycleState.ENDED:
+                continue
+            try:
+                self._stage_and_adopt_worker_terminal_spool(game)
+            except WorkerTerminalSpoolNotReady:
+                continue
+            except Exception:
+                logger.exception(
+                    "worker terminal spool recovery failed for %s",
+                    game.game_id,
+                )
+
+    def _stage_and_adopt_worker_terminal_spool(
+        self,
+        game: GameRecord,
+    ) -> bool:
+        """Import and adopt the exact ready file for one hosted game."""
+
+        if game.worker_id is None or game.worker_generation is None:
+            return False
+        bundle = WorkerTerminalSpool(
+            self.worker_manager.runtime_directory(game.game_id),
+        ).read_ready(
+            expected_game_id=game.game_id,
+            expected_worker_instance_id=game.worker_id,
+            expected_worker_generation=game.worker_generation,
+        )
+        replay_artifact, subjective_artifact = store_terminal_artifacts(
+            artifact_store=self.artifact_store,
+            game_id=game.game_id,
+            evidence=bundle.summary,
+            objective_replay=bundle.objective_replay,
+            subjective_replay=bundle.subjective_replay,
+            known_membership_ids=frozenset(
+                membership.membership_id
+                for membership in self.repository.list_memberships(
+                    game.game_id,
+                )
+            ),
+            producer_kind=ProducerKind.WORKER,
+            producer_version=ENGINE_VERSION,
+        )
+        manifest = self.repository.stage_worker_terminal_ready_manifest(
+            WorkerTerminalReadyManifestCreate(
+                game_id=game.game_id,
+                worker_id=game.worker_id,
+                worker_generation=game.worker_generation,
+                objective_artifact=replay_artifact,
+                subjective_artifact=subjective_artifact,
+                summary_evidence=bundle.summary.model_dump(mode="json"),
+                settlement_evidence=(
+                    bundle.holdings.model_dump(mode="json")
+                    if bundle.holdings is not None
+                    else None
+                ),
+                manifest_digest=bundle.manifest.manifest_digest,
+                ready_at=bundle.manifest.ready_at,
+            ),
+        )
+        self._adopt_staged_worker_terminal_manifest(manifest)
+        return True
+
+    def _adopt_staged_worker_terminal_manifest(
+        self,
+        manifest: WorkerTerminalReadyManifestRecord,
+    ) -> None:
+        """Integrity-check and atomically adopt one staged terminal manifest."""
+
+        evidence = WorkerSummaryEvidence.model_validate(
+            manifest.summary_evidence,
+        )
+        holdings_evidence = (
+            WorkerCharacterHoldingsEvidence.model_validate(
+                manifest.settlement_evidence,
+            )
+            if manifest.settlement_evidence is not None
+            else None
+        )
+        validate_stored_terminal_artifacts(
+            artifact_store=self.artifact_store,
+            game_id=manifest.game_id,
+            evidence=evidence,
+            objective_artifact=manifest.objective_artifact,
+            subjective_artifact=manifest.subjective_artifact,
+            known_membership_ids=frozenset(
+                membership.membership_id
+                for membership in self.repository.list_memberships(
+                    manifest.game_id,
+                )
+            ),
+        )
+        settlement_bundle = None
+        lease_id = None
+        if holdings_evidence is not None:
+            leases = tuple(
+                lease
+                for lease in (
+                    self.repository.list_character_deployment_leases(
+                        game_id=manifest.game_id,
+                        active_only=True,
+                    )
+                )
+                if lease.character_id == holdings_evidence.character_id
+            )
+            if len(leases) != 1:
+                raise ConflictError(
+                    "Hosted terminal holdings evidence requires exactly one "
+                    "matching active character lease",
+                )
+            lease = leases[0]
+            deployments = tuple(
+                deployment
+                for deployment in (
+                    self.repository.list_character_deployments(
+                        holdings_evidence.character_id,
+                    )
+                )
+                if (
+                    deployment.game_id == manifest.game_id
+                    and deployment.lease_id == lease.lease_id
+                )
+            )
+            if len(deployments) != 1:
+                raise ConflictError(
+                    "Hosted terminal holdings evidence requires exactly one "
+                    "matching pinned deployment",
+                )
+            settlement_bundle = build_terminal_settlement_bundle(
+                holdings_evidence,
+                deployments[0],
+                settlement_namespace=(
+                    "dnd-engine:hosted-character-settlement:v1"
+                ),
+            )
+            lease_id = lease.lease_id
+        self.repository.finalize_staged_worker_terminal_commit(
+            manifest.objective_artifact,
+            evidence.summary,
+            subjective_artifact=manifest.subjective_artifact,
+            summary_revision=1,
+            source_event_digest=evidence.source_event_digest,
+            source_combat_log_digest=(
+                evidence.source_combat_log_digest
+            ),
+            manifest_digest=manifest.manifest_digest,
+            summary_evidence=manifest.summary_evidence,
+            settlement_evidence=manifest.settlement_evidence,
+            settlement_bundle=settlement_bundle,
+            lease_id=lease_id,
+        )
 
     async def close(self) -> None:
         """Stop monitors and durably interrupt workers owned by this gateway."""
@@ -262,7 +457,7 @@ class GameGatewayService:
                     GameLifecycleState.STARTING,
                     GameLifecycleState.ACTIVE,
                 }:
-                    self.repository.transition_game(
+                    self.repository.terminate_game_and_release_leases(
                         game_id,
                         expected_row_version=game.row_version,
                         lifecycle_state=GameLifecycleState.INTERRUPTED,
@@ -277,27 +472,33 @@ class GameGatewayService:
         self._publish_new_directory_events()
 
     def _reconcile_orphaned_active_games(self) -> None:
-        """Mark durable active rows whose worker is absent after gateway start."""
-        for game in self.repository.list_games(
-            lifecycle_state=GameLifecycleState.ACTIVE,
-            limit=1000,
+        """Interrupt every orphaned nonterminal game after gateway restart."""
+
+        for state in (
+            GameLifecycleState.RESERVED,
+            GameLifecycleState.STARTING,
+            GameLifecycleState.ACTIVE,
         ):
-            if self.worker_manager.placement(game.game_id) is not None:
-                continue
-            if game.worker_id is not None:
-                self.repository.update_worker(
-                    game.worker_id,
-                    state=WorkerState.LOST,
-                    stopped_at=datetime.now(UTC),
-                    failure_code="gateway_restart",
-                    failure_detail={"game_id": str(game.game_id)},
+            for game in self.repository.list_games(
+                lifecycle_state=state,
+                limit=1000,
+            ):
+                if self.worker_manager.placement(game.game_id) is not None:
+                    continue
+                if game.worker_id is not None:
+                    self.repository.update_worker(
+                        game.worker_id,
+                        state=WorkerState.LOST,
+                        stopped_at=datetime.now(UTC),
+                        failure_code="gateway_restart",
+                        failure_detail={"game_id": str(game.game_id)},
+                    )
+                self.repository.terminate_game_and_release_leases(
+                    game.game_id,
+                    expected_row_version=game.row_version,
+                    lifecycle_state=GameLifecycleState.INTERRUPTED,
+                    terminal_reason="gateway_restart",
                 )
-            self.repository.transition_game(
-                game.game_id,
-                expected_row_version=game.row_version,
-                lifecycle_state=GameLifecycleState.INTERRUPTED,
-                terminal_reason="gateway_restart",
-            )
 
     def create_guest_principal(self, request: GuestPrincipalRequest) -> GuestPrincipalResponse:
         """Create one durable local identity and return its secret once."""
@@ -309,6 +510,7 @@ class GameGatewayService:
                 credential_hash=hash_capability(capability, self.capability_pepper),
             )
         )
+        self._create_default_profile_settings(principal.principal_id)
         self._publish_new_directory_events()
         return GuestPrincipalResponse(
             principal=principal,
@@ -338,6 +540,7 @@ class GameGatewayService:
                 secret_hash=hash_capability(capability, self.capability_pepper),
             )
         )
+        self._ensure_profile_settings(principal.principal_id)
         self._publish_new_directory_events()
         return PlayerIdentityResponse(
             principal=principal,
@@ -345,85 +548,34 @@ class GameGatewayService:
             principal_capability=capability,
         )
 
-    def get_player_profile(
+    def _create_default_profile_settings(
         self,
         principal_id: UUID,
-        principal_capability: str,
-    ) -> PlayerProfileResponse:
-        """Return identity-owned characters and game seats."""
+    ) -> ProfileSettingsRecord:
+        return self.character_directory.ensure_profile_settings(principal_id)
 
-        principal = self._authenticate_principal(principal_id, principal_capability)
-        characters = list(self.repository.list_characters_for_principal(principal_id))
-        seats: list[PlayerGameSeat] = []
-        for membership in self.repository.list_memberships_for_principal(principal_id):
-            controlled = [
-                assignment.entity_uuid
-                for assignment in self.repository.list_entity_assignments(
-                    membership.game_id,
-                    active_only=False,
-                )
-                if assignment.membership_id == membership.membership_id
-                and assignment.released_at is None
-            ]
-            attachments = self.repository.list_attachments_for_membership(
-                membership.membership_id,
-                connected_only=True,
-            )
-            seats.append(
-                PlayerGameSeat(
-                    membership=membership,
-                    controlled_entity_uuids=controlled,
-                    active_attachments=[
-                        AttachmentSummary(
-                            attachment_id=attachment.attachment_id,
-                            game_id=attachment.game_id,
-                            membership_id=attachment.membership_id,
-                            client_kind=attachment.client_kind,
-                            client_instance_id=attachment.client_instance_id,
-                            connected_at=attachment.connected_at,
-                            expires_at=attachment.expires_at,
-                        )
-                        for attachment in attachments
-                    ],
-                )
-            )
-        return PlayerProfileResponse(
-            principal=principal,
-            characters=characters,
-            game_seats=seats,
-        )
+    def _ensure_profile_settings(
+        self,
+        principal_id: UUID,
+    ) -> ProfileSettingsRecord:
+        return self.character_directory.ensure_profile_settings(principal_id)
 
     def create_character(
         self,
         principal_id: UUID,
         principal_capability: str,
         request: CreateCharacterRequest,
-    ) -> CharacterRecord:
-        """Create one exact definition/holdings-backed persistent character."""
+    ) -> CharacterSnapshotResponse:
+        """Create one normalized schema-2 persistent character."""
 
-        self._authenticate_principal(principal_id, principal_capability)
-        display_name = " ".join(request.display_name.split())
-        if not display_name:
-            raise GatewayError(
-                400,
-                "character_name_empty",
-                "Character name cannot be blank",
-            )
-        try:
-            bootstrap = compose_premade_character_bootstrap(
-                character_id=uuid4(),
-                owner_principal_id=principal_id,
-                display_name=display_name,
-                premade_id=request.premade_id,
-                content_system=self.content_system,
-            )
-        except PremadeCharacterNotFoundError as exc:
-            raise GatewayError(
-                400,
-                "character_premade_unsupported",
-                "Premade is not available for persistent player characters",
-            ) from exc
-        character = self.repository.create_character_with_revisions(bootstrap)
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        character = self.character_directory.create_character(
+            principal.principal_id,
+            request,
+        )
         self._publish_new_directory_events()
         return character
 
@@ -439,23 +591,180 @@ class GameGatewayService:
             principal_id,
             principal_capability,
         )
-        character = self.repository.get_character(character_id)
-        if character.owner_principal_id != principal.principal_id:
-            raise GatewayError(
-                403,
-                "character_not_owned",
-                "Character belongs to another player",
-            )
-        if character.current_definition_revision is None:
-            raise GatewayError(
-                409,
-                "character_definition_unavailable",
-                "Character has no canonical structural revision",
-            )
-        return self.repository.get_character_definition_revision(
-            character.character_id,
-            definition_revision=character.current_definition_revision,
+        return self.character_directory.get_character_snapshot(
+            principal.principal_id,
+            character_id,
+        ).definition
+
+    def validate_character_build(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        request: CharacterBuildValidationRequest,
+    ) -> CharacterBuildValidationResponse:
+        """Validate a creation build under the authenticated profile policy."""
+
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
         )
+        return self.character_directory.validate_new_character(
+            principal.principal_id,
+            request,
+        )
+
+    def get_character_snapshot(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+    ) -> CharacterSnapshotResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.get_character_snapshot(
+            principal.principal_id,
+            character_id,
+        )
+
+    def get_character_definition_history(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+    ) -> CharacterDefinitionHistoryResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.get_definition_history(
+            principal.principal_id,
+            character_id,
+        )
+
+    def get_character_advancement(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+    ) -> CharacterAdvancementResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.get_advancement(
+            principal.principal_id,
+            character_id,
+        )
+
+    def validate_character_level_up(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterLevelUpRequest,
+    ) -> CharacterBuildValidationResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.validate_level_up(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+
+    def level_up_character(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterLevelUpRequest,
+    ) -> CharacterSnapshotResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        result = self.character_directory.level_up(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+        self._publish_new_directory_events()
+        return result
+
+    def validate_character_respec(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterRespecRequest,
+    ) -> CharacterBuildValidationResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.validate_respec(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+
+    def respec_character(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterRespecRequest,
+    ) -> CharacterSnapshotResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        result = self.character_directory.respec(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+        self._publish_new_directory_events()
+        return result
+
+    def validate_character_loadout(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterLoadoutMutationRequest,
+    ) -> CharacterBuildValidationResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        return self.character_directory.validate_loadout(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+
+    def update_character_loadout(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        character_id: UUID,
+        request: CharacterLoadoutMutationRequest,
+    ) -> CharacterSnapshotResponse:
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        result = self.character_directory.update_loadout(
+            principal.principal_id,
+            character_id,
+            request,
+        )
+        self._publish_new_directory_events()
+        return result
 
     async def create_hosted_game(
         self,
@@ -469,8 +778,11 @@ class GameGatewayService:
             request.principal_capability,
         )
         character: CharacterRecord | None = None
-        if request.character_id is not None:
-            character = self.repository.get_character(request.character_id)
+        character_deployment = None
+        if request.creation.character_id is not None:
+            character = self.repository.get_character(
+                request.creation.character_id,
+            )
             if character.owner_principal_id != principal.principal_id:
                 raise GatewayError(403, "character_not_owned", "Character belongs to another player")
             if character.status.value != "active":
@@ -493,19 +805,11 @@ class GameGatewayService:
                     "character_revisions_unavailable",
                     "Persistent character has not been migrated to exact revisions",
                 )
-            definition = self.repository.get_character_definition_revision(
+            character_deployment = build_character_deployment_snapshot(
+                self.character_directory,
+                principal.principal_id,
                 character.character_id,
-                definition_revision=character.current_definition_revision,
-            ).definition
-            if (
-                request.creation.scenario.hero_configuration_id
-                != definition.premade_id
-            ):
-                raise GatewayError(
-                    400,
-                    "character_premade_mismatch",
-                    "Game hero selection does not match the selected character",
-                )
+            )
         selected_side_request = (
             request.creation.side_a
             if request.owner_side == "side_a"
@@ -529,6 +833,7 @@ class GameGatewayService:
             placement = await self.worker_manager.start(
                 hosted_game_id,
                 public_game_base_url=runtime_base_url,
+                character_deployment=character_deployment,
             )
             async with self.worker_manager.client(hosted_game_id, timeout=60.0) as client:
                 worker_response = await client.post(
@@ -595,6 +900,7 @@ class GameGatewayService:
             if side is not None:
                 self._persist_entity_assignments(game, membership, side)
             if character is not None:
+                assert character_deployment is not None
                 if side is None or len(side.entity_assignments) != 1:
                     raise GatewayError(
                         409,
@@ -608,6 +914,21 @@ class GameGatewayService:
                         membership_id=membership.membership_id,
                     ),
                 )
+                current_character = self.repository.get_character(
+                    character.character_id,
+                )
+                if not _character_matches_deployment_snapshot(
+                    current_character,
+                    character_deployment,
+                ):
+                    raise GatewayError(
+                        409,
+                        "character_heads_changed_during_deployment",
+                        (
+                            "Character revisions changed while the worker was "
+                            "being prepared; retry game creation"
+                        ),
+                    )
                 self.repository.deploy_character_pinned(
                     PinnedCharacterDeploymentCreate(
                         game_id=game.game_id,
@@ -663,9 +984,10 @@ class GameGatewayService:
                     failure_detail={"error_type": type(exc).__name__},
                 )
             if game is not None:
-                self.repository.transition_game(
-                    game.game_id,
-                    expected_row_version=game.row_version,
+                latest_game = self.repository.get_game(game.game_id)
+                self.repository.terminate_game_and_release_leases(
+                    latest_game.game_id,
+                    expected_row_version=latest_game.row_version,
                     lifecycle_state=GameLifecycleState.FAILED,
                     terminal_reason="provisioning_failed",
                 )
@@ -1043,7 +1365,7 @@ class GameGatewayService:
             GameLifecycleState.INTERRUPTED,
             GameLifecycleState.ARCHIVED,
         }:
-            game = self.repository.transition_game(
+            game = self.repository.terminate_game_and_release_leases(
                 game_id,
                 expected_row_version=game.row_version,
                 lifecycle_state=GameLifecycleState.INTERRUPTED,
@@ -1057,28 +1379,20 @@ class GameGatewayService:
         *,
         principal_id: UUID | None,
         principal_capability: str | None,
-    ) -> HostedGameListResponse:
+    ) -> GameHistoryListResponse:
         """List public games plus private games belonging to an authenticated principal."""
         visible_principal: PrincipalRecord | None = None
         if principal_id is not None or principal_capability is not None:
             if principal_id is None or principal_capability is None:
                 raise GatewayError(400, "incomplete_principal_auth", "Both principal fields are required")
             visible_principal = self._authenticate_principal(principal_id, principal_capability)
-        games = self.repository.list_games(limit=500)
-        visible: list[GameRecord] = []
-        for game in games:
-            if game.visibility_policy is VisibilityPolicy.PUBLIC:
-                visible.append(game)
-                continue
-            if visible_principal is None:
-                continue
-            if any(
-                membership.principal_id == visible_principal.principal_id
-                and membership.membership_state is MembershipState.ACTIVE
-                for membership in self.repository.list_memberships(game.game_id)
-            ):
-                visible.append(game)
-        return HostedGameListResponse(games=visible, count=len(visible))
+        return self.game_history.list_visible_games(
+            (
+                visible_principal.principal_id
+                if visible_principal is not None
+                else None
+            ),
+        )
 
     def require_visible_game(
         self,
@@ -1088,19 +1402,30 @@ class GameGatewayService:
         principal_capability: str | None,
     ) -> GameRecord:
         """Return a game only when directory visibility permits discovery."""
-        game = self.repository.get_game(game_id)
-        if game.visibility_policy is VisibilityPolicy.PUBLIC:
-            return game
+        resolved_principal_id: UUID | None = None
         if principal_id is None or principal_capability is None:
-            raise GatewayError(404, "game_not_found", "Game was not found")
-        principal = self._authenticate_principal(principal_id, principal_capability)
-        if not any(
-            membership.principal_id == principal.principal_id
-            and membership.membership_state is MembershipState.ACTIVE
-            for membership in self.repository.list_memberships(game_id)
-        ):
-            raise GatewayError(404, "game_not_found", "Game was not found")
-        return game
+            if principal_id is not None or principal_capability is not None:
+                raise GatewayError(
+                    400,
+                    "incomplete_principal_auth",
+                    "Both principal fields are required",
+                )
+        else:
+            resolved_principal_id = self._authenticate_principal(
+                principal_id,
+                principal_capability,
+            ).principal_id
+        try:
+            return self.game_history.require_visible_game(
+                game_id,
+                resolved_principal_id,
+            )
+        except GameHistoryQueryError as exc:
+            raise GatewayError(
+                exc.status_code,
+                exc.code,
+                exc.message,
+            ) from exc
 
     def get_objective_replay(
         self,
@@ -1114,71 +1439,17 @@ class GameGatewayService:
             principal_id,
             principal_capability,
         )
-        game = self.repository.get_game(game_id)
-        if game.lifecycle_state not in {
-            GameLifecycleState.ENDED,
-            GameLifecycleState.ARCHIVED,
-        }:
-            raise GatewayError(
-                409,
-                "objective_replay_not_terminal",
-                "Objective replay is available only for ended or archived games",
-            )
-        authorized = any(
-            membership.principal_id == principal.principal_id
-            and membership.membership_state in {
-                MembershipState.ACTIVE,
-                MembershipState.DISCONNECTED,
-            }
-            and membership.capabilities.may_view_objective_replay
-            for membership in self.repository.list_memberships(game_id)
-        )
-        if not authorized:
-            raise GatewayError(
-                403,
-                "objective_replay_denied",
-                "Principal may not read objective replay evidence",
-            )
-
-        artifacts = self.repository.list_artifacts(
-            game_id,
-            artifact_kind=ArtifactKind.REPLAY_BUNDLE,
-        )
-        if not artifacts:
-            raise GatewayError(404, "objective_replay_missing", "Objective replay was not found")
-        if len(artifacts) != 1:
-            raise GatewayError(409, "objective_replay_ambiguous", "Multiple objective replays are registered")
-        artifact = artifacts[0]
-        if (
-            artifact.schema_version != OBJECTIVE_REPLAY_SCHEMA_VERSION
-            or artifact.media_type != "application/json"
-        ):
-            raise GatewayError(500, "objective_replay_metadata_invalid", "Replay metadata contract is invalid")
         try:
-            payload = self.artifact_store.read_bytes(artifact.content_digest)
-        except ArtifactStoreError as exc:
-            raise GatewayError(500, "objective_replay_integrity_failed", str(exc)) from exc
-        if len(payload) != artifact.byte_size:
-            raise GatewayError(500, "objective_replay_size_mismatch", "Replay byte size does not match metadata")
-        try:
-            replay = ObjectiveReplayBundle.model_validate_json(payload)
-        except ValueError as exc:
-            raise GatewayError(500, "objective_replay_contract_invalid", str(exc)) from exc
-        if replay.game_id != str(game_id):
-            raise GatewayError(500, "objective_replay_game_mismatch", "Replay belongs to another game")
-        summary = self.repository.get_current_summary(game_id).summary
-        if replay.encounter_uuid != str(summary.encounter_uuid):
-            raise GatewayError(
-                500,
-                "objective_replay_encounter_mismatch",
-                "Replay describes another encounter",
+            return self.game_history.get_objective_replay(
+                game_id,
+                principal.principal_id,
             )
-        if (
-            replay.terminal_event_cursor != game.final_event_cursor
-            or replay.terminal_combat_log_cursor != game.final_combat_log_cursor
-        ):
-            raise GatewayError(500, "objective_replay_cursor_mismatch", "Replay disagrees with terminal game cursors")
-        return replay
+        except GameHistoryQueryError as exc:
+            raise GatewayError(
+                exc.status_code,
+                exc.code,
+                exc.message,
+            ) from exc
 
     def get_subjective_replay(
         self,
@@ -1194,132 +1465,32 @@ class GameGatewayService:
             principal_id,
             principal_capability,
         )
-        game = self.repository.get_game(game_id)
-        if game.lifecycle_state not in {
-            GameLifecycleState.ENDED,
-            GameLifecycleState.ARCHIVED,
-        }:
-            raise GatewayError(
-                409,
-                "subjective_replay_not_terminal",
-                "Player replay is available only for ended or archived games",
-            )
         try:
-            membership = self.repository.get_membership(membership_id)
-        except NotFoundError as exc:
+            return self.game_history.get_subjective_replay(
+                game_id,
+                membership_id,
+                principal.principal_id,
+            )
+        except GameHistoryQueryError as exc:
             raise GatewayError(
-                404,
-                "subjective_replay_membership_not_found",
-                "Game membership was not found",
+                exc.status_code,
+                exc.code,
+                exc.message,
             ) from exc
-        if (
-            membership.game_id != game_id
-            or membership.principal_id != principal.principal_id
-            or membership.membership_state
-            not in {MembershipState.ACTIVE, MembershipState.DISCONNECTED}
-            or not membership.capabilities.may_observe_subjective_state
-        ):
-            raise GatewayError(
-                403,
-                "subjective_replay_denied",
-                "Principal may not read this membership's player replay",
-            )
-
-        archive = self._read_subjective_replay_archive(game_id)
-        replay = next(
-            (
-                candidate
-                for candidate in archive.membership_replays
-                if candidate.membership_id == str(membership_id)
-            ),
-            None,
-        )
-        if replay is None:
-            raise GatewayError(
-                404,
-                "subjective_replay_missing",
-                "No canonical player replay was recorded for this membership",
-            )
-        return replay
 
     def _read_subjective_replay_archive(
         self,
         game_id: UUID,
     ) -> SubjectivePlayerReplayArchive:
         """Read and authenticate one aggregate archive without exposing it publicly."""
-
-        game = self.repository.get_game(game_id)
-        artifacts = self.repository.list_artifacts(
-            game_id,
-            artifact_kind=ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
-        )
-        if not artifacts:
-            raise GatewayError(
-                404,
-                "subjective_replay_archive_missing",
-                "Player replay archive was not found",
-            )
-        if len(artifacts) != 1:
-            raise GatewayError(
-                409,
-                "subjective_replay_archive_ambiguous",
-                "Multiple player replay archives are registered",
-            )
-        artifact = artifacts[0]
-        if (
-            artifact.schema_version != SUBJECTIVE_REPLAY_SCHEMA_VERSION
-            or artifact.media_type != "application/json"
-        ):
-            raise GatewayError(
-                500,
-                "subjective_replay_metadata_invalid",
-                "Player replay metadata contract is invalid",
-            )
         try:
-            payload = self.artifact_store.read_bytes(artifact.content_digest)
-        except ArtifactStoreError as exc:
+            return self.game_history.read_subjective_archive(game_id)
+        except GameHistoryQueryError as exc:
             raise GatewayError(
-                500,
-                "subjective_replay_integrity_failed",
-                str(exc),
+                exc.status_code,
+                exc.code,
+                exc.message,
             ) from exc
-        if len(payload) != artifact.byte_size:
-            raise GatewayError(
-                500,
-                "subjective_replay_size_mismatch",
-                "Player replay byte size does not match metadata",
-            )
-        try:
-            archive = SubjectivePlayerReplayArchive.model_validate_json(payload)
-        except ValueError as exc:
-            raise GatewayError(
-                500,
-                "subjective_replay_contract_invalid",
-                str(exc),
-            ) from exc
-        if archive.game_id != str(game_id):
-            raise GatewayError(
-                500,
-                "subjective_replay_game_mismatch",
-                "Player replay archive belongs to another game",
-            )
-        summary = self.repository.get_current_summary(game_id).summary
-        if archive.encounter_uuid != str(summary.encounter_uuid):
-            raise GatewayError(
-                500,
-                "subjective_replay_encounter_mismatch",
-                "Player replay archive describes another encounter",
-            )
-        if (
-            archive.terminal_source_event_cursor != game.final_event_cursor
-            or archive.terminal_combat_log_cursor != game.final_combat_log_cursor
-        ):
-            raise GatewayError(
-                500,
-                "subjective_replay_cursor_mismatch",
-                "Player replay archive disagrees with terminal game cursors",
-            )
-        return archive
 
     def directory_event_filter(
         self,
@@ -1341,24 +1512,9 @@ class GameGatewayService:
                 principal_capability,
             )
 
-        def event_is_visible(event: DirectoryEventRecord) -> bool:
-            if event.game_id is None:
-                return False
-            try:
-                game = self.repository.get_game(event.game_id)
-            except NotFoundError:
-                return False
-            if game.visibility_policy is VisibilityPolicy.PUBLIC:
-                return True
-            if visible_principal is None:
-                return False
-            return any(
-                membership.principal_id == visible_principal.principal_id
-                and membership.membership_state is MembershipState.ACTIVE
-                for membership in self.repository.list_memberships(event.game_id)
-            )
-
-        return event_is_visible
+        return self.game_history.directory_event_filter(
+            None if visible_principal is None else visible_principal.principal_id,
+        )
 
     def _authenticate_principal(self, principal_id: UUID, capability: str) -> PrincipalRecord:
         principal = self.repository.get_principal(principal_id)
@@ -1691,11 +1847,7 @@ class GameGatewayService:
             raise GatewayError(409, "worker_not_live", "Game worker is not available")
 
     def _publish_new_directory_events(self) -> None:
-        for event in self.repository.list_directory_events(
-            since_cursor=self.directory_stream.cursor,
-            limit=1000,
-        ):
-            self.directory_stream.publish(event)
+        self.directory_stream.publish_pending()
 
     def _start_terminal_monitor(self, game_id: UUID) -> None:
         """Watch one worker's objective stream for its terminal barrier."""
@@ -1824,7 +1976,7 @@ class GameGatewayService:
         game_id: UUID,
         client: httpx.AsyncClient,
     ) -> bool:
-        """Persist terminal evidence and report whether all three inputs are ready."""
+        """Adopt terminal evidence when the durable worker manifest is ready."""
         lock = self._terminal_persistence_locks.setdefault(game_id, asyncio.Lock())
         async with lock:
             return await self._persist_worker_summary_if_ready_under_lock(
@@ -1837,158 +1989,29 @@ class GameGatewayService:
         game_id: UUID,
         client: httpx.AsyncClient,
     ) -> bool:
-        """Fetch and publish terminal evidence while the game lock is held."""
-        summary_response = await client.get("/game/evidence/summary")
-        if summary_response.status_code == 404:
-            detail = summary_response.json().get("detail", {})
-            if detail.get("code") == "terminal_summary_not_ready":
-                return False
-        summary_response.raise_for_status()
+        """Adopt the worker's durable ready manifest under the game lock."""
 
-        objective_replay_response = await client.get(
-            "/game/evidence/objective-replay"
-        )
-        if objective_replay_response.status_code == 404:
-            detail = objective_replay_response.json().get("detail", {})
-            if detail.get("code") == "terminal_objective_replay_not_ready":
-                return False
-        objective_replay_response.raise_for_status()
-
-        subjective_replay_response = await client.get(
-            "/game/evidence/subjective-replay"
-        )
-        if subjective_replay_response.status_code == 404:
-            detail = subjective_replay_response.json().get("detail", {})
-            if detail.get("code") == "terminal_subjective_replay_not_ready":
-                return False
-        subjective_replay_response.raise_for_status()
-        self._publish_worker_terminal_responses(
-            game_id,
-            summary_response=summary_response,
-            objective_replay_response=objective_replay_response,
-            subjective_replay_response=subjective_replay_response,
-        )
-        return True
-
-    def _publish_worker_terminal_responses(
-        self,
-        game_id: UUID,
-        *,
-        summary_response: httpx.Response,
-        objective_replay_response: httpx.Response,
-        subjective_replay_response: httpx.Response,
-    ) -> None:
-        """Validate, store, and atomically publish both replays plus summary."""
-        evidence = self._validate_worker_response(
-            summary_response,
-            WorkerSummaryEvidence,
-            "worker_summary_invalid",
-        )
-        replay = self._validate_worker_response(
-            objective_replay_response,
-            ObjectiveReplayBundle,
-            "worker_replay_invalid",
-        )
-        subjective_replay = self._validate_worker_response(
-            subjective_replay_response,
-            SubjectivePlayerReplayArchive,
-            "worker_subjective_replay_invalid",
-        )
-        if evidence.summary.game_id != str(game_id):
-            raise GatewayError(502, "summary_game_mismatch", "Worker summary belongs to another game")
-        if replay.game_id != str(game_id):
-            raise GatewayError(502, "replay_game_mismatch", "Worker replay belongs to another game")
-        if subjective_replay.game_id != str(game_id):
-            raise GatewayError(
-                502,
-                "subjective_replay_game_mismatch",
-                "Worker player replay belongs to another game",
-            )
-        if replay.encounter_uuid != str(evidence.summary.encounter_uuid):
-            raise GatewayError(502, "replay_encounter_mismatch", "Replay and summary describe different encounters")
-        if subjective_replay.encounter_uuid != str(evidence.summary.encounter_uuid):
-            raise GatewayError(
-                502,
-                "subjective_replay_encounter_mismatch",
-                "Player replay and summary describe different encounters",
-            )
-        if replay.generation_id != str(evidence.generation_id):
-            raise GatewayError(502, "replay_generation_mismatch", "Replay and summary use different generations")
-        if (
-            replay.terminal_event_cursor != evidence.summary.terminal_cursor.event_cursor
-            or replay.terminal_combat_log_cursor
-            != evidence.summary.terminal_cursor.combat_log_cursor
-        ):
-            raise GatewayError(502, "replay_cursor_mismatch", "Replay and summary terminal cursors differ")
-        if (
-            subjective_replay.terminal_source_event_cursor
-            != evidence.summary.terminal_cursor.event_cursor
-            or subjective_replay.terminal_combat_log_cursor
-            != evidence.summary.terminal_cursor.combat_log_cursor
-        ):
-            raise GatewayError(
-                502,
-                "subjective_replay_cursor_mismatch",
-                "Player replay and summary terminal cursors differ",
-            )
-        known_membership_ids = {
-            str(membership.membership_id)
-            for membership in self.repository.list_memberships(game_id)
-        }
-        replay_membership_ids = {
-            bundle.membership_id
-            for bundle in subjective_replay.membership_replays
-        }
-        if not replay_membership_ids.issubset(known_membership_ids):
-            raise GatewayError(
-                502,
-                "subjective_replay_membership_mismatch",
-                "Player replay contains an unknown or cross-game membership",
-            )
-
+        del client
+        game = self.repository.get_game(game_id)
+        if game.lifecycle_state is GameLifecycleState.ENDED:
+            return True
         try:
-            stored = self.artifact_store.put_json(replay)
-        except ArtifactStoreError as exc:
-            raise GatewayError(500, "replay_store_failed", str(exc)) from exc
-        try:
-            stored_subjective = self.artifact_store.put_json(subjective_replay)
-        except ArtifactStoreError as exc:
+            adopted = self._stage_and_adopt_worker_terminal_spool(game)
+        except WorkerTerminalSpoolNotReady:
+            return False
+        except WorkerTerminalSpoolError as exc:
             raise GatewayError(
-                500,
-                "subjective_replay_store_failed",
+                502,
+                "worker_terminal_spool_invalid",
                 str(exc),
             ) from exc
-        replay_artifact = ArtifactCreate(
-            game_id=game_id,
-            artifact_kind=ArtifactKind.REPLAY_BUNDLE,
-            schema_version=OBJECTIVE_REPLAY_SCHEMA_VERSION,
-            media_type="application/json",
-            uri=stored.uri,
-            byte_size=stored.byte_size,
-            content_digest=stored.content_digest,
-            producer_kind=ProducerKind.WORKER,
-            producer_version=ENGINE_VERSION,
-        )
-        subjective_replay_artifact = ArtifactCreate(
-            game_id=game_id,
-            artifact_kind=ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
-            schema_version=SUBJECTIVE_REPLAY_SCHEMA_VERSION,
-            media_type="application/json",
-            uri=stored_subjective.uri,
-            byte_size=stored_subjective.byte_size,
-            content_digest=stored_subjective.content_digest,
-            producer_kind=ProducerKind.WORKER,
-            producer_version=ENGINE_VERSION,
-        )
-        self.repository.publish_terminal_evidence(
-            replay_artifact,
-            evidence.summary,
-            additional_artifacts=(subjective_replay_artifact,),
-            summary_revision=1,
-            source_event_digest=evidence.source_event_digest,
-            source_combat_log_digest=evidence.source_combat_log_digest,
-        )
-        self._publish_new_directory_events()
+        except TerminalEvidenceError as exc:
+            raise GatewayError(502, exc.code, exc.message) from exc
+        except ArtifactStoreError as exc:
+            raise GatewayError(500, "replay_store_failed", str(exc)) from exc
+        if adopted:
+            self._publish_new_directory_events()
+        return adopted
 
     @staticmethod
     def _validate_worker_response(
@@ -2207,108 +2230,102 @@ def create_gateway_app(
     ) -> PlayerIdentityResponse:
         return service(request).identify_player(body)
 
-    @gateway_app.get("/directory/players/me", response_model=PlayerProfileResponse)
-    async def get_player_profile(
-        request: Request,
-        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
-        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
-    ) -> PlayerProfileResponse:
-        return service(request).get_player_profile(principal_id, principal_capability)
-
-    @gateway_app.post("/directory/characters", response_model=CharacterRecord)
-    async def create_character(
-        request: Request,
-        body: CreateCharacterRequest,
-        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
-        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
-    ) -> CharacterRecord:
-        return service(request).create_character(
-            principal_id,
-            principal_capability,
-            body,
+    @gateway_app.exception_handler(CharacterDirectoryBuildError)
+    async def handle_character_build_error(
+        _request: Request,
+        exc: CharacterDirectoryBuildError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.validation.model_dump(mode="json")},
         )
 
-    @gateway_app.get(
-        "/directory/characters/{character_id}/definition",
-        response_model=CharacterDefinitionRecord,
-    )
-    async def get_character_definition(
-        request: Request,
-        character_id: UUID,
-        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
-        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
-    ) -> CharacterDefinitionRecord:
-        return service(request).get_character_definition(
-            principal_id,
-            principal_capability,
-            character_id,
-        )
-
-    @gateway_app.get("/games", response_model=HostedGameListResponse)
-    async def list_games(
-        request: Request,
-        principal_id: UUID | None = Header(default=None, alias="X-Dnd-Principal-Id"),
-        principal_capability: str | None = Header(
-            default=None,
-            alias="X-Dnd-Principal-Capability",
-        ),
-    ) -> HostedGameListResponse:
-        return service(request).list_visible_games(
-            principal_id=principal_id,
-            principal_capability=principal_capability,
-        )
-
-    @gateway_app.get("/games/subscribe")
-    async def subscribe_games(
-        request: Request,
-        since: int = 0,
-        principal_id: UUID | None = Header(default=None, alias="X-Dnd-Principal-Id"),
-        principal_capability: str | None = Header(
-            default=None,
-            alias="X-Dnd-Principal-Capability",
-        ),
-    ) -> StreamingResponse:
-        gateway = service(request)
-        stream = gateway.directory_stream
-        event_filter = gateway.directory_event_filter(
-            principal_id=principal_id,
-            principal_capability=principal_capability,
-        )
-        return StreamingResponse(
-            stream.iterate(
-                since=since,
-                disconnected=request.is_disconnected,
-                event_filter=event_filter,
-            ),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
+    @gateway_app.exception_handler(CharacterDirectoryOwnershipError)
+    async def handle_character_ownership_error(
+        _request: Request,
+        exc: CharacterDirectoryOwnershipError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": {
+                    "code": "character_not_owned",
+                    "message": str(exc),
+                },
             },
         )
+    def authorize_character_principal(
+        request: Request,
+        principal_id: UUID,
+        principal_capability: str,
+    ) -> UUID:
+        return service(request)._authenticate_principal(
+            principal_id,
+            principal_capability,
+        ).principal_id
+
+    gateway_app.include_router(
+        create_character_directory_router(
+            resolve_service=lambda request: service(request).character_directory,
+            authorize_principal=authorize_character_principal,
+            on_mutation=lambda request: service(
+                request,
+            )._publish_new_directory_events(),
+        ),
+    )
+
+    def resolve_directory_event_filter(
+        request: Request,
+        principal_id: UUID | None,
+        principal_capability: str | None,
+    ) -> Callable[[DirectoryEventRecord], bool]:
+        return service(request).directory_event_filter(
+            principal_id=principal_id,
+            principal_capability=principal_capability,
+        )
+
+    gateway_app.include_router(
+        create_directory_event_stream_router(
+            resolve_stream=lambda request: service(
+                request,
+            ).directory_stream,
+            resolve_event_filter=resolve_directory_event_filter,
+        )
+    )
+
+    def authorize_optional_history_principal(
+        request: Request,
+        principal_id: UUID | None,
+        principal_capability: str | None,
+    ) -> UUID | None:
+        if principal_id is None and principal_capability is None:
+            return None
+        if principal_id is None or principal_capability is None:
+            raise GatewayError(
+                400,
+                "incomplete_principal_auth",
+                "Both principal fields are required",
+            )
+        return service(request)._authenticate_principal(
+            principal_id,
+            principal_capability,
+        ).principal_id
+
+    gateway_app.include_router(
+        create_game_history_router(
+            resolve_service=lambda request: service(request).game_history,
+            authorize_optional_principal=(
+                authorize_optional_history_principal
+            ),
+            authorize_required_principal=authorize_character_principal,
+        ),
+    )
 
     @gateway_app.post("/games", response_model=CreateHostedGameResponse)
     async def create_game(request: Request, body: CreateHostedGameRequest) -> CreateHostedGameResponse:
         return await service(request).create_hosted_game(
             body,
             public_gateway_base_url=str(request.base_url).rstrip("/"),
-        )
-
-    @gateway_app.get("/games/{game_id}", response_model=GameRecord)
-    async def get_game(
-        game_id: UUID,
-        request: Request,
-        principal_id: UUID | None = Header(default=None, alias="X-Dnd-Principal-Id"),
-        principal_capability: str | None = Header(
-            default=None,
-            alias="X-Dnd-Principal-Capability",
-        ),
-    ) -> GameRecord:
-        return service(request).require_visible_game(
-            game_id,
-            principal_id=principal_id,
-            principal_capability=principal_capability,
         )
 
     @gateway_app.post("/games/{game_id}/attachments", response_model=AttachHostedGameResponse)
@@ -2363,64 +2380,6 @@ def create_gateway_app(
     ) -> StopHostedGameResponse:
         return await service(request).stop_hosted_game(game_id, body)
 
-    @gateway_app.get("/games/{game_id}/summary")
-    async def get_summary(
-        game_id: UUID,
-        request: Request,
-        principal_id: UUID | None = Header(default=None, alias="X-Dnd-Principal-Id"),
-        principal_capability: str | None = Header(
-            default=None,
-            alias="X-Dnd-Principal-Capability",
-        ),
-    ):
-        gateway = service(request)
-        gateway.require_visible_game(
-            game_id,
-            principal_id=principal_id,
-            principal_capability=principal_capability,
-        )
-        return gateway.repository.get_current_summary(game_id)
-
-    @gateway_app.get(
-        "/games/{game_id}/diagnostics/objective-replay",
-        response_model=ObjectiveReplayBundle,
-    )
-    async def get_objective_replay(
-        game_id: UUID,
-        request: Request,
-        response: Response,
-        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
-        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
-    ) -> ObjectiveReplayBundle:
-        replay = service(request).get_objective_replay(
-            game_id,
-            principal_id=principal_id,
-            principal_capability=principal_capability,
-        )
-        response.headers["Cache-Control"] = "private, no-store"
-        return replay
-
-    @gateway_app.get(
-        "/games/{game_id}/memberships/{membership_id}/replay",
-        response_model=SubjectivePlayerReplayBundle,
-    )
-    async def get_subjective_replay(
-        game_id: UUID,
-        membership_id: UUID,
-        request: Request,
-        response: Response,
-        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
-        principal_capability: str = Header(alias="X-Dnd-Principal-Capability"),
-    ) -> SubjectivePlayerReplayBundle:
-        replay = service(request).get_subjective_replay(
-            game_id,
-            membership_id,
-            principal_id=principal_id,
-            principal_capability=principal_capability,
-        )
-        response.headers["Cache-Control"] = "private, no-store"
-        return replay
-
     runtime_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
 
     @gateway_app.api_route(
@@ -2449,6 +2408,30 @@ def _selected_side(
     if owner_side == "side_b":
         return creation.side_b
     return None
+
+
+def _character_matches_deployment_snapshot(
+    character: CharacterRecord,
+    deployment: CharacterDeploymentSnapshot,
+) -> bool:
+    """Check the revision triplet bound before worker preparation."""
+
+    return (
+        character.character_id == deployment.character_id
+        and character.row_version == deployment.character_row_version
+        and character.current_definition_revision
+        == deployment.definition.definition_revision
+        and character.current_definition_digest
+        == deployment.definition.definition_digest
+        and character.current_holdings_revision
+        == deployment.holdings.holdings_revision
+        and character.current_holdings_digest
+        == deployment.holdings.holdings_digest
+        and character.current_loadout_revision
+        == deployment.loadout.loadout_revision
+        and character.current_loadout_digest
+        == deployment.loadout.loadout_digest
+    )
 
 
 def _side_takeover_claims(side: GameCreationSideResult | None) -> tuple[UUID, ...]:

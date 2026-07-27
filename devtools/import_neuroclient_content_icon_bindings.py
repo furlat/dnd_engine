@@ -19,6 +19,7 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
+from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.recipe_presets import ContentRecipePreset
 
 
@@ -43,15 +44,347 @@ DEFAULT_GENERATED_BINDINGS_PATH = (
     / "icon_bindings_generated.py"
 )
 EXPECTED_MANIFEST_SHA256 = (
-    "c154feeea3803fe3c023c7a89d4bf71cdc13624e2f6adf2be3429d4315815bea"
+    "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc"
 )
-EXPECTED_MANIFEST_ASSET_COUNT = 455
+EXPECTED_MANIFEST_ASSET_COUNT = 477
 EXPECTED_MANIFEST_SCHEMA_VERSION = 3
 EXPECTED_STYLE_ID = "fantasy-classic-v1"
 
 
 _HUMAN_REVIEWED_BINDINGS = {
     # Definition identity owns the selected authored inventory asset.
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.bandit_captain.melee@1"
+    ): "action.bandit-captain-multiattack-melee",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.bandit_captain.ranged@1"
+    ): "action.bandit-captain-multiattack-ranged",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.cult_fanatic@1"
+    ): "action.cult-fanatic-multiattack",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.knight@1"
+    ): "action.knight-multiattack",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.scout.longbow@1"
+    ): "action.scout-multiattack-longbow",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.scout.shortsword@1"
+    ): "action.scout-multiattack-shortsword",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.spy@1"
+    ): "action.spy-multiattack",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.thug@1"
+    ): "action.thug-multiattack",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.veteran.melee@1"
+    ): "action.veteran-multiattack-melee",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.monster.multiattack.veteran.ranged@1"
+    ): "action.veteran-multiattack-ranged",
+    (
+        "content.neurodragon:item:"
+        "apparel.bracers@1"
+    ): "item.bracers",
+    (
+        "content.neurodragon:item:"
+        "apparel.chain_coif@1"
+    ): "item.chain-coif",
+    (
+        "content.neurodragon:item:"
+        "apparel.cloth_hood@1"
+    ): "item.cloth-hood",
+    (
+        "content.neurodragon:item:"
+        "apparel.fine_clothes@1"
+    ): "item.fine-clothes",
+    (
+        "content.neurodragon:item:"
+        "apparel.gauntlets@1"
+    ): "item.gauntlets",
+    (
+        "content.neurodragon:item:"
+        "apparel.great_helm@1"
+    ): "item.great-helm",
+    (
+        "content.neurodragon:item:"
+        "apparel.horned_helmet@1"
+    ): "item.horned-helmet",
+    (
+        "content.neurodragon:item:"
+        "apparel.leather_gloves@1"
+    ): "item.leather-gloves",
+    (
+        "content.neurodragon:item:"
+        "apparel.leather_hood@1"
+    ): "item.leather-hood",
+    (
+        "content.neurodragon:item:"
+        "apparel.monster_hands@1"
+    ): "item.monster-hands",
+    (
+        "content.neurodragon:item:"
+        "apparel.monster_helm@1"
+    ): "item.monster-helm",
+    (
+        "content.neurodragon:item:"
+        "armor.circus.performer_leather@1"
+    ): "item.circus-performer-leather",
+    (
+        "content.neurodragon:item:"
+        "armor.cloth@1"
+    ): "item.cloth-armor",
+    (
+        "content.neurodragon:item:"
+        "gear.field_kit@1"
+    ): "item.field-kit",
+    (
+        "content.neurodragon:item:"
+        "weapon.double_bladed_sword@1"
+    ): "item.double-bladed-sword",
+    (
+        "content.neurodragon:condition:"
+        "condition.aegis_spark@1"
+    ): "spell.aegis-spark",
+    (
+        "content.neurodragon:spell:"
+        "spell.aegis_spark@1"
+    ): "spell.aegis-spark",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.core.drop@1"
+    ): "action.drop",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.core.drop_prone@1"
+    ): "action.drop-prone",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.core.stand_up@1"
+    ): "action.stand-up",
+    (
+        "content.srd_5_1_cc:item:"
+        "weapon.sickle@1"
+    ): "item.sickle",
+    (
+        "content.srd_5_1_cc:item:"
+        "weapon.trident@1"
+    ): "item.trident",
+    (
+        "content.srd_5_1_cc:reaction:"
+        "reaction.class_feature.paladin.divine_smite@1"
+    ): "reaction.divine-smite",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.barbarian.dual_axes@1"
+    ): "item.handaxe",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.barbarian.greataxe@1"
+    ): "item.greataxe",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.barbarian.sword_shield@1"
+    ): "item.longsword",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.fighter.archery@1"
+    ): "item.longbow",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.fighter.dual_wield@1"
+    ): "item.shortsword",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.fighter.greatsword@1"
+    ): "item.greatsword",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.fighter.sword_shield@1"
+    ): "item.longsword",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.sorcerer.dagger@1"
+    ): "item.dagger",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_equipment.sorcerer.quarterstaff@1"
+    ): "item.quarterstaff",
+    (
+        "content.srd_5_1_cc:item:"
+        "weapon.dart@1"
+    ): "item.dagger",
+    (
+        "content.srd_5_1_cc:class:"
+        "class.barbarian@1"
+    ): "action.rage",
+    (
+        "content.srd_5_1_cc:class:"
+        "class.fighter@1"
+    ): "action.extra-attack",
+    (
+        "content.srd_5_1_cc:class:"
+        "class.sorcerer@1"
+    ): "condition.dnd-classes-sorcerer-sorcerypointsfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.unarmored_defense@1"
+    ): "item.natural-armor",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.remarkable_athlete@1"
+    ): "action.jump",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.black@1"
+    ): "spell.acid-splash",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.blue@1"
+    ): "spell.lightning-bolt",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.brass@1"
+    ): "spell.fire-bolt",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.bronze@1"
+    ): "spell.lightning-bolt",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.copper@1"
+    ): "spell.acid-splash",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.gold@1"
+    ): "spell.fire-bolt",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.green@1"
+    ): "spell.poison-spray",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.red@1"
+    ): "spell.fire-bolt",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.silver@1"
+    ): "spell.ray-of-frost",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_ancestry.white@1"
+    ): "spell.ray-of-frost",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_presence@1"
+    ): "spell.fear",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.class.sorcerer.elemental_affinity.resistance@1"
+    ): "condition.dnd-classes-sorcerer-elementalaffinity",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.elemental_affinity@1"
+    ): "condition.dnd-classes-sorcerer-elementalaffinity",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.elemental_affinity.resistance@1"
+    ): "condition.dnd-classes-sorcerer-elementalaffinity",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.class.sorcerer.draconic_presence@1"
+    ): "spell.fear",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_presence.aura@1"
+    ): "spell.fear",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_presence.immunity@1"
+    ): "spell.fear",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.dragon_wings@1"
+    ): "spell.haste",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.class.sorcerer.dragon_wings.fly@1"
+    ): "action.move",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.class.sorcerer.dragon_wings.toggle@1"
+    ): "spell.haste",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.dragon_wings.active@1"
+    ): "spell.haste",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.counterspell@1"
+    ): "reaction.counterspell",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.shield@1"
+    ): "reaction.shield",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.careful_spell@1"
+    ): "condition.dnd-classes-sorcerer-metamagicactive",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.distant_spell@1"
+    ): "condition.dnd-classes-sorcerer-sorcerypointsfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.empowered_spell@1"
+    ): "condition.dnd-classes-sorcerer-metamagicactive",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.extended_spell@1"
+    ): "condition.dnd-classes-sorcerer-metamagicactive",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.heightened_spell@1"
+    ): "condition.dnd-classes-sorcerer-metamagicactive",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.quickened_spell@1"
+    ): "action.quickened-spell",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.subtle_spell@1"
+    ): "condition.dnd-classes-sorcerer-metamagicactive",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.metamagic.twinned_spell@1"
+    ): "action.twinned-spell",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.sorcerous_restoration@1"
+    ): "condition.dnd-classes-sorcerer-sorcerypointsfeature",
+    (
+        "content.srd_5_1_cc:subclass:"
+        "subclass.barbarian.berserker@1"
+    ): "condition.dnd-classes-rage-frenzyfeature",
+    (
+        "content.srd_5_1_cc:subclass:"
+        "subclass.fighter.champion@1"
+    ): "condition.dnd-classes-fighter-improvedcritical",
+    (
+        "content.srd_5_1_cc:subclass:"
+        "subclass.sorcerer.draconic_bloodline@1"
+    ): "condition.dnd-classes-sorcerer-draconicresilience",
     (
         "content.neurodragon:item:"
         "apparel.travelers_clothes@1"
@@ -260,7 +593,12 @@ _EVIDENCE_KIND_MAP = {
 }
 _INTENTIONAL_DYNAMIC_PROVIDER_IDENTITIES = frozenset({
     "core.rules:action:action.attack@1",
-    "content.srd_5_1_cc:action:action.monster.multiattack@1",
+})
+_NON_GAME_ICON_DEFINITION_KINDS = frozenset({
+    ContentDefinitionKind.BACKGROUND,
+    ContentDefinitionKind.CREATURE,
+    ContentDefinitionKind.SPECIES,
+    ContentDefinitionKind.SPECIES_VARIANT,
 })
 
 
@@ -469,10 +807,16 @@ def _definition_rows_from_audit(
             decision = "intentional_null"
             evidence_kind = "intentional_dynamic_provider"
             evidence_token = f"provider_attributed_runtime_icon:{identity}"
-        elif declaration.ref.definition_kind.value == "creature":
+        elif (
+            declaration.ref.definition_kind
+            in _NON_GAME_ICON_DEFINITION_KINDS
+        ):
             decision = "intentional_null"
             evidence_kind = "intentional_non_icon_presentation"
-            evidence_token = f"portrait_sprite_owned_presentation:{identity}"
+            evidence_token = (
+                "portrait_sprite_owned_presentation:"
+                f"{declaration.ref.definition_kind.value}:{identity}"
+            )
         elif audit_row["status"] == "ambiguous":
             decision = "ambiguous"
             evidence_kind = "unresolved_ambiguous"
@@ -524,9 +868,13 @@ def _apply_exact_provider_icon_inheritance(
             }:
                 continue
             target_row = rows_by_identity.get(dependency.target_ref.identity_key)
+            if target_row is None:
+                # Runtime-only dependencies are present in the installed
+                # content graph but intentionally absent from the public
+                # game-icon ledger.
+                continue
             if (
-                target_row is None
-                or target_row["content_ref"]
+                target_row["content_ref"]
                 != dependency.target_ref.model_dump(mode="json")
             ):
                 raise ValueError(
@@ -583,6 +931,7 @@ def _definition_rows_from_existing(
     *,
     existing: dict[str, Any],
     declarations: tuple[Any, ...],
+    assets_by_key: dict[str, dict[str, str]],
 ) -> list[dict[str, Any]]:
     rows = existing.get("definitions")
     if not isinstance(rows, list):
@@ -605,8 +954,65 @@ def _definition_rows_from_existing(
         ): row
         for row in rows
     }
-    if rows_by_identity.keys() != refs_by_identity.keys():
-        raise ValueError("existing icon ledger public closure is stale")
+    all_identity_keys = {
+        declaration.ref.identity_key
+        for declaration in declarations
+    }
+    unknown = rows_by_identity.keys() - refs_by_identity.keys()
+    retired_non_public = unknown & all_identity_keys
+    for identity in retired_non_public:
+        rows_by_identity.pop(identity)
+    unknown -= all_identity_keys
+    if unknown:
+        raise ValueError(
+            "existing icon ledger contains unknown public definitions: "
+            f"{sorted(unknown)!r}",
+        )
+    missing = refs_by_identity.keys() - rows_by_identity.keys()
+    for identity in sorted(missing):
+        manual_key = _HUMAN_REVIEWED_BINDINGS.get(identity)
+        declaration = next(
+            value
+            for value in public
+            if value.ref.identity_key == identity
+        )
+        if (
+            declaration.ref.definition_kind
+            in _NON_GAME_ICON_DEFINITION_KINDS
+        ):
+            rows_by_identity[identity] = {
+                "content_ref": refs_by_identity[identity],
+                "decision": "intentional_null",
+                "icon_key": None,
+                "asset_sha256": None,
+                "evidence_kind": "intentional_non_icon_presentation",
+                "evidence_token": (
+                    "portrait_sprite_owned_presentation:"
+                    f"{declaration.ref.definition_kind.value}:{identity}"
+                ),
+            }
+            continue
+        if manual_key is None:
+            raise ValueError(
+                "existing icon ledger public closure is stale and the new "
+                f"definition lacks a reviewed binding: {identity}",
+            )
+        asset = assets_by_key.get(manual_key)
+        if asset is None:
+            raise ValueError(
+                f"reviewed binding names unknown asset {manual_key!r}",
+            )
+        rows_by_identity[identity] = {
+            "content_ref": refs_by_identity[identity],
+            "decision": "bind",
+            "icon_key": manual_key,
+            "asset_sha256": asset["asset_sha256"],
+            "evidence_kind": "human_reviewed",
+            "evidence_token": (
+                "reviewed_content_ref_to_manifest_asset:"
+                f"{identity}->{manual_key}"
+            ),
+        }
     normalized: list[dict[str, Any]] = []
     for identity in sorted(refs_by_identity):
         row = dict(rows_by_identity[identity])
@@ -614,7 +1020,28 @@ def _definition_rows_from_existing(
             raise ValueError(
                 f"existing icon ledger ContentRef is stale: {identity}",
             )
+        manual_key = _HUMAN_REVIEWED_BINDINGS.get(identity)
+        if manual_key is not None:
+            asset = assets_by_key.get(manual_key)
+            if asset is None:
+                raise ValueError(
+                    f"reviewed binding names unknown asset {manual_key!r}",
+                )
+            row.update({
+                "decision": "bind",
+                "icon_key": manual_key,
+                "asset_sha256": asset["asset_sha256"],
+                "evidence_kind": "human_reviewed",
+                "evidence_token": (
+                    "reviewed_content_ref_to_manifest_asset:"
+                    f"{identity}->{manual_key}"
+                ),
+            })
         normalized.append(row)
+    _apply_exact_provider_icon_inheritance(
+        rows=normalized,
+        declarations=public,
+    )
     return normalized
 
 
@@ -716,6 +1143,7 @@ def _build_outputs(
         definition_rows = _definition_rows_from_existing(
             existing=_read_json(existing_ledger_path),
             declarations=declarations,
+            assets_by_key=assets_by_key,
         )
     for row in definition_rows:
         icon_key = row["icon_key"]

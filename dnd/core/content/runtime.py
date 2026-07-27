@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Protocol
 from uuid import UUID
@@ -337,6 +338,14 @@ def bind_runtime_action_before_admission(
     provider retains its own exact definition and names that provider as the
     grant source. Ordinary entity-composition actions bind independently.
     """
+    existing = getattr(action, "behavior_binding", None)
+    if isinstance(existing, BehaviorBinding):
+        if existing.runtime_owner_uuid != runtime_owner_uuid:
+            raise ValueError(
+                "Runtime behavior is already bound to a different owner",
+            )
+        return existing
+
     provider = _active_behavior_provider.get()
     if provider is None:
         return bind_runtime_root_owned_behavior(
@@ -364,11 +373,19 @@ def bind_runtime_handler_before_admission(
     handler: object,
 ) -> BehaviorBinding | None:
     """Bind a declared or provider-owned handler before any runtime index sees it."""
+    owner_uuid = getattr(handler, "source_entity_uuid", None)
+    if not isinstance(owner_uuid, UUID):
+        raise TypeError("Runtime handler requires a UUID owner")
+    existing = getattr(handler, "behavior_binding", None)
+    if isinstance(existing, BehaviorBinding):
+        if existing.runtime_owner_uuid != owner_uuid:
+            raise ValueError(
+                "Runtime behavior is already bound to a different owner",
+            )
+        return existing
+
     provider = _active_behavior_provider.get()
     if provider is None:
-        owner_uuid = getattr(handler, "source_entity_uuid", None)
-        if not isinstance(owner_uuid, UUID):
-            raise TypeError("Runtime handler requires a UUID owner")
         return bind_runtime_behavior(
             handler,
             runtime_owner_uuid=owner_uuid,
@@ -454,3 +471,23 @@ class HandlerDispatchEvidence(BaseModel):
     def effected(self) -> bool:
         """Whether the invocation produced an observable engine effect."""
         return self.outcome != HandlerDispatchOutcome.NO_EFFECT
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveHandlerPresentation:
+    """Exact internal evidence for one reaction that changed engine state.
+
+    This is deliberately not a transport model. The subjective mapper consumes
+    it while the authoritative event batch is live and emits the closed,
+    privacy-checked presentation DTO. Persisted subjective replays store that
+    projected DTO rather than reconstructing handler execution later.
+    """
+
+    dispatch_index: int
+    handler_name: str
+    behavior_binding: BehaviorBinding
+    source_entity_uuid: UUID
+    triggering_event_uuid: UUID
+    triggering_lineage_uuid: UUID
+    emitted_lineage_uuids: tuple[UUID, ...]
+    outcome: HandlerDispatchOutcome

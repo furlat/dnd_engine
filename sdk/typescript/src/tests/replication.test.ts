@@ -730,6 +730,9 @@ test("the subjective wire gate accepts every canonical presentation and area kin
   const validGraphs = [
     [movementCue()],
     movementReactionGraph(),
+    [actionCue()],
+    actionConditionGraph(),
+    reactiveActionTriggerGraph(),
     [attackCue()],
     [spellCue()],
     [itemCue()],
@@ -781,6 +784,10 @@ test("local presentation semantics reject malformed renderer transactions", () =
   };
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
     ["movement path overflow", [{ ...movementCue(), path_start_index: 2, path_total_steps: 2 }]],
+    ["duplicate action target", [{ ...actionCue(), target_uuids: ["hero", "hero"] }]],
+    ["action child mismatch", [{ ...actionCue(), effect_presentation_ids: ["missing"] }]],
+    ["action self trigger", [{ ...actionCue(), trigger_presentation_id: "action" }]],
+    ["action without exact behavior", [{ ...actionCue(), content_attributions: [] }]],
     ["duplicate attack damage types", [{ ...attackCue(), damage_types: ["Fire", "Fire"] }]],
     ["projectile attack without projectile", [{ ...attackCue(), delivery: "projectile", projectile_type: null }]],
     ["melee attack with projectile", [{ ...attackCue(), projectile_type: "bolt" }]],
@@ -843,7 +850,35 @@ test("cross-node presentation semantics reject mismatched actors, targets, and e
   spellWrongSource[1] = { ...spellWrongSource[1], source_uuid: "other" };
   const forcedWrongActor = forcedMovementGraph({ source_uuid: "other" });
   const lifecycleWrongEntity = lifecycleGraph({}, { entity_uuid: "other" });
+  const actionWrongTarget = actionConditionGraph();
+  actionWrongTarget[1] = { ...actionWrongTarget[1], target_uuid: "other" };
+  const actionWrongNestedAttack = [
+    actionCue({
+      ...cueBase("action", "action", 1, null, ["attack"]),
+      content_attributions: actionCue().content_attributions,
+      target_uuids: ["hero"],
+      effect_presentation_ids: ["attack"],
+    }),
+    attackCue({
+      ...cueBase("attack", "attack", 2, "action"),
+      target_uuid: "monster",
+    }),
+  ];
+  const actionDanglingTrigger = reactiveActionTriggerGraph();
+  actionDanglingTrigger[0] = {
+    ...actionDanglingTrigger[0],
+    trigger_presentation_id: "missing",
+  };
+  const actionWrongTriggerTarget = reactiveActionTriggerGraph();
+  actionWrongTriggerTarget[1] = {
+    ...actionWrongTriggerTarget[1],
+    target_uuid: "other",
+  };
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
+    ["action target", actionWrongTarget],
+    ["nested attack target", actionWrongNestedAttack],
+    ["dangling action trigger", actionDanglingTrigger],
+    ["action trigger participant", actionWrongTriggerTarget],
     ["attack target", attackWrongTarget],
     ["attack source", attackWrongSource],
     ["spell target", spellWrongTarget],
@@ -887,6 +922,24 @@ function movementCue(overrides: CueOverrides = {}): Record<string, unknown> {
     path_start_index: 0,
     path_total_steps: 1,
     perception_commit: "observation_frame",
+    ...overrides,
+  };
+}
+
+function actionCue(overrides: CueOverrides = {}): Record<string, unknown> {
+  return {
+    ...cueBase("action", "action"),
+    content_attributions: [{
+      kind: "unrooted_behavior",
+      role: "behavior",
+      definition_ref: contentRef("action.rage", "action"),
+      provided_by_ref: contentRef("action.rage", "action"),
+    }],
+    actor_uuid: "hero",
+    action_name: "Rage",
+    target_uuids: ["hero"],
+    trigger_presentation_id: null,
+    effect_presentation_ids: [],
     ...overrides,
   };
 }
@@ -984,7 +1037,10 @@ function counterspellAttributions(): ReadonlyArray<Record<string, unknown>> {
   ];
 }
 
-function contentRef(contentId: string, definitionKind: "reaction" | "spell"): Record<string, unknown> {
+function contentRef(
+  contentId: string,
+  definitionKind: "action" | "reaction" | "spell",
+): Record<string, unknown> {
   return {
     pack_id: "content.srd_5_1_cc",
     definition_kind: definitionKind,
@@ -1170,6 +1226,37 @@ function spellDamageGraph(): Array<Record<string, unknown>> {
       targets: [spellTarget(0, "application-0", ["damage"])],
     }),
     damageCue("damage", 2, "spell"),
+  ];
+}
+
+function actionConditionGraph(): Array<Record<string, unknown>> {
+  return [
+    actionCue({
+      ...cueBase("action", "action", 1, null, ["condition"]),
+      content_attributions: actionCue().content_attributions,
+      effect_presentation_ids: ["condition"],
+    }),
+    {
+      ...conditionCue("condition", 2, "action"),
+      target_uuid: "hero",
+    },
+  ];
+}
+
+function reactiveActionTriggerGraph(): Array<Record<string, unknown>> {
+  return [
+    actionCue({
+      ...cueBase("action", "reaction", 1),
+      content_attributions: actionCue().content_attributions,
+      action_name: "Shield",
+      target_uuids: ["hero"],
+      trigger_presentation_id: "incoming-attack",
+    }),
+    attackCue({
+      ...cueBase("attack", "incoming-attack", 2),
+      actor_uuid: "monster",
+      target_uuid: "hero",
+    }),
   ];
 }
 

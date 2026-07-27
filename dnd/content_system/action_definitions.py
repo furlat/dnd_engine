@@ -86,6 +86,7 @@ def _srd(
     display_name: str,
     description: str,
     *,
+    visibility: ContentVisibility = ContentVisibility.PUBLIC,
     granted_action_types: tuple[type[BaseAction], ...] = (),
     root_owned: bool = False,
     icon_key: str | None = None,
@@ -96,6 +97,7 @@ def _srd(
         content_id=content_id,
         display_name=display_name,
         description=description,
+        visibility=visibility,
         granted_action_types=granted_action_types,
         root_owned=root_owned,
         icon_key=icon_key,
@@ -161,6 +163,39 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     ),
     _srd(sorcerer.DistantSpell, "action.class.sorcerer.distant_spell", "Distant Spell", "Empower the next eligible spell with increased range.", root_owned=True),
     _srd(
+        sorcerer.ElementalAffinityResistanceAction,
+        "action.class.sorcerer.elemental_affinity.resistance",
+        "Elemental Affinity Resistance",
+        "Spend one sorcery point for 1 hour of ancestry resistance.",
+        root_owned=True,
+        icon_key="condition.dnd-classes-sorcerer-elementalaffinity",
+    ),
+    _srd(
+        sorcerer.Fly,
+        "action.class.sorcerer.dragon_wings.fly",
+        "Fly",
+        "Move using manifested dragon wings.",
+        root_owned=True,
+        icon_key="action.move",
+    ),
+    _srd(
+        sorcerer.DragonWings,
+        "action.class.sorcerer.dragon_wings.toggle",
+        "Dragon Wings",
+        "Manifest or dismiss dragon wings as a bonus action.",
+        granted_action_types=(sorcerer.Fly,),
+        root_owned=True,
+        icon_key="spell.haste",
+    ),
+    _srd(
+        sorcerer.DraconicPresence,
+        "action.class.sorcerer.draconic_presence",
+        "Draconic Presence",
+        "Concentrate on a 60-foot aura of awe or fear for up to 1 minute.",
+        root_owned=True,
+        icon_key="spell.fear",
+    ),
+    _srd(
         sorcerer.QuickenedSpell,
         "action.class.sorcerer.quickened_spell",
         "Quickened Spell",
@@ -225,7 +260,17 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(monster_traits.AggressiveMoveAction, "action.trait.aggressive", "Aggressive", "Move toward a visible hostile as a bonus action.", root_owned=True),
     _srd(monster_traits.DivineEminenceAction, "action.trait.divine_eminence", "Divine Eminence", "Spend a spell slot to empower melee attacks with radiant damage.", root_owned=True),
     _srd(monster_traits.LeadershipAction, "action.trait.leadership", "Leadership", "Inspire nearby allies with a temporary attack and saving-throw bonus.", root_owned=True),
-    _srd(monster_traits.MultiattackAction, "action.monster.multiattack", "Multiattack", "Resolve an explicitly authored ordered sequence of stat-block attacks.", root_owned=True),
+    _srd(
+        monster_traits.MultiattackAction,
+        "action.monster.multiattack",
+        "Multiattack Runtime",
+        (
+            "Internal reusable engine behavior specialized by exact public "
+            "stat-block action configurations."
+        ),
+        visibility=ContentVisibility.INTERNAL,
+        root_owned=True,
+    ),
     _srd(monster_traits.NaturalAttack, "action.monster.natural_attack", "Natural Attack", "Resolve a data-authored natural weapon attack.", root_owned=True),
 
     # Helper actions granted by persistent spell effects or active casts.
