@@ -14,6 +14,7 @@ from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range,
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import (
     AuthoredBehaviorAttribution,
     BehaviorBinding,
@@ -831,6 +832,15 @@ class BaseAction(BaseObject):
             "action becomes observable."
         ),
     )
+    configured_action_ref: Optional[ContentRef] = Field(
+        default=None,
+        description=(
+            "Exact authored configuration specializing a reusable action "
+            "behavior. When present, this is the catalog identity of the "
+            "configured affordance; behavior_binding remains the engine "
+            "implementation identity."
+        ),
+    )
     parent_event: Optional[Event] = Field(
         default=None,
         description="Optional parent event used to nest action-created events.",
@@ -1394,12 +1404,21 @@ class BaseAction(BaseObject):
             themselves.
         """
         variants: List["BaseAction"] = [self]
-        if not self.restricted_action_kinds:
+        eligible_kinds = set(self.restricted_action_kinds)
+        if any(
+            cost.cost_type == "actions"
+            and cost.cost > 0
+            and cost.resource_name is None
+            and cost.resource_cost == 0
+            for cost in self.target_independent_effective_costs
+        ):
+            eligible_kinds.add(RestrictedActionKind.STANDARD_ACTION)
+        if not eligible_kinds:
             return variants
         if not isinstance(entity, RestrictedActionGrantProvider):
             return variants
         for grant in entity.get_restricted_action_grants():
-            if self.restricted_action_kinds.isdisjoint(grant.allowed_kinds):
+            if eligible_kinds.isdisjoint(grant.allowed_kinds):
                 continue
             if not any(
                 cost.cost_type in grant.replaced_cost_types
@@ -1984,6 +2003,14 @@ class AvailableActionInfo(BaseModel):
         description=(
             "Exact authored behavior identity used for catalog-backed "
             "presentation; execution and display names are not identity."
+        ),
+    )
+    configured_action_ref: Optional[ContentRef] = Field(
+        default=None,
+        description=(
+            "Exact authored configuration for a parameterized action. "
+            "Clients resolve this catalog row instead of inferring a variant "
+            "from execution tokens, display names, or outcome identifiers."
         ),
     )
     target_type: TargetType = Field(description="What kind of target this action needs")

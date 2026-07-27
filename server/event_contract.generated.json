@@ -1,5 +1,5 @@
 {
-  "contract_hash": "ee47e6b50cfd502a2417a4ba21a73adc4e0771fb08bf7a01d59a082ef6cb32fa",
+  "contract_hash": "4b4b0dc9a2d27daae7ffb8ad95925f0c6faeae77916b29a305a6ba507618b468",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -1329,6 +1329,17 @@
         "total_targets": {
           "kind": "number"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -1674,6 +1685,17 @@
         "trajectory": {
           "kind": "enum",
           "ref": "dnd.core.events.MovementTrajectory"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -2039,6 +2061,17 @@
         "trajectory": {
           "kind": "enum",
           "ref": "dnd.core.events.MovementTrajectory"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -2416,6 +2449,17 @@
         },
         "total_targets": {
           "kind": "number"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -2994,6 +3038,17 @@
         "total_targets": {
           "kind": "number"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -3199,6 +3254,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -3478,6 +3544,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -3673,6 +3750,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -3870,6 +3958,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -4065,6 +4164,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -4262,6 +4372,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -4458,6 +4579,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -4653,6 +4785,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -4933,6 +5076,17 @@
         },
         "total_targets": {
           "kind": "number"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -5507,6 +5661,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -5711,6 +5876,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -6414,6 +6590,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -6665,6 +6852,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -7004,6 +7202,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -7223,6 +7432,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -7452,6 +7672,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -7665,6 +7896,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -7892,6 +8134,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -8077,6 +8330,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -8274,6 +8538,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -8465,6 +8740,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -8640,6 +8926,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -8830,6 +9127,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -9023,6 +9331,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -9256,6 +9575,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -9477,6 +9807,17 @@
         "total_healing": {
           "kind": "number"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -9677,6 +10018,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -9876,6 +10228,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -10072,6 +10435,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -10285,6 +10659,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -10467,6 +10852,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -10648,6 +11044,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -10917,6 +11324,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -11198,6 +11616,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -11694,6 +12123,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "update_reason": {
           "kind": "enum",
           "ref": "dnd.core.events.SensoryUpdateReason"
@@ -12159,6 +12599,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -12476,6 +12927,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -12964,6 +13426,17 @@
           ],
           "kind": "union"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -13177,6 +13650,17 @@
         "trajectory": {
           "kind": "enum",
           "ref": "dnd.core.events.MovementTrajectory"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -13427,6 +13911,17 @@
         "total_damage": {
           "kind": "number"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "use_register": {
           "kind": "boolean"
         },
@@ -13620,6 +14115,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "turn_index": {
           "kind": "number"
@@ -13821,6 +14327,17 @@
         "timestamp": {
           "kind": "string"
         },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "turn_index": {
           "kind": "number"
         },
@@ -14016,6 +14533,17 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"
@@ -16842,6 +17370,17 @@
         },
         "triggered_lineage_uuid": {
           "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "use_register": {
           "kind": "boolean"

@@ -352,6 +352,26 @@ _build_spear = _declare_standard_weapon(
         normal_range=5,
     )
 )
+_build_dart = _declare_standard_weapon(
+    _StandardWeaponSpec(
+        content_id="dart",
+        display_name="Dart",
+        description="A balanced throwing dart.",
+        group="simple_ranged",
+        order=5,
+        damage_dice=4,
+        dice_numbers=1,
+        damage_type=DamageType.PIERCING,
+        properties=(
+            WeaponProperty.FINESSE,
+            WeaponProperty.RANGED,
+            WeaponProperty.THROWN,
+        ),
+        range_type=RangeType.RANGE,
+        normal_range=20,
+        long_range=60,
+    )
+)
 _build_light_crossbow = _declare_standard_weapon(
     _StandardWeaponSpec(
         content_id="light_crossbow",
@@ -640,6 +660,8 @@ SICKLE_DECLARATION, SICKLE_RECIPE = _declaration_and_recipe(_build_sickle)
 SICKLE_REF = SICKLE_DECLARATION.ref
 SPEAR_DECLARATION, SPEAR_RECIPE = _declaration_and_recipe(_build_spear)
 SPEAR_REF = SPEAR_DECLARATION.ref
+DART_DECLARATION, DART_RECIPE = _declaration_and_recipe(_build_dart)
+DART_REF = DART_DECLARATION.ref
 LIGHT_CROSSBOW_DECLARATION, LIGHT_CROSSBOW_RECIPE = (
     _declaration_and_recipe(_build_light_crossbow)
 )
@@ -702,6 +724,7 @@ SRD_WEAPON_DECLARATIONS = (
     QUARTERSTAFF_DECLARATION,
     SICKLE_DECLARATION,
     SPEAR_DECLARATION,
+    DART_DECLARATION,
     LIGHT_CROSSBOW_DECLARATION,
     SHORTBOW_DECLARATION,
     SLING_DECLARATION,
@@ -731,6 +754,7 @@ SRD_WEAPON_RECIPES_BY_CONTENT_ID = MappingProxyType(
             (QUARTERSTAFF_DECLARATION, QUARTERSTAFF_RECIPE),
             (SICKLE_DECLARATION, SICKLE_RECIPE),
             (SPEAR_DECLARATION, SPEAR_RECIPE),
+            (DART_DECLARATION, DART_RECIPE),
             (LIGHT_CROSSBOW_DECLARATION, LIGHT_CROSSBOW_RECIPE),
             (SHORTBOW_DECLARATION, SHORTBOW_RECIPE),
             (SLING_DECLARATION, SLING_RECIPE),

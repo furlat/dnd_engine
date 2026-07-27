@@ -6,7 +6,10 @@ import asyncio
 import inspect
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from uuid import UUID
 
+from fastapi import APIRouter, Header, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from server.event_stream import BoundedSubscription, format_sse
@@ -47,6 +50,28 @@ class DirectoryEventStream:
         for subscription in list(self._subscriptions):
             if not subscription.try_enqueue(envelope):
                 self.unsubscribe(subscription)
+
+    def publish_pending(self) -> tuple[DirectoryEventRecord, ...]:
+        """Fan out every durable row committed after the observed cursor."""
+
+        published: list[DirectoryEventRecord] = []
+        while True:
+            batch = tuple(self._history_loader(self._cursor, 1_000))
+            if not batch:
+                break
+            previous_cursor = self._cursor
+            for event in batch:
+                if event.cursor <= self._cursor:
+                    continue
+                self.publish(event)
+                published.append(event)
+            if self._cursor == previous_cursor:
+                raise RuntimeError(
+                    "Directory history loader did not advance its cursor",
+                )
+            if len(batch) < 1_000:
+                break
+        return tuple(published)
 
     def subscribe(self, max_depth: int = 256) -> BoundedSubscription:
         """Create one bounded live directory subscription."""
@@ -116,3 +141,55 @@ async def _is_disconnected(callback: Callable[[], Awaitable[bool] | bool]) -> bo
     if inspect.isawaitable(result):
         return bool(await result)
     return bool(result)
+
+
+ResolveDirectoryEventStream = Callable[[Request], DirectoryEventStream]
+ResolveDirectoryEventFilter = Callable[
+    [Request, UUID | None, str | None],
+    Callable[[DirectoryEventRecord], bool],
+]
+
+
+def create_directory_event_stream_router(
+    *,
+    resolve_stream: ResolveDirectoryEventStream,
+    resolve_event_filter: ResolveDirectoryEventFilter,
+) -> APIRouter:
+    """Build the one canonical cold-directory SSE route."""
+
+    router = APIRouter()
+
+    @router.get("/games/subscribe")
+    async def subscribe_games(
+        request: Request,
+        since: int = 0,
+        principal_id: UUID | None = Header(
+            default=None,
+            alias="X-Dnd-Principal-Id",
+        ),
+        principal_capability: str | None = Header(
+            default=None,
+            alias="X-Dnd-Principal-Capability",
+        ),
+    ) -> StreamingResponse:
+        stream = resolve_stream(request)
+        event_filter = resolve_event_filter(
+            request,
+            principal_id,
+            principal_capability,
+        )
+        return StreamingResponse(
+            stream.iterate(
+                since=since,
+                disconnected=request.is_disconnected,
+                event_filter=event_filter,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    return router

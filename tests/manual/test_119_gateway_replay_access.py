@@ -28,6 +28,7 @@ from server.game_directory.contracts import (
     MembershipState,
     PrincipalCreate,
     PrincipalKind,
+    ProducerKind,
 )
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_gateway import (
@@ -46,6 +47,11 @@ from server.player_replication.runtime import CanonicalSubjectiveReplicationRunt
 from server.replication_perspective import PerspectiveScope
 from server.runtime_authority import RuntimeAuthorityCache
 from server.subjective_authority import ResolvedSubjectiveAuthority
+from server.terminal_evidence import (
+    TerminalEvidenceError,
+    publish_terminal_evidence,
+    validate_terminal_evidence,
+)
 from server.timeline_contracts import CombatLogProjection
 from server.worker_player_replay import build_worker_subjective_replays
 from server.worker_replay import build_worker_objective_replay
@@ -89,6 +95,14 @@ def _terminal_service(
             credential_hash=hash_capability(capability, PEPPER),
         )
     )
+    artifact_store = GameArtifactStore(tmp_path / "artifacts")
+    service = GameGatewayService(
+        repository,
+        HostedWorkerManager(tmp_path / "runtime"),
+        RuntimeAuthorityCache(),
+        artifact_store,
+        capability_pepper=PEPPER,
+    )
     game = repository.create_game(
         GameCreate(
             created_by_principal_id=principal.principal_id,
@@ -100,14 +114,6 @@ def _terminal_service(
             engine_version=ENGINE_VERSION,
             content_digest="test-content",
         )
-    )
-    artifact_store = GameArtifactStore(tmp_path / "artifacts")
-    service = GameGatewayService(
-        repository,
-        HostedWorkerManager(tmp_path / "runtime"),
-        RuntimeAuthorityCache(),
-        artifact_store,
-        capability_pepper=PEPPER,
     )
     repository.transition_game(
         game.game_id,
@@ -174,20 +180,15 @@ def _terminal_service(
     runtime.clear_all()
     runtime.stop()
 
-    service._publish_worker_terminal_responses(
-        game.game_id,
-        summary_response=httpx.Response(
-            200,
-            json=evidence.model_dump(mode="json"),
-        ),
-        objective_replay_response=httpx.Response(
-            200,
-            json=replay.model_dump(mode="json"),
-        ),
-        subjective_replay_response=httpx.Response(
-            200,
-            json=subjective_replay.model_dump(mode="json"),
-        ),
+    publish_terminal_evidence(
+        repository=repository,
+        artifact_store=artifact_store,
+        game_id=game.game_id,
+        evidence=evidence,
+        objective_replay=replay,
+        subjective_replay=subjective_replay,
+        known_membership_ids=frozenset({membership.membership_id}),
+        producer_kind=ProducerKind.WORKER,
     )
     return (
         service,
@@ -457,7 +458,7 @@ def test_revoked_or_left_membership_cannot_read_retained_player_replay(
     repository.close()
 
 
-def test_terminal_poll_waits_for_all_three_explicit_worker_documents(
+def test_terminal_poll_waits_for_durable_worker_ready_manifest(
     tmp_path: Path,
 ) -> None:
     repository = GameDirectoryRepository(
@@ -471,42 +472,48 @@ def test_terminal_poll_waits_for_all_three_explicit_worker_documents(
         GameArtifactStore(tmp_path / "artifacts"),
         capability_pepper=PEPPER,
     )
+    principal = repository.create_principal(
+        PrincipalCreate(
+            principal_kind=PrincipalKind.SERVICE,
+            display_name="Terminal Poll Fixture",
+        )
+    )
+    game = repository.create_game(
+        GameCreate(
+            created_by_principal_id=principal.principal_id,
+            lifecycle_state=GameLifecycleState.ACTIVE,
+            scenario_kind="test",
+            scenario_id="terminal-poll",
+            display_name="Terminal Poll",
+            creation_manifest={},
+            ruleset_version="test",
+            engine_version=ENGINE_VERSION,
+            content_digest="test-content",
+        )
+    )
     requested_paths: list[str] = []
 
-    def response(request: httpx.Request) -> httpx.Response:
-        requested_paths.append(request.url.path)
-        if request.url.path == "/game/evidence/subjective-replay":
-            return httpx.Response(
-                404,
-                json={
-                    "detail": {
-                        "code": "terminal_subjective_replay_not_ready",
-                    }
-                },
-            )
-        return httpx.Response(200, json={})
-
     async def exercise() -> bool:
+        def reject_http(request: httpx.Request) -> httpx.Response:
+            requested_paths.append(request.url.path)
+            raise AssertionError("durable terminal polling must not call the worker")
+
         async with httpx.AsyncClient(
-            transport=httpx.MockTransport(response),
+            transport=httpx.MockTransport(reject_http),
             base_url="http://worker",
         ) as client:
             return await service._persist_worker_summary_if_ready_under_lock(
-                uuid4(),
+                game.game_id,
                 client,
             )
 
     assert asyncio.run(exercise()) is False
-    assert requested_paths == [
-        "/game/evidence/summary",
-        "/game/evidence/objective-replay",
-        "/game/evidence/subjective-replay",
-    ]
+    assert requested_paths == []
     asyncio.run(service.close())
     repository.close()
 
 
-def test_gateway_rejects_subjective_archive_coordinate_and_membership_drift(
+def test_terminal_validator_rejects_subjective_archive_coordinate_and_membership_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -540,21 +547,13 @@ def test_gateway_rejects_subjective_archive_coordinate_and_membership_drift(
         terminal_combat_log_cursor=archive.terminal_combat_log_cursor,
         opened_partition_count=0,
     )
-    with pytest.raises(GatewayError) as cursor_error:
-        service._publish_worker_terminal_responses(
-            game_id,
-            summary_response=httpx.Response(
-                200,
-                json=evidence.model_dump(mode="json"),
-            ),
-            objective_replay_response=httpx.Response(
-                200,
-                json=objective.model_dump(mode="json"),
-            ),
-            subjective_replay_response=httpx.Response(
-                200,
-                json=mismatched_cursor.model_dump(mode="json"),
-            ),
+    with pytest.raises(TerminalEvidenceError) as cursor_error:
+        validate_terminal_evidence(
+            game_id=game_id,
+            evidence=evidence,
+            objective_replay=objective,
+            subjective_replay=mismatched_cursor,
+            known_membership_ids=frozenset({membership_id}),
         )
     assert cursor_error.value.code == "subjective_replay_cursor_mismatch"
 
@@ -574,21 +573,13 @@ def test_gateway_rejects_subjective_archive_coordinate_and_membership_drift(
     unknown_membership_archive = archive.model_copy(
         update={"membership_replays": (unknown_bundle,)},
     )
-    with pytest.raises(GatewayError) as membership_error:
-        service._publish_worker_terminal_responses(
-            game_id,
-            summary_response=httpx.Response(
-                200,
-                json=evidence.model_dump(mode="json"),
-            ),
-            objective_replay_response=httpx.Response(
-                200,
-                json=objective.model_dump(mode="json"),
-            ),
-            subjective_replay_response=httpx.Response(
-                200,
-                json=unknown_membership_archive.model_dump(mode="json"),
-            ),
+    with pytest.raises(TerminalEvidenceError) as membership_error:
+        validate_terminal_evidence(
+            game_id=game_id,
+            evidence=evidence,
+            objective_replay=objective,
+            subjective_replay=unknown_membership_archive,
+            known_membership_ids=frozenset({membership_id}),
         )
     assert membership_error.value.code == "subjective_replay_membership_mismatch"
 

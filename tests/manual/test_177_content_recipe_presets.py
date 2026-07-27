@@ -285,8 +285,11 @@ def test_wardrobes_reference_registered_presets_for_every_named_variant() -> Non
 def test_consumers_do_not_recreate_aesthetic_recipes_ad_hoc() -> None:
     repository_root = Path(__file__).resolve().parents[2]
     consumer_paths = (
-        repository_root / "dnd" / "classes" / "fighter_factory.py",
-        repository_root / "dnd" / "classes" / "sorcerer_factory.py",
+        repository_root / "dnd" / "classes" / "content_factories.py",
+        repository_root
+        / "dnd"
+        / "content_system"
+        / "builtin_character_builds.py",
         repository_root / "dnd" / "premade_characters.py",
         repository_root / "dnd" / "scenarios" / "evaluation" / "wardrobes.py",
     )

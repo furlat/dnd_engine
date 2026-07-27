@@ -14,6 +14,10 @@ class ContentDependencyRelation(str, Enum):
 
     GRANTS_ACTION = "grants_action"
     GRANTS_SPELL = "grants_spell"
+    GRANTS_FEATURE = "grants_feature"
+    OFFERS_SUBCLASS = "offers_subclass"
+    OFFERS_STARTING_EQUIPMENT = "offers_starting_equipment"
+    HAS_SPECIES_VARIANT = "has_species_variant"
     APPLIES_CONDITION = "applies_condition"
     INSTALLS_HANDLER = "installs_handler"
     CREATES_ZONE = "creates_zone"

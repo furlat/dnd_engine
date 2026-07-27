@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -17,11 +17,27 @@ from dnd.analytics import (
 )
 from dnd.core.events import EncounterEndEvent, EncounterStartEvent, EventPhase
 from dnd.core.life_types import LifeState
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.core.content.durable_characters import CharacterHoldingsRevision
+from server.character_settlement import (
+    WorkerCharacterHoldingsEvidence,
+    build_terminal_settlement_bundle,
+)
+from server.character_directory_contracts import (
+    CharacterLoadoutDraft,
+    CreateCharacterRequest,
+)
+from server.character_directory_service import CharacterDirectoryService
 from server.game_directory.contracts import (
     ArtifactCreate,
     ArtifactKind,
+    CharacterDeploymentLeaseCreate,
     GameCreate,
     GameLifecycleState,
+    MembershipCapabilities,
+    MembershipCreate,
+    MembershipRole,
+    PinnedCharacterDeploymentCreate,
     PrincipalCreate,
     PrincipalKind,
     ProducerKind,
@@ -29,9 +45,18 @@ from server.game_directory.contracts import (
     RatingEstimateCreate,
     RatingRunCreate,
     RatingRunStatus,
+    WorkerCreate,
+    WorkerState,
+    WorkerTerminalReadyManifestCreate,
+    WorkerTransportKind,
 )
-from server.game_directory.errors import ConflictError, ImmutableRecordError
+from server.game_directory.errors import (
+    ConflictError,
+    ImmutableRecordError,
+    NotFoundError,
+)
 from server.game_directory.repository import GameDirectoryRepository
+from server.game_summary_store import WorkerSummaryEvidence
 
 NOW = datetime(2026, 7, 21, 19, 0, tzinfo=UTC)
 STARTED = datetime(2026, 7, 21, 18, 58, tzinfo=UTC)
@@ -250,6 +275,246 @@ def test_summary_publication_is_atomic_idempotent_and_immutable(tmp_path: Path) 
             supersedes_summary_id=corrected.summary_id,
         )
     repository.close()
+
+
+def test_hosted_terminal_settles_pinned_character_holdings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hosted adoption atomically settles holdings, evidence, and its lease."""
+
+    repository = _open(tmp_path / "directory.sqlite3")
+    owner = repository.create_principal(
+        PrincipalCreate(
+            principal_kind=PrincipalKind.HUMAN,
+            display_name="Hosted Owner",
+        ),
+    )
+    worker = repository.create_worker(
+        WorkerCreate(
+            state=WorkerState.ACTIVE,
+            pid=12345,
+            process_group_id=12345,
+            host_id="test-host",
+            transport_kind=WorkerTransportKind.UNIX_SOCKET,
+            private_locator="/tmp/test-hosted-terminal.sock",
+            protocol_hash="test-protocol",
+            engine_version="test-engine",
+        ),
+    )
+    game = repository.create_game(
+        GameCreate(
+            worker_id=worker.worker_id,
+            worker_generation=worker.worker_generation,
+            created_by_principal_id=owner.principal_id,
+            scenario_kind="evaluation",
+            scenario_id="hosted-settlement",
+            display_name="Hosted Settlement",
+            creation_manifest={"seed": 44},
+            seed=44,
+            ruleset_version="one-ruleset",
+            engine_version="test",
+            content_digest="content-v1",
+        ),
+    )
+    game_id = game.game_id
+    owner_id = owner.principal_id
+    service = CharacterDirectoryService(
+        repository,
+        bootstrap_content_system(),
+    )
+    catalog = service.build_creation_catalog()
+    premade = next(
+        row
+        for row in catalog.premades
+        if row.premade_id == "hero.fighter_2_sorcerer_3_spellblade"
+    )
+    settings = service.ensure_profile_settings(owner_id)
+    character = service.create_character(
+        owner_id,
+        CreateCharacterRequest(
+            display_name="Hosted Settlement Proof",
+            build=premade.build,
+            loadout=CharacterLoadoutDraft(),
+            expected_content_set_digest=catalog.content_set_digest,
+            expected_ruleset_digest=settings.ruleset_digest,
+            idempotency_key=uuid4(),
+        ),
+    ).character
+    membership = repository.create_membership(
+        MembershipCreate(
+            game_id=game_id,
+            principal_id=owner_id,
+            role=MembershipRole.OWNER,
+            capabilities=MembershipCapabilities(
+                may_control_entities=True,
+            ),
+        ),
+    )
+    lease = repository.acquire_character_deployment_lease(
+        CharacterDeploymentLeaseCreate(
+            character_id=character.character_id,
+            game_id=game_id,
+            membership_id=membership.membership_id,
+        ),
+    )
+    runtime_entity_uuid = uuid4()
+    deployment = repository.deploy_character_pinned(
+        PinnedCharacterDeploymentCreate(
+            game_id=game_id,
+            membership_id=membership.membership_id,
+            character_id=character.character_id,
+            entity_uuid=runtime_entity_uuid,
+            lease_id=lease.lease_id,
+        ),
+    )
+    _activate_game(repository, game_id)
+    replay, subjective_replay = _terminal_artifacts(game_id)
+    summary = _summary(game_id)
+    character_snapshot = service.get_character_snapshot(
+        owner_id,
+        character.character_id,
+    )
+    resulting_holdings = CharacterHoldingsRevision.create(
+        character_id=character.character_id,
+        holdings_revision=(
+            character_snapshot.holdings.holdings.holdings_revision + 1
+        ),
+        items=character_snapshot.holdings.holdings.items,
+    )
+    holdings_evidence = WorkerCharacterHoldingsEvidence(
+        game_id=game_id,
+        generation_id=UUID(int=404),
+        terminal_event_cursor=summary.terminal_cursor.event_cursor,
+        terminal_combat_log_cursor=(
+            summary.terminal_cursor.combat_log_cursor
+        ),
+        runtime_entity_uuid=runtime_entity_uuid,
+        character_id=character.character_id,
+        expected_row_version=character.row_version,
+        expected_heads=character_snapshot.heads,
+        resulting_holdings=resulting_holdings,
+    )
+    settlement_bundle = build_terminal_settlement_bundle(
+        holdings_evidence,
+        deployment,
+        settlement_namespace=(
+            "dnd-engine:hosted-character-settlement:v1"
+        ),
+    )
+    summary_evidence = WorkerSummaryEvidence(
+        generation_id=holdings_evidence.generation_id,
+        summary=summary,
+        source_event_digest="e" * 64,
+        source_combat_log_digest="c" * 64,
+    )
+    manifest = repository.stage_worker_terminal_ready_manifest(
+        WorkerTerminalReadyManifestCreate(
+            game_id=game_id,
+            worker_id=worker.worker_id,
+            worker_generation=worker.worker_generation,
+            objective_artifact=replay,
+            subjective_artifact=subjective_replay,
+            summary_evidence=summary_evidence.model_dump(mode="json"),
+            settlement_evidence=holdings_evidence.model_dump(mode="json"),
+            manifest_digest="d" * 64,
+            ready_at=NOW,
+        ),
+    )
+    commit_settlement = repository._commit_terminal_settlement_in_transaction
+
+    def fail_settlement(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("injected hosted settlement failure")
+
+    monkeypatch.setattr(
+        repository,
+        "_commit_terminal_settlement_in_transaction",
+        fail_settlement,
+    )
+    with pytest.raises(RuntimeError, match="injected hosted settlement failure"):
+        repository.finalize_staged_worker_terminal_commit(
+            replay,
+            summary,
+            subjective_artifact=subjective_replay,
+            summary_revision=1,
+            source_event_digest=summary_evidence.source_event_digest,
+            source_combat_log_digest=summary_evidence.source_combat_log_digest,
+            manifest_digest=manifest.manifest_digest,
+            summary_evidence=summary_evidence.model_dump(mode="json"),
+            settlement_evidence=holdings_evidence.model_dump(mode="json"),
+            settlement_bundle=settlement_bundle,
+            lease_id=lease.lease_id,
+        )
+    assert repository.get_game(game_id).lifecycle_state is GameLifecycleState.ACTIVE
+    assert repository.list_artifacts(game_id) == ()
+    with pytest.raises(NotFoundError):
+        repository.get_current_summary(game_id)
+    with pytest.raises(NotFoundError):
+        repository.get_character_settlement_by_deployment(
+            deployment.deployment_id,
+        )
+    assert repository.get_character(character.character_id).current_holdings_revision == 1
+    assert len(
+        repository.list_character_deployment_leases(
+            game_id=game_id,
+            active_only=True,
+        )
+    ) == 1
+    assert repository.get_worker_terminal_ready_manifest(game_id).adopted_at is None
+    monkeypatch.setattr(
+        repository,
+        "_commit_terminal_settlement_in_transaction",
+        commit_settlement,
+    )
+
+    first = repository.finalize_staged_worker_terminal_commit(
+        replay,
+        summary,
+        subjective_artifact=subjective_replay,
+        summary_revision=1,
+        source_event_digest=summary_evidence.source_event_digest,
+        source_combat_log_digest=(
+            summary_evidence.source_combat_log_digest
+        ),
+        manifest_digest=manifest.manifest_digest,
+        summary_evidence=summary_evidence.model_dump(mode="json"),
+        settlement_evidence=holdings_evidence.model_dump(mode="json"),
+        settlement_bundle=settlement_bundle,
+        lease_id=lease.lease_id,
+    )
+    retry = repository.finalize_staged_worker_terminal_commit(
+        replay,
+        summary,
+        subjective_artifact=subjective_replay,
+        summary_revision=1,
+        source_event_digest=summary_evidence.source_event_digest,
+        source_combat_log_digest=(
+            summary_evidence.source_combat_log_digest
+        ),
+        manifest_digest=manifest.manifest_digest,
+        summary_evidence=summary_evidence.model_dump(mode="json"),
+        settlement_evidence=holdings_evidence.model_dump(mode="json"),
+        settlement_bundle=settlement_bundle,
+        lease_id=lease.lease_id,
+    )
+
+    assert retry == first
+    settlement = repository.get_character_settlement_by_deployment(
+        deployment.deployment_id,
+    )
+    assert settlement.resulting_holdings_revision == 2
+    assert repository.get_character(character.character_id).current_holdings_revision == 2
+    released = repository.list_character_deployment_leases(
+        game_id=game_id,
+        active_only=False,
+    )
+    assert len(released) == 1
+    assert released[0].released_at is not None
+    assert released[0].release_reason == "hosted_game_settled"
+    assert repository.get_game(game_id).lifecycle_state is GameLifecycleState.ENDED
+    assert repository.get_worker_terminal_ready_manifest(
+        game_id,
+    ).adopted_at is not None
 
 
 def test_rating_runs_reference_exact_immutable_summary_evidence_and_survive_restart(

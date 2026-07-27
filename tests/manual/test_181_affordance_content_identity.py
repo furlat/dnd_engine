@@ -21,6 +21,7 @@ from dnd.content_system.reaction_definitions import (
     REACTION_BEHAVIOR_DECLARATIONS,
 )
 from dnd.core.base_actions import (
+    ActionEvent,
     ActionAvailabilityStatus,
     AvailableActionInfo,
     AvailableHandlerInfo,
@@ -36,13 +37,19 @@ from dnd.core.content.materialization import (
 from dnd.core.content.runtime import (
     AuthoredBehaviorAttribution,
     BehaviorBinding,
+    HandlerDispatchOutcome,
+    RuntimeBehaviorKind,
 )
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventHandler
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.entity import Entity
 from dnd.items.test_reactions import DodgeRollFeature, Intercepting
 from dnd.monsters.bestiary import create_goblin
-from dnd.premade_characters import PREMADE_CHARACTER_TEMPLATES
+from dnd.premade_characters import (
+    BARBARIAN_L5_BERSERKER_TORCH_RECIPE,
+    FIGHTER_L5_SHIELD_TORCH_RECIPE,
+    SORCERER_L5_STANDARD_TORCH_RECIPE,
+)
 from dnd.reactions import create_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import (
@@ -278,9 +285,132 @@ def test_every_direct_toggleable_reaction_binds_and_resolves_in_catalog() -> Non
         for declaration in REACTION_BEHAVIOR_DECLARATIONS
     ) == (
         "reaction.opportunity_attack",
-        "reaction.spell.shield",
         "reaction.class_feature.paladin.divine_smite",
     )
+
+
+def test_effective_reaction_retains_exact_internal_presentation_evidence() -> None:
+    """A state-changing handler leaves replay-safe evidence on its event lineage."""
+
+    owner = Entity.create(source_entity_uuid=uuid4(), name="Reaction Evidence")
+    reaction_ref = _ref(
+        "reaction.test",
+        definition_kind=ContentDefinitionKind.REACTION,
+    )
+    binding = BehaviorBinding(
+        definition_ref=reaction_ref,
+        provided_by_ref=reaction_ref,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner.uuid,
+    )
+
+    emitted: list[Event] = []
+
+    def modify(event: ActionEvent, _source_uuid):
+        child = Event(
+            name="Reaction Effect",
+            event_type=EventType.TRIGGER_EVENT,
+            phase=EventPhase.COMPLETION,
+            source_entity_uuid=owner.uuid,
+            target_entity_uuid=owner.uuid,
+            parent_event=event.uuid,
+            use_register=False,
+        )
+        emitted.append(EventQueue.register(child))
+        return event.model_copy(update={"modified": True})
+
+    handler = EventHandler(
+        name="Test Reaction",
+        semantic_key="reaction.test",
+        behavior_binding=binding,
+        content_kind=RuntimeBehaviorKind.REACTION,
+        source_entity_uuid=owner.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.BASE_ACTION,
+                event_phase=EventPhase.DECLARATION,
+            ),
+        ],
+        event_processor=modify,
+    )
+    owner.add_event_handler(handler)
+    declaration = ActionEvent(
+        name="Trigger",
+        source_entity_uuid=owner.uuid,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    )
+
+    modified = EventQueue.register(declaration)
+    completion = modified.phase_to(EventPhase.COMPLETION)
+
+    evidence = completion.effective_handler_presentations
+    assert len(evidence) == 1
+    assert evidence[0].handler_name == "Test Reaction"
+    assert evidence[0].behavior_binding == binding
+    assert evidence[0].source_entity_uuid == owner.uuid
+    assert evidence[0].triggering_event_uuid == declaration.uuid
+    assert evidence[0].triggering_lineage_uuid == declaration.lineage_uuid
+    assert evidence[0].emitted_lineage_uuids == (
+        emitted[0].lineage_uuid,
+    )
+    assert evidence[0].outcome is HandlerDispatchOutcome.MODIFIED_EVENT
+    assert "effective_handler_presentations" not in completion.model_dump()
+
+
+def test_unchanged_already_modified_event_is_not_a_reaction_effect() -> None:
+    """A later handler cannot claim an earlier handler's modified flag."""
+
+    owner = Entity.create(source_entity_uuid=uuid4(), name="No Effect Evidence")
+    reaction_ref = _ref(
+        "reaction.no_effect",
+        definition_kind=ContentDefinitionKind.REACTION,
+    )
+    binding = BehaviorBinding(
+        definition_ref=reaction_ref,
+        provided_by_ref=reaction_ref,
+        origin_root_ref=None,
+        runtime_owner_uuid=owner.uuid,
+    )
+    outcomes: list[HandlerDispatchOutcome] = []
+
+    def unchanged(event: ActionEvent, _source_uuid):
+        return event
+
+    def capture(evidence):
+        outcomes.append(evidence.outcome)
+
+    handler = EventHandler(
+        name="No Effect Reaction",
+        semantic_key="reaction.no_effect",
+        behavior_binding=binding,
+        content_kind=RuntimeBehaviorKind.REACTION,
+        source_entity_uuid=owner.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.BASE_ACTION,
+                event_phase=EventPhase.DECLARATION,
+            ),
+        ],
+        event_processor=unchanged,
+    )
+    owner.add_event_handler(handler)
+    EventQueue.add_on_handler_dispatch_callback(capture)
+    try:
+        event = ActionEvent(
+            name="Previously Modified Trigger",
+            source_entity_uuid=owner.uuid,
+            phase=EventPhase.DECLARATION,
+            modified=True,
+            use_register=False,
+        )
+        result = EventQueue.register(event)
+    finally:
+        EventQueue.remove_on_handler_dispatch_callback(capture)
+
+    assert result is event
+    assert outcomes == [HandlerDispatchOutcome.NO_EFFECT]
+    assert result.effective_handler_presentations == ()
 
 
 def test_condition_owned_toggleable_handlers_inherit_provider_identity() -> None:
@@ -380,10 +510,15 @@ def test_every_premade_affordance_ref_resolves_in_the_public_catalog() -> None:
         for entry in build_public_content_catalog(loaded).entries
     }
 
-    for index, template in enumerate(PREMADE_CHARACTER_TEMPLATES.values()):
+    recipes = (
+        BARBARIAN_L5_BERSERKER_TORCH_RECIPE,
+        FIGHTER_L5_SHIELD_TORCH_RECIPE,
+        SORCERER_L5_STANDARD_TORCH_RECIPE,
+    )
+    for index, recipe in enumerate(recipes):
         reset_engine_runtime(grid_size=(8, 8))
         entity = materialize_creature(
-            template.creature_recipe,
+            recipe,
             runtime_entity_uuid=uuid4(),
             display_name=f"Affordance Premade {index}",
             faction="heroes",

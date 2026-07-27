@@ -1,4 +1,4 @@
-"""Dependency-neutral contracts for approved premade character templates."""
+"""Dependency-neutral schema-2 character-build and premade contracts."""
 
 from __future__ import annotations
 
@@ -12,26 +12,65 @@ from dnd.core.content.identities import (
     ContentDefinitionKind,
     validate_namespaced_id,
 )
+from dnd.core.content.durable_characters import (
+    AbilityScoreAllocation,
+    BuildChoiceSelection,
+    CharacterAppearanceSelection,
+    ClassLevelEntry,
+    FeatureToggleSelection,
+    FlexibleAbilityBonusSelection,
+    PreparedSpellSourceLoadout,
+)
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import EquipmentSlot
 
 
-def compute_premade_template_digest(
+class CharacterBuildDraft(BaseModel):
+    """Client-owned structural selections before server normalization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    body_recipe: ContentRecipe
+    species_ref: ContentRef
+    species_variant_ref: ContentRef | None = None
+    background_ref: ContentRef
+    immutable_origin_choices: tuple[BuildChoiceSelection, ...] = ()
+    appearance: CharacterAppearanceSelection
+    base_ability_scores: AbilityScoreAllocation
+    flexible_ability_bonuses: FlexibleAbilityBonusSelection
+    class_levels: tuple[ClassLevelEntry, ...] = Field(
+        min_length=1,
+        max_length=20,
+    )
+    premade_id: str | None = None
+
+
+class CharacterLoadoutDraft(BaseModel):
+    """Client-owned mutable loadout selections before server normalization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    prepared_spells: tuple[PreparedSpellSourceLoadout, ...] = ()
+    feature_toggles: tuple[FeatureToggleSelection, ...] = ()
+
+
+def compute_premade_build_digest(
     *,
-    schema_version: Literal[1],
+    schema_version: Literal[2],
     premade_id: str,
-    creature_recipe: ContentRecipe,
-    starter_holdings: tuple["StarterHoldingTemplate", ...],
+    display_name: str,
+    build: CharacterBuildDraft,
+    loadout: CharacterLoadoutDraft,
 ) -> str:
-    """Authenticate one exact structural recipe and ordered starter loadout."""
+    """Authenticate one exact schema-2 definition and loadout draft."""
+
     payload = {
         "schema_version": schema_version,
         "premade_id": premade_id,
-        "creature_recipe": creature_recipe.model_dump(mode="json"),
-        "starter_holdings": [
-            holding.model_dump(mode="json")
-            for holding in starter_holdings
-        ],
+        "display_name": display_name,
+        "build": build.model_dump(mode="json"),
+        "loadout": loadout.model_dump(mode="json"),
     }
     encoded = json.dumps(
         payload,
@@ -63,37 +102,43 @@ class StarterHoldingTemplate(BaseModel):
         return self
 
 
-class PremadeCharacterTemplate(BaseModel):
-    """One approved character definition plus its one-time starter holdings."""
+class PremadeCharacterBuild(BaseModel):
+    """One exact creator preset that fills the canonical creation request."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     premade_id: str
-    creature_recipe: ContentRecipe
-    starter_holdings: tuple[StarterHoldingTemplate, ...]
-    template_digest: str
+    display_name: str = Field(min_length=1, max_length=80)
+    build: CharacterBuildDraft
+    loadout: CharacterLoadoutDraft
+    premade_digest: str
 
     @classmethod
     def create(
         cls,
         *,
         premade_id: str,
-        creature_recipe: ContentRecipe,
-        starter_holdings: tuple[StarterHoldingTemplate, ...],
-        schema_version: Literal[1] = 1,
+        display_name: str,
+        build: CharacterBuildDraft,
+        loadout: CharacterLoadoutDraft,
+        schema_version: Literal[2] = 2,
     ) -> Self:
-        """Create one template with its canonical digest."""
+        """Create one premade row with its canonical digest."""
+
+        normalized_display_name = " ".join(display_name.split())
         return cls(
             schema_version=schema_version,
             premade_id=premade_id,
-            creature_recipe=creature_recipe,
-            starter_holdings=starter_holdings,
-            template_digest=compute_premade_template_digest(
+            display_name=normalized_display_name,
+            build=build,
+            loadout=loadout,
+            premade_digest=compute_premade_build_digest(
                 schema_version=schema_version,
                 premade_id=premade_id,
-                creature_recipe=creature_recipe,
-                starter_holdings=starter_holdings,
+                display_name=normalized_display_name,
+                build=build,
+                loadout=loadout,
             ),
         )
 
@@ -102,63 +147,63 @@ class PremadeCharacterTemplate(BaseModel):
     def _validate_premade_id(cls, value: str) -> str:
         return validate_namespaced_id(value, "premade_id")
 
-    @field_validator("template_digest")
+    @field_validator("display_name")
     @classmethod
-    def _validate_template_digest(cls, value: str) -> str:
+    def _normalize_display_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("display_name cannot be blank")
+        return normalized
+
+    @field_validator("premade_digest")
+    @classmethod
+    def _validate_premade_digest(cls, value: str) -> str:
         if len(value) != 64 or any(
             character not in "0123456789abcdef"
             for character in value
         ):
-            raise ValueError("template_digest must be a lowercase SHA-256 digest")
+            raise ValueError(
+                "premade_digest must be a lowercase SHA-256 digest",
+            )
         return value
 
     @model_validator(mode="after")
-    def _validate_template(self) -> Self:
+    def _validate_build(self) -> Self:
+        if self.build.premade_id != self.premade_id:
+            raise ValueError(
+                "premade build identity must match build.premade_id",
+            )
         if (
-            self.creature_recipe.ref.definition_kind
-            != ContentDefinitionKind.CREATURE
+            self.build.body_recipe.ref.definition_kind
+            is not ContentDefinitionKind.CREATURE
         ):
             raise ValueError(
-                "PremadeCharacterTemplate requires a creature recipe",
-            )
-        holding_keys = tuple(
-            (
-                holding.recipe.recipe_digest,
-                (
-                    holding.equipped_slot.value
-                    if holding.equipped_slot is not None
-                    else None
-                ),
-            )
-            for holding in self.starter_holdings
-        )
-        if len(set(holding_keys)) != len(holding_keys):
-            raise ValueError(
-                "starter_holdings must combine identical recipe/slot grants "
-                "through quantity",
+                "premade character build requires a creature body recipe",
             )
         self.verify_integrity()
         return self
 
     def verify_integrity(self) -> None:
-        """Reject mutation of the structural recipe or ordered starter grants."""
-        self.creature_recipe.verify_integrity()
-        for holding in self.starter_holdings:
-            holding.recipe.verify_integrity()
-        expected = compute_premade_template_digest(
+        """Reject mutation of the authenticated schema-2 drafts."""
+
+        self.build.body_recipe.verify_integrity()
+        expected = compute_premade_build_digest(
             schema_version=self.schema_version,
             premade_id=self.premade_id,
-            creature_recipe=self.creature_recipe,
-            starter_holdings=self.starter_holdings,
+            display_name=self.display_name,
+            build=self.build,
+            loadout=self.loadout,
         )
-        if self.template_digest != expected:
+        if self.premade_digest != expected:
             raise ValueError(
-                "template_digest does not authenticate the premade template",
+                "premade_digest does not authenticate the premade build",
             )
 
 
 __all__ = [
-    "PremadeCharacterTemplate",
+    "CharacterBuildDraft",
+    "CharacterLoadoutDraft",
+    "PremadeCharacterBuild",
     "StarterHoldingTemplate",
-    "compute_premade_template_digest",
+    "compute_premade_build_digest",
 ]

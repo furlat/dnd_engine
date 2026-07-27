@@ -11,9 +11,15 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from dnd.analytics.models import GameSummary
 from dnd.core.content.durable_characters import (
-    CharacterDefinitionRevision,
+    CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
+    CharacterLoadoutRevisionV1,
 )
+from dnd.core.progression import (
+    MulticlassSlotRoundingPolicy,
+    character_ruleset_digest,
+)
+from server.game_directory.canonical import canonical_digest
 
 JsonObject = dict[str, JsonValue]
 
@@ -47,11 +53,20 @@ class CharacterRevisionState(str, Enum):
     CANONICAL = "canonical"
 
 
-class CharacterDeploymentPinState(str, Enum):
-    """Whether a deployment has exact durable character revision pins."""
+class SpellPreparationPolicy(str, Enum):
+    """When a profile permits a persistent prepared-spell loadout change."""
 
-    LEGACY_PENDING = "legacy_pending"
-    PINNED = "pinned"
+    LONG_REST = "long_rest"
+    OUT_OF_COMBAT = "out_of_combat"
+
+
+class CharacterAdvancementSourceKind(str, Enum):
+    """Audited sources that may grant persistent character levels."""
+
+    CREATION = "creation"
+    GAME_REWARD = "game_reward"
+    DEVELOPER = "developer"
+    MIGRATION = "migration"
 
 
 class WorkerState(str, Enum):
@@ -106,6 +121,7 @@ class ExecutionKind(str, Enum):
     """Origin and execution mode of a game record."""
 
     HOSTED = "hosted"
+    LOCAL = "local"
     EVALUATION = "evaluation"
     IMPORTED = "imported"
 
@@ -236,6 +252,78 @@ class PrincipalCredentialRecord(PrincipalCredentialCreate):
     revoked_at: datetime | None = Field(default=None, description="UTC credential revocation time.")
 
 
+class ProfileSettingsCreate(DirectoryModel):
+    """Create the rules policy owned by one player principal."""
+
+    owner_principal_id: UUID
+    permissive_multiclass_prerequisites: bool = True
+    multiclass_slot_rounding_policy: MulticlassSlotRoundingPolicy = (
+        MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
+    )
+    allow_respec: bool = True
+    spell_preparation_policy: SpellPreparationPolicy = (
+        SpellPreparationPolicy.LONG_REST
+    )
+    ruleset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_ruleset_digest(self) -> Self:
+        expected = character_ruleset_digest(
+            permissive_multiclass_prerequisites=(
+                self.permissive_multiclass_prerequisites
+            ),
+            multiclass_slot_rounding_policy=(
+                self.multiclass_slot_rounding_policy
+            ),
+        )
+        if self.ruleset_digest != expected:
+            raise ValueError(
+                "ruleset_digest does not authenticate the selected "
+                "character-build policy",
+            )
+        return self
+
+
+class ProfileSettingsUpdate(ProfileSettingsCreate):
+    """Replace profile rules policy through a settings-version CAS."""
+
+    expected_settings_version: int = Field(ge=1)
+
+
+class ProfileSettingsRecord(ProfileSettingsCreate):
+    """Persisted profile rules policy."""
+
+    settings_version: int = Field(ge=1)
+    updated_at: datetime
+
+
+class CharacterAdvancementAwardCreate(DirectoryModel):
+    """Append one idempotent source-owned level entitlement."""
+
+    award_id: UUID = Field(default_factory=uuid4)
+    character_id: UUID
+    level_delta: int = Field(gt=0)
+    source_kind: CharacterAdvancementSourceKind
+    source_id: str = Field(min_length=1)
+
+
+class CharacterAdvancementAwardRecord(CharacterAdvancementAwardCreate):
+    """Persisted immutable level entitlement."""
+
+    created_at: datetime
+
+
+class CharacterRevisionHeads(DirectoryModel):
+    """One exact three-stream character CAS expectation."""
+
+    definition_revision: int = Field(ge=1)
+    definition_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    holdings_revision: int = Field(ge=1)
+    holdings_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    loadout_revision: int = Field(ge=1)
+    loadout_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CharacterRecord(DirectoryModel):
     """Persisted player character and its current revision."""
 
@@ -254,7 +342,7 @@ class CharacterRecord(DirectoryModel):
     )
     revision_state: CharacterRevisionState = Field(
         default=CharacterRevisionState.LEGACY_PENDING,
-        description="Whether exact definition and holdings heads are installed.",
+        description="Whether all three exact durable heads are installed.",
     )
     current_definition_revision: int | None = Field(
         default=None,
@@ -276,19 +364,31 @@ class CharacterRecord(DirectoryModel):
         pattern=r"^[0-9a-f]{64}$",
         description="Digest of the current immutable holdings revision.",
     )
+    current_loadout_revision: int | None = Field(
+        default=None,
+        ge=1,
+        description="Current immutable prepared-feature loadout revision.",
+    )
+    current_loadout_digest: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="Digest of the current immutable loadout revision.",
+    )
     created_at: datetime = Field(description="UTC character creation time.")
     updated_at: datetime = Field(description="UTC time of the latest character update.")
     row_version: int = Field(default=1, ge=1, description="Compare-and-swap character revision.")
 
     @model_validator(mode="after")
     def _validate_revision_heads(self) -> Self:
-        """Require either an explicit legacy gap or four complete current heads."""
+        """Require either an explicit legacy gap or six complete current heads."""
 
         heads = (
             self.current_definition_revision,
             self.current_definition_digest,
             self.current_holdings_revision,
             self.current_holdings_digest,
+            self.current_loadout_revision,
+            self.current_loadout_digest,
         )
         if self.revision_state is CharacterRevisionState.LEGACY_PENDING:
             if any(value is not None for value in heads):
@@ -301,7 +401,7 @@ class CharacterRecord(DirectoryModel):
 
 
 class CanonicalCharacterRecord(CharacterRecord):
-    """Character row whose exact durable definition and holdings heads exist."""
+    """Character row whose exact durable three-stream heads exist."""
 
     revision_state: Literal[CharacterRevisionState.CANONICAL] = (
         CharacterRevisionState.CANONICAL
@@ -316,10 +416,15 @@ class CanonicalCharacterRecord(CharacterRecord):
         default=...,
         pattern=r"^[0-9a-f]{64}$",
     )
+    current_loadout_revision: int = Field(default=..., ge=1)
+    current_loadout_digest: str = Field(
+        default=...,
+        pattern=r"^[0-9a-f]{64}$",
+    )
 
 
 class CharacterBootstrapCreate(DirectoryModel):
-    """Atomically create one character with definition and starter holdings."""
+    """Atomically create one character and all three revision-one streams."""
 
     character_id: UUID = Field(
         default_factory=uuid4,
@@ -333,11 +438,17 @@ class CharacterBootstrapCreate(DirectoryModel):
         max_length=80,
         description="Player-facing character name.",
     )
-    definition: CharacterDefinitionRevision = Field(
+    definition: CharacterDefinitionRevisionV2 = Field(
         description="Immutable structural revision one.",
     )
     starter_holdings: CharacterHoldingsRevision = Field(
         description="Immutable starter holdings revision one.",
+    )
+    starter_loadout: CharacterLoadoutRevisionV1 = Field(
+        description="Immutable starter loadout revision one.",
+    )
+    initial_advancement_award: CharacterAdvancementAwardCreate = Field(
+        description="Creation-owned entitlement matching the initial build.",
     )
     status: CharacterStatus = Field(
         default=CharacterStatus.ACTIVE,
@@ -352,17 +463,42 @@ class CharacterBootstrapCreate(DirectoryModel):
             raise ValueError("definition character_id must match character_id")
         if self.starter_holdings.character_id != self.character_id:
             raise ValueError("starter holdings character_id must match character_id")
+        if self.starter_loadout.character_id != self.character_id:
+            raise ValueError("starter loadout character_id must match character_id")
+        if self.initial_advancement_award.character_id != self.character_id:
+            raise ValueError(
+                "initial advancement award character_id must match character_id",
+            )
         if self.definition.definition_revision != 1:
             raise ValueError("character bootstrap requires definition revision 1")
         if self.starter_holdings.holdings_revision != 1:
             raise ValueError("character bootstrap requires holdings revision 1")
+        if self.starter_loadout.loadout_revision != 1:
+            raise ValueError("character bootstrap requires loadout revision 1")
+        if (
+            self.starter_loadout.based_on_definition_revision
+            != self.definition.definition_revision
+        ):
+            raise ValueError(
+                "starter loadout must be based on definition revision 1",
+            )
+        if (
+            self.initial_advancement_award.source_kind
+            is not CharacterAdvancementSourceKind.CREATION
+            or self.initial_advancement_award.level_delta
+            != self.definition.earned_character_level
+        ):
+            raise ValueError(
+                "character bootstrap creation award must match the initial "
+                "definition level",
+            )
         return self
 
 
 class CharacterDefinitionRecord(DirectoryModel):
     """One decoded immutable structural revision row."""
 
-    definition: CharacterDefinitionRevision
+    definition: CharacterDefinitionRevisionV2
     created_at: datetime
 
 
@@ -373,57 +509,171 @@ class CharacterHoldingsRecord(DirectoryModel):
     created_at: datetime
 
 
-class CharacterDeploymentCreate(DirectoryModel):
-    """Bind one persistent character to its concrete entity in a game."""
+class CharacterLoadoutRecord(DirectoryModel):
+    """One decoded immutable loadout revision row."""
 
-    deployment_id: UUID = Field(default_factory=uuid4, description="Stable deployment identifier.")
-    game_id: UUID = Field(description="Hosted game receiving the character.")
-    membership_id: UUID = Field(description="Membership controlling the deployed character.")
-    character_id: UUID = Field(description="Persistent character entering the game.")
-    entity_uuid: UUID = Field(description="Worker entity instantiated for this character.")
+    loadout: CharacterLoadoutRevisionV1
+    created_at: datetime
 
 
-class CharacterDeploymentRecord(CharacterDeploymentCreate):
-    """Persisted character-to-game deployment history."""
+class CharacterSettlementCreate(DirectoryModel):
+    """Exactly-once receipt for one deployment's holdings transition."""
 
-    lease_id: UUID | None = Field(
-        default=None,
-        description="Exclusive lease authorizing a revision-pinned deployment.",
-    )
-    pin_state: CharacterDeploymentPinState = Field(
-        default=CharacterDeploymentPinState.LEGACY_PENDING,
-        description="Whether exact definition and holdings revisions are pinned.",
-    )
-    definition_revision: int | None = Field(default=None, ge=1)
-    definition_digest: str | None = Field(
-        default=None,
-        pattern=r"^[0-9a-f]{64}$",
-    )
-    holdings_revision: int | None = Field(default=None, ge=1)
-    holdings_digest: str | None = Field(
-        default=None,
-        pattern=r"^[0-9a-f]{64}$",
-    )
-    deployed_at: datetime = Field(description="UTC deployment time.")
+    settlement_id: UUID = Field(default_factory=uuid4)
+    deployment_id: UUID
+    game_id: UUID
+    character_id: UUID
+    starting_holdings_revision: int = Field(ge=1)
+    starting_holdings_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resulting_holdings_revision: int = Field(ge=1)
+    resulting_holdings_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    delta_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
-    def _validate_revision_pins(self) -> Self:
-        """Keep legacy gaps explicit and pinned deployments complete."""
+    def _validate_holdings_transition(self) -> Self:
+        if self.resulting_holdings_revision != self.starting_holdings_revision + 1:
+            raise ValueError(
+                "settlement resulting holdings revision must follow its start",
+            )
+        return self
 
-        pins = (
-            self.lease_id,
-            self.definition_revision,
-            self.definition_digest,
-            self.holdings_revision,
-            self.holdings_digest,
+
+class CharacterSettlementRecord(CharacterSettlementCreate):
+    """Persisted immutable settlement receipt."""
+
+    settled_at: datetime
+
+
+class DirectoryMutationReceiptCreate(DirectoryModel):
+    """Caller-owned idempotency identity for one durable directory mutation."""
+
+    owner_principal_id: UUID
+    idempotency_key: UUID
+    operation_kind: str = Field(
+        min_length=1,
+        max_length=80,
+        pattern=r"^[a-z][a-z0-9_.-]*$",
+    )
+    scope_id: UUID
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DirectoryMutationReceiptRecord(DirectoryMutationReceiptCreate):
+    """Immutable successful result replayed for an exact mutation retry."""
+
+    result_payload: JsonObject
+    result_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_result_digest(self) -> Self:
+        if self.result_digest != canonical_digest(self.result_payload):
+            raise ValueError("result_digest does not authenticate result_payload")
+        return self
+
+
+class CharacterRevisionBundleCommit(DirectoryModel):
+    """One atomic compare-and-swap across character revision streams."""
+
+    character_id: UUID
+    expected_row_version: int = Field(ge=1)
+    expected_heads: CharacterRevisionHeads
+    new_definition: CharacterDefinitionRevisionV2 | None = None
+    new_holdings: CharacterHoldingsRevision | None = None
+    new_loadout: CharacterLoadoutRevisionV1 | None = None
+    advancement_award: CharacterAdvancementAwardCreate | None = None
+    settlement: CharacterSettlementCreate | None = None
+    mutation_receipt: DirectoryMutationReceiptCreate | None = None
+
+    @model_validator(mode="after")
+    def _validate_bundle(self) -> Self:
+        mutations = (
+            self.new_definition,
+            self.new_holdings,
+            self.new_loadout,
+            self.advancement_award,
+            self.settlement,
         )
-        if self.pin_state is CharacterDeploymentPinState.LEGACY_PENDING:
-            if any(value is not None for value in pins):
+        if all(mutation is None for mutation in mutations):
+            raise ValueError("character revision bundle cannot be empty")
+        for revision in (
+            self.new_definition,
+            self.new_holdings,
+            self.new_loadout,
+        ):
+            if revision is not None and revision.character_id != self.character_id:
+                raise ValueError("revision character_id must match bundle character_id")
+        if (
+            self.advancement_award is not None
+            and self.advancement_award.character_id != self.character_id
+        ):
+            raise ValueError(
+                "advancement award character_id must match bundle character_id",
+            )
+        if (
+            self.mutation_receipt is not None
+            and self.mutation_receipt.scope_id != self.character_id
+        ):
+            raise ValueError(
+                "mutation receipt scope_id must match bundle character_id",
+            )
+        if self.new_definition is not None:
+            if (
+                self.new_definition.definition_revision
+                != self.expected_heads.definition_revision + 1
+            ):
                 raise ValueError(
-                    "legacy-pending deployments cannot have revision pins",
+                    "new definition revision must follow the expected head",
                 )
-        elif any(value is None for value in pins):
-            raise ValueError("pinned deployments require complete revision pins")
+            if self.new_loadout is None:
+                raise ValueError(
+                    "a new definition requires a matching replacement loadout",
+                )
+        if (
+            self.new_holdings is not None
+            and self.new_holdings.holdings_revision
+            != self.expected_heads.holdings_revision + 1
+        ):
+            raise ValueError("new holdings revision must follow the expected head")
+        if (
+            self.new_loadout is not None
+            and self.new_loadout.loadout_revision
+            != self.expected_heads.loadout_revision + 1
+        ):
+            raise ValueError("new loadout revision must follow the expected head")
+        resolved_definition_revision = (
+            self.new_definition.definition_revision
+            if self.new_definition is not None
+            else self.expected_heads.definition_revision
+        )
+        if (
+            self.new_loadout is not None
+            and self.new_loadout.based_on_definition_revision
+            != resolved_definition_revision
+        ):
+            raise ValueError(
+                "new loadout must be based on the resulting definition head",
+            )
+        if self.settlement is not None:
+            if self.settlement.character_id != self.character_id:
+                raise ValueError(
+                    "settlement character_id must match bundle character_id",
+                )
+            if self.new_holdings is None:
+                raise ValueError("settlement requires a new holdings revision")
+            if (
+                self.settlement.starting_holdings_revision
+                != self.expected_heads.holdings_revision
+                or self.settlement.starting_holdings_digest
+                != self.expected_heads.holdings_digest
+                or self.settlement.resulting_holdings_revision
+                != self.new_holdings.holdings_revision
+                or self.settlement.resulting_holdings_digest
+                != self.new_holdings.holdings_digest
+            ):
+                raise ValueError(
+                    "settlement holdings must match the bundle transition",
+                )
         return self
 
 
@@ -454,22 +704,36 @@ class CharacterDeploymentLeaseRecord(CharacterDeploymentLeaseCreate):
         return self
 
 
-class PinnedCharacterDeploymentCreate(CharacterDeploymentCreate):
+class PinnedCharacterDeploymentCreate(DirectoryModel):
     """Deploy a character under one matching active exclusive lease."""
 
+    deployment_id: UUID = Field(
+        default_factory=uuid4,
+        description="Stable deployment identifier.",
+    )
+    game_id: UUID = Field(description="Game receiving the character.")
+    membership_id: UUID = Field(
+        description="Membership controlling the deployed character.",
+    )
+    character_id: UUID = Field(
+        description="Persistent character entering the game.",
+    )
+    entity_uuid: UUID = Field(
+        description="Runtime entity instantiated for this character.",
+    )
     lease_id: UUID
 
 
 class PinnedCharacterDeploymentRecord(PinnedCharacterDeploymentCreate):
     """Deployment history pinned to exact durable character heads."""
 
-    pin_state: Literal[CharacterDeploymentPinState.PINNED] = (
-        CharacterDeploymentPinState.PINNED
-    )
+    pin_state: Literal["pinned"] = "pinned"
     definition_revision: int = Field(ge=1)
     definition_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     holdings_revision: int = Field(ge=1)
     holdings_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    loadout_revision: int = Field(ge=1)
+    loadout_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     deployed_at: datetime
 
 
@@ -692,6 +956,40 @@ class ArtifactRecord(ArtifactCreate):
     """Persisted immutable artifact descriptor."""
 
     created_at: datetime = Field(description="UTC publication time.")
+
+
+class WorkerTerminalReadyManifestCreate(DirectoryModel):
+    """Generation-fenced terminal evidence staged before hosted adoption."""
+
+    game_id: UUID
+    worker_id: UUID
+    worker_generation: int = Field(ge=1)
+    objective_artifact: ArtifactCreate
+    subjective_artifact: ArtifactCreate
+    summary_evidence: JsonObject
+    settlement_evidence: JsonObject | None = None
+    manifest_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ready_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_artifact_ownership(self) -> Self:
+        if (
+            self.objective_artifact.game_id != self.game_id
+            or self.subjective_artifact.game_id != self.game_id
+        ):
+            raise ValueError(
+                "worker terminal artifacts must belong to the manifest game",
+            )
+        return self
+
+
+class WorkerTerminalReadyManifestRecord(
+    WorkerTerminalReadyManifestCreate,
+):
+    """Persisted immutable ready manifest with one-way adoption state."""
+
+    staged_at: datetime
+    adopted_at: datetime | None = None
 
 
 class FinalSummaryRecord(DirectoryModel):

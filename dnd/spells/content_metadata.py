@@ -356,6 +356,7 @@ def srd_reaction_identity(
     description: str,
     source_page: int,
     sort_order: int,
+    icon_key: str | None = None,
 ) -> Callable[[_DefinitionT], _DefinitionT]:
     """Declare one SRD reaction handler as exact metadata-only content."""
     return behavior_identity(
@@ -370,7 +371,7 @@ def srd_reaction_identity(
             tags=("reaction", "spell", "srd"),
             visibility=ContentVisibility.PUBLIC,
             presentation=ContentPresentation(
-                icon_key=content_id,
+                icon_key=icon_key or content_id,
                 visual_variant_key=content_id.removeprefix("reaction."),
                 vfx_profile=content_id,
                 ui_group="reactions.spells",

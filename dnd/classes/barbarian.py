@@ -29,7 +29,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    DamageAppliedEvent, TakeDamageEvent, SkillCheckEvent
+    DamageAppliedEvent, RangeType, TakeDamageEvent, SkillCheckEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
@@ -114,6 +114,26 @@ __all__ = [
 ]
 
 
+def reckless_attack_check(
+    source_entity_uuid: UUID,
+    target_entity_uuid: Optional[UUID] = None,
+    context: Optional[dict] = None,
+) -> Optional[AdvantageModifier]:
+    """Grant Reckless Attack advantage only to Strength melee attacks."""
+    if (
+        context is None
+        or context.get("attack_ability") != "strength"
+        or context.get("range_type") != RangeType.REACH.value
+    ):
+        return None
+    return AdvantageModifier(
+        name="Reckless Attack",
+        value=AdvantageStatus.ADVANTAGE,
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=target_entity_uuid,
+    )
+
+
 class RecklessAttacking(BaseCondition):
     """Active Reckless Attack state and exposed-target marker.
 
@@ -153,13 +173,16 @@ class RecklessAttacking(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        melee_adv_mod = AdvantageModifier(
+        melee_adv_mod = ContextualAdvantageModifier(
             name="Reckless Attack",
-            value=AdvantageStatus.ADVANTAGE,
             source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid
+            target_entity_uuid=self.target_entity_uuid,
+            callable=reckless_attack_check,
         )
-        mod_uuid = target.equipment.melee_attack_bonus.self_static.add_advantage_modifier(melee_adv_mod)
+        mod_uuid = (
+            target.equipment.melee_attack_bonus.self_contextual
+            .add_advantage_modifier(melee_adv_mod)
+        )
         outs.append((target.equipment.melee_attack_bonus.uuid, mod_uuid))
 
         attacker_adv_mod = AdvantageModifier(
@@ -323,8 +346,10 @@ def danger_sense_check(
     if not entity:
         return None
 
-    disabled_conditions = ["Blinded", "Deafened", "Incapacitated"]
+    disabled_conditions = ["Blinded", "Deafened"]
     if any(c in entity.active_conditions for c in disabled_conditions):
+        return None
+    if not entity.can_take_actions():
         return None
 
     if target_entity_uuid and target_entity_uuid not in entity.senses.entities:
@@ -995,9 +1020,9 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
         costs=[],
         parent_event=event
     )
-    attack.apply(parent_event=event)
-
-    entity.action_economy.consume("reactions", 1)
+    result = attack.apply(parent_event=event)
+    if result is not None and not result.canceled:
+        entity.action_economy.consume("reactions", 1)
 
     return None
 

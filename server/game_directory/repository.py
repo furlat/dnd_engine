@@ -16,8 +16,9 @@ from pydantic import JsonValue, TypeAdapter, ValidationError
 
 from dnd.analytics.models import GameSummary, summary_digest_is_valid
 from dnd.core.content.durable_characters import (
-    CharacterDefinitionRevision,
+    CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
+    CharacterLoadoutRevisionV1,
 )
 
 from server.game_directory.canonical import (
@@ -37,16 +38,21 @@ from server.game_directory.contracts import (
     AttachmentRecord,
     AttachmentState,
     CanonicalCharacterRecord,
+    CharacterAdvancementAwardCreate,
+    CharacterAdvancementAwardRecord,
     CharacterBootstrapCreate,
     CharacterDefinitionRecord,
-    CharacterDeploymentCreate,
     CharacterDeploymentLeaseCreate,
     CharacterDeploymentLeaseRecord,
-    CharacterDeploymentRecord,
     CharacterHoldingsRecord,
+    CharacterLoadoutRecord,
     CharacterRecord,
+    CharacterRevisionBundleCommit,
+    CharacterRevisionHeads,
     CharacterRevisionState,
+    CharacterSettlementRecord,
     DirectoryEventRecord,
+    DirectoryMutationReceiptRecord,
     EntityAssignmentCreate,
     EntityAssignmentRecord,
     FinalSummaryRecord,
@@ -66,6 +72,9 @@ from server.game_directory.contracts import (
     PrincipalCredentialCreate,
     PrincipalCredentialRecord,
     PrincipalRecord,
+    ProfileSettingsCreate,
+    ProfileSettingsRecord,
+    ProfileSettingsUpdate,
     RatingAdmissionCreate,
     RatingAdmissionRecord,
     RatingEstimateCreate,
@@ -77,6 +86,8 @@ from server.game_directory.contracts import (
     WorkerCreate,
     WorkerRecord,
     WorkerState,
+    WorkerTerminalReadyManifestCreate,
+    WorkerTerminalReadyManifestRecord,
 )
 
 from server.game_directory.database import DirectoryDatabase
@@ -89,6 +100,7 @@ from server.game_directory.errors import (
 )
 
 _GAME_SUMMARY_ADAPTER = TypeAdapter(GameSummary)
+_CHARACTER_DEFINITION_ADAPTER = TypeAdapter(CharacterDefinitionRevisionV2)
 JsonObject = dict[str, JsonValue]
 
 
@@ -172,6 +184,8 @@ def _character_from_row(row: sqlite3.Row) -> CharacterRecord:
         current_definition_digest=row["current_definition_digest"],
         current_holdings_revision=row["current_holdings_revision"],
         current_holdings_digest=row["current_holdings_digest"],
+        current_loadout_revision=row["current_loadout_revision"],
+        current_loadout_digest=row["current_loadout_digest"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         row_version=row["row_version"],
@@ -196,7 +210,7 @@ def _character_definition_from_row(
         "character definition",
     )
     try:
-        definition = CharacterDefinitionRevision.model_validate(payload)
+        definition = _CHARACTER_DEFINITION_ADAPTER.validate_python(payload)
     except ValidationError as exc:
         raise ImmutableRecordError(
             "Persisted character definition failed durable integrity validation",
@@ -246,22 +260,107 @@ def _character_holdings_from_row(
     )
 
 
-def _character_deployment_from_row(row: sqlite3.Row) -> CharacterDeploymentRecord:
-    """Build one persisted character deployment from a SQLite row."""
+def _character_loadout_from_row(row: sqlite3.Row) -> CharacterLoadoutRecord:
+    """Decode and authenticate one immutable loadout revision."""
 
-    return CharacterDeploymentRecord(
+    payload = _load_canonical_json_object(
+        row["loadout_json"],
+        "character loadout",
+    )
+    try:
+        loadout = CharacterLoadoutRevisionV1.model_validate(payload)
+    except ValidationError as exc:
+        raise ImmutableRecordError(
+            "Persisted character loadout failed durable integrity validation",
+        ) from exc
+    if (
+        str(loadout.character_id) != row["character_id"]
+        or loadout.loadout_revision != row["loadout_revision"]
+        or loadout.schema_version != row["schema_version"]
+        or loadout.based_on_definition_revision
+        != row["based_on_definition_revision"]
+        or loadout.loadout_digest != row["loadout_digest"]
+    ):
+        raise ImmutableRecordError(
+            "Character loadout row metadata does not match its canonical JSON",
+        )
+    return CharacterLoadoutRecord(
+        loadout=loadout,
+        created_at=row["created_at"],
+    )
+
+
+def _profile_settings_from_row(row: sqlite3.Row) -> ProfileSettingsRecord:
+    """Build one principal-owned rules policy record."""
+
+    return ProfileSettingsRecord(
+        owner_principal_id=row["owner_principal_id"],
+        permissive_multiclass_prerequisites=bool(
+            row["permissive_multiclass_prerequisites"],
+        ),
+        multiclass_slot_rounding_policy=row[
+            "multiclass_slot_rounding_policy"
+        ],
+        allow_respec=bool(row["allow_respec"]),
+        spell_preparation_policy=row["spell_preparation_policy"],
+        settings_version=row["settings_version"],
+        ruleset_digest=row["ruleset_digest"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _character_advancement_award_from_row(
+    row: sqlite3.Row,
+) -> CharacterAdvancementAwardRecord:
+    """Build one immutable advancement authority row."""
+
+    return CharacterAdvancementAwardRecord(
+        award_id=row["award_id"],
+        character_id=row["character_id"],
+        level_delta=row["level_delta"],
+        source_kind=row["source_kind"],
+        source_id=row["source_id"],
+        created_at=row["created_at"],
+    )
+
+
+def _character_settlement_from_row(
+    row: sqlite3.Row,
+) -> CharacterSettlementRecord:
+    """Build one immutable exactly-once settlement receipt."""
+
+    return CharacterSettlementRecord(
+        settlement_id=row["settlement_id"],
         deployment_id=row["deployment_id"],
         game_id=row["game_id"],
-        membership_id=row["membership_id"],
         character_id=row["character_id"],
-        entity_uuid=row["entity_uuid"],
-        lease_id=row["lease_id"],
-        pin_state=row["pin_state"],
-        definition_revision=row["definition_revision"],
-        definition_digest=row["definition_digest"],
-        holdings_revision=row["holdings_revision"],
-        holdings_digest=row["holdings_digest"],
-        deployed_at=row["deployed_at"],
+        starting_holdings_revision=row["starting_holdings_revision"],
+        starting_holdings_digest=row["starting_holdings_digest"],
+        resulting_holdings_revision=row["resulting_holdings_revision"],
+        resulting_holdings_digest=row["resulting_holdings_digest"],
+        delta_digest=row["delta_digest"],
+        settled_at=row["settled_at"],
+    )
+
+
+def _directory_mutation_receipt_from_row(
+    row: sqlite3.Row,
+) -> DirectoryMutationReceiptRecord:
+    """Decode and authenticate one immutable directory mutation receipt."""
+
+    payload = _load_canonical_json_object(
+        row["result_payload_json"],
+        "directory mutation receipt result",
+    )
+    return DirectoryMutationReceiptRecord(
+        owner_principal_id=row["owner_principal_id"],
+        idempotency_key=row["idempotency_key"],
+        operation_kind=row["operation_kind"],
+        scope_id=row["scope_id"],
+        request_digest=row["request_digest"],
+        result_payload=payload,
+        result_digest=row["result_digest"],
+        created_at=row["created_at"],
     )
 
 
@@ -282,6 +381,8 @@ def _pinned_character_deployment_from_row(
         definition_digest=row["definition_digest"],
         holdings_revision=row["holdings_revision"],
         holdings_digest=row["holdings_digest"],
+        loadout_revision=row["loadout_revision"],
+        loadout_digest=row["loadout_digest"],
         deployed_at=row["deployed_at"],
     )
 
@@ -484,6 +585,40 @@ def _artifact_from_row(row: sqlite3.Row) -> ArtifactRecord:
         producer_kind=row["producer_kind"],
         producer_version=row["producer_version"],
         created_at=row["created_at"],
+    )
+
+
+def _worker_terminal_ready_manifest_from_row(
+    row: sqlite3.Row,
+) -> WorkerTerminalReadyManifestRecord:
+    """Decode one immutable hosted terminal ready-manifest row."""
+
+    return WorkerTerminalReadyManifestRecord(
+        game_id=row["game_id"],
+        worker_id=row["worker_id"],
+        worker_generation=row["worker_generation"],
+        objective_artifact=ArtifactCreate.model_validate_json(
+            row["objective_artifact_json"],
+        ),
+        subjective_artifact=ArtifactCreate.model_validate_json(
+            row["subjective_artifact_json"],
+        ),
+        summary_evidence=_load_canonical_json_object(
+            row["summary_evidence_json"],
+            "worker terminal summary evidence",
+        ),
+        settlement_evidence=(
+            _load_canonical_json_object(
+                row["settlement_evidence_json"],
+                "worker terminal settlement evidence",
+            )
+            if row["settlement_evidence_json"] is not None
+            else None
+        ),
+        manifest_digest=row["manifest_digest"],
+        ready_at=row["ready_at"],
+        staged_at=row["staged_at"],
+        adopted_at=row["adopted_at"],
     )
 
 
@@ -820,24 +955,254 @@ class GameDirectoryRepository:
             )
         return _principal_credential_from_row(refreshed)
 
+    def create_profile_settings(
+        self,
+        request: ProfileSettingsCreate,
+    ) -> ProfileSettingsRecord:
+        """Create the one rules-policy row owned by a principal."""
+
+        now = self._now()
+        with self._database.transaction("create_profile_settings") as connection:
+            self._required_row(
+                connection,
+                "SELECT principal_id FROM principals WHERE principal_id = ?",
+                (str(request.owner_principal_id),),
+                "principal",
+            )
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO profile_settings(
+                        owner_principal_id,
+                        permissive_multiclass_prerequisites,
+                        multiclass_slot_rounding_policy,
+                        allow_respec,
+                        spell_preparation_policy,
+                        settings_version,
+                        ruleset_digest,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        str(request.owner_principal_id),
+                        int(request.permissive_multiclass_prerequisites),
+                        request.multiclass_slot_rounding_policy.value,
+                        int(request.allow_respec),
+                        request.spell_preparation_policy.value,
+                        request.ruleset_digest,
+                        datetime_to_text(now),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    "Profile settings already exist for this principal",
+                ) from exc
+            row = self._required_row(
+                connection,
+                "SELECT * FROM profile_settings WHERE owner_principal_id = ?",
+                (str(request.owner_principal_id),),
+                "profile settings",
+            )
+        return _profile_settings_from_row(row)
+
+    def get_profile_settings(
+        self,
+        owner_principal_id: UUID,
+    ) -> ProfileSettingsRecord:
+        """Return the exact profile rules policy."""
+
+        with self._database.read("get_profile_settings") as connection:
+            row = self._required_row(
+                connection,
+                "SELECT * FROM profile_settings WHERE owner_principal_id = ?",
+                (str(owner_principal_id),),
+                "profile settings",
+            )
+        return _profile_settings_from_row(row)
+
+    def update_profile_settings(
+        self,
+        request: ProfileSettingsUpdate,
+    ) -> ProfileSettingsRecord:
+        """Replace profile rules policy through a settings-version CAS."""
+
+        now = self._now()
+        with self._database.transaction("update_profile_settings") as connection:
+            current_row = self._required_row(
+                connection,
+                "SELECT * FROM profile_settings WHERE owner_principal_id = ?",
+                (str(request.owner_principal_id),),
+                "profile settings",
+            )
+            if current_row["settings_version"] != request.expected_settings_version:
+                raise StaleVersionError(
+                    "Profile settings version changed",
+                )
+            cursor = connection.execute(
+                """
+                UPDATE profile_settings
+                SET permissive_multiclass_prerequisites = ?,
+                    multiclass_slot_rounding_policy = ?,
+                    allow_respec = ?,
+                    spell_preparation_policy = ?,
+                    settings_version = settings_version + 1,
+                    ruleset_digest = ?,
+                    updated_at = ?
+                WHERE owner_principal_id = ? AND settings_version = ?
+                """,
+                (
+                    int(request.permissive_multiclass_prerequisites),
+                    request.multiclass_slot_rounding_policy.value,
+                    int(request.allow_respec),
+                    request.spell_preparation_policy.value,
+                    request.ruleset_digest,
+                    datetime_to_text(now),
+                    str(request.owner_principal_id),
+                    request.expected_settings_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StaleVersionError("Profile settings version changed")
+            row = self._required_row(
+                connection,
+                "SELECT * FROM profile_settings WHERE owner_principal_id = ?",
+                (str(request.owner_principal_id),),
+                "profile settings",
+            )
+        return _profile_settings_from_row(row)
+
+    def create_character_advancement_award(
+        self,
+        request: CharacterAdvancementAwardCreate,
+    ) -> CharacterAdvancementAwardRecord:
+        """Append an idempotent source-owned level entitlement."""
+
+        with self._database.transaction(
+            "create_character_advancement_award",
+        ) as connection:
+            row = self._insert_character_advancement_award(
+                connection,
+                request,
+                created_at=self._now(),
+            )
+        return _character_advancement_award_from_row(row)
+
+    def create_character_advancement_award_if_expected_level(
+        self,
+        request: CharacterAdvancementAwardCreate,
+        *,
+        expected_earned_character_level: int,
+        maximum_character_level: int = 20,
+    ) -> CharacterAdvancementAwardRecord:
+        """Append one award behind an atomic earned-level expectation."""
+
+        with self._database.transaction(
+            "create_character_advancement_award_if_expected_level",
+        ) as connection:
+            existing = connection.execute(
+                """
+                SELECT * FROM character_advancement_awards
+                WHERE character_id = ? AND source_kind = ? AND source_id = ?
+                """,
+                (
+                    str(request.character_id),
+                    request.source_kind.value,
+                    request.source_id,
+                ),
+            ).fetchone()
+            if existing is not None:
+                row = self._insert_character_advancement_award(
+                    connection,
+                    request,
+                    created_at=self._now(),
+                )
+                return _character_advancement_award_from_row(row)
+
+            current_row = connection.execute(
+                """
+                SELECT COALESCE(SUM(level_delta), 0) AS earned_level
+                FROM character_advancement_awards
+                WHERE character_id = ?
+                """,
+                (str(request.character_id),),
+            ).fetchone()
+            current_level = int(current_row["earned_level"])
+            if current_level != expected_earned_character_level:
+                raise StaleVersionError(
+                    "Character earned level changed",
+                )
+            if current_level + request.level_delta > maximum_character_level:
+                raise ConflictError(
+                    f"Character advancement cannot exceed level "
+                    f"{maximum_character_level}",
+                )
+            row = self._insert_character_advancement_award(
+                connection,
+                request,
+                created_at=self._now(),
+            )
+        return _character_advancement_award_from_row(row)
+
+    def list_character_advancement_awards(
+        self,
+        character_id: UUID,
+    ) -> tuple[CharacterAdvancementAwardRecord, ...]:
+        """Return deterministic advancement authority for one character."""
+
+        with self._database.read(
+            "list_character_advancement_awards",
+        ) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM character_advancement_awards
+                WHERE character_id = ?
+                ORDER BY created_at, award_id
+                """,
+                (str(character_id),),
+            ).fetchall()
+        return tuple(
+            _character_advancement_award_from_row(row)
+            for row in rows
+        )
+
+    def get_character_earned_level(self, character_id: UUID) -> int:
+        """Return the authoritative sum of immutable level awards."""
+
+        with self._database.read("get_character_earned_level") as connection:
+            self._required_row(
+                connection,
+                "SELECT character_id FROM characters WHERE character_id = ?",
+                (str(character_id),),
+                "character",
+            )
+            row = connection.execute(
+                """
+                SELECT COALESCE(SUM(level_delta), 0) AS earned_level
+                FROM character_advancement_awards
+                WHERE character_id = ?
+                """,
+                (str(character_id),),
+            ).fetchone()
+        return int(row["earned_level"])
+
     def create_character_with_revisions(
         self,
         request: CharacterBootstrapCreate,
     ) -> CanonicalCharacterRecord:
-        """Atomically persist a character, definition one, and starter holdings."""
+        """Atomically persist one character and all revision-one authority."""
 
         now = self._now()
         timestamp = datetime_to_text(now)
         definition = request.definition
         holdings = request.starter_holdings
+        loadout = request.starter_loadout
         definition_json = canonical_json(definition.model_dump(mode="json"))
         holdings_json = canonical_json(holdings.model_dump(mode="json"))
-        # Migration v2 made this physical column NOT NULL. It remains solely
-        # as frozen input for pending legacy-row backfill; no public contract
-        # or runtime authority reads it.
-        legacy_backfill_premade_id = (
-            definition.premade_id
-            or definition.creature_recipe.ref.identity_key
+        loadout_json = canonical_json(loadout.model_dump(mode="json"))
+        # The historical physical column remains NOT NULL, but schema-2
+        # definition JSON is the sole durable character authority.
+        storage_preset_identity = (
+            definition.premade_id or definition.body_recipe.ref.identity_key
         )
         with self._database.transaction(
             "create_character_with_revisions",
@@ -861,7 +1226,7 @@ class GameDirectoryRepository:
                         str(request.character_id),
                         str(request.owner_principal_id),
                         request.display_name,
-                        legacy_backfill_premade_id,
+                        storage_preset_identity,
                         request.status.value,
                         timestamp,
                         timestamp,
@@ -901,12 +1266,37 @@ class GameDirectoryRepository:
                 )
                 connection.execute(
                     """
+                    INSERT INTO character_loadout_revisions(
+                        character_id, loadout_revision, schema_version,
+                        based_on_definition_revision, loadout_json,
+                        loadout_digest, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(loadout.character_id),
+                        loadout.loadout_revision,
+                        loadout.schema_version,
+                        loadout.based_on_definition_revision,
+                        loadout_json,
+                        loadout.loadout_digest,
+                        timestamp,
+                    ),
+                )
+                self._insert_character_advancement_award(
+                    connection,
+                    request.initial_advancement_award,
+                    created_at=now,
+                )
+                connection.execute(
+                    """
                     UPDATE characters
                     SET revision_state = 'canonical',
                         current_definition_revision = ?,
                         current_definition_digest = ?,
                         current_holdings_revision = ?,
-                        current_holdings_digest = ?
+                        current_holdings_digest = ?,
+                        current_loadout_revision = ?,
+                        current_loadout_digest = ?
                     WHERE character_id = ?
                     """,
                     (
@@ -914,6 +1304,8 @@ class GameDirectoryRepository:
                         definition.definition_digest,
                         holdings.holdings_revision,
                         holdings.holdings_digest,
+                        loadout.loadout_revision,
+                        loadout.loadout_digest,
                         str(request.character_id),
                     ),
                 )
@@ -954,6 +1346,31 @@ class GameDirectoryRepository:
             )
         return _character_definition_from_row(row)
 
+    def list_character_definition_revisions(
+        self,
+        character_id: UUID,
+    ) -> tuple[CharacterDefinitionRecord, ...]:
+        """Return every immutable structural revision in ascending order."""
+
+        with self._database.read(
+            "list_character_definition_revisions",
+        ) as connection:
+            self._required_row(
+                connection,
+                "SELECT character_id FROM characters WHERE character_id = ?",
+                (str(character_id),),
+                "character",
+            )
+            rows = connection.execute(
+                """
+                SELECT * FROM character_definitions
+                WHERE character_id = ?
+                ORDER BY definition_revision
+                """,
+                (str(character_id),),
+            ).fetchall()
+        return tuple(_character_definition_from_row(row) for row in rows)
+
     def get_character_holdings_revision(
         self,
         character_id: UUID,
@@ -978,6 +1395,503 @@ class GameDirectoryRepository:
             )
         return _character_holdings_from_row(row)
 
+    def list_character_holdings_revisions(
+        self,
+        character_id: UUID,
+    ) -> tuple[CharacterHoldingsRecord, ...]:
+        """Return every immutable holdings revision in ascending order."""
+
+        with self._database.read(
+            "list_character_holdings_revisions",
+        ) as connection:
+            self._required_row(
+                connection,
+                "SELECT character_id FROM characters WHERE character_id = ?",
+                (str(character_id),),
+                "character",
+            )
+            rows = connection.execute(
+                """
+                SELECT * FROM character_holdings_revisions
+                WHERE character_id = ?
+                ORDER BY holdings_revision
+                """,
+                (str(character_id),),
+            ).fetchall()
+        return tuple(_character_holdings_from_row(row) for row in rows)
+
+    def get_character_loadout_revision(
+        self,
+        character_id: UUID,
+        *,
+        loadout_revision: int,
+    ) -> CharacterLoadoutRecord:
+        """Return one exact immutable prepared-feature loadout revision."""
+
+        if loadout_revision < 1:
+            raise ValueError("loadout_revision must be at least 1")
+        with self._database.read(
+            "get_character_loadout_revision",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_loadout_revisions
+                WHERE character_id = ? AND loadout_revision = ?
+                """,
+                (str(character_id), loadout_revision),
+                "character loadout revision",
+            )
+        return _character_loadout_from_row(row)
+
+    def list_character_loadout_revisions(
+        self,
+        character_id: UUID,
+    ) -> tuple[CharacterLoadoutRecord, ...]:
+        """Return every immutable loadout revision in ascending order."""
+
+        with self._database.read(
+            "list_character_loadout_revisions",
+        ) as connection:
+            self._required_row(
+                connection,
+                "SELECT character_id FROM characters WHERE character_id = ?",
+                (str(character_id),),
+                "character",
+            )
+            rows = connection.execute(
+                """
+                SELECT * FROM character_loadout_revisions
+                WHERE character_id = ?
+                ORDER BY loadout_revision
+                """,
+                (str(character_id),),
+            ).fetchall()
+        return tuple(_character_loadout_from_row(row) for row in rows)
+
+    def get_directory_mutation_receipt(
+        self,
+        owner_principal_id: UUID,
+        idempotency_key: UUID,
+    ) -> DirectoryMutationReceiptRecord:
+        """Return one successful durable mutation receipt by caller key."""
+
+        with self._database.read(
+            "get_directory_mutation_receipt",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM directory_mutation_receipts
+                WHERE owner_principal_id = ? AND idempotency_key = ?
+                """,
+                (str(owner_principal_id), str(idempotency_key)),
+                "directory mutation receipt",
+            )
+        return _directory_mutation_receipt_from_row(row)
+
+    def _character_snapshot_payload(
+        self,
+        connection: sqlite3.Connection,
+        character_row: sqlite3.Row,
+    ) -> dict[str, JsonValue]:
+        """Build the exact successful character result inside its transaction."""
+
+        character = _canonical_character_from_row(character_row)
+        definition_row = self._required_row(
+            connection,
+            """
+            SELECT * FROM character_definitions
+            WHERE character_id = ? AND definition_revision = ?
+            """,
+            (
+                str(character.character_id),
+                character.current_definition_revision,
+            ),
+            "character definition revision",
+        )
+        holdings_row = self._required_row(
+            connection,
+            """
+            SELECT * FROM character_holdings_revisions
+            WHERE character_id = ? AND holdings_revision = ?
+            """,
+            (
+                str(character.character_id),
+                character.current_holdings_revision,
+            ),
+            "character holdings revision",
+        )
+        loadout_row = self._required_row(
+            connection,
+            """
+            SELECT * FROM character_loadout_revisions
+            WHERE character_id = ? AND loadout_revision = ?
+            """,
+            (
+                str(character.character_id),
+                character.current_loadout_revision,
+            ),
+            "character loadout revision",
+        )
+        award_rows = connection.execute(
+            """
+            SELECT * FROM character_advancement_awards
+            WHERE character_id = ?
+            ORDER BY created_at, award_id
+            """,
+            (str(character.character_id),),
+        ).fetchall()
+        awards = tuple(
+            _character_advancement_award_from_row(row)
+            for row in award_rows
+        )
+        payload = {
+            "character": character.model_dump(mode="json"),
+            "heads": CharacterRevisionHeads(
+                definition_revision=character.current_definition_revision,
+                definition_digest=character.current_definition_digest,
+                holdings_revision=character.current_holdings_revision,
+                holdings_digest=character.current_holdings_digest,
+                loadout_revision=character.current_loadout_revision,
+                loadout_digest=character.current_loadout_digest,
+            ).model_dump(mode="json"),
+            "definition": _character_definition_from_row(
+                definition_row,
+            ).model_dump(mode="json"),
+            "holdings": _character_holdings_from_row(
+                holdings_row,
+            ).model_dump(mode="json"),
+            "loadout": _character_loadout_from_row(
+                loadout_row,
+            ).model_dump(mode="json"),
+            "advancement": {
+                "character_id": str(character.character_id),
+                "earned_character_level": sum(
+                    award.level_delta for award in awards
+                ),
+                "awards": [
+                    award.model_dump(mode="json") for award in awards
+                ],
+            },
+        }
+        return TypeAdapter(dict[str, JsonValue]).validate_python(payload)
+
+    def commit_character_revisions(
+        self,
+        request: CharacterRevisionBundleCommit,
+    ) -> CanonicalCharacterRecord:
+        """Atomically append supplied revisions and CAS all three heads."""
+
+        now = self._now()
+        timestamp = datetime_to_text(now)
+        with self._database.transaction(
+            "commit_character_revisions",
+        ) as connection:
+            receipt_request = request.mutation_receipt
+            if receipt_request is not None:
+                receipt_row = connection.execute(
+                    """
+                    SELECT * FROM directory_mutation_receipts
+                    WHERE owner_principal_id = ? AND idempotency_key = ?
+                    """,
+                    (
+                        str(receipt_request.owner_principal_id),
+                        str(receipt_request.idempotency_key),
+                    ),
+                ).fetchone()
+                if receipt_row is not None:
+                    existing_receipt = (
+                        _directory_mutation_receipt_from_row(receipt_row)
+                    )
+                    if (
+                        existing_receipt.operation_kind
+                        != receipt_request.operation_kind
+                        or existing_receipt.scope_id
+                        != receipt_request.scope_id
+                        or existing_receipt.request_digest
+                        != receipt_request.request_digest
+                    ):
+                        raise ConflictError(
+                            "Directory mutation idempotency key was reused "
+                            "with a different request",
+                        )
+                    result_character = existing_receipt.result_payload.get(
+                        "character",
+                    )
+                    return CanonicalCharacterRecord.model_validate(
+                        result_character,
+                    )
+            if request.settlement is not None:
+                existing_settlement_row = connection.execute(
+                    """
+                    SELECT * FROM character_settlements
+                    WHERE deployment_id = ?
+                    """,
+                    (str(request.settlement.deployment_id),),
+                ).fetchone()
+                if existing_settlement_row is not None:
+                    existing = _character_settlement_from_row(
+                        existing_settlement_row,
+                    )
+                    if (
+                        existing.model_dump(exclude={"settled_at"})
+                        != request.settlement.model_dump()
+                    ):
+                        raise ConflictError(
+                            "Character deployment was already settled "
+                            "with different evidence",
+                        )
+                    current_row = self._required_row(
+                        connection,
+                        "SELECT * FROM characters WHERE character_id = ?",
+                        (str(request.character_id),),
+                        "character",
+                    )
+                    return _canonical_character_from_row(current_row)
+
+            current_row = self._required_row(
+                connection,
+                "SELECT * FROM characters WHERE character_id = ?",
+                (str(request.character_id),),
+                "character",
+            )
+            current = _canonical_character_from_row(current_row)
+            expected = request.expected_heads
+            if (
+                current.row_version != request.expected_row_version
+                or current.current_definition_revision
+                != expected.definition_revision
+                or current.current_definition_digest
+                != expected.definition_digest
+                or current.current_holdings_revision
+                != expected.holdings_revision
+                or current.current_holdings_digest != expected.holdings_digest
+                or current.current_loadout_revision != expected.loadout_revision
+                or current.current_loadout_digest != expected.loadout_digest
+            ):
+                raise StaleVersionError(
+                    f"Character {request.character_id} revision heads changed",
+                )
+
+            definition = request.new_definition
+            holdings = request.new_holdings
+            loadout = request.new_loadout
+            try:
+                if definition is not None:
+                    connection.execute(
+                        """
+                        INSERT INTO character_definitions(
+                            character_id, definition_revision, schema_version,
+                            definition_json, definition_digest, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(definition.character_id),
+                            definition.definition_revision,
+                            definition.schema_version,
+                            canonical_json(definition.model_dump(mode="json")),
+                            definition.definition_digest,
+                            timestamp,
+                        ),
+                    )
+                if holdings is not None:
+                    connection.execute(
+                        """
+                        INSERT INTO character_holdings_revisions(
+                            character_id, holdings_revision, schema_version,
+                            holdings_json, holdings_digest, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(holdings.character_id),
+                            holdings.holdings_revision,
+                            holdings.schema_version,
+                            canonical_json(holdings.model_dump(mode="json")),
+                            holdings.holdings_digest,
+                            timestamp,
+                        ),
+                    )
+                if loadout is not None:
+                    connection.execute(
+                        """
+                        INSERT INTO character_loadout_revisions(
+                            character_id, loadout_revision, schema_version,
+                            based_on_definition_revision, loadout_json,
+                            loadout_digest, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(loadout.character_id),
+                            loadout.loadout_revision,
+                            loadout.schema_version,
+                            loadout.based_on_definition_revision,
+                            canonical_json(loadout.model_dump(mode="json")),
+                            loadout.loadout_digest,
+                            timestamp,
+                        ),
+                    )
+                if request.advancement_award is not None:
+                    self._insert_character_advancement_award(
+                        connection,
+                        request.advancement_award,
+                        created_at=now,
+                    )
+
+                resulting_definition_revision = (
+                    definition.definition_revision
+                    if definition is not None
+                    else current.current_definition_revision
+                )
+                resulting_definition_digest = (
+                    definition.definition_digest
+                    if definition is not None
+                    else current.current_definition_digest
+                )
+                resulting_holdings_revision = (
+                    holdings.holdings_revision
+                    if holdings is not None
+                    else current.current_holdings_revision
+                )
+                resulting_holdings_digest = (
+                    holdings.holdings_digest
+                    if holdings is not None
+                    else current.current_holdings_digest
+                )
+                resulting_loadout_revision = (
+                    loadout.loadout_revision
+                    if loadout is not None
+                    else current.current_loadout_revision
+                )
+                resulting_loadout_digest = (
+                    loadout.loadout_digest
+                    if loadout is not None
+                    else current.current_loadout_digest
+                )
+                cursor = connection.execute(
+                    """
+                    UPDATE characters
+                    SET current_definition_revision = ?,
+                        current_definition_digest = ?,
+                        current_holdings_revision = ?,
+                        current_holdings_digest = ?,
+                        current_loadout_revision = ?,
+                        current_loadout_digest = ?,
+                        updated_at = ?,
+                        row_version = row_version + 1
+                    WHERE character_id = ?
+                      AND revision_state = 'canonical'
+                      AND current_definition_revision = ?
+                      AND current_definition_digest = ?
+                      AND current_holdings_revision = ?
+                      AND current_holdings_digest = ?
+                      AND current_loadout_revision = ?
+                      AND current_loadout_digest = ?
+                      AND row_version = ?
+                    """,
+                    (
+                        resulting_definition_revision,
+                        resulting_definition_digest,
+                        resulting_holdings_revision,
+                        resulting_holdings_digest,
+                        resulting_loadout_revision,
+                        resulting_loadout_digest,
+                        timestamp,
+                        str(request.character_id),
+                        expected.definition_revision,
+                        expected.definition_digest,
+                        expected.holdings_revision,
+                        expected.holdings_digest,
+                        expected.loadout_revision,
+                        expected.loadout_digest,
+                        request.expected_row_version,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleVersionError(
+                        f"Character {request.character_id} revision heads changed",
+                    )
+                if request.settlement is not None:
+                    game_row = self._required_row(
+                        connection,
+                        "SELECT lifecycle_state FROM games WHERE game_id = ?",
+                        (str(request.settlement.game_id),),
+                        "settlement game",
+                    )
+                    if (
+                        GameLifecycleState(game_row["lifecycle_state"])
+                        is not GameLifecycleState.ENDED
+                    ):
+                        raise ConflictError(
+                            "Character settlement requires an ended game",
+                        )
+                    settlement = request.settlement
+                    connection.execute(
+                        """
+                        INSERT INTO character_settlements(
+                            settlement_id, deployment_id, game_id, character_id,
+                            starting_holdings_revision,
+                            starting_holdings_digest,
+                            resulting_holdings_revision,
+                            resulting_holdings_digest,
+                            delta_digest, settled_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(settlement.settlement_id),
+                            str(settlement.deployment_id),
+                            str(settlement.game_id),
+                            str(settlement.character_id),
+                            settlement.starting_holdings_revision,
+                            settlement.starting_holdings_digest,
+                            settlement.resulting_holdings_revision,
+                            settlement.resulting_holdings_digest,
+                            settlement.delta_digest,
+                            timestamp,
+                        ),
+                    )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    f"Character revision bundle failed: {exc}",
+                ) from exc
+            updated_row = self._required_row(
+                connection,
+                "SELECT * FROM characters WHERE character_id = ?",
+                (str(request.character_id),),
+                "character",
+            )
+            if receipt_request is not None:
+                result_payload = self._character_snapshot_payload(
+                    connection,
+                    updated_row,
+                )
+                result_digest = canonical_digest(result_payload)
+                try:
+                    connection.execute(
+                        """
+                        INSERT INTO directory_mutation_receipts(
+                            owner_principal_id, idempotency_key,
+                            operation_kind, scope_id, request_digest,
+                            result_payload_json, result_digest, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(receipt_request.owner_principal_id),
+                            str(receipt_request.idempotency_key),
+                            receipt_request.operation_kind,
+                            str(receipt_request.scope_id),
+                            receipt_request.request_digest,
+                            canonical_json(result_payload),
+                            result_digest,
+                            timestamp,
+                        ),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise ConflictError(
+                        f"Directory mutation receipt failed: {exc}",
+                    ) from exc
+        return _canonical_character_from_row(updated_row)
+
     def append_character_holdings_revision(
         self,
         holdings: CharacterHoldingsRevision,
@@ -986,7 +1900,7 @@ class GameDirectoryRepository:
         expected_holdings_digest: str,
         expected_row_version: int,
     ) -> CanonicalCharacterRecord:
-        """Append immutable holdings and CAS-advance the character head."""
+        """Append holdings through the one three-head bundle CAS."""
 
         if expected_holdings_revision < 1:
             raise ValueError("expected_holdings_revision must be at least 1")
@@ -997,84 +1911,23 @@ class GameDirectoryRepository:
                 "new holdings revision must increase the expected revision "
                 "by exactly one",
             )
-        now = self._now()
-        timestamp = datetime_to_text(now)
-        holdings_json = canonical_json(holdings.model_dump(mode="json"))
-        with self._database.transaction(
-            "append_character_holdings_revision",
-        ) as connection:
-            current_row = self._required_row(
-                connection,
-                "SELECT * FROM characters WHERE character_id = ?",
-                (str(holdings.character_id),),
-                "character",
-            )
-            current = _canonical_character_from_row(current_row)
-            if (
-                current.current_holdings_revision
-                != expected_holdings_revision
-                or current.current_holdings_digest
-                != expected_holdings_digest
-                or current.row_version != expected_row_version
-            ):
-                raise StaleVersionError(
-                    f"Character {holdings.character_id} holdings head changed",
-                )
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO character_holdings_revisions(
-                        character_id, holdings_revision, schema_version,
-                        holdings_json, holdings_digest, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(holdings.character_id),
-                        holdings.holdings_revision,
-                        holdings.schema_version,
-                        holdings_json,
-                        holdings.holdings_digest,
-                        timestamp,
-                    ),
-                )
-                cursor = connection.execute(
-                    """
-                    UPDATE characters
-                    SET current_holdings_revision = ?,
-                        current_holdings_digest = ?,
-                        updated_at = ?,
-                        row_version = row_version + 1
-                    WHERE character_id = ?
-                      AND revision_state = 'canonical'
-                      AND current_holdings_revision = ?
-                      AND current_holdings_digest = ?
-                      AND row_version = ?
-                    """,
-                    (
-                        holdings.holdings_revision,
-                        holdings.holdings_digest,
-                        timestamp,
-                        str(holdings.character_id),
-                        expected_holdings_revision,
-                        expected_holdings_digest,
-                        expected_row_version,
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(
-                    f"Character holdings append failed: {exc}",
-                ) from exc
-            if cursor.rowcount != 1:
-                raise StaleVersionError(
-                    f"Character {holdings.character_id} holdings head changed",
-                )
-            updated_row = self._required_row(
-                connection,
-                "SELECT * FROM characters WHERE character_id = ?",
-                (str(holdings.character_id),),
-                "character",
-            )
-        return _canonical_character_from_row(updated_row)
+        current = self.get_character(holdings.character_id)
+        canonical = CanonicalCharacterRecord.model_validate(current.model_dump())
+        return self.commit_character_revisions(
+            CharacterRevisionBundleCommit(
+                character_id=holdings.character_id,
+                expected_row_version=expected_row_version,
+                expected_heads=CharacterRevisionHeads(
+                    definition_revision=canonical.current_definition_revision,
+                    definition_digest=canonical.current_definition_digest,
+                    holdings_revision=expected_holdings_revision,
+                    holdings_digest=expected_holdings_digest,
+                    loadout_revision=canonical.current_loadout_revision,
+                    loadout_digest=canonical.current_loadout_digest,
+                ),
+                new_holdings=holdings,
+            ),
+        )
 
     def get_character(self, character_id: UUID) -> CharacterRecord:
         """Return one persistent character by identifier."""
@@ -1204,6 +2057,70 @@ class GameDirectoryRepository:
             )
         return _character_deployment_lease_from_row(row)
 
+    def get_active_character_deployment_lease(
+        self,
+        character_id: UUID,
+    ) -> CharacterDeploymentLeaseRecord | None:
+        """Return the character's active lease without creating authority."""
+
+        with self._database.read(
+            "get_active_character_deployment_lease",
+        ) as connection:
+            self._required_row(
+                connection,
+                "SELECT character_id FROM characters WHERE character_id = ?",
+                (str(character_id),),
+                "character",
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE character_id = ? AND released_at IS NULL
+                """,
+                (str(character_id),),
+            ).fetchone()
+        return (
+            None
+            if row is None
+            else _character_deployment_lease_from_row(row)
+        )
+
+    def list_character_deployment_leases(
+        self,
+        *,
+        game_id: UUID | None = None,
+        active_only: bool = False,
+    ) -> tuple[CharacterDeploymentLeaseRecord, ...]:
+        """List durable leases for lifecycle recovery and reconciliation."""
+
+        predicates: list[str] = []
+        parameters: list[str] = []
+        if game_id is not None:
+            predicates.append("game_id = ?")
+            parameters.append(str(game_id))
+        if active_only:
+            predicates.append("released_at IS NULL")
+        where_clause = (
+            f"WHERE {' AND '.join(predicates)}"
+            if predicates
+            else ""
+        )
+        with self._database.read(
+            "list_character_deployment_leases",
+        ) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM character_deployment_leases
+                {where_clause}
+                ORDER BY acquired_at, lease_id
+                """,
+                tuple(parameters),
+            ).fetchall()
+        return tuple(
+            _character_deployment_lease_from_row(row)
+            for row in rows
+        )
+
     def release_character_deployment_lease(
         self,
         lease_id: UUID,
@@ -1304,8 +2221,12 @@ class GameDirectoryRepository:
                         deployment_id, game_id, membership_id, character_id,
                         entity_uuid, deployed_at, lease_id, pin_state,
                         definition_revision, definition_digest,
-                        holdings_revision, holdings_digest
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pinned', ?, ?, ?, ?)
+                        holdings_revision, holdings_digest,
+                        loadout_revision, loadout_digest
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, 'pinned',
+                        ?, ?, ?, ?, ?, ?
+                    )
                     """,
                     (
                         str(request.deployment_id),
@@ -1319,6 +2240,8 @@ class GameDirectoryRepository:
                         character.current_definition_digest,
                         character.current_holdings_revision,
                         character.current_holdings_digest,
+                        character.current_loadout_revision,
+                        character.current_loadout_digest,
                     ),
                 )
             except sqlite3.IntegrityError as exc:
@@ -1336,42 +2259,11 @@ class GameDirectoryRepository:
             )
         return _pinned_character_deployment_from_row(row)
 
-    def deploy_character(
-        self,
-        request: CharacterDeploymentCreate,
-    ) -> CharacterDeploymentRecord:
-        """Persist the concrete game entity created from a character."""
-
-        now = self._now()
-        with self._database.transaction("deploy_character") as connection:
-            connection.execute(
-                """
-                INSERT INTO character_deployments(
-                    deployment_id, game_id, membership_id, character_id, entity_uuid, deployed_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(request.deployment_id),
-                    str(request.game_id),
-                    str(request.membership_id),
-                    str(request.character_id),
-                    str(request.entity_uuid),
-                    datetime_to_text(now),
-                ),
-            )
-            row = self._required_row(
-                connection,
-                "SELECT * FROM character_deployments WHERE deployment_id = ?",
-                (str(request.deployment_id),),
-                "character deployment",
-            )
-        return _character_deployment_from_row(row)
-
     def list_character_deployments(
         self,
         character_id: UUID,
-    ) -> tuple[CharacterDeploymentRecord, ...]:
-        """Return the game deployment history for one character."""
+    ) -> tuple[PinnedCharacterDeploymentRecord, ...]:
+        """Return only revision-pinned deployment history for one character."""
 
         with self._database.read("list_character_deployments") as connection:
             rows = connection.execute(
@@ -1382,7 +2274,30 @@ class GameDirectoryRepository:
                 """,
                 (str(character_id),),
             ).fetchall()
-        return tuple(_character_deployment_from_row(row) for row in rows)
+        return tuple(
+            _pinned_character_deployment_from_row(row)
+            for row in rows
+        )
+
+    def get_character_settlement_by_deployment(
+        self,
+        deployment_id: UUID,
+    ) -> CharacterSettlementRecord:
+        """Return the unique immutable settlement receipt for a deployment."""
+
+        with self._database.read(
+            "get_character_settlement_by_deployment",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_settlements
+                WHERE deployment_id = ?
+                """,
+                (str(deployment_id),),
+                "character settlement",
+            )
+        return _character_settlement_from_row(row)
 
     def create_worker(self, request: WorkerCreate) -> WorkerRecord:
         """Persist one isolated worker placement record."""
@@ -1598,79 +2513,188 @@ class GameDirectoryRepository:
 
         now = self._now()
         with self._database.transaction("transition_game") as connection:
-            current_row = self._required_row(
+            return self._transition_game_in_transaction(
                 connection,
-                "SELECT * FROM games WHERE game_id = ?",
-                (str(game_id),),
-                "game",
+                game_id,
+                expected_row_version=expected_row_version,
+                lifecycle_state=lifecycle_state,
+                engine_game_id=engine_game_id,
+                worker_id=worker_id,
+                worker_generation=worker_generation,
+                terminal_reason=terminal_reason,
+                winner_side_id=winner_side_id,
+                final_event_cursor=final_event_cursor,
+                final_combat_log_cursor=final_combat_log_cursor,
+                now=now,
             )
-            current = _game_from_row(current_row)
-            if current.row_version != expected_row_version:
-                raise StaleVersionError(
-                    f"Game {game_id} row version is {current.row_version}, expected {expected_row_version}"
-                )
-            resolved_worker_id = worker_id if worker_id is not None else current.worker_id
-            resolved_generation = (
-                worker_generation if worker_generation is not None else current.worker_generation
+
+    def terminate_game_and_release_leases(
+        self,
+        game_id: UUID,
+        *,
+        expected_row_version: int,
+        lifecycle_state: GameLifecycleState,
+        terminal_reason: str,
+    ) -> GameRecord:
+        """Atomically terminate one game and release all of its active leases."""
+
+        if lifecycle_state not in {
+            GameLifecycleState.FAILED,
+            GameLifecycleState.INTERRUPTED,
+        }:
+            raise ValueError(
+                "Non-evidence termination must fail or interrupt the game",
             )
-            self._validate_worker_binding(connection, resolved_worker_id, resolved_generation)
-            started_at = current.started_at
-            ended_at = current.ended_at
-            archived_at = current.archived_at
-            if lifecycle_state is GameLifecycleState.ACTIVE and started_at is None:
-                started_at = now
-            if lifecycle_state in {
-                GameLifecycleState.ENDED,
-                GameLifecycleState.FAILED,
-                GameLifecycleState.INTERRUPTED,
-            } and ended_at is None:
-                ended_at = now
-            if lifecycle_state is GameLifecycleState.ARCHIVED and archived_at is None:
-                archived_at = now
-            cursor = connection.execute(
+        if not terminal_reason:
+            raise ValueError("terminal_reason cannot be empty")
+        now = self._now()
+        timestamp = datetime_to_text(now)
+        with self._database.transaction(
+            "terminate_game_and_release_leases",
+        ) as connection:
+            connection.execute(
                 """
-                UPDATE games
-                SET lifecycle_state = ?, engine_game_id = ?, worker_id = ?,
-                    worker_generation = ?, started_at = ?, ended_at = ?, archived_at = ?,
-                    terminal_reason = ?, winner_side_id = ?, final_event_cursor = ?,
-                    final_combat_log_cursor = ?, row_version = row_version + 1
-                WHERE game_id = ? AND row_version = ?
+                UPDATE character_deployment_leases
+                SET released_at = ?, release_reason = ?
+                WHERE game_id = ? AND released_at IS NULL
                 """,
+                (timestamp, terminal_reason, str(game_id)),
+            )
+            return self._transition_game_in_transaction(
+                connection,
+                game_id,
+                expected_row_version=expected_row_version,
+                lifecycle_state=lifecycle_state,
+                terminal_reason=terminal_reason,
+                now=now,
+            )
+
+    def _transition_game_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        game_id: UUID,
+        *,
+        expected_row_version: int,
+        lifecycle_state: GameLifecycleState,
+        engine_game_id: UUID | None = None,
+        worker_id: UUID | None = None,
+        worker_generation: int | None = None,
+        terminal_reason: str | None = None,
+        winner_side_id: str | None = None,
+        final_event_cursor: int | None = None,
+        final_combat_log_cursor: int | None = None,
+        now: datetime,
+    ) -> GameRecord:
+        """Apply one game lifecycle CAS inside an existing transaction."""
+
+        current_row = self._required_row(
+            connection,
+            "SELECT * FROM games WHERE game_id = ?",
+            (str(game_id),),
+            "game",
+        )
+        current = _game_from_row(current_row)
+        if current.row_version != expected_row_version:
+            raise StaleVersionError(
+                f"Game {game_id} row version is {current.row_version}, "
+                f"expected {expected_row_version}",
+            )
+        resolved_worker_id = (
+            worker_id if worker_id is not None else current.worker_id
+        )
+        resolved_generation = (
+            worker_generation
+            if worker_generation is not None
+            else current.worker_generation
+        )
+        self._validate_worker_binding(
+            connection,
+            resolved_worker_id,
+            resolved_generation,
+        )
+        started_at = current.started_at
+        ended_at = current.ended_at
+        archived_at = current.archived_at
+        if lifecycle_state is GameLifecycleState.ACTIVE and started_at is None:
+            started_at = now
+        if lifecycle_state in {
+            GameLifecycleState.ENDED,
+            GameLifecycleState.FAILED,
+            GameLifecycleState.INTERRUPTED,
+        } and ended_at is None:
+            ended_at = now
+        if (
+            lifecycle_state is GameLifecycleState.ARCHIVED
+            and archived_at is None
+        ):
+            archived_at = now
+        cursor = connection.execute(
+            """
+            UPDATE games
+            SET lifecycle_state = ?, engine_game_id = ?, worker_id = ?,
+                worker_generation = ?, started_at = ?, ended_at = ?,
+                archived_at = ?, terminal_reason = ?, winner_side_id = ?,
+                final_event_cursor = ?, final_combat_log_cursor = ?,
+                row_version = row_version + 1
+            WHERE game_id = ? AND row_version = ?
+            """,
+            (
+                lifecycle_state.value,
                 (
-                    lifecycle_state.value,
-                    str(engine_game_id or current.engine_game_id) if (engine_game_id or current.engine_game_id) else None,
-                    str(resolved_worker_id) if resolved_worker_id else None,
-                    resolved_generation,
-                    _optional_text(started_at),
-                    _optional_text(ended_at),
-                    _optional_text(archived_at),
-                    terminal_reason if terminal_reason is not None else current.terminal_reason,
-                    winner_side_id if winner_side_id is not None else current.winner_side_id,
-                    final_event_cursor if final_event_cursor is not None else current.final_event_cursor,
-                    final_combat_log_cursor if final_combat_log_cursor is not None else current.final_combat_log_cursor,
-                    str(game_id),
-                    expected_row_version,
+                    str(engine_game_id or current.engine_game_id)
+                    if (engine_game_id or current.engine_game_id)
+                    else None
                 ),
+                str(resolved_worker_id) if resolved_worker_id else None,
+                resolved_generation,
+                _optional_text(started_at),
+                _optional_text(ended_at),
+                _optional_text(archived_at),
+                (
+                    terminal_reason
+                    if terminal_reason is not None
+                    else current.terminal_reason
+                ),
+                (
+                    winner_side_id
+                    if winner_side_id is not None
+                    else current.winner_side_id
+                ),
+                (
+                    final_event_cursor
+                    if final_event_cursor is not None
+                    else current.final_event_cursor
+                ),
+                (
+                    final_combat_log_cursor
+                    if final_combat_log_cursor is not None
+                    else current.final_combat_log_cursor
+                ),
+                str(game_id),
+                expected_row_version,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise StaleVersionError(
+                f"Game {game_id} changed during lifecycle transition",
             )
-            if cursor.rowcount != 1:
-                raise StaleVersionError(f"Game {game_id} changed during lifecycle transition")
-            self._append_event_in_transaction(
-                connection,
-                game_id=game_id,
-                event_type="game_lifecycle_changed",
-                payload={
-                    "from": current.lifecycle_state.value,
-                    "to": lifecycle_state.value,
-                    "row_version": expected_row_version + 1,
-                },
-                created_at=now,
-            )
-            row = self._required_row(
-                connection,
-                "SELECT * FROM games WHERE game_id = ?",
-                (str(game_id),),
-                "game",
-            )
+        self._append_event_in_transaction(
+            connection,
+            game_id=game_id,
+            event_type="game_lifecycle_changed",
+            payload={
+                "from": current.lifecycle_state.value,
+                "to": lifecycle_state.value,
+                "row_version": expected_row_version + 1,
+            },
+            created_at=now,
+        )
+        row = self._required_row(
+            connection,
+            "SELECT * FROM games WHERE game_id = ?",
+            (str(game_id),),
+            "game",
+        )
         return _game_from_row(row)
 
     def create_membership(self, request: MembershipCreate) -> MembershipRecord:
@@ -2376,6 +3400,272 @@ class GameDirectoryRepository:
                 created_at=self._now(),
             )
 
+    def stage_local_terminal_commit(
+        self,
+        game_id: UUID,
+        *,
+        lease_id: UUID | None,
+        payload: JsonObject,
+    ) -> str:
+        """Durably stage all inputs needed to finish one local terminal game."""
+
+        payload_json = canonical_json(payload)
+        payload_digest = canonical_digest(payload)
+        now = self._now()
+        with self._database.transaction(
+            "stage_local_terminal_commit",
+        ) as connection:
+            existing = connection.execute(
+                """
+                SELECT * FROM local_terminal_commit_intents
+                WHERE game_id = ?
+                """,
+                (str(game_id),),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["lease_id"]
+                    != (str(lease_id) if lease_id is not None else None)
+                    or existing["payload_digest"] != payload_digest
+                    or existing["payload_json"] != payload_json
+                ):
+                    raise ImmutableRecordError(
+                        "Local terminal commit was already staged with "
+                        "different evidence",
+                    )
+                return payload_digest
+            game_row = self._required_row(
+                connection,
+                "SELECT lifecycle_state FROM games WHERE game_id = ?",
+                (str(game_id),),
+                "game",
+            )
+            if (
+                GameLifecycleState(game_row["lifecycle_state"])
+                is not GameLifecycleState.ACTIVE
+            ):
+                raise ConflictError(
+                    "Local terminal commit can only be staged for an active "
+                    "game",
+                )
+            connection.execute(
+                """
+                INSERT INTO local_terminal_commit_intents(
+                    game_id, lease_id, payload_json, payload_digest, staged_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(game_id),
+                    str(lease_id) if lease_id is not None else None,
+                    payload_json,
+                    payload_digest,
+                    datetime_to_text(now),
+                ),
+            )
+        return payload_digest
+
+    def stage_worker_terminal_ready_manifest(
+        self,
+        request: WorkerTerminalReadyManifestCreate,
+    ) -> WorkerTerminalReadyManifestRecord:
+        """Stage one generation-fenced hosted terminal manifest idempotently."""
+
+        objective_json = canonical_json(
+            request.objective_artifact.model_dump(mode="json"),
+        )
+        subjective_json = canonical_json(
+            request.subjective_artifact.model_dump(mode="json"),
+        )
+        summary_json = canonical_json(request.summary_evidence)
+        settlement_json = (
+            canonical_json(request.settlement_evidence)
+            if request.settlement_evidence is not None
+            else None
+        )
+        staged_at = self._now()
+        with self._database.transaction(
+            "stage_worker_terminal_ready_manifest",
+        ) as connection:
+            game = self._required_row(
+                connection,
+                "SELECT * FROM games WHERE game_id = ?",
+                (str(request.game_id),),
+                "game",
+            )
+            if (
+                game["worker_id"] != str(request.worker_id)
+                or game["worker_generation"] != request.worker_generation
+            ):
+                raise StaleVersionError(
+                    "Worker terminal ready manifest does not match the "
+                    "game's worker generation",
+                )
+            if (
+                GameLifecycleState(game["lifecycle_state"])
+                not in {
+                    GameLifecycleState.ACTIVE,
+                    GameLifecycleState.ENDED,
+                }
+            ):
+                raise ConflictError(
+                    "Worker terminal ready manifest requires an active or "
+                    "already-ended game",
+                )
+            existing = connection.execute(
+                """
+                SELECT * FROM worker_terminal_ready_manifests
+                WHERE game_id = ?
+                """,
+                (str(request.game_id),),
+            ).fetchone()
+            if existing is not None:
+                record = _worker_terminal_ready_manifest_from_row(existing)
+                if (
+                    record.model_dump(exclude={"staged_at", "adopted_at"})
+                    != request.model_dump()
+                ):
+                    raise ImmutableRecordError(
+                        "Worker terminal ready manifest was already staged "
+                        "with different evidence",
+                    )
+                return record
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO worker_terminal_ready_manifests(
+                        game_id, worker_id, worker_generation,
+                        objective_artifact_json,
+                        subjective_artifact_json,
+                        summary_evidence_json,
+                        settlement_evidence_json,
+                        manifest_digest, ready_at, staged_at, adopted_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                    """,
+                    (
+                        str(request.game_id),
+                        str(request.worker_id),
+                        request.worker_generation,
+                        objective_json,
+                        subjective_json,
+                        summary_json,
+                        settlement_json,
+                        request.manifest_digest,
+                        datetime_to_text(request.ready_at),
+                        datetime_to_text(staged_at),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    "Worker terminal ready manifest could not be staged: "
+                    f"{exc}",
+                ) from exc
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM worker_terminal_ready_manifests
+                WHERE game_id = ?
+                """,
+                (str(request.game_id),),
+                "worker terminal ready manifest",
+            )
+        return _worker_terminal_ready_manifest_from_row(row)
+
+    def get_worker_terminal_ready_manifest(
+        self,
+        game_id: UUID,
+    ) -> WorkerTerminalReadyManifestRecord:
+        """Return one staged hosted terminal ready manifest."""
+
+        with self._database.read(
+            "get_worker_terminal_ready_manifest",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM worker_terminal_ready_manifests
+                WHERE game_id = ?
+                """,
+                (str(game_id),),
+                "worker terminal ready manifest",
+            )
+        return _worker_terminal_ready_manifest_from_row(row)
+
+    def list_pending_worker_terminal_ready_manifests(
+        self,
+    ) -> tuple[WorkerTerminalReadyManifestRecord, ...]:
+        """List generation-fenced terminal manifests awaiting adoption."""
+
+        with self._database.read(
+            "list_pending_worker_terminal_ready_manifests",
+        ) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM worker_terminal_ready_manifests
+                WHERE adopted_at IS NULL
+                ORDER BY ready_at, game_id
+                """,
+            ).fetchall()
+        return tuple(
+            _worker_terminal_ready_manifest_from_row(row) for row in rows
+        )
+
+    def list_pending_local_terminal_commits(
+        self,
+    ) -> tuple[tuple[UUID, UUID | None, JsonObject, str], ...]:
+        """Return staged local terminal inputs that still need publication."""
+
+        with self._database.read(
+            "list_pending_local_terminal_commits",
+        ) as connection:
+            rows = connection.execute(
+                """
+                SELECT game_id, lease_id, payload_json, payload_digest
+                FROM local_terminal_commit_intents
+                WHERE committed_at IS NULL
+                ORDER BY staged_at, game_id
+                """,
+            ).fetchall()
+        return tuple(
+            (
+                UUID(row["game_id"]),
+                UUID(row["lease_id"]) if row["lease_id"] is not None else None,
+                _load_canonical_json_object(
+                    row["payload_json"],
+                    "local terminal commit",
+                ),
+                row["payload_digest"],
+            )
+            for row in rows
+        )
+
+    def get_pending_local_terminal_commit(
+        self,
+        game_id: UUID,
+    ) -> tuple[UUID | None, JsonObject, str] | None:
+        """Return one staged local terminal payload when not yet committed."""
+
+        with self._database.read(
+            "get_pending_local_terminal_commit",
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT lease_id, payload_json, payload_digest
+                FROM local_terminal_commit_intents
+                WHERE game_id = ? AND committed_at IS NULL
+                """,
+                (str(game_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        return (
+            UUID(row["lease_id"]) if row["lease_id"] is not None else None,
+            _load_canonical_json_object(
+                row["payload_json"],
+                "local terminal commit",
+            ),
+            row["payload_digest"],
+        )
+
     def _publish_artifact_in_transaction(
         self,
         connection: sqlite3.Connection,
@@ -2563,7 +3853,6 @@ class GameDirectoryRepository:
         artifact_kinds = tuple(artifact.artifact_kind for artifact in terminal_artifacts)
         if len(artifact_kinds) != len(set(artifact_kinds)):
             raise ValueError("Terminal evidence artifacts must use distinct artifact kinds")
-
         with self._database.transaction("publish_terminal_evidence") as connection:
             game_row = self._required_row(
                 connection,
@@ -2573,7 +3862,7 @@ class GameDirectoryRepository:
             )
             lifecycle_state = GameLifecycleState(game_row["lifecycle_state"])
             if lifecycle_state is GameLifecycleState.ENDED:
-                return self._require_exact_terminal_evidence_retry(
+                result = self._require_exact_terminal_evidence_retry(
                     connection,
                     replay_artifact,
                     summary,
@@ -2583,6 +3872,19 @@ class GameDirectoryRepository:
                     source_combat_log_digest=source_combat_log_digest,
                     supersedes_summary_id=supersedes_summary_id,
                 )
+                active_lease = connection.execute(
+                    """
+                    SELECT 1 FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    LIMIT 1
+                    """,
+                    (str(summary_game_id),),
+                ).fetchone()
+                if active_lease is not None:
+                    raise ConflictError(
+                        "Ended terminal game retains an active character lease",
+                    )
+                return result
             if lifecycle_state is not GameLifecycleState.ACTIVE:
                 raise ConflictError(
                     "Terminal evidence can only end an active game"
@@ -2593,6 +3895,21 @@ class GameDirectoryRepository:
             ):
                 raise ValueError(
                     "Terminal evidence requires one subjective replay archive"
+                )
+            active_lease_ids = {
+                UUID(row["lease_id"])
+                for row in connection.execute(
+                    """
+                    SELECT lease_id FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    """,
+                    (str(summary_game_id),),
+                ).fetchall()
+            }
+            if active_lease_ids:
+                raise ConflictError(
+                    "Generic terminal evidence cannot settle active character "
+                    "leases",
                 )
 
             created_at = self._now()
@@ -2622,6 +3939,599 @@ class GameDirectoryRepository:
                 created_at=created_at,
             )
             return artifact, published_summary
+
+    def finalize_staged_local_terminal_commit(
+        self,
+        replay_artifact: ArtifactCreate,
+        summary: GameSummary,
+        *,
+        additional_artifacts: tuple[ArtifactCreate, ...],
+        summary_revision: int,
+        source_event_digest: str,
+        source_combat_log_digest: str,
+        payload_digest: str,
+        settlement_bundle: CharacterRevisionBundleCommit | None,
+        lease_id: UUID | None,
+    ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
+        """Atomically publish terminal evidence, settlement, and lease release."""
+
+        try:
+            game_id = UUID(summary.game_id)
+        except ValueError as exc:
+            raise ValueError(
+                "Persisted game summaries require a UUID game_id",
+            ) from exc
+        terminal_artifacts = (replay_artifact, *additional_artifacts)
+        if any(artifact.game_id != game_id for artifact in terminal_artifacts):
+            raise ValueError(
+                "Terminal artifacts and summary must belong to the same game",
+            )
+        if replay_artifact.artifact_kind is not ArtifactKind.REPLAY_BUNDLE:
+            raise ValueError(
+                "Terminal evidence requires a replay-bundle artifact",
+            )
+        artifact_kinds = tuple(
+            artifact.artifact_kind for artifact in terminal_artifacts
+        )
+        if len(artifact_kinds) != len(set(artifact_kinds)):
+            raise ValueError(
+                "Terminal evidence artifacts must use distinct artifact kinds",
+            )
+        if ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE not in artifact_kinds:
+            raise ValueError(
+                "Terminal evidence requires one subjective replay archive",
+            )
+        if (settlement_bundle is None) != (lease_id is None):
+            raise ValueError(
+                "Character settlement bundle and lease must be supplied "
+                "together",
+            )
+
+        with self._database.transaction(
+            "finalize_staged_local_terminal_commit",
+        ) as connection:
+            intent = self._required_row(
+                connection,
+                """
+                SELECT * FROM local_terminal_commit_intents
+                WHERE game_id = ?
+                """,
+                (str(game_id),),
+                "local terminal commit intent",
+            )
+            if (
+                intent["payload_digest"] != payload_digest
+                or intent["lease_id"]
+                != (str(lease_id) if lease_id is not None else None)
+            ):
+                raise ImmutableRecordError(
+                    "Local terminal commit intent differs from finalization",
+                )
+            game_row = self._required_row(
+                connection,
+                "SELECT * FROM games WHERE game_id = ?",
+                (str(game_id),),
+                "game",
+            )
+            lifecycle_state = GameLifecycleState(
+                game_row["lifecycle_state"],
+            )
+            if intent["committed_at"] is not None:
+                artifact, published = (
+                    self._require_exact_terminal_evidence_retry(
+                        connection,
+                        replay_artifact,
+                        summary,
+                        additional_artifacts=additional_artifacts,
+                        summary_revision=summary_revision,
+                        source_event_digest=source_event_digest,
+                        source_combat_log_digest=source_combat_log_digest,
+                        supersedes_summary_id=None,
+                    )
+                )
+                if settlement_bundle is not None and lease_id is not None:
+                    self._require_exact_terminal_settlement_retry(
+                        connection,
+                        settlement_bundle,
+                        lease_id=lease_id,
+                        release_reason="local_game_settled",
+                    )
+                if connection.execute(
+                    """
+                    SELECT 1 FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    LIMIT 1
+                    """,
+                    (str(game_id),),
+                ).fetchone() is not None:
+                    raise ConflictError(
+                        "Committed local terminal game retains an active "
+                        "character lease",
+                    )
+                return artifact, published
+            if lifecycle_state is not GameLifecycleState.ACTIVE:
+                raise ConflictError(
+                    "Staged local terminal commit requires an active game",
+                )
+            active_lease_ids = {
+                UUID(row["lease_id"])
+                for row in connection.execute(
+                    """
+                    SELECT lease_id FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    """,
+                    (str(game_id),),
+                ).fetchall()
+            }
+            expected_lease_ids = (
+                {lease_id} if lease_id is not None else set()
+            )
+            if active_lease_ids != expected_lease_ids:
+                raise ConflictError(
+                    "Local terminal commit does not account for every active "
+                    "character lease",
+                )
+
+            created_at = self._now()
+            artifact = self._publish_artifact_in_transaction(
+                connection,
+                replay_artifact,
+                created_at=created_at,
+            )
+            additional_records = tuple(
+                self._publish_artifact_in_transaction(
+                    connection,
+                    additional_artifact,
+                    created_at=created_at,
+                )
+                for additional_artifact in additional_artifacts
+            )
+            published = self._publish_final_summary_in_transaction(
+                connection,
+                summary,
+                summary_revision=summary_revision,
+                source_event_digest=source_event_digest,
+                source_combat_log_digest=source_combat_log_digest,
+                supersedes_summary_id=None,
+                summary_id=None,
+                replay_artifact=artifact,
+                additional_artifacts=additional_records,
+                created_at=created_at,
+            )
+            if settlement_bundle is not None and lease_id is not None:
+                self._commit_terminal_settlement_in_transaction(
+                    connection,
+                    settlement_bundle,
+                    lease_id=lease_id,
+                    created_at=created_at,
+                    release_reason="local_game_settled",
+                )
+            connection.execute(
+                """
+                UPDATE local_terminal_commit_intents
+                SET committed_at = ?
+                WHERE game_id = ? AND committed_at IS NULL
+                """,
+                (datetime_to_text(created_at), str(game_id)),
+            )
+            return artifact, published
+
+    def finalize_staged_worker_terminal_commit(
+        self,
+        replay_artifact: ArtifactCreate,
+        summary: GameSummary,
+        *,
+        subjective_artifact: ArtifactCreate,
+        summary_revision: int,
+        source_event_digest: str,
+        source_combat_log_digest: str,
+        manifest_digest: str,
+        summary_evidence: JsonObject,
+        settlement_evidence: JsonObject | None,
+        settlement_bundle: CharacterRevisionBundleCommit | None,
+        lease_id: UUID | None,
+    ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
+        """Atomically adopt one staged hosted terminal ready manifest."""
+
+        try:
+            game_id = UUID(summary.game_id)
+        except ValueError as exc:
+            raise ValueError(
+                "Persisted game summaries require a UUID game_id",
+            ) from exc
+        if (
+            replay_artifact.game_id != game_id
+            or subjective_artifact.game_id != game_id
+        ):
+            raise ValueError(
+                "Terminal artifacts and summary must belong to the same game",
+            )
+        if replay_artifact.artifact_kind is not ArtifactKind.REPLAY_BUNDLE:
+            raise ValueError(
+                "Hosted terminal evidence requires an objective replay",
+            )
+        if (
+            subjective_artifact.artifact_kind
+            is not ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE
+        ):
+            raise ValueError(
+                "Hosted terminal evidence requires a subjective replay",
+            )
+        if (settlement_bundle is None) != (lease_id is None):
+            raise ValueError(
+                "Hosted character settlement bundle and lease must be "
+                "supplied together",
+            )
+        if (settlement_evidence is None) != (settlement_bundle is None):
+            raise ValueError(
+                "Hosted settlement evidence and settlement bundle must be "
+                "supplied together",
+            )
+
+        with self._database.transaction(
+            "finalize_staged_worker_terminal_commit",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM worker_terminal_ready_manifests
+                WHERE game_id = ?
+                """,
+                (str(game_id),),
+                "worker terminal ready manifest",
+            )
+            manifest = _worker_terminal_ready_manifest_from_row(row)
+            if (
+                manifest.manifest_digest != manifest_digest
+                or manifest.objective_artifact.model_dump()
+                != replay_artifact.model_dump()
+                or manifest.subjective_artifact.model_dump()
+                != subjective_artifact.model_dump()
+                or manifest.summary_evidence != summary_evidence
+                or manifest.settlement_evidence != settlement_evidence
+            ):
+                raise ImmutableRecordError(
+                    "Hosted terminal finalization differs from its ready "
+                    "manifest",
+                )
+            game_row = self._required_row(
+                connection,
+                "SELECT * FROM games WHERE game_id = ?",
+                (str(game_id),),
+                "game",
+            )
+            lifecycle_state = GameLifecycleState(
+                game_row["lifecycle_state"],
+            )
+            if manifest.adopted_at is not None:
+                artifact, published = self._require_exact_terminal_evidence_retry(
+                    connection,
+                    replay_artifact,
+                    summary,
+                    additional_artifacts=(subjective_artifact,),
+                    summary_revision=summary_revision,
+                    source_event_digest=source_event_digest,
+                    source_combat_log_digest=source_combat_log_digest,
+                    supersedes_summary_id=None,
+                )
+                if settlement_bundle is not None and lease_id is not None:
+                    self._require_exact_terminal_settlement_retry(
+                        connection,
+                        settlement_bundle,
+                        lease_id=lease_id,
+                        release_reason="hosted_game_settled",
+                    )
+                if connection.execute(
+                    """
+                    SELECT 1 FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    LIMIT 1
+                    """,
+                    (str(game_id),),
+                ).fetchone() is not None:
+                    raise ConflictError(
+                        "Adopted hosted terminal game retains an active "
+                        "character lease",
+                    )
+                return artifact, published
+            if lifecycle_state is not GameLifecycleState.ACTIVE:
+                raise ConflictError(
+                    "Hosted terminal manifest requires an active game",
+                )
+            active_lease_ids = {
+                UUID(active["lease_id"])
+                for active in connection.execute(
+                    """
+                    SELECT lease_id FROM character_deployment_leases
+                    WHERE game_id = ? AND released_at IS NULL
+                    """,
+                    (str(game_id),),
+                ).fetchall()
+            }
+            expected_lease_ids = (
+                {lease_id} if lease_id is not None else set()
+            )
+            if active_lease_ids != expected_lease_ids:
+                raise ConflictError(
+                    "Hosted terminal manifest does not account for every "
+                    "active character lease",
+                )
+
+            created_at = self._now()
+            artifact = self._publish_artifact_in_transaction(
+                connection,
+                replay_artifact,
+                created_at=created_at,
+            )
+            subjective_record = self._publish_artifact_in_transaction(
+                connection,
+                subjective_artifact,
+                created_at=created_at,
+            )
+            published = self._publish_final_summary_in_transaction(
+                connection,
+                summary,
+                summary_revision=summary_revision,
+                source_event_digest=source_event_digest,
+                source_combat_log_digest=source_combat_log_digest,
+                supersedes_summary_id=None,
+                summary_id=None,
+                replay_artifact=artifact,
+                additional_artifacts=(subjective_record,),
+                created_at=created_at,
+            )
+            if settlement_bundle is not None and lease_id is not None:
+                self._commit_terminal_settlement_in_transaction(
+                    connection,
+                    settlement_bundle,
+                    lease_id=lease_id,
+                    created_at=created_at,
+                    release_reason="hosted_game_settled",
+                )
+            connection.execute(
+                """
+                UPDATE worker_terminal_ready_manifests
+                SET adopted_at = ?
+                WHERE game_id = ? AND adopted_at IS NULL
+                """,
+                (datetime_to_text(created_at), str(game_id)),
+            )
+            return artifact, published
+
+    def _commit_terminal_settlement_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        request: CharacterRevisionBundleCommit,
+        *,
+        lease_id: UUID,
+        created_at: datetime,
+        release_reason: str,
+    ) -> CanonicalCharacterRecord:
+        """Commit one holdings settlement inside terminal publication."""
+
+        if not release_reason:
+            raise ValueError("terminal settlement release reason cannot be empty")
+        if (
+            request.new_holdings is None
+            or request.settlement is None
+            or request.new_definition is not None
+            or request.new_loadout is not None
+            or request.advancement_award is not None
+            or request.mutation_receipt is not None
+        ):
+            raise ValueError(
+                "Terminal settlement must contain only holdings and "
+                "its settlement receipt",
+            )
+        settlement = request.settlement
+        holdings = request.new_holdings
+        current_row = self._required_row(
+            connection,
+            "SELECT * FROM characters WHERE character_id = ?",
+            (str(request.character_id),),
+            "character",
+        )
+        current = _canonical_character_from_row(current_row)
+        expected = request.expected_heads
+        if (
+            current.row_version != request.expected_row_version
+            or current.current_definition_revision
+            != expected.definition_revision
+            or current.current_definition_digest
+            != expected.definition_digest
+            or current.current_holdings_revision
+            != expected.holdings_revision
+            or current.current_holdings_digest != expected.holdings_digest
+            or current.current_loadout_revision
+            != expected.loadout_revision
+            or current.current_loadout_digest != expected.loadout_digest
+        ):
+            raise StaleVersionError(
+                f"Character {request.character_id} revision heads changed",
+            )
+        deployment = self._required_row(
+            connection,
+            """
+            SELECT * FROM character_deployments
+            WHERE deployment_id = ?
+            """,
+            (str(settlement.deployment_id),),
+            "character deployment",
+        )
+        if (
+            deployment["game_id"] != str(settlement.game_id)
+            or deployment["character_id"] != str(settlement.character_id)
+            or deployment["lease_id"] != str(lease_id)
+            or deployment["pin_state"] != "pinned"
+        ):
+            raise ConflictError(
+                "Terminal settlement does not match its pinned "
+                "deployment",
+            )
+        timestamp = datetime_to_text(created_at)
+        try:
+            connection.execute(
+                """
+                INSERT INTO character_holdings_revisions(
+                    character_id, holdings_revision, schema_version,
+                    holdings_json, holdings_digest, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(holdings.character_id),
+                    holdings.holdings_revision,
+                    holdings.schema_version,
+                    canonical_json(holdings.model_dump(mode="json")),
+                    holdings.holdings_digest,
+                    timestamp,
+                ),
+            )
+            cursor = connection.execute(
+                """
+                UPDATE characters
+                SET current_holdings_revision = ?,
+                    current_holdings_digest = ?,
+                    updated_at = ?,
+                    row_version = row_version + 1
+                WHERE character_id = ?
+                  AND current_holdings_revision = ?
+                  AND current_holdings_digest = ?
+                  AND row_version = ?
+                """,
+                (
+                    holdings.holdings_revision,
+                    holdings.holdings_digest,
+                    timestamp,
+                    str(request.character_id),
+                    expected.holdings_revision,
+                    expected.holdings_digest,
+                    request.expected_row_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StaleVersionError(
+                    f"Character {request.character_id} revision heads changed",
+                )
+            connection.execute(
+                """
+                INSERT INTO character_settlements(
+                    settlement_id, deployment_id, game_id, character_id,
+                    starting_holdings_revision, starting_holdings_digest,
+                    resulting_holdings_revision, resulting_holdings_digest,
+                    delta_digest, settled_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(settlement.settlement_id),
+                    str(settlement.deployment_id),
+                    str(settlement.game_id),
+                    str(settlement.character_id),
+                    settlement.starting_holdings_revision,
+                    settlement.starting_holdings_digest,
+                    settlement.resulting_holdings_revision,
+                    settlement.resulting_holdings_digest,
+                    settlement.delta_digest,
+                    timestamp,
+                ),
+            )
+            lease = self._required_row(
+                connection,
+                """
+                SELECT * FROM character_deployment_leases
+                WHERE lease_id = ?
+                """,
+                (str(lease_id),),
+                "character deployment lease",
+            )
+            if lease["released_at"] is not None:
+                raise ConflictError(
+                    "Terminal character lease was already released",
+                )
+            connection.execute(
+                """
+                UPDATE character_deployment_leases
+                SET released_at = ?, release_reason = ?
+                WHERE lease_id = ? AND released_at IS NULL
+                """,
+                (timestamp, release_reason, str(lease_id)),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(
+                f"Terminal settlement failed: {exc}",
+            ) from exc
+        updated = self._required_row(
+            connection,
+            "SELECT * FROM characters WHERE character_id = ?",
+            (str(request.character_id),),
+            "character",
+        )
+        return _canonical_character_from_row(updated)
+
+    def _require_exact_terminal_settlement_retry(
+        self,
+        connection: sqlite3.Connection,
+        request: CharacterRevisionBundleCommit,
+        *,
+        lease_id: UUID,
+        release_reason: str,
+    ) -> None:
+        """Authenticate a fully committed terminal settlement retry."""
+
+        settlement = request.settlement
+        holdings = request.new_holdings
+        if settlement is None or holdings is None:
+            raise ValueError(
+                "Terminal settlement retry requires holdings evidence",
+            )
+        row = self._required_row(
+            connection,
+            """
+            SELECT * FROM character_settlements
+            WHERE deployment_id = ?
+            """,
+            (str(settlement.deployment_id),),
+            "character settlement",
+        )
+        existing = _character_settlement_from_row(row)
+        if (
+            existing.model_dump(exclude={"settled_at"})
+            != settlement.model_dump()
+        ):
+            raise ConflictError(
+                "Terminal settlement retry changed its evidence",
+            )
+        holdings_row = self._required_row(
+            connection,
+            """
+            SELECT holdings_digest FROM character_holdings_revisions
+            WHERE character_id = ? AND holdings_revision = ?
+            """,
+            (
+                str(holdings.character_id),
+                holdings.holdings_revision,
+            ),
+            "character holdings revision",
+        )
+        if holdings_row["holdings_digest"] != holdings.holdings_digest:
+            raise ConflictError(
+                "Terminal settlement retry changed holdings",
+            )
+        lease = self._required_row(
+            connection,
+            """
+            SELECT released_at, release_reason
+            FROM character_deployment_leases WHERE lease_id = ?
+            """,
+            (str(lease_id),),
+            "character deployment lease",
+        )
+        if (
+            lease["released_at"] is None
+            or lease["release_reason"] != release_reason
+        ):
+            raise ConflictError(
+                "Terminal settlement retry has an unreleased lease",
+            )
 
     def _require_exact_terminal_evidence_retry(
         self,
@@ -3158,6 +5068,73 @@ class GameDirectoryRepository:
                 (str(rating_run_id),),
             ).fetchall()
         return tuple(_rating_estimate_from_row(row) for row in rows)
+
+    def _insert_character_advancement_award(
+        self,
+        connection: sqlite3.Connection,
+        request: CharacterAdvancementAwardCreate,
+        *,
+        created_at: datetime,
+    ) -> sqlite3.Row:
+        """Insert one award or return its exact natural-key retry."""
+
+        existing = connection.execute(
+            """
+            SELECT * FROM character_advancement_awards
+            WHERE character_id = ? AND source_kind = ? AND source_id = ?
+            """,
+            (
+                str(request.character_id),
+                request.source_kind.value,
+                request.source_id,
+            ),
+        ).fetchone()
+        if existing is not None:
+            if existing["level_delta"] != request.level_delta:
+                raise ConflictError(
+                    "Advancement source was already recorded with a "
+                    "different level delta",
+                )
+            return existing
+        conflicting_id = connection.execute(
+            """
+            SELECT * FROM character_advancement_awards
+            WHERE award_id = ?
+            """,
+            (str(request.award_id),),
+        ).fetchone()
+        if conflicting_id is not None:
+            raise ConflictError(
+                "Advancement award identifier was already used for another "
+                "source",
+            )
+        try:
+            connection.execute(
+                """
+                INSERT INTO character_advancement_awards(
+                    award_id, character_id, level_delta,
+                    source_kind, source_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(request.award_id),
+                    str(request.character_id),
+                    request.level_delta,
+                    request.source_kind.value,
+                    request.source_id,
+                    datetime_to_text(created_at),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(
+                f"Character advancement award could not be created: {exc}",
+            ) from exc
+        return self._required_row(
+            connection,
+            "SELECT * FROM character_advancement_awards WHERE award_id = ?",
+            (str(request.award_id),),
+            "character advancement award",
+        )
 
     def _now(self) -> datetime:
         """Return a validated timezone-aware UTC clock value."""

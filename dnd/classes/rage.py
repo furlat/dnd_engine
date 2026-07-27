@@ -17,7 +17,7 @@ from dnd.core.base_actions import (
 from dnd.core.events import (
     Event, EventPhase, EventType,
     Trigger, EventHandler,
-    DeathEvent,
+    DeathEvent, RangeType,
 )
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
@@ -54,7 +54,14 @@ def rage_damage_check(
 
     The rage damage value comes from the Raging condition.
     """
-    _ = target_entity_uuid, context
+    _ = target_entity_uuid
+
+    if (
+        context is None
+        or context.get("attack_ability") != "strength"
+        or context.get("range_type") != RangeType.REACH.value
+    ):
+        return None
 
     entity = Entity.get(source_entity_uuid)
     if not entity:
@@ -103,10 +110,11 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
     if not entity:
         return None
 
-    if "Raging" not in entity.active_conditions:
+    raging = entity.active_conditions.get("Raging")
+    if not isinstance(raging, Raging):
         return None
 
-    if "PersistentRage" in entity.active_conditions:
+    if raging.persistent_rage:
         return None
 
     has_attacked = "HasAttacked" in entity.active_conditions
@@ -252,6 +260,14 @@ class Raging(BaseCondition):
         default=2,
         description="Damage bonus supplied by the active rage state to melee attacks.",
     )
+    mindless_rage: bool = Field(
+        default=False,
+        description="Whether this active rage purges charm and fear.",
+    )
+    persistent_rage: bool = Field(
+        default=False,
+        description="Whether inactivity can end this active rage.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -271,7 +287,7 @@ class Raging(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        if "Mindless Rage" in target.active_conditions:
+        if self.mindless_rage:
             for cond_name in ["Charmed", "Frightened"]:
                 if cond_name in target.active_conditions:
                     target.remove_condition(cond_name)
@@ -362,6 +378,14 @@ class Rage(BaseAction):
         default=2,
         description="Damage bonus copied into the applied Raging condition.",
     )
+    mindless_rage: bool = Field(
+        default=False,
+        description="Whether the resulting active rage purges charm and fear.",
+    )
+    persistent_rage: bool = Field(
+        default=False,
+        description="Whether inactivity can end the resulting active rage.",
+    )
 
     costs: List[Cost] = Field(
         default_factory=list,
@@ -403,9 +427,6 @@ class Rage(BaseAction):
         if not entity:
             return False
 
-        if "Frenzy Feature" in entity.active_conditions:
-            return False
-
         if "Frenzied" in entity.active_conditions:
             return False
 
@@ -438,7 +459,9 @@ class Rage(BaseAction):
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            rage_damage=self.rage_damage
+            rage_damage=self.rage_damage,
+            mindless_rage=self.mindless_rage,
+            persistent_rage=self.persistent_rage,
         )
         entity.add_condition(raging, parent_event=execution_event)
 
@@ -817,6 +840,14 @@ class Frenzy(BaseAction):
         default=2,
         description="Damage bonus copied into the applied Raging and Frenzied conditions.",
     )
+    mindless_rage: bool = Field(
+        default=False,
+        description="Whether the resulting active rage purges charm and fear.",
+    )
+    persistent_rage: bool = Field(
+        default=False,
+        description="Whether inactivity can end the resulting active rage.",
+    )
 
     costs: List[Cost] = Field(
         default_factory=list,
@@ -874,7 +905,9 @@ class Frenzy(BaseAction):
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
-            rage_damage=self.rage_damage
+            rage_damage=self.rage_damage,
+            mindless_rage=self.mindless_rage,
+            persistent_rage=self.persistent_rage,
         )
         entity.add_condition(raging, parent_event=execution_event)
 

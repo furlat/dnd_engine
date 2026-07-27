@@ -780,7 +780,7 @@ class _ApplyWeaponCoatAction(BaseAction):
             provider=self,
             runtime_owner_uuid=entity.uuid,
         )
-        entity.add_condition(coat)
+        entity.add_condition(coat, parent_event=execution_event)
 
         if self.use_concentration:
             concentration = Concentrating(
@@ -788,7 +788,10 @@ class _ApplyWeaponCoatAction(BaseAction):
                 target_entity_uuid=self.source_entity_uuid,
                 spell_name=f"{coat.name} Weapon",
             )
-            entity.add_condition(concentration)
+            entity.add_condition(
+                concentration,
+                parent_event=execution_event,
+            )
             concentration.add_linked_condition(entity.uuid, coat.uuid)
 
         effect = execution_event.phase_to(

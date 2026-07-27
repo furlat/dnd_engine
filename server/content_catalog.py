@@ -37,6 +37,11 @@ from dnd.core.content.identities import (
     validate_namespaced_id,
     validate_sha256,
 )
+from dnd.core.content.effects import (
+    AuthoredConditionEffectProfile,
+    AuthoredConditionLifecycle,
+    ConditionEffectCoverage,
+)
 from dnd.core.content.item_definitions import ItemDefinition
 from dnd.core.content.provenance import ContentProvenance, ContentSource
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
@@ -47,7 +52,7 @@ from server.world_contracts import SafeContentPresentationRef
 
 
 CONTENT_MANIFEST_SCHEMA_VERSION = 2
-CONTENT_CATALOG_SCHEMA_VERSION = 5
+CONTENT_CATALOG_SCHEMA_VERSION = 6
 
 
 def safe_content_presentation_ref(
@@ -133,6 +138,9 @@ class ContentCatalogEntry(BaseModel):
     runtime_behavior_kind: RuntimeBehaviorKind | None = None
     item_definition: ItemDefinition | None = None
     dependencies: tuple[ContentDependency, ...] = ()
+    condition_effect_coverage: ConditionEffectCoverage
+    condition_effect_profile: AuthoredConditionEffectProfile | None = None
+    condition_lifecycle: AuthoredConditionLifecycle | None = None
     parameter_schema: dict[str, JsonValue] | None = None
 
     @model_validator(mode="after")
@@ -154,7 +162,7 @@ class ContentCatalogEntry(BaseModel):
                 raise ValueError(
                     "non-item factory catalog entry cannot own item_definition",
                 )
-        else:
+        elif self.definition_mode == ContentDeclarationMode.BEHAVIOR_IDENTITY:
             if self.runtime_behavior_kind is None:
                 raise ValueError(
                     "behavior catalog entry requires runtime_behavior_kind",
@@ -166,6 +174,20 @@ class ContentCatalogEntry(BaseModel):
             if self.item_definition is not None:
                 raise ValueError(
                     "behavior catalog entry cannot own item_definition",
+                )
+        else:
+            if self.runtime_behavior_kind is not None:
+                raise ValueError(
+                    "typed-definition catalog entry cannot own runtime behavior",
+                )
+            if self.parameter_schema is not None:
+                raise ValueError(
+                    "typed-definition catalog entry cannot expose factory "
+                    "parameters",
+                )
+            if self.item_definition is not None:
+                raise ValueError(
+                    "typed-definition catalog entry cannot own item_definition",
                 )
         return self
 
@@ -210,7 +232,7 @@ class ContentCatalogResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[5] = CONTENT_CATALOG_SCHEMA_VERSION
+    schema_version: Literal[6] = CONTENT_CATALOG_SCHEMA_VERSION
     content_set_digest: str
     catalog_digest: str
     entries: tuple[ContentCatalogEntry, ...]
@@ -384,6 +406,18 @@ def build_public_content_catalog(
                 runtime_behavior_kind=declaration.runtime_behavior_kind,
                 item_definition=declaration.item_definition,
                 dependencies=declaration.dependencies,
+                condition_effect_coverage=(
+                    declaration.condition_effect_coverage
+                ),
+                condition_effect_profile=(
+                    _resolve_public_condition_effect_profile(
+                        loaded,
+                        declaration.condition_effect_profile,
+                    )
+                    if declaration.condition_effect_profile is not None
+                    else None
+                ),
+                condition_lifecycle=declaration.condition_lifecycle,
                 parameter_schema=(
                     declaration.construction.parameter_model.model_json_schema(
                         mode="validation",
@@ -460,6 +494,52 @@ def build_public_content_catalog(
         presets=ordered_presets,
         safe_presentations=safe_presentations,
     )
+
+
+def _resolve_public_condition_effect_profile(
+    loaded: LoadedContentSystem,
+    profile: AuthoredConditionEffectProfile,
+) -> AuthoredConditionEffectProfile:
+    """Expand typed cleanse selectors to exact installed public refs."""
+    resolved_branches = []
+    for branch in profile.branches:
+        resolved_effects = []
+        for effect in branch.effects:
+            selector = effect.selector
+            if selector is None:
+                resolved_effects.append(effect)
+                continue
+            matched_refs = tuple(sorted(
+                (
+                    declaration.ref
+                    for declaration in loaded.registry.declarations.values()
+                    if (
+                        declaration.descriptor.visibility
+                        is ContentVisibility.PUBLIC
+                        and declaration.condition_lifecycle is not None
+                        and set(selector.required_tags).issubset(
+                            set(declaration.condition_lifecycle.tags),
+                        )
+                        and set(
+                            selector.required_removal_triggers,
+                        ).issubset(
+                            set(
+                                declaration.condition_lifecycle.removal_triggers,
+                            ),
+                        )
+                    )
+                ),
+                key=lambda ref: ref.identity_key,
+            ))
+            resolved_effects.append(effect.model_copy(update={
+                "selector": selector.model_copy(update={
+                    "resolved_condition_refs": matched_refs,
+                }),
+            }))
+        resolved_branches.append(branch.model_copy(update={
+            "effects": tuple(resolved_effects),
+        }))
+    return profile.model_copy(update={"branches": tuple(resolved_branches)})
 
 
 def content_response_etag(digest: str) -> str:

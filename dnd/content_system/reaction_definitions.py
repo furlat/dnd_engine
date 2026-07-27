@@ -27,7 +27,6 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import EventHandler
 from dnd.reactions import OpportunityAttackHandler
-from dnd.spells.abjuration import ShieldReactionHandler
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,22 +63,6 @@ REACTION_BEHAVIOR_IDENTITY_SPECS: tuple[
         ),
         sort_group="reactions.standard",
         sort_order=10,
-    ),
-    ReactionBehaviorIdentitySpec(
-        handler_type=ShieldReactionHandler,
-        pack_id="content.srd_5_1_cc",
-        content_id="reaction.spell.shield",
-        display_name="Shield",
-        description=(
-            "Use a reaction and a spell slot to defend against an attack or "
-            "Magic Missile."
-        ),
-        icon_key="reaction.shield",
-        source_anchor=(
-            "SRD 5.1 (CC-BY-4.0), p. 180, Spell Descriptions: Shield"
-        ),
-        sort_group="reactions.spells",
-        sort_order=20,
     ),
     ReactionBehaviorIdentitySpec(
         handler_type=DivineSmiteHandler,

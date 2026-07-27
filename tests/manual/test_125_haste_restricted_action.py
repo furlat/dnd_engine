@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import AttackEvent
+from dnd.actions import AttackEvent, SpellAction
 from dnd.actions_functional import (
     execute_action,
     execute_by_index,
@@ -13,6 +13,10 @@ from dnd.actions_functional import (
     update_weapon_templates,
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.action_economy import (
+    RechargeType,
+    ResourceCapacityPolicy,
+)
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -20,7 +24,12 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.fighter import (
     ActionSurge,
     ActionSurgeFeature,
+    ExtraAttack,
     ExtraAttackFeature,
+    create_extra_attack_resource_handler,
+)
+from dnd.content_system.extra_attack_character_grant_appliers import (
+    EXTRA_ATTACK_FEATURE_REF,
 )
 from dnd.core.base_actions import (
     AvailableActionInfo,
@@ -30,9 +39,11 @@ from dnd.core.base_actions import (
 from dnd.core.condition_types import DurationType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event
+from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.action_types import HasteActionPolicy
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect
@@ -98,9 +109,11 @@ def _create_hasted_fighter(
     extra_attacks: int,
     action_surge: bool = False,
     apply_lethargy: bool = False,
+    haste_action_policy: HasteActionPolicy = HasteActionPolicy.BG3_HONOUR,
 ) -> tuple[Entity, Entity]:
     """Create a hasted fighter and one adjacent hostile target."""
     fighter = _create_creature("Hasted Fighter", (3, 3), "heroes")
+    fighter.action_economy.haste_action_policy = haste_action_policy
     target = _create_creature("Target", (4, 3), "monsters")
     fighter.add_condition(
         ExtraAttackFeature(
@@ -124,6 +137,49 @@ def _create_hasted_fighter(
             caster_uuid=fighter.uuid,
             apply_lethargy=apply_lethargy,
         )
+    )
+    fighter.action_economy.resources["extra_attacks"].current = 0
+    Entity.update_all_entities_senses()
+    return fighter, target
+
+
+def _create_hasted_structural_fighter() -> tuple[Entity, Entity]:
+    """Create the same matchup through the source-owned Extra Attack family."""
+    fighter = _create_creature("Structural Hasted Fighter", (3, 3), "heroes")
+    target = _create_creature("Target", (4, 3), "monsters")
+    grant_id = uuid4()
+    fighter.action_economy.add_attack_multiplicity_grant(
+        AttackMultiplicityGrant(
+            grant_id=grant_id,
+            provider_ref=EXTRA_ATTACK_FEATURE_REF,
+            attacks_per_attack_action=2,
+            acquisition_ordinal=5,
+        ),
+    )
+    fighter.action_economy.add_resource_contribution(
+        "extra_attacks",
+        grant_id,
+        maximum=1,
+        recharge_type=RechargeType.TURN_START,
+        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+    )
+    fighter.register_action(
+        ExtraAttack(
+            source_entity_uuid=fighter.uuid,
+            name="Extra Attack",
+            template=True,
+            discover_equipped_weapon_slots=True,
+        ),
+    )
+    EventQueue.add_event_handler(
+        create_extra_attack_resource_handler(fighter.uuid),
+    )
+    fighter.add_condition(
+        HasteEffect(
+            source_entity_uuid=fighter.uuid,
+            target_entity_uuid=fighter.uuid,
+            caster_uuid=fighter.uuid,
+        ),
     )
     fighter.action_economy.resources["extra_attacks"].current = 0
     Entity.update_all_entities_senses()
@@ -174,6 +230,50 @@ def _execute(
     return event
 
 
+def _condition_parent_lineage(condition_name: str) -> UUID:
+    """Return the unique causal parent lineage for one applied condition."""
+    matches = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.CONDITION_APPLICATION,
+        )
+        if getattr(getattr(event, "condition", None), "name", None)
+        == condition_name
+        and event.phase is EventPhase.DECLARATION
+    ]
+    assert len(matches) == 1
+    parent_event_uuid = matches[0].parent_event
+    assert parent_event_uuid is not None
+    parent = EventQueue.get_event_by_uuid(parent_event_uuid)
+    assert parent is not None
+    return parent.lineage_uuid
+
+
+def test_fighter_internal_markers_remain_in_their_action_lineage() -> None:
+    """Action Surge and Extra Attack bookkeeping cannot become root effects."""
+    actor, target = _create_hasted_fighter(
+        extra_attacks=1,
+        action_surge=True,
+    )
+
+    surge = ActionSurge(
+        source_entity_uuid=actor.uuid,
+        template=False,
+    ).apply()
+    assert surge is not None and not surge.canceled
+    assert _condition_parent_lineage("ActionSurging") == surge.lineage_uuid
+
+    attack = _execute(
+        actor,
+        "Attack_MELEE_MAIN",
+        target_uuid=target.uuid,
+    )
+    assert (
+        _condition_parent_lineage("ExtraAttacksGranted")
+        == attack.lineage_uuid
+    )
+
+
 @pytest.mark.parametrize("extra_attacks", [1, 2, 3])
 @pytest.mark.parametrize("haste_attack_first", [False, True])
 def test_haste_attack_and_normal_attack_batches_are_order_independent(
@@ -214,6 +314,33 @@ def test_haste_attack_and_normal_attack_batches_are_order_independent(
             target_uuid=target.uuid,
         )
         assert fighter.action_economy.resources["extra_attacks"].current == remaining
+
+
+@pytest.mark.parametrize("haste_attack_first", [False, True])
+def test_structural_extra_attack_preserves_haste_ordering(
+    haste_attack_first: bool,
+) -> None:
+    """The source-owned rank uses the same legal Haste/Attack batch semantics."""
+    fighter, target = _create_hasted_structural_fighter()
+    regular_attack = "Attack_MELEE_MAIN"
+    haste_attack = f"{regular_attack}{HASTE_GRANT_SUFFIX}"
+
+    if haste_attack_first:
+        _execute(fighter, haste_attack, target_uuid=target.uuid)
+        assert fighter.action_economy.resources["extra_attacks"].current == 0
+        _execute(fighter, regular_attack, target_uuid=target.uuid)
+    else:
+        _execute(fighter, regular_attack, target_uuid=target.uuid)
+        assert fighter.action_economy.resources["extra_attacks"].current == 1
+        _execute(fighter, haste_attack, target_uuid=target.uuid)
+
+    assert fighter.action_economy.resources["extra_attacks"].current == 1
+    _execute(
+        fighter,
+        "Extra Attack_MELEE_MAIN",
+        target_uuid=target.uuid,
+    )
+    assert fighter.action_economy.resources["extra_attacks"].current == 0
 
 
 def test_haste_extra_attack_miss_keeps_weapon_presentation_metadata() -> None:
@@ -267,8 +394,8 @@ def test_weapon_attack_metadata_snapshot_is_typed_and_handles_unarmed_slots() ->
     )
 
 
-def test_haste_discovery_exposes_only_its_rules_legal_action_variants() -> None:
-    """The restricted budget cannot buy arbitrary ordinary actions."""
+def test_haste_discovery_exposes_every_standard_action_variant() -> None:
+    """Honour-mode Haste buys any Action while retaining a separate budget."""
     fighter, _target = _create_hasted_fighter(extra_attacks=1)
     variants = {
         variant.get_discovery_template_name(): variant
@@ -282,9 +409,9 @@ def test_haste_discovery_exposes_only_its_rules_legal_action_variants() -> None:
         f"Dash{HASTE_GRANT_SUFFIX}",
         f"Disengage{HASTE_GRANT_SUFFIX}",
         f"Hide{HASTE_GRANT_SUFFIX}",
+        f"Dodge{HASTE_GRANT_SUFFIX}",
     }
     assert expected_haste_rows <= names
-    assert f"Dodge{HASTE_GRANT_SUFFIX}" not in names
     assert f"Extra Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}" not in names
 
     for template_name in expected_haste_rows:
@@ -302,8 +429,38 @@ def test_haste_discovery_exposes_only_its_rules_legal_action_variants() -> None:
         )
 
 
-def test_haste_weapon_attack_can_use_an_equipped_off_hand_weapon() -> None:
-    """The restricted Attack may choose either hand without spending a bonus action."""
+def test_srd_haste_policy_keeps_the_restricted_action_whitelist() -> None:
+    """The optional tabletop policy does not grant Dodge or spell actions."""
+    fighter, _target = _create_hasted_fighter(
+        extra_attacks=1,
+        haste_action_policy=HasteActionPolicy.SRD_5_1,
+    )
+    spell = SpellAction(
+        source_entity_uuid=fighter.uuid,
+        name="Strict Policy Probe",
+        template=True,
+    )
+    spell_variant_names = {
+        variant.get_discovery_template_name()
+        for variant in spell.get_discovery_variants(fighter)
+    }
+    action_variant_names = {
+        variant.get_discovery_template_name()
+        for template in fighter.registered_actions
+        for variant in template.get_discovery_variants(fighter)
+    }
+
+    assert "Strict Policy Probe" in spell_variant_names
+    assert f"Strict Policy Probe{HASTE_GRANT_SUFFIX}" not in spell_variant_names
+    assert f"Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}" in action_variant_names
+    assert f"Dash{HASTE_GRANT_SUFFIX}" in action_variant_names
+    assert f"Disengage{HASTE_GRANT_SUFFIX}" in action_variant_names
+    assert f"Hide{HASTE_GRANT_SUFFIX}" in action_variant_names
+    assert f"Dodge{HASTE_GRANT_SUFFIX}" not in action_variant_names
+
+
+def test_haste_does_not_convert_an_off_hand_bonus_action_into_an_action() -> None:
+    """Honour-mode Haste adds an Action, not another bonus-action budget."""
     fighter, target = _create_hasted_fighter(extra_attacks=1)
     fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
     fighter.equipment.equip(
@@ -326,22 +483,18 @@ def test_haste_weapon_attack_can_use_an_equipped_off_hand_weapon() -> None:
     )
     update_weapon_templates(fighter)
 
-    haste_attack = f"Attack_MELEE_OFF{HASTE_GRANT_SUFFIX}"
-    row = _find_row(
-        get_available_actions(fighter, legal_only=True),
-        haste_attack,
-    )
-    assert len(row.costs) == 1
-    assert row.costs[0].cost_type == "bonus_actions"
-    assert row.costs[0].cost == 0
-    assert row.costs[0].resource_name == HASTE_ACTION_RESOURCE
-    assert row.costs[0].resource_cost == 1
+    names = {
+        row.template_name
+        for row in get_available_actions(fighter, legal_only=True).all_actions
+    }
+    assert f"Attack_MELEE_OFF{HASTE_GRANT_SUFFIX}" not in names
+    assert "Attack_MELEE_OFF" in names
 
-    _execute(fighter, haste_attack, target_uuid=target.uuid)
+    _execute(fighter, "Attack_MELEE_OFF", target_uuid=target.uuid)
 
-    assert fighter.action_economy.resources[HASTE_ACTION_RESOURCE].current == 0
+    assert fighter.action_economy.resources[HASTE_ACTION_RESOURCE].current == 1
     assert fighter.action_economy.actions.normalized_score == 1
-    assert fighter.action_economy.bonus_actions.normalized_score == 1
+    assert fighter.action_economy.bonus_actions.normalized_score == 0
     assert fighter.action_economy.resources["extra_attacks"].current == 0
 
 

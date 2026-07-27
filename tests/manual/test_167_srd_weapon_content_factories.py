@@ -30,6 +30,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _LEGACY_FACTORY_NAMES = frozenset(
     {
         "create_dagger",
+        "create_dart",
         "create_handaxe",
         "create_javelin",
         "create_mace",
@@ -138,6 +139,20 @@ _EXPECTED = {
         RangeType.REACH,
         5,
         None,
+    ),
+    "dart": (
+        "Dart",
+        4,
+        1,
+        DamageType.PIERCING,
+        (
+            WeaponProperty.FINESSE,
+            WeaponProperty.RANGED,
+            WeaponProperty.THROWN,
+        ),
+        RangeType.RANGE,
+        20,
+        60,
     ),
     "light_crossbow": (
         "Light Crossbow",
@@ -323,7 +338,7 @@ _EXPECTED = {
 
 
 def test_srd_weapon_declarations_are_exact_frozen_content() -> None:
-    """All 23 playable weapons own stable refs, descriptors, and possession policy."""
+    """All 24 playable weapons own stable refs, descriptors, and possession policy."""
     declarations = weapon_definitions.SRD_WEAPON_DECLARATIONS
     recipes = weapon_definitions.SRD_WEAPON_RECIPES_BY_CONTENT_ID
 

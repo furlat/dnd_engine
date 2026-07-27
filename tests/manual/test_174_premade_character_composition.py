@@ -2,136 +2,235 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.core.content.item_definitions import ItemPersistencePolicy
-from dnd.premade_characters import PREMADE_CHARACTER_TEMPLATES
-from server.character_composition import (
-    PremadeCharacterNotFoundError,
-    compose_premade_character_bootstrap,
+from dnd.content_system.builtin_character_builds import (
+    BUILTIN_PREMADE_BUILDS,
+    starter_holdings_for_build,
 )
-from server.game_gateway_models import CreateCharacterRequest
+from dnd.core.content.item_definitions import ItemPersistencePolicy
+from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
+from server.character_directory_contracts import CreateCharacterRequest
+from server.character_directory_service import (
+    CharacterDirectoryBuildError,
+    CharacterDirectoryService,
+)
+from server.game_directory.contracts import (
+    PrincipalCreate,
+    PrincipalKind,
+    PrincipalRecord,
+)
+from server.game_directory.repository import GameDirectoryRepository
 
 
-@pytest.mark.parametrize("premade_id", tuple(PREMADE_CHARACTER_TEMPLATES))
-def test_every_approved_premade_composes_exact_revision_one(
+PEPPER = b"premade-composition-test-pepper"
+
+
+def _directory(
+    database_path: Path,
+) -> tuple[
+    GameDirectoryRepository,
+    CharacterDirectoryService,
+    PrincipalRecord,
+]:
+    repository = GameDirectoryRepository(
+        database_path,
+        capability_pepper=PEPPER,
+    )
+    owner = repository.create_principal(
+        PrincipalCreate(
+            principal_kind=PrincipalKind.HUMAN,
+            display_name="Premade Owner",
+        ),
+    )
+    return (
+        repository,
+        CharacterDirectoryService(
+            repository,
+            bootstrap_content_system(),
+        ),
+        owner,
+    )
+
+
+def _request_for_premade(
+    service: CharacterDirectoryService,
+    *,
+    owner_id: UUID,
+    premade_id: str,
+    display_name: str,
+) -> CreateCharacterRequest:
+    premade = next(
+        row
+        for row in service.build_creation_catalog().premades
+        if row.premade_id == premade_id
+    )
+    settings = service.ensure_profile_settings(owner_id)
+    return CreateCharacterRequest(
+        display_name=display_name,
+        build=premade.build,
+        loadout=premade.loadout,
+        expected_content_set_digest=service.content_system.content_set_digest,
+        expected_ruleset_digest=settings.ruleset_digest,
+        idempotency_key=uuid4(),
+    )
+
+
+@pytest.mark.parametrize("premade_id", tuple(BUILTIN_PREMADE_BUILDS))
+def test_every_approved_premade_composes_exact_schema2_revision_one(
+    tmp_path: Path,
     premade_id: str,
 ) -> None:
     """All starter rows are exact durable possession recipes, never live state."""
 
-    content_system = bootstrap_content_system()
-    character_id = uuid4()
-    principal_id = uuid4()
-
-    first = compose_premade_character_bootstrap(
-        character_id=character_id,
-        owner_principal_id=principal_id,
-        display_name="Persistent Hero",
-        premade_id=premade_id,
-        content_system=content_system,
+    repository, service, owner = _directory(
+        tmp_path / f"{premade_id}.sqlite3",
     )
-    second = compose_premade_character_bootstrap(
-        character_id=character_id,
-        owner_principal_id=principal_id,
-        display_name="Persistent Hero",
+    request = _request_for_premade(
+        service,
+        owner_id=owner.principal_id,
         premade_id=premade_id,
-        content_system=content_system,
+        display_name="Persistent Hero",
     )
+    first = service.create_character(owner.principal_id, request)
+    second = service.create_character(owner.principal_id, request)
 
-    template = PREMADE_CHARACTER_TEMPLATES[premade_id]
+    build = BUILTIN_PREMADE_BUILDS[premade_id]
+    definition = first.definition.definition
+    holdings = first.holdings.holdings
+    loadout = first.loadout.loadout
     assert first == second
-    assert first.definition.creature_recipe == template.creature_recipe
-    assert first.definition.premade_id == premade_id
-    assert first.definition.content_set_digest == content_system.content_set_digest
-    assert first.definition.definition_revision == 1
-    assert first.starter_holdings.holdings_revision == 1
-    assert len(first.starter_holdings.items) == len(template.starter_holdings)
+    assert definition.schema_version == 2
+    assert definition.body_recipe == PLAYER_CHARACTER_BODY_RECIPE
+    assert definition.premade_id == premade_id
+    assert (
+        definition.content_set_digest
+        == service.content_system.content_set_digest
+    )
+    assert definition.definition_revision == 1
+    assert definition.earned_character_level == build.level
+    assert len(definition.class_levels) == build.level
+    assert holdings.holdings_revision == 1
+    assert len(holdings.items) == len(
+        starter_holdings_for_build(build),
+    )
+    assert loadout.based_on_definition_revision == 1
     assert tuple(
-        item.character_item_id for item in first.starter_holdings.items
+        award.level_delta for award in first.advancement.awards
+    ) == (build.level,)
+    assert tuple(
+        item.character_item_id for item in holdings.items
     ) == tuple(
         sorted(
             (
                 item.character_item_id
-                for item in first.starter_holdings.items
+                for item in holdings.items
             ),
             key=lambda item_id: item_id.hex,
         ),
     )
     assert len({
         item.character_item_id
-        for item in first.starter_holdings.items
-    }) == len(first.starter_holdings.items)
-    for item in first.starter_holdings.items:
-        declaration = content_system.registry.resolve_factory(item.recipe.ref)
+        for item in holdings.items
+    }) == len(holdings.items)
+    for item in holdings.items:
+        declaration = service.content_system.registry.resolve_factory(
+            item.recipe.ref,
+        )
         assert declaration.item_definition is not None
         assert (
             declaration.item_definition.persistence_policy
             is ItemPersistencePolicy.POSSESSION
         )
+    repository.close()
 
 
-def test_character_identity_namespaces_deterministic_starter_item_ids() -> None:
+def test_character_identity_namespaces_deterministic_starter_item_ids(
+    tmp_path: Path,
+) -> None:
     """Two characters of one premade never share persistent item identities."""
 
-    content_system = bootstrap_content_system()
-    principal_id = uuid4()
-    premade_id = next(iter(PREMADE_CHARACTER_TEMPLATES))
-    first = compose_premade_character_bootstrap(
-        character_id=uuid4(),
-        owner_principal_id=principal_id,
-        display_name="First",
-        premade_id=premade_id,
-        content_system=content_system,
+    repository, service, owner = _directory(tmp_path / "identities.sqlite3")
+    premade_id = next(iter(BUILTIN_PREMADE_BUILDS))
+    first = service.create_character(
+        owner.principal_id,
+        _request_for_premade(
+            service,
+            owner_id=owner.principal_id,
+            premade_id=premade_id,
+            display_name="First",
+        ),
     )
-    second = compose_premade_character_bootstrap(
-        character_id=uuid4(),
-        owner_principal_id=principal_id,
-        display_name="Second",
-        premade_id=premade_id,
-        content_system=content_system,
+    second = service.create_character(
+        owner.principal_id,
+        _request_for_premade(
+            service,
+            owner_id=owner.principal_id,
+            premade_id=premade_id,
+            display_name="Second",
+        ),
     )
 
     assert {
-        item.character_item_id for item in first.starter_holdings.items
+        item.character_item_id
+        for item in first.holdings.holdings.items
     }.isdisjoint({
-        item.character_item_id for item in second.starter_holdings.items
+        item.character_item_id
+        for item in second.holdings.holdings.items
     })
+    repository.close()
 
 
-def test_unknown_premade_fails_before_any_directory_write() -> None:
+def test_unknown_premade_fails_before_any_directory_write(
+    tmp_path: Path,
+) -> None:
     """The public selector cannot submit an arbitrary creature recipe."""
 
-    with pytest.raises(PremadeCharacterNotFoundError):
-        compose_premade_character_bootstrap(
-            character_id=uuid4(),
-            owner_principal_id=uuid4(),
-            display_name="Unknown",
-            premade_id="hero.unknown",
-            content_system=bootstrap_content_system(),
-        )
-
-
-def test_public_character_creation_has_no_legacy_preset_or_recipe_path() -> None:
-    """Clients submit one approved premade ID, never duplicate factory authority."""
-
-    request = CreateCharacterRequest(
-        display_name="Canonical",
-        premade_id="hero.fighter_l5_shield_torch",
+    repository, service, owner = _directory(tmp_path / "unknown.sqlite3")
+    known_id = next(iter(BUILTIN_PREMADE_BUILDS))
+    known = _request_for_premade(
+        service,
+        owner_id=owner.principal_id,
+        premade_id=known_id,
+        display_name="Unknown",
     )
-    assert request.model_dump() == {
-        "display_name": "Canonical",
-        "premade_id": "hero.fighter_l5_shield_torch",
+    request = known.model_copy(update={
+        "build": known.build.model_copy(update={
+            "premade_id": "hero.unknown",
+        }),
+    })
+
+    validation = service.validate_new_character(owner.principal_id, request)
+    assert not validation.valid
+    assert {
+        issue.code.value for issue in validation.issues
+    } >= {"unknown_premade_id"}
+    with pytest.raises(CharacterDirectoryBuildError):
+        service.create_character(owner.principal_id, request)
+    assert service.list_characters(owner.principal_id).characters == ()
+    repository.close()
+
+
+def test_public_character_creation_is_schema2_draft_only() -> None:
+    """The premade composer is not a second public character-creation API."""
+
+    assert set(CreateCharacterRequest.model_fields) == {
+        "display_name",
+        "build",
+        "loadout",
+        "expected_content_set_digest",
+        "expected_ruleset_digest",
+        "idempotency_key",
     }
     with pytest.raises(ValidationError):
         CreateCharacterRequest.model_validate(
             {
                 "display_name": "Legacy",
-                "preset_configuration_id": (
-                    "hero.fighter_l5_shield_torch"
-                ),
+                "premade_id": "hero.fighter_l5_shield_torch",
             },
         )

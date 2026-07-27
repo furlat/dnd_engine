@@ -28,6 +28,7 @@ from dnd.core.base_actions import (
     spell_slot_cost_type,
 )
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import (
@@ -124,8 +125,14 @@ def register_reckless(entity: Entity) -> None:
     _register_action_once(entity, RecklessAttack(source_entity_uuid=entity.uuid, template=True, name="Reckless"))
 
 
-def register_multiattack(entity: Entity, name: str, attacks: tuple[tuple[WeaponSlot, int], ...]) -> None:
-    """Register a monster stat-block Multiattack action."""
+def register_multiattack(
+    entity: Entity,
+    name: str,
+    attacks: tuple[tuple[WeaponSlot, int], ...],
+    *,
+    configured_action_ref: ContentRef,
+) -> None:
+    """Register one exactly identified monster stat-block Multiattack."""
     _register_action_once(
         entity,
         MultiattackAction(
@@ -133,6 +140,7 @@ def register_multiattack(entity: Entity, name: str, attacks: tuple[tuple[WeaponS
             template=True,
             name=name,
             attack_sequence=attacks,
+            configured_action_ref=configured_action_ref,
         ),
     )
 

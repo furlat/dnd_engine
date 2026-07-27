@@ -34,14 +34,36 @@ from dnd.content_system.action_definitions import (
 from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_DECLARATIONS,
 )
+from dnd.content_system.character_origin_definitions import (
+    NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS,
+    SRD_CHARACTER_ORIGIN_DECLARATIONS,
+)
+from dnd.content_system.starting_equipment_definitions import (
+    STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
+)
 from dnd.content_system.reaction_definitions import (
     REACTION_BEHAVIOR_DECLARATIONS,
 )
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.provenance import ContentSourceFamily, RulesBaseline
 from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
+from dnd.classes.barbarian_progression_definitions import (
+    BARBARIAN_PROGRESSION_DECLARATIONS,
+)
 from dnd.classes.content_factories import (
     PLAYER_CLASS_CREATURE_DECLARATIONS,
+)
+from dnd.classes.progression_definitions import (
+    FIGHTER_PROGRESSION_DECLARATIONS,
+)
+from dnd.classes.sorcerer_progression_definitions import (
+    SORCERER_PROGRESSION_DECLARATIONS,
+)
+from dnd.classes.sorcerer_structural_feature_definitions import (
+    SORCERER_STRUCTURAL_FEATURE_DECLARATIONS,
+)
+from dnd.classes.structural_feature_definitions import (
+    STRUCTURAL_CLASS_FEATURE_DECLARATIONS,
 )
 from dnd.conditions import CORE_STANDARD_CONDITION_DECLARATIONS
 from dnd.extensions.field_focus import (
@@ -65,6 +87,9 @@ from dnd.items.weapons import (
     SRD_WEAPON_DECLARATIONS,
 )
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
+from dnd.monsters.multiattack_definitions import (
+    SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
+)
 from dnd.monsters.srd_roster_items import (
     SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
 )
@@ -76,11 +101,16 @@ from dnd.monsters.circus_fighter_items import (
     NEURODRAGON_CIRCUS_ITEM_DECLARATIONS,
 )
 from dnd.premade_characters import NEURODRAGON_PREMADE_CREATURE_DECLARATIONS
+from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS
 from dnd.spells.conjuration import (
     SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
 )
 from dnd.spells.abjuration import COUNTERSPELL_REACTION_DECLARATION
+from dnd.spells.abjuration import SHIELD_REACTION_DECLARATION
+from dnd.spells.reaction_spell_content import (
+    LEARNED_REACTION_SPELL_DECLARATIONS,
+)
 
 
 def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
@@ -96,7 +126,17 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
         *ACTION_BEHAVIOR_DECLARATIONS,
         *CONDITION_BEHAVIOR_DECLARATIONS,
         *REACTION_BEHAVIOR_DECLARATIONS,
+        *STRUCTURAL_CLASS_FEATURE_DECLARATIONS,
+        *SORCERER_STRUCTURAL_FEATURE_DECLARATIONS,
+        *SRD_CHARACTER_ORIGIN_DECLARATIONS,
+        *NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS,
+        *STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
+        *BARBARIAN_PROGRESSION_DECLARATIONS,
+        *FIGHTER_PROGRESSION_DECLARATIONS,
+        *SORCERER_PROGRESSION_DECLARATIONS,
         COUNTERSPELL_REACTION_DECLARATION,
+        SHIELD_REACTION_DECLARATION,
+        *LEARNED_REACTION_SPELL_DECLARATIONS,
         *NEURODRAGON_ARMOR_DECLARATIONS,
         *NEURODRAGON_BESTIARY_ITEM_DECLARATIONS,
         *NEURODRAGON_CIRCUS_ITEM_DECLARATIONS,
@@ -105,6 +145,7 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
         *NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS,
         *NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS,
         *NEURODRAGON_PREMADE_CREATURE_DECLARATIONS,
+        PLAYER_CHARACTER_BODY_DECLARATION,
         *NEURODRAGON_SPELL_ITEM_DECLARATIONS,
         *NEURODRAGON_TORCH_DECLARATIONS,
         *NEURODRAGON_WEAPON_DECLARATIONS,
@@ -114,18 +155,25 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
         *SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
         *SRD_ARMOR_DECLARATIONS,
         *SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
+        *SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
         *SRD_CREATURE_DECLARATIONS,
         *SRD_WEAPON_DECLARATIONS,
     )
     assert loaded.registry.declarations == {
         declaration.ref.identity_key: declaration
-        for declaration in expected_declarations
+        for declaration in BUILT_IN_DECLARATIONS
     }
+    assert tuple(
+        declaration.ref.identity_key
+        for declaration in BUILT_IN_DECLARATIONS
+    ) == tuple(
+        declaration.ref.identity_key
+        for declaration in expected_declarations
+    )
     assert tuple(loaded.registry.sources) == (
         "wotc.srd_5_1_cc",
         "neurodragon.original_b2b3930",
     )
-    assert BUILT_IN_DECLARATIONS == expected_declarations
     assert BUILT_IN_PACK_VERSIONS == {
         "content.neurodragon": "1.0.0",
         "content.srd_5_1_cc": "1.0.0",
@@ -192,7 +240,7 @@ def test_builtin_artifact_digest_is_required_and_stable() -> None:
     assert {
         "dnd/actions_functional.py",
         "dnd/classes/barbarian.py",
-        "dnd/classes/barbarian_factory.py",
+        "dnd/classes/barbarian_progression_definitions.py",
         "dnd/items/armors.py",
         "dnd/items/consumables.py",
         "dnd/items/spell_items.py",
@@ -200,18 +248,23 @@ def test_builtin_artifact_digest_is_required_and_stable() -> None:
         "dnd/items/weapons.py",
         "dnd/classes/content_factories.py",
         "dnd/classes/fighter.py",
-        "dnd/classes/fighter_factory.py",
+        "dnd/classes/progression_definitions.py",
         "dnd/classes/rage.py",
         "dnd/classes/sorcerer.py",
-        "dnd/classes/sorcerer_factory.py",
+        "dnd/classes/sorcerer_progression_definitions.py",
         "dnd/content_system/artifact_digest.py",
         "dnd/content_system/builtin.py",
+        "dnd/content_system/builtin_character_builds.py",
+        "dnd/content_system/character_build_validation.py",
+        "dnd/content_system/character_materialization.py",
+        "dnd/content_system/installed_creature_materialization.py",
         "dnd/monsters/bestiary.py",
         "dnd/monsters/bestiary_content.py",
         "dnd/monsters/bestiary_items.py",
         "dnd/monsters/skeleton_abilities.py",
         "dnd/monsters/srd_roster.py",
         "dnd/monsters/traits.py",
+        "dnd/player_character_body.py",
         "dnd/spells/conjuration.py",
         "dnd/spells/necromancy.py",
         "content_data/ledgers/neuroclient_authored_item_visuals.json",

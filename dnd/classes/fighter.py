@@ -42,7 +42,7 @@ from dnd.actions import (
 )
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 import random
 
 
@@ -987,7 +987,7 @@ class ActionSurge(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid
         )
-        entity.add_condition(surging)
+        entity.add_condition(surging, parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1194,13 +1194,20 @@ def extra_attack_resource_processor(
     if not action_cost_attack:
         return None
 
-    extra_attack_feature = entity.active_conditions.get("Extra Attack")
     extra_attack_resource = entity.action_economy.resources.get("extra_attacks")
+    attacks_per_action = (
+        entity.action_economy.resolve_attacks_per_attack_action()
+    )
+    if attacks_per_action > 1:
+        num_extra = attacks_per_action - 1
+    else:
+        extra_attack_feature = entity.active_conditions.get("Extra Attack")
+        if not isinstance(extra_attack_feature, ExtraAttackFeature):
+            return None
+        num_extra = extra_attack_feature.extra_attacks
 
-    if not extra_attack_resource or not extra_attack_feature:
+    if not extra_attack_resource:
         return None
-
-    num_extra = extra_attack_feature.extra_attacks if isinstance(extra_attack_feature, ExtraAttackFeature) else 1
 
     if "ExtraAttacksGranted" not in entity.active_conditions:
         extra_attack_resource.current = num_extra
@@ -1211,7 +1218,7 @@ def extra_attack_resource_processor(
         )
         marker.duration.duration_type = DurationType.ROUNDS
         marker.duration.duration = 1
-        entity.add_condition(marker)
+        entity.add_condition(marker, parent_event=event)
     else:
         extra_attack_resource.current += num_extra
 
@@ -1266,6 +1273,13 @@ class ExtraAttack(BaseAction):
         default_factory=list,
         description="Extra-attack resource cost rebuilt after model initialization.",
     )
+    discover_equipped_weapon_slots: bool = Field(
+        default=False,
+        description=(
+            "Whether one structural family template expands into current "
+            "equipped-weapon discovery variants."
+        ),
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1280,6 +1294,36 @@ class ExtraAttack(BaseAction):
                 resource_evaluator=entity_resource_cost_evaluator
             )
         ]
+
+    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
+        """Expand a structural family template over the current weapon set."""
+        if not self.discover_equipped_weapon_slots:
+            return super().get_discovery_variants(entity)
+        if not isinstance(entity, Entity):
+            return []
+        variants: List[BaseAction] = []
+        for slot in (
+            WeaponSlot.MELEE_MAIN,
+            WeaponSlot.MELEE_OFF,
+            WeaponSlot.RANGED_MAIN,
+            WeaponSlot.RANGED_OFF,
+        ):
+            weapon = entity.equipment._get_weapon_by_slot(slot)
+            if weapon is None or isinstance(weapon, Shield):
+                continue
+            variants.append(
+                self.model_copy(
+                    deep=True,
+                    update={
+                        "uuid": uuid4(),
+                        "name": f"Extra Attack_{slot.value}",
+                        "weapon_slot": slot,
+                        "template": False,
+                        "use_register": False,
+                    },
+                ),
+            )
+        return variants
 
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
         """Return the same actor-baseline weapon profile as a normal attack."""
@@ -1450,17 +1494,18 @@ def indomitable_processor(
     if event.result is not False:
         return None
 
-    if not entity.action_economy.can_afford_resource("indomitable", 1):
+    dc = event.get_dc()
+    if dc is None:
         return None
 
-    entity.action_economy.consume_resource("indomitable", 1)
+    if not entity.action_economy.can_afford_resource("indomitable", 1):
+        return None
 
     ability_name = event.ability_name
     save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
     new_roll = entity.roll_d20(save_bonus, RollType.SAVE, parent_event=event.uuid)
 
-    dc = event.get_dc()
-    if dc is None:
+    if not entity.action_economy.consume_resource("indomitable", 1):
         return None
 
     new_outcome = determine_attack_outcome(new_roll, dc)

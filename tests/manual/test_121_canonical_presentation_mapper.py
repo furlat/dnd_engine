@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from dnd.actions import (
+    Attack,
     AttackEvent,
     Jump,
     JumpEvent,
@@ -16,14 +17,23 @@ from dnd.actions import (
     SpellEvent,
 )
 from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.classes.paladin import create_divine_smite_handler
 from dnd.conditions import Prone
+from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.action_types import ActionPresentationKind
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import position_evidence_key
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.runtime import BehaviorBinding
-from dnd.core.dice import AttackOutcome
+from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    EffectiveHandlerPresentation,
+    HandlerDispatchOutcome,
+)
+from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     Damage,
@@ -52,15 +62,18 @@ from dnd.core.item_types import (
     ItemRarity,
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.core.modifiers import DamageType
+from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
 )
-from dnd.entity import Entity
+from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.spells.abjuration import CounterspellReactionEvent
+from dnd.spells.abjuration import (
+    CounterspellReactionEvent,
+    create_shield_reaction_handler,
+)
 from dnd.utils import force_attack_miss, reset_combat_state
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.mapper import (
@@ -71,6 +84,7 @@ from server.player_replication.mapper import (
 )
 from server.player_replication_contract import (
     ActiveWeaponSet,
+    ActionPresentationCue,
     AttackPresentationCue,
     BehaviorPresentationRole,
     ConeAreaGeometry,
@@ -78,6 +92,7 @@ from server.player_replication_contract import (
     CounterspellAutomaticSuccess,
     CounterspellCheckFailure,
     CounterspellPresentationCue,
+    ConditionPresentationCue,
     DamagePresentationCue,
     DoorPresentationCue,
     DoorStatePatch,
@@ -449,6 +464,10 @@ def _assert_exact_reactive_movement_segments(
     )
     attack_cues = tuple(
         cue for cue in semantic_cues if isinstance(cue, AttackPresentationCue)
+    )
+    assert not any(
+        isinstance(cue, ActionPresentationCue)
+        for cue in projection.frame.presentation
     )
 
     assert tuple(
@@ -832,6 +851,556 @@ def test_condition_cue_projects_exact_bound_definition_without_name_inference() 
 
 
 @pytest.mark.parametrize(
+    ("definition_kind", "content_id"),
+    (
+        (ContentDefinitionKind.ACTION, "action.rage"),
+        (ContentDefinitionKind.REACTION, "reaction.defensive_flare"),
+    ),
+)
+def test_generic_action_preserves_existing_condition_causality(
+    definition_kind: ContentDefinitionKind,
+    content_id: str,
+) -> None:
+    """The mapper delivers the authored parent instead of orphaning its effect."""
+
+    actor = uuid4()
+    action_ref = _content_ref(
+        kind=definition_kind,
+        content_id=content_id,
+        digest_char="e",
+    )
+    condition_ref = _content_ref(
+        kind=ContentDefinitionKind.CLASS_FEATURE,
+        content_id="feature.raging",
+        digest_char="f",
+    )
+    action = ActionEvent(
+        name="Rage",
+        source_entity_uuid=actor,
+        target_entity_uuid=actor,
+        behavior_binding=_binding(
+            definition_ref=action_ref,
+            owner_uuid=actor,
+        ),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    condition = ConditionApplicationEvent(
+        source_entity_uuid=actor,
+        target_entity_uuid=actor,
+        condition=Prone(
+            source_entity_uuid=actor,
+            target_entity_uuid=actor,
+            behavior_binding=_binding(
+                definition_ref=condition_ref,
+                owner_uuid=actor,
+            ),
+            use_register=False,
+        ),
+        parent_lineage=action.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    action = _visible(action, actor, identified=(actor,))
+    condition = _visible(condition, actor, identified=(actor,))
+
+    frame = MAPPER.project_frame(
+        _batch(action, condition),
+        _context(_perspective(actor)),
+    )
+
+    root, effect = frame.presentation
+    assert isinstance(root, ActionPresentationCue)
+    assert root.actor_uuid == str(actor)
+    assert root.action_name == "Rage"
+    assert root.target_uuids == (str(actor),)
+    assert root.effect_presentation_ids == (effect.presentation_id,)
+    assert root.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=action_ref,
+            provided_by_ref=action_ref,
+        ),
+    )
+    assert effect.parent_presentation_id == root.presentation_id
+    assert effect.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=condition_ref,
+            provided_by_ref=condition_ref,
+        ),
+    )
+    _assert_closed_graph(frame)
+
+
+def test_generic_action_derives_safe_targets_from_typed_child_actions() -> None:
+    """A composite action owns its visible attack without trusting hidden target state."""
+
+    actor = uuid4()
+    target = uuid4()
+    action_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.monster.multiattack",
+        digest_char="a",
+    )
+    attack_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.attack",
+        digest_char="b",
+    )
+    action = ActionEvent(
+        name="Multiattack",
+        source_entity_uuid=actor,
+        behavior_binding=_binding(
+            definition_ref=action_ref,
+            owner_uuid=actor,
+        ),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    attack = AttackEvent(
+        name="Claw",
+        source_entity_uuid=actor,
+        target_entity_uuid=target,
+        behavior_binding=_binding(
+            definition_ref=attack_ref,
+            owner_uuid=actor,
+        ),
+        parent_lineage=action.lineage_uuid,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
+        attack_outcome=AttackOutcome.MISS,
+        damage_types=[DamageType.SLASHING],
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    action = _visible(action, actor, identified=(actor,))
+    attack = _visible(attack, actor, identified=(actor, target))
+
+    frame = MAPPER.project_frame(
+        _batch(action, attack),
+        _context(_perspective(actor)),
+    )
+
+    root, child = frame.presentation
+    assert isinstance(root, ActionPresentationCue)
+    assert isinstance(child, AttackPresentationCue)
+    assert root.target_uuids == (str(target),)
+    assert root.effect_presentation_ids == (child.presentation_id,)
+    assert child.parent_presentation_id == root.presentation_id
+    _assert_closed_graph(frame)
+
+
+def test_handler_only_shield_reaction_owns_its_emitted_condition() -> None:
+    """Shield gets an exact action root instead of borrowing the incoming attack."""
+
+    defender = uuid4()
+    attacker = uuid4()
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.spell.shield",
+        digest_char="c",
+    )
+    attack_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.attack",
+        digest_char="d",
+    )
+    condition_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.shield",
+        digest_char="e",
+    )
+    incoming = AttackEvent(
+        name="Incoming Attack",
+        source_entity_uuid=attacker,
+        target_entity_uuid=defender,
+        behavior_binding=_binding(
+            definition_ref=attack_ref,
+            owner_uuid=attacker,
+        ),
+        weapon_slot=WeaponSlot.MELEE_MAIN,
+        attack_outcome=AttackOutcome.MISS,
+        damage_types=[DamageType.SLASHING],
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    condition = ConditionApplicationEvent(
+        source_entity_uuid=defender,
+        target_entity_uuid=defender,
+        condition=Prone(
+            source_entity_uuid=defender,
+            target_entity_uuid=defender,
+            behavior_binding=_binding(
+                definition_ref=condition_ref,
+                owner_uuid=defender,
+            ),
+            use_register=False,
+        ),
+        parent_lineage=incoming.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    incoming = _visible(
+        incoming,
+        defender,
+        identified=(attacker, defender),
+    )
+    condition = _visible(
+        condition,
+        defender,
+        identified=(defender,),
+    )
+    incoming._effective_handler_presentations = (
+        EffectiveHandlerPresentation(
+            dispatch_index=1,
+            handler_name="Shield",
+            behavior_binding=_binding(
+                definition_ref=reaction_ref,
+                owner_uuid=defender,
+            ),
+            source_entity_uuid=defender,
+            triggering_event_uuid=incoming.uuid,
+            triggering_lineage_uuid=incoming.lineage_uuid,
+            emitted_lineage_uuids=(condition.lineage_uuid,),
+            outcome=HandlerDispatchOutcome.MODIFIED_EVENT,
+        ),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(incoming, condition),
+        _context(_perspective(defender)),
+    )
+
+    reaction = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, ActionPresentationCue)
+    )
+    attack = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, AttackPresentationCue)
+    )
+    effect = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, ConditionPresentationCue)
+    )
+    assert isinstance(reaction, ActionPresentationCue)
+    assert reaction.action_name == "Shield"
+    assert reaction.actor_uuid == str(defender)
+    assert reaction.target_uuids == (str(defender),)
+    assert reaction.effect_presentation_ids == (effect.presentation_id,)
+    assert isinstance(attack, AttackPresentationCue)
+    assert attack.parent_presentation_id is None
+    assert effect.parent_presentation_id == reaction.presentation_id
+    assert reaction.presentation_cursor < effect.presentation_cursor
+    assert effect.presentation_cursor < attack.presentation_cursor
+    assert reaction.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=reaction_ref,
+            provided_by_ref=reaction_ref,
+        ),
+    )
+    _assert_closed_graph(frame)
+
+
+def test_real_shield_handler_reaches_the_canonical_action_root() -> None:
+    """The production handler bridge preserves Shield without synthetic events."""
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 6, 6)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        defender = Entity.create(
+            source_entity_uuid=uuid4(),
+            name="Shield Defender",
+            config=EntityConfig(
+                action_economy=ActionEconomyConfig(spell_slots={1: 1}),
+                position=(2, 2),
+                faction="heroes",
+            ),
+        )
+        attacker = create_goblin(
+            name="Shield Attacker",
+            position=(2, 3),
+            faction="monsters",
+        )
+        handler = create_shield_reaction_handler(defender.uuid)
+        defender.add_event_handler(handler)
+        assert handler.behavior_binding is not None
+        Entity.update_all_entities_senses(max_distance=20)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {str(defender.uuid)}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        before = EventQueue.event_cursor()
+        attack_action = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=defender.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        )
+        attack_ref = get_content_declaration(Attack).ref
+        attack_action.behavior_binding = _binding(
+            definition_ref=attack_ref,
+            owner_uuid=attacker.uuid,
+        )
+        with fixed_dice_faces(10):
+            result = attack_action.apply()
+        assert isinstance(result, AttackEvent)
+        assert result.attack_outcome is AttackOutcome.MISS
+
+        source_events = tuple(
+            event
+            for _, event in EventQueue.iter_events_since(before)
+        )
+        frame = MAPPER.project_frame(
+            _batch(*source_events),
+            _context(_perspective(defender.uuid)),
+        )
+
+        shield = next(
+            cue
+            for cue in frame.presentation
+            if (
+                isinstance(cue, ActionPresentationCue)
+                and cue.content_attributions
+                and cue.content_attributions[0].definition_ref
+                == handler.behavior_binding.definition_ref
+            )
+        )
+        incoming = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, AttackPresentationCue)
+        )
+        shield_effects = [
+            cue
+            for cue in frame.presentation
+            if cue.parent_presentation_id == shield.presentation_id
+        ]
+        assert shield.action_name == "Shield"
+        assert shield.actor_uuid == str(defender.uuid)
+        assert shield.target_uuids == (str(defender.uuid),)
+        assert shield.trigger_presentation_id == incoming.presentation_id
+        assert len(shield_effects) == 1
+        assert isinstance(shield_effects[0], ConditionPresentationCue)
+        assert incoming.parent_presentation_id is None
+        assert shield.presentation_cursor < shield_effects[0].presentation_cursor
+        assert shield_effects[0].presentation_cursor < incoming.presentation_cursor
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
+def test_handler_only_divine_smite_reaction_gets_an_exact_root() -> None:
+    """A modifying reaction with no emitted child remains an authored action cue."""
+
+    paladin = uuid4()
+    target = uuid4()
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.class_feature.paladin.divine_smite",
+        digest_char="f",
+    )
+    trigger = Event(
+        name="Damage Roll Result",
+        event_type=EventType.DAMAGE_ROLL_RESULT,
+        source_entity_uuid=paladin,
+        target_entity_uuid=target,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    trigger = _visible(
+        trigger,
+        paladin,
+        identified=(paladin, target),
+    )
+    trigger._effective_handler_presentations = (
+        EffectiveHandlerPresentation(
+            dispatch_index=2,
+            handler_name="Divine Smite (L3)",
+            behavior_binding=_binding(
+                definition_ref=reaction_ref,
+                owner_uuid=paladin,
+            ),
+            source_entity_uuid=paladin,
+            triggering_event_uuid=trigger.uuid,
+            triggering_lineage_uuid=trigger.lineage_uuid,
+            emitted_lineage_uuids=(),
+            outcome=HandlerDispatchOutcome.MODIFIED_EVENT,
+        ),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(trigger),
+        _context(_perspective(paladin)),
+    )
+
+    assert len(frame.presentation) == 1
+    reaction = frame.presentation[0]
+    assert isinstance(reaction, ActionPresentationCue)
+    assert reaction.action_name == "Divine Smite (L3)"
+    assert reaction.actor_uuid == str(paladin)
+    assert reaction.target_uuids == (str(target),)
+    assert reaction.effect_presentation_ids == ()
+    assert reaction.content_attributions == (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=reaction_ref,
+            provided_by_ref=reaction_ref,
+        ),
+    )
+    _assert_closed_graph(frame)
+
+
+def test_emission_only_handler_without_a_delivered_result_is_suppressed() -> None:
+    """Canceled/hidden emissions cannot become empty generic reaction actions."""
+
+    reactor = uuid4()
+    target = uuid4()
+    reaction_ref = _content_ref(
+        kind=ContentDefinitionKind.REACTION,
+        content_id="reaction.opportunity_attack",
+        digest_char="e",
+    )
+    trigger = Event(
+        name="Movement Trigger",
+        event_type=EventType.STEP_MOVEMENT,
+        source_entity_uuid=target,
+        target_entity_uuid=target,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    trigger = _visible(
+        trigger,
+        target,
+        identified=(reactor, target),
+    )
+    trigger._effective_handler_presentations = (
+        EffectiveHandlerPresentation(
+            dispatch_index=3,
+            handler_name="Opportunity Attack Handler",
+            behavior_binding=_binding(
+                definition_ref=reaction_ref,
+                owner_uuid=reactor,
+            ),
+            source_entity_uuid=reactor,
+            triggering_event_uuid=trigger.uuid,
+            triggering_lineage_uuid=trigger.lineage_uuid,
+            emitted_lineage_uuids=(uuid4(),),
+            outcome=HandlerDispatchOutcome.EMITTED_EVENTS,
+        ),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(trigger),
+        _context(_perspective(target)),
+    )
+
+    assert frame.presentation == ()
+
+
+def test_real_divine_smite_handler_reaches_the_canonical_action_root() -> None:
+    """The production smite handler exposes activation before the attack impact."""
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 6, 6)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        paladin = create_goblin(
+            name="Smite Attacker",
+            position=(2, 2),
+            faction="heroes",
+        )
+        target = create_skeleton(
+            name="Smite Target",
+            position=(2, 3),
+            faction="monsters",
+        )
+        target.health.damage_reduction.self_static.add_resistance_modifier(
+            ResistanceModifier(
+                source_entity_uuid=target.uuid,
+                target_entity_uuid=target.uuid,
+                name="Smite packet slashing resistance",
+                value=ResistanceStatus.RESISTANCE,
+                damage_type=DamageType.SLASHING,
+            ),
+        )
+        slot_base = paladin.action_economy.spell_slot_1.get_base_modifier()
+        assert slot_base is not None
+        slot_base.value = 1
+        handler = create_divine_smite_handler(paladin.uuid, 1)
+        paladin.add_event_handler(handler)
+        assert handler.behavior_binding is not None
+        Entity.update_all_entities_senses(max_distance=20)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {str(paladin.uuid)}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        before = EventQueue.event_cursor()
+        attack_action = Attack(
+            source_entity_uuid=paladin.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        )
+        attack_action.behavior_binding = _binding(
+            definition_ref=get_content_declaration(Attack).ref,
+            owner_uuid=paladin.uuid,
+        )
+        with fixed_dice_faces(20, *([4] * 10)):
+            result = attack_action.apply()
+        assert isinstance(result, AttackEvent)
+        assert result.attack_outcome is AttackOutcome.CRIT
+
+        source_events = tuple(
+            event
+            for _, event in EventQueue.iter_events_since(before)
+        )
+        frame = MAPPER.project_frame(
+            _batch(*source_events),
+            _context(_perspective(paladin.uuid)),
+        )
+
+        smite = next(
+            cue
+            for cue in frame.presentation
+            if (
+                isinstance(cue, ActionPresentationCue)
+                and cue.content_attributions
+                and cue.content_attributions[0].definition_ref
+                == handler.behavior_binding.definition_ref
+            )
+        )
+        attack = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, AttackPresentationCue)
+        )
+        impact = next(
+            cue
+            for cue in frame.presentation
+            if (
+                isinstance(cue, DamagePresentationCue)
+                and cue.parent_presentation_id == attack.presentation_id
+            )
+        )
+        assert smite.action_name == "Divine Smite (L1)"
+        assert smite.actor_uuid == str(paladin.uuid)
+        assert smite.target_uuids == (str(target.uuid),)
+        assert smite.trigger_presentation_id == attack.presentation_id
+        assert smite.effect_presentation_ids == ()
+        assert impact.applied_amount == 29
+        assert PresentationDamageType.RADIANT in impact.damage_types
+        assert smite.presentation_cursor < attack.presentation_cursor
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
+@pytest.mark.parametrize(
     ("automatic", "succeeded", "incoming_level", "slot_level", "total", "dc", "resolution_type"),
     (
         (True, True, 3, 3, None, None, CounterspellAutomaticSuccess),
@@ -899,6 +1468,21 @@ def test_counterspell_maps_closed_reaction_and_trigger_identity(
         reaction,
         caster,
         identified=(caster, reactor),
+    )
+    reaction._effective_handler_presentations = (
+        EffectiveHandlerPresentation(
+            dispatch_index=3,
+            handler_name="Counterspell",
+            behavior_binding=_binding(
+                definition_ref=reaction_ref,
+                owner_uuid=reactor,
+            ),
+            source_entity_uuid=reactor,
+            triggering_event_uuid=incoming.uuid,
+            triggering_lineage_uuid=incoming.lineage_uuid,
+            emitted_lineage_uuids=(reaction.lineage_uuid,),
+            outcome=HandlerDispatchOutcome.EMITTED_EVENTS,
+        ),
     )
 
     frame = MAPPER.project_frame(

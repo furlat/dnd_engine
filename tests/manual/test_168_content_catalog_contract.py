@@ -105,12 +105,32 @@ def test_public_catalog_is_complete_code_free_and_self_authenticating() -> None:
                 }
             else:
                 assert entry.item_definition is None
-        else:
+        elif (
+            entry.definition_mode
+            == ContentDeclarationMode.BEHAVIOR_IDENTITY
+        ):
             assert (
                 entry.definition_mode
                 == ContentDeclarationMode.BEHAVIOR_IDENTITY
             )
             assert entry.runtime_behavior_kind is not None
+            assert entry.item_definition is None
+            assert entry.parameter_schema is None
+        else:
+            assert (
+                entry.definition_mode
+                == ContentDeclarationMode.TYPED_DEFINITION
+            )
+            assert entry.ref.definition_kind in {
+                ContentDefinitionKind.ACTION,
+                ContentDefinitionKind.CLASS,
+                ContentDefinitionKind.SUBCLASS,
+                ContentDefinitionKind.SPECIES,
+                ContentDefinitionKind.SPECIES_VARIANT,
+                ContentDefinitionKind.BACKGROUND,
+                ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
+            }
+            assert entry.runtime_behavior_kind is None
             assert entry.item_definition is None
             assert entry.parameter_schema is None
 

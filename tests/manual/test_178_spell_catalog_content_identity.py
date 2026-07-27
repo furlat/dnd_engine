@@ -5,7 +5,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import dnd.spells as spells_package
-import pytest
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -77,6 +76,7 @@ EXPECTED_CATALOG_IDS = (
     "charm_person",
     "sleep",
     "color_spray",
+    "shield",
     "guiding_bolt",
     "grease",
     "fog_cloud",
@@ -127,6 +127,7 @@ EXPECTED_CATALOG_IDS = (
     "sleet_storm",
     "mass_healing_word",
     "beacon_of_hope",
+    "counterspell",
     "remove_curse",
     "bestow_curse",
     "blight",
@@ -170,7 +171,11 @@ EXPECTED_CATALOG_IDS = (
 EXPECTED_NATIVE_CATALOG_IDS = tuple(
     catalog_id
     for catalog_id in EXPECTED_CATALOG_IDS
-    if catalog_id != "aegis_spark"
+    if catalog_id not in {
+        "aegis_spark",
+        "counterspell",
+        "shield",
+    }
 )
 
 
@@ -241,7 +246,7 @@ def test_all_public_spells_have_one_explicit_exact_content_identity() -> None:
     ):
         assert SPELL_CONTENT_DECLARATIONS_BY_NAME[spec.display_name] is declaration
         assert SPELL_CONTENT_DECLARATIONS_BY_CLASS[spec.spell_type] is declaration
-        assert get_content_declaration(spec.spell_type) is declaration
+        assert get_content_declaration(spec.spell_type).ref == declaration.ref
         assert declaration.ref.pack_id == spec.pack_id
         assert declaration.ref.content_id == spec.content_id
         assert declaration.descriptor.display_name == spec.display_name
@@ -295,7 +300,7 @@ def test_spell_refs_resolve_in_frozen_registry_and_public_content_catalog() -> N
 
     for declaration in SPELL_CONTENT_DECLARATIONS:
         resolved = loaded.registry.resolve_definition(declaration.ref)
-        assert resolved is declaration
+        assert resolved.ref == declaration.ref
         catalog_entry = public_by_key[declaration.ref.identity_key]
         assert catalog_entry.ref == declaration.ref
         assert catalog_entry.display_name == declaration.descriptor.display_name
@@ -323,20 +328,18 @@ def test_public_registered_spell_definitions_are_exactly_the_spell_catalog() -> 
 def test_spell_catalog_id_and_content_ref_are_independently_authored() -> None:
     """Catalog lookup projects its explicit ID and exact durable identity."""
     expected = SPELL_CONTENT_DECLARATIONS_BY_CLASS[FireBolt].ref
-    entry = spell_catalog.build_spell_catalog_entry("Fire Bolt", FireBolt)
+    composition = next(
+        row
+        for row in SPELL_CATALOG_COMPOSITION_ROWS
+        if row.spell_type is FireBolt
+    )
+    entry = spell_catalog.build_spell_catalog_entry(composition)
 
     assert entry.id == SPELL_CATALOG_METADATA_BY_CLASS[FireBolt].catalog_id
     assert entry.id == "fire_bolt"
     assert entry.content_ref == expected
     assert entry.model_dump()["content_ref"] == expected.model_dump()
     assert "aliases" not in entry.model_dump()
-
-    with pytest.raises(
-        ValueError,
-        match="display name disagrees",
-    ):
-        spell_catalog.build_spell_catalog_entry("Firebolt", FireBolt)
-
 
 def test_spell_catalog_projection_has_no_runtime_inference_paths() -> None:
     """The backend projection cannot recover facts from names or source code."""
@@ -394,7 +397,7 @@ def test_complete_spell_catalog_uses_the_exact_class_declarations() -> None:
     spell_catalog.build_spell_catalog.cache_clear()
     response = spell_catalog.build_spell_catalog()
 
-    assert response.version == "2026-07-26.1"
+    assert response.version == "2026-07-26.2"
     assert tuple(row.id for row in response.spells) == EXPECTED_CATALOG_IDS
     for composition, row in zip(
         SPELL_CATALOG_COMPOSITION_ROWS,

@@ -149,7 +149,10 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(rage.RageFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.rage"),
     _srd(rage.Raging, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.raging"),
     _srd(sorcerer.DraconicResilience, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_resilience"),
-    _srd(sorcerer.ElementalAffinity, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.elemental_affinity"),
+    _srd(sorcerer.DraconicPresenceAura, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.aura"),
+    _srd(sorcerer.DraconicPresenceImmunity, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.immunity"),
+    _srd(sorcerer.DragonWingsActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.dragon_wings.active"),
+    _srd(sorcerer.ElementalAffinityResistance, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.elemental_affinity.resistance"),
     _srd(sorcerer.MetamagicActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.metamagic_active"),
     _srd(sorcerer.SorceryPointsFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.sorcery_points"),
 
@@ -158,7 +161,11 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(conditions.GreaterInvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.greater_invisibility"),
 
     # Original extension and item-owned condition behaviors.
-    _original(aegis_spark.AegisSparkEffect, ContentDefinitionKind.CONDITION, "condition.aegis_spark", visibility=ContentVisibility.DEVELOPER),
+    _original(
+        aegis_spark.AegisSparkEffect,
+        ContentDefinitionKind.CONDITION,
+        "condition.aegis_spark",
+    ),
     _original(aegis_spark.AegisTrainingFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.aegis_training", visibility=ContentVisibility.DEVELOPER),
     _original(field_focus.FieldFocus, ContentDefinitionKind.CONDITION, "condition.field_focus"),
     _original(

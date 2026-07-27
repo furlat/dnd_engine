@@ -16,6 +16,7 @@ from server.game_directory.contracts import (
     AttachmentCreate,
     ClientKind,
     EntityAssignmentCreate,
+    ExecutionKind,
     GameCreate,
     GameLifecycleState,
     GrantKind,
@@ -274,6 +275,38 @@ def test_authority_and_lifecycle_updates_use_compare_and_swap(tmp_path: Path) ->
             capabilities=membership.capabilities,
         )
     repository.close()
+
+
+def test_local_game_execution_kind_round_trips_through_repository(tmp_path: Path) -> None:
+    """A single-player local game is a first-class durable directory record."""
+
+    database_path = tmp_path / "local-profile.sqlite3"
+    repository = _open(database_path)
+    principal = repository.create_principal(
+        PrincipalCreate(principal_kind=PrincipalKind.HUMAN, display_name="Local Player")
+    )
+    created = repository.create_game(
+        GameCreate(
+            created_by_principal_id=principal.principal_id,
+            execution_kind=ExecutionKind.LOCAL,
+            scenario_kind="arena",
+            scenario_id="single-player",
+            display_name="Local Adventure",
+            creation_manifest={"profile_mode": "single_player"},
+            ruleset_version="one-ruleset",
+            engine_version="test",
+            content_digest="content",
+        )
+    )
+    repository.close()
+
+    restarted = _open(database_path)
+    loaded = restarted.get_game(created.game_id)
+    restarted.close()
+
+    assert created.execution_kind is ExecutionKind.LOCAL
+    assert loaded == created
+    assert loaded.execution_kind is ExecutionKind.LOCAL
 
 
 def test_cross_game_entity_assignment_is_rejected(tmp_path: Path) -> None:

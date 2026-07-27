@@ -1076,6 +1076,70 @@ class BaseBlock(BaseModel):
         else:
             self.add_static_condition_immunity(condition_name, immunity_name)
 
+    @staticmethod
+    def _condition_immunity_source_name(source_id: UUID) -> str:
+        """Encode one exact structural source without display-name identity."""
+        return f"structural-source:{source_id}"
+
+    def add_condition_immunity_source(
+        self,
+        condition_name: str,
+        source_id: UUID,
+        *,
+        immunity_check: Optional[ContextualConditionImmunity] = None,
+    ) -> None:
+        """Install one exact source-owned static or contextual immunity."""
+        source_name = self._condition_immunity_source_name(source_id)
+        if any(
+            name == source_name
+            for name, _ in self.contextual_condition_immunities.get(
+                condition_name,
+                (),
+            )
+        ) or any(
+            existing_condition == condition_name
+            and existing_name == source_name
+            for existing_condition, existing_name in self.condition_immunities
+        ):
+            raise ValueError(
+                f"condition immunity source {source_id} is already installed "
+                f"for {condition_name}",
+            )
+        self.add_condition_immunity(
+            condition_name,
+            immunity_name=source_name,
+            immunity_check=immunity_check,
+        )
+
+    def remove_condition_immunity_source(
+        self,
+        condition_name: str,
+        source_id: UUID,
+    ) -> bool:
+        """Remove exactly one source-owned immunity without touching siblings."""
+        source_name = self._condition_immunity_source_name(source_id)
+        removed = False
+        for row in tuple(self.condition_immunities):
+            if row == (condition_name, source_name):
+                self.condition_immunities.remove(row)
+                removed = True
+        rows = self.contextual_condition_immunities.get(condition_name)
+        if rows is not None:
+            retained = [
+                row
+                for row in rows
+                if row[0] != source_name
+            ]
+            removed = removed or len(retained) != len(rows)
+            if retained:
+                self.contextual_condition_immunities[condition_name] = retained
+            else:
+                self.contextual_condition_immunities.pop(
+                    condition_name,
+                    None,
+                )
+        return removed
+
     def _remove_contextual_condition_immunity(self, condition_name: str, immunity_name: Optional[str] = None) -> None:
         """Remove matching contextual condition immunity rows.
 

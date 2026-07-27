@@ -761,7 +761,25 @@ MONSTER_PARTY_CONFIGURATIONS: tuple[SideConfigurationSpec, ...] = (
         "Condition Lock Cell",
         (
             _skeleton("monster_1", "skeleton_warrior"),
-            _sorcerer("monster_2", 7, ("Fire Bolt", "Ray of Frost", "Command", "Hold Person", "Fear", "Hypnotic Pattern", "Slow", "Banishment")),
+            _sorcerer(
+                "monster_2",
+                7,
+                (
+                    "Fire Bolt",
+                    "Ray of Frost",
+                    "Hold Person",
+                    "Fear",
+                    "Hypnotic Pattern",
+                    "Slow",
+                    "Banishment",
+                ),
+                (
+                    SpellGrant(
+                        spell_names=("Command",),
+                        caster_level=7,
+                    ),
+                ),
+            ),
             _caster(
                 "monster_3",
                 spells=("Bless", "Bane", "Guiding Bolt", "Shield of Faith", "Sanctuary"),

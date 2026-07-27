@@ -19,6 +19,13 @@ const fireBoltRef: ContentRef = {
   content_version: 1,
   definition_contract_hash: digest,
 };
+const poisonedRef: ContentRef = {
+  pack_id: "core.rules",
+  definition_kind: "condition",
+  content_id: "condition.poisoned",
+  content_version: 1,
+  definition_contract_hash: digest,
+};
 
 const manifest: ContentManifestResponse = {
   schema_version: 2,
@@ -48,7 +55,7 @@ const manifest: ContentManifestResponse = {
 };
 
 const catalog: ContentCatalogResponse = {
-  schema_version: 5,
+  schema_version: 6,
   content_set_digest: digest,
   catalog_digest: digest,
   entries: [{
@@ -84,6 +91,9 @@ const catalog: ContentCatalogResponse = {
     },
     definition_mode: "behavior_identity",
     runtime_behavior_kind: "spell",
+    condition_effect_coverage: "none",
+    condition_effect_profile: null,
+    condition_lifecycle: null,
     item_definition: null,
     dependencies: [],
     parameter_schema: null,
@@ -196,7 +206,7 @@ test("content catalog accepts the authored tint field and spell catalog exposes 
   const decodedContent = await client.getContentCatalog();
   const decodedSpells = await client.getSpellCatalog();
 
-  assert.equal(decodedContent.schema_version, 5);
+  assert.equal(decodedContent.schema_version, 6);
   assert.equal(decodedContent.entries[0]?.presentation.tint_rgb, 0xff6b21);
   assert.deepEqual(decodedContent.entries[0]?.ref, fireBoltRef);
   assert.deepEqual(
@@ -206,6 +216,100 @@ test("content catalog accepts the authored tint field and spell catalog exposes 
   assert.deepEqual(decodedSpells.spells[0]?.content_ref, fireBoltRef);
   assert.deepEqual(decodedSpells.spells[0]?.saving_throws, []);
   assert.equal(decodedSpells.spells[0]?.aoe_height_ft, null);
+});
+
+test("content catalog decodes exact ordered condition effects and lifecycle facts", async () => {
+  const sourceEntry = catalog.entries[0];
+  assert.ok(sourceEntry);
+  const conditionCatalog: ContentCatalogResponse = {
+    ...catalog,
+    entries: [{
+      ...sourceEntry,
+      dependencies: [{
+        relation: "applies_condition",
+        target_ref: poisonedRef,
+        required: true,
+        phase: "runtime_reference",
+        notes: "",
+      }],
+      condition_effect_coverage: "profiled",
+      condition_effect_profile: {
+        branches: [{
+          branch_id: "failed-save",
+          disposition: "harmful",
+          included_creature_types: [],
+          excluded_creature_types: ["construct"],
+          gates: [{
+            kind: "saving_throw",
+            ability: "constitution",
+            outcome: "failed",
+            dc_source: "actor_spell_save_dc",
+            fixed_dc: null,
+          }],
+          effects: [{
+            effect_id: "apply-poisoned",
+            source_ref: fireBoltRef,
+            operation: "apply",
+            condition_ref: poisonedRef,
+            selector: null,
+            target: "selected_target",
+          }],
+        }],
+      },
+      condition_lifecycle: null,
+    }, {
+      ...sourceEntry,
+      ref: poisonedRef,
+      display_name: "Poisoned",
+      runtime_behavior_kind: "condition",
+      dependencies: [],
+      condition_effect_coverage: "lifecycle_only",
+      condition_effect_profile: null,
+      condition_lifecycle: {
+        application_policy: "replace_existing",
+        tags: ["poison"],
+        removal_triggers: [],
+        agency_denial: "none",
+      },
+    }],
+  };
+  const client = new DndEngineClient("/api", {
+    fetchImplementation: async () => jsonResponse(conditionCatalog),
+  });
+
+  const decoded = await client.getContentCatalog();
+  assert.equal(
+    decoded.entries[0]?.condition_effect_profile?.branches[0]
+      ?.effects[0]?.condition_ref?.content_id,
+    "condition.poisoned",
+  );
+  assert.equal(
+    decoded.entries[1]?.condition_lifecycle?.application_policy,
+    "replace_existing",
+  );
+
+  const malformed = JSON.parse(
+    JSON.stringify(conditionCatalog),
+  ) as {
+    entries: Array<{
+      condition_effect_profile: {
+        branches: Array<{
+          effects: Array<Record<string, unknown>>;
+        }>;
+      } | null;
+    }>;
+  };
+  const malformedEffect = malformed.entries[0]
+    ?.condition_effect_profile?.branches[0]?.effects[0];
+  assert.ok(malformedEffect);
+  malformedEffect.condition_semantic_key = "Poisoned";
+  const malformedClient = new DndEngineClient("/api", {
+    fetchImplementation: async () => jsonResponse(malformed),
+  });
+  await assert.rejects(
+    malformedClient.getContentCatalog(),
+    ContractValidationError,
+  );
 });
 
 test("content catalog requires exact compound equipment render-layer rows", async () => {

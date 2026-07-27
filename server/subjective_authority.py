@@ -34,6 +34,7 @@ def resolve_subjective_authority(
     *,
     observer_entity_uuids: Optional[Iterable[UUID]] = None,
     active_observer_uuid: Optional[UUID] = None,
+    standalone_membership_id: UUID | None = None,
     allow_standalone: bool = False,
     registry: PerspectiveEpochRegistry = perspective_epoch_registry,
 ) -> ResolvedSubjectiveAuthority:
@@ -54,7 +55,11 @@ def resolve_subjective_authority(
     if authority is None:
         if not allow_standalone:
             raise SubjectiveAuthorityError("trusted runtime authority is required")
-        membership_id = f"standalone:{session.session_id}"
+        membership_id = (
+            str(standalone_membership_id)
+            if standalone_membership_id is not None
+            else f"standalone:{session.session_id}"
+        )
         authority_epoch = 1
         if requested_observers is not None:
             observers = requested_observers

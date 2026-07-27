@@ -433,7 +433,10 @@ class CanonicalSubjectiveReplicationContext:
             return
         if self.journal.watermarks.combat_log_cursor != len(self.encounter.combat_log):
             return
-        recorder.close(SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED)
+        self._replay_capture_store.close(
+            recorder.key,
+            SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED,
+        )
 
     def _require_current_generation(self) -> None:
         current_generation = str(EventQueue.generation_id())
@@ -447,11 +450,28 @@ class CanonicalSubjectiveReplicationContext:
         if recorder is not None and not recorder.closed:
             if self.healthy:
                 try:
-                    recorder.close(SubjectiveReplaySegmentEnd.PERSPECTIVE_RETIRED)
-                except Exception:
-                    self._replay_capture_store.abort(recorder.key, recorder)
+                    self._replay_capture_store.close(
+                        recorder.key,
+                        SubjectiveReplaySegmentEnd.PERSPECTIVE_RETIRED,
+                    )
+                except Exception as exc:
+                    self._replay_capture_store.abort(
+                        recorder.key,
+                        recorder,
+                        reason=(
+                            "perspective retirement could not seal replay segment: "
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                    )
             else:
-                self._replay_capture_store.abort(recorder.key, recorder)
+                self._replay_capture_store.abort(
+                    recorder.key,
+                    recorder,
+                    reason=(
+                        self.unhealthy_reason
+                        or f"subjective perspective retired: {reason}"
+                    ),
+                )
         self._replay_recorder = None
         self._pending_log_slots.clear()
         self.journal.close(reason)
@@ -459,7 +479,11 @@ class CanonicalSubjectiveReplicationContext:
     def _fail(self, reason: str) -> None:
         recorder = self._replay_recorder
         if recorder is not None and not recorder.closed:
-            self._replay_capture_store.abort(recorder.key, recorder)
+            self._replay_capture_store.abort(
+                recorder.key,
+                recorder,
+                reason=reason,
+            )
             self._replay_recorder = None
         self.journal.close(reason)
 
@@ -620,10 +644,18 @@ class CanonicalSubjectiveReplicationRuntime:
             else:
                 context._attach_replay_recorder(recorder)
                 context._close_terminal_replay_if_complete()
-        except Exception:
-            context._fail("subjective runtime initialization failed")
+        except Exception as exc:
+            failure_reason = (
+                "subjective runtime initialization failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            context._fail(failure_reason)
             if recorder is not None:
-                self._replay_capture_store.abort(recorder.key, recorder)
+                self._replay_capture_store.abort(
+                    recorder.key,
+                    recorder,
+                    reason=failure_reason,
+                )
             self._store.discard_uninitialized(key, journal)
             raise
         self._contexts[key] = context
