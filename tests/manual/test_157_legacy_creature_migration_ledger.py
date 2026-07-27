@@ -110,9 +110,6 @@ _EXPECTED_SRD_PROVISIONAL_CREATURE_IDS = (
 )
 ENTITY_FACTORY_MODULES = (
     "dnd/monsters/bestiary.py",
-    "dnd/classes/barbarian_factory.py",
-    "dnd/classes/fighter_factory.py",
-    "dnd/classes/sorcerer_factory.py",
     "dnd/monsters/circus_fighter.py",
     "dnd/extensions/aegis_spark.py",
     "dnd/extensions/field_focus.py",

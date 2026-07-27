@@ -109,6 +109,7 @@ class GameArtifactStore:
 
             try:
                 os.link(temporary_path, target)
+                _fsync_directory(target.parent)
             except FileExistsError:
                 self._verify_existing(target, content_digest, expected=payload)
         finally:
@@ -213,3 +214,13 @@ class GameArtifactStore:
             raise ArtifactPathError(
                 "Artifact digest must be exactly 64 lowercase hexadecimal characters"
             )
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Durably publish one newly linked immutable artifact name."""
+
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

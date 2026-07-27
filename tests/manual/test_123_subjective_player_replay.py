@@ -479,6 +479,8 @@ def test_transient_open_failure_creates_no_ghost_replay_segment() -> None:
 def test_terminal_capture_waits_for_every_finalized_nullable_log_slot() -> None:
     scene = create_stream_scene()
     capture_store = SubjectiveReplayCaptureStore()
+    closed_sources: list[str] = []
+    capture_store.add_source_closed_listener(closed_sources.append)
     runtime = CanonicalSubjectiveReplicationRuntime(
         store=SubjectiveJournalStore(),
         source_journal=event_stream,
@@ -521,6 +523,7 @@ def test_terminal_capture_waits_for_every_finalized_nullable_log_slot() -> None:
         scene.encounter.end_encounter("wait for finalized replay log")
         assert recorder.encounter_ended is True
         assert recorder.closed is False
+        assert closed_sources == []
 
         source_window = event_stream.capture_combat_log_source_window(
             scene.encounter,
@@ -531,8 +534,15 @@ def test_terminal_capture_waits_for_every_finalized_nullable_log_slot() -> None:
         for slot in source_window.slots[:-1]:
             context._note_finalized_combat_log(slot)
             assert recorder.closed is False
+            assert closed_sources == []
         context._note_finalized_combat_log(source_window.slots[-1])
         assert recorder.closed is True
+        assert closed_sources == [str(scene.encounter.uuid)]
+        capture_store.close(
+            recorder.key,
+            SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED,
+        )
+        assert closed_sources == [str(scene.encounter.uuid)]
         bundle = capture_store.build_bundle(
             game_id="delayed-terminal-log-game",
             encounter_uuid=str(scene.encounter.uuid),
@@ -591,8 +601,12 @@ def test_failed_live_context_discards_partial_replay_instead_of_publishing_it() 
             )
         with pytest.raises(
             SubjectiveReplayCaptureError,
-            match="failed and cannot be replayed",
-        ):
+                match=(
+                    "failed and cannot be replayed exactly: causal batch projection "
+                    "failed: SubjectiveProjectionError: frame projection failed: "
+                    "RuntimeError: intentional replay projection failure"
+                ),
+            ):
             capture_store.build_archive(
                 game_id="failed-replay-game",
                 encounter_uuid=str(scene.encounter.uuid),

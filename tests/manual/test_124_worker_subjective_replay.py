@@ -24,7 +24,10 @@ from server.player_replication.runtime import CanonicalSubjectiveReplicationRunt
 from server.replication_perspective import PerspectiveScope
 from server.subjective_authority import ResolvedSubjectiveAuthority
 from server.timeline_contracts import CombatLogProjection
-from server.worker_player_replay import build_worker_subjective_replays
+from server.worker_player_replay import (
+    WorkerPlayerReplayError,
+    build_worker_subjective_replays,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -160,6 +163,72 @@ def test_worker_freezes_recorded_subjective_inputs_without_event_reconstruction(
         )
         assert empty_archive.opened_partition_count == 0
         assert empty_archive.membership_replays == ()
+    finally:
+        runtime.clear_all()
+        runtime.stop()
+
+
+def test_worker_preserves_exact_private_capture_failure_diagnosis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed player reducer names its first invariant instead of a generic 500."""
+
+    hosted_game_id = uuid4()
+    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(hosted_game_id))
+    scene = create_stream_scene()
+    summary_store = WorkerGameSummaryStore()
+    summary_store.capture_active_encounter(scene.encounter)
+    capture_store = SubjectiveReplayCaptureStore()
+    runtime = CanonicalSubjectiveReplicationRuntime(
+        store=SubjectiveJournalStore(),
+        source_journal=event_stream,
+        grid_provider=get_map,
+        entities_provider=Entity.get_all_entities,
+        encounter_provider=lambda: scene.encounter,
+        replay_capture_store=capture_store,
+    )
+    hero_uuid = str(scene.hero.uuid)
+    authority = ResolvedSubjectiveAuthority(
+        scope=PerspectiveScope(
+            session_id="failed-worker-replay-session",
+            membership_id="failed-worker-replay-membership",
+            authority_epoch=1,
+            projection=CombatLogProjection.SUBJECTIVE,
+            controlled_entity_uuids=(hero_uuid,),
+            observer_entity_uuids=(hero_uuid,),
+            active_observer_uuid=hero_uuid,
+        ),
+        perspective_epoch_id="failed-worker-replay-epoch",
+    )
+    try:
+        context = runtime.bind(authority, encounter=scene.encounter)
+        recorder = capture_store.get(
+            SubjectiveReplayCaptureKey(
+                source_stream_id=context.protocol.source_stream_id,
+                generation_id=context.protocol.generation_id,
+                perspective_epoch_id=context.perspective.perspective_epoch_id,
+            )
+        )
+        capture_store.abort(
+            recorder.key,
+            recorder,
+            reason="projector exploded at source cursor 7",
+        )
+        scene.encounter.end_encounter("failed worker subjective replay")
+        capture = summary_store.get_replay_capture(hosted_game_id)
+        assert capture is not None
+
+        with pytest.raises(
+            WorkerPlayerReplayError,
+            match=(
+                "canonical player partition failed and cannot be replayed "
+                "exactly: projector exploded at source cursor 7"
+            ),
+        ):
+            build_worker_subjective_replays(
+                capture,
+                replay_capture_store=capture_store,
+            )
     finally:
         runtime.clear_all()
         runtime.stop()

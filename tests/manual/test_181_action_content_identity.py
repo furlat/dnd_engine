@@ -38,6 +38,11 @@ from dnd.core.content.runtime import (
 )
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import _PotionDrinkAction
+from dnd.monsters.multiattack_definitions import (
+    MultiattackConfigurationDefinition,
+    MultiattackTargetPolicy,
+    SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID,
+)
 from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
 from dnd.monsters.traits import MultiattackAction
 from dnd.runtime_reset import reset_engine_runtime
@@ -221,25 +226,12 @@ def _assert_feature_granted_action(
     feature_type: type[object],
 ) -> None:
     action = _require_action(entity, action_type)
-    feature = next(
-        condition
-        for condition in entity.active_conditions.values()
-        if isinstance(condition, feature_type)
-    )
     action_declaration = get_content_declaration(action_type)
     feature_declaration = get_content_declaration(feature_type)
-    root_ref = entity.content_ref
-    assert root_ref is not None
-    assert feature.behavior_binding == BehaviorBinding(
-        definition_ref=feature_declaration.ref,
-        provided_by_ref=root_ref,
-        origin_root_ref=root_ref,
-        runtime_owner_uuid=entity.uuid,
-    )
     assert action.behavior_binding == BehaviorBinding(
         definition_ref=action_declaration.ref,
         provided_by_ref=feature_declaration.ref,
-        origin_root_ref=root_ref,
+        origin_root_ref=None,
         runtime_owner_uuid=entity.uuid,
     )
 
@@ -253,7 +245,6 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
             PLAYER_CLASS_CREATURE_RECIPES_BY_ID["barbarian"],
             {
                 "level": 5,
-                "primal_path": "berserker",
                 "asi_4": [["strength", 2]],
             },
             RecklessAttack,
@@ -341,6 +332,122 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
         and dependency.target_ref == multiattack_declaration.ref
         for dependency in scout_declaration.dependencies
     )
+
+
+def test_multiattack_variants_have_exact_public_configuration_identity() -> None:
+    """Every stat-block Multiattack joins to its own authored catalog row."""
+    loaded = bootstrap_content_system()
+    SERVER_CONTENT_SYSTEM_RUNTIME.install(loaded)
+    catalog = build_public_content_catalog(loaded)
+    entries_by_identity = {
+        entry.ref.identity_key: entry
+        for entry in catalog.entries
+    }
+    expected = {
+        "scout": {
+            "Scout Multiattack: Shortsword": (
+                "action.monster.multiattack.scout.shortsword",
+                "action.scout-multiattack-shortsword",
+            ),
+            "Scout Multiattack: Longbow": (
+                "action.monster.multiattack.scout.longbow",
+                "action.scout-multiattack-longbow",
+            ),
+        },
+        "thug": {
+            "Thug Multiattack": (
+                "action.monster.multiattack.thug",
+                "action.thug-multiattack",
+            ),
+        },
+        "spy": {
+            "Spy Multiattack": (
+                "action.monster.multiattack.spy",
+                "action.spy-multiattack",
+            ),
+        },
+        "bandit_captain": {
+            "Bandit Captain Multiattack: Melee": (
+                "action.monster.multiattack.bandit_captain.melee",
+                "action.bandit-captain-multiattack-melee",
+            ),
+            "Bandit Captain Multiattack: Ranged": (
+                "action.monster.multiattack.bandit_captain.ranged",
+                "action.bandit-captain-multiattack-ranged",
+            ),
+        },
+        "cult_fanatic": {
+            "Cult Fanatic Multiattack": (
+                "action.monster.multiattack.cult_fanatic",
+                "action.cult-fanatic-multiattack",
+            ),
+        },
+        "knight": {
+            "Knight Multiattack": (
+                "action.monster.multiattack.knight",
+                "action.knight-multiattack",
+            ),
+        },
+        "veteran": {
+            "Veteran Multiattack: Melee": (
+                "action.monster.multiattack.veteran.melee",
+                "action.veteran-multiattack-melee",
+            ),
+            "Veteran Multiattack: Ranged": (
+                "action.monster.multiattack.veteran.ranged",
+                "action.veteran-multiattack-ranged",
+            ),
+        },
+    }
+
+    implementation = get_content_declaration(MultiattackAction)
+    assert implementation.descriptor.visibility is ContentVisibility.INTERNAL
+    assert implementation.ref.identity_key not in entries_by_identity
+
+    for creature_id, expected_actions in expected.items():
+        reset_engine_runtime(grid_size=(6, 6))
+        recipe = SRD_CREATURE_RECIPES_BY_ID[creature_id]
+        entity = _materialize_test_creature(recipe)
+        actions_by_name = {
+            action.name: action
+            for action in entity.registered_actions
+            if isinstance(action, MultiattackAction)
+        }
+        discovery_by_name = {
+            row.template_name: row
+            for row in entity.get_available_actions().entity_actions
+            if row.configured_action_ref is not None
+        }
+        assert set(actions_by_name) == set(expected_actions)
+        assert set(discovery_by_name) == set(expected_actions)
+        creature_declaration = loaded.registry.resolve_factory(recipe.ref)
+        granted_refs = {
+            dependency.target_ref
+            for dependency in creature_declaration.dependencies
+            if dependency.relation is ContentDependencyRelation.GRANTS_ACTION
+        }
+
+        for name, (content_id, icon_key) in expected_actions.items():
+            action = actions_by_name[name]
+            configured_ref = getattr(action, "configured_action_ref", None)
+            assert configured_ref is not None
+            assert configured_ref.content_id == content_id
+            assert discovery_by_name[name].configured_action_ref == configured_ref
+            assert configured_ref in granted_refs
+            entry = entries_by_identity[configured_ref.identity_key]
+            assert entry.ref == configured_ref
+            assert entry.presentation.icon_key == icon_key
+            configuration = MultiattackConfigurationDefinition.model_validate(
+                SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID[
+                    content_id
+                ].definition_payload,
+            )
+            assert (
+                configuration.target_policy
+                is MultiattackTargetPolicy.SINGLE_TARGET_SEQUENCE
+            )
+            assert action.behavior_binding is not None
+            assert action.behavior_binding.definition_ref == implementation.ref
 
 
 def test_maintained_spell_action_closure_and_cross_owner_binding_are_exact() -> None:

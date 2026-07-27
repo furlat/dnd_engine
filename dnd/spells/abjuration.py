@@ -7,6 +7,7 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           AntimagicField
 """
 import random
+from functools import partial
 from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
@@ -33,6 +34,7 @@ from dnd.core.condition_types import (
 )
 from dnd.core.base_object import BaseObject
 from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
@@ -306,8 +308,24 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     return None
 
 
+@srd_reaction_identity(
+    content_id="reaction.spell.shield",
+    display_name="Shield",
+    description=(
+        "Use a reaction and a spell slot to defend against an attack or "
+        "Magic Missile."
+    ),
+    source_page=180,
+    sort_order=20,
+    icon_key="reaction.shield",
+)
 class ShieldReactionHandler(EventHandler):
     """Direct player-toggleable Shield reaction behavior."""
+
+
+SHIELD_REACTION_DECLARATION = get_content_declaration(
+    ShieldReactionHandler,
+)
 
 
 def create_shield_reaction_handler(
@@ -864,7 +882,12 @@ def _complete_counterspell_reaction(
     )
 
 
-def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
+def counterspell_reaction_processor(
+    event: Event,
+    source_entity_uuid: UUID,
+    *,
+    learned_spell_ref: ContentRef | None = None,
+) -> Optional[Event]:
     """Attempt to counter a visible spell cast within sixty feet.
 
     The handler spends a reaction and an available spell slot. Slots at least as
@@ -929,7 +952,25 @@ def counterspell_reaction_processor(event: Event, source_entity_uuid: UUID) -> O
     entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
 
     dc = 10 + spell_cast_level
-    ability_name = entity.spellcasting.spellcasting_ability or "intelligence"
+    ability_name: AbilityName = entity.spellcasting.spellcasting_ability
+    if learned_spell_ref is not None:
+        source_ids = (
+            entity.spellcasting.learned_reaction_spell_source_ids(
+                learned_spell_ref,
+            )
+        )
+        if not source_ids:
+            return None
+        ability_name = max(
+            (
+                entity.spellcasting.resolve_spellcasting_ability(source_id)
+                for source_id in source_ids
+            ),
+            key=lambda candidate: (
+                entity.ability_scores.get_ability(candidate).modifier,
+                candidate,
+            ),
+        )
     ability_mod = entity.ability_scores.get_ability(ability_name).modifier
     d20 = random.randint(1, 20)
     check_total = d20 + ability_mod
@@ -980,6 +1021,8 @@ COUNTERSPELL_REACTION_DECLARATION = get_content_declaration(
 
 def create_counterspell_reaction_handler(
     source_entity_uuid: UUID,
+    *,
+    learned_spell_ref: ContentRef | None = None,
 ) -> CounterspellReactionHandler:
     """Create a Counterspell reaction handler for an entity."""
     return CounterspellReactionHandler(
@@ -993,7 +1036,14 @@ def create_counterspell_reaction_handler(
                 event_phase=EventPhase.EXECUTION,
             )
         ],
-        event_processor=counterspell_reaction_processor,
+        event_processor=(
+            counterspell_reaction_processor
+            if learned_spell_ref is None
+            else partial(
+                counterspell_reaction_processor,
+                learned_spell_ref=learned_spell_ref,
+            )
+        ),
         player_toggleable=True
     )
 
@@ -1334,7 +1384,7 @@ class Banishment(SpellAction):
                     effect_id="control.banishment.banished",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="charisma",
                     condition_fact_ids=("selected_target.condition.banished",),
                     condition_semantic_keys=frozenset({"dnd.spells.abjuration.BanishedCondition"}),
@@ -1371,7 +1421,7 @@ class Banishment(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Entity not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name="charisma",
@@ -2825,7 +2875,7 @@ class Sanctuary(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

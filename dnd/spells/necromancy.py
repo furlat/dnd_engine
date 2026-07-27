@@ -475,7 +475,7 @@ class Blight(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         is_plant = target.creature_type == CreatureType.PLANT
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         mod_uuid: Optional[UUID] = None
         if is_plant:
@@ -699,7 +699,7 @@ class BlindnessDeafness(SpellAction):
                     effect_id=f"control.{effect_type}",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="constitution",
                     condition_fact_ids=(condition_fact,),
                     condition_semantic_keys=condition_keys,
@@ -756,7 +756,7 @@ class BlindnessDeafness(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -856,7 +856,7 @@ class NecroticBless(SpellAction):
                     excluded_creature_types=frozenset({CreatureType.UNDEAD.value}),
                     resolution=OutcomeResolution.SAVING_THROW,
                     save_ability="charisma",
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     condition_fact_ids=("selected_target.condition.bane",),
                     condition_semantic_keys=frozenset({
                         "dnd.spells.enchantment.BaneEffect",
@@ -883,7 +883,7 @@ class NecroticBless(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         concentration = self.ensure_concentration(execution_event)
 
@@ -1581,7 +1581,7 @@ class Eyebite(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1695,7 +1695,7 @@ class FingerOfDeath(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -1901,7 +1901,7 @@ class Harm(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -2375,7 +2375,7 @@ class BestowCurse(SpellAction):
                     effect_id=f"control.bestow_curse.option_{option}",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="wisdom",
                     condition_fact_ids=(condition_fact,),
                     condition_semantic_keys=condition_keys,
@@ -2412,7 +2412,7 @@ class BestowCurse(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         concentration = self.ensure_concentration(execution_event)
 

@@ -74,6 +74,7 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "RuntimeBehaviorKind": "dnd.core.content.runtime",
     "HandlerDispatchOutcome": "dnd.core.content.runtime",
     "HandlerDispatchEvidence": "dnd.core.content.runtime",
+    "EffectiveHandlerPresentation": "dnd.core.content.runtime",
     "ConditionTag": "dnd.core.condition_types",
     "LifeState": "dnd.core.life_types",
     "WeaponSlot": "dnd.core.equipment_types",
@@ -102,7 +103,9 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
 
 CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
 CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
+    "dnd.core.condition_types",
     "dnd.core.equipment_types",
+    "dnd.core.progression",
 })
 CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
 CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"

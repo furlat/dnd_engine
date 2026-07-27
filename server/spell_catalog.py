@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Type
-
-from dnd.actions import SpellAction
 from dnd.content_system.spell_catalog_composition import (
-    SPELL_CATALOG_COMPOSITION_BY_CLASS,
     SPELL_CATALOG_COMPOSITION_ROWS,
+    SpellCatalogCompositionRow,
 )
 from dnd.spells.content_metadata import get_spell_catalog_metadata
 from server.api_models import (
@@ -21,14 +18,14 @@ from server.api_models import (
 )
 
 
-CATALOG_VERSION = "2026-07-26.1"
+CATALOG_VERSION = "2026-07-26.2"
 
 
 @lru_cache(maxsize=1)
 def build_spell_catalog() -> SpellCatalogResponse:
     """Project the complete reviewed built-in public spell ledger."""
     spells = [
-        build_spell_catalog_entry(row.display_name, row.spell_type)
+        build_spell_catalog_entry(row)
         for row in SPELL_CATALOG_COMPOSITION_ROWS
     ]
     return SpellCatalogResponse(
@@ -39,26 +36,18 @@ def build_spell_catalog() -> SpellCatalogResponse:
 
 
 def build_spell_catalog_entry(
-    display_name: str,
-    spell_cls: Type[SpellAction],
+    composition: SpellCatalogCompositionRow,
 ) -> SpellCatalogEntry:
     """Project one exact ledger row without constructing or inspecting code."""
-    composition = SPELL_CATALOG_COMPOSITION_BY_CLASS.get(spell_cls)
-    if composition is None:
-        raise ValueError(
-            f"Spell class {spell_cls!r} has no public catalog identity",
-        )
-    if composition.display_name != display_name:
-        raise ValueError(
-            "Spell catalog display name disagrees with its exact identity: "
-            f"{display_name!r}",
-        )
-
     declaration = composition.declaration
     metadata = composition.metadata
-    if get_spell_catalog_metadata(spell_cls) != metadata:
+    if (
+        composition.spell_type is not None
+        and get_spell_catalog_metadata(composition.spell_type) != metadata
+    ):
         raise ValueError(
-            f"Spell class {spell_cls!r} lost its authored catalog metadata",
+            f"Spell class {composition.spell_type!r} lost its authored "
+            "catalog metadata",
         )
 
     area = metadata.aoe

@@ -92,6 +92,7 @@ class WorkerGameSummaryStore:
             raise ValueError("max_summaries must be at least 1")
         self._max_summaries = max_summaries
         self._captures: dict[UUID, _EncounterCapture] = {}
+        self._directory_game_ids: dict[UUID, UUID] = {}
         self._summaries: OrderedDict[str, WorkerSummaryEvidence] = OrderedDict()
         self._replay_captures: OrderedDict[str, WorkerReplayCapture] = OrderedDict()
         self._lock = RLock()
@@ -105,9 +106,26 @@ class WorkerGameSummaryStore:
         """
         with self._lock:
             self._captures.clear()
+            self._directory_game_ids.clear()
             self._summaries.clear()
             self._replay_captures.clear()
         self.ensure_attached()
+
+    def bind_directory_game_id(
+        self,
+        encounter_uuid: UUID,
+        game_id: UUID,
+    ) -> None:
+        """Bind an in-process encounter to its durable directory identity."""
+
+        with self._lock:
+            existing = self._directory_game_ids.get(encounter_uuid)
+            if existing is not None and existing != game_id:
+                raise ValueError(
+                    f"Encounter {encounter_uuid} is already bound to game "
+                    f"{existing}",
+                )
+            self._directory_game_ids[encounter_uuid] = game_id
 
     def ensure_attached(self) -> None:
         """Idempotently attach the store to EventQueue batch notifications."""
@@ -303,8 +321,15 @@ class WorkerGameSummaryStore:
             ),
             final_snapshot_complete=final_snapshot_complete,
         )
-        game_id = os.environ.get(_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE) or str(
-            event.encounter_uuid
+        with self._lock:
+            directory_game_id = self._directory_game_ids.get(
+                event.encounter_uuid,
+            )
+        game_id = (
+            str(directory_game_id)
+            if directory_game_id is not None
+            else os.environ.get(_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE)
+            or str(event.encounter_uuid)
         )
         summary = reduce_game_summary(
             game_id=game_id,

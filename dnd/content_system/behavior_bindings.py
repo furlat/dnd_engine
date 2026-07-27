@@ -13,7 +13,11 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    RuntimeBehaviorKind,
+    has_direct_behavior_declaration,
+)
 from dnd.core.events import BaseHandler
 
 
@@ -150,6 +154,91 @@ class BehaviorBinder:
             runtime_owner_uuid=runtime_owner_uuid,
         )
 
+    def bind_granted(
+        self,
+        behavior: object,
+        *,
+        provider_ref: ContentRef,
+        runtime_owner_uuid: UUID,
+    ) -> BehaviorBinding:
+        """Bind a structural grant through an exact authored provider.
+
+        This entry point is for durable character/creature composition where
+        the provider is an authored feature rather than a live condition or
+        action object. Declared behaviors retain their own exact definition.
+        Undeclared implementation handlers inherit the provider definition
+        without manufacturing a fake runtime provider object.
+        """
+        if not isinstance(behavior, (BaseAction, BaseCondition, BaseHandler)):
+            raise TypeError(
+                "Structurally granted runtime behavior must be an action, "
+                "condition, or handler",
+            )
+        provider_declaration = self._registry.resolve_definition(provider_ref)
+        if (
+            isinstance(behavior, BaseHandler)
+            and not has_direct_behavior_declaration(behavior)
+        ):
+            return self._bind_private_granted_handler(
+                behavior,
+                provider_declaration=provider_declaration,
+                runtime_owner_uuid=runtime_owner_uuid,
+            )
+
+        declaration_source = type(behavior)
+        declaration = self._resolve_decorated_source(declaration_source)
+        expected_kind = declaration.runtime_behavior_kind
+        if expected_kind is None:
+            raise ValueError(
+                f"Content {declaration.ref.identity_key} does not declare a "
+                "runtime behavior kind",
+            )
+        return self.bind(
+            behavior,
+            declaration_source=declaration_source,
+            expected_kind=expected_kind,
+            provided_by_ref=provider_ref,
+            runtime_owner_uuid=runtime_owner_uuid,
+        )
+
+    def _bind_private_granted_handler(
+        self,
+        behavior: BaseHandler,
+        *,
+        provider_declaration: ContentDeclaration,
+        runtime_owner_uuid: UUID,
+    ) -> BehaviorBinding:
+        """Give one private structural handler its provider's exact identity."""
+        provider_kind = provider_declaration.runtime_behavior_kind
+        if provider_kind is None:
+            raise ValueError(
+                f"Private handler provider "
+                f"{provider_declaration.ref.identity_key} does not declare a "
+                "runtime behavior kind",
+            )
+        if behavior.content_kind == RuntimeBehaviorKind.UNCLASSIFIED:
+            behavior.content_kind = provider_kind
+        if behavior.content_kind not in _HANDLER_RUNTIME_KINDS:
+            raise ValueError(
+                f"Provider-owned handler content kind "
+                f"{behavior.content_kind.value} is not a supported runtime "
+                "behavior kind",
+            )
+        if behavior.semantic_key is None:
+            behavior.semantic_key = self._private_handler_semantic_key(
+                provider_declaration.ref,
+                behavior.name,
+            )
+        return self._install_binding(
+            behavior,
+            BehaviorBinding(
+                definition_ref=provider_declaration.ref,
+                provided_by_ref=provider_declaration.ref,
+                origin_root_ref=None,
+                runtime_owner_uuid=runtime_owner_uuid,
+            ),
+        )
+
     def _bind_handler_child(
         self,
         behavior: BaseHandler,
@@ -181,17 +270,9 @@ class BehaviorBinder:
         if behavior.content_kind == RuntimeBehaviorKind.UNCLASSIFIED:
             behavior.content_kind = expected_kind
         if behavior.semantic_key is None:
-            handler_name = "_".join(
-                fragment
-                for fragment in "".join(
-                    character.lower() if character.isalnum() else "_"
-                    for character in behavior.name
-                ).split("_")
-                if fragment
-            )
-            behavior.semantic_key = (
-                f"{declaration.ref.identity_key}#handler."
-                f"{handler_name or 'effect'}"
+            behavior.semantic_key = self._private_handler_semantic_key(
+                declaration.ref,
+                behavior.name,
             )
         if behavior.content_kind not in _HANDLER_RUNTIME_KINDS:
             raise ValueError(
@@ -216,6 +297,25 @@ class BehaviorBinder:
                 origin_root_ref=origin_root_ref,
                 runtime_owner_uuid=runtime_owner_uuid,
             ),
+        )
+
+    @staticmethod
+    def _private_handler_semantic_key(
+        provider_ref: ContentRef,
+        handler_name: str,
+    ) -> str:
+        """Return one deterministic provider-scoped implementation key."""
+        normalized_name = "_".join(
+            fragment
+            for fragment in "".join(
+                character.lower() if character.isalnum() else "_"
+                for character in handler_name
+            ).split("_")
+            if fragment
+        )
+        return (
+            f"{provider_ref.identity_key}#handler."
+            f"{normalized_name or 'effect'}"
         )
 
     def _resolve_behavior_provider(

@@ -6,9 +6,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from dnd.content_system.reaction_definitions import (
-    REACTION_BEHAVIOR_DECLARATIONS,
-)
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.inventory import (
     SourceCoverageLedger,
@@ -26,7 +23,9 @@ from dnd.monsters.bestiary_content import (
 )
 from dnd.monsters.circus_fighter_items import LONGSWORD_PLUS_ONE_REF
 from dnd.spells import ALL_SPELLS, SPELL_CONTENT_DECLARATIONS_BY_NAME
-from dnd.spells.abjuration import COUNTERSPELL_REACTION_DECLARATION
+from dnd.spells.reaction_spell_content import (
+    LEARNED_REACTION_SPELL_SPECS,
+)
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -61,13 +60,9 @@ _EXPECTED_KINDS = {
     SourceCoverageSection.MAGIC_ITEMS: ContentDefinitionKind.ITEM,
     SourceCoverageSection.SPELLS: ContentDefinitionKind.SPELL,
 }
-_PARTIAL_SPELL_REACTION_REFS = {
-    "Counterspell": COUNTERSPELL_REACTION_DECLARATION.ref,
-    "Shield": next(
-        declaration.ref
-        for declaration in REACTION_BEHAVIOR_DECLARATIONS
-        if declaration.ref.content_id == "reaction.spell.shield"
-    ),
+_LEARNED_REACTION_SPELLS_BY_NAME = {
+    spec.display_name: spec
+    for spec in LEARNED_REACTION_SPELL_SPECS
 }
 _WEAPON_SOURCE_NAMES = {
     "club": "Club",
@@ -79,6 +74,7 @@ _WEAPON_SOURCE_NAMES = {
     "sickle": "Sickle",
     "spear": "Spear",
     "light_crossbow": "Crossbow, light",
+    "dart": "Dart",
     "shortbow": "Shortbow",
     "sling": "Sling",
     "battleaxe": "Battleaxe",
@@ -163,6 +159,13 @@ _MIGRATED_SOURCE_REFS = {
         for spell_name, declaration
         in SPELL_CONTENT_DECLARATIONS_BY_NAME.items()
         if declaration.ref.pack_id == "content.srd_5_1_cc"
+    },
+    **{
+        (
+            SourceCoverageSection.SPELLS,
+            spec.display_name,
+        ): spec.declaration.ref
+        for spec in LEARNED_REACTION_SPELL_SPECS
     },
 }
 
@@ -275,6 +278,16 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
             row.content_ref
             == SPELL_CONTENT_DECLARATIONS_BY_NAME[spell_name].ref
         )
+    for source_name, spec in _LEARNED_REACTION_SPELLS_BY_NAME.items():
+        row = rows_by_section_and_name[
+            (SourceCoverageSection.SPELLS, source_name)
+        ]
+        assert row.implementation_status is SourceImplementationStatus.PLAYABLE
+        assert row.content_ref == spec.declaration.ref
+        assert row.dependency_refs == tuple(
+            dependency.target_ref
+            for dependency in spec.declaration.dependencies
+        )
 
     tracked_weapon_rows = {
         row.source_name: row
@@ -316,8 +329,8 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
         for row in ledger.rows
         if row.section == SourceCoverageSection.WEAPONS
     ) == {
-        SourceImplementationStatus.PLAYABLE: 23,
-        SourceImplementationStatus.MISSING: 14,
+        SourceImplementationStatus.PLAYABLE: 24,
+        SourceImplementationStatus.MISSING: 13,
     }
     assert Counter(
         row.implementation_status
@@ -339,24 +352,27 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
         for row in ledger.rows
         if row.section == SourceCoverageSection.SPELLS
     ) == {
-        SourceImplementationStatus.PLAYABLE: 108,
-        SourceImplementationStatus.PARTIAL: 2,
+        SourceImplementationStatus.PLAYABLE: 110,
         SourceImplementationStatus.MISSING: 209,
     }
 
-    partial_spell_rows = {
+    learned_reaction_rows = {
         row.source_name: row
         for row in ledger.rows
         if (
             row.section == SourceCoverageSection.SPELLS
-            and row.implementation_status
-            is SourceImplementationStatus.PARTIAL
+            and row.source_name in _LEARNED_REACTION_SPELLS_BY_NAME
         )
     }
-    assert set(partial_spell_rows) == set(_PARTIAL_SPELL_REACTION_REFS)
-    for source_name, reaction_ref in _PARTIAL_SPELL_REACTION_REFS.items():
-        row = partial_spell_rows[source_name]
-        assert row.content_ref is None
-        assert row.dependency_refs == (reaction_ref,)
+    assert set(learned_reaction_rows) == set(
+        _LEARNED_REACTION_SPELLS_BY_NAME,
+    )
+    for source_name, spec in _LEARNED_REACTION_SPELLS_BY_NAME.items():
+        row = learned_reaction_rows[source_name]
+        assert row.content_ref == spec.declaration.ref
+        assert row.dependency_refs == tuple(
+            dependency.target_ref
+            for dependency in spec.declaration.dependencies
+        )
         assert row.legacy_locators
-        assert "reaction behavior is playable" in row.mechanical_notes
+        assert "exact playable reaction behavior" in row.mechanical_notes

@@ -1,13 +1,18 @@
 """Action economy resources, turn costs, and spell slot values."""
 
-from typing import Optional, List, Tuple, Dict
-from uuid import UUID, uuid4
+from typing import Optional, List, Tuple, Dict, Union
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
-from dnd.core.action_types import RestrictedActionGrant
+from dnd.core.action_types import HasteActionPolicy, RestrictedActionGrant
+from dnd.core.content.identities import ContentRef
+from dnd.core.feature_grants import (
+    AttackMultiplicityApplicability,
+    AttackMultiplicityGrant,
+)
 
 from dnd.core.base_block import BaseBlock
 
@@ -19,6 +24,27 @@ class RechargeType(str, Enum):
     LONG_REST = "long_rest"
     TURN_START = "turn_start"
     NEVER = "never"
+
+
+class ResourceCapacityPolicy(str, Enum):
+    """How multiple owned contributions determine one resource maximum."""
+
+    SUM = "sum"
+    MAXIMUM = "maximum"
+
+
+class ResourceRecoveryContribution(BaseModel):
+    """One exact source-owned partial recovery rule."""
+
+    model_config = ConfigDict(frozen=True)
+
+    trigger: RechargeType = Field(
+        description="Recovery boundary that activates this contribution.",
+    )
+    amount: int = Field(
+        ge=1,
+        description="Uses restored at that boundary, capped by maximum.",
+    )
 
 
 class Resource(BaseModel):
@@ -35,6 +61,59 @@ class Resource(BaseModel):
     current: int = Field(description="Current uses remaining.")
     maximum: int = Field(description="Maximum uses after recharge.")
     recharge_type: RechargeType = Field(description="Rest or turn timing that restores this resource.")
+    capacity_policy: ResourceCapacityPolicy = Field(
+        default=ResourceCapacityPolicy.MAXIMUM,
+        description="Rule used to combine independently owned capacity grants.",
+    )
+    capacity_contributions: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Capacity by exact source identity.",
+    )
+    recovery_contributions: Dict[str, ResourceRecoveryContribution] = Field(
+        default_factory=dict,
+        description="Partial recovery rules by exact source identity.",
+    )
+
+    @property
+    def spent(self) -> int:
+        """Return uses spent from the currently available capacity."""
+        return max(0, self.maximum - self.current)
+
+    def set_capacity_contribution(
+        self,
+        source_id: Union[str, UUID],
+        maximum: int,
+    ) -> None:
+        """Add or replace one source while preserving already-spent uses."""
+        if maximum < 0:
+            raise ValueError("resource contribution maximum cannot be negative")
+        spent = self.spent
+        self.capacity_contributions[str(source_id)] = maximum
+        self._recompute_capacity(spent)
+
+    def remove_capacity_contribution(
+        self,
+        source_id: Union[str, UUID],
+    ) -> bool:
+        """Remove one source while preserving already-spent uses."""
+        source_key = str(source_id)
+        if source_key not in self.capacity_contributions:
+            return False
+        spent = self.spent
+        del self.capacity_contributions[source_key]
+        self._recompute_capacity(spent)
+        return True
+
+    def _recompute_capacity(self, spent: int) -> None:
+        """Resolve maximum from sources and carry expenditure across rebuild."""
+        capacities = tuple(self.capacity_contributions.values())
+        if not capacities:
+            self.maximum = 0
+        elif self.capacity_policy == ResourceCapacityPolicy.SUM:
+            self.maximum = sum(capacities)
+        else:
+            self.maximum = max(capacities)
+        self.current = max(0, self.maximum - spent)
 
     def can_afford(self, amount: int = 1) -> bool:
         """Return whether the resource has enough uses."""
@@ -55,6 +134,62 @@ class Resource(BaseModel):
         """Restore resource to maximum."""
         self.current = self.maximum
 
+    def set_recovery_contribution(
+        self,
+        source_id: Union[str, UUID],
+        *,
+        trigger: RechargeType,
+        amount: int,
+    ) -> None:
+        """Add or replace one exact partial recovery contribution."""
+        self.recovery_contributions[str(source_id)] = (
+            ResourceRecoveryContribution(
+                trigger=trigger,
+                amount=amount,
+            )
+        )
+
+    def remove_recovery_contribution(
+        self,
+        source_id: Union[str, UUID],
+    ) -> bool:
+        """Remove one exact partial recovery contribution."""
+        return self.recovery_contributions.pop(str(source_id), None) is not None
+
+    def recover_for(self, trigger: RechargeType) -> None:
+        """Apply base recharge or all partial contributions for one boundary."""
+        recharges_fully = self.recharge_type == trigger
+        if trigger is RechargeType.LONG_REST:
+            recharges_fully = self.recharge_type in {
+                RechargeType.SHORT_REST,
+                RechargeType.LONG_REST,
+            }
+        if recharges_fully:
+            self.recharge()
+            return
+        recovered = sum(
+            contribution.amount
+            for contribution in self.recovery_contributions.values()
+            if contribution.trigger is trigger
+        )
+        self.current = min(self.maximum, self.current + recovered)
+
+
+class NormalSpellSlotCapacityReceipt(BaseModel):
+    """Exact runtime handles for the one shared normal spell-slot capacity."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: UUID = Field(
+        description="Exact runtime source that owns this aggregate capacity.",
+    )
+    capacities: Tuple[Tuple[int, int], ...] = Field(
+        description="Non-zero slot counts in ascending spell-rank order.",
+    )
+    capacity_modifier_uuids: Tuple[Tuple[int, UUID], ...] = Field(
+        description="Exact capacity modifier handle for every normal slot rank.",
+    )
+
 
 class ActionEconomyConfig(BaseModel):
     """Configuration for turn resources, named resources, and spell slots."""
@@ -70,6 +205,13 @@ class ActionEconomyConfig(BaseModel):
     spell_slots: Dict[int, int] = Field(
         default_factory=dict,
         description="Spell slot counts by level (1-9). E.g., {1: 4, 2: 3} for 4 L1 slots and 3 L2 slots"
+    )
+    haste_action_policy: HasteActionPolicy = Field(
+        default=HasteActionPolicy.BG3_HONOUR,
+        description=(
+            "Rules policy governing which ordinary actions may spend Haste's "
+            "independent turn budget."
+        ),
     )
 
 
@@ -170,7 +312,21 @@ class ActionEconomy(BaseBlock):
         default_factory=dict,
         description="Named limited-use resources keyed by resource name.",
     )
+    haste_action_policy: HasteActionPolicy = Field(
+        default=HasteActionPolicy.BG3_HONOUR,
+        description="Rules policy consumed when a Haste effect grants its action.",
+    )
     _restricted_action_grants: Dict[str, RestrictedActionGrant] = PrivateAttr(
+        default_factory=dict,
+    )
+    _attack_multiplicity_grants: Dict[
+        UUID,
+        AttackMultiplicityGrant,
+    ] = PrivateAttr(default_factory=dict)
+    _normal_spell_slot_capacity_receipt: Optional[
+        NormalSpellSlotCapacityReceipt
+    ] = PrivateAttr(default=None)
+    _normal_spell_slot_floor_modifier_uuids: Dict[int, UUID] = PrivateAttr(
         default_factory=dict,
     )
 
@@ -220,10 +376,12 @@ class ActionEconomy(BaseBlock):
                 f"is owned by {resource_owner.grant_id!r}"
             )
         self._restricted_action_grants[grant.grant_id] = grant
-        self.add_resource(
+        self.add_resource_contribution(
             grant.resource_name,
-            grant.uses_per_turn,
-            RechargeType.TURN_START,
+            grant.grant_id,
+            maximum=grant.uses_per_turn,
+            recharge_type=RechargeType.TURN_START,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
         )
 
     def remove_restricted_action_grant(
@@ -236,11 +394,7 @@ class ActionEconomy(BaseBlock):
         if grant is None or grant.owner_uuid != owner_uuid:
             return
         del self._restricted_action_grants[grant_id]
-        if not any(
-            item.resource_name == grant.resource_name
-            for item in self._restricted_action_grants.values()
-        ):
-            self.remove_resource(grant.resource_name)
+        self.remove_resource_contribution(grant.resource_name, grant.grant_id)
 
     def get_restricted_action_grants(
         self,
@@ -251,18 +405,173 @@ class ActionEconomy(BaseBlock):
             for grant_id in sorted(self._restricted_action_grants)
         )
 
+    def add_attack_multiplicity_grant(
+        self,
+        grant: AttackMultiplicityGrant,
+    ) -> None:
+        """Install one exact ranked Attack-action entitlement."""
+        existing = self._attack_multiplicity_grants.get(grant.grant_id)
+        if existing is not None and existing != grant:
+            raise ValueError(
+                f"attack multiplicity grant {grant.grant_id} already exists "
+                "with a different contract",
+            )
+        self._attack_multiplicity_grants[grant.grant_id] = grant
+
+    def remove_attack_multiplicity_grant(self, grant_id: UUID) -> bool:
+        """Remove one exact ranked Attack-action entitlement."""
+        return self._attack_multiplicity_grants.pop(
+            grant_id,
+            None,
+        ) is not None
+
+    def resolve_attacks_per_attack_action(
+        self,
+        *,
+        applicability: AttackMultiplicityApplicability = (
+            AttackMultiplicityApplicability.ORDINARY_ATTACK
+        ),
+        weapon_tags: frozenset[str] = frozenset(),
+        body_tags: frozenset[str] = frozenset(),
+        action_ref: ContentRef | None = None,
+    ) -> int:
+        """Resolve the strongest applicable grant without adding class ranks."""
+        matching = tuple(
+            grant
+            for grant in self._attack_multiplicity_grants.values()
+            if grant.applies_to(
+                applicability=applicability,
+                weapon_tags=weapon_tags,
+                body_tags=body_tags,
+                action_ref=action_ref,
+            )
+        )
+        if not matching:
+            return 1
+        winner = min(
+            matching,
+            key=lambda grant: (
+                -grant.attacks_per_attack_action,
+                grant.acquisition_ordinal,
+                str(grant.grant_id),
+            ),
+        )
+        return winner.attacks_per_attack_action
+
+    def get_attack_multiplicity_grants(
+        self,
+    ) -> tuple[AttackMultiplicityGrant, ...]:
+        """Return ranked grants in deterministic acquisition order."""
+        return tuple(
+            sorted(
+                self._attack_multiplicity_grants.values(),
+                key=lambda grant: (
+                    grant.acquisition_ordinal,
+                    str(grant.grant_id),
+                ),
+            ),
+        )
+
     def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None:
         """Add a named resource at full uses."""
+        legacy_source_id = uuid5(
+            NAMESPACE_URL,
+            f"dnd_engine:action_economy:legacy_resource:{name}",
+        )
         self.resources[name] = Resource(
             name=name,
             current=maximum,
             maximum=maximum,
-            recharge_type=recharge_type
+            recharge_type=recharge_type,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+            capacity_contributions={str(legacy_source_id): maximum},
         )
 
     def remove_resource(self, name: str) -> None:
         """Remove a resource by name."""
         self.resources.pop(name, None)
+
+    def add_resource_contribution(
+        self,
+        name: str,
+        source_id: Union[str, UUID],
+        *,
+        maximum: int,
+        recharge_type: RechargeType,
+        capacity_policy: ResourceCapacityPolicy = ResourceCapacityPolicy.SUM,
+    ) -> None:
+        """Add one exact source-owned capacity contribution.
+
+        Existing expenditure is preserved when a rebuild changes the resolved
+        maximum.  All contributors to a named resource must agree on recharge
+        timing and combination policy.
+        """
+        resource = self.resources.get(name)
+        if resource is None:
+            resource = Resource(
+                name=name,
+                current=0,
+                maximum=0,
+                recharge_type=recharge_type,
+                capacity_policy=capacity_policy,
+            )
+            self.resources[name] = resource
+        elif resource.recharge_type != recharge_type:
+            raise ValueError(
+                f"resource {name!r} already uses "
+                f"{resource.recharge_type.value} recharge"
+            )
+        elif resource.capacity_policy != capacity_policy:
+            raise ValueError(
+                f"resource {name!r} already uses "
+                f"{resource.capacity_policy.value} capacity policy"
+            )
+        resource.set_capacity_contribution(source_id, maximum)
+
+    def remove_resource_contribution(
+        self,
+        name: str,
+        source_id: Union[str, UUID],
+    ) -> bool:
+        """Remove one source-owned capacity contribution."""
+        resource = self.resources.get(name)
+        if resource is None:
+            return False
+        removed = resource.remove_capacity_contribution(source_id)
+        if removed and not resource.capacity_contributions:
+            del self.resources[name]
+        return removed
+
+    def add_resource_recovery_contribution(
+        self,
+        name: str,
+        source_id: Union[str, UUID],
+        *,
+        trigger: RechargeType,
+        amount: int,
+    ) -> None:
+        """Add one partial recovery rule to an existing named resource."""
+        resource = self.resources.get(name)
+        if resource is None:
+            raise ValueError(
+                f"resource {name!r} must exist before recovery is granted",
+            )
+        resource.set_recovery_contribution(
+            source_id,
+            trigger=trigger,
+            amount=amount,
+        )
+
+    def remove_resource_recovery_contribution(
+        self,
+        name: str,
+        source_id: Union[str, UUID],
+    ) -> bool:
+        """Remove one exact source-owned partial recovery rule."""
+        resource = self.resources.get(name)
+        if resource is None:
+            return False
+        return resource.remove_recovery_contribution(source_id)
 
     def has_resource(self, name: str) -> bool:
         """Check if a resource exists."""
@@ -290,20 +599,17 @@ class ActionEconomy(BaseBlock):
     def on_short_rest(self) -> None:
         """Recharge resources that recharge on short rest."""
         for resource in self.resources.values():
-            if resource.recharge_type == RechargeType.SHORT_REST:
-                resource.recharge()
+            resource.recover_for(RechargeType.SHORT_REST)
 
     def on_long_rest(self) -> None:
         """Recharge resources that recharge on short or long rest."""
         for resource in self.resources.values():
-            if resource.recharge_type in (RechargeType.SHORT_REST, RechargeType.LONG_REST):
-                resource.recharge()
+            resource.recover_for(RechargeType.LONG_REST)
 
     def on_turn_start(self) -> None:
         """Recharge resources that recharge on turn start."""
         for resource in self.resources.values():
-            if resource.recharge_type == RechargeType.TURN_START:
-                resource.recharge()
+            resource.recover_for(RechargeType.TURN_START)
 
     def _get_spell_slot_value(self, level: int) -> ModifiableValue:
         """Get the ModifiableValue for a spell slot level."""
@@ -315,6 +621,177 @@ class ActionEconomy(BaseBlock):
         if level not in slot_map:
             raise ValueError(f"Invalid spell slot level: {level}")
         return slot_map[level]
+
+    @staticmethod
+    def _validate_normal_spell_slot_capacities(
+        capacities: Dict[int, int],
+    ) -> Tuple[Tuple[int, int], ...]:
+        """Validate and canonicalize one aggregate normal-slot capacity."""
+        canonical: List[Tuple[int, int]] = []
+        for rank, count in capacities.items():
+            if (
+                isinstance(rank, bool)
+                or not isinstance(rank, int)
+                or rank < 1
+                or rank > 9
+            ):
+                raise ValueError(
+                    f"normal spell-slot rank must be an integer from 1 to 9: "
+                    f"{rank!r}"
+                )
+            if (
+                isinstance(count, bool)
+                or not isinstance(count, int)
+                or count < 0
+            ):
+                raise ValueError(
+                    f"normal spell-slot count must be a non-negative integer: "
+                    f"{count!r}"
+                )
+            if count > 0:
+                canonical.append((rank, count))
+        canonical.sort()
+        return tuple(canonical)
+
+    def _validate_installed_normal_spell_slot_capacity(self) -> None:
+        """Fail closed if an installed receipt no longer owns its modifiers."""
+        receipt = self._normal_spell_slot_capacity_receipt
+        if receipt is None:
+            return
+        for rank, modifier_uuid in receipt.capacity_modifier_uuids:
+            value = self._get_spell_slot_value(rank)
+            if modifier_uuid not in value.self_static.value_modifiers:
+                raise RuntimeError(
+                    "installed normal spell-slot capacity lost an owned "
+                    f"modifier for rank {rank}"
+                )
+
+    def _ensure_normal_spell_slot_floor(self, rank: int) -> UUID:
+        """Install the infrastructure floor that prevents negative slots."""
+        value = self._get_spell_slot_value(rank)
+        existing_uuid = self._normal_spell_slot_floor_modifier_uuids.get(rank)
+        if existing_uuid is not None:
+            existing = value.self_static.min_constraints.get(existing_uuid)
+            if (
+                existing is None
+                or existing.name != "Normal Spell Slot Availability Floor"
+                or existing.value != 0
+            ):
+                raise RuntimeError(
+                    "normal spell-slot availability floor ownership conflict "
+                    f"for rank {rank}"
+                )
+            return existing_uuid
+        floor = NumericalModifier.create(
+            source_entity_uuid=self.source_entity_uuid,
+            name="Normal Spell Slot Availability Floor",
+            value=0,
+        )
+        value.self_static.add_min_constraint(floor)
+        self._normal_spell_slot_floor_modifier_uuids[rank] = floor.uuid
+        return floor.uuid
+
+    def set_normal_spell_slot_capacity(
+        self,
+        source_id: UUID,
+        capacities: Dict[int, int],
+    ) -> NormalSpellSlotCapacityReceipt:
+        """Set the one shared normal spell-slot capacity.
+
+        This is an authoritative aggregate, not another spell-slot pool.
+        Installing a different source replaces the prior aggregate through its
+        exact modifier handles. Existing cost modifiers remain in place, so
+        already-spent slots survive level, multiclass, and respec rebuilds.
+        Reusing one source with a different contract is rejected.
+        """
+        if not isinstance(source_id, UUID):
+            raise ValueError("normal spell-slot capacity source must be a UUID")
+        canonical = self._validate_normal_spell_slot_capacities(capacities)
+        existing = self._normal_spell_slot_capacity_receipt
+        self._validate_installed_normal_spell_slot_capacity()
+        if existing is not None and existing.source_id == source_id:
+            if existing.capacities == canonical:
+                return existing
+            raise ValueError(
+                f"source {source_id} already owns a different normal "
+                "spell-slot capacity"
+            )
+
+        old_handles = (
+            dict(existing.capacity_modifier_uuids)
+            if existing is not None
+            else {}
+        )
+        desired_by_rank = dict(canonical)
+        baselines: Dict[int, int] = {}
+        for rank in range(1, 10):
+            excluded_modifier_uuids = {
+                modifier.uuid
+                for modifier in self.get_cost_modifiers(
+                    spell_slot_cost_type(rank)
+                )
+            }
+            old_handle = old_handles.get(rank)
+            if old_handle is not None:
+                excluded_modifier_uuids.add(old_handle)
+            baselines[rank] = self._get_spell_slot_value(
+                rank
+            ).normalized_score_excluding_static_modifiers(
+                excluded_modifier_uuids
+            )
+
+        for rank, modifier_uuid in old_handles.items():
+            self._get_spell_slot_value(rank).self_static.remove_value_modifier(
+                modifier_uuid
+            )
+
+        new_handles: List[Tuple[int, UUID]] = []
+        for rank in range(1, 10):
+            self._ensure_normal_spell_slot_floor(rank)
+            capacity_modifier = NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid,
+                name=(
+                    "Normal Spell Slot Capacity "
+                    f"{source_id} Rank {rank}"
+                ),
+                value=desired_by_rank.get(rank, 0) - baselines[rank],
+            )
+            self._get_spell_slot_value(rank).self_static.add_value_modifier(
+                capacity_modifier
+            )
+            new_handles.append((rank, capacity_modifier.uuid))
+
+        receipt = NormalSpellSlotCapacityReceipt(
+            source_id=source_id,
+            capacities=canonical,
+            capacity_modifier_uuids=tuple(new_handles),
+        )
+        self._normal_spell_slot_capacity_receipt = receipt
+        return receipt
+
+    def get_normal_spell_slot_capacity_source(self) -> Optional[UUID]:
+        """Return the exact owner of the active aggregate, when installed."""
+        receipt = self._normal_spell_slot_capacity_receipt
+        return receipt.source_id if receipt is not None else None
+
+    def get_normal_spell_slot_capacities(self) -> Dict[int, int]:
+        """Return the authoritative installed aggregate by spell-slot rank."""
+        self._validate_installed_normal_spell_slot_capacity()
+        receipt = self._normal_spell_slot_capacity_receipt
+        return dict(receipt.capacities) if receipt is not None else {}
+
+    def remove_normal_spell_slot_capacity(self, source_id: UUID) -> bool:
+        """Remove the aggregate only when the requesting source still owns it."""
+        receipt = self._normal_spell_slot_capacity_receipt
+        if receipt is None or receipt.source_id != source_id:
+            return False
+        self._validate_installed_normal_spell_slot_capacity()
+        for rank, modifier_uuid in receipt.capacity_modifier_uuids:
+            self._get_spell_slot_value(rank).self_static.remove_value_modifier(
+                modifier_uuid
+            )
+        self._normal_spell_slot_capacity_receipt = None
+        return True
 
     def _get_value_for_cost_type(self, cost_type: CostType) -> ModifiableValue:
         """Get the ModifiableValue for a cost type."""
@@ -459,4 +936,5 @@ class ActionEconomy(BaseBlock):
                 spell_slot_1=spell_slot_1, spell_slot_2=spell_slot_2, spell_slot_3=spell_slot_3,
                 spell_slot_4=spell_slot_4, spell_slot_5=spell_slot_5, spell_slot_6=spell_slot_6,
                 spell_slot_7=spell_slot_7, spell_slot_8=spell_slot_8, spell_slot_9=spell_slot_9,
+                haste_action_policy=config.haste_action_policy,
             )

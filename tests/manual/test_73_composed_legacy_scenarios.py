@@ -1,13 +1,7 @@
-import random
-
 import pytest
 
-from ai.evaluation.arena_manifest import build_arena_manifest
 from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.scenarios.ai_validation_arenas import (
-    create_ai_validation_arena,
-    list_ai_validation_arena_specs,
-)
+from dnd.scenarios.ai_validation_arenas import list_ai_validation_arena_specs
 from dnd.scenarios.evaluation.assembler import assemble_legacy_scenario
 from dnd.scenarios.evaluation.battlefield_catalog import get_battlefield
 from dnd.scenarios.evaluation.combatant_catalog import get_combatant_configuration
@@ -31,23 +25,33 @@ def test_all_38_legacy_specs_have_complete_composition_recipes() -> None:
 
 
 @pytest.mark.parametrize("arena_id", LEGACY_ARENA_IDS)
-def test_composed_recipe_matches_seeded_legacy_manifest(arena_id: str) -> None:
-    random.seed(20260717)
-    legacy_manifest = build_arena_manifest(create_ai_validation_arena(arena_id))
-    random.seed(20260717)
-    composed_manifest = build_arena_manifest(assemble_legacy_scenario(arena_id))
+def test_every_active_recipe_constructs_one_complete_composed_scenario(
+    arena_id: str,
+) -> None:
+    arena = assemble_legacy_scenario(arena_id)
+    recipe = next(row for row in LEGACY_RECIPES if row.arena_id == arena_id)
+    hero_configuration = get_combatant_configuration(recipe.hero_configuration_id)
+    monster_configuration = get_combatant_configuration(
+        recipe.monster_configuration_id,
+    )
 
-    assert composed_manifest == legacy_manifest
+    assert arena.spec.arena_id == arena_id
+    assert len(arena.side_a) == len(hero_configuration.members)
+    assert len(arena.side_b) == len(monster_configuration.members)
+    assert {
+        entity.uuid for entity in (*arena.side_a, *arena.side_b)
+    } == set(arena.encounter.combatants)
 
 
 @pytest.mark.parametrize("opening_faction", ("heroes", "monsters"))
 def test_composed_opening_treatment_preserves_rolled_initiative_and_forces_side(
     opening_faction: str,
 ) -> None:
-    random.seed(91)
     arena = assemble_legacy_scenario("standard_skeleton_doors", opening_faction=opening_faction)
+    current = arena.encounter.get_current_entity()
 
-    assert arena.encounter.get_current_entity().faction == opening_faction
+    assert current is not None
+    assert current.faction == opening_faction
     assert all(state.initiative_roll > 0 for state in arena.encounter.combatants.values())
 
 

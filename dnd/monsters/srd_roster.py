@@ -93,6 +93,10 @@ from dnd.items.weapons import (
 from dnd.monsters.srd_roster_items import (
     SRD_CREATURE_POSSESSION_RECIPES,
 )
+from dnd.monsters.multiattack_definitions import (
+    MultiattackConfigurationDefinition,
+    SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID,
+)
 from dnd.monsters.traits import (
     AggressiveMoveAction,
     DivineEminenceAction,
@@ -139,6 +143,26 @@ _VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
     Size.HUGE: 1.55,
     Size.GARGANTUAN: 2.0,
 }
+
+
+def _register_configured_multiattack(
+    entity: Entity,
+    content_id: str,
+) -> None:
+    """Install one exact typed stat-block Multiattack configuration."""
+    declaration = SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID[content_id]
+    configuration = MultiattackConfigurationDefinition.model_validate(
+        declaration.definition_payload,
+    )
+    register_multiattack(
+        entity,
+        declaration.descriptor.display_name,
+        tuple(
+            (step.weapon_slot, step.count)
+            for step in configuration.steps
+        ),
+        configured_action_ref=declaration.ref,
+    )
 
 
 class SrdCreatureParameters(BaseModel):
@@ -418,8 +442,14 @@ def _configure_scout(context: CreatureBuildContext) -> Entity:
         ),
     )
     register_keen_hearing_and_sight(entity)
-    register_multiattack(entity, "Scout Multiattack: Shortsword", ((WeaponSlot.MELEE_MAIN, 2),))
-    register_multiattack(entity, "Scout Multiattack: Longbow", ((WeaponSlot.RANGED_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.scout.shortsword",
+    )
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.scout.longbow",
+    )
     return entity
 
 
@@ -459,7 +489,10 @@ def _configure_thug(context: CreatureBuildContext) -> Entity:
         ),
     )
     register_pack_tactics(entity)
-    register_multiattack(entity, "Thug Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.thug",
+    )
     return entity
 
 
@@ -493,7 +526,10 @@ def _configure_spy(context: CreatureBuildContext) -> Entity:
     )
     register_cunning_action(entity)
     register_sneak_attack(entity)
-    register_multiattack(entity, "Spy Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.spy",
+    )
     return entity
 
 
@@ -572,8 +608,14 @@ def _configure_bandit_captain(context: CreatureBuildContext) -> Entity:
             expected_type=Weapon,
         ),
     )
-    register_multiattack(entity, "Bandit Captain Multiattack: Melee", ((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1)))
-    register_multiattack(entity, "Bandit Captain Multiattack: Ranged", ((WeaponSlot.RANGED_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.bandit_captain.melee",
+    )
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.bandit_captain.ranged",
+    )
     register_parry(entity)
     return entity
 
@@ -645,7 +687,10 @@ def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
         ),
     )
     register_dark_devotion(entity)
-    register_multiattack(entity, "Cult Fanatic Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.cult_fanatic",
+    )
     return entity
 
 
@@ -686,7 +731,10 @@ def _configure_knight(context: CreatureBuildContext) -> Entity:
     register_brave(entity)
     register_leadership(entity)
     register_parry(entity)
-    register_multiattack(entity, "Knight Multiattack", ((WeaponSlot.MELEE_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.knight",
+    )
     return entity
 
 
@@ -732,8 +780,14 @@ def _configure_veteran(context: CreatureBuildContext) -> Entity:
             expected_type=Weapon,
         ),
     )
-    register_multiattack(entity, "Veteran Multiattack: Melee", ((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1)))
-    register_multiattack(entity, "Veteran Multiattack: Ranged", ((WeaponSlot.RANGED_MAIN, 2),))
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.veteran.melee",
+    )
+    _register_configured_multiattack(
+        entity,
+        "action.monster.multiattack.veteran.ranged",
+    )
     return entity
 
 
@@ -1211,13 +1265,31 @@ _ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID = MappingProxyType({
     "thug": (MultiattackAction,),
     "veteran": (MultiattackAction,),
 })
+_MULTIATTACK_CONFIGURATION_IDS_BY_CREATURE_ID = MappingProxyType({
+    "bandit_captain": (
+        "action.monster.multiattack.bandit_captain.melee",
+        "action.monster.multiattack.bandit_captain.ranged",
+    ),
+    "cult_fanatic": ("action.monster.multiattack.cult_fanatic",),
+    "knight": ("action.monster.multiattack.knight",),
+    "scout": (
+        "action.monster.multiattack.scout.shortsword",
+        "action.monster.multiattack.scout.longbow",
+    ),
+    "spy": ("action.monster.multiattack.spy",),
+    "thug": ("action.monster.multiattack.thug",),
+    "veteran": (
+        "action.monster.multiattack.veteran.melee",
+        "action.monster.multiattack.veteran.ranged",
+    ),
+})
 
 
 def _root_owned_action_dependencies(
     creature_id: str,
 ) -> tuple[ContentDependency, ...]:
     """Declare non-universal actions installed by one SRD stat block."""
-    return tuple(
+    behavior_dependencies = tuple(
         ContentDependency(
             relation=ContentDependencyRelation.GRANTS_ACTION,
             target_ref=ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS[
@@ -1231,6 +1303,24 @@ def _root_owned_action_dependencies(
             (),
         )
     )
+    configuration_dependencies = tuple(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_ACTION,
+            target_ref=SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID[
+                content_id
+            ].ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes=(
+                "Exact authored Multiattack configuration installed by this "
+                "SRD creature composition."
+            ),
+        )
+        for content_id in _MULTIATTACK_CONFIGURATION_IDS_BY_CREATURE_ID.get(
+            creature_id,
+            (),
+        )
+    )
+    return behavior_dependencies + configuration_dependencies
 
 
 def _declare_srd_creature(

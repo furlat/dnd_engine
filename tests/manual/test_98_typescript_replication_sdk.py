@@ -5,6 +5,7 @@ from pathlib import Path
 
 from devtools.generate_typescript_sdk import build_sdk_manifest, render_typescript
 from dnd.core.content.descriptors import EquipmentSpritePresentation
+from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.equipment_types import EquipmentRenderLayer
 from dnd.core.events import EventQueue, SensoryUpdateEvent
 from dnd.core.combat_log import AttackLogData, DiceRollDisplay
@@ -19,6 +20,10 @@ from server.api_models import (
     ToggleHandlerResponse,
 )
 from server.content_catalog import ContentCatalogResponse
+from server.character_directory_contracts import (
+    CharacterListResponse,
+    CharacterProfileResponse,
+)
 from server.world_contracts import APIEntityVisibility
 from server.event_server import app
 from server.objective_replay import ObjectiveReplayBundle
@@ -74,6 +79,9 @@ def test_sdk_uses_only_the_canonical_subjective_replication_roots() -> None:
     manifest = build_sdk_manifest()
     models = manifest["models"]
     actions = models[f"{APIAvailableActions.__module__}.{APIAvailableActions.__qualname__}"]
+    action_info = models[
+        f"{AvailableActionInfo.__module__}.{AvailableActionInfo.__qualname__}"
+    ]
     bootstrap = models[
         f"{SubjectiveReplicationBootstrap.__module__}.{SubjectiveReplicationBootstrap.__qualname__}"
     ]
@@ -94,6 +102,16 @@ def test_sdk_uses_only_the_canonical_subjective_replication_roots() -> None:
         "spell_slots",
         "resources",
     } <= set(actions["fields"])
+    assert action_info["fields"]["configured_action_ref"] == {
+        "kind": "union",
+        "items": [
+            {
+                "kind": "model",
+                "ref": "dnd.core.content.identities.ContentRef",
+            },
+            {"kind": "null"},
+        ],
+    }
     assert set(bootstrap["fields"]) == {
         "protocol",
         "perspective",
@@ -175,6 +193,48 @@ def test_sdk_exports_public_replays_but_not_the_all_memberships_archive() -> Non
     assert {objective_path, player_path, segment_path} <= set(models)
     assert archive_path not in roots
     assert archive_path not in models
+
+
+def test_sdk_character_directory_is_schema2_and_transport_only() -> None:
+    """Persistence, migration, and unpinned deployment DTOs stay server-only."""
+
+    manifest = build_sdk_manifest()
+    models = manifest["models"]
+    generated_names = {
+        row["typescript"] for row in models.values()
+    }
+    assert not {
+        "CharacterBootstrapCreate",
+        "CharacterDefinitionRevision",
+        "CharacterDefinitionRevisionV1",
+        "CharacterRecord",
+        "CharacterDeploymentLeaseCreate",
+        "CharacterDeploymentLeaseRecord",
+        "CharacterDeploymentCreate",
+        "CharacterDeploymentRecord",
+        "CharacterRevisionBundleCommit",
+        "DirectoryMutationReceiptCreate",
+        "DirectoryMutationReceiptRecord",
+        "PinnedCharacterDeploymentCreate",
+        "PinnedCharacterDeploymentRecord",
+        "WorkerCreate",
+        "WorkerRecord",
+    } & generated_names
+    assert "legacy_pending" not in json.dumps(manifest, sort_keys=True)
+
+    for response_model in (CharacterListResponse, CharacterProfileResponse):
+        model_path = (
+            f"{response_model.__module__}.{response_model.__qualname__}"
+        )
+        characters = models[model_path]["fields"]["characters"]
+        assert characters["kind"] == "array"
+        assert characters["items"] == {
+            "kind": "model",
+            "ref": (
+                "server.game_directory.contracts."
+                "CanonicalCharacterRecord"
+            ),
+        }
 
 
 def test_sdk_descriptors_preserve_player_field_constraints() -> None:
@@ -267,7 +327,7 @@ def test_sdk_preserves_exact_compound_equipment_presentation_contract() -> None:
     )
     assert models[catalog_path]["fields"]["schema_version"] == {
         "kind": "union",
-        "items": [{"kind": "literal", "value": 5}],
+        "items": [{"kind": "literal", "value": 6}],
     }
 
 

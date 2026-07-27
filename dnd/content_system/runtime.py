@@ -6,6 +6,7 @@ from uuid import UUID
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -92,6 +93,24 @@ class ContentSystemRuntime:
                 provider=provider,
                 runtime_owner_uuid=runtime_owner_uuid,
             )
+
+    def bind_granted_behavior(
+        self,
+        behavior: object,
+        *,
+        provider_ref: ContentRef,
+        runtime_owner_uuid: UUID,
+    ) -> BehaviorBinding:
+        """Bind one structural grant through an exact provider definition."""
+        self.require()
+        binder = self._behavior_binder
+        if binder is None:
+            raise RuntimeError("Content system behavior binder is not installed")
+        return binder.bind_granted(
+            behavior,
+            provider_ref=provider_ref,
+            runtime_owner_uuid=runtime_owner_uuid,
+        )
 
 
 SERVER_CONTENT_SYSTEM_RUNTIME = ContentSystemRuntime(

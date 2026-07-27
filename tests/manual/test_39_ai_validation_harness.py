@@ -514,6 +514,9 @@ def test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands()
         first_trace.command_http_ms
         + first_trace.command_followup_sync_ms
     )
+    assert first_trace.actor_economy is not None
+    assert first_trace.actor_economy.spell_slots[3].max == 2
+    assert first_trace.actor_economy.spell_slots[3].current == 2
     assert first_trace.pre_command_sync_ms is not None
     assert first_trace.pre_command_frame_fetch_ms is not None
     assert first_trace.pre_command_frame_apply_ms is not None
@@ -551,6 +554,19 @@ def test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands()
     assert barbarian_traces
     assert barbarian_traces[0].turn_index != sorcerer_traces[0].turn_index
     assert barbarian_traces[0].session_id != sorcerer_traces[0].session_id
+    assert any(
+        trace.routine_id == "routine.enable_then_act"
+        for trace in barbarian_traces
+    )
+    augment_steps = [
+        trace
+        for trace in barbarian_traces
+        if trace.routine_id == "routine.augment_then_act"
+    ]
+    assert [trace.routine_step_id for trace in augment_steps] == [
+        "augment",
+        "act",
+    ]
     assert any(
         trace.action_category == "movement"
         for trace in barbarian_traces

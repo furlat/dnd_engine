@@ -8,9 +8,15 @@ import pytest
 from pydantic import JsonValue, ValidationError
 
 from dnd.core.content.durable_characters import (
-    CharacterDefinitionRevision,
+    AbilityScoreAllocation,
+    AbilityScoreName,
+    CharacterAppearanceSelection,
+    CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterItemV1,
+    ClassLevelEntry,
+    ClassLevelId,
+    FlexibleAbilityBonusSelection,
     ItemAugmentationRecord,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -82,18 +88,52 @@ def _item(
     )
 
 
-def _definition() -> CharacterDefinitionRevision:
-    return CharacterDefinitionRevision.create(
+def _definition(
+    body_recipe: ContentRecipe | None = None,
+) -> CharacterDefinitionRevisionV2:
+    return CharacterDefinitionRevisionV2.create(
         character_id=_CHARACTER_ID,
-        schema_version=1,
         definition_revision=1,
-        creature_recipe=_recipe(
+        body_recipe=body_recipe or _recipe(
             ContentDefinitionKind.CREATURE,
-            "creature.premade_barbarian",
-            {"level": 5, "ability_choices": ["strength", "constitution"]},
+            "creature.player_body",
+        ),
+        species_ref=_ref(
+            ContentDefinitionKind.SPECIES,
+            "species.human",
+        ),
+        background_ref=_ref(
+            ContentDefinitionKind.BACKGROUND,
+            "background.acolyte",
+        ),
+        appearance=CharacterAppearanceSelection(),
+        base_ability_scores=AbilityScoreAllocation(
+            strength=15,
+            dexterity=14,
+            constitution=13,
+            intelligence=10,
+            wisdom=12,
+            charisma=8,
+        ),
+        flexible_ability_bonuses=FlexibleAbilityBonusSelection(
+            plus_two=AbilityScoreName.STRENGTH,
+            plus_one=AbilityScoreName.CONSTITUTION,
+        ),
+        class_levels=(
+            ClassLevelEntry(
+                class_level_id=ClassLevelId(value="fighter.level_1"),
+                character_level=1,
+                class_ref=_ref(
+                    ContentDefinitionKind.CLASS,
+                    "class.fighter",
+                ),
+                resulting_class_level=1,
+            ),
         ),
         premade_id="premade.barbarian",
+        earned_character_level=1,
         content_set_digest="c" * 64,
+        ruleset_digest="d" * 64,
     )
 
 
@@ -126,11 +166,11 @@ def test_durable_contracts_round_trip_with_exact_canonical_digests() -> None:
             "character_item_digest",
             "36b24fe4073c7b24cbba20ec1a3ca29a4ff899b1f9045fc4c3be9b6f74eab05f",
         ),
-        (
-            definition,
-            "definition_digest",
-            "3de01ea80d34d1a36728f6a156ca1420d2da3a250966f1701dac7e916b7dc94c",
-        ),
+            (
+                definition,
+                "definition_digest",
+                "32df679af9edec3316aed91cb5d42fe79de63ccf5dc60a07986abde20923639b",
+            ),
         (
             holdings,
             "holdings_digest",
@@ -286,16 +326,11 @@ def test_item_state_validates_durable_bounds_and_one_selected_slot() -> None:
 def test_recipes_are_restricted_to_their_durable_definition_family() -> None:
     """Structural definitions and possessions cannot exchange recipe kinds."""
     with pytest.raises(ValidationError, match="creature"):
-        CharacterDefinitionRevision.create(
-            character_id=_CHARACTER_ID,
-            schema_version=1,
-            definition_revision=1,
-            creature_recipe=_recipe(
+        _definition(
+            _recipe(
                 ContentDefinitionKind.ITEM,
                 "item.club",
             ),
-            premade_id="premade.invalid",
-            content_set_digest="c" * 64,
         )
 
     with pytest.raises(ValidationError, match="item"):

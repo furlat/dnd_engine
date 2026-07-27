@@ -61,6 +61,9 @@ def test_hosted_worker_configuration_rejection_is_structured(
     assignment = HostedWorkerAssignment(
         hosted_game_id=uuid4(),
         public_game_base_url="http://gateway/games/example/runtime",
+        worker_instance_id=uuid4(),
+        worker_generation=1,
+        terminal_runtime_directory="/private/worker/runtime",
     )
 
     with pytest.raises(HTTPException) as rejected:

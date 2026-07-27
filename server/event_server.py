@@ -41,10 +41,19 @@ import uvicorn
 logger = logging.getLogger("dnd_server")
 
 from dnd.core.equipment_types import BodyPart, RingSlot, WeaponSlot
-from dnd.core.events import EventQueue, EventType, EventPhase
+from dnd.core.events import (
+    EncounterEndEvent,
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import get_map
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.pack_loader import ENGINE_CONTENT_API_VERSION
+from dnd.content_system.pack_loader import (
+    ENGINE_CONTENT_API_VERSION,
+    LoadedContentSystem,
+)
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
@@ -124,6 +133,39 @@ from server.content_catalog import (
     build_public_content_catalog,
     content_response_etag,
 )
+from server.character_directory_routes import create_character_directory_router
+from server.character_directory_contracts import (
+    AdminCharacterAdvancementAwardRequest,
+    CharacterAdvancementResponse,
+    StandaloneLocalProfileResponse,
+)
+from server.character_deployment import build_character_deployment_snapshot
+from server.character_settlement import project_terminal_character_holdings
+from server.character_directory_service import (
+    CharacterDirectoryBuildError,
+    CharacterDirectoryOwnershipError,
+    CharacterDirectoryService,
+)
+from server.game_directory.errors import (
+    CapabilityError,
+    ConflictError,
+    DirectoryError,
+    NotFoundError,
+)
+from server.game_directory.contracts import DirectoryEventRecord
+from server.game_directory.local_profiles import (
+    LocalProfileHandle,
+    LocalProfileManager,
+)
+from server.local_game_lifecycle import StandaloneLocalGameCoordinator
+from server.game_history import (
+    GameHistoryQueryService,
+    create_game_history_router,
+)
+from server.directory_event_stream import (
+    DirectoryEventStream,
+    create_directory_event_stream_router,
+)
 from server.external_ai_protocol import (
     EXTERNAL_AI_PROTOCOL_HASH,
     EXTERNAL_AI_PROTOCOL_VERSION,
@@ -162,6 +204,7 @@ from server.hosted_worker import (
     HostedWorkerAssignment,
     HostedWorkerReadiness,
 )
+from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from server.spell_catalog import build_spell_catalog
 from server.game_creation_catalog import (
     GameCreationCatalogError,
@@ -191,6 +234,7 @@ from server.worker_player_replay import (
     build_worker_subjective_replays,
 )
 from server.worker_replay import WorkerReplayError, build_worker_objective_replay
+from server.worker_terminal_spool import WorkerTerminalSpool
 from server.action_serialization import serialize_available_actions
 from server.session import (
     SessionManager, GameSession,
@@ -489,9 +533,17 @@ class SimulationState:
             return None
         return self._game_session.active_entity_uuid
 
-    def create_game_session(self, encounter: Encounter) -> GameSession:
+    def create_game_session(
+        self,
+        encounter: Encounter,
+        *,
+        game_id: UUID | None = None,
+    ) -> GameSession:
         """Create a new game session for the encounter."""
-        self._game_session = self._session_manager.create_game(encounter)
+        self._game_session = self._session_manager.create_game(
+            encounter,
+            game_id=game_id,
+        )
         return self._game_session
 
     def get_session_manager(self) -> SessionManager:
@@ -625,6 +677,7 @@ def _retire_changed_subjective_sessions(
             canonical_subjective_replication_runtime.retire_session(session_id)
 
 _policy_source_manifest: Optional[PolicySourceManifest] = None
+_local_terminal_tasks: set[asyncio.Task[None]] = set()
 
 
 def configure_policy_source_manifest(
@@ -643,6 +696,199 @@ def configure_policy_source_manifest(
     _policy_source_manifest = manifest
 
 
+def _active_local_game_coordinator(
+) -> StandaloneLocalGameCoordinator | None:
+    """Return standalone durable lifecycle ownership when installed."""
+
+    coordinator = getattr(app.state, "local_game_coordinator", None)
+    return (
+        coordinator
+        if isinstance(coordinator, StandaloneLocalGameCoordinator)
+        else None
+    )
+
+
+def _publish_standalone_directory_events(
+    request: Request | None = None,
+) -> None:
+    """Fan out every newly durable local-profile directory event."""
+
+    owner_app = app if request is None else request.app
+    stream = getattr(owner_app.state, "directory_stream", None)
+    if isinstance(stream, DirectoryEventStream):
+        stream.publish_pending()
+
+
+def _ensure_local_terminal_callback() -> None:
+    """Attach the ordered batch trigger and exact replay-ready retry signal."""
+
+    EventQueue.remove_on_event_batch_callback(_on_local_terminal_event_batch)
+    EventQueue.add_on_event_batch_callback(_on_local_terminal_event_batch)
+    subjective_replay_capture_store.remove_source_closed_listener(
+        _on_subjective_replay_source_closed
+    )
+    subjective_replay_capture_store.add_source_closed_listener(
+        _on_subjective_replay_source_closed
+    )
+
+
+def _on_local_terminal_event_batch(events: Sequence[Event]) -> None:
+    """Commit terminal persistence after every causal observer has drained."""
+
+    encounter_end = next(
+        (
+            event
+            for event in events
+            if isinstance(event, EncounterEndEvent)
+            and event.phase is EventPhase.COMPLETION
+        ),
+        None,
+    )
+    if encounter_end is None:
+        return
+    if _active_local_game_coordinator() is not None:
+        try:
+            _publish_local_terminal_game(encounter_end.encounter_uuid)
+        except BaseException:
+            logger.exception(
+                "Standalone terminal publication failed for encounter %s",
+                encounter_end.encounter_uuid,
+            )
+    if os.environ.get("DND_GAME_WORKER") == "1":
+        try:
+            _publish_hosted_terminal_ready(encounter_end.encounter_uuid)
+        except BaseException:
+            logger.exception(
+                "Hosted terminal ready publication failed for encounter %s",
+                encounter_end.encounter_uuid,
+            )
+
+
+def _on_subjective_replay_source_closed(source_stream_id: str) -> None:
+    """Retry local terminal publication when the last reducer segment seals."""
+
+    try:
+        encounter_uuid = UUID(source_stream_id)
+    except ValueError:
+        return
+    try:
+        _publish_local_terminal_game(encounter_uuid)
+    except BaseException:
+        logger.exception(
+            "Standalone terminal publication failed after subjective replay "
+            "closure for encounter %s",
+            encounter_uuid,
+        )
+    if os.environ.get("DND_GAME_WORKER") == "1":
+        try:
+            _publish_hosted_terminal_ready(encounter_uuid)
+        except BaseException:
+            logger.exception(
+                "Hosted terminal ready publication failed after subjective "
+                "replay closure for encounter %s",
+                encounter_uuid,
+            )
+
+
+def _publish_local_terminal_game(encounter_uuid: UUID) -> bool:
+    """Freeze and publish the in-process terminal evidence through one path."""
+
+    coordinator = _active_local_game_coordinator()
+    current = None if coordinator is None else coordinator.current
+    encounter = Encounter.get(encounter_uuid)
+    if coordinator is None or current is None or encounter is None:
+        return False
+    evidence = game_summary_store.get_evidence(current.game.game_id)
+    capture = game_summary_store.get_replay_capture(
+        current.game.game_id,
+    )
+    if evidence is None or capture is None:
+        return False
+    objective_replay = build_worker_objective_replay(
+        capture,
+        encounter=encounter,
+        stream=event_stream,
+    )
+    try:
+        subjective_replay = build_worker_subjective_replays(capture)
+    except WorkerPlayerReplayNotReady:
+        return False
+    coordinator.complete_terminal(
+        evidence=evidence,
+        objective_replay=objective_replay,
+        subjective_replay=subjective_replay,
+    )
+    task = asyncio.create_task(
+        _close_registered_ai_after_terminal(encounter),
+        name=f"local-game-terminal-cleanup-{encounter_uuid}",
+    )
+    _local_terminal_tasks.add(task)
+    task.add_done_callback(_local_terminal_tasks.discard)
+    return True
+
+
+def _publish_hosted_terminal_ready(encounter_uuid: UUID) -> bool:
+    """Seal one worker-owned generation-fenced terminal ready manifest."""
+
+    if os.environ.get("DND_GAME_WORKER") != "1":
+        return False
+    game_id_text = os.environ.get("DND_HOSTED_GAME_ID")
+    worker_id_text = os.environ.get("DND_WORKER_INSTANCE_ID")
+    worker_generation_text = os.environ.get("DND_WORKER_GENERATION")
+    runtime_directory = os.environ.get("DND_WORKER_RUNTIME_DIR")
+    if (
+        game_id_text is None
+        or worker_id_text is None
+        or worker_generation_text is None
+        or runtime_directory is None
+    ):
+        raise RuntimeError(
+            "hosted terminal spool authority is not configured",
+        )
+    game_id = UUID(game_id_text)
+    worker_instance_id = UUID(worker_id_text)
+    worker_generation = int(worker_generation_text)
+    encounter = Encounter.get(encounter_uuid)
+    evidence = game_summary_store.get_evidence(game_id)
+    capture = game_summary_store.get_replay_capture(game_id)
+    if encounter is None or evidence is None or capture is None:
+        return False
+    objective_replay = build_worker_objective_replay(
+        capture,
+        encounter=encounter,
+        stream=event_stream,
+    )
+    try:
+        subjective_replay = build_worker_subjective_replays(capture)
+    except WorkerPlayerReplayNotReady:
+        return False
+    holdings_evidence = None
+    if _hosted_character_deployment is not None:
+        if _hosted_character_entity_uuid is None:
+            raise RuntimeError(
+                "hosted character deployment has no runtime entity",
+            )
+        terminal = evidence.summary.terminal_cursor
+        holdings_evidence = project_terminal_character_holdings(
+            _hosted_character_deployment,
+            game_id=game_id,
+            generation_id=evidence.generation_id,
+            terminal_event_cursor=terminal.event_cursor,
+            terminal_combat_log_cursor=terminal.combat_log_cursor,
+            runtime_entity_uuid=_hosted_character_entity_uuid,
+        )
+    WorkerTerminalSpool(runtime_directory).publish(
+        game_id=game_id,
+        worker_instance_id=worker_instance_id,
+        worker_generation=worker_generation,
+        summary=evidence,
+        objective_replay=objective_replay,
+        subjective_replay=subjective_replay,
+        holdings=holdings_evidence,
+    )
+    return True
+
+
 async def prepare_new_simulation_start() -> None:
     """Stop active automation and clear session-side projection state."""
     if sim.combat_task and not sim.combat_task.done():
@@ -652,6 +898,9 @@ async def prepare_new_simulation_start() -> None:
         except asyncio.CancelledError:
             pass
 
+    local_game = _active_local_game_coordinator()
+    if local_game is not None:
+        local_game.interrupt("local_game_replaced")
     await sim.close_registered_ai_controllers()
     sim.close_native_ai_controllers()
     sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
@@ -678,6 +927,9 @@ async def _abort_failed_simulation_start() -> None:
         except asyncio.CancelledError:
             pass
 
+    local_game = _active_local_game_coordinator()
+    if local_game is not None:
+        local_game.fail("local_game_start_failed")
     await sim.close_registered_ai_controllers()
     sim.close_native_ai_controllers()
     sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
@@ -698,6 +950,7 @@ async def _abort_failed_simulation_start() -> None:
     reset_engine_runtime()
     game_summary_store.reset()
     event_stream.ensure_attached()
+    _ensure_local_terminal_callback()
 
 
 async def _close_registered_ai_after_terminal(
@@ -1328,9 +1581,15 @@ def _resolve_replication_request(
             if not matches_worker:
                 raise RuntimeAuthorityError("runtime authority belongs to another hosted game")
 
+        local_game = _active_local_game_coordinator()
         subjective_authority = resolve_subjective_authority(
             session,
             projection_authority,
+            standalone_membership_id=(
+                local_game.membership_id
+                if not is_worker and local_game is not None
+                else None
+            ),
             allow_standalone=not is_worker,
         )
     except (RuntimeAuthorityError, SubjectiveAuthorityError) as exc:
@@ -1368,6 +1627,7 @@ def _replication_runtime_context(
             request_context.subjective_authority,
             encounter=sim.encounter,
         )
+        _ensure_local_terminal_callback()
         context.validate_identity(
             expected_source_stream_id=expected_source_stream_id,
             expected_generation_id=expected_generation_id,
@@ -1803,6 +2063,80 @@ def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity
     return entity
 
 
+def _install_standalone_local_profile(
+    app: FastAPI,
+    content_system: LoadedContentSystem,
+) -> LocalProfileHandle | None:
+    """Open exactly one physical local profile for standalone directory use."""
+
+    app.state.directory_stream = None
+    if os.environ.get("DND_GAME_WORKER") == "1":
+        app.state.local_profile_manager = None
+        app.state.local_profile_handle = None
+        app.state.character_directory = None
+        app.state.local_game_coordinator = None
+        app.state.game_history = None
+        app.state.directory_stream = None
+        return None
+    manager = LocalProfileManager(
+        capability_pepper=os.environ.get(
+            "DND_LOCAL_PROFILE_CAPABILITY_PEPPER",
+            "local-profile-development-pepper",
+        ).encode("utf-8"),
+        runtime_root=Path(
+            os.environ.get("DND_LOCAL_PROFILE_RUNTIME_ROOT", ".runtime"),
+        ),
+    )
+    selected = os.environ.get("DND_LOCAL_PROFILE_ID")
+    if selected is not None:
+        handle = manager.open_profile(UUID(selected))
+    else:
+        profiles = manager.list_profiles()
+        if not profiles:
+            handle = manager.create_profile(
+                os.environ.get(
+                    "DND_LOCAL_PROFILE_DISPLAY_NAME",
+                    "Local Player",
+                ),
+            )
+        elif len(profiles) == 1:
+            handle = manager.open_profile(profiles[0].profile_id)
+        else:
+            raise RuntimeError(
+                "Multiple local profiles exist; set DND_LOCAL_PROFILE_ID",
+            )
+    app.state.local_profile_manager = manager
+    app.state.local_profile_handle = handle
+    character_directory = CharacterDirectoryService(
+        handle.repository,
+        content_system,
+    )
+    app.state.character_directory = character_directory
+    coordinator = StandaloneLocalGameCoordinator(
+        repository=handle.repository,
+        character_directory=character_directory,
+        artifact_root=handle.artifacts_root,
+        owner_principal_id=handle.profile_id,
+        content_digest=content_system.content_set_digest,
+        on_mutation=_publish_standalone_directory_events,
+    )
+    coordinator.recover_abandoned_games()
+    app.state.local_game_coordinator = coordinator
+    app.state.game_history = GameHistoryQueryService(
+        handle.repository,
+        coordinator.artifact_store,
+    )
+    directory_stream = DirectoryEventStream(
+        lambda since, limit: handle.repository.list_directory_events(
+            since_cursor=since,
+            limit=limit,
+        ),
+    )
+    directory_stream.publish_pending()
+    app.state.directory_stream = directory_stream
+    return handle
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage event-stream resources for the FastAPI application lifespan.
@@ -1818,11 +2152,16 @@ async def lifespan(app: FastAPI):
         loaded_content_system,
     )
     app.state.content_system = installed_content_system
+    local_profile = _install_standalone_local_profile(
+        app,
+        installed_content_system,
+    )
 
     with latency_sensitive_gc():
         event_stream.start()
         canonical_subjective_replication_runtime.ensure_attached()
         game_summary_store.ensure_attached()
+        _ensure_local_terminal_callback()
         try:
             yield
         finally:
@@ -1833,6 +2172,9 @@ async def lifespan(app: FastAPI):
                 except asyncio.CancelledError:
                     pass
             try:
+                coordinator = _active_local_game_coordinator()
+                if coordinator is not None:
+                    coordinator.interrupt("local_game_server_shutdown")
                 await sim.close_registered_ai_controllers()
             finally:
                 sim.close_native_ai_controllers()
@@ -1842,7 +2184,17 @@ async def lifespan(app: FastAPI):
                     try:
                         canonical_subjective_replication_runtime.stop()
                     finally:
-                        event_stream.stop()
+                        try:
+                            event_stream.stop()
+                        finally:
+                            try:
+                                sim.reset()
+                            finally:
+                                try:
+                                    reset_engine_runtime()
+                                finally:
+                                    if local_profile is not None:
+                                        local_profile.close()
 
 app = FastAPI(
     title="D&D Engine Event Server",
@@ -1851,6 +2203,8 @@ app = FastAPI(
 )
 
 _world_replacement_lock = asyncio.Lock()
+_hosted_character_deployment: CharacterDeploymentSnapshot | None = None
+_hosted_character_entity_uuid: UUID | None = None
 
 
 async def _serialize_world_replacement() -> AsyncIterator[None]:
@@ -1866,6 +2220,227 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestTimingMiddleware)
+
+
+def _resolve_standalone_character_directory(
+    request: Request,
+) -> CharacterDirectoryService:
+    service = request.app.state.character_directory
+    if not isinstance(service, CharacterDirectoryService):
+        raise _api_http_exception(
+            status_code=404,
+            code="local_character_directory_unavailable",
+            message="Hosted workers do not own local player profiles",
+        )
+    return service
+
+
+def _authorize_standalone_character_principal(
+    request: Request,
+    principal_id: UUID,
+    principal_capability: str,
+) -> UUID:
+    handle = request.app.state.local_profile_handle
+    if not isinstance(handle, LocalProfileHandle):
+        raise CapabilityError("Local profile is unavailable")
+    expected_capability = os.environ.get(
+        "DND_LOCAL_PROFILE_CAPABILITY",
+        "local-profile",
+    )
+    if (
+        principal_id != handle.profile_id
+        or not hmac.compare_digest(
+            principal_capability,
+            expected_capability,
+        )
+    ):
+        raise CapabilityError("Local profile capability is invalid")
+    return handle.profile_id
+
+
+app.include_router(
+    create_character_directory_router(
+        resolve_service=_resolve_standalone_character_directory,
+        authorize_principal=_authorize_standalone_character_principal,
+        on_mutation=_publish_standalone_directory_events,
+    ),
+)
+
+
+def _resolve_standalone_game_history(
+    request: Request,
+) -> GameHistoryQueryService:
+    service = request.app.state.game_history
+    if not isinstance(service, GameHistoryQueryService):
+        raise _api_http_exception(
+            status_code=404,
+            code="local_game_history_unavailable",
+            message="Hosted workers do not own local game history",
+        )
+    return service
+
+
+def _authorize_optional_standalone_history_principal(
+    request: Request,
+    principal_id: UUID | None,
+    principal_capability: str | None,
+) -> UUID | None:
+    if principal_id is None and principal_capability is None:
+        return None
+    if principal_id is None or principal_capability is None:
+        raise _api_http_exception(
+            status_code=400,
+            code="incomplete_principal_auth",
+            message="Both principal fields are required",
+        )
+    return _authorize_standalone_character_principal(
+        request,
+        principal_id,
+        principal_capability,
+    )
+
+
+def _resolve_standalone_directory_stream(
+    request: Request,
+) -> DirectoryEventStream:
+    stream = request.app.state.directory_stream
+    if not isinstance(stream, DirectoryEventStream):
+        raise _api_http_exception(
+            status_code=404,
+            code="local_directory_stream_unavailable",
+            message="Hosted workers do not own a cold directory stream",
+        )
+    return stream
+
+
+def _resolve_standalone_directory_event_filter(
+    request: Request,
+    principal_id: UUID | None,
+    principal_capability: str | None,
+) -> Callable[[DirectoryEventRecord], bool]:
+    principal = _authorize_optional_standalone_history_principal(
+        request,
+        principal_id,
+        principal_capability,
+    )
+    return _resolve_standalone_game_history(
+        request,
+    ).directory_event_filter(principal)
+
+
+app.include_router(
+    create_directory_event_stream_router(
+        resolve_stream=_resolve_standalone_directory_stream,
+        resolve_event_filter=_resolve_standalone_directory_event_filter,
+    ),
+)
+
+
+app.include_router(
+    create_game_history_router(
+        resolve_service=_resolve_standalone_game_history,
+        authorize_optional_principal=(
+            _authorize_optional_standalone_history_principal
+        ),
+        authorize_required_principal=(
+            _authorize_standalone_character_principal
+        ),
+    ),
+)
+
+
+@app.get(
+    "/directory/local-profile",
+    response_model=StandaloneLocalProfileResponse,
+)
+async def get_standalone_local_profile(
+    request: Request,
+) -> StandaloneLocalProfileResponse:
+    """Return the explicitly local-trust profile selected by this process."""
+
+    handle = request.app.state.local_profile_handle
+    if not isinstance(handle, LocalProfileHandle):
+        raise _api_http_exception(
+            status_code=404,
+            code="local_profile_unavailable",
+            message="Hosted workers do not expose local profiles",
+        )
+    return StandaloneLocalProfileResponse(
+        profile_id=handle.profile_id,
+        display_name=handle.display_name,
+        principal_capability=os.environ.get(
+            "DND_LOCAL_PROFILE_CAPABILITY",
+            "local-profile",
+        ),
+        settings=handle.repository.get_profile_settings(handle.profile_id),
+    )
+
+
+@app.post(
+    "/admin/characters/{character_id}/advancement-awards",
+    response_model=CharacterAdvancementResponse,
+)
+async def grant_standalone_character_advancement_award(
+    request: Request,
+    character_id: UUID,
+    body: AdminCharacterAdvancementAwardRequest,
+    principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+    principal_capability: str = Header(
+        alias="X-Dnd-Principal-Capability",
+    ),
+) -> CharacterAdvancementResponse:
+    """Grant a local-profile level entitlement for creator UI and tooling."""
+
+    owner = _authorize_standalone_character_principal(
+        request,
+        principal_id,
+        principal_capability,
+    )
+    result = _resolve_standalone_character_directory(
+        request,
+    ).grant_admin_advancement_award(
+        owner,
+        character_id,
+        body,
+    )
+    _publish_standalone_directory_events(request)
+    return result
+
+
+@app.exception_handler(CharacterDirectoryBuildError)
+async def character_build_exception_handler(
+    _request: Request,
+    exc: CharacterDirectoryBuildError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.validation.model_dump(mode="json")},
+    )
+
+
+@app.exception_handler(DirectoryError)
+async def directory_exception_handler(
+    _request: Request,
+    exc: DirectoryError,
+) -> JSONResponse:
+    status = (
+        404
+        if isinstance(exc, NotFoundError)
+        else 403
+        if isinstance(exc, (CapabilityError, CharacterDirectoryOwnershipError))
+        else 409
+        if isinstance(exc, ConflictError)
+        else 500
+    )
+    code = (
+        "character_not_owned"
+        if isinstance(exc, CharacterDirectoryOwnershipError)
+        else type(exc).__name__
+    )
+    return JSONResponse(
+        status_code=status,
+        content={"detail": {"code": code, "message": str(exc)}},
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -1951,6 +2526,7 @@ async def configure_hosted_worker(
     Raises:
         HTTPException: If the process is not a worker or already owns game state.
     """
+    global _hosted_character_deployment
     if os.environ.get("DND_GAME_WORKER") != "1":
         raise _api_http_exception(
             status_code=404,
@@ -1965,16 +2541,26 @@ async def configure_hosted_worker(
         )
     os.environ["DND_HOSTED_GAME_ID"] = str(assignment.hosted_game_id)
     os.environ["DND_PUBLIC_GAME_BASE_URL"] = assignment.public_game_base_url.rstrip("/")
+    os.environ["DND_WORKER_INSTANCE_ID"] = str(
+        assignment.worker_instance_id,
+    )
+    os.environ["DND_WORKER_GENERATION"] = str(
+        assignment.worker_generation,
+    )
+    os.environ["DND_WORKER_RUNTIME_DIR"] = (
+        assignment.terminal_runtime_directory
+    )
+    _hosted_character_deployment = assignment.character_deployment
     return {"status": "configured"}
 
 
 @app.get("/server/capabilities", response_model=ServerCapabilitiesResponse)
 async def get_server_capabilities() -> ServerCapabilitiesResponse:
-    """Return the typed DB-free standalone deployment capabilities."""
+    """Return standalone capabilities backed by the selected local profile."""
     return ServerCapabilitiesResponse(
         server_mode="standalone",
-        game_directory_enabled=False,
-        persistent_game_history=False,
+        game_directory_enabled=True,
+        persistent_game_history=True,
         isolated_game_workers=False,
     )
 
@@ -5676,6 +6262,72 @@ def _game_creation_selection(
     ), recipe.arena_id
 
 
+def _game_creation_character_deployment(
+    creation: GameCreationStartRequest,
+) -> CharacterDeploymentSnapshot | None:
+    """Resolve the one trusted persistent-character source for this process."""
+
+    selected_character_id = creation.character_id
+    is_worker = os.environ.get("DND_GAME_WORKER") == "1"
+    if selected_character_id is None:
+        if is_worker and _hosted_character_deployment is not None:
+            raise _api_http_exception(
+                status_code=409,
+                code="character_deployment_selection_missing",
+                message=(
+                    "Hosted character deployment requires the matching "
+                    "game-creation character_id"
+                ),
+            )
+        return None
+    if not isinstance(creation.scenario, GameCreationComposedScenario):
+        raise _api_http_exception(
+            status_code=400,
+            code="character_deployment_requires_composed_scenario",
+            message=(
+                "Persistent characters can enter only a composed hero seat"
+            ),
+        )
+    if is_worker:
+        deployment = _hosted_character_deployment
+        if deployment is None:
+            raise _api_http_exception(
+                status_code=403,
+                code="character_deployment_not_authorized",
+                message=(
+                    "Hosted worker has no gateway-authenticated character "
+                    "deployment"
+                ),
+            )
+        if deployment.character_id != selected_character_id:
+            raise _api_http_exception(
+                status_code=403,
+                code="character_deployment_identity_mismatch",
+                message=(
+                    "Game-creation character_id differs from the gateway "
+                    "assignment"
+                ),
+            )
+        return deployment
+
+    service = app.state.character_directory
+    handle = app.state.local_profile_handle
+    if (
+        not isinstance(service, CharacterDirectoryService)
+        or not isinstance(handle, LocalProfileHandle)
+    ):
+        raise _api_http_exception(
+            status_code=404,
+            code="local_character_directory_unavailable",
+            message="No local profile is available for character deployment",
+        )
+    return build_character_deployment_snapshot(
+        service,
+        handle.profile_id,
+        selected_character_id,
+    )
+
+
 @dataclass(frozen=True)
 class _ResolvedAIPolicy:
     """Cold policy resolution completed before engine replacement."""
@@ -6039,6 +6691,9 @@ async def start_created_game(
     creation: GameCreationStartRequest,
 ) -> GameCreationStartResponse:
     """Atomically assemble a scenario and configure both controller sides."""
+
+    global _hosted_character_entity_uuid
+    _hosted_character_entity_uuid = None
     selection, preset_arena_id = _game_creation_selection(creation.scenario)
     static_report = _game_creation_preflight(selection)
     if not static_report.admitted:
@@ -6049,6 +6704,7 @@ async def start_created_game(
             compatibility=static_report.model_dump(mode="json"),
         )
 
+    character_deployment = _game_creation_character_deployment(creation)
     policies = _resolve_game_creation_policies(creation)
     await prepare_new_simulation_start()
     opening_faction = {
@@ -6057,6 +6713,29 @@ async def start_created_game(
         "side_b": "monsters",
     }[creation.opening_side]
     try:
+        local_game = _active_local_game_coordinator()
+        prepared_local_game = None
+        if local_game is not None:
+            scenario_id = (
+                preset_arena_id
+                if preset_arena_id is not None
+                else ":".join(
+                    (
+                        selection.hero_configuration_id,
+                        selection.monster_configuration_id,
+                        selection.battlefield_id,
+                        selection.deployment_id,
+                    ),
+                )
+            )
+            prepared_local_game = local_game.prepare(
+                creation_manifest=creation.model_dump(mode="json"),
+                scenario_kind=creation.scenario.kind,
+                scenario_id=scenario_id,
+                display_name=f"Local Game: {scenario_id}",
+                character_id=creation.character_id,
+            )
+            character_deployment = prepared_local_game.character_snapshot
         if preset_arena_id is not None:
             arena = prepare_legacy_scenario(
                 preset_arena_id,
@@ -6070,6 +6749,7 @@ async def start_created_game(
                 selection.battlefield_id,
                 selection.deployment_id,
                 opening_faction=opening_faction,
+                hero_deployment=character_deployment,
             )
             arena = assembled.arena
             compatibility = assembled.compatibility
@@ -6079,10 +6759,46 @@ async def start_created_game(
         sim.encounter.clear_combat_log()
         game_summary_store.reset()
         event_stream.ensure_attached()
+        _ensure_local_terminal_callback()
         side_a = tuple(arena.side_a)
         side_b = tuple(arena.side_b)
+        if (
+            os.environ.get("DND_GAME_WORKER") == "1"
+            and character_deployment is not None
+        ):
+            if len(side_a) != 1:
+                raise RuntimeError(
+                    "hosted persistent character requires exactly one hero "
+                    "runtime entity",
+                )
+            _hosted_character_entity_uuid = side_a[0].uuid
 
-        game = sim.create_game_session(sim.encounter)
+        if prepared_local_game is not None:
+            game_summary_store.bind_directory_game_id(
+                sim.encounter.uuid,
+                prepared_local_game.game.game_id,
+            )
+        game = sim.create_game_session(
+            sim.encounter,
+            game_id=(
+                prepared_local_game.game.game_id
+                if prepared_local_game is not None
+                else None
+            ),
+        )
+        if (
+            prepared_local_game is not None
+            and character_deployment is not None
+        ):
+            if len(side_a) != 1:
+                raise RuntimeError(
+                    "persistent local character requires exactly one hero "
+                    "runtime entity",
+                )
+            local_game = _active_local_game_coordinator()
+            if local_game is None:
+                raise RuntimeError("local game lifecycle ownership disappeared")
+            local_game.pin_character(side_a[0].uuid)
         await _set_game_creation_side_controllers(
             sim.encounter,
             game,
@@ -6247,11 +6963,16 @@ async def activate_created_game(
 
     sim.activation_identity = identity
     sim.paused = False
+    local_game = _active_local_game_coordinator()
     try:
+        if local_game is not None:
+            local_game.activate()
         encounter.start_encounter()
         if not _schedule_activated_game_coordinator():
             raise RuntimeError("Activated game coordinator could not be scheduled")
     except BaseException:
+        if local_game is not None:
+            local_game.fail("local_game_activation_failed")
         sim.activation_identity = None
         sim.paused = True
         raise

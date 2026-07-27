@@ -296,6 +296,42 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
       }
       return;
     }
+    case "action": {
+      if (new Set(cue.target_uuids).size !== cue.target_uuids.length) {
+        throw new ContractValidationError(path, "action targets must be unique");
+      }
+      if (!sameOrderedValues(
+        cue.effect_presentation_ids,
+        cue.child_presentation_ids,
+      )) {
+        throw new ContractValidationError(
+          path,
+          "action effects must exactly equal ordered children",
+        );
+      }
+      if (cue.trigger_presentation_id === cue.presentation_id) {
+        throw new ContractValidationError(path, "action cannot cite itself as its trigger");
+      }
+      if (
+        cue.trigger_presentation_id !== null
+        && cue.child_presentation_ids.includes(cue.trigger_presentation_id)
+      ) {
+        throw new ContractValidationError(path, "action trigger cannot also be one of its effects");
+      }
+      const hasBehavior = cue.content_attributions.some(
+        (attribution) => (
+          attribution.kind !== "source_item"
+          && attribution.role === "behavior"
+        ),
+      );
+      if (!hasBehavior) {
+        throw new ContractValidationError(
+          path,
+          "action presentation requires exact behavior attribution",
+        );
+      }
+      return;
+    }
     case "attack":
       if (new Set(cue.damage_types).size !== cue.damage_types.length) {
         throw new ContractValidationError(path, "attack damage types must be unique");
@@ -602,6 +638,151 @@ function assertPresentationGraphSemantics(
         }
       }
       return;
+    case "action": {
+      const allowedTargets = new Set([
+        cue.actor_uuid,
+        ...cue.target_uuids,
+      ]);
+      if (cue.trigger_presentation_id !== null) {
+        const trigger = requirePresentationCue(
+          cue.trigger_presentation_id,
+          byId,
+          path,
+        );
+        if (
+          trigger.kind !== "movement"
+          && trigger.kind !== "action"
+          && trigger.kind !== "attack"
+          && trigger.kind !== "spell"
+          && trigger.kind !== "shove"
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action trigger is not a delivered action-like cue",
+          );
+        }
+        const triggerTargets = new Set<string>();
+        if (trigger.kind === "movement") {
+          triggerTargets.add(trigger.entity_uuid);
+        } else if (trigger.kind === "action") {
+          for (const targetUuid of trigger.target_uuids) triggerTargets.add(targetUuid);
+        } else if (trigger.kind === "attack" || trigger.kind === "shove") {
+          triggerTargets.add(trigger.target_uuid);
+        } else {
+          for (const target of trigger.targets) {
+            if (target.target_uuid !== null) triggerTargets.add(target.target_uuid);
+          }
+        }
+        if (
+          triggerTargets.size !== 0
+          && ![...triggerTargets].some((targetUuid) => allowedTargets.has(targetUuid))
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action trigger shares no authorized action participant",
+          );
+        }
+      }
+      for (const childId of cue.child_presentation_ids) {
+        const child = requirePresentationCue(childId, byId, path);
+        if (
+          child.kind !== "attack"
+          && child.kind !== "spell"
+          && child.kind !== "shove"
+          && child.kind !== "forced_movement"
+          && child.kind !== "damage"
+          && child.kind !== "heal"
+          && child.kind !== "condition"
+          && child.kind !== "door"
+          && child.kind !== "light"
+          && child.kind !== "equipment"
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action child is not a typed delivered action effect",
+          );
+        }
+        if (
+          (
+            child.kind === "attack"
+            || child.kind === "spell"
+            || child.kind === "shove"
+          )
+          && child.actor_uuid !== cue.actor_uuid
+        ) {
+          throw new ContractValidationError(
+            path,
+            "nested action actor differs from owning action",
+          );
+        }
+        if (
+          child.kind === "attack"
+          && !allowedTargets.has(child.target_uuid)
+        ) {
+          throw new ContractValidationError(
+            path,
+            "nested attack target differs from owning action",
+          );
+        }
+        if (
+          child.kind === "shove"
+          && !allowedTargets.has(child.target_uuid)
+        ) {
+          throw new ContractValidationError(
+            path,
+            "nested shove target differs from owning action",
+          );
+        }
+        if (
+          child.kind === "spell"
+          && child.targets.some(
+            (target) => (
+              target.target_uuid !== null
+              && !allowedTargets.has(target.target_uuid)
+            ),
+          )
+        ) {
+          throw new ContractValidationError(
+            path,
+            "nested spell target differs from owning action",
+          );
+        }
+        if (
+          (child.kind === "damage" || child.kind === "heal")
+          && (
+            child.source_uuid !== cue.actor_uuid
+            || !allowedTargets.has(child.target_uuid)
+          )
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action impact source or target differs from its action",
+          );
+        }
+        if (
+          child.kind === "condition"
+          && !allowedTargets.has(child.target_uuid)
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action condition target differs from its action",
+          );
+        }
+        if (
+          child.kind === "forced_movement"
+          && (
+            child.source_uuid !== cue.actor_uuid
+            || !allowedTargets.has(child.entity_uuid)
+          )
+        ) {
+          throw new ContractValidationError(
+            path,
+            "action forced movement differs from its action",
+          );
+        }
+      }
+      return;
+    }
     case "shove":
       if (cue.outcome === "succeeded_push") {
         const forced = requirePresentationCue(cue.forced_movement_presentation_id, byId, path);
@@ -737,7 +918,6 @@ function assertPresentationGraphSemantics(
       }
       return;
     }
-    case "movement":
     case "counterspell":
     case "damage":
     case "heal":

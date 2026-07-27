@@ -10,9 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions_functional import register_spells_by_name
 from dnd.blocks.equipment import Weapon
-from dnd.classes.barbarian_factory import BarbarianConfig, PrimalPathChoice, create_barbarian
-from dnd.classes.fighter_factory import FighterConfig, create_fighter
-from dnd.classes.sorcerer_factory import SorcererConfig, create_sorcerer
 from dnd.conditions import Blinded, Poisoned
 from dnd.controller import Controller, PassController
 from dnd.core.gridmap import get_map
@@ -20,6 +17,15 @@ from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.creature_materialization import materialize_creature
+from dnd.content_system.builtin_character_builds import (
+    BuiltinSingleClassBuild,
+)
+from dnd.content_system.builtin_character_materialization import (
+    materialize_builtin_character,
+)
+from dnd.content_system.character_materialization import materialize_character
+from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
+from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -109,42 +115,95 @@ def reset_composed_scenario_state(width: int = 15, height: int = 15) -> None:
 
 
 def _build_class_actor(blueprint: ActorBlueprint, context: ActorBuildContext) -> Entity | None:
-    """Build one class-factory actor, returning None for other blueprint families."""
+    """Build one schema-2 class actor, returning None for other families."""
     if isinstance(blueprint, BarbarianActorBlueprint):
-        return create_barbarian(BarbarianConfig(
-            level=blueprint.level,
-            name=context.name,
+        return materialize_builtin_character(
+            build=BuiltinSingleClassBuild(
+                class_id="barbarian",
+                level=blueprint.level,
+                equipment_preset=blueprint.equipment_preset,
+                asi_by_level=tuple(
+                    (
+                        level,
+                        tuple(
+                            (AbilityScoreName(ability), amount)
+                            for ability, amount in increases
+                        ),
+                    )
+                    for level, increases in (
+                        (4, blueprint.asi_4),
+                        (8, blueprint.asi_8),
+                    )
+                    if increases
+                ),
+            ),
+            display_name=context.name,
             position=context.position,
             faction=context.faction,
-            primal_path=PrimalPathChoice(blueprint.primal_path),
-            equipment_preset=blueprint.equipment_preset,
-            asi_4=list(blueprint.asi_4) or None,
-            asi_8=list(blueprint.asi_8) or None,
-        ))
+            deployment_role=CreatureDeploymentRole(
+                role_id=f"scenario.evaluation.{context.role}",
+            ),
+        ).entity
     if isinstance(blueprint, FighterActorBlueprint):
-        return create_fighter(FighterConfig(
-            level=blueprint.level,
-            name=context.name,
+        return materialize_builtin_character(
+            build=BuiltinSingleClassBuild(
+                class_id="fighter",
+                level=blueprint.level,
+                equipment_preset=blueprint.equipment_preset,
+                fighting_style=blueprint.fighting_style,
+                asi_by_level=tuple(
+                    (
+                        level,
+                        tuple(
+                            (AbilityScoreName(ability), amount)
+                            for ability, amount in increases
+                        ),
+                    )
+                    for level, increases in (
+                        (4, blueprint.asi_4),
+                        (6, blueprint.asi_6),
+                        (8, blueprint.asi_8),
+                    )
+                    if increases
+                ),
+            ),
+            display_name=context.name,
             position=context.position,
             faction=context.faction,
-            fighting_style=blueprint.fighting_style,
-            equipment_preset=blueprint.equipment_preset,
-            asi_4=list(blueprint.asi_4) or None,
-            asi_6=list(blueprint.asi_6) or None,
-            asi_8=list(blueprint.asi_8) or None,
-        ))
+            deployment_role=CreatureDeploymentRole(
+                role_id=f"scenario.evaluation.{context.role}",
+            ),
+        ).entity
     if isinstance(blueprint, SorcererActorBlueprint):
-        return create_sorcerer(SorcererConfig(
-            level=blueprint.level,
-            name=context.name,
+        return materialize_builtin_character(
+            build=BuiltinSingleClassBuild(
+                class_id="sorcerer",
+                level=blueprint.level,
+                equipment_preset=blueprint.equipment_preset,
+                metamagic_choices=blueprint.metamagic_choices,
+                spell_names=blueprint.spell_names,
+                asi_by_level=tuple(
+                    (
+                        level,
+                        tuple(
+                            (AbilityScoreName(ability), amount)
+                            for ability, amount in increases
+                        ),
+                    )
+                    for level, increases in (
+                        (4, blueprint.asi_4),
+                        (8, blueprint.asi_8),
+                    )
+                    if increases
+                ),
+            ),
+            display_name=context.name,
             position=context.position,
             faction=context.faction,
-            metamagic_choices=list(blueprint.metamagic_choices),
-            spell_names=list(blueprint.spell_names),
-            equipment_preset=blueprint.equipment_preset,
-            asi_4=list(blueprint.asi_4) or None,
-            asi_8=list(blueprint.asi_8) or None,
-        ))
+            deployment_role=CreatureDeploymentRole(
+                role_id=f"scenario.evaluation.{context.role}",
+            ),
+        ).entity
     return None
 
 
@@ -311,11 +370,13 @@ def _build_side(
     positions: Mapping[str, tuple[int, int]],
     names: Mapping[str, str],
     faction: str,
+    actor_deployments: Mapping[str, CharacterDeploymentSnapshot] | None = None,
 ) -> tuple[tuple[Entity, ...], dict[str, Entity], list[tuple[Entity, StartingDamage | StartingCondition]]]:
     """Build and immediately augment one complete side."""
     actors: list[Entity] = []
     actors_by_role: dict[str, Entity] = {}
     deferred: list[tuple[Entity, StartingDamage | StartingCondition]] = []
+    deployments = actor_deployments or {}
     for blueprint in spec.members:
         role = blueprint.deployment_role or blueprint.actor_id
         context = ActorBuildContext(
@@ -324,10 +385,38 @@ def _build_side(
             faction=faction,
             position=positions[role],
         )
-        actor = build_actor(blueprint, context)
-        actor.appearance.portrait_key = f"{spec.configuration_id}::{blueprint.actor_id}"
+        deployment = deployments.get(role)
+        if deployment is None:
+            actor = build_actor(blueprint, context)
+            actor.appearance.portrait_key = (
+                f"{spec.configuration_id}::{blueprint.actor_id}"
+            )
+        else:
+            actor = materialize_character(
+                definition=deployment.definition,
+                holdings=deployment.holdings,
+                loadout=deployment.loadout,
+                runtime_entity_uuid=None,
+                display_name=deployment.display_name,
+                faction=faction,
+                position=context.position,
+                deployment_role=CreatureDeploymentRole(
+                    role_id=f"scenario.evaluation.{role}",
+                ),
+                expected_ruleset_digest=(
+                    deployment.expected_ruleset_digest
+                ),
+                multiclass_slot_rounding_policy=(
+                    deployment.multiclass_slot_rounding_policy
+                ),
+                permissive_multiclass_prerequisites=(
+                    deployment.permissive_multiclass_prerequisites
+                ),
+            ).entity
         actors.append(actor)
         actors_by_role[role] = actor
+        if deployment is not None:
+            continue
         for augmentation in blueprint.augmentations:
             if isinstance(augmentation, (StartingDamage, StartingCondition)):
                 deferred.append((actor, augmentation))
@@ -621,6 +710,7 @@ def assemble_composed_scenario(
     opening_faction: str | None = None,
     validation_spec: ValidationArenaSpec | None = None,
     start_encounter: bool = True,
+    hero_deployment: CharacterDeploymentSnapshot | None = None,
 ) -> AssembledScenario:
     """Reset and assemble one compatible scenario through existing engine factories.
 
@@ -651,7 +741,27 @@ def assemble_composed_scenario(
 
     hero_positions, monster_positions = resolve_deployment_positions(hero_spec, monster_spec, deployment)
     names = actor_names or {}
-    hero_actors, hero_by_role, hero_deferred = _build_side(hero_spec, hero_positions, names, "heroes")
+    if hero_deployment is not None and len(hero_spec.members) != 1:
+        raise IncompatibleScenarioError(
+            "Persistent character deployment requires one hero catalog slot",
+        )
+    hero_actor_deployments = (
+        {
+            (
+                hero_spec.members[0].deployment_role
+                or hero_spec.members[0].actor_id
+            ): hero_deployment,
+        }
+        if hero_deployment is not None
+        else None
+    )
+    hero_actors, hero_by_role, hero_deferred = _build_side(
+        hero_spec,
+        hero_positions,
+        names,
+        "heroes",
+        hero_actor_deployments,
+    )
     monster_actors, monsters_by_role, monster_deferred = _build_side(
         monster_spec,
         monster_positions,
@@ -718,6 +828,7 @@ def prepare_composed_scenario(
     notable_positions: Mapping[str, tuple[int, int]] | None = None,
     opening_faction: str | None = None,
     validation_spec: ValidationArenaSpec | None = None,
+    hero_deployment: CharacterDeploymentSnapshot | None = None,
 ) -> AssembledScenario:
     """Assemble a server-owned scenario without starting its encounter."""
     return assemble_composed_scenario(
@@ -731,6 +842,7 @@ def prepare_composed_scenario(
         opening_faction=opening_faction,
         validation_spec=validation_spec,
         start_encounter=False,
+        hero_deployment=hero_deployment,
     )
 
 

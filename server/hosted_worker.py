@@ -18,6 +18,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.identities import validate_sha256
 from dnd.content_system.pack_loader import ENGINE_CONTENT_API_VERSION
 
@@ -57,6 +58,25 @@ class HostedWorkerAssignment(BaseModel):
     public_game_base_url: str = Field(
         min_length=1,
         description="Public gateway runtime URL used by external controllers.",
+    )
+    character_deployment: CharacterDeploymentSnapshot | None = Field(
+        default=None,
+        description=(
+            "Gateway-authenticated character revisions pinned before game "
+            "creation; never accepted from a player runtime route."
+        ),
+    )
+    worker_instance_id: UUID = Field(
+        description="Exact process-generation identity writing terminal evidence.",
+    )
+    worker_generation: int = Field(
+        default=1,
+        ge=1,
+        description="Monotonic directory generation fenced into terminal evidence.",
+    )
+    terminal_runtime_directory: str = Field(
+        min_length=1,
+        description="Gateway-owned private directory for durable terminal files.",
     )
 
 
@@ -177,6 +197,11 @@ class HostedWorkerManager:
         """Return the exact ASGI application imported by worker processes."""
         return self._worker_application.import_path
 
+    def runtime_directory(self, hosted_game_id: UUID) -> Path:
+        """Return the durable private runtime directory for one game."""
+
+        return self._runtime_root / str(hosted_game_id)
+
     async def prewarm(self) -> None:
         """Fill the configured warm-worker pool before games are requested."""
         if self._warm_pool_size == 0 or self._closing:
@@ -208,6 +233,7 @@ class HostedWorkerManager:
         hosted_game_id: UUID,
         *,
         public_game_base_url: str,
+        character_deployment: CharacterDeploymentSnapshot | None = None,
     ) -> HostedWorkerPlacement:
         """Start one event-server worker and wait for private readiness.
 
@@ -243,11 +269,21 @@ class HostedWorkerManager:
                 )
                 async with self._lock:
                     self._workers[hosted_game_id] = handle
+            self.runtime_directory(hosted_game_id).mkdir(
+                parents=True,
+                exist_ok=True,
+            )
             await self._configure_worker(
                 handle,
                 HostedWorkerAssignment(
                     hosted_game_id=hosted_game_id,
                     public_game_base_url=public_game_base_url.rstrip("/"),
+                    character_deployment=character_deployment,
+                    worker_instance_id=handle.placement.worker_instance_id,
+                    worker_generation=1,
+                    terminal_runtime_directory=str(
+                        self.runtime_directory(hosted_game_id),
+                    ),
                 ),
             )
         except BaseException:
@@ -355,6 +391,8 @@ class HostedWorkerManager:
             "DND_GAME_WORKER": "1",
             "DND_HOSTED_GAME_ID": str(hosted_game_id),
             "DND_WORKER_INSTANCE_ID": str(worker_instance_id),
+            "DND_WORKER_GENERATION": "1",
+            "DND_WORKER_RUNTIME_DIR": str(game_dir),
             "DND_PUBLIC_GAME_BASE_URL": public_game_base_url.rstrip("/"),
             "DND_WORKER_UNIX_SOCKET": str(socket_path),
             "DND_EXPECTED_CONTENT_SET_DIGEST": (

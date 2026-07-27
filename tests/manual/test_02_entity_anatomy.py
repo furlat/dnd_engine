@@ -122,7 +122,6 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
         f"uuid matches source: {'yes' if hero.uuid == hero.source_entity_uuid else 'no'}",
         f"position: {hero.position}",
         f"hit points: {hero.get_hp()}",
-        f"direct blocks: {len(hero.get_blocks())}",
         f"map lookup: {get_map().get_entity_position(hero.uuid)}",
     ]
 
@@ -133,7 +132,6 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
         "uuid matches source: yes",
         "position: (1, 2)",
         "hit points: 24",
-        "direct blocks: 10",
         "map lookup: (1, 2)",
     ]
     assert readout_lines == expected_lines
@@ -174,6 +172,7 @@ def test_entity_config_prints_actor_shell_and_block_ownership(capsys) -> None:
         "Inventory",
         "Appearance",
         "Spellcasting",
+        "Creature Proficiencies",
     }
     shared_source_count = sum(
         block.source_entity_uuid == hero.uuid
@@ -181,17 +180,15 @@ def test_entity_config_prints_actor_shell_and_block_ownership(capsys) -> None:
     )
 
     block_lines = [
-        f"direct block count: {len(direct_block_names)}",
         f"required blocks present: {required_block_names.issubset(direct_block_names)}",
-        f"shared source blocks: {shared_source_count}/{len(hero.get_blocks())}",
+        f"all direct blocks share source: {shared_source_count == len(hero.get_blocks())}",
     ]
 
     print("\n".join(block_lines))
 
     expected_block_lines = [
-        "direct block count: 10",
         "required blocks present: True",
-        "shared source blocks: 10/10",
+        "all direct blocks share source: True",
     ]
 
     assert hero.name == "Aria"

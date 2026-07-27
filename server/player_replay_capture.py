@@ -8,6 +8,7 @@ reprojects mutable world state.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from threading import RLock
 from typing import Optional
@@ -285,9 +286,31 @@ class SubjectiveReplayCaptureStore:
         self._membership_indices: dict[tuple[str, str], int] = {}
         self._opened_partition_counts: dict[str, int] = {}
         self._aborted_sources: set[str] = set()
+        self._aborted_source_reasons: dict[str, str] = {}
         self._frozen_sources: set[str] = set()
         self._frozen_archives: dict[str, SubjectivePlayerReplayArchive] = {}
+        self._source_closed_listeners: list[Callable[[str], None]] = []
         self._lock = RLock()
+
+    def add_source_closed_listener(
+        self,
+        listener: Callable[[str], None],
+    ) -> None:
+        """Register one process-lifetime notification for newly sealed segments."""
+
+        with self._lock:
+            if listener not in self._source_closed_listeners:
+                self._source_closed_listeners.append(listener)
+
+    def remove_source_closed_listener(
+        self,
+        listener: Callable[[str], None],
+    ) -> None:
+        """Remove one terminal-ready notification listener."""
+
+        with self._lock:
+            if listener in self._source_closed_listeners:
+                self._source_closed_listeners.remove(listener)
 
     def open(
         self,
@@ -353,12 +376,29 @@ class SubjectiveReplayCaptureStore:
     ) -> SubjectiveReplaySegment:
         """Seal one capture while retaining it for later artifact publication."""
 
-        return self.get(key).close(reason)
+        with self._lock:
+            recorder = self._recorders.get(key)
+            if recorder is None:
+                raise SubjectiveReplayCaptureError(
+                    "subjective replay capture does not exist"
+                )
+            was_closed = recorder.closed
+            segment = recorder.close(reason)
+            listeners = (
+                ()
+                if was_closed
+                else tuple(self._source_closed_listeners)
+            )
+        for listener in listeners:
+            listener(key.source_stream_id)
+        return segment
 
     def abort(
         self,
         key: SubjectiveReplayCaptureKey,
         recorder: Optional[SubjectiveReplayRecorder] = None,
+        *,
+        reason: Optional[str] = None,
     ) -> None:
         """Discard one failed provisional or partial capture without publishing it."""
 
@@ -371,6 +411,8 @@ class SubjectiveReplayCaptureStore:
             self._recorders.pop(key)
             existing.abort()
             self._aborted_sources.add(key.source_stream_id)
+            if reason and key.source_stream_id not in self._aborted_source_reasons:
+                self._aborted_source_reasons[key.source_stream_id] = reason
             index_key = (key.source_stream_id, existing.membership_id)
             next_index = self._membership_indices.get(index_key)
             if next_index == existing.segment_index + 1:
@@ -416,7 +458,8 @@ class SubjectiveReplayCaptureStore:
             )
         except ValueError as exc:
             raise SubjectiveReplayCaptureError(
-                "recorded subjective inputs do not form an exact ended-game replay"
+                "recorded subjective inputs do not form an exact ended-game replay: "
+                f"{type(exc).__name__}: {exc}"
             ) from exc
 
     def memberships(self, *, encounter_uuid: str) -> tuple[str, ...]:
@@ -463,8 +506,13 @@ class SubjectiveReplayCaptureStore:
             )
             if encounter_uuid in self._aborted_sources:
                 self._frozen_sources.add(encounter_uuid)
+                reason = self._aborted_source_reasons.get(
+                    encounter_uuid,
+                    "capture aborted without a recorded reason",
+                )
                 raise SubjectiveReplayCaptureError(
-                    "a canonical player partition failed and cannot be replayed exactly"
+                    "a canonical player partition failed and cannot be replayed "
+                    f"exactly: {reason}"
                 )
             source_recorders = tuple(
                 recorder
@@ -501,7 +549,8 @@ class SubjectiveReplayCaptureStore:
                 )
             except ValueError as exc:
                 raise SubjectiveReplayCaptureError(
-                    "canonical player partitions are missing from the ended-game archive"
+                    "canonical player partitions are missing from the ended-game "
+                    f"archive: {type(exc).__name__}: {exc}"
                 ) from exc
             self._frozen_archives[encounter_uuid] = archive
             return archive
@@ -514,6 +563,7 @@ class SubjectiveReplayCaptureStore:
             self._membership_indices.clear()
             self._opened_partition_counts.clear()
             self._aborted_sources.clear()
+            self._aborted_source_reasons.clear()
             self._frozen_sources.clear()
             self._frozen_archives.clear()
 

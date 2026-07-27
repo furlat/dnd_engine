@@ -21,6 +21,7 @@ class ActionPresentationKind(str, Enum):
 class RestrictedActionKind(str, Enum):
     """Rule-level action families that a restricted budget may authorize."""
 
+    STANDARD_ACTION = "standard_action"
     WEAPON_ATTACK = "weapon_attack"
     DASH = "dash"
     DISENGAGE = "disengage"
@@ -34,6 +35,13 @@ class ActionEconomyCostType(str, Enum):
     BONUS_ACTIONS = "bonus_actions"
     REACTIONS = "reactions"
     MOVEMENT = "movement"
+
+
+class HasteActionPolicy(str, Enum):
+    """Which action families may spend Haste's independent turn budget."""
+
+    BG3_HONOUR = "bg3_honour"
+    SRD_5_1 = "srd_5_1"
 
 
 @dataclass(frozen=True)
@@ -82,6 +90,7 @@ class RestrictedActionGrantProvider(Protocol):
 __all__ = [
     "ActionEconomyCostType",
     "ActionPresentationKind",
+    "HasteActionPolicy",
     "RestrictedActionGrant",
     "RestrictedActionGrantProvider",
     "RestrictedActionKind",

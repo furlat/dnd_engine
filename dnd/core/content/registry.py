@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
+from typing import TypeVar
 
-from dnd.core.content.dependencies import ContentDependencyPhase
+from pydantic import BaseModel
+from dnd.core.content.dependencies import (
+    ContentDependencyPhase,
+    ContentDependencyRelation,
+)
+from dnd.core.content.effects import (
+    ConditionEffectCoverage,
+    ConditionEffectOperation,
+)
 from dnd.core.content.descriptors import ContentVisibility
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.provenance import ContentSource
@@ -18,10 +27,18 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     ContentDeclarationMode,
 )
+from dnd.core.content.runtime import RuntimeBehaviorKind
 
 
 class NonConstructibleContentError(TypeError):
     """Raised when metadata-only content is used as a factory."""
+
+
+class NonTypedDefinitionError(NonConstructibleContentError):
+    """Raised when a typed-definition operation targets another mode."""
+
+
+_TypedDefinition = TypeVar("_TypedDefinition", bound=BaseModel)
 
 
 class ContentRegistryBuilder:
@@ -83,6 +100,7 @@ class ContentRegistryBuilder:
         _validate_sources(self._declarations, self._sources)
         _validate_recipe_preset_sources(self._recipe_presets, self._sources)
         _validate_dependencies(self._declarations, pack_dependencies)
+        _validate_condition_effects(self._declarations, pack_dependencies)
         _validate_related_content(self._declarations, pack_dependencies)
         _validate_construction_cycles(self._declarations)
         _validate_recipe_presets(
@@ -149,6 +167,10 @@ class FrozenContentRegistry:
     def resolve_factory(self, ref: ContentRef) -> ContentDeclaration:
         """Resolve an exact constructible definition or fail closed."""
         declaration = self.resolve_definition(ref)
+        if declaration.mode == ContentDeclarationMode.TYPED_DEFINITION:
+            raise NonTypedDefinitionError(
+                f"Content {ref.identity_key} is a typed definition",
+            )
         if (
             declaration.mode != ContentDeclarationMode.FACTORY
             or declaration.construction is None
@@ -157,6 +179,28 @@ class FrozenContentRegistry:
                 f"Content {ref.identity_key} is metadata-only",
             )
         return declaration
+
+    def resolve_typed_definition(
+        self,
+        ref: ContentRef,
+        expected_type: type[_TypedDefinition],
+    ) -> _TypedDefinition:
+        """Resolve one exact typed structural definition or fail closed."""
+        declaration = self.resolve_definition(ref)
+        payload = declaration.definition_payload
+        if (
+            declaration.mode != ContentDeclarationMode.TYPED_DEFINITION
+            or payload is None
+        ):
+            raise NonTypedDefinitionError(
+                f"Content {ref.identity_key} is not a typed definition",
+            )
+        if not isinstance(payload, expected_type):
+            raise TypeError(
+                f"Typed definition {ref.identity_key} is "
+                f"{type(payload).__name__}, expected {expected_type.__name__}",
+            )
+        return payload
 
     def resolve_recipe_preset(
         self,
@@ -246,6 +290,14 @@ def _validate_dependencies(
                 f"Missing pack dependency declaration for "
                 f"{declaration.ref.pack_id}",
             )
+        dependency_keys = [
+            (dependency.relation, dependency.target_ref.identity_key)
+            for dependency in declaration.dependencies
+        ]
+        if len(dependency_keys) != len(set(dependency_keys)):
+            raise ValueError(
+                f"Content {key} contains duplicate dependency edges",
+            )
         for dependency in declaration.dependencies:
             target = declarations.get(dependency.target_ref.identity_key)
             if target is None:
@@ -280,6 +332,165 @@ def _validate_dependencies(
                     f"Content {key} references pack {target.ref.pack_id} "
                     "without a declared pack dependency",
                 )
+
+
+def _validate_condition_effects(
+    declarations: Mapping[str, ContentDeclaration],
+    pack_dependencies: Mapping[str, frozenset[str]],
+) -> None:
+    """Validate exact condition-effect closure and dependency equality."""
+    for key, declaration in declarations.items():
+        profile = declaration.condition_effect_profile
+        coverage = declaration.condition_effect_coverage
+        apply_dependencies = {
+            dependency.target_ref.identity_key: dependency.target_ref
+            for dependency in declaration.dependencies
+            if dependency.relation
+            is ContentDependencyRelation.APPLIES_CONDITION
+        }
+        if coverage is ConditionEffectCoverage.PROFILED:
+            if profile is None:
+                raise ValueError(
+                    f"Content {key} claims profiled condition effects "
+                    "without a profile",
+                )
+        elif profile is not None:
+            raise ValueError(
+                f"Content {key} owns a condition-effect profile but coverage "
+                f"is {coverage.value}",
+            )
+        if coverage is ConditionEffectCoverage.LIFECYCLE_ONLY:
+            if (
+                declaration.runtime_behavior_kind
+                is not RuntimeBehaviorKind.CONDITION
+                or declaration.condition_lifecycle is None
+            ):
+                raise ValueError(
+                    f"Content {key} claims lifecycle-only condition behavior "
+                    "without condition lifecycle ownership",
+                )
+        elif (
+            declaration.runtime_behavior_kind is RuntimeBehaviorKind.CONDITION
+            and coverage
+            not in {
+                ConditionEffectCoverage.PROFILED,
+                ConditionEffectCoverage.INTERNAL_ONLY,
+            }
+        ):
+            raise ValueError(
+                f"Content {key} condition behavior must be profiled, "
+                "lifecycle-only, or internal-only",
+            )
+        if coverage is ConditionEffectCoverage.INDIRECT:
+            indirect_relations = {
+                ContentDependencyRelation.CREATES_OBJECT,
+                ContentDependencyRelation.GRANTS_ACTION,
+                ContentDependencyRelation.GRANTS_FEATURE,
+                ContentDependencyRelation.CREATES_ITEM,
+                ContentDependencyRelation.SUMMONS_CREATURE,
+            }
+            if not any(
+                dependency.relation in indirect_relations
+                for dependency in declaration.dependencies
+            ):
+                raise ValueError(
+                    f"Content {key} claims indirect condition behavior "
+                    "without an exact intermediary dependency",
+                )
+        if profile is None:
+            if apply_dependencies:
+                raise ValueError(
+                    f"Content {key} declares APPLIES_CONDITION without an "
+                    "authored condition effect profile",
+                )
+            continue
+
+        apply_refs = {
+            effect.condition_ref.identity_key: effect.condition_ref
+            for effect in profile.effects
+            if (
+                effect.operation is ConditionEffectOperation.APPLY
+                and effect.condition_ref is not None
+            )
+        }
+        if any(
+            effect.operation is ConditionEffectOperation.APPLY
+            and effect.condition_ref is None
+            for effect in profile.effects
+        ):
+            raise ValueError(
+                f"Content {key} has a condition application without an "
+                "exact condition ref",
+            )
+        if apply_refs != apply_dependencies:
+            raise ValueError(
+                f"Content {key} APPLIES_CONDITION dependencies do not "
+                "exactly match its authored application effects",
+            )
+
+        for effect in profile.effects:
+            if effect.source_ref != declaration.ref:
+                raise ValueError(
+                    f"Content {key} condition effect {effect.effect_id} "
+                    "claims a different source definition",
+                )
+            exact_refs = (
+                (effect.condition_ref,)
+                if effect.condition_ref is not None
+                else ()
+            )
+            if effect.selector is not None:
+                matched_refs = tuple(sorted(
+                    (
+                        candidate.ref
+                        for candidate in declarations.values()
+                        if candidate.condition_lifecycle is not None
+                        and set(effect.selector.required_tags).issubset(
+                            set(candidate.condition_lifecycle.tags),
+                        )
+                        and set(
+                            effect.selector.required_removal_triggers,
+                        ).issubset(
+                            set(
+                                candidate.condition_lifecycle.removal_triggers,
+                            ),
+                        )
+                    ),
+                    key=lambda ref: ref.identity_key,
+                ))
+                if (
+                    effect.selector.resolved_condition_refs
+                    and effect.selector.resolved_condition_refs != matched_refs
+                ):
+                    raise ValueError(
+                        f"Content {key} condition selector for "
+                        f"{effect.effect_id} has stale resolved refs",
+                    )
+                exact_refs = matched_refs
+
+            for condition_ref in exact_refs:
+                target = declarations.get(condition_ref.identity_key)
+                if target is None or target.ref != condition_ref:
+                    raise ValueError(
+                        f"Content {key} condition effect {effect.effect_id} "
+                        f"references missing {condition_ref.identity_key}",
+                    )
+                if target.runtime_behavior_kind is not RuntimeBehaviorKind.CONDITION:
+                    raise ValueError(
+                        f"Content {key} condition effect {effect.effect_id} "
+                        f"targets non-condition {condition_ref.identity_key}",
+                    )
+                if target.ref.pack_id == declaration.ref.pack_id:
+                    continue
+                if (
+                    effect.operation is ConditionEffectOperation.APPLY
+                    and target.ref.pack_id
+                    not in pack_dependencies[declaration.ref.pack_id]
+                ):
+                    raise ValueError(
+                        f"Content {key} applies condition from pack "
+                        f"{target.ref.pack_id} without a declared dependency",
+                    )
 
 
 def _validate_related_content(

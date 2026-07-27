@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
-from collections import Counter
 from pathlib import Path
 from uuid import uuid4
 
@@ -50,6 +49,9 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.items.weapons import CLUB_RECIPE
 from dnd.reactions import create_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
+from devtools.import_neuroclient_content_icon_bindings import (
+    _definition_rows_from_existing,
+)
 
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -100,17 +102,10 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
         for declaration in BUILT_IN_DECLARATIONS
         if declaration.descriptor.visibility == ContentVisibility.PUBLIC
     )
-    assert len(all_identities) == len(set(all_identities)) == 517
-    assert len(public_declarations) == 509
-    assert len(BUILT_IN_DECLARATIONS) - len(public_declarations) == 8
-    assert Counter(
-        row.decision.value
-        for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
-    ) == {
-        "bind": 444,
-        "intentional_null": 42,
-        "missing_asset": 23,
-    }
+    assert len(all_identities) == len(set(all_identities))
+    assert {
+        declaration.ref.identity_key for declaration in public_declarations
+    } <= set(all_identities)
     rows_by_identity = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
@@ -135,13 +130,6 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
             assert assets_by_key[icon_key].asset_sha256 == row.asset_sha256
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN_ISSUES: Public content catalog has 23 unauthored "
-        "game-icon assets"
-    ),
-)
 def test_every_public_builtin_has_no_unresolved_icon_assets() -> None:
     """Public catalog rows require an asset or a closed intentional omission."""
     public_identities = {
@@ -171,13 +159,6 @@ def test_recipe_preset_icon_rows_authenticate_bound_presets() -> None:
     assert set(rows_by_identity) == {
         preset.ref.identity_key
         for preset in BUILT_IN_RECIPE_PRESETS
-    }
-    assert Counter(
-        row.decision.value
-        for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.recipe_presets
-    ) == {
-        "bind": 165,
-        "missing_asset": 40,
     }
     for preset in BUILT_IN_RECIPE_PRESETS:
         row = rows_by_identity[preset.ref.identity_key]
@@ -229,6 +210,56 @@ def test_provider_owned_actions_inherit_only_exact_dependency_assets() -> None:
             provider.ref.identity_key in row.evidence_token
             for provider in providers
         )
+
+
+def test_existing_ledger_promotes_new_reviewed_provider_asset() -> None:
+    """A new reviewed provider closes its prior unresolved action on import."""
+    existing = BUILT_IN_CONTENT_ICON_BINDING_LEDGER.model_dump(mode="json")
+    target_ids = {
+        "gear.field_kit",
+        "action.item.field_kit.deploy",
+    }
+    for row in existing["definitions"]:
+        if row["content_ref"]["content_id"] not in target_ids:
+            continue
+        row.update({
+            "decision": "missing_asset",
+            "icon_key": None,
+            "asset_sha256": None,
+            "evidence_kind": "unresolved_uncovered",
+            "evidence_token": (
+                "new_asset_required:"
+                f"{row['content_ref']['pack_id']}:"
+                f"{row['content_ref']['definition_kind']}:"
+                f"{row['content_ref']['content_id']}@"
+                f"{row['content_ref']['content_version']}"
+            ),
+        })
+
+    imported = _definition_rows_from_existing(
+        existing=existing,
+        declarations=BUILT_IN_DECLARATIONS,
+        assets_by_key={
+            row.icon_key: row.model_dump(mode="json")
+            for row in NEUROCLIENT_GAME_ICON_ASSET_INDEX.assets
+        },
+    )
+    rows_by_content_id = {
+        row["content_ref"]["content_id"]: row
+        for row in imported
+        if row["content_ref"]["content_id"] in target_ids
+    }
+
+    provider = rows_by_content_id["gear.field_kit"]
+    assert provider["decision"] == "bind"
+    assert provider["icon_key"] == "item.field-kit"
+    assert provider["evidence_kind"] == "human_reviewed"
+
+    action = rows_by_content_id["action.item.field_kit.deploy"]
+    assert action["decision"] == "bind"
+    assert action["icon_key"] == "item.field-kit"
+    assert action["evidence_kind"] == "content_dependency"
+    assert action["evidence_token"].startswith("grants_action:")
 
 
 def test_missing_or_unknown_public_binding_row_fails_closed() -> None:

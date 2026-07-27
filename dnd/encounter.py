@@ -275,6 +275,10 @@ class Encounter(BaseObject):
         ge=0,
         description="Objective event cursor of the current turn-start completion.",
     )
+    current_turn_execution_id: Optional[UUID] = Field(
+        default=None,
+        description="Opaque causal identity of the currently active actual turn.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -604,31 +608,51 @@ class Encounter(BaseObject):
     ) -> Optional[TurnStartEvent]:
         """Run turn boundary hooks for a surprised combatant without allowing actions."""
         self.turn_state = TurnState.IN_PROGRESS
+        self._begin_turn_execution()
 
-        event = entity.on_turn_start(
-            encounter_uuid=self.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index,
-        )
-        self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
-        self._refresh_turn_start_senses(entity, event)
+        try:
+            event = entity.on_turn_start(
+                encounter_uuid=self.uuid,
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+            )
+            self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
+            self._refresh_turn_start_senses(entity, event)
 
-        if controller:
-            controller.on_turn_start(entity, self._build_turn_context(entity))
+            if controller:
+                controller.on_turn_start(entity, self._build_turn_context(entity))
 
-        entity.on_turn_end(
-            encounter_uuid=self.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index,
-        )
+            entity.on_turn_end(
+                encounter_uuid=self.uuid,
+                round_number=self.round_number,
+                turn_index=self.current_turn_index,
+            )
 
-        if controller:
-            controller.on_turn_end(entity, self._build_turn_context(entity))
+            if controller:
+                controller.on_turn_end(entity, self._build_turn_context(entity))
 
-        combatant.has_acted_this_round = True
-        combatant.turn_count += 1
-        self.turn_state = TurnState.ENDED
+            combatant.has_acted_this_round = True
+            combatant.turn_count += 1
+            self.turn_state = TurnState.ENDED
+        finally:
+            self._end_turn_execution()
         return self._skip_to_next_turn()
+
+    def _begin_turn_execution(self) -> UUID:
+        """Open the one causal identity shared by every event in this turn."""
+        if self.current_turn_execution_id is not None:
+            raise RuntimeError("Encounter turn execution is already active")
+        execution_id = EventQueue.begin_turn_execution()
+        self.current_turn_execution_id = execution_id
+        return execution_id
+
+    def _end_turn_execution(self) -> None:
+        """Close the active causal turn identity, if this encounter owns one."""
+        execution_id = self.current_turn_execution_id
+        if execution_id is None:
+            return
+        EventQueue.end_turn_execution(execution_id)
+        self.current_turn_execution_id = None
 
     def start_turn(self) -> Optional[TurnStartEvent]:
         """
@@ -662,19 +686,25 @@ class Encounter(BaseObject):
             return self._skip_to_next_turn()
 
         self.turn_state = TurnState.IN_PROGRESS
+        self._begin_turn_execution()
 
-        event = entity.on_turn_start(
-            encounter_uuid=self.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index
-        )
-        self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
+        try:
+            event = entity.on_turn_start(
+                encounter_uuid=self.uuid,
+                round_number=self.round_number,
+                turn_index=self.current_turn_index
+            )
+            self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
 
-        self._refresh_turn_start_senses(entity, event)
+            self._refresh_turn_start_senses(entity, event)
 
-        if controller:
-            context = self._build_turn_context(entity)
-            controller.on_turn_start(entity, context)
+            if controller:
+                context = self._build_turn_context(entity)
+                controller.on_turn_start(entity, context)
+        except Exception:
+            self._end_turn_execution()
+            self.turn_state = TurnState.NOT_STARTED
+            raise
 
         return event
 
@@ -725,19 +755,22 @@ class Encounter(BaseObject):
         if not entity or not combatant:
             return None
 
-        event = entity.on_turn_end(
-            encounter_uuid=self.uuid,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index
-        )
+        try:
+            event = entity.on_turn_end(
+                encounter_uuid=self.uuid,
+                round_number=self.round_number,
+                turn_index=self.current_turn_index
+            )
 
-        if controller:
-            context = self._build_turn_context(entity)
-            controller.on_turn_end(entity, context)
+            if controller:
+                context = self._build_turn_context(entity)
+                controller.on_turn_end(entity, context)
 
-        combatant.has_acted_this_round = True
-        combatant.turn_count += 1
-        self.turn_state = TurnState.ENDED
+            combatant.has_acted_this_round = True
+            combatant.turn_count += 1
+            self.turn_state = TurnState.ENDED
+        finally:
+            self._end_turn_execution()
 
         return event
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import cast
 
 from dnd.actions import SpellAction
 from dnd.content_system.action_definitions import (
@@ -26,6 +27,10 @@ from dnd.spells.content_metadata import (
     SpellCatalogMetadata,
     attach_spell_catalog_metadata,
 )
+from dnd.spells.reaction_spell_content import (
+    LEARNED_REACTION_SPELL_SPECS,
+    LearnedReactionHandlerFactory,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,11 +38,22 @@ class SpellCatalogCompositionRow:
     """One exact runtime class, declaration, and authored catalog record."""
 
     display_name: str
-    spell_type: type[SpellAction]
+    spell_type: type[SpellAction] | None
     declaration: ContentDeclaration
     metadata: SpellCatalogMetadata
     school: str
     level: int
+    catalog_order: int
+    reaction_handler_factory: LearnedReactionHandlerFactory | None = None
+
+    def __post_init__(self) -> None:
+        if (self.spell_type is None) == (
+            self.reaction_handler_factory is None
+        ):
+            raise ValueError(
+                "Spell composition must own exactly one playable runtime "
+                "surface",
+            )
 
 
 _NATIVE_ROWS: tuple[SpellCatalogCompositionRow, ...] = tuple(
@@ -48,6 +64,7 @@ _NATIVE_ROWS: tuple[SpellCatalogCompositionRow, ...] = tuple(
         metadata=SPELL_CATALOG_METADATA_BY_CLASS[spec.spell_type],
         school=spec.school,
         level=spec.level,
+        catalog_order=spec.sort_order,
     )
     for spec in SPELL_CONTENT_IDENTITY_SPECS
 )
@@ -83,21 +100,36 @@ _AEGIS_SPARK_ROW = SpellCatalogCompositionRow(
     metadata=_AEGIS_SPARK_METADATA,
     school="abjuration",
     level=0,
+    catalog_order=125,
 )
 
-# Keep public catalog ordering level-oriented without making an extension a
+_LEARNED_REACTION_ROWS: tuple[SpellCatalogCompositionRow, ...] = tuple(
+    SpellCatalogCompositionRow(
+        display_name=spec.display_name,
+        spell_type=None,
+        declaration=spec.declaration,
+        metadata=spec.metadata,
+        school=spec.school,
+        level=spec.level,
+        catalog_order=spec.catalog_order,
+        reaction_handler_factory=spec.handler_factory,
+    )
+    for spec in LEARNED_REACTION_SPELL_SPECS
+)
+
+# Keep the explicit authored public order without making an extension a
 # dependency of the native spell package.
 SPELL_CATALOG_COMPOSITION_ROWS: tuple[
     SpellCatalogCompositionRow,
     ...,
-] = (
-    *(row for row in _NATIVE_ROWS if row.level == 0),
-    _AEGIS_SPARK_ROW,
-    *(row for row in _NATIVE_ROWS if row.level != 0),
-)
+] = tuple(sorted(
+    (*_NATIVE_ROWS, _AEGIS_SPARK_ROW, *_LEARNED_REACTION_ROWS),
+    key=lambda row: row.catalog_order,
+))
 SPELL_CATALOG_COMPOSITION_BY_CLASS = MappingProxyType({
-    row.spell_type: row
+    cast(type[SpellAction], row.spell_type): row
     for row in SPELL_CATALOG_COMPOSITION_ROWS
+    if row.spell_type is not None
 })
 SPELL_CATALOG_COMPOSITION_BY_NAME = MappingProxyType({
     row.display_name: row
@@ -110,11 +142,15 @@ SPELL_CATALOG_COMPOSITION_BY_ID = MappingProxyType({
 
 if not (
     len(SPELL_CATALOG_COMPOSITION_ROWS)
-    == len(SPELL_CATALOG_COMPOSITION_BY_CLASS)
     == len(SPELL_CATALOG_COMPOSITION_BY_NAME)
     == len(SPELL_CATALOG_COMPOSITION_BY_ID)
 ):
     raise ValueError("Spell catalog composition contains duplicate identities")
+if len(SPELL_CATALOG_COMPOSITION_BY_CLASS) != sum(
+    row.spell_type is not None
+    for row in SPELL_CATALOG_COMPOSITION_ROWS
+):
+    raise ValueError("Spell catalog composition contains duplicate classes")
 if (
     _AEGIS_SPARK_ROW.declaration.ref.definition_kind.value != "spell"
     or _AEGIS_SPARK_ROW.declaration.runtime_behavior_kind is None

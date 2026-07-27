@@ -6,6 +6,7 @@ from dnd.core.modifiers import NumericalModifier
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import AbilityName, SkillName
+from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
 SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
     'acrobatics': 'dexterity',
@@ -109,6 +110,10 @@ class Skill(BaseBlock):
     skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
     expertise: bool = Field(default=False, description="If true, the character has expertise in this skill, doubling their proficiency bonus")
     proficiency: bool = Field(default=False, description="If true, the character is proficient in this skill, adding their proficiency bonus to checks")
+    proficiency_sources: ProficiencySourceSet = Field(
+        default_factory=ProficiencySourceSet,
+        description="Exact source-owned proficiency contributions.",
+    )
 
     @property
     def ability(self) -> AbilityName:
@@ -138,6 +143,19 @@ class Skill(BaseBlock):
         self.expertise = expertise
         if not self.proficiency:
             self.proficiency = True
+
+    def add_proficiency_source(
+        self,
+        source_id: UUID,
+        mode: ProficiencyMode,
+    ) -> None:
+        """Add one exact proficiency grant without disturbing other sources."""
+        self.proficiency_sources.add(source_id, mode)
+
+    def remove_proficiency_source(self, source_id: UUID) -> bool:
+        """Remove one exact proficiency grant."""
+        return self.proficiency_sources.remove(source_id)
+
     def _get_proficiency_converter(self) -> Callable[[int], int]:
         """
         Get a function that calculates the proficiency bonus based on the character's expertise and proficiency.
@@ -145,18 +163,20 @@ class Skill(BaseBlock):
         Returns:
             Callable[[int], int]: A function that takes the proficiency bonus as an argument and returns the adjusted bonus.
         """
-        def proficient(proficiency_bonus:int) -> int:
-            return proficiency_bonus
-        def not_proficient(proficiency_bonus:int) -> int:
-            return 0
-        def expert(proficiency_bonus:int) -> int:
-            return 2*proficiency_bonus
-        if self.proficiency:
-            if self.expertise:
-                return expert
-            return proficient
-        else:
-            return not_proficient
+        def convert(proficiency_bonus: int) -> int:
+            legacy = 0
+            if self.proficiency:
+                legacy = (
+                    2 * proficiency_bonus
+                    if self.expertise
+                    else proficiency_bonus
+                )
+            return max(
+                legacy,
+                self.proficiency_sources.apply(proficiency_bonus),
+            )
+
+        return convert
     def get_score(self,profiency_bonus:int) -> int:
         """
         Calculate the total score for this skill.

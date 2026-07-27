@@ -7,6 +7,7 @@ from typing import Literal as TypeLiteral
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import AbilityName
+from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 SavingThrowName = TypeLiteral[
     'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
     'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
@@ -97,6 +98,10 @@ class SavingThrow(BaseBlock):
     )
     proficiency: bool = Field(default=False, description="If true, the character is proficient in this saving throw, adding their proficiency bonus")
     bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"), description="Any additional bonus applied to the saving throw, beyond ability modifier and proficiency")
+    proficiency_sources: ProficiencySourceSet = Field(
+        default_factory=ProficiencySourceSet,
+        description="Exact source-owned proficiency contributions.",
+    )
 
     @property
     def ability(self) -> AbilityName:
@@ -118,10 +123,21 @@ class SavingThrow(BaseBlock):
         Returns:
             int: The total bonus for the saving throw, including proficiency if applicable.
         """
-        if self.proficiency:
-            return self.bonus.score + proficiency_bonus
-        else:
-            return self.bonus.score
+        return self.bonus.score + self._get_proficiency_converter()(
+            proficiency_bonus
+        )
+
+    def add_proficiency_source(
+        self,
+        source_id: UUID,
+        mode: ProficiencyMode,
+    ) -> None:
+        """Add one exact proficiency grant without disturbing other sources."""
+        self.proficiency_sources.add(source_id, mode)
+
+    def remove_proficiency_source(self, source_id: UUID) -> bool:
+        """Remove one exact proficiency grant."""
+        return self.proficiency_sources.remove(source_id)
 
     def _get_proficiency_converter(self) -> Callable[[int], int]:
         """
@@ -135,7 +151,14 @@ class SavingThrow(BaseBlock):
             Callable[[int], int]: A lambda function that applies the appropriate multiplier
                                  to the proficiency bonus.
         """
-        return lambda x: x if self.proficiency else 0
+        def convert(proficiency_bonus: int) -> int:
+            legacy = proficiency_bonus if self.proficiency else 0
+            return max(
+                legacy,
+                self.proficiency_sources.apply(proficiency_bonus),
+            )
+
+        return convert
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None,

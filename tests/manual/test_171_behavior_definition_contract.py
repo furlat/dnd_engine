@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 import dnd.conditions as condition_module
 from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -109,7 +110,7 @@ class _DrinkClockworkFlask:
     ),
     provenance=_PROVENANCE,
 )
-class _ClockworkFlaskConsumed:
+class _ClockworkFlaskConsumed(BaseCondition):
     pass
 
 

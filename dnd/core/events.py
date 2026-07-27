@@ -32,7 +32,7 @@ __all__ = [
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, field_serializer
 from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 
@@ -44,6 +44,7 @@ from dnd.core.combat_log import (
 )
 from dnd.core.content.runtime import (
     BehaviorBinding,
+    EffectiveHandlerPresentation,
     HandlerDispatchEvidence,
     HandlerDispatchOutcome,
     RuntimeBehaviorKind,
@@ -304,6 +305,13 @@ class Event(BaseObject):
         default=None,
         description="UUID of the parent event version that caused this child event.",
     )
+    turn_execution_id: Optional[UUID] = Field(
+        default=None,
+        description=(
+            "Opaque identity of the actual encounter turn that caused this "
+            "event; inherited by phased versions and child events."
+        ),
+    )
     status_message: Optional[str] = Field(
         default=None,
         description="Short status or cancellation reason attached to this event version.",
@@ -345,6 +353,10 @@ class Event(BaseObject):
         exclude=True,
         description="Generated combat-log entry for completed events; excluded from model serialization.",
     )
+    _effective_handler_presentations: tuple[
+        EffectiveHandlerPresentation,
+        ...,
+    ] = PrivateAttr(default=())
     identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
         default_factory=dict,
         exclude=True,
@@ -429,6 +441,17 @@ class Event(BaseObject):
         )
 
     def model_post_init(self, __context: Any) -> None:
+        if self.turn_execution_id is None:
+            parent = (
+                EventQueue.get_event_by_uuid(self.parent_event)
+                if self.parent_event is not None
+                else None
+            )
+            self.turn_execution_id = (
+                parent.turn_execution_id
+                if parent is not None
+                else EventQueue.current_turn_execution_id()
+            )
         super().model_post_init(__context)
         if self.use_register:
             EventQueue.register(self)
@@ -685,6 +708,13 @@ class Event(BaseObject):
             if event.timestamp < self.timestamp:
                 outs.append(event)
         return outs
+
+    @property
+    def effective_handler_presentations(
+        self,
+    ) -> tuple[EffectiveHandlerPresentation, ...]:
+        """Return exact reaction evidence retained across this event lineage."""
+        return self._effective_handler_presentations
 
     def post(self, **updates) -> Self:
         """Create a modified version of this event and rebroadcast it.
@@ -1094,6 +1124,7 @@ class EventQueue:
     _events_by_target: Dict[UUID, List[Event]] = defaultdict(list)
     _all_events: List[Event] = []
     _generation_uuid: UUID = uuid4()
+    _active_turn_execution_id: Optional[UUID] = None
 
     _event_handlers: Dict[UUID, 'EventHandler'] = {}
     _event_handlers_by_trigger: Dict[Trigger, List['EventHandler']] = defaultdict(list)
@@ -1146,6 +1177,29 @@ class EventQueue:
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
     _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, Set[str]]]] = None
+
+    @classmethod
+    def begin_turn_execution(cls, execution_id: Optional[UUID] = None) -> UUID:
+        """Open one causal encounter-turn scope and return its opaque identity."""
+        active = cls._active_turn_execution_id
+        if active is not None:
+            raise RuntimeError("A turn execution is already active")
+        resolved = execution_id or uuid4()
+        cls._active_turn_execution_id = resolved
+        return resolved
+
+    @classmethod
+    def current_turn_execution_id(cls) -> Optional[UUID]:
+        """Return the causal identity of the active encounter turn, if any."""
+        return cls._active_turn_execution_id
+
+    @classmethod
+    def end_turn_execution(cls, execution_id: UUID) -> None:
+        """Close the matching causal encounter-turn scope."""
+        active = cls._active_turn_execution_id
+        if active != execution_id:
+            raise RuntimeError("Cannot close a different turn execution")
+        cls._active_turn_execution_id = None
 
     @classmethod
     def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
@@ -1271,12 +1325,14 @@ class EventQueue:
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
         """Invoke one matched handler and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
+        before_event_index = len(cls._all_events)
         with runtime_behavior_provider(handler):
             result = handler(event)
         emitted_event_count = cls.event_cursor() - before_cursor
-        if result is not None and result.canceled:
+        result_changed = result is not None and result != event
+        if result_changed and result is not None and result.canceled:
             outcome = HandlerDispatchOutcome.CANCELED_EVENT
-        elif result is not None and result.modified:
+        elif result_changed and result is not None and result.modified:
             outcome = HandlerDispatchOutcome.MODIFIED_EVENT
         elif emitted_event_count:
             outcome = HandlerDispatchOutcome.EMITTED_EVENTS
@@ -1296,6 +1352,30 @@ class EventQueue:
             outcome=outcome,
             emitted_event_count=emitted_event_count,
         )
+        binding = handler.behavior_binding
+        if (
+            result is not None
+            and evidence.effected
+            and handler.content_kind is RuntimeBehaviorKind.REACTION
+            and isinstance(binding, BehaviorBinding)
+        ):
+            emitted_lineages = tuple(dict.fromkeys(
+                emitted.lineage_uuid
+                for emitted in cls._all_events[before_event_index:]
+            ))
+            result._effective_handler_presentations = (
+                *result.effective_handler_presentations,
+                EffectiveHandlerPresentation(
+                    dispatch_index=evidence.dispatch_index,
+                    handler_name=handler.name,
+                    behavior_binding=binding,
+                    source_entity_uuid=handler.source_entity_uuid,
+                    triggering_event_uuid=event.uuid,
+                    triggering_lineage_uuid=event.lineage_uuid,
+                    emitted_lineage_uuids=emitted_lineages,
+                    outcome=evidence.outcome,
+                ),
+            )
         cls._handler_dispatch_cursor += 1
         for callback in tuple(cls._on_handler_dispatch_callbacks):
             try:
@@ -2229,6 +2309,7 @@ class EventQueue:
         cls._on_event_batch_callbacks.clear()
         cls._on_handler_dispatch_callbacks.clear()
         cls._handler_dispatch_cursor = 0
+        cls._active_turn_execution_id = None
         cls._event_batch_depth.set(0)
         cls._pending_event_batch.set(None)
         cls._preflight_depth.set(0)

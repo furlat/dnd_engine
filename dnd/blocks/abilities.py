@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
 from dnd.core.events import AbilityName
 
@@ -83,6 +84,25 @@ class Ability(BaseBlock):
     )
     ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
     modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
+    check_proficiency_sources: ProficiencySourceSet = Field(
+        default_factory=ProficiencySourceSet,
+        description=(
+            "Exact source-owned proficiency contributions to checks using "
+            "this ability."
+        ),
+    )
+
+    def add_check_proficiency_source(
+        self,
+        source_id: UUID,
+        mode: ProficiencyMode,
+    ) -> None:
+        """Add one proficiency contribution to checks using this ability."""
+        self.check_proficiency_sources.add(source_id, mode)
+
+    def remove_check_proficiency_source(self, source_id: UUID) -> bool:
+        """Remove exactly one ability-check proficiency contribution."""
+        return self.check_proficiency_sources.remove(source_id)
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Ability']:
         """

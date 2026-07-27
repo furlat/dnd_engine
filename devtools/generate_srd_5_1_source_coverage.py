@@ -39,10 +39,6 @@ from dnd.core.content.inventory import (
     SourceImplementationStatus,
 )
 from dnd.core.content.provenance import ContentSource
-from dnd.core.content.registration import get_content_declaration
-from dnd.content_system.reaction_definitions import (
-    REACTION_BEHAVIOR_DECLARATIONS,
-)
 from dnd.items.armors import SRD_ARMOR_RECIPES_BY_LEGACY_ID
 from dnd.items.consumables import (
     HASTE_POTION_DECLARATION,
@@ -67,9 +63,8 @@ from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS,
 )
 from dnd.spells import ALL_SPELLS, SPELL_CONTENT_DECLARATIONS_BY_NAME
-from dnd.spells.abjuration import (
-    CounterspellReactionHandler,
-    ShieldReactionHandler,
+from dnd.spells.reaction_spell_content import (
+    LEARNED_REACTION_SPELL_SPECS,
 )
 
 
@@ -184,6 +179,7 @@ _WEAPON_RECIPE_KEYS = {
     "Sickle": "sickle",
     "Spear": "spear",
     "Crossbow, light": "light_crossbow",
+    "Dart": "dart",
     "Shortbow": "shortbow",
     "Sling": "sling",
     "Battleaxe": "battleaxe",
@@ -248,19 +244,9 @@ _ARMOR_LEGACY_FACTORY_NAMES = {
     "Plate": "create_plate_armor",
     "Shield": "create_shield",
 }
-_PARTIAL_SPELL_REACTIONS = {
-    "Counterspell": (
-        CounterspellReactionHandler,
-        get_content_declaration(CounterspellReactionHandler).ref,
-    ),
-    "Shield": (
-        ShieldReactionHandler,
-        next(
-            declaration.ref
-            for declaration in REACTION_BEHAVIOR_DECLARATIONS
-            if declaration.ref.content_id == "reaction.spell.shield"
-        ),
-    ),
+_LEARNED_REACTION_SPELLS_BY_NAME = {
+    spec.display_name: spec
+    for spec in LEARNED_REACTION_SPELL_SPECS
 }
 
 
@@ -741,26 +727,27 @@ def _spell_rows(
     rows = []
     for heading in headings:
         spell_class = ALL_SPELLS.get(heading.name)
-        partial_reaction = _PARTIAL_SPELL_REACTIONS.get(heading.name)
-        if spell_class is None and partial_reaction is None:
+        reaction_spell = _LEARNED_REACTION_SPELLS_BY_NAME.get(heading.name)
+        if spell_class is None and reaction_spell is None:
             status = SourceImplementationStatus.MISSING
             locators: tuple[str, ...] = ()
             content_ref = None
             dependency_refs: tuple[ContentRef, ...] = ()
             notes = f"Source declaration: {heading.detail}."
-        elif spell_class is None:
-            assert partial_reaction is not None
-            reaction_type, reaction_ref = partial_reaction
-            status = SourceImplementationStatus.PARTIAL
-            locators = (_locator(reaction_type),)
-            content_ref = None
-            dependency_refs = (reaction_ref,)
+        elif reaction_spell is not None:
+            status = SourceImplementationStatus.PLAYABLE
+            locators = (_locator(reaction_spell.handler_type),)
+            content_ref = reaction_spell.declaration.ref
+            dependency_refs = tuple(
+                dependency.target_ref
+                for dependency in reaction_spell.declaration.dependencies
+            )
             notes = (
-                f"Source declaration: {heading.detail}. The exact reaction "
-                "behavior is playable, but the learnable spell root and "
-                "spell-catalog entry are not implemented."
+                f"Source declaration: {heading.detail}. The exact learned "
+                "spell root installs its exact playable reaction behavior."
             )
         else:
+            assert spell_class is not None
             status = SourceImplementationStatus.PLAYABLE
             locators = (_locator(spell_class),)
             content_ref = SPELL_CONTENT_DECLARATIONS_BY_NAME[
@@ -845,6 +832,13 @@ def _current_migrated_content_refs(
         in SPELL_CONTENT_DECLARATIONS_BY_NAME.items()
         if declaration.ref.pack_id == "content.srd_5_1_cc"
     })
+    refs.update({
+        (
+            SourceCoverageSection.SPELLS,
+            spec.display_name,
+        ): spec.declaration.ref
+        for spec in LEARNED_REACTION_SPELL_SPECS
+    })
     return refs
 
 
@@ -865,26 +859,29 @@ def _refresh_content_refs(
             if ref is not None
             else None
         )
-        partial_reaction = (
-            _PARTIAL_SPELL_REACTIONS.get(row["source_name"])
+        reaction_spell = (
+            _LEARNED_REACTION_SPELLS_BY_NAME.get(row["source_name"])
             if row["section"] == SourceCoverageSection.SPELLS.value
             else None
         )
-        if partial_reaction is not None:
-            reaction_type, reaction_ref = partial_reaction
+        if reaction_spell is not None:
             source_declaration = row["mechanical_notes"].partition(".")[0]
             row["implementation_status"] = (
-                SourceImplementationStatus.PARTIAL.value
+                SourceImplementationStatus.PLAYABLE.value
             )
-            row["legacy_locators"] = [_locator(reaction_type)]
-            row["content_ref"] = None
+            row["legacy_locators"] = [
+                _locator(reaction_spell.handler_type),
+            ]
+            row["content_ref"] = (
+                reaction_spell.declaration.ref.model_dump(mode="json")
+            )
             row["dependency_refs"] = [
-                reaction_ref.model_dump(mode="json"),
+                dependency.target_ref.model_dump(mode="json")
+                for dependency in reaction_spell.declaration.dependencies
             ]
             row["mechanical_notes"] = (
-                f"{source_declaration}. The exact reaction behavior is "
-                "playable, but the learnable spell root and spell-catalog "
-                "entry are not implemented."
+                f"{source_declaration}. The exact learned spell root installs "
+                "its exact playable reaction behavior."
             )
     return SourceCoverageLedger.model_validate(payload)
 

@@ -9,6 +9,7 @@ from pydantic import (
 )
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
@@ -1044,6 +1045,14 @@ class GameCreationSideRequest(BaseModel):
 class GameCreationStartRequest(BaseModel):
     """Atomic scenario and controller assignment request."""
 
+    character_id: Optional[UUID] = Field(
+        default=None,
+        description=(
+            "Persistent character selected for the composed hero seat. "
+            "Standalone resolves it from the active local profile; hosted "
+            "gateway deployment authenticates and pins the same identity."
+        ),
+    )
     scenario: GameCreationScenario = Field(description="Preset or composed scenario selection.")
     side_a: GameCreationSideRequest = Field(description="Controller assignment for the hero side.")
     side_b: GameCreationSideRequest = Field(description="Controller assignment for the opposition side.")

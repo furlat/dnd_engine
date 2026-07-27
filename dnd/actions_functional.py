@@ -23,7 +23,7 @@ from dnd.core.events import (
 from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity
-from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop, SpellAction
 from dnd.conditions import (
     create_has_attacked_handler,
     create_has_taken_damage_handler,
@@ -557,29 +557,46 @@ def execute_by_index(
     )
 
 
-def register_spell(entity: Entity, spell_class: type, caster_level: int = 1) -> None:
+def register_spell(
+    entity: Entity,
+    spell_class: type[SpellAction],
+    caster_level: int = 1,
+    *,
+    spellcasting_source_id: Optional[UUID] = None,
+) -> None:
     """Register a spell template on an entity.
 
     Args:
         entity: Entity receiving the spell template.
         spell_class: Spell action class to instantiate as a template.
         caster_level: Caster level used for scaling spell templates.
+        spellcasting_source_id: Exact registered source owning this spell.
+            None preserves the legacy default spellcasting ability.
     """
     spell = spell_class(
         source_entity_uuid=entity.uuid,
         caster_level=caster_level,
+        spellcasting_source_id=spellcasting_source_id,
         template=True
     )
     entity.register_action(spell)
 
 
-def register_spells_by_name(entity: Entity, spell_names: list, caster_level: int = 1) -> None:
+def register_spells_by_name(
+    entity: Entity,
+    spell_names: list[str],
+    caster_level: int = 1,
+    *,
+    spellcasting_source_id: Optional[UUID] = None,
+) -> None:
     """Register multiple spells by name from ALL_SPELLS dict.
 
     Args:
         entity: Entity receiving spell templates.
         spell_names: Spell names present in `ALL_SPELLS`.
         caster_level: Caster level used for scaling spell templates.
+        spellcasting_source_id: Exact registered source owning these spells.
+            None preserves the legacy default spellcasting ability.
 
     Raises:
         ValueError: If a spell name is unknown.
@@ -588,7 +605,12 @@ def register_spells_by_name(entity: Entity, spell_names: list, caster_level: int
     for name in spell_names:
         if name not in ALL_SPELLS:
             raise ValueError(f"Unknown spell: {name}")
-        register_spell(entity, ALL_SPELLS[name], caster_level)
+        register_spell(
+            entity,
+            ALL_SPELLS[name],
+            caster_level,
+            spellcasting_source_id=spellcasting_source_id,
+        )
 
 
 def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:

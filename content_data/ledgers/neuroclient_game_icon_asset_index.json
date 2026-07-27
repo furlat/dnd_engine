@@ -1,5 +1,5 @@
 {
-  "asset_index_digest": "b3a1207422be1f9456921522da32ad8aada9fef4698af4f0c9b818e9a842090a",
+  "asset_index_digest": "440314e68181847a1a29fcdffe5a8a5444449d478781afb5a24a3233546a3201",
   "assets": [
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.action-surge.webp",
@@ -107,9 +107,19 @@
       "icon_key": "action.dodge"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.drop.webp",
+      "asset_sha256": "249e18a0037f5dad5e0d1a81e2eb971553b5a47fd0cffc8dba89f5ac2bf9ffde",
+      "icon_key": "action.drop"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.drop-concentration.webp",
       "asset_sha256": "6f53bbef95b71978af6e92ffc55de2535a2cc8f9a2bfbe9b2e38339ce6af19ab",
       "icon_key": "action.drop-concentration"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.drop-prone.webp",
+      "asset_sha256": "5f19292c317b81b2795e15cde271a0a5e94604271bf3c6ddd92287867ad799bb",
+      "icon_key": "action.drop-prone"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.eat-from-feast.webp",
@@ -295,6 +305,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.spy-multiattack.webp",
       "asset_sha256": "482b10d1f122fd70ee92549b6bb148b99b134d51adb567275671eb522d869922",
       "icon_key": "action.spy-multiattack"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.stand-up.webp",
+      "asset_sha256": "3e572272347020b2b9572345ce2ada80d63d7855bc0087cffbe1e0a5c1f2c9e3",
+      "icon_key": "action.stand-up"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.sunbeam-strike.webp",
@@ -1183,7 +1198,7 @@
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/condition.generic.webp",
-      "asset_sha256": "5c4f976d3cce4daa3fc7fa3199ce8c28eccc6651e558479718eee823e28d78da",
+      "asset_sha256": "67d6f0826fb1f010ef7f3f223ca656535c9765e515c99c82c636b979cc062a90",
       "icon_key": "condition.generic"
     },
     {
@@ -1212,9 +1227,19 @@
       "icon_key": "item.bite"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.bracers.webp",
+      "asset_sha256": "d6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b",
+      "icon_key": "item.bracers"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.breastplate.webp",
       "asset_sha256": "fbf97d4464decb1cacdd4ee0e2fe01a72528db2592c11ba9671e96c21e51a43a",
       "icon_key": "item.breastplate"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.chain-coif.webp",
+      "asset_sha256": "606a07b7219c6a5554672d95cd548e4f16abd2eb6f4ad621d9e33cc2d276c4ee",
+      "icon_key": "item.chain-coif"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.chain-mail.webp",
@@ -1227,9 +1252,24 @@
       "icon_key": "item.chain-shirt"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.circus-performer-leather.webp",
+      "asset_sha256": "788a14aceb1561f76365cbbc86f0d054b24abf2a6d8128831063e3c7903f73c4",
+      "icon_key": "item.circus-performer-leather"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.claws.webp",
       "asset_sha256": "779b9a1e62632269cfb238355f0b34d88050128cccb3e53c80e4fe3225ab7817",
       "icon_key": "item.claws"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.cloth-armor.webp",
+      "asset_sha256": "bebe8ba12b3ce6e74d60bd8700b3468b1bddab2f6158ea26b9c19d0874268b8a",
+      "icon_key": "item.cloth-armor"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.cloth-hood.webp",
+      "asset_sha256": "ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e",
+      "icon_key": "item.cloth-hood"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.cloth-shoes.webp",
@@ -1260,6 +1300,31 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.dagger.webp",
       "asset_sha256": "929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e",
       "icon_key": "item.dagger"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.double-bladed-sword.webp",
+      "asset_sha256": "85826f6ab71a8b473556e101c5b3b0d42a34f71b6803849c87a03defffe08980",
+      "icon_key": "item.double-bladed-sword"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.field-kit.webp",
+      "asset_sha256": "d031f5306b4d5efd7c0730e7b1368795d2ac3c8c33d3d3e3cf769e95b30157d5",
+      "icon_key": "item.field-kit"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.fine-clothes.webp",
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "icon_key": "item.fine-clothes"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.gauntlets.webp",
+      "asset_sha256": "81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be",
+      "icon_key": "item.gauntlets"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.great-helm.webp",
+      "asset_sha256": "71deba0a168030ccccf51c7893369170a122466ace1d9a78bc2836bcdb40bac6",
+      "icon_key": "item.great-helm"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.greataxe.webp",
@@ -1297,6 +1362,11 @@
       "icon_key": "item.hide-armor"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.horned-helmet.webp",
+      "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
+      "icon_key": "item.horned-helmet"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.iron-helmet.webp",
       "asset_sha256": "634ee9859b3af68de828511a0813c2165e46b72f80444464d1e00277b1b6610a",
       "icon_key": "item.iron-helmet"
@@ -1322,6 +1392,16 @@
       "icon_key": "item.leather-boots"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.leather-gloves.webp",
+      "asset_sha256": "95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6",
+      "icon_key": "item.leather-gloves"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.leather-hood.webp",
+      "asset_sha256": "0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac",
+      "icon_key": "item.leather-hood"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.leather-shoes.webp",
       "asset_sha256": "5e268a5cd7d4e40cd51347e074b752276f7b83f278ed2dee117e79030b6a49d5",
       "icon_key": "item.leather-shoes"
@@ -1345,6 +1425,16 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.mace.webp",
       "asset_sha256": "41a24f630a683c9cce42be8efe162b19fcc4ed56c418d8dac229f408be2b83f8",
       "icon_key": "item.mace"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.monster-hands.webp",
+      "asset_sha256": "0285b9b3b054f718f3f9210ffdc9fdc5832136ccda6fb371ba450d68de1a3be5",
+      "icon_key": "item.monster-hands"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.monster-helm.webp",
+      "asset_sha256": "350f670d4e63cc9f0991504fbfffb4ba9e86e2dc1e3c66bddefa7879ee1cf639",
+      "icon_key": "item.monster-helm"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.morningstar.webp",
@@ -1472,6 +1562,11 @@
       "icon_key": "item.shortsword"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.sickle.webp",
+      "asset_sha256": "50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59",
+      "icon_key": "item.sickle"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.slam.webp",
       "asset_sha256": "a01b093a10b4f8afdb308e8b157a44f87c90c14a8ba32597a8887d9ea8a27356",
       "icon_key": "item.slam"
@@ -1515,6 +1610,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.travelers-clothes.webp",
       "asset_sha256": "f724d906569f59571f72c365d99b8a88902384716a99294813f6b704e077c030",
       "icon_key": "item.travelers-clothes"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.trident.webp",
+      "asset_sha256": "5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef",
+      "icon_key": "item.trident"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.wand-of-fire.webp",
@@ -1637,6 +1737,11 @@
       "icon_key": "reaction.counterspell"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/reaction.divine-smite.webp",
+      "asset_sha256": "e403d09e13b222e91651d052c18d93bdc64da60c962f13dfbb60588dfb7f894e",
+      "icon_key": "reaction.divine-smite"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/reaction.great-weapon-fighting.webp",
       "asset_sha256": "42d5dcdc08b519993908577bfb5a63534affae08a0f62479cfc47c3213c7a95b",
       "icon_key": "reaction.great-weapon-fighting"
@@ -1655,6 +1760,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.acid-splash.webp",
       "asset_sha256": "1672149b73949e10481f6e143454dc07aa77721cf900109686958a5fbb15d88b",
       "icon_key": "spell.acid-splash"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.aegis-spark.webp",
+      "asset_sha256": "4d4e14646f789b1d5a29357ce8e21de258fda996525c0e8ac85417e818187552",
+      "icon_key": "spell.aegis-spark"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.aid.webp",
@@ -2279,9 +2389,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 455,
+    "asset_count": 477,
     "schema_version": 3,
-    "sha256": "c154feeea3803fe3c023c7a89d4bf71cdc13624e2f6adf2be3429d4315815bea",
+    "sha256": "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc",
     "style_id": "fantasy-classic-v1"
   }
 }

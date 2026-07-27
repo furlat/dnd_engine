@@ -274,7 +274,7 @@ class CallLightning(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         damage_dice_count = 3 + self.get_upcast_bonus()
 
         effect_event = execution_event.phase_to(
@@ -390,7 +390,7 @@ class PoisonSpray(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Entity not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -525,7 +525,7 @@ class AcidSplash(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -837,7 +837,7 @@ class Grease(SpellAction):
                     effect_id="control.grease.prone",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="dexterity",
                     condition_fact_ids=("selected_target.condition.prone",),
                     condition_semantic_keys=frozenset({"dnd.conditions.Prone"}),
@@ -879,7 +879,7 @@ class Grease(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1454,7 +1454,7 @@ class Web(SpellAction):
                     effect_id="control.web.restrained",
                     disposition=TargetEffectDisposition.HARMFUL,
                     resolution=OutcomeResolution.SAVING_THROW,
-                    save_dc=actor.spell_save_dc(),
+                    save_dc=actor.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id),
                     save_ability="dexterity",
                     condition_fact_ids=("selected_target.condition.restrained",),
                     condition_semantic_keys=frozenset({
@@ -1499,7 +1499,7 @@ class Web(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1830,7 +1830,7 @@ class Cloudkill(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
 
         effect_event = execution_event.phase_to(
@@ -2299,7 +2299,7 @@ class SpiritGuardians(SpellAction):
         if not caster:
             return execution_event.cancel(status_message="Caster not found")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
 
         effect_event = execution_event.phase_to(
@@ -2992,7 +2992,7 @@ class InsectPlague(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         upcast_bonus = self.get_upcast_bonus()
 
         effect_event = execution_event.phase_to(
@@ -3248,7 +3248,7 @@ class IncendiaryCloud(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -3547,7 +3547,7 @@ class StinkingCloud(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -3853,7 +3853,7 @@ class SleetStorm(SpellAction):
         if not target_pos:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -4197,7 +4197,7 @@ class GuardianOfFaith(SpellAction):
         if not position:
             return execution_event.cancel(status_message="No target position")
 
-        dc = caster.spell_save_dc()
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
