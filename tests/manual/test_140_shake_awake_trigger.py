@@ -6,7 +6,7 @@ from dnd.entity import Entity
 from dnd.spells.enchantment import SleepEffect
 from dnd.spells.illusion import HypnoticPatternEffect
 from dnd.spells.necromancy import EyebiteAsleepEffect
-from tests.engine_book.test_chapter_10_core_actions_combat import (
+from tests.engine.test_combat_actions import (
     reset_core_action_state,
     strong_entity,
 )

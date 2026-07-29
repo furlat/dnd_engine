@@ -1,9 +1,4 @@
-"""
-Simple creature factories for combat examples.
-
-This module provides factory functions to create basic D&D 5e creatures
-for testing and demonstrating the combat system.
-"""
+"""Runtime builders behind canonical NeuroDragon bestiary declarations."""
 
 from uuid import UUID, uuid4
 from typing import Optional, Tuple
@@ -25,7 +20,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.core.modifiers import DamageType, CreatureType, Size
+from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.actions import Hide, Disengage
@@ -35,7 +30,6 @@ from dnd.items.armors import (
     LEATHER_ARMOR_RECIPE,
     WOODEN_SHIELD_RECIPE,
 )
-
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.spells.evocation import (
     FireBolt, Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
@@ -627,6 +621,44 @@ def create_caster(
     return entity
 
 
+def create_goblin_caster(
+    source_id: Optional[UUID] = None,
+    name: str = "Goblin Caster",
+    position: Tuple[int, int] = (0, 0),
+    faction: Optional[str] = None,
+    level: int = 5,
+    weight: int = 40,
+    *,
+    possession_mode: CreaturePossessionMode = (
+        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    ),
+    content_ref: ContentRef | None = None,
+) -> Entity:
+    """Create the authored goblin full-caster variant used by scenario cells."""
+    entity = create_caster(
+        source_id=source_id,
+        name=name,
+        position=position,
+        faction=faction,
+        level=level,
+        possession_mode=possession_mode,
+        content_ref=content_ref,
+    )
+    entity.description = (
+        "A small goblin hedge caster combining innate arcane power with "
+        "goblinoid mobility."
+    )
+    entity.size = Size.SMALL
+    entity.weight = weight
+    for field_name, value in GOBLIN_APPEARANCE.model_dump().items():
+        setattr(entity.appearance, field_name, value)
+    entity.senses.sense_modes.append(
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
+    )
+    register_goblin_nimble_escape(entity)
+    return entity
+
+
 def create_skeleton_warrior(
     source_id: Optional[UUID] = None,
     name: str = "Skeleton Warrior",
@@ -999,18 +1031,3 @@ def create_skeleton_warlock(
     entity.loot_item(scroll)
 
     return entity
-
-if __name__ == "__main__":
-
-    goblin = create_goblin(name="Test Goblin", position=(0, 0))
-    skeleton = create_skeleton(name="Test Skeleton", position=(1, 0))
-
-    print(f"Created {goblin.name}:")
-    print(f"  HP: {goblin.get_hp()}")
-    print(f"  AC: {goblin.ac_bonus().normalized_score}")
-    print(f"  Position: {goblin.position}")
-
-    print(f"\nCreated {skeleton.name}:")
-    print(f"  HP: {skeleton.get_hp()}")
-    print(f"  AC: {skeleton.ac_bonus().normalized_score}")
-    print(f"  Position: {skeleton.position}")

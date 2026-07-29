@@ -7,7 +7,10 @@ from typing import ClassVar
 from dnd.controller import PassController
 from dnd.encounter import EncounterState
 from dnd.entity import Entity
-from dnd.scenarios.evaluation.assembler import prepare_legacy_scenario
+from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
+from dnd.scenarios.encounter_catalog import (
+    encounter_recipe,
+)
 
 
 class _RecordingController(PassController):
@@ -21,20 +24,25 @@ class _RecordingController(PassController):
 
 def test_prepared_scenario_does_not_start_before_final_controllers_are_installed() -> None:
     _RecordingController.started_entities.clear()
-    arena = prepare_legacy_scenario("standard_skeleton_doors", opening_faction="heroes")
+    assembled = prepare_encounter_recipe(
+        encounter_recipe("encounter.standard_skeleton_doors"),
+    )
+    encounter = assembled.encounter
 
-    assert arena.encounter.state is EncounterState.NOT_STARTED
-    assert arena.encounter.get_current_entity() is None
+    assert encounter.state is EncounterState.NOT_STARTED
+    assert encounter.get_current_entity() is None
 
-    for actor in (*arena.side_a, *arena.side_b):
-        arena.encounter.set_controller_for(
+    for actor in assembled.entities:
+        encounter.set_controller_for(
             actor.uuid,
             _RecordingController(source_entity_uuid=actor.uuid),
         )
 
-    arena.encounter.start_encounter()
+    encounter.start_encounter()
 
-    assert arena.encounter.state is EncounterState.ACTIVE
-    assert arena.encounter.get_current_entity() is not None
-    assert len(_RecordingController.started_entities) == len((*arena.side_a, *arena.side_b))
+    assert encounter.state is EncounterState.ACTIVE
+    assert encounter.get_current_entity() is not None
+    assert len(_RecordingController.started_entities) == len(
+        assembled.entities,
+    )
     assert all(len(entity_uuids) == 1 for entity_uuids in _RecordingController.started_entities)

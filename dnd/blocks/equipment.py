@@ -5,7 +5,8 @@ from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, U
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import NumericalModifier, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.blocks.abilities import Ability, AbilityScores
 from dnd.core.events import Event, EventQueue, EventType, EventPhase, Range, RangeType, AbilityName, Damage
 from dnd.core.equipment_types import (

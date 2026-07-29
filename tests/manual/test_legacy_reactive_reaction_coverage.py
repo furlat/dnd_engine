@@ -39,16 +39,17 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.environment_content import door_recipe
 from dnd.items.spell_items import SpellGrantingItem, invisibility_scroll_recipe
 from dnd.items.weapons import SHORTSWORD_RECIPE
-from dnd.items.test_items import (
-    TestDoorA as DoorFixture,
+from dnd.items.environment_interactables import (
+    DoorObject as DoorFixture,
 )
-from dnd.items.test_reactions import (
+from tests.manual.reactive_fixture_support import (
     DodgeRollFeature,
     Intercepting,
     PrepareIntercept,
@@ -56,7 +57,7 @@ from dnd.items.test_reactions import (
 from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.illusion import GreaterInvisibility, Invisibility
-from dnd.utils import (
+from tests.engine.support import (
     force_attack_hit,
     force_attack_miss,
     remove_attack_modifier,
@@ -77,9 +78,9 @@ class LegacyCoverage:
 
 
 THIS_FILE = "tests/manual/test_legacy_reactive_reaction_coverage.py"
-SENSES_BOOK = "tests/engine_book/test_chapter_12_senses_light_stealth.py"
-GRID_BOOK = "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py"
-MOVEMENT_BOOK = "tests/engine_book/test_manual_11_grid_tiles_terrain_movement.py"
+SENSES_BOOK = "tests/engine/test_senses_light_stealth.py"
+GRID_BOOK = "tests/engine/test_grid_pathfinding.py"
+MOVEMENT_BOOK = "tests/engine/test_manual_11_grid_tiles_terrain_movement.py"
 PERFORMANCE_FILE = "tests/manual/test_43_ai_runtime_performance.py"
 
 SENSES_REGISTRATION_SELECTOR = (

@@ -227,11 +227,6 @@ class GridMap:
         return self._movement_revision
 
     @property
-    def occupancy_revision(self) -> int:
-        """Return the current entity-occupancy revision for path blocking."""
-        return self._occupancy_revision
-
-    @property
     def propagation_revision(self) -> int:
         """Return the current physical-propagation topology revision."""
         return self._propagation_revision
@@ -539,10 +534,6 @@ class GridMap:
                 return True
 
         return False
-
-    def is_position_hazardous(self, x: int, y: int) -> bool:
-        """Non-entity-aware hazard check. True if ANY hazard condition exists."""
-        return self.is_position_hazardous_for(x, y, entity_uuid=None)
 
     def has_any_hazards(self) -> bool:
         """Return whether any tile or placed object currently declares a hazard."""
@@ -1108,32 +1099,6 @@ class GridMap:
             self._bump_all_spatial_revisions()
             self.enable_events()
 
-    def create_room(self, x: int, y: int, width: int, height: int,
-                    floor_name: str = "Floor", wall_name: str = "Wall") -> None:
-        """Create a room with floor tiles surrounded by wall tiles."""
-        self.disable_events()
-        try:
-            def _set_tile(pos: Tuple[int, int], tile: Tile) -> None:
-                old_tile = self._tiles.get(pos)
-                if old_tile:
-                    self._tiles_by_uuid.pop(old_tile.uuid, None)
-                self._tiles[pos] = tile
-                self._tiles_by_uuid[tile.uuid] = pos
-
-            for tx in range(x, x + width):
-                _set_tile((tx, y), Tile.create((tx, y), walkable=False, visible=False, name=wall_name))
-                _set_tile((tx, y + height - 1), Tile.create((tx, y + height - 1), walkable=False, visible=False, name=wall_name))
-            for ty in range(y, y + height):
-                _set_tile((x, ty), Tile.create((x, ty), walkable=False, visible=False, name=wall_name))
-                _set_tile((x + width - 1, ty), Tile.create((x + width - 1, ty), walkable=False, visible=False, name=wall_name))
-            for tx in range(x + 1, x + width - 1):
-                for ty in range(y + 1, y + height - 1):
-                    _set_tile((tx, ty), Tile.create((tx, ty), walkable=True, visible=True, name=floor_name))
-            self._bounds_dirty = True
-        finally:
-            self._bump_all_spatial_revisions()
-            self.enable_events()
-
     def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
                          parent_event: Optional[UUID] = None) -> None:
         """Register an entity at a position."""
@@ -1160,26 +1125,6 @@ class GridMap:
                 **new_directional_metadata,
             )
             self._fire_spatial_event(event)
-
-    def unregister_entity(self, entity_uuid: UUID,
-                           parent_event: Optional[UUID] = None) -> None:
-        """Remove an entity from position tracking and subscriptions."""
-        if entity_uuid in self._entity_positions:
-            pos = self._entity_positions[entity_uuid]
-            self._entities_by_position[pos].discard(entity_uuid)
-            self.invalidate_occupancy_paths()
-            directional_metadata = self.recompute_tile_directional_blocking(pos)
-
-            if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(
-                    pos, entity_uuid, parent_event=parent_event,
-                    **directional_metadata,
-                )
-                self._fire_spatial_event(event)
-
-            del self._entity_positions[entity_uuid]
-
-        self.unsubscribe_entity(entity_uuid)
 
     def move_entity(
         self,
@@ -1240,9 +1185,9 @@ class GridMap:
         """Get all entity UUIDs at a position."""
         return self._entities_by_position.get(position, set()).copy()
 
-    def get_all_entity_positions(self) -> Dict[UUID, Tuple[int, int]]:
-        """Get all entity positions."""
-        return self._entity_positions.copy()
+    def get_all_object_positions(self) -> Dict[UUID, Tuple[int, int]]:
+        """Get all placed object positions."""
+        return self._object_positions.copy()
 
     def place_object(self, object_uuid: UUID, position: Tuple[int, int],
                       parent_event: Optional[UUID] = None) -> None:
@@ -1854,18 +1799,6 @@ class GridMap:
         )
         if len(self._path_cache) > 128:
             self._path_cache.popitem(last=False)
-        return result
-
-    def get_visible_entities(self, origin: Tuple[int, int], max_distance: Optional[float] = None
-                             ) -> Dict[UUID, Tuple[int, int]]:
-        """Get all entities visible from origin position."""
-        visible_positions = self.compute_fov(origin, max_distance)
-        result: Dict[UUID, Tuple[int, int]] = {}
-
-        for pos in visible_positions:
-            for entity_uuid in self._entities_by_position.get(pos, set()):
-                result[entity_uuid] = pos
-
         return result
 
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
@@ -2539,15 +2472,6 @@ class GridMap:
     def tile_count(self) -> int:
         """Get number of tiles."""
         return len(self._tiles)
-
-    def entity_count(self) -> int:
-        """Get number of registered entities."""
-        return len(self._entity_positions)
-
-    def subscription_count(self) -> int:
-        """Get total number of cell subscriptions."""
-        return sum(len(subs) for subs in self._cell_subscribers.values())
-
 
 def get_map() -> GridMap:
     """Get the global GridMap instance."""

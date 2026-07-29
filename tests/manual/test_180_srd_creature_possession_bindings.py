@@ -12,15 +12,25 @@ from dnd.content_system.item_bindings import (
     ITEM_RUNTIME_BINDINGS,
     ItemRuntimeOrigin,
 )
+from dnd.content_system.creature_possessions import (
+    CreaturePossessionDisposition,
+)
+from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
 from dnd.core.events import RangeType
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
+    SRD_CREATURE_POSSESSION_GRANTS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
+)
+from dnd.monsters.configured_srd_creatures import (
+    CONFIGURED_SRD_CREATURE_DECLARATIONS_BY_ID,
+    CONFIGURED_SRD_CREATURE_RECIPES_BY_ID,
+    CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID,
 )
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -141,6 +151,21 @@ def _materialize(
     )
 
 
+def _materialize_configured(creature_id: str):
+    declaration = CONFIGURED_SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
+    return materialize_creature(
+        CONFIGURED_SRD_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=uuid4(),
+        display_name=declaration.descriptor.display_name,
+        faction="monsters",
+        position=(2, 2),
+        deployment_role=CreatureDeploymentRole(
+            role_id=f"tests.configured_srd_possessions.{creature_id}",
+        ),
+        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
+    )
+
+
 def test_every_equipped_srd_creature_item_has_an_exact_runtime_binding() -> None:
     """No creature possession may fall back to a Python class or display name."""
     for creature_id in SRD_CREATURE_RECIPES_BY_ID:
@@ -152,6 +177,109 @@ def test_every_equipped_srd_creature_item_has_an_exact_runtime_binding() -> None
                 continue
             binding = ITEM_RUNTIME_BINDINGS.require(item.uuid)
             assert item.content_ref == binding.recipe.ref
+
+
+def test_srd_possession_grants_are_the_only_runtime_and_dependency_source() -> None:
+    """Declarations and raw factories consume the same exact possession rows."""
+    assert tuple(SRD_CREATURE_POSSESSION_GRANTS_BY_ID) == tuple(
+        SRD_CREATURE_RECIPES_BY_ID
+    )
+    for creature_id, grants in SRD_CREATURE_POSSESSION_GRANTS_BY_ID.items():
+        reset_engine_runtime(grid_size=(8, 8))
+        entity = _materialize(creature_id)
+        runtime_rows = {
+            (
+                item.equipped_slot,
+                ITEM_RUNTIME_BINDINGS.require(item.uuid).origin,
+                ITEM_RUNTIME_BINDINGS.require(item.uuid).recipe.recipe_digest,
+            )
+            for item in entity.equipment.get_all_equipped_items()
+        }
+        runtime_rows.update(
+            (
+                None,
+                ITEM_RUNTIME_BINDINGS.require(item.uuid).origin,
+                ITEM_RUNTIME_BINDINGS.require(item.uuid).recipe.recipe_digest,
+            )
+            for item in entity.inventory.items.values()
+        )
+        grant_rows = {
+            (
+                (
+                    grant.equipment_slot.value
+                    if grant.equipment_slot is not None
+                    else None
+                ),
+                (
+                    ItemRuntimeOrigin.INTRINSIC
+                    if grant.disposition
+                    is CreaturePossessionDisposition.INTRINSIC
+                    else ItemRuntimeOrigin.STARTER
+                ),
+                grant.recipe.recipe_digest,
+            )
+            for grant in grants
+        }
+        assert runtime_rows == grant_rows, creature_id
+
+        dependency_refs = {
+            dependency.target_ref.identity_key
+            for dependency in SRD_CREATURE_DECLARATIONS_BY_ID[
+                creature_id
+            ].dependencies
+            if dependency.relation in {
+                ContentDependencyRelation.CREATES_ITEM,
+                ContentDependencyRelation.EQUIPS_ITEM,
+            }
+        }
+        assert dependency_refs == {
+            grant.recipe.ref.identity_key
+            for grant in grants
+        }, creature_id
+
+
+def test_neurodragon_configured_srd_roots_own_exact_wardrobes() -> None:
+    """Presentation composition belongs to one exact downstream creature root."""
+    assert set(CONFIGURED_SRD_CREATURE_RECIPES_BY_ID) == set(
+        CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID
+    )
+    for creature_id, wardrobe in (
+        CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID.items()
+    ):
+        reset_engine_runtime(grid_size=(8, 8))
+        entity = _materialize_configured(creature_id)
+        declaration = CONFIGURED_SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
+        assert entity.content_ref == declaration.ref
+
+        dependency_by_relation = {
+            relation: {
+                dependency.target_ref
+                for dependency in declaration.dependencies
+                if dependency.relation is relation
+            }
+            for relation in (
+                ContentDependencyRelation.CONFIGURES_CREATURE,
+                ContentDependencyRelation.EQUIPS_ITEM,
+            )
+        }
+        assert dependency_by_relation[
+            ContentDependencyRelation.CONFIGURES_CREATURE
+        ] == {SRD_CREATURE_DECLARATIONS_BY_ID[creature_id].ref}
+        assert dependency_by_relation[
+            ContentDependencyRelation.EQUIPS_ITEM
+        ] == {grant.recipe.ref for grant in wardrobe}
+
+        runtime_digests = {
+            ITEM_RUNTIME_BINDINGS.require(item.uuid).recipe.recipe_digest
+            for item in entity.equipment.get_all_equipped_items()
+        }
+        assert runtime_digests == {
+            grant.recipe.recipe_digest
+            for grant in (
+                *SRD_CREATURE_POSSESSION_GRANTS_BY_ID[creature_id],
+                *wardrobe,
+            )
+        }
 
 
 def test_migrated_srd_possessions_preserve_their_exact_mechanical_profiles() -> None:

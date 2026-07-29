@@ -17,13 +17,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.actions_functional import register_spells_by_name, setup_standard_actions
+from dnd.actions_functional import register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.equipment import BodyArmor, Shield, Weapon
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
@@ -57,10 +57,16 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.events import AbilityName
-from dnd.core.modifiers import CreatureType, DamageType, Size
+from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+)
+from dnd.content_system.creature_possessions import (
+    CreaturePossessionDisposition,
+    CreaturePossessionGrant,
+    apply_creature_possessions,
+    creature_possession_dependencies,
 )
 from dnd.content_system.item_runtime_materialization import (
     materialize_item_from_installed_runtime,
@@ -127,7 +133,28 @@ from dnd.monsters.traits import (
     register_undead_fortitude,
     register_wolf_bite_prone_rider,
 )
-from dnd.spells.abjuration import register_counterspell_reaction, register_shield_reaction
+from dnd.spells.abjuration import (
+    LesserRestoration,
+    MageArmor,
+    Sanctuary,
+    ShieldOfFaith,
+    register_counterspell_reaction,
+    register_shield_reaction,
+)
+from dnd.spells.conjuration import MistyStep, SpiritGuardians
+from dnd.spells.enchantment import Bless, Command, HoldPerson
+from dnd.spells.evocation import (
+    ConeOfCold,
+    CureWounds,
+    FireBolt,
+    Fireball,
+    GuidingBolt,
+    IceStorm,
+    MagicMissile,
+    SacredFlame,
+)
+from dnd.spells.illusion import GreaterInvisibility
+from dnd.spells.necromancy import InflictWounds
 
 
 HitDieValue = Literal[4, 6, 8, 10, 12]
@@ -392,7 +419,8 @@ def _configure_acolyte(context: CreatureBuildContext) -> Entity:
         spell_slots={1: 3},
         skills={"medicine": True, "religion": True},
     )
-    register_spells_by_name(entity, ["Sacred Flame", "Bless", "Cure Wounds"], caster_level=1)
+    for spell_type in (SacredFlame, Bless, CureWounds):
+        register_spell(entity, spell_type, caster_level=1)
     _equip(
         entity,
         melee=_default_possession(
@@ -633,7 +661,15 @@ def _configure_priest(context: CreatureBuildContext) -> Entity:
         spell_slots={1: 4, 2: 3, 3: 2},
         skills={"medicine": True, "persuasion": True, "religion": True},
     )
-    register_spells_by_name(entity, ["Sacred Flame", "Cure Wounds", "Guiding Bolt", "Sanctuary", "Lesser Restoration", "Spirit Guardians"], caster_level=5)
+    for spell_type in (
+        SacredFlame,
+        CureWounds,
+        GuidingBolt,
+        Sanctuary,
+        LesserRestoration,
+        SpiritGuardians,
+    ):
+        register_spell(entity, spell_type, caster_level=5)
     _equip(
         entity,
         armor=_default_possession(
@@ -668,7 +704,14 @@ def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
         spell_slots={1: 4, 2: 3},
         skills={"deception": True, "persuasion": True, "religion": True},
     )
-    register_spells_by_name(entity, ["Sacred Flame", "Command", "Inflict Wounds", "Shield of Faith", "Hold Person"], caster_level=4)
+    for spell_type in (
+        SacredFlame,
+        Command,
+        InflictWounds,
+        ShieldOfFaith,
+        HoldPerson,
+    ):
+        register_spell(entity, spell_type, caster_level=4)
     _equip(
         entity,
         armor=_default_possession(
@@ -804,7 +847,17 @@ def _configure_mage(context: CreatureBuildContext) -> Entity:
         spell_slots={1: 4, 2: 3, 3: 3, 4: 3, 5: 1},
         skills={"arcana": True, "history": True},
     )
-    register_spells_by_name(entity, ["Fire Bolt", "Magic Missile", "Mage Armor", "Misty Step", "Fireball", "Greater Invisibility", "Ice Storm", "Cone of Cold"], caster_level=9)
+    for spell_type in (
+        FireBolt,
+        MagicMissile,
+        MageArmor,
+        MistyStep,
+        Fireball,
+        GreaterInvisibility,
+        IceStorm,
+        ConeOfCold,
+    ):
+        register_spell(entity, spell_type, caster_level=9)
     register_shield_reaction(entity)
     register_counterspell_reaction(entity)
     _equip(
@@ -1047,19 +1100,6 @@ def _configure_wolf(context: CreatureBuildContext) -> Entity:
         movement=40,
         skills={"perception": True, "stealth": True},
     )
-    _equip(
-        entity,
-        armor=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["wolf_natural_armor"],
-            entity.uuid,
-            expected_type=BodyArmor,
-        ),
-        melee=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["wolf_bite"],
-            entity.uuid,
-            expected_type=Weapon,
-        ),
-    )
     register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)
     register_wolf_bite_prone_rider(entity)
@@ -1080,19 +1120,6 @@ def _configure_dire_wolf(context: CreatureBuildContext) -> Entity:
         movement=50,
         weight=250,
         skills={"perception": True, "stealth": True},
-    )
-    _equip(
-        entity,
-        armor=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_natural_armor"],
-            entity.uuid,
-            expected_type=BodyArmor,
-        ),
-        melee=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_bite"],
-            entity.uuid,
-            expected_type=Weapon,
-        ),
     )
     register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)
@@ -1115,14 +1142,6 @@ def _configure_zombie(context: CreatureBuildContext) -> Entity:
         immunities=(DamageType.POISON,),
     )
     entity.add_condition_immunity("Poisoned", immunity_name="Zombie")
-    _equip(
-        entity,
-        melee=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["zombie_slam"],
-            entity.uuid,
-            expected_type=Weapon,
-        ),
-    )
     register_undead_fortitude(entity)
     return entity
 
@@ -1175,19 +1194,6 @@ def _configure_ghoul(context: CreatureBuildContext) -> Entity:
     entity.add_condition_immunity("Charmed", immunity_name="Ghoul")
     entity.add_condition_immunity("Exhaustion", immunity_name="Ghoul")
     entity.add_condition_immunity("Poisoned", immunity_name="Ghoul")
-    _equip(
-        entity,
-        melee=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["ghoul_claws"],
-            entity.uuid,
-            expected_type=Weapon,
-        ),
-        offhand=_intrinsic_possession(
-            SRD_CREATURE_POSSESSION_RECIPES["ghoul_bite"],
-            entity.uuid,
-            expected_type=Weapon,
-        ),
-    )
     register_ghoul_claws_paralysis(entity)
     return entity
 
@@ -1251,6 +1257,235 @@ _CONFIGURE_SRD_CREATURE_BY_ID = MappingProxyType({
     "ogre_zombie": _configure_ogre_zombie,
     "ghoul": _configure_ghoul,
 })
+
+
+def _equipped(
+    recipe: ContentRecipe,
+    slot: EquipmentSlot,
+) -> CreaturePossessionGrant:
+    """Author one starter item equipped by an SRD creature root."""
+    return CreaturePossessionGrant(
+        recipe=recipe,
+        disposition=CreaturePossessionDisposition.EQUIPPED,
+        equipment_slot=slot,
+    )
+
+
+def _intrinsic(
+    recipe: ContentRecipe,
+    slot: EquipmentSlot,
+) -> CreaturePossessionGrant:
+    """Author one body-owned intrinsic equipped in every deployment mode."""
+    return CreaturePossessionGrant(
+        recipe=recipe,
+        disposition=CreaturePossessionDisposition.INTRINSIC,
+        equipment_slot=slot,
+    )
+
+
+SRD_CREATURE_POSSESSION_GRANTS_BY_ID = MappingProxyType({
+    "commoner": (
+        _equipped(CLUB_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "bandit": (
+        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(LIGHT_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "cultist": (
+        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "guard": (
+        _equipped(CHAIN_SHIRT_RECIPE, BodyPart.BODY),
+        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+    ),
+    "tribal_warrior": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "kobold": (
+        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["kobold_sling"],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "acolyte": (
+        _equipped(CLUB_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "scout": (
+        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "thug": (
+        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(MACE_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "spy": (
+        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["spy_hand_crossbow"],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "berserker": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(GREATAXE_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "bandit_captain": (
+        _equipped(STUDDED_LEATHER_RECIPE, BodyPart.BODY),
+        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES[
+                "bandit_captain_thrown_dagger"
+            ],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "priest": (
+        _equipped(CHAIN_SHIRT_RECIPE, BodyPart.BODY),
+        _equipped(MACE_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "cult_fanatic": (
+        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "knight": (
+        _equipped(PLATE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(GREATSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "veteran": (
+        _equipped(SPLINT_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(LONGSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "mage": (
+        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+    ),
+    "orc": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(GREATAXE_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "hobgoblin": (
+        _equipped(CHAIN_MAIL_RECIPE, BodyPart.BODY),
+        _equipped(LONGSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "bugbear": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["bugbear_morningstar"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "gnoll": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+    ),
+    "ogre": (
+        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["ogre_greatclub"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES["ogre_thrown_javelin"],
+            WeaponSlot.RANGED_MAIN,
+        ),
+    ),
+    "wolf": (
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["wolf_natural_armor"],
+            BodyPart.BODY,
+        ),
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["wolf_bite"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+    ),
+    "dire_wolf": (
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_natural_armor"],
+            BodyPart.BODY,
+        ),
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_bite"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+    ),
+    "zombie": (
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["zombie_slam"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+    ),
+    "ogre_zombie": (
+        _equipped(
+            SRD_CREATURE_POSSESSION_RECIPES[
+                "ogre_zombie_morningstar"
+            ],
+            WeaponSlot.MELEE_MAIN,
+        ),
+    ),
+    "ghoul": (
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["ghoul_claws"],
+            WeaponSlot.MELEE_MAIN,
+        ),
+        _intrinsic(
+            SRD_CREATURE_POSSESSION_RECIPES["ghoul_bite"],
+            WeaponSlot.MELEE_OFF,
+        ),
+    ),
+})
+
+
+def construct_srd_creature(
+    context: CreatureBuildContext,
+    creature_id: str,
+) -> Entity:
+    """Construct one SRD mechanical root under the caller's exact identity.
+
+    NeuroDragon configured-creature definitions reuse this seam to add
+    presentation-owned possessions without making the SRD pack depend on the
+    downstream NeuroDragon pack. The requested ref therefore belongs to the
+    caller while the mechanical structure and possessions stay single-source.
+    """
+    configure = _CONFIGURE_SRD_CREATURE_BY_ID.get(creature_id)
+    if configure is None:
+        raise KeyError(f"Unknown SRD creature id {creature_id!r}")
+    entity = configure(
+        context.model_copy(update={
+            "possession_mode": (
+                CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+            ),
+        }),
+    )
+    apply_creature_possessions(
+        entity,
+        SRD_CREATURE_POSSESSION_GRANTS_BY_ID[creature_id],
+        possession_mode=context.possession_mode,
+    )
+    return entity
 
 _ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID = MappingProxyType({
     "bandit_captain": (MultiattackAction,),
@@ -1366,7 +1601,8 @@ def _declare_srd_creature(
         parameters: SrdCreatureParameters,
     ) -> Entity:
         _ = parameters
-        return configure(CreatureBuildContext.model_validate(raw_context))
+        context = CreatureBuildContext.model_validate(raw_context)
+        return construct_srd_creature(context, facts.creature_id)
 
     factory.__name__ = f"_build_{facts.creature_id}"
     factory.__qualname__ = factory.__name__
@@ -1377,7 +1613,12 @@ def _declare_srd_creature(
         parameters=SrdCreatureParameters,
         descriptor=descriptor,
         provenance=provenance,
-        dependencies=_root_owned_action_dependencies(facts.creature_id),
+        dependencies=(
+            *_root_owned_action_dependencies(facts.creature_id),
+            *creature_possession_dependencies(
+                SRD_CREATURE_POSSESSION_GRANTS_BY_ID[facts.creature_id],
+            ),
+        ),
     )(factory)
     return get_content_declaration(declared_factory)
 
@@ -1510,21 +1751,6 @@ def _default_possession(
         recipe,
         source_entity_uuid,
         origin=origin,
-        expected_type=expected_type,
-    )
-
-
-def _intrinsic_possession(
-    recipe: ContentRecipe,
-    source_entity_uuid: UUID,
-    *,
-    expected_type: type[_ItemT],
-) -> _ItemT:
-    """Materialize a creature-owned intrinsic in every possession mode."""
-    return materialize_item_from_installed_runtime(
-        recipe,
-        source_entity_uuid,
-        origin=ItemRuntimeOrigin.INTRINSIC,
         expected_type=expected_type,
     )
 

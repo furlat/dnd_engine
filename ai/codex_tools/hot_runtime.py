@@ -107,10 +107,7 @@ from ai.policy import (
 )
 from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import create_generation_policy_host
-from ai.policy.generations.registry import (
-    CANDIDATE_GENERATION_ID,
-    get_policy_implementation,
-)
+from ai.policy.generations.registry import get_active_policy_implementation
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from ai.policy.host import PolicyDecisionDiagnostics
 from dnd.ai.contracts.control import ActionCostProfile, ActionEconomyState, CommandResult, DecisionEpoch
@@ -854,7 +851,7 @@ class HotCodexSession:
         self.lease_seconds = lease_seconds
         self.runtime_id = runtime_id or str(uuid4())
         self.policy_host = policy_host or create_generation_policy_host(
-            get_policy_implementation(CANDIDATE_GENERATION_ID),
+            get_active_policy_implementation(),
             controller_mode="direct_codex",
         )
         self.policy_telemetry = QueuedPolicyTelemetrySink(runtime)

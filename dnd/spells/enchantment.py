@@ -24,11 +24,17 @@ from dnd.core.condition_types import (
     ConditionRemovalTrigger,
     ConditionTag,
 )
+from dnd.core.content.origin_features import OriginCapability
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent,
 )
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, CreatureType, DamageType
+from dnd.core.creature_types import CreatureType, DamageType
+from dnd.core.modifiers import (
+    AdvantageModifier,
+    AdvantageStatus,
+)
+from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
@@ -55,6 +61,10 @@ class CharmPerson(SpellAction):
     )
     spell_level: int = Field(default=1, description="Base spell level.")
     spell_school: str = Field(default="enchantment", description="Spell school.")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.CHARM,),
+        description="Exact origin-rule semantics carried by Charm Person saves.",
+    )
     target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Multi-creature target mode.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=30),
@@ -977,6 +987,11 @@ class Sleep(SpellAction):
             if entity.creature_type == CreatureType.UNDEAD:
                 continue
 
+            if entity.has_origin_capability(
+                OriginCapability.MAGICAL_SLEEP_IMMUNITY,
+            ):
+                continue
+
             if entity.check_condition_immunity("Charmed"):
                 continue
 
@@ -1234,8 +1249,7 @@ def _bane_processor(
     effective = event.get_effective_roll()
     new_total = effective.total - d4_value
     new_roll = effective.model_copy(update={"total": new_total})
-    event.replace_roll(new_roll, "Bane", f"-{d4_value} (1d4)")
-    return event.model_copy(update={"modified": True})
+    return event.replace_roll(new_roll, "Bane", f"-{d4_value} (1d4)")
 
 
 def _bless_processor(
@@ -1250,8 +1264,7 @@ def _bless_processor(
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
-    event.replace_roll(new_roll, "Bless", f"+{d4_value} (1d4)")
-    return event.model_copy(update={"modified": True})
+    return event.replace_roll(new_roll, "Bless", f"+{d4_value} (1d4)")
 
 
 class BaneEffect(BaseCondition):

@@ -5,9 +5,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellAction
+from dnd.actions import SpellAction, SpellEvent
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost
@@ -78,8 +78,8 @@ def test_matching_affinity_adds_charisma_once_per_cast_without_persisting(
         second_target,
     )
 
-    assert first is not None and first.damages
-    assert second is not None and second.damages
+    assert isinstance(first, SpellEvent) and first.damages
+    assert isinstance(second, SpellEvent) and second.damages
     assert first.damages[0].damage_bonus is not None
     assert second.damages[0].damage_bonus is not None
     assert first.damages[0].damage_bonus.normalized_score == 4
@@ -94,7 +94,7 @@ def test_matching_affinity_adds_charisma_once_per_cast_without_persisting(
         FireBolt(source_entity_uuid=caster.uuid, template=True),
         _target(position=(4, 1)),
     )
-    assert third is not None and third.damages
+    assert isinstance(third, SpellEvent) and third.damages
     assert third.damages[0].damage_bonus is not None
     assert third.damages[0].damage_bonus.normalized_score == 0
 
@@ -119,7 +119,7 @@ def test_affinity_does_not_apply_to_a_different_spell_damage_type(
         _target(),
     )
 
-    assert result is not None and result.damages
+    assert isinstance(result, SpellEvent) and result.damages
     assert result.damages[0].damage_bonus is not None
     assert result.damages[0].damage_bonus.normalized_score == 0
 

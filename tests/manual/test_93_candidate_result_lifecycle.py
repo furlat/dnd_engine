@@ -5,7 +5,10 @@ from __future__ import annotations
 from ai.policy.contracts import PolicyGoal
 from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.generations.current_commitments import CurrentCandidatePolicyHost, create_generation_policy_host
-from ai.policy.generations.registry import CANDIDATE_GENERATION_ID, get_policy_implementation
+from ai.policy.generations.registry import (
+    ACTIVE_GENERATION_ID,
+    get_active_policy_implementation,
+)
 from ai.policy.host import PolicyResultDisposition
 from dnd.ai.contracts.control import ActionResolutionStatus, CommandResult, CommandResultStatus
 from tests.manual.test_44_typed_agent_policy import _world
@@ -13,7 +16,7 @@ from tests.manual.test_44_typed_agent_policy import _world
 
 def _candidate_host_with_pending(command_id: str) -> tuple[CurrentCandidatePolicyHost, str, str]:
     """Create one candidate host, decision, and pending command."""
-    host = create_generation_policy_host(get_policy_implementation(CANDIDATE_GENERATION_ID))
+    host = create_generation_policy_host(get_active_policy_implementation())
     assert isinstance(host, CurrentCandidatePolicyHost)
     world = _world()
     decision = host.decide(world)
@@ -53,7 +56,7 @@ def _result(
 
 def _accepted_steps(host: CurrentCandidatePolicyHost) -> int:
     """Return retained candidate progress for the current test session."""
-    commitment = host.commitment_store.session("session", CANDIDATE_GENERATION_ID)
+    commitment = host.commitment_store.session("session", ACTIVE_GENERATION_ID)
     assert commitment is not None
     return commitment.accepted_steps
 

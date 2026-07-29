@@ -36,12 +36,13 @@ from dnd.core.base_actions import Cost
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import GREATSWORD_RECIPE
-from dnd.spells import FireBolt
+from tests.spell_test_exports import FireBolt
 from dnd.spells.transmutation import Slow
-from dnd.utils import (
+from tests.engine.support import (
     deal_damage_to,
     force_attack_miss,
     reset_combat_state,

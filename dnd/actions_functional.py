@@ -28,7 +28,6 @@ from dnd.conditions import (
     create_has_attacked_handler,
     create_has_taken_damage_handler,
 )
-from dnd.spells import ALL_SPELLS
 from dnd.blocks.base_item import UsableItem, consume_item_charge_before_action_completion
 from dnd.core.base_block import BaseBlock
 
@@ -58,7 +57,7 @@ def _remove_standard_action_handlers(entity: Entity) -> None:
             entity.remove_event_handler(handler)
 
     weapon_handler_names = _standard_weapon_handler_names(entity.uuid)
-    source_handlers = list(EventQueue._event_handlers_by_source_entity_uuid.get(entity.uuid, []))
+    source_handlers = EventQueue.get_handlers_by_source_entity(entity.uuid)
     for handler in source_handlers:
         if handler.name in weapon_handler_names:
             if handler.uuid in entity.event_handlers:
@@ -580,37 +579,6 @@ def register_spell(
         template=True
     )
     entity.register_action(spell)
-
-
-def register_spells_by_name(
-    entity: Entity,
-    spell_names: list[str],
-    caster_level: int = 1,
-    *,
-    spellcasting_source_id: Optional[UUID] = None,
-) -> None:
-    """Register multiple spells by name from ALL_SPELLS dict.
-
-    Args:
-        entity: Entity receiving spell templates.
-        spell_names: Spell names present in `ALL_SPELLS`.
-        caster_level: Caster level used for scaling spell templates.
-        spellcasting_source_id: Exact registered source owning these spells.
-            None preserves the legacy default spellcasting ability.
-
-    Raises:
-        ValueError: If a spell name is unknown.
-    """
-
-    for name in spell_names:
-        if name not in ALL_SPELLS:
-            raise ValueError(f"Unknown spell: {name}")
-        register_spell(
-            entity,
-            ALL_SPELLS[name],
-            caster_level,
-            spellcasting_source_id=spellcasting_source_id,
-        )
 
 
 def execute_drop(entity: Entity, item_uuid: UUID, position: Optional[Tuple[int, int]] = None) -> Optional[Event]:

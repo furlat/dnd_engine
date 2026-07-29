@@ -13,6 +13,7 @@ from dnd.content_system.character_build_validation import (
     CharacterGrantSourceKind,
     CharacterBuildValidator,
 )
+from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.core.content.descriptors import (
     ContentDescriptor,
@@ -62,6 +63,7 @@ from dnd.core.content.durable_characters import (
     TotalCharacterLevelPrerequisite,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
@@ -245,6 +247,7 @@ def _fixture() -> _Fixture:
         ContentDefinitionKind.SPECIES,
         "species.human",
         SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
             level_grants=(
                 OriginLevelGrant(
                     character_level=1,
@@ -258,6 +261,7 @@ def _fixture() -> _Fixture:
         "species_variant.human_variant",
         SpeciesVariantDefinition(
             parent_species_ref=species.ref,
+            runtime_support=OriginRuntimeSupport.available(),
             level_grants=(
                 OriginLevelGrant(
                     character_level=1,
@@ -269,7 +273,10 @@ def _fixture() -> _Fixture:
     background = _typed_declaration(
         ContentDefinitionKind.BACKGROUND,
         "background.soldier",
-        BackgroundDefinition(automatic_grant_refs=(grants[0].ref,)),
+        BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+            automatic_grant_refs=(grants[0].ref,),
+        ),
     )
     champion_placeholder = _typed_declaration(
         ContentDefinitionKind.SUBCLASS,
@@ -454,6 +461,24 @@ def _fixture() -> _Fixture:
     )
 
 
+def _replace_loaded_declaration(
+    fixture: _Fixture,
+    declaration: ContentDeclaration,
+) -> LoadedContentSystem:
+    declarations = dict(fixture.loaded.registry.declarations)
+    declarations[declaration.ref.identity_key] = declaration
+    return LoadedContentSystem(
+        registry=FrozenContentRegistry(
+            declarations=declarations,
+            recipe_presets=fixture.loaded.registry.recipe_presets,
+            sources=fixture.loaded.registry.sources,
+        ),
+        packs=fixture.loaded.packs,
+        built_in_artifact_digest=fixture.loaded.built_in_artifact_digest,
+        content_set_digest=fixture.loaded.content_set_digest,
+    )
+
+
 def _definition(
     fixture: _Fixture,
     *,
@@ -510,7 +535,7 @@ def _definition(
         species_ref=fixture.species_ref,
         species_variant_ref=fixture.variant_ref,
         background_ref=fixture.background_ref,
-        appearance=CharacterAppearanceSelection(),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=15,
@@ -638,6 +663,87 @@ def test_valid_multiclass_build_returns_deterministic_pure_preview() -> None:
     )
     assert result.preview.effective_spellcaster_level == 1
     assert result.preview.normal_spell_slots == ((1, 2),)
+
+
+def test_origin_runtime_support_alone_controls_build_availability() -> None:
+    fixture = _fixture()
+    definition = _definition(fixture)
+    species = fixture.loaded.registry.declarations[
+        fixture.species_ref.identity_key
+    ]
+    assert isinstance(species.definition_payload, SpeciesDefinition)
+
+    blocked_species = species.model_copy(
+        update={
+            "definition_payload": species.definition_payload.model_copy(
+                update={
+                    "runtime_support": OriginRuntimeSupport.blocked(
+                        "Fixture origin mechanics are intentionally unavailable.",
+                    ),
+                },
+            ),
+        },
+    )
+    blocked_result = CharacterBuildValidator(
+        _replace_loaded_declaration(fixture, blocked_species),
+        expected_ruleset_digest=_RULESET_DIGEST,
+    ).validate(definition, _loadout(definition))
+
+    assert blocked_result.preview is None
+    blocked_issue = next(
+        issue
+        for issue in blocked_result.issues
+        if issue.code is CharacterBuildIssueCode.ORIGIN_IMPLEMENTATION_BLOCKED
+    )
+    assert blocked_issue.path == ("species_ref",)
+    assert blocked_issue.detail == (
+        "Fixture origin mechanics are intentionally unavailable."
+    )
+    assert "player_capable" in blocked_species.descriptor.tags
+    assert blocked_species.provenance.fidelity is ContentFidelity.COMPLETE
+
+    available_without_legacy_signals = species.model_copy(
+        update={
+            "descriptor": species.descriptor.model_copy(
+                update={"tags": ("character_creation",)},
+            ),
+            "provenance": species.provenance.model_copy(
+                update={
+                    "fidelity": ContentFidelity.BLOCKED,
+                    "notes": "Source-review state must not control execution.",
+                },
+            ),
+        },
+    )
+    available_result = CharacterBuildValidator(
+        _replace_loaded_declaration(
+            fixture,
+            available_without_legacy_signals,
+        ),
+        expected_ruleset_digest=_RULESET_DIGEST,
+    ).validate(definition, _loadout(definition))
+
+    assert available_result.issues == ()
+    assert available_result.preview is not None
+
+
+def test_empty_appearance_selection_fails_closed() -> None:
+    """A durable character never receives an inferred renderer identity."""
+    fixture = _fixture()
+    definition = _replace_definition(
+        _definition(fixture),
+        appearance=CharacterAppearanceSelection(),
+    )
+
+    result = _validator(fixture).validate(
+        definition,
+        _loadout(definition),
+    )
+
+    assert result.preview is None
+    assert _codes(result) == {
+        CharacterBuildIssueCode.APPEARANCE_SELECTION_INVALID,
+    }
 
 
 def test_grant_schedule_preserves_authored_ledger_order_and_provenance() -> None:
@@ -1292,12 +1398,17 @@ def test_variant_parent_and_subclass_parent_are_exact() -> None:
     unrelated_species = _typed_declaration(
         ContentDefinitionKind.SPECIES,
         "species.elf",
-        SpeciesDefinition(),
+        SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     wrong_variant = _typed_declaration(
         ContentDefinitionKind.SPECIES_VARIANT,
         "species_variant.wrong",
-        SpeciesVariantDefinition(parent_species_ref=unrelated_species.ref),
+        SpeciesVariantDefinition(
+            parent_species_ref=unrelated_species.ref,
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     declarations = dict(fixture.loaded.registry.declarations)
     declarations[unrelated_species.ref.identity_key] = unrelated_species

@@ -15,6 +15,10 @@ from dnd.core.content.durable_characters import (
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
 )
+from dnd.core.content.encounters import (
+    EncounterRecipe,
+    EncounterRosterRecipe,
+)
 from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
@@ -122,7 +126,6 @@ class ExecutionKind(str, Enum):
 
     HOSTED = "hosted"
     LOCAL = "local"
-    EVALUATION = "evaluation"
     IMPORTED = "imported"
 
 
@@ -186,7 +189,6 @@ class ArtifactKind(str, Enum):
     TERMINAL_SUMMARY = "terminal_summary"
     REPLAY_BUNDLE = "replay_bundle"
     SUBJECTIVE_REPLAY_BUNDLE = "subjective_replay_bundle"
-    RATING_OUTPUT = "rating_output"
 
 
 class ProducerKind(str, Enum):
@@ -194,17 +196,7 @@ class ProducerKind(str, Enum):
 
     DIRECTORY = "directory"
     WORKER = "worker"
-    EVALUATOR = "evaluator"
     IMPORTER = "importer"
-
-
-class RatingRunStatus(str, Enum):
-    """Lifecycle state of a derived rating computation."""
-
-    RESERVED = "reserved"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 class PrincipalCreate(DirectoryModel):
@@ -400,6 +392,115 @@ class CharacterRecord(DirectoryModel):
         return self
 
 
+class CharacterPresentationPreferencesRecord(DirectoryModel):
+    """Character-scoped, non-mechanical frontend presentation preferences."""
+
+    schema_version: Literal[1] = 1
+    character_id: UUID
+    owner_principal_id: UUID
+    revision: int = Field(
+        ge=0,
+        description=(
+            "Independent presentation-document revision; zero is the "
+            "synthetic empty document before the first write."
+        ),
+    )
+    preferences: JsonObject = Field(
+        default_factory=dict,
+        description=(
+            "Flexible frontend-owned artistic preferences. This document "
+            "does not participate in character mechanics or replication."
+        ),
+    )
+    preferences_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    updated_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _validate_document(self) -> Self:
+        if self.preferences_digest != canonical_digest(self.preferences):
+            raise ValueError(
+                "preferences_digest must authenticate preferences",
+            )
+        if self.revision == 0:
+            if self.preferences or self.updated_at is not None:
+                raise ValueError(
+                    "revision-zero presentation preferences must be empty",
+                )
+        elif self.updated_at is None:
+            raise ValueError(
+                "persisted presentation preferences require updated_at",
+            )
+        return self
+
+
+class SavedEncounterRosterCreate(DirectoryModel):
+    """Create one owner-scoped reusable exact roster."""
+
+    saved_roster_id: str = Field(min_length=1)
+    owner_principal_id: UUID
+    title: str = Field(min_length=1, max_length=120)
+    recipe: EncounterRosterRecipe
+
+
+class SavedEncounterRosterRecord(SavedEncounterRosterCreate):
+    """Persisted exact roster with optimistic revision identity."""
+
+    schema_version: Literal[1] = 1
+    recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    revision: int = Field(ge=1)
+    created_at: datetime
+    updated_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_digest(self) -> Self:
+        if self.recipe.recipe_digest != self.recipe_digest:
+            raise ValueError("Saved roster digest must match its recipe")
+        return self
+
+
+class SavedEncounterRosterReplace(DirectoryModel):
+    """Compare-and-swap replacement of one saved roster."""
+
+    title: str = Field(min_length=1, max_length=120)
+    recipe: EncounterRosterRecipe
+    expected_revision: int = Field(ge=1)
+    expected_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class SavedEncounterCreate(DirectoryModel):
+    """Create one owner-scoped exact encounter recipe."""
+
+    saved_encounter_id: str = Field(min_length=1)
+    owner_principal_id: UUID
+    title: str = Field(min_length=1, max_length=120)
+    recipe: EncounterRecipe
+
+
+class SavedEncounterRecord(SavedEncounterCreate):
+    """Persisted exact encounter with optimistic revision identity."""
+
+    schema_version: Literal[1] = 1
+    recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    revision: int = Field(ge=1)
+    created_at: datetime
+    updated_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_digest(self) -> Self:
+        if self.recipe.recipe_digest != self.recipe_digest:
+            raise ValueError("Saved encounter digest must match its recipe")
+        return self
+
+
+class SavedEncounterReplace(DirectoryModel):
+    """Compare-and-swap replacement of one saved encounter."""
+
+    title: str = Field(min_length=1, max_length=120)
+    recipe: EncounterRecipe
+    expected_revision: int = Field(ge=1)
+    expected_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CanonicalCharacterRecord(CharacterRecord):
     """Character row whose exact durable three-stream heads exist."""
 
@@ -578,6 +679,7 @@ class CharacterRevisionBundleCommit(DirectoryModel):
     character_id: UUID
     expected_row_version: int = Field(ge=1)
     expected_heads: CharacterRevisionHeads
+    require_no_active_deployment: bool = False
     new_definition: CharacterDefinitionRevisionV2 | None = None
     new_holdings: CharacterHoldingsRevision | None = None
     new_loadout: CharacterLoadoutRevisionV1 | None = None
@@ -1011,73 +1113,6 @@ class FinalSummaryRecord(DirectoryModel):
     created_at: datetime = Field(description="UTC publication time.")
     supersedes_summary_id: UUID | None = Field(default=None, description="Prior current revision replaced by this one.")
     is_current: bool = Field(description="Whether this is the current summary revision.")
-
-
-class RatingRunCreate(DirectoryModel):
-    """Input used to reserve a reproducible derived rating computation."""
-
-    rating_run_id: UUID = Field(default_factory=uuid4, description="Stable rating-run identifier.")
-    algorithm_id: str = Field(min_length=1, description="Rating algorithm identity.")
-    algorithm_version: str = Field(min_length=1, description="Rating algorithm version.")
-    parameters: JsonObject = Field(default_factory=dict, description="Canonical estimator parameters.")
-    selection_query: JsonObject = Field(default_factory=dict, description="Canonical evidence-selection query.")
-    compatibility_constraints: JsonObject = Field(default_factory=dict, description="Rules, content, and policy compatibility constraints.")
-
-
-class RatingRunRecord(RatingRunCreate):
-    """Persisted rating-run definition and lifecycle."""
-
-    parameters_digest: str = Field(description="Digest of canonical estimator parameters.")
-    selection_query_digest: str = Field(description="Digest of canonical evidence selection.")
-    compatibility_digest: str = Field(description="Digest of canonical compatibility constraints.")
-    status: RatingRunStatus = Field(description="Rating-run lifecycle state.")
-    created_at: datetime = Field(description="UTC run creation time.")
-    completed_at: datetime | None = Field(default=None, description="UTC completion time.")
-    output_artifact_digest: str | None = Field(default=None, description="Digest of the immutable result artifact.")
-
-
-class RatingAdmissionCreate(DirectoryModel):
-    """Input selecting one exact immutable summary for a rating run."""
-
-    rating_run_id: UUID = Field(description="Rating run receiving the evidence.")
-    game_id: UUID = Field(description="Game supplying the evidence.")
-    summary_digest: str = Field(min_length=1, description="Exact immutable summary digest admitted or excluded.")
-    admitted: bool = Field(description="Whether the evidence is admitted.")
-    exclusion_reason_code: str | None = Field(default=None, description="Stable exclusion reason when not admitted.")
-    exclusion_detail: JsonObject = Field(default_factory=dict, description="Structured exclusion diagnostics.")
-    treatment_id: str = Field(min_length=1, description="Experimental treatment identity.")
-    configuration_id: str = Field(min_length=1, description="Rated configuration identity.")
-    weight: float = Field(default=1.0, gt=0, description="Evidence weight used by the estimator.")
-
-
-class RatingAdmissionRecord(RatingAdmissionCreate):
-    """Persisted immutable rating admission decision."""
-
-    admission_id: UUID = Field(description="Stable admission identifier.")
-    created_at: datetime = Field(description="UTC admission time.")
-
-
-class RatingEstimateCreate(DirectoryModel):
-    """Input used to publish one subject estimate for a rating run."""
-
-    rating_run_id: UUID = Field(description="Completed or running rating computation.")
-    subject_id: str = Field(min_length=1, description="Rated configuration or policy identity.")
-    estimate: float = Field(description="Estimated rating value.")
-    uncertainty: float = Field(ge=0, description="Estimator uncertainty on the same declared scale.")
-    games: int = Field(ge=0, description="Number of admitted games used.")
-    wins: int = Field(ge=0, description="Number of wins represented.")
-    losses: int = Field(ge=0, description="Number of losses represented.")
-    draws: int = Field(ge=0, description="Number of draws represented.")
-    rank: int | None = Field(default=None, ge=1, description="Optional rank in the run output.")
-    diagnostics: JsonObject = Field(default_factory=dict, description="Canonical estimator diagnostics.")
-
-
-class RatingEstimateRecord(RatingEstimateCreate):
-    """Persisted immutable rating estimate."""
-
-    estimate_id: UUID = Field(description="Stable estimate identifier.")
-    diagnostics_digest: str = Field(description="Digest of canonical diagnostics.")
-    created_at: datetime = Field(description="UTC estimate publication time.")
 
 
 class RepositoryMetrics(DirectoryModel):

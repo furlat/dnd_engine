@@ -14,10 +14,10 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.items.test_items import PullLeverAction, TrapLever
+from dnd.items.environment_interactables import PullLeverAction, TrapLever
 from server.event_server import app, sim
 from server.event_stream import event_stream
-from tests.engine_book.test_chapter_18_encounters_apis import (
+from tests.engine.test_encounter_apis import (
     reset_chapter_18_state,
 )
 

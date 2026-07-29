@@ -1,9 +1,7 @@
 """Weapon factories and hook-bearing weapon test fixtures."""
 
-import random
-from types import MappingProxyType
 from typing import Literal, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -30,12 +28,12 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.equipment_types import EquipmentSlot, WeaponProperty
-from dnd.core.dice import DiceRoll, RollType, AdvantageStatus, CriticalStatus, AutoHitStatus
 from dnd.core.events import (
     RangeType, Event, EventType, EventPhase, EventHandler, Trigger,
-    DamageRollResultEvent,
+    Damage, DamageRollResultEvent,
 )
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.items.authored_presentations import (
@@ -290,6 +288,22 @@ _build_javelin = _declare_standard_weapon(
         properties=(WeaponProperty.THROWN,),
         range_type=RangeType.REACH,
         normal_range=5,
+    )
+)
+_build_light_hammer = _declare_standard_weapon(
+    _StandardWeaponSpec(
+        content_id="light_hammer",
+        display_name="Light Hammer",
+        description="A compact hammer balanced for melee or throwing.",
+        group="simple_melee",
+        order=45,
+        damage_dice=4,
+        dice_numbers=1,
+        damage_type=DamageType.BLUDGEONING,
+        properties=(WeaponProperty.LIGHT, WeaponProperty.THROWN),
+        range_type=RangeType.REACH,
+        normal_range=5,
+        source_table_name="Hammer, light",
     )
 )
 _build_mace = _declare_standard_weapon(
@@ -650,6 +664,10 @@ HANDAXE_DECLARATION, HANDAXE_RECIPE = _declaration_and_recipe(_build_handaxe)
 HANDAXE_REF = HANDAXE_DECLARATION.ref
 JAVELIN_DECLARATION, JAVELIN_RECIPE = _declaration_and_recipe(_build_javelin)
 JAVELIN_REF = JAVELIN_DECLARATION.ref
+LIGHT_HAMMER_DECLARATION, LIGHT_HAMMER_RECIPE = _declaration_and_recipe(
+    _build_light_hammer,
+)
+LIGHT_HAMMER_REF = LIGHT_HAMMER_DECLARATION.ref
 MACE_DECLARATION, MACE_RECIPE = _declaration_and_recipe(_build_mace)
 MACE_REF = MACE_DECLARATION.ref
 QUARTERSTAFF_DECLARATION, QUARTERSTAFF_RECIPE = _declaration_and_recipe(
@@ -720,6 +738,7 @@ SRD_WEAPON_DECLARATIONS = (
     DAGGER_DECLARATION,
     HANDAXE_DECLARATION,
     JAVELIN_DECLARATION,
+    LIGHT_HAMMER_DECLARATION,
     MACE_DECLARATION,
     QUARTERSTAFF_DECLARATION,
     SICKLE_DECLARATION,
@@ -741,63 +760,6 @@ SRD_WEAPON_DECLARATIONS = (
     LONGBOW_DECLARATION,
     HEAVY_CROSSBOW_DECLARATION,
 )
-
-SRD_WEAPON_RECIPES_BY_CONTENT_ID = MappingProxyType(
-    {
-        declaration.ref.content_id.removeprefix("weapon."): recipe
-        for declaration, recipe in (
-            (CLUB_DECLARATION, CLUB_RECIPE),
-            (DAGGER_DECLARATION, DAGGER_RECIPE),
-            (HANDAXE_DECLARATION, HANDAXE_RECIPE),
-            (JAVELIN_DECLARATION, JAVELIN_RECIPE),
-            (MACE_DECLARATION, MACE_RECIPE),
-            (QUARTERSTAFF_DECLARATION, QUARTERSTAFF_RECIPE),
-            (SICKLE_DECLARATION, SICKLE_RECIPE),
-            (SPEAR_DECLARATION, SPEAR_RECIPE),
-            (DART_DECLARATION, DART_RECIPE),
-            (LIGHT_CROSSBOW_DECLARATION, LIGHT_CROSSBOW_RECIPE),
-            (SHORTBOW_DECLARATION, SHORTBOW_RECIPE),
-            (SLING_DECLARATION, SLING_RECIPE),
-            (BATTLEAXE_DECLARATION, BATTLEAXE_RECIPE),
-            (GREATAXE_DECLARATION, GREATAXE_RECIPE),
-            (GREATSWORD_DECLARATION, GREATSWORD_RECIPE),
-            (LONGSWORD_DECLARATION, LONGSWORD_RECIPE),
-            (MORNINGSTAR_DECLARATION, MORNINGSTAR_RECIPE),
-            (RAPIER_DECLARATION, RAPIER_RECIPE),
-            (SCIMITAR_DECLARATION, SCIMITAR_RECIPE),
-            (SHORTSWORD_DECLARATION, SHORTSWORD_RECIPE),
-            (TRIDENT_DECLARATION, TRIDENT_RECIPE),
-            (WARHAMMER_DECLARATION, WARHAMMER_RECIPE),
-            (LONGBOW_DECLARATION, LONGBOW_RECIPE),
-            (HEAVY_CROSSBOW_DECLARATION, HEAVY_CROSSBOW_RECIPE),
-        )
-    },
-)
-
-SRD_WEAPON_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "club": CLUB_RECIPE,
-        "dagger": DAGGER_RECIPE,
-        "handaxe": HANDAXE_RECIPE,
-        "javelin": JAVELIN_RECIPE,
-        "mace": MACE_RECIPE,
-        "quarterstaff": QUARTERSTAFF_RECIPE,
-        "spear": SPEAR_RECIPE,
-        "light_crossbow": LIGHT_CROSSBOW_RECIPE,
-        "shortbow": SHORTBOW_RECIPE,
-        "battleaxe": BATTLEAXE_RECIPE,
-        "greataxe": GREATAXE_RECIPE,
-        "greatsword": GREATSWORD_RECIPE,
-        "longsword": LONGSWORD_RECIPE,
-        "rapier": RAPIER_RECIPE,
-        "scimitar": SCIMITAR_RECIPE,
-        "shortsword": SHORTSWORD_RECIPE,
-        "warhammer": WARHAMMER_RECIPE,
-        "longbow": LONGBOW_RECIPE,
-        "heavy_crossbow": HEAVY_CROSSBOW_RECIPE,
-    },
-)
-
 
 _DOUBLE_BLADED_SWORD_SPEC = _StandardWeaponSpec(
     content_id="double_bladed_sword",
@@ -894,7 +856,7 @@ def _unseen_strike_processor(
         source_entity_uuid: Entity UUID that owns the unseen-strike handler.
 
     Returns:
-        Mutated damage-roll event when the target cannot see the attacker;
+        Modified damage-roll event when the target cannot see the attacker;
         otherwise `None`.
     """
     if not isinstance(event, DamageRollResultEvent):
@@ -909,24 +871,28 @@ def _unseen_strike_processor(
     if source_entity_uuid in target.senses.entities:
         return None
 
-    result = random.randint(1, 6)
-    extra_roll = DiceRoll(
-        dice_uuid=uuid4(),
-        roll_type=RollType.DAMAGE,
-        results=[result],
-        total=result,
-        bonus=0,
-        advantage_status=AdvantageStatus.NONE,
-        critical_status=CriticalStatus.NONE,
-        auto_hit_status=AutoHitStatus.NONE,
+    damage_bonus = ModifiableValue.create(
         source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=event.target_entity_uuid
+        target_entity_uuid=event.target_entity_uuid,
+        base_value=0,
+        value_name="Unseen Strike Damage Bonus",
     )
-    event.final_rolls.append(extra_roll)
-    event.roll_modifications.append(
-        ("Unseen Strike", len(event.final_rolls) - 1, 0, result, "1d6 piercing (unseen attacker)")
+    damage = Damage(
+        name="Unseen Strike",
+        source_entity_uuid=source_entity_uuid,
+        target_entity_uuid=event.target_entity_uuid,
+        damage_dice=6,
+        dice_numbers=1,
+        damage_bonus=damage_bonus,
+        damage_type=DamageType.PIERCING,
     )
-    return event
+    extra_roll = damage.get_dice(event.attack_outcome).roll
+    return event.append_damage_roll(
+        damage,
+        extra_roll,
+        "Unseen Strike",
+        "1d6 piercing (unseen attacker)",
+    )
 
 
 class _UnseenStrikeDagger(Weapon):
@@ -1172,11 +1138,4 @@ NEURODRAGON_WEAPON_DECLARATIONS = (
     DOUBLE_BLADED_SWORD_DECLARATION,
     ASSASSIN_DAGGER_DECLARATION,
     ARCANE_STAFF_DECLARATION,
-)
-
-NEURODRAGON_WEAPON_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "assassin_dagger": ASSASSIN_DAGGER_RECIPE,
-        "arcane_staff": ARCANE_STAFF_RECIPE,
-    },
 )

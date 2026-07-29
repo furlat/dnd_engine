@@ -17,6 +17,7 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.event_server import app, sim
+from tests.manual.game_creation_test_support import compose_and_preview
 
 
 class ApiClient:
@@ -531,21 +532,10 @@ def test_preset_map_and_authoring_handoff_clear_combat_state(capsys) -> None:
     assert Entity.get_all_entities() == []
     assert sim.encounter is None
 
+    composition = compose_and_preview(client)
     start_response = client.post(
         "/game-creation/start",
-        json={
-            "scenario": {
-                "kind": "preset",
-                "arena_id": "standard_skeleton_doors",
-            },
-            "side_a": {"controller": "human", "name": "Editor Hero"},
-            "side_b": {
-                "controller": "ai",
-                "name": "Basic AI",
-                "policy_id": "builtin.basic",
-            },
-            "opening_side": "side_a",
-        },
+        json=composition["exact_start_request"],
     )
     assert start_response.status_code == 200
     assert sim.encounter is not None

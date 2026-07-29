@@ -16,11 +16,11 @@ from dnd.classes.fighter import FightingStyleTwoWeaponFighting
 from dnd.core.equipment_types import WeaponProperty, WeaponSlot
 from dnd.core.events import Range, RangeType
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin
-from dnd.utils import force_attack_miss, reset_combat_state, set_hp
+from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 
 def _reset_state() -> None:

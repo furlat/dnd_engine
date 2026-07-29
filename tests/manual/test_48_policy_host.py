@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import AbstractSet
+from typing import AbstractSet, Sequence
 
 import pytest
 
@@ -50,19 +50,18 @@ from ai.policy.contracts import (
 from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from ai.policy.candidates import build_policy_candidate_set
 from ai.policy.generations import (
-    BASELINE_GENERATION_ID,
-    CANDIDATE_GENERATION_ID,
-    get_policy_implementation,
-    list_policy_generations,
+    ACTIVE_GENERATION_ID,
+    get_active_policy_implementation,
 )
-from ai.policy.generations.registry import EXPECTED_V31_BEHAVIOR_SHA256
 from dnd.ai.contracts.control import (
     ActionAffordance,
+    ActionBucket,
     ActionCapability,
     ActionCostProfile,
     ActionEconomyState,
     ActionOutcomeProfile,
     ActionResolutionStatus,
+    ActionSourceDefinition,
     ActionTarget,
     AffordanceSet,
     CommandResult,
@@ -92,7 +91,56 @@ from dnd.ai.contracts.semantics import (
     TargetingSemantics,
     TruthValue,
     action_semantics_ref,
+    unknown_action_semantics,
 )
+
+
+_UNKNOWN_ACTION_SEMANTICS_REF = action_semantics_ref(
+    unknown_action_semantics(),
+)
+
+
+def _action_affordance(
+    *,
+    row_id: str,
+    bucket: ActionBucket,
+    template_name: str,
+    display_name: str,
+    action_category: str,
+    target_type: str,
+    can_afford: bool,
+    cost: ActionCostProfile | None = None,
+    targets: Sequence[ActionTarget] = (),
+    semantic_key: str = "action.unclassified",
+    target_options: Sequence[ActionTarget] = (),
+    num_projectiles: int | None = None,
+    allow_same_target: bool | None = None,
+    semantic_id: str = "action.unknown",
+    semantics_ref: str = _UNKNOWN_ACTION_SEMANTICS_REF,
+    tags: Sequence[str] = (),
+) -> ActionAffordance:
+    """Build one canonical factored affordance for policy-host fixtures."""
+    return ActionAffordance(
+        row_id=row_id,
+        source=ActionSourceDefinition(
+            source_action_id=row_id,
+            bucket=bucket,
+            template_name=template_name,
+            semantic_key=semantic_key,
+            display_name=display_name,
+            action_category=action_category,
+            target_type=target_type,
+            can_afford=can_afford,
+            cost=cost if cost is not None else ActionCostProfile(),
+            target_options=target_options,
+            num_projectiles=num_projectiles,
+            allow_same_target=allow_same_target,
+            semantic_id=semantic_id,
+            semantics_ref=semantics_ref,
+            tags=tags,
+        ),
+        targets=targets,
+    )
 
 
 def test_policy_host_builds_and_validates_one_aligned_subjective_context() -> None:
@@ -124,28 +172,19 @@ def test_policy_host_models_are_complete_before_the_decision_hot_path() -> None:
     assert policy_host_module.PolicyDecisionBinding.__pydantic_complete__
 
 
-def test_policy_generations_are_executable_and_select_host_behavior() -> None:
-    """Baseline and candidate are authenticated implementations, not labels."""
-    identities = {row.generation_id: row for row in list_policy_generations()}
-    assert set(identities) == {BASELINE_GENERATION_ID, CANDIDATE_GENERATION_ID}
-    assert identities[BASELINE_GENERATION_ID].executable_sha256 != identities[CANDIDATE_GENERATION_ID].executable_sha256
-    assert identities[BASELINE_GENERATION_ID].implementation_sha256 == EXPECTED_V31_BEHAVIOR_SHA256
-    assert len(identities[BASELINE_GENERATION_ID].implementation_paths) == 8
-
+def test_active_policy_is_authenticated_and_executable() -> None:
+    """The sole advanced policy binds its source manifest to runtime behavior."""
     world = _door_world()
-    baseline = get_policy_implementation(BASELINE_GENERATION_ID)
-    candidate = get_policy_implementation(CANDIDATE_GENERATION_ID)
-    baseline_host = PolicyHost(implementation=baseline)
-    candidate_host = PolicyHost(implementation=candidate)
+    implementation = get_active_policy_implementation()
+    host = PolicyHost(implementation=implementation)
 
-    baseline_decision = baseline_host.decide(world)
-    candidate_decision = candidate_host.decide(world)
+    decision = host.decide(world)
 
-    assert baseline_host.policy_id == BASELINE_GENERATION_ID
-    assert candidate_host.policy_id == CANDIDATE_GENERATION_ID
-    assert baseline_decision.selected.intent == candidate_decision.selected.intent
-    assert baseline_host.binding_for("session", "actor", "epoch-1").policy_id == BASELINE_GENERATION_ID
-    assert candidate_host.binding_for("session", "actor", "epoch-1").policy_id == CANDIDATE_GENERATION_ID
+    assert implementation.identity.generation_id == ACTIVE_GENERATION_ID
+    assert implementation.identity.implementation_sha256
+    assert implementation.identity.executable_sha256
+    assert decision.selected.intent == ExecuteIntent(row_id="move-row")
+    assert host.binding_for("session", "actor", "epoch-1").policy_id == ACTIVE_GENERATION_ID
 
 
 def test_policy_host_exposes_one_identical_decision_and_trace_to_every_consumer() -> None:
@@ -1391,7 +1430,7 @@ def test_current_generation_rejects_exposure_augmentation_before_critical_hp(
         },
     })
 
-    host = PolicyHost(implementation=get_policy_implementation(CANDIDATE_GENERATION_ID))
+    host = PolicyHost(implementation=get_active_policy_implementation())
     decision = host.decide(world)
 
     assert decision.selected.intent == ExecuteIntent(row_id="melee-attack")
@@ -1691,7 +1730,7 @@ def test_policy_host_ends_spent_no_contact_turn_with_opaque_row() -> None:
     world = _door_world()
     epoch = world.current_epoch
     assert epoch is not None
-    opaque = ActionAffordance(
+    opaque = _action_affordance(
         row_id="self|opaque-action|index=0",
         bucket="self_actions",
         template_name="Opaque Action",
@@ -1852,7 +1891,7 @@ def _same_turn_spacing_world() -> SubjectiveWorldState:
 
     def movement_row(row_id: str, position: tuple[int, int]) -> ActionAffordance:
         movement_cost = abs(position[0]) * 5
-        return ActionAffordance(
+        return _action_affordance(
             row_id=row_id,
             bucket="position_actions",
             template_name="Relocate",
@@ -1958,7 +1997,7 @@ def _same_turn_spacing_followup_world(
     rows = []
     for index, position in enumerate(movement_positions):
         movement_cost = (abs(position[0] + 4) + abs(position[1])) * 5
-        rows.append(ActionAffordance(
+        rows.append(_action_affordance(
             row_id=f"followup-move:{position[0]},{position[1]}",
             bucket="position_actions",
             template_name="Investigate",
@@ -2033,7 +2072,7 @@ def _door_world() -> SubjectiveWorldState:
         tags=frozenset({ActionTag.MOVEMENT_VOLUNTARY, ActionTag.INFORMATION_REVEAL}),
     )
     semantics_ref = action_semantics_ref(semantics)
-    move = ActionAffordance(
+    move = _action_affordance(
         row_id="move-row",
         bucket="position_actions",
         template_name="Traverse Quietly",
@@ -2142,7 +2181,7 @@ def _combat_world() -> SubjectiveWorldState:
         tags=frozenset({ActionTag.ATTACK_WEAPON, ActionTag.DAMAGE_SINGLE_TARGET}),
     )
     semantics_ref = action_semantics_ref(semantics)
-    attack = ActionAffordance(
+    attack = _action_affordance(
         row_id="melee-attack",
         bucket="entity_actions",
         template_name="Attack_MELEE_MAIN",
@@ -2238,7 +2277,7 @@ def _transient_augmentation_world(*, augmented: bool = False) -> SubjectiveWorld
         ),
     )
     setup_ref = action_semantics_ref(setup_semantics)
-    setup = ActionAffordance(
+    setup = _action_affordance(
         row_id="transient-augmentation",
         bucket="self_actions",
         template_name="Opaque transient augmentation",
@@ -2303,7 +2342,7 @@ def _approach_combat_world() -> SubjectiveWorldState:
     assert epoch is not None
     move_semantics = next(iter(epoch.affordances.semantic_catalog.values()))
     move_ref = action_semantics_ref(move_semantics)
-    move = ActionAffordance(
+    move = _action_affordance(
         row_id="approach-hostile",
         bucket="position_actions",
         template_name="Traverse",
@@ -2439,7 +2478,7 @@ def _pursuit_after_first_move_world(
         tags=frozenset({ActionTag.MOBILITY_EXTEND}),
     )
     dash_ref = action_semantics_ref(dash_semantics)
-    dash = ActionAffordance(
+    dash = _action_affordance(
         row_id="pursuit-dash",
         bucket="self_actions",
         template_name="Extend Mobility",
@@ -2494,7 +2533,7 @@ def _pursuit_after_dash_world(
         if ActionTag.MOVEMENT_VOLUNTARY in semantics.tags
     )
     movement_ref = action_semantics_ref(movement_semantics)
-    move = ActionAffordance(
+    move = _action_affordance(
         row_id="pursuit-final-advance",
         bucket="position_actions",
         template_name="Traverse",
@@ -2610,7 +2649,7 @@ def _pursuit_next_turn_attack_world(
     assert epoch is not None
     capability = epoch.affordances.capabilities[0]
     damage_semantics = epoch.affordances.semantic_catalog[capability.semantics_ref]
-    attack = ActionAffordance(
+    attack = _action_affordance(
         row_id="pursuit-fresh-attack",
         bucket="entity_actions",
         template_name="Strike",
@@ -2660,7 +2699,7 @@ def _approach_followup_world(first_world: SubjectiveWorldState) -> SubjectiveWor
     assert first_epoch is not None
     damage_capability = first_epoch.affordances.capabilities[0]
     damage_semantics = first_epoch.affordances.semantic_catalog[damage_capability.semantics_ref]
-    attack = ActionAffordance(
+    attack = _action_affordance(
         row_id="followup-attack",
         bucket="entity_actions",
         template_name="Strike",
@@ -2898,7 +2937,7 @@ def _spell_transform_world(kind: str) -> SubjectiveWorldState:
         capability_transformations=(transformation,),
     )
     transform_ref = action_semantics_ref(transform_semantics)
-    activation = ActionAffordance(
+    activation = _action_affordance(
         row_id="opaque-transform",
         bucket="self_actions",
         template_name="Opaque",
@@ -2916,7 +2955,7 @@ def _spell_transform_world(kind: str) -> SubjectiveWorldState:
     initial_spell_rows: list[ActionAffordance] = []
     entities = dict(world.known_entities)
     if kind == "twinned":
-        initial_spell_rows.append(ActionAffordance(
+        initial_spell_rows.append(_action_affordance(
             row_id="initial-single-spell",
             bucket="entity_actions",
             template_name="Opaque Cast",
@@ -3022,7 +3061,7 @@ def _spell_transform_followup_world(
         ]
         row_id = "fresh-twinned-spell"
     semantics_ref = action_semantics_ref(semantics)
-    row = ActionAffordance(
+    row = _action_affordance(
         row_id=row_id,
         bucket="entity_actions",
         template_name="Fresh Opaque Cast",
@@ -3086,7 +3125,7 @@ def _quickened_competing_area_world(
         ),
     )
     semantics_ref = action_semantics_ref(semantics)
-    row = ActionAffordance(
+    row = _action_affordance(
         row_id="competing-area-spell",
         bucket="position_actions",
         template_name="Opaque Area Cast",

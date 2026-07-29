@@ -27,7 +27,7 @@ from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.gridmap import get_map
 from dnd.items.environment import DirectionalDoor
-from dnd.items.test_items import TestDoorA as DoorObject
+from dnd.items.environment_interactables import DoorObject as DoorObject
 from dnd.items.torches import WallTorch
 from dnd.runtime_reset import reset_engine_runtime
 from server.api_models import (
@@ -68,10 +68,59 @@ def test_mapeditor_catalog_exactly_discovers_public_placeable_content() -> None:
     catalog = build_catalog()
 
     assert catalog.content_set_digest == loaded.content_set_digest
-    assert len(catalog.objects) == 14
-    assert len(catalog.loot) == 300
-    assert sum(row.recipe_preset_ref is None for row in catalog.loot) == 97
-    assert sum(row.recipe_preset_ref is not None for row in catalog.loot) == 203
+    expected_object_refs: set[str] = set()
+    expected_loot_refs: set[str] = set()
+    for declaration in loaded.registry.declarations.values():
+        descriptor = declaration.descriptor
+        item_definition = declaration.item_definition
+        if (
+            descriptor.visibility is not ContentVisibility.PUBLIC
+            or declaration.construction is None
+            or item_definition is None
+        ):
+            continue
+        if item_definition.persistence_policy is (
+            ItemPersistencePolicy.ENVIRONMENT
+        ):
+            expected_object_refs.add(declaration.ref.identity_key)
+        elif item_definition.persistence_policy is (
+            ItemPersistencePolicy.POSSESSION
+        ):
+            expected_loot_refs.add(declaration.ref.identity_key)
+
+    default_loot_rows = [
+        row for row in catalog.loot if row.recipe_preset_ref is None
+    ]
+    assert {
+        row.recipe.ref.identity_key for row in catalog.objects
+    } == expected_object_refs
+    assert {
+        row.recipe.ref.identity_key for row in default_loot_rows
+    } == expected_loot_refs
+
+    default_recipe_digests = {
+        row.recipe.recipe_digest for row in default_loot_rows
+    }
+    expected_preset_refs = {
+        preset.ref.identity_key
+        for preset in loaded.registry.recipe_presets.values()
+        if (
+            preset.descriptor.visibility is ContentVisibility.PUBLIC
+            and (
+                declaration := loaded.registry.resolve_factory(
+                    preset.recipe.ref,
+                )
+            ).item_definition is not None
+            and declaration.item_definition.persistence_policy
+            is ItemPersistencePolicy.POSSESSION
+            and preset.recipe.recipe_digest not in default_recipe_digests
+        )
+    }
+    assert {
+        row.recipe_preset_ref.identity_key
+        for row in catalog.loot
+        if row.recipe_preset_ref is not None
+    } == expected_preset_refs
 
     all_rows = (*catalog.objects, *catalog.loot)
     recipe_digests = [row.recipe.recipe_digest for row in all_rows]
@@ -120,7 +169,7 @@ def test_mapeditor_place_and_save_models_have_one_exact_identity_path() -> None:
 
 
 def test_generic_placement_materializes_every_default_public_root() -> None:
-    """All 111 default roots cross one validated registry adapter."""
+    """Every default public root crosses one validated registry adapter."""
     reset_engine_runtime(grid_size=(120, 2))
     catalog = build_catalog()
 
@@ -128,7 +177,6 @@ def test_generic_placement_materializes_every_default_public_root() -> None:
         *catalog.objects,
         *(row for row in catalog.loot if row.recipe_preset_ref is None),
     )
-    assert len(rows) == 111
     for x, row in enumerate(rows):
         placed = place_catalog_object(
             MapEditorObjectPlaceRequest(

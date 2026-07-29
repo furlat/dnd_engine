@@ -20,6 +20,10 @@ from dnd.core.content.durable_characters import (
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
 )
+from dnd.core.content.encounters import (
+    EncounterRecipe,
+    EncounterRosterRecipe,
+)
 
 from server.game_directory.canonical import (
     canonical_digest,
@@ -46,6 +50,7 @@ from server.game_directory.contracts import (
     CharacterDeploymentLeaseRecord,
     CharacterHoldingsRecord,
     CharacterLoadoutRecord,
+    CharacterPresentationPreferencesRecord,
     CharacterRecord,
     CharacterRevisionBundleCommit,
     CharacterRevisionHeads,
@@ -75,14 +80,13 @@ from server.game_directory.contracts import (
     ProfileSettingsCreate,
     ProfileSettingsRecord,
     ProfileSettingsUpdate,
-    RatingAdmissionCreate,
-    RatingAdmissionRecord,
-    RatingEstimateCreate,
-    RatingEstimateRecord,
-    RatingRunCreate,
-    RatingRunRecord,
-    RatingRunStatus,
     RepositoryMetrics,
+    SavedEncounterCreate,
+    SavedEncounterRecord,
+    SavedEncounterReplace,
+    SavedEncounterRosterCreate,
+    SavedEncounterRosterRecord,
+    SavedEncounterRosterReplace,
     WorkerCreate,
     WorkerRecord,
     WorkerState,
@@ -287,6 +291,83 @@ def _character_loadout_from_row(row: sqlite3.Row) -> CharacterLoadoutRecord:
     return CharacterLoadoutRecord(
         loadout=loadout,
         created_at=row["created_at"],
+    )
+
+
+def _character_presentation_preferences_from_row(
+    row: sqlite3.Row,
+    *,
+    owner_principal_id: UUID,
+) -> CharacterPresentationPreferencesRecord:
+    """Decode and authenticate one mutable presentation document."""
+
+    preferences = _load_canonical_json_object(
+        row["preferences_json"],
+        "character presentation preferences",
+    )
+    return CharacterPresentationPreferencesRecord(
+        character_id=row["character_id"],
+        owner_principal_id=owner_principal_id,
+        revision=row["revision"],
+        preferences=preferences,
+        preferences_digest=row["preferences_digest"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _saved_encounter_roster_from_row(
+    row: sqlite3.Row,
+) -> SavedEncounterRosterRecord:
+    """Decode one exact saved roster and authenticate its canonical bytes."""
+
+    try:
+        recipe = EncounterRosterRecipe.model_validate_json(
+            row["recipe_json"],
+        )
+    except ValidationError as exc:
+        raise ImmutableRecordError(
+            "Persisted saved roster failed schema validation",
+        ) from exc
+    if canonical_json(recipe.model_dump(mode="json")) != row["recipe_json"]:
+        raise ImmutableRecordError(
+            "Persisted saved roster JSON is not canonical",
+        )
+    return SavedEncounterRosterRecord(
+        saved_roster_id=row["saved_roster_id"],
+        owner_principal_id=row["owner_principal_id"],
+        title=row["title"],
+        recipe=recipe,
+        recipe_digest=row["recipe_digest"],
+        revision=row["revision"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _saved_encounter_from_row(
+    row: sqlite3.Row,
+) -> SavedEncounterRecord:
+    """Decode one exact saved encounter and authenticate its canonical bytes."""
+
+    try:
+        recipe = EncounterRecipe.model_validate_json(row["recipe_json"])
+    except ValidationError as exc:
+        raise ImmutableRecordError(
+            "Persisted saved encounter failed schema validation",
+        ) from exc
+    if canonical_json(recipe.model_dump(mode="json")) != row["recipe_json"]:
+        raise ImmutableRecordError(
+            "Persisted saved encounter JSON is not canonical",
+        )
+    return SavedEncounterRecord(
+        saved_encounter_id=row["saved_encounter_id"],
+        owner_principal_id=row["owner_principal_id"],
+        title=row["title"],
+        recipe=recipe,
+        recipe_digest=row["recipe_digest"],
+        revision=row["revision"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
     )
 
 
@@ -642,64 +723,6 @@ def _summary_from_row(row: sqlite3.Row) -> FinalSummaryRecord:
         created_at=row["created_at"],
         supersedes_summary_id=row["supersedes_summary_id"],
         is_current=bool(row["is_current"]),
-    )
-
-
-def _rating_run_from_row(row: sqlite3.Row) -> RatingRunRecord:
-    """Build a typed rating run from one SQLite row."""
-
-    return RatingRunRecord(
-        rating_run_id=row["rating_run_id"],
-        algorithm_id=row["algorithm_id"],
-        algorithm_version=row["algorithm_version"],
-        parameters=_load_json_object(row["parameters_json"]),
-        selection_query=_load_json_object(row["selection_query_json"]),
-        compatibility_constraints=_load_json_object(row["compatibility_constraints_json"]),
-        parameters_digest=row["parameters_digest"],
-        selection_query_digest=row["selection_query_digest"],
-        compatibility_digest=row["compatibility_digest"],
-        status=row["status"],
-        created_at=row["created_at"],
-        completed_at=row["completed_at"],
-        output_artifact_digest=row["output_artifact_digest"],
-    )
-
-
-def _rating_admission_from_row(row: sqlite3.Row) -> RatingAdmissionRecord:
-    """Build a typed immutable rating admission from one SQLite row."""
-
-    return RatingAdmissionRecord(
-        admission_id=row["admission_id"],
-        rating_run_id=row["rating_run_id"],
-        game_id=row["game_id"],
-        summary_digest=row["summary_digest"],
-        admitted=bool(row["admitted"]),
-        exclusion_reason_code=row["exclusion_reason_code"],
-        exclusion_detail=_load_json_object(row["exclusion_detail_json"]),
-        treatment_id=row["treatment_id"],
-        configuration_id=row["configuration_id"],
-        weight=row["weight"],
-        created_at=row["created_at"],
-    )
-
-
-def _rating_estimate_from_row(row: sqlite3.Row) -> RatingEstimateRecord:
-    """Build a typed immutable rating estimate from one SQLite row."""
-
-    return RatingEstimateRecord(
-        estimate_id=row["estimate_id"],
-        rating_run_id=row["rating_run_id"],
-        subject_id=row["subject_id"],
-        estimate=row["estimate"],
-        uncertainty=row["uncertainty"],
-        games=row["games"],
-        wins=row["wins"],
-        losses=row["losses"],
-        draws=row["draws"],
-        rank=row["rank"],
-        diagnostics=_load_json_object(row["diagnostics_json"]),
-        diagnostics_digest=row["diagnostics_digest"],
-        created_at=row["created_at"],
     )
 
 
@@ -1657,6 +1680,19 @@ class GameDirectoryRepository:
                 "character",
             )
             current = _canonical_character_from_row(current_row)
+            if request.require_no_active_deployment:
+                active_lease = connection.execute(
+                    """
+                    SELECT lease_id FROM character_deployment_leases
+                    WHERE character_id = ? AND released_at IS NULL
+                    """,
+                    (str(request.character_id),),
+                ).fetchone()
+                if active_lease is not None:
+                    raise ConflictError(
+                        "Character cannot be changed during an active "
+                        "deployment",
+                    )
             expected = request.expected_heads
             if (
                 current.row_version != request.expected_row_version
@@ -1955,107 +1991,588 @@ class GameDirectoryRepository:
             ).fetchall()
         return tuple(_character_from_row(row) for row in rows)
 
+    def get_character_presentation_preferences(
+        self,
+        character_id: UUID,
+    ) -> CharacterPresentationPreferencesRecord:
+        """Return one independent art document or its revision-zero default."""
+
+        with self._database.read(
+            "get_character_presentation_preferences",
+        ) as connection:
+            character_row = self._required_row(
+                connection,
+                """
+                SELECT character_id, owner_principal_id
+                FROM characters
+                WHERE character_id = ?
+                """,
+                (str(character_id),),
+                "character",
+            )
+            preferences_row = connection.execute(
+                """
+                SELECT * FROM character_presentation_preferences
+                WHERE character_id = ?
+                """,
+                (str(character_id),),
+            ).fetchone()
+        owner_principal_id = UUID(character_row["owner_principal_id"])
+        if preferences_row is None:
+            return CharacterPresentationPreferencesRecord(
+                character_id=character_id,
+                owner_principal_id=owner_principal_id,
+                revision=0,
+                preferences={},
+                preferences_digest=canonical_digest({}),
+                updated_at=None,
+            )
+        return _character_presentation_preferences_from_row(
+            preferences_row,
+            owner_principal_id=owner_principal_id,
+        )
+
+    def update_character_presentation_preferences(
+        self,
+        *,
+        character_id: UUID,
+        expected_revision: int,
+        preferences: JsonObject,
+    ) -> CharacterPresentationPreferencesRecord:
+        """CAS-replace one mutable art document without touching mechanics."""
+
+        if expected_revision < 0:
+            raise ValueError("expected_revision must be non-negative")
+        preferences_json = canonical_json(preferences)
+        preferences_digest = canonical_digest(preferences)
+        now = self._now()
+        timestamp = datetime_to_text(now)
+        with self._database.transaction(
+            "update_character_presentation_preferences",
+        ) as connection:
+            character_row = self._required_row(
+                connection,
+                """
+                SELECT character_id, owner_principal_id
+                FROM characters
+                WHERE character_id = ?
+                """,
+                (str(character_id),),
+                "character",
+            )
+            existing = connection.execute(
+                """
+                SELECT revision FROM character_presentation_preferences
+                WHERE character_id = ?
+                """,
+                (str(character_id),),
+            ).fetchone()
+            current_revision = (
+                int(existing["revision"]) if existing is not None else 0
+            )
+            if current_revision != expected_revision:
+                raise StaleVersionError(
+                    "Character presentation preferences changed",
+                )
+            revision = current_revision + 1
+            if existing is None:
+                connection.execute(
+                    """
+                    INSERT INTO character_presentation_preferences(
+                        character_id, schema_version, preferences_json,
+                        preferences_digest, revision, updated_at
+                    ) VALUES (?, 1, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(character_id),
+                        preferences_json,
+                        preferences_digest,
+                        revision,
+                        timestamp,
+                    ),
+                )
+            else:
+                cursor = connection.execute(
+                    """
+                    UPDATE character_presentation_preferences
+                    SET preferences_json = ?,
+                        preferences_digest = ?,
+                        revision = ?,
+                        updated_at = ?
+                    WHERE character_id = ? AND revision = ?
+                    """,
+                    (
+                        preferences_json,
+                        preferences_digest,
+                        revision,
+                        timestamp,
+                        str(character_id),
+                        expected_revision,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleVersionError(
+                        "Character presentation preferences changed",
+                    )
+        return CharacterPresentationPreferencesRecord(
+            character_id=character_id,
+            owner_principal_id=character_row["owner_principal_id"],
+            revision=revision,
+            preferences=preferences,
+            preferences_digest=preferences_digest,
+            updated_at=now,
+        )
+
+    def create_saved_encounter_roster(
+        self,
+        request: SavedEncounterRosterCreate,
+    ) -> SavedEncounterRosterRecord:
+        """Persist one exact reusable roster owned by a principal."""
+
+        now = self._now()
+        recipe_json = canonical_json(request.recipe.model_dump(mode="json"))
+        with self._database.transaction(
+            "create_saved_encounter_roster",
+        ) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO saved_encounter_rosters(
+                        saved_roster_id, owner_principal_id, schema_version, title,
+                        recipe_json, recipe_digest, revision,
+                        created_at, updated_at
+                    ) VALUES (?, ?, 1, ?, ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        request.saved_roster_id,
+                        str(request.owner_principal_id),
+                        request.title,
+                        recipe_json,
+                        request.recipe.recipe_digest,
+                        datetime_to_text(now),
+                        datetime_to_text(now),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    f"Saved roster could not be created: {exc}",
+                ) from exc
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounter_rosters
+                WHERE saved_roster_id = ?
+                """,
+                (request.saved_roster_id,),
+                "saved encounter roster",
+            )
+        return _saved_encounter_roster_from_row(row)
+
+    def get_saved_encounter_roster(
+        self,
+        owner_principal_id: UUID,
+        saved_roster_id: str,
+    ) -> SavedEncounterRosterRecord:
+        with self._database.read("get_saved_encounter_roster") as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounter_rosters
+                WHERE saved_roster_id = ? AND owner_principal_id = ?
+                """,
+                (saved_roster_id, str(owner_principal_id)),
+                "saved encounter roster",
+            )
+        return _saved_encounter_roster_from_row(row)
+
+    def list_saved_encounter_rosters(
+        self,
+        owner_principal_id: UUID,
+    ) -> tuple[SavedEncounterRosterRecord, ...]:
+        with self._database.read("list_saved_encounter_rosters") as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM saved_encounter_rosters
+                WHERE owner_principal_id = ?
+                ORDER BY updated_at DESC, saved_roster_id
+                """,
+                (str(owner_principal_id),),
+            ).fetchall()
+        return tuple(_saved_encounter_roster_from_row(row) for row in rows)
+
+    def replace_saved_encounter_roster(
+        self,
+        owner_principal_id: UUID,
+        saved_roster_id: str,
+        request: SavedEncounterRosterReplace,
+    ) -> SavedEncounterRosterRecord:
+        now = self._now()
+        with self._database.transaction(
+            "replace_saved_encounter_roster",
+        ) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE saved_encounter_rosters
+                SET title = ?, recipe_json = ?, recipe_digest = ?,
+                    revision = revision + 1, updated_at = ?
+                WHERE saved_roster_id = ? AND owner_principal_id = ?
+                  AND revision = ? AND recipe_digest = ?
+                """,
+                (
+                    request.title,
+                    canonical_json(request.recipe.model_dump(mode="json")),
+                    request.recipe.recipe_digest,
+                    datetime_to_text(now),
+                    saved_roster_id,
+                    str(owner_principal_id),
+                    request.expected_revision,
+                    request.expected_recipe_digest,
+                ),
+            )
+            if cursor.rowcount != 1:
+                self._required_row(
+                    connection,
+                    """
+                    SELECT saved_roster_id FROM saved_encounter_rosters
+                    WHERE saved_roster_id = ? AND owner_principal_id = ?
+                    """,
+                    (saved_roster_id, str(owner_principal_id)),
+                    "saved encounter roster",
+                )
+                raise StaleVersionError("Saved encounter roster changed")
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounter_rosters
+                WHERE saved_roster_id = ?
+                """,
+                (saved_roster_id,),
+                "saved encounter roster",
+            )
+        return _saved_encounter_roster_from_row(row)
+
+    def delete_saved_encounter_roster(
+        self,
+        owner_principal_id: UUID,
+        saved_roster_id: str,
+        *,
+        expected_revision: int,
+        expected_recipe_digest: str,
+    ) -> SavedEncounterRosterRecord:
+        with self._database.transaction(
+            "delete_saved_encounter_roster",
+        ) as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounter_rosters
+                WHERE saved_roster_id = ? AND owner_principal_id = ?
+                """,
+                (saved_roster_id, str(owner_principal_id)),
+                "saved encounter roster",
+            )
+            record = _saved_encounter_roster_from_row(row)
+            if (
+                record.revision != expected_revision
+                or record.recipe_digest != expected_recipe_digest
+            ):
+                raise StaleVersionError("Saved encounter roster changed")
+            connection.execute(
+                """
+                DELETE FROM saved_encounter_rosters
+                WHERE saved_roster_id = ?
+                """,
+                (saved_roster_id,),
+            )
+        return record
+
+    def create_saved_encounter(
+        self,
+        request: SavedEncounterCreate,
+    ) -> SavedEncounterRecord:
+        """Persist one exact reusable encounter owned by a principal."""
+
+        now = self._now()
+        with self._database.transaction("create_saved_encounter") as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO saved_encounters(
+                        saved_encounter_id, owner_principal_id, schema_version,
+                        title, recipe_json, recipe_digest, revision,
+                        created_at, updated_at
+                    ) VALUES (?, ?, 1, ?, ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        request.saved_encounter_id,
+                        str(request.owner_principal_id),
+                        request.title,
+                        canonical_json(
+                            request.recipe.model_dump(mode="json"),
+                        ),
+                        request.recipe.recipe_digest,
+                        datetime_to_text(now),
+                        datetime_to_text(now),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ConflictError(
+                    f"Saved encounter could not be created: {exc}",
+                ) from exc
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounters
+                WHERE saved_encounter_id = ?
+                """,
+                (request.saved_encounter_id,),
+                "saved encounter",
+            )
+        return _saved_encounter_from_row(row)
+
+    def get_saved_encounter(
+        self,
+        owner_principal_id: UUID,
+        saved_encounter_id: str,
+    ) -> SavedEncounterRecord:
+        with self._database.read("get_saved_encounter") as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounters
+                WHERE saved_encounter_id = ? AND owner_principal_id = ?
+                """,
+                (saved_encounter_id, str(owner_principal_id)),
+                "saved encounter",
+            )
+        return _saved_encounter_from_row(row)
+
+    def list_saved_encounters(
+        self,
+        owner_principal_id: UUID,
+    ) -> tuple[SavedEncounterRecord, ...]:
+        with self._database.read("list_saved_encounters") as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM saved_encounters
+                WHERE owner_principal_id = ?
+                ORDER BY updated_at DESC, saved_encounter_id
+                """,
+                (str(owner_principal_id),),
+            ).fetchall()
+        return tuple(_saved_encounter_from_row(row) for row in rows)
+
+    def replace_saved_encounter(
+        self,
+        owner_principal_id: UUID,
+        saved_encounter_id: str,
+        request: SavedEncounterReplace,
+    ) -> SavedEncounterRecord:
+        now = self._now()
+        with self._database.transaction("replace_saved_encounter") as connection:
+            cursor = connection.execute(
+                """
+                UPDATE saved_encounters
+                SET title = ?, recipe_json = ?, recipe_digest = ?,
+                    revision = revision + 1, updated_at = ?
+                WHERE saved_encounter_id = ? AND owner_principal_id = ?
+                  AND revision = ? AND recipe_digest = ?
+                """,
+                (
+                    request.title,
+                    canonical_json(request.recipe.model_dump(mode="json")),
+                    request.recipe.recipe_digest,
+                    datetime_to_text(now),
+                    saved_encounter_id,
+                    str(owner_principal_id),
+                    request.expected_revision,
+                    request.expected_recipe_digest,
+                ),
+            )
+            if cursor.rowcount != 1:
+                self._required_row(
+                    connection,
+                    """
+                    SELECT saved_encounter_id FROM saved_encounters
+                    WHERE saved_encounter_id = ? AND owner_principal_id = ?
+                    """,
+                    (saved_encounter_id, str(owner_principal_id)),
+                    "saved encounter",
+                )
+                raise StaleVersionError("Saved encounter changed")
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounters
+                WHERE saved_encounter_id = ?
+                """,
+                (saved_encounter_id,),
+                "saved encounter",
+            )
+        return _saved_encounter_from_row(row)
+
+    def delete_saved_encounter(
+        self,
+        owner_principal_id: UUID,
+        saved_encounter_id: str,
+        *,
+        expected_revision: int,
+        expected_recipe_digest: str,
+    ) -> SavedEncounterRecord:
+        with self._database.transaction("delete_saved_encounter") as connection:
+            row = self._required_row(
+                connection,
+                """
+                SELECT * FROM saved_encounters
+                WHERE saved_encounter_id = ? AND owner_principal_id = ?
+                """,
+                (saved_encounter_id, str(owner_principal_id)),
+                "saved encounter",
+            )
+            record = _saved_encounter_from_row(row)
+            if (
+                record.revision != expected_revision
+                or record.recipe_digest != expected_recipe_digest
+            ):
+                raise StaleVersionError("Saved encounter changed")
+            connection.execute(
+                """
+                DELETE FROM saved_encounters
+                WHERE saved_encounter_id = ?
+                """,
+                (saved_encounter_id,),
+            )
+        return record
+
     def acquire_character_deployment_lease(
         self,
         request: CharacterDeploymentLeaseCreate,
     ) -> CharacterDeploymentLeaseRecord:
         """Acquire the one active live-deployment lease for a character."""
 
+        return self.acquire_character_deployment_leases((request,))[0]
+
+    def acquire_character_deployment_leases(
+        self,
+        requests: tuple[CharacterDeploymentLeaseCreate, ...],
+    ) -> tuple[CharacterDeploymentLeaseRecord, ...]:
+        """Acquire an exact roster's character leases in one transaction."""
+
+        character_ids = tuple(request.character_id for request in requests)
+        lease_ids = tuple(request.lease_id for request in requests)
+        if len(character_ids) != len(set(character_ids)):
+            raise ValueError("Character lease roster repeats a character")
+        if len(lease_ids) != len(set(lease_ids)):
+            raise ValueError("Character lease roster repeats a lease")
         now = self._now()
         with self._database.transaction(
-            "acquire_character_deployment_lease",
+            "acquire_character_deployment_leases",
         ) as connection:
-            ownership_row = self._required_row(
-                connection,
-                """
-                SELECT
-                    character.status,
-                    character.revision_state,
-                    character.owner_principal_id,
-                    membership.game_id AS membership_game_id,
-                    membership.principal_id AS membership_principal_id,
-                    membership.membership_state,
-                    membership.may_control_entities
-                FROM characters AS character
-                JOIN game_memberships AS membership
-                  ON membership.membership_id = ?
-                WHERE character.character_id = ?
-                """,
-                (
-                    str(request.membership_id),
-                    str(request.character_id),
-                ),
-                "character deployment authority",
-            )
-            if ownership_row["revision_state"] != CharacterRevisionState.CANONICAL.value:
-                raise ConflictError(
-                    "Character requires canonical revisions before deployment",
-                )
-            if ownership_row["status"] != "active":
-                raise ConflictError("Retired characters cannot be deployed")
-            if ownership_row["membership_game_id"] != str(request.game_id):
-                raise ConflictError(
-                    "Character deployment membership belongs to another game",
-                )
-            if (
-                ownership_row["membership_principal_id"]
-                != ownership_row["owner_principal_id"]
-            ):
-                raise ConflictError(
-                    "Character deployment membership does not belong to the "
-                    "character owner",
-                )
-            if ownership_row["membership_state"] != MembershipState.ACTIVE.value:
-                raise ConflictError(
-                    "Character deployment requires an active membership",
-                )
-            if not bool(ownership_row["may_control_entities"]):
-                raise ConflictError(
-                    "Character deployment membership does not have "
-                    "entity-control authority",
-                )
-            try:
-                connection.execute(
+            for request in requests:
+                ownership_row = self._required_row(
+                    connection,
                     """
-                    INSERT INTO character_deployment_leases(
-                        lease_id, character_id, game_id, membership_id,
-                        acquired_at
-                    ) VALUES (?, ?, ?, ?, ?)
+                    SELECT
+                        character.status,
+                        character.revision_state,
+                        character.owner_principal_id,
+                        membership.game_id AS membership_game_id,
+                        membership.principal_id AS membership_principal_id,
+                        membership.membership_state,
+                        membership.may_control_entities
+                    FROM characters AS character
+                    JOIN game_memberships AS membership
+                      ON membership.membership_id = ?
+                    WHERE character.character_id = ?
                     """,
                     (
-                        str(request.lease_id),
-                        str(request.character_id),
-                        str(request.game_id),
                         str(request.membership_id),
-                        datetime_to_text(now),
+                        str(request.character_id),
                     ),
+                    "character deployment authority",
                 )
-            except sqlite3.IntegrityError as exc:
-                active = connection.execute(
-                    """
-                    SELECT lease_id FROM character_deployment_leases
-                    WHERE character_id = ? AND released_at IS NULL
-                    """,
-                    (str(request.character_id),),
-                ).fetchone()
-                if active is not None:
+                if (
+                    ownership_row["revision_state"]
+                    != CharacterRevisionState.CANONICAL.value
+                ):
                     raise ConflictError(
-                        f"Character {request.character_id} already has an "
-                        "active deployment lease",
+                        "Character requires canonical revisions before deployment",
+                    )
+                if ownership_row["status"] != "active":
+                    raise ConflictError("Retired characters cannot be deployed")
+                if ownership_row["membership_game_id"] != str(request.game_id):
+                    raise ConflictError(
+                        "Character deployment membership belongs to another game",
+                    )
+                if (
+                    ownership_row["membership_principal_id"]
+                    != ownership_row["owner_principal_id"]
+                ):
+                    raise ConflictError(
+                        "Character deployment membership does not belong to "
+                        "the character owner",
+                    )
+                if (
+                    ownership_row["membership_state"]
+                    != MembershipState.ACTIVE.value
+                ):
+                    raise ConflictError(
+                        "Character deployment requires an active membership",
+                    )
+                if not bool(ownership_row["may_control_entities"]):
+                    raise ConflictError(
+                        "Character deployment membership does not have "
+                        "entity-control authority",
+                    )
+                try:
+                    connection.execute(
+                        """
+                        INSERT INTO character_deployment_leases(
+                            lease_id, character_id, game_id, membership_id,
+                            acquired_at
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(request.lease_id),
+                            str(request.character_id),
+                            str(request.game_id),
+                            str(request.membership_id),
+                            datetime_to_text(now),
+                        ),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    active = connection.execute(
+                        """
+                        SELECT lease_id FROM character_deployment_leases
+                        WHERE character_id = ? AND released_at IS NULL
+                        """,
+                        (str(request.character_id),),
+                    ).fetchone()
+                    if active is not None:
+                        raise ConflictError(
+                            f"Character {request.character_id} already has an "
+                            "active deployment lease",
+                        ) from exc
+                    raise ConflictError(
+                        "Character deployment lease could not be acquired: "
+                        f"{exc}",
                     ) from exc
-                raise ConflictError(
-                    f"Character deployment lease could not be acquired: {exc}",
-                ) from exc
-            row = self._required_row(
-                connection,
-                """
-                SELECT * FROM character_deployment_leases
-                WHERE lease_id = ?
-                """,
-                (str(request.lease_id),),
-                "character deployment lease",
+            rows = tuple(
+                self._required_row(
+                    connection,
+                    """
+                    SELECT * FROM character_deployment_leases
+                    WHERE lease_id = ?
+                    """,
+                    (str(request.lease_id),),
+                    "character deployment lease",
+                )
+                for request in requests
             )
-        return _character_deployment_lease_from_row(row)
+        return tuple(
+            _character_deployment_lease_from_row(row)
+            for row in rows
+        )
 
     def get_active_character_deployment_lease(
         self,
@@ -2178,86 +2695,152 @@ class GameDirectoryRepository:
     def deploy_character_pinned(
         self,
         request: PinnedCharacterDeploymentCreate,
+        *,
+        expected_character_row_version: int,
+        expected_heads: CharacterRevisionHeads,
     ) -> PinnedCharacterDeploymentRecord:
         """Persist a deployment pinned to the leased character's exact heads."""
 
+        return self.deploy_characters_pinned(
+            (request,),
+            expected_character_heads={
+                request.character_id: (
+                    expected_character_row_version,
+                    expected_heads,
+                ),
+            },
+        )[0]
+
+    def deploy_characters_pinned(
+        self,
+        requests: tuple[PinnedCharacterDeploymentCreate, ...],
+        *,
+        expected_character_heads: dict[
+            UUID,
+            tuple[int, CharacterRevisionHeads],
+        ],
+    ) -> tuple[PinnedCharacterDeploymentRecord, ...]:
+        """Pin an exact roster's runtime entities in one transaction."""
+
+        character_ids = tuple(request.character_id for request in requests)
+        entity_uuids = tuple(request.entity_uuid for request in requests)
+        deployment_ids = tuple(request.deployment_id for request in requests)
+        if len(character_ids) != len(set(character_ids)):
+            raise ValueError("Pinned roster repeats a character")
+        if len(entity_uuids) != len(set(entity_uuids)):
+            raise ValueError("Pinned roster repeats a runtime entity")
+        if len(deployment_ids) != len(set(deployment_ids)):
+            raise ValueError("Pinned roster repeats a deployment")
+        if set(expected_character_heads) != set(character_ids):
+            raise ValueError(
+                "Pinned roster head expectations must match every character",
+            )
         now = self._now()
         with self._database.transaction(
-            "deploy_character_pinned",
+            "deploy_characters_pinned",
         ) as connection:
-            lease_row = self._required_row(
-                connection,
-                """
-                SELECT * FROM character_deployment_leases
-                WHERE lease_id = ?
-                """,
-                (str(request.lease_id),),
-                "character deployment lease",
-            )
-            lease = _character_deployment_lease_from_row(lease_row)
-            if lease.released_at is not None:
-                raise ConflictError(
-                    "Pinned character deployment requires an active lease",
-                )
-            if (
-                lease.character_id != request.character_id
-                or lease.game_id != request.game_id
-                or lease.membership_id != request.membership_id
-            ):
-                raise ConflictError(
-                    "Pinned character deployment does not match its lease",
-                )
-            character_row = self._required_row(
-                connection,
-                "SELECT * FROM characters WHERE character_id = ?",
-                (str(request.character_id),),
-                "character",
-            )
-            character = _canonical_character_from_row(character_row)
-            try:
-                connection.execute(
+            for request in requests:
+                lease_row = self._required_row(
+                    connection,
                     """
-                    INSERT INTO character_deployments(
-                        deployment_id, game_id, membership_id, character_id,
-                        entity_uuid, deployed_at, lease_id, pin_state,
-                        definition_revision, definition_digest,
-                        holdings_revision, holdings_digest,
-                        loadout_revision, loadout_digest
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, 'pinned',
-                        ?, ?, ?, ?, ?, ?
-                    )
+                    SELECT * FROM character_deployment_leases
+                    WHERE lease_id = ?
                     """,
-                    (
-                        str(request.deployment_id),
-                        str(request.game_id),
-                        str(request.membership_id),
-                        str(request.character_id),
-                        str(request.entity_uuid),
-                        datetime_to_text(now),
-                        str(request.lease_id),
-                        character.current_definition_revision,
-                        character.current_definition_digest,
-                        character.current_holdings_revision,
-                        character.current_holdings_digest,
-                        character.current_loadout_revision,
-                        character.current_loadout_digest,
-                    ),
+                    (str(request.lease_id),),
+                    "character deployment lease",
                 )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(
-                    f"Pinned character deployment could not be created: {exc}",
-                ) from exc
-            row = self._required_row(
-                connection,
-                """
-                SELECT * FROM character_deployments
-                WHERE deployment_id = ?
-                """,
-                (str(request.deployment_id),),
-                "character deployment",
+                lease = _character_deployment_lease_from_row(lease_row)
+                if lease.released_at is not None:
+                    raise ConflictError(
+                        "Pinned character deployment requires an active lease",
+                    )
+                if (
+                    lease.character_id != request.character_id
+                    or lease.game_id != request.game_id
+                    or lease.membership_id != request.membership_id
+                ):
+                    raise ConflictError(
+                        "Pinned character deployment does not match its lease",
+                    )
+                character_row = self._required_row(
+                    connection,
+                    "SELECT * FROM characters WHERE character_id = ?",
+                    (str(request.character_id),),
+                    "character",
+                )
+                character = _canonical_character_from_row(character_row)
+                expected_row_version, expected_heads = (
+                    expected_character_heads[request.character_id]
+                )
+                if (
+                    character.row_version != expected_row_version
+                    or character.current_definition_revision
+                    != expected_heads.definition_revision
+                    or character.current_definition_digest
+                    != expected_heads.definition_digest
+                    or character.current_holdings_revision
+                    != expected_heads.holdings_revision
+                    or character.current_holdings_digest
+                    != expected_heads.holdings_digest
+                    or character.current_loadout_revision
+                    != expected_heads.loadout_revision
+                    or character.current_loadout_digest
+                    != expected_heads.loadout_digest
+                ):
+                    raise StaleVersionError(
+                        "Character heads changed before deployment pinning",
+                    )
+                try:
+                    connection.execute(
+                        """
+                        INSERT INTO character_deployments(
+                            deployment_id, game_id, membership_id,
+                            character_id, entity_uuid, deployed_at, lease_id,
+                            pin_state, definition_revision,
+                            definition_digest, holdings_revision,
+                            holdings_digest, loadout_revision, loadout_digest
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, 'pinned',
+                            ?, ?, ?, ?, ?, ?
+                        )
+                        """,
+                        (
+                            str(request.deployment_id),
+                            str(request.game_id),
+                            str(request.membership_id),
+                            str(request.character_id),
+                            str(request.entity_uuid),
+                            datetime_to_text(now),
+                            str(request.lease_id),
+                            character.current_definition_revision,
+                            character.current_definition_digest,
+                            character.current_holdings_revision,
+                            character.current_holdings_digest,
+                            character.current_loadout_revision,
+                            character.current_loadout_digest,
+                        ),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise ConflictError(
+                        "Pinned character deployment could not be created: "
+                        f"{exc}",
+                    ) from exc
+            rows = tuple(
+                self._required_row(
+                    connection,
+                    """
+                    SELECT * FROM character_deployments
+                    WHERE deployment_id = ?
+                    """,
+                    (str(request.deployment_id),),
+                    "character deployment",
+                )
+                for request in requests
             )
-        return _pinned_character_deployment_from_row(row)
+        return tuple(
+            _pinned_character_deployment_from_row(row)
+            for row in rows
+        )
 
     def list_character_deployments(
         self,
@@ -3404,13 +3987,16 @@ class GameDirectoryRepository:
         self,
         game_id: UUID,
         *,
-        lease_id: UUID | None,
+        lease_ids: tuple[UUID, ...],
         payload: JsonObject,
     ) -> str:
         """Durably stage all inputs needed to finish one local terminal game."""
 
         payload_json = canonical_json(payload)
         payload_digest = canonical_digest(payload)
+        lease_ids_json = canonical_json([
+            str(lease_id) for lease_id in lease_ids
+        ])
         now = self._now()
         with self._database.transaction(
             "stage_local_terminal_commit",
@@ -3424,8 +4010,7 @@ class GameDirectoryRepository:
             ).fetchone()
             if existing is not None:
                 if (
-                    existing["lease_id"]
-                    != (str(lease_id) if lease_id is not None else None)
+                    existing["lease_ids_json"] != lease_ids_json
                     or existing["payload_digest"] != payload_digest
                     or existing["payload_json"] != payload_json
                 ):
@@ -3451,12 +4036,13 @@ class GameDirectoryRepository:
             connection.execute(
                 """
                 INSERT INTO local_terminal_commit_intents(
-                    game_id, lease_id, payload_json, payload_digest, staged_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    game_id, lease_id, lease_ids_json, payload_json,
+                    payload_digest, staged_at
+                ) VALUES (?, NULL, ?, ?, ?, ?)
                 """,
                 (
                     str(game_id),
-                    str(lease_id) if lease_id is not None else None,
+                    lease_ids_json,
                     payload_json,
                     payload_digest,
                     datetime_to_text(now),
@@ -3611,7 +4197,7 @@ class GameDirectoryRepository:
 
     def list_pending_local_terminal_commits(
         self,
-    ) -> tuple[tuple[UUID, UUID | None, JsonObject, str], ...]:
+    ) -> tuple[tuple[UUID, tuple[UUID, ...], JsonObject, str], ...]:
         """Return staged local terminal inputs that still need publication."""
 
         with self._database.read(
@@ -3619,7 +4205,7 @@ class GameDirectoryRepository:
         ) as connection:
             rows = connection.execute(
                 """
-                SELECT game_id, lease_id, payload_json, payload_digest
+                SELECT game_id, lease_ids_json, payload_json, payload_digest
                 FROM local_terminal_commit_intents
                 WHERE committed_at IS NULL
                 ORDER BY staged_at, game_id
@@ -3628,7 +4214,10 @@ class GameDirectoryRepository:
         return tuple(
             (
                 UUID(row["game_id"]),
-                UUID(row["lease_id"]) if row["lease_id"] is not None else None,
+                tuple(
+                    UUID(value)
+                    for value in json.loads(row["lease_ids_json"])
+                ),
                 _load_canonical_json_object(
                     row["payload_json"],
                     "local terminal commit",
@@ -3641,7 +4230,7 @@ class GameDirectoryRepository:
     def get_pending_local_terminal_commit(
         self,
         game_id: UUID,
-    ) -> tuple[UUID | None, JsonObject, str] | None:
+    ) -> tuple[tuple[UUID, ...], JsonObject, str] | None:
         """Return one staged local terminal payload when not yet committed."""
 
         with self._database.read(
@@ -3649,7 +4238,7 @@ class GameDirectoryRepository:
         ) as connection:
             row = connection.execute(
                 """
-                SELECT lease_id, payload_json, payload_digest
+                SELECT lease_ids_json, payload_json, payload_digest
                 FROM local_terminal_commit_intents
                 WHERE game_id = ? AND committed_at IS NULL
                 """,
@@ -3658,7 +4247,10 @@ class GameDirectoryRepository:
         if row is None:
             return None
         return (
-            UUID(row["lease_id"]) if row["lease_id"] is not None else None,
+            tuple(
+                UUID(value)
+                for value in json.loads(row["lease_ids_json"])
+            ),
             _load_canonical_json_object(
                 row["payload_json"],
                 "local terminal commit",
@@ -3950,8 +4542,8 @@ class GameDirectoryRepository:
         source_event_digest: str,
         source_combat_log_digest: str,
         payload_digest: str,
-        settlement_bundle: CharacterRevisionBundleCommit | None,
-        lease_id: UUID | None,
+        settlement_bundles: tuple[CharacterRevisionBundleCommit, ...],
+        lease_ids: tuple[UUID, ...],
     ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
         """Atomically publish terminal evidence, settlement, and lease release."""
 
@@ -3981,11 +4573,13 @@ class GameDirectoryRepository:
             raise ValueError(
                 "Terminal evidence requires one subjective replay archive",
             )
-        if (settlement_bundle is None) != (lease_id is None):
+        if len(settlement_bundles) != len(lease_ids):
             raise ValueError(
-                "Character settlement bundle and lease must be supplied "
-                "together",
+                "Character settlement bundles and leases must be one-to-one",
             )
+        lease_ids_json = canonical_json([
+            str(lease_id) for lease_id in lease_ids
+        ])
 
         with self._database.transaction(
             "finalize_staged_local_terminal_commit",
@@ -4001,8 +4595,7 @@ class GameDirectoryRepository:
             )
             if (
                 intent["payload_digest"] != payload_digest
-                or intent["lease_id"]
-                != (str(lease_id) if lease_id is not None else None)
+                or intent["lease_ids_json"] != lease_ids_json
             ):
                 raise ImmutableRecordError(
                     "Local terminal commit intent differs from finalization",
@@ -4029,7 +4622,11 @@ class GameDirectoryRepository:
                         supersedes_summary_id=None,
                     )
                 )
-                if settlement_bundle is not None and lease_id is not None:
+                for settlement_bundle, lease_id in zip(
+                    settlement_bundles,
+                    lease_ids,
+                    strict=True,
+                ):
                     self._require_exact_terminal_settlement_retry(
                         connection,
                         settlement_bundle,
@@ -4063,9 +4660,7 @@ class GameDirectoryRepository:
                     (str(game_id),),
                 ).fetchall()
             }
-            expected_lease_ids = (
-                {lease_id} if lease_id is not None else set()
-            )
+            expected_lease_ids = set(lease_ids)
             if active_lease_ids != expected_lease_ids:
                 raise ConflictError(
                     "Local terminal commit does not account for every active "
@@ -4098,7 +4693,11 @@ class GameDirectoryRepository:
                 additional_artifacts=additional_records,
                 created_at=created_at,
             )
-            if settlement_bundle is not None and lease_id is not None:
+            for settlement_bundle, lease_id in zip(
+                settlement_bundles,
+                lease_ids,
+                strict=True,
+            ):
                 self._commit_terminal_settlement_in_transaction(
                     connection,
                     settlement_bundle,
@@ -4128,8 +4727,11 @@ class GameDirectoryRepository:
         manifest_digest: str,
         summary_evidence: JsonObject,
         settlement_evidence: JsonObject | None,
-        settlement_bundle: CharacterRevisionBundleCommit | None,
-        lease_id: UUID | None,
+        settlement_bundles: tuple[
+            CharacterRevisionBundleCommit,
+            ...,
+        ] = (),
+        lease_ids: tuple[UUID, ...] = (),
     ) -> tuple[ArtifactRecord, FinalSummaryRecord]:
         """Atomically adopt one staged hosted terminal ready manifest."""
 
@@ -4157,15 +4759,14 @@ class GameDirectoryRepository:
             raise ValueError(
                 "Hosted terminal evidence requires a subjective replay",
             )
-        if (settlement_bundle is None) != (lease_id is None):
+        if len(settlement_bundles) != len(lease_ids):
             raise ValueError(
-                "Hosted character settlement bundle and lease must be "
-                "supplied together",
+                "Hosted character settlement bundles and leases must be "
+                "one-to-one",
             )
-        if (settlement_evidence is None) != (settlement_bundle is None):
+        if (settlement_evidence is None) != (not settlement_bundles):
             raise ValueError(
-                "Hosted settlement evidence and settlement bundle must be "
-                "supplied together",
+                "Hosted settlement evidence must match settlement bundles",
             )
 
         with self._database.transaction(
@@ -4214,7 +4815,11 @@ class GameDirectoryRepository:
                     source_combat_log_digest=source_combat_log_digest,
                     supersedes_summary_id=None,
                 )
-                if settlement_bundle is not None and lease_id is not None:
+                for settlement_bundle, lease_id in zip(
+                    settlement_bundles,
+                    lease_ids,
+                    strict=True,
+                ):
                     self._require_exact_terminal_settlement_retry(
                         connection,
                         settlement_bundle,
@@ -4248,9 +4853,7 @@ class GameDirectoryRepository:
                     (str(game_id),),
                 ).fetchall()
             }
-            expected_lease_ids = (
-                {lease_id} if lease_id is not None else set()
-            )
+            expected_lease_ids = set(lease_ids)
             if active_lease_ids != expected_lease_ids:
                 raise ConflictError(
                     "Hosted terminal manifest does not account for every "
@@ -4280,7 +4883,11 @@ class GameDirectoryRepository:
                 additional_artifacts=(subjective_record,),
                 created_at=created_at,
             )
-            if settlement_bundle is not None and lease_id is not None:
+            for settlement_bundle, lease_id in zip(
+                settlement_bundles,
+                lease_ids,
+                strict=True,
+            ):
                 self._commit_terminal_settlement_in_transaction(
                     connection,
                     settlement_bundle,
@@ -4836,239 +5443,6 @@ class GameDirectoryRepository:
             ).fetchall()
         return tuple(_summary_from_row(row) for row in rows)
 
-    def create_rating_run(self, request: RatingRunCreate) -> RatingRunRecord:
-        """Persist an immutable rating-run definition."""
-
-        now = self._now()
-        parameters_json = canonical_json(request.parameters)
-        selection_json = canonical_json(request.selection_query)
-        compatibility_json = canonical_json(request.compatibility_constraints)
-        with self._database.transaction("create_rating_run") as connection:
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO rating_runs(
-                        rating_run_id, algorithm_id, algorithm_version,
-                        parameters_json, parameters_digest, selection_query_json,
-                        selection_query_digest, compatibility_constraints_json,
-                        compatibility_digest, status, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(request.rating_run_id),
-                        request.algorithm_id,
-                        request.algorithm_version,
-                        parameters_json,
-                        canonical_digest(request.parameters),
-                        selection_json,
-                        canonical_digest(request.selection_query),
-                        compatibility_json,
-                        canonical_digest(request.compatibility_constraints),
-                        RatingRunStatus.RESERVED.value,
-                        datetime_to_text(now),
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(f"Rating run {request.rating_run_id} already exists") from exc
-            row = self._required_row(
-                connection,
-                "SELECT * FROM rating_runs WHERE rating_run_id = ?",
-                (str(request.rating_run_id),),
-                "rating run",
-            )
-        return _rating_run_from_row(row)
-
-    def get_rating_run(self, rating_run_id: UUID) -> RatingRunRecord:
-        """Return one rating-run definition and lifecycle record."""
-
-        with self._database.read("get_rating_run") as connection:
-            row = self._required_row(
-                connection,
-                "SELECT * FROM rating_runs WHERE rating_run_id = ?",
-                (str(rating_run_id),),
-                "rating run",
-            )
-        return _rating_run_from_row(row)
-
-    def set_rating_run_status(
-        self,
-        rating_run_id: UUID,
-        *,
-        status: RatingRunStatus,
-        output_artifact_digest: str | None = None,
-    ) -> RatingRunRecord:
-        """Advance rating-run lifecycle without mutating its definition."""
-
-        now = self._now()
-        completed_at = now if status in {RatingRunStatus.COMPLETED, RatingRunStatus.FAILED} else None
-        with self._database.transaction("set_rating_run_status") as connection:
-            cursor = connection.execute(
-                """
-                UPDATE rating_runs
-                SET status = ?, completed_at = ?, output_artifact_digest = ?
-                WHERE rating_run_id = ?
-                """,
-                (
-                    status.value,
-                    _optional_text(completed_at),
-                    output_artifact_digest,
-                    str(rating_run_id),
-                ),
-            )
-            if cursor.rowcount != 1:
-                raise NotFoundError(f"Rating run {rating_run_id} does not exist")
-            row = self._required_row(
-                connection,
-                "SELECT * FROM rating_runs WHERE rating_run_id = ?",
-                (str(rating_run_id),),
-                "rating run",
-            )
-        return _rating_run_from_row(row)
-
-    def add_rating_admission(
-        self,
-        request: RatingAdmissionCreate,
-        *,
-        admission_id: UUID | None = None,
-    ) -> RatingAdmissionRecord:
-        """Record an immutable admission decision for exact game evidence."""
-
-        now = self._now()
-        resolved_admission_id = admission_id or uuid4()
-        with self._database.transaction("add_rating_admission") as connection:
-            existing_row = connection.execute(
-                """
-                SELECT * FROM rating_admissions
-                WHERE rating_run_id = ? AND game_id = ? AND summary_digest = ?
-                  AND treatment_id = ? AND configuration_id = ?
-                """,
-                (
-                    str(request.rating_run_id),
-                    str(request.game_id),
-                    request.summary_digest,
-                    request.treatment_id,
-                    request.configuration_id,
-                ),
-            ).fetchone()
-            if existing_row is not None:
-                existing = _rating_admission_from_row(existing_row)
-                if self._admission_semantics(existing) != self._admission_semantics(request):
-                    raise ImmutableRecordError("Rating admission identity has different semantics")
-                return existing
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO rating_admissions(
-                        admission_id, rating_run_id, game_id, summary_digest,
-                        admitted, exclusion_reason_code, exclusion_detail_json,
-                        treatment_id, configuration_id, weight, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(resolved_admission_id),
-                        str(request.rating_run_id),
-                        str(request.game_id),
-                        request.summary_digest,
-                        int(request.admitted),
-                        request.exclusion_reason_code,
-                        canonical_json(request.exclusion_detail),
-                        request.treatment_id,
-                        request.configuration_id,
-                        request.weight,
-                        datetime_to_text(now),
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(f"Rating admission could not be recorded: {exc}") from exc
-            row = self._required_row(
-                connection,
-                "SELECT * FROM rating_admissions WHERE admission_id = ?",
-                (str(resolved_admission_id),),
-                "rating admission",
-            )
-        return _rating_admission_from_row(row)
-
-    def list_rating_admissions(self, rating_run_id: UUID) -> tuple[RatingAdmissionRecord, ...]:
-        """List immutable evidence decisions for one rating run."""
-
-        with self._database.read("list_rating_admissions") as connection:
-            rows = connection.execute(
-                "SELECT * FROM rating_admissions WHERE rating_run_id = ? ORDER BY created_at",
-                (str(rating_run_id),),
-            ).fetchall()
-        return tuple(_rating_admission_from_row(row) for row in rows)
-
-    def publish_rating_estimate(
-        self,
-        request: RatingEstimateCreate,
-        *,
-        estimate_id: UUID | None = None,
-    ) -> RatingEstimateRecord:
-        """Publish one immutable subject estimate idempotently."""
-
-        now = self._now()
-        resolved_estimate_id = estimate_id or uuid4()
-        with self._database.transaction("publish_rating_estimate") as connection:
-            existing_row = connection.execute(
-                "SELECT * FROM rating_estimates WHERE rating_run_id = ? AND subject_id = ?",
-                (str(request.rating_run_id), request.subject_id),
-            ).fetchone()
-            if existing_row is not None:
-                existing = _rating_estimate_from_row(existing_row)
-                if self._estimate_semantics(existing) != self._estimate_semantics(request):
-                    raise ImmutableRecordError("Rating estimate subject already has different output")
-                return existing
-            diagnostics_json = canonical_json(request.diagnostics)
-            diagnostics_digest = canonical_digest(request.diagnostics)
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO rating_estimates(
-                        estimate_id, rating_run_id, subject_id, estimate,
-                        uncertainty, games, wins, losses, draws, rank,
-                        diagnostics_json, diagnostics_digest, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(resolved_estimate_id),
-                        str(request.rating_run_id),
-                        request.subject_id,
-                        request.estimate,
-                        request.uncertainty,
-                        request.games,
-                        request.wins,
-                        request.losses,
-                        request.draws,
-                        request.rank,
-                        diagnostics_json,
-                        diagnostics_digest,
-                        datetime_to_text(now),
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise ConflictError(f"Rating estimate could not be published: {exc}") from exc
-            row = self._required_row(
-                connection,
-                "SELECT * FROM rating_estimates WHERE estimate_id = ?",
-                (str(resolved_estimate_id),),
-                "rating estimate",
-            )
-        return _rating_estimate_from_row(row)
-
-    def list_rating_estimates(self, rating_run_id: UUID) -> tuple[RatingEstimateRecord, ...]:
-        """List estimates for one rating run in rank and subject order."""
-
-        with self._database.read("list_rating_estimates") as connection:
-            rows = connection.execute(
-                """
-                SELECT * FROM rating_estimates
-                WHERE rating_run_id = ?
-                ORDER BY CASE WHEN rank IS NULL THEN 1 ELSE 0 END, rank, subject_id
-                """,
-                (str(rating_run_id),),
-            ).fetchall()
-        return tuple(_rating_estimate_from_row(row) for row in rows)
-
     def _insert_character_advancement_award(
         self,
         connection: sqlite3.Connection,
@@ -5258,41 +5632,4 @@ class GameDirectoryRepository:
             value.content_digest,
             value.producer_kind,
             value.producer_version,
-        )
-
-    @staticmethod
-    def _admission_semantics(
-        value: RatingAdmissionCreate | RatingAdmissionRecord,
-    ) -> tuple[object, ...]:
-        """Return immutable rating-admission fields."""
-
-        return (
-            value.rating_run_id,
-            value.game_id,
-            value.summary_digest,
-            value.admitted,
-            value.exclusion_reason_code,
-            canonical_json(value.exclusion_detail),
-            value.treatment_id,
-            value.configuration_id,
-            value.weight,
-        )
-
-    @staticmethod
-    def _estimate_semantics(
-        value: RatingEstimateCreate | RatingEstimateRecord,
-    ) -> tuple[object, ...]:
-        """Return immutable rating-estimate fields."""
-
-        return (
-            value.rating_run_id,
-            value.subject_id,
-            value.estimate,
-            value.uncertainty,
-            value.games,
-            value.wins,
-            value.losses,
-            value.draws,
-            value.rank,
-            canonical_json(value.diagnostics),
         )

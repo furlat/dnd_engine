@@ -2,7 +2,7 @@
 
 import pytest
 
-from ai.evaluation.agent_observer_projection import (
+from ai.telemetry.observer_projection import (
     extract_agent_event_payloads,
     project_agent_event_history,
 )

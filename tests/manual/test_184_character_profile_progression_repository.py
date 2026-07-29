@@ -246,6 +246,7 @@ def _game_membership_and_deployment(
             membership_id=membership.membership_id,
         ),
     )
+    character = repository.get_character(CHARACTER_ID)
     deployment = repository.deploy_character_pinned(
         PinnedCharacterDeploymentCreate(
             game_id=game.game_id,
@@ -254,6 +255,8 @@ def _game_membership_and_deployment(
             entity_uuid=uuid4(),
             lease_id=lease.lease_id,
         ),
+        expected_character_row_version=character.row_version,
+        expected_heads=_heads(character),
     )
     if end_game:
         game = repository.transition_game(

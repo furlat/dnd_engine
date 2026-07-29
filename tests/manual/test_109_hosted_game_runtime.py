@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sqlite3
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
@@ -16,7 +17,10 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from server import event_server
-from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
+from tests.manual.server_test_client import (
+    ServerTestClient,
+    reset_server_test_runtime,
+)
 from server.hosted_worker import (
     HostedWorkerAssignment,
     HostedWorkerManager,
@@ -48,9 +52,9 @@ from server.worker_proxy import (
 @pytest.fixture(autouse=True)
 def clean_direct_runtime() -> Iterator[None]:
     """Reset process-global direct-server state around every focused check."""
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
     yield
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
 
 
 def test_hosted_worker_configuration_rejection_is_structured(
@@ -76,14 +80,40 @@ def test_hosted_worker_configuration_rejection_is_structured(
     }
 
 
+def test_hosted_worker_configuration_uses_typed_process_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warm-worker assignment never mutates process environment identity."""
+    monkeypatch.setenv("DND_GAME_WORKER", "1")
+    retired_environment_keys = (
+        "DND_HOSTED_GAME_ID",
+        "DND_PUBLIC_GAME_BASE_URL",
+        "DND_WORKER_INSTANCE_ID",
+        "DND_WORKER_GENERATION",
+        "DND_WORKER_RUNTIME_DIR",
+    )
+    for key in retired_environment_keys:
+        monkeypatch.delenv(key, raising=False)
+    assignment = HostedWorkerAssignment(
+        hosted_game_id=uuid4(),
+        public_game_base_url="http://gateway/games/example/runtime",
+        worker_instance_id=uuid4(),
+        worker_generation=3,
+        terminal_runtime_directory="/private/worker/runtime",
+    )
+
+    assert asyncio.run(
+        event_server.configure_hosted_worker(assignment),
+    ) == {"status": "configured"}
+    assert event_server._require_hosted_worker_assignment() == assignment
+    assert all(key not in os.environ for key in retired_environment_keys)
+
+
 def test_hosted_worker_uses_private_socket_and_stops_process_group(tmp_path: Path) -> None:
     """A hosted worker is reachable privately and leaves no live socket."""
 
     async def exercise() -> None:
-        manager = HostedWorkerManager(
-            tmp_path / "runtime",
-            startup_timeout_seconds=20.0,
-        )
+        manager = HostedWorkerManager(tmp_path / "runtime")
         game_id = uuid4()
         placement = await manager.start(
             game_id,
@@ -421,14 +451,63 @@ def test_direct_single_game_server_never_requires_sqlite(
 
     monkeypatch.setattr(sqlite3, "connect", reject_sqlite)
 
-    request = {
-        "scenario": {"kind": "preset", "arena_id": "standard_skeleton_doors"},
-        "side_a": {"controller": "human", "name": "Human"},
-        "side_b": {"controller": "ai", "name": "AI"},
-        "opening_side": "side_a",
-        }
-    with ArenaApiClient() as client:
-        start = client.post("/game-creation/start", json=request)
+    with ServerTestClient() as client:
+        composed = client.post(
+            "/game-creation/compose",
+            json={
+                "title": "Direct Server Test",
+                "roster_slots": [
+                    {
+                        "roster_slot_id": "players",
+                        "roster": {
+                            "kind": "authored_roster",
+                            "roster_id": "hero.fighter_l5_shield_torch",
+                        },
+                        "faction_id": "players",
+                        "deployment_zone_id": "zone_1",
+                        "controller_defaults": {
+                            "controller": "human",
+                            "participant_name": "Human",
+                            "policy_id": None,
+                            "member_overrides": [],
+                        },
+                    },
+                    {
+                        "roster_slot_id": "opposition",
+                        "roster": {
+                            "kind": "authored_roster",
+                            "roster_id": "monsters.skeleton_trio",
+                        },
+                        "faction_id": "opposition",
+                        "deployment_zone_id": "zone_2",
+                        "controller_defaults": {
+                            "controller": "ai",
+                            "participant_name": "AI",
+                            "policy_id": "builtin.basic",
+                            "member_overrides": [],
+                        },
+                    },
+                ],
+                "battlefield_id": "battlefield.open_floor_bright",
+                "deployment_id": "neutral.battlefield.open_floor_bright",
+                "opening_policy": {
+                    "kind": "fixed_roster",
+                    "roster_slot_id": "players",
+                },
+            },
+        )
+        assert composed.status_code == 200, composed.text
+        normalized = composed.json()
+        start = client.post(
+            "/game-creation/start",
+            json={
+                "expected_content_set_digest": normalized[
+                    "content_set_digest"
+                ],
+                "expected_ruleset_digest": normalized["ruleset_digest"],
+                "recipe": normalized["recipe"],
+            },
+        )
         events = client.get(
             "/diagnostics/objective/events",
             params={"from_cursor": 0},
@@ -436,9 +515,10 @@ def test_direct_single_game_server_never_requires_sqlite(
 
     assert start.status_code == 200
     assert start.json()["status"] == "prepared"
-    assert start.json()["side_b"]["policy_id"] == "builtin.basic"
-    assert start.json()["side_b"]["policy_execution"] == "in_process"
-    assert start.json()["side_b"]["provider_id"] is None
+    opposition = start.json()["rosters"][1]["entity_assignments"]
+    assert all(row["policy_id"] == "builtin.basic" for row in opposition)
+    assert all(row["policy_execution"] == "in_process" for row in opposition)
+    assert all(row["provider_id"] is None for row in opposition)
     assert events.status_code == 200
     assert events.json()["generation_id"]
     assert events.json()["source_stream_id"]

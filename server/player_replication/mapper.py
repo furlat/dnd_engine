@@ -893,6 +893,10 @@ def _attack_node(
     weapon_slot = _weapon_slot(event.weapon_slot)
     ranged = event.weapon_slot in {WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF}
     lineage = str(event.lineage_uuid)
+    attributions = (
+        *_behavior_content_attributions(event.behavior_binding),
+        *_source_item_content_attributions(event),
+    )
     return _NodeSpec(
         key=f"attack:{event.uuid}",
         kind=_NodeKind.ATTACK,
@@ -909,9 +913,7 @@ def _attack_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
-        content_attributions=_behavior_content_attributions(
-            event.behavior_binding,
-        ),
+        content_attributions=attributions,
     )
 
 
@@ -1141,15 +1143,10 @@ def _item_node(
     if not _identity_allowed(event, event.source_entity_uuid, perspective):
         return None
     lineage = str(event.lineage_uuid)
-    attributions = list(_behavior_content_attributions(event.behavior_binding))
-    if snapshot.content_ref is not None:
-        attributions.append(
-            SourceItemPresentationAttribution(
-                definition_ref=ContentRef.model_validate(
-                    snapshot.content_ref.model_dump(mode="python")
-                ),
-            )
-        )
+    attributions = (
+        *_behavior_content_attributions(event.behavior_binding),
+        *_source_item_content_attributions(event),
+    )
     return _NodeSpec(
         key=f"item:{event.uuid}",
         kind=_NodeKind.ITEM,
@@ -1161,7 +1158,7 @@ def _item_node(
         ),
         lineage=lineage,
         order_key=(index.root_order_cursor(lineage, slot.source_event_cursor), 20, slot.source_event_cursor),
-        content_attributions=tuple(attributions),
+        content_attributions=attributions,
     )
 
 
@@ -1403,6 +1400,13 @@ def _action_node(
 ) -> Optional[_NodeSpec]:
     event = slot.event
     if not isinstance(event, ActionEvent):
+        return None
+    if event.application_index is not None:
+        # MULTI_ENTITY/POSITION_AOE convolution rows are technical
+        # applications of the authored root action. Their descendants retain
+        # exact lineage ancestry and are reparented to that root below; exposing
+        # the application row itself would manufacture one duplicate Action
+        # cue per target.
         return None
     if event.behavior_binding is None:
         return None
@@ -2533,8 +2537,8 @@ def _forced_node(
         return None
     if not _identity_allowed(event, event.target_entity_uuid, perspective):
         return None
-    if not _multi_position_geometry_allowed(
-        event.target_entity_uuid,
+    if not _forced_movement_geometry_allowed(
+        event,
         perspective,
         causing_entity_uuid=event.source_entity_uuid,
     ):
@@ -2585,27 +2589,39 @@ def _location_allowed(
     return bool(set(perspective.observer_entity_uuids) & grants)
 
 
-def _multi_position_geometry_allowed(
-    entity_uuid: UUID,
+def _forced_movement_geometry_allowed(
+    event: ForcedMovementEvent,
     perspective: SubjectivePerspective,
     *,
     causing_entity_uuid: UUID | None = None,
 ) -> bool:
-    """Allow exact paths only for owned or causally player-authored motion.
+    """Allow exact displacement only with ownership or both endpoint grants.
 
-    Event-time entity location grants prove one current position, not every
-    coordinate carried by a movement trajectory. Until the engine records
-    per-coordinate observer evidence, a spectator cannot receive either
-    endpoint for a non-controlled entity. A controlling player may receive a
-    forced path caused by their own action; that action is the authoritative
-    causal grant. The world patch always carries the authorized post-state, so
-    suppressed observer motion safely snaps.
+    A controlling player may receive their own displacement or a forced path
+    caused by their own action. Other observers receive the geometry only when
+    one observer in the perspective saw the displaced entity at both the
+    event-time start and completion-time destination. The world patch remains
+    the safe post-state fallback when either endpoint was hidden.
     """
     controlled = set(perspective.controlled_entity_uuids)
-    return str(entity_uuid) in controlled or (
-        causing_entity_uuid is not None
-        and str(causing_entity_uuid) in controlled
+    if (
+        str(event.target_entity_uuid) in controlled
+        or (
+            causing_entity_uuid is not None
+            and str(causing_entity_uuid) in controlled
+        )
+    ):
+        return True
+    origin = event.located_position_observer_uuids.get(
+        position_evidence_key(event.start_position),
+        set(),
     )
+    destination = event.located_position_observer_uuids.get(
+        position_evidence_key(event.end_position),
+        set(),
+    )
+    eligible = origin & destination & set(perspective.observer_entity_uuids)
+    return bool(eligible)
 
 
 def _step_geometry_allowed(
@@ -2657,6 +2673,27 @@ def _behavior_content_attributions(
             definition_ref=binding.definition_ref,
             provided_by_ref=binding.provided_by_ref,
             origin_root_ref=binding.origin_root_ref,
+        ),
+    )
+
+
+def _source_item_content_attributions(
+    event: ActionEvent,
+) -> tuple[PresentationContentAttribution, ...]:
+    """Project one declaration-time item identity without consulting live state."""
+    snapshot = event.source_item_presentation
+    if (
+        event.source_item_uuid is None
+        or snapshot is None
+        or snapshot.item_uuid != event.source_item_uuid
+        or snapshot.content_ref is None
+    ):
+        return ()
+    return (
+        SourceItemPresentationAttribution(
+            definition_ref=ContentRef.model_validate(
+                snapshot.content_ref.model_dump(mode="python")
+            ),
         ),
     )
 

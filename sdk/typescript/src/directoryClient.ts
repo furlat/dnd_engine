@@ -3,9 +3,10 @@ import type {
   AttachHostedGameRequest,
   AttachHostedGameResponse,
   CharacterAdvancementResponse,
-  CharacterBuildValidationRequest,
   CharacterBuildValidationResponse,
+  CharacterBuildVisualPreviewResponse,
   CharacterCreationCatalogResponse,
+  CharacterCreationValidationRequest,
   CharacterDefinitionHistoryResponse,
   CharacterDefinitionRecord,
   CharacterHoldingsRecord,
@@ -13,8 +14,10 @@ import type {
   CharacterListResponse,
   CharacterLoadoutMutationRequest,
   CharacterLoadoutRecord,
+  CharacterPresentationPreferencesResponse,
   CharacterProfileResponse,
   CharacterRespecRequest,
+  CharacterRespecSeedResponse,
   CharacterSnapshotResponse,
   CreateCharacterRequest,
   CreateAgentGrantRequest,
@@ -24,6 +27,11 @@ import type {
   ContentCatalogResponse,
   ContentManifestResponse,
   FinalSummaryRecord,
+  GameCreationCatalogResponse,
+  GameCreationComposeRequest,
+  GameCreationComposeResponse,
+  GameCreationEncounterVisualPreviewResponse,
+  GameCreationPreviewRequest,
   GameRecord,
   GuestPrincipalRequest,
   GuestPrincipalResponse,
@@ -37,6 +45,14 @@ import type {
   ProfileSettingsRecord,
   ReconnectHostedGameRequest,
   ReconnectHostedGameResponse,
+  ReplaceSavedEncounterRequest,
+  ReplaceSavedEncounterRosterRequest,
+  SaveEncounterRequest,
+  SaveEncounterRosterRequest,
+  SavedEncounterListResponse,
+  SavedEncounterRecord,
+  SavedEncounterRosterListResponse,
+  SavedEncounterRosterRecord,
   SdkModelByName,
   SdkModelName,
   StandaloneLocalProfileResponse,
@@ -44,6 +60,7 @@ import type {
   StopHostedGameResponse,
   SubjectivePlayerReplayBundle,
   UpdateCharacterProfileSettingsRequest,
+  UpdateCharacterPresentationPreferencesRequest,
 } from "./generated/contracts.generated.js";
 import { DndEngineClient, DndHttpError } from "./client.js";
 import {
@@ -118,6 +135,50 @@ export class GameDirectoryClient {
     );
   }
 
+  async getGameCreationCatalog(
+    signal?: AbortSignal,
+  ): Promise<GameCreationCatalogResponse> {
+    return this.requestModel(
+      "GameCreationCatalogResponse",
+      "/game-creation/catalog",
+      requestOptions("GET", signal),
+    );
+  }
+
+  async composeGameCreation(
+    credential: DirectoryPrincipalCredential,
+    request: GameCreationComposeRequest,
+    signal?: AbortSignal,
+  ): Promise<GameCreationComposeResponse> {
+    return this.requestModel(
+      "GameCreationComposeResponse",
+      "/game-creation/compose",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async previewGameCreation(
+    credential: DirectoryPrincipalCredential,
+    request: GameCreationPreviewRequest,
+    signal?: AbortSignal,
+  ): Promise<GameCreationEncounterVisualPreviewResponse> {
+    return this.requestModel(
+      "GameCreationEncounterVisualPreviewResponse",
+      "/game-creation/preview",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
   async getStandaloneLocalProfile(
     signal?: AbortSignal,
   ): Promise<StandaloneLocalProfileResponse> {
@@ -180,12 +241,29 @@ export class GameDirectoryClient {
 
   async validateCharacterBuild(
     credential: DirectoryPrincipalCredential,
-    request: CharacterBuildValidationRequest,
+    request: CharacterCreationValidationRequest,
     signal?: AbortSignal,
   ): Promise<CharacterBuildValidationResponse> {
     return this.requestModel(
       "CharacterBuildValidationResponse",
       "/character-builds/validate",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async previewCharacterBuild(
+    credential: DirectoryPrincipalCredential,
+    request: CharacterCreationValidationRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterBuildVisualPreviewResponse> {
+    return this.requestModel(
+      "CharacterBuildVisualPreviewResponse",
+      "/character-builds/visual-preview",
       requestOptions(
         "POST",
         signal,
@@ -220,6 +298,158 @@ export class GameDirectoryClient {
       "CharacterListResponse",
       "/directory/characters",
       requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async createSavedEncounterRoster(
+    credential: DirectoryPrincipalCredential,
+    request: SaveEncounterRosterRequest,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRosterRecord> {
+    return this.requestModel(
+      "SavedEncounterRosterRecord",
+      "/directory/encounter-rosters",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async listSavedEncounterRosters(
+    credential: DirectoryPrincipalCredential,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRosterListResponse> {
+    return this.requestModel(
+      "SavedEncounterRosterListResponse",
+      "/directory/encounter-rosters",
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getSavedEncounterRoster(
+    credential: DirectoryPrincipalCredential,
+    savedRosterId: string,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRosterRecord> {
+    return this.requestModel(
+      "SavedEncounterRosterRecord",
+      `/directory/encounter-rosters/${encodeURIComponent(savedRosterId)}`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async replaceSavedEncounterRoster(
+    credential: DirectoryPrincipalCredential,
+    savedRosterId: string,
+    request: ReplaceSavedEncounterRosterRequest,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRosterRecord> {
+    return this.requestModel(
+      "SavedEncounterRosterRecord",
+      `/directory/encounter-rosters/${encodeURIComponent(savedRosterId)}`,
+      requestOptions(
+        "PUT",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async deleteSavedEncounterRoster(
+    credential: DirectoryPrincipalCredential,
+    savedRosterId: string,
+    expectedRevision: number,
+    expectedRecipeDigest: string,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRosterRecord> {
+    const query = new URLSearchParams({
+      expected_revision: String(expectedRevision),
+      expected_recipe_digest: expectedRecipeDigest,
+    });
+    return this.requestModel(
+      "SavedEncounterRosterRecord",
+      `/directory/encounter-rosters/${encodeURIComponent(savedRosterId)}?${query.toString()}`,
+      requestOptions("DELETE", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async createSavedEncounter(
+    credential: DirectoryPrincipalCredential,
+    request: SaveEncounterRequest,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRecord> {
+    return this.requestModel(
+      "SavedEncounterRecord",
+      "/directory/encounters",
+      requestOptions(
+        "POST",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async listSavedEncounters(
+    credential: DirectoryPrincipalCredential,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterListResponse> {
+    return this.requestModel(
+      "SavedEncounterListResponse",
+      "/directory/encounters",
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getSavedEncounter(
+    credential: DirectoryPrincipalCredential,
+    savedEncounterId: string,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRecord> {
+    return this.requestModel(
+      "SavedEncounterRecord",
+      `/directory/encounters/${encodeURIComponent(savedEncounterId)}`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async replaceSavedEncounter(
+    credential: DirectoryPrincipalCredential,
+    savedEncounterId: string,
+    request: ReplaceSavedEncounterRequest,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRecord> {
+    return this.requestModel(
+      "SavedEncounterRecord",
+      `/directory/encounters/${encodeURIComponent(savedEncounterId)}`,
+      requestOptions(
+        "PUT",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
+    );
+  }
+
+  async deleteSavedEncounter(
+    credential: DirectoryPrincipalCredential,
+    savedEncounterId: string,
+    expectedRevision: number,
+    expectedRecipeDigest: string,
+    signal?: AbortSignal,
+  ): Promise<SavedEncounterRecord> {
+    const query = new URLSearchParams({
+      expected_revision: String(expectedRevision),
+      expected_recipe_digest: expectedRecipeDigest,
+    });
+    return this.requestModel(
+      "SavedEncounterRecord",
+      `/directory/encounters/${encodeURIComponent(savedEncounterId)}?${query.toString()}`,
+      requestOptions("DELETE", signal, undefined, principalHeaders(credential)),
     );
   }
 
@@ -280,6 +510,36 @@ export class GameDirectoryClient {
       "CharacterLoadoutRecord",
       `/directory/characters/${encodeURIComponent(characterId)}/loadout`,
       requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async getCharacterPresentationPreferences(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterPresentationPreferencesResponse> {
+    return this.requestModel(
+      "CharacterPresentationPreferencesResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/presentation-preferences`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
+    );
+  }
+
+  async updateCharacterPresentationPreferences(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    request: UpdateCharacterPresentationPreferencesRequest,
+    signal?: AbortSignal,
+  ): Promise<CharacterPresentationPreferencesResponse> {
+    return this.requestModel(
+      "CharacterPresentationPreferencesResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/presentation-preferences`,
+      requestOptions(
+        "PUT",
+        signal,
+        JSON.stringify(request),
+        principalHeaders(credential),
+      ),
     );
   }
 
@@ -364,6 +624,18 @@ export class GameDirectoryClient {
         JSON.stringify(request),
         principalHeaders(credential),
       ),
+    );
+  }
+
+  async getCharacterRespecSeed(
+    credential: DirectoryPrincipalCredential,
+    characterId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterRespecSeedResponse> {
+    return this.requestModel(
+      "CharacterRespecSeedResponse",
+      `/directory/characters/${encodeURIComponent(characterId)}/respec/seed`,
+      requestOptions("GET", signal, undefined, principalHeaders(credential)),
     );
   }
 

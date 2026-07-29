@@ -2,6 +2,9 @@
 
 from datetime import datetime
 import json
+from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -29,6 +32,8 @@ from dnd.core.events import (
     WindExposureEvent,
 )
 from dnd.entity import Entity
+from dnd.monsters.bestiary import create_goblin
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import ShieldBuff
 from server.event_contract import (
     EVENT_CONTRACT,
@@ -37,10 +42,9 @@ from server.event_contract import (
     serialize_event,
 )
 from server.timeline_contracts import WireEvent
-from tests.engine_book.test_chapter_10_core_actions_combat import (
-    reset_core_action_state,
-    strong_entity,
-)
+
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_generated_contract_covers_every_semantic_and_concrete_event() -> None:
@@ -52,12 +56,41 @@ def test_generated_contract_covers_every_semantic_and_concrete_event() -> None:
     assert event_contract_summary()["wire_types"] == sorted(EVENT_CONTRACT["event_classes"])
 
 
+def test_event_contract_generator_checks_the_canonical_server_manifest() -> None:
+    """The maintained CLI checks the server artifact without a retired client."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "devtools/generate_event_contract.py",
+            "--check",
+        ],
+        cwd=_REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30.0,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_executed_event_lineages_round_trip_typed_values_through_json() -> None:
     """Real movement and save lineages remain valid JSON-backed wire events."""
-    reset_core_action_state()
-    mover = strong_entity("Wire Mover", (1, 1), "heroes")
-    saver = strong_entity("Wire Saver", (5, 5), "heroes")
-    caster = strong_entity("Wire Caster", (6, 5), "monsters")
+    reset_engine_runtime(grid_size=(20, 20))
+    mover = create_goblin(
+        name="Wire Mover",
+        position=(1, 1),
+        faction="heroes",
+    )
+    saver = create_goblin(
+        name="Wire Saver",
+        position=(5, 5),
+        faction="heroes",
+    )
+    caster = create_goblin(
+        name="Wire Caster",
+        position=(6, 5),
+        faction="monsters",
+    )
     Entity.update_all_entities_senses(max_distance=30)
 
     movement = Move(

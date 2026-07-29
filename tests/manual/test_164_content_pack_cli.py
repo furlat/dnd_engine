@@ -19,7 +19,7 @@ def _write_pack(
     *,
     pack_id: str = "fixture.cli",
     package_name: str = "fixture_cli_pack",
-    engine_content_api: int = 1,
+    engine_content_api: int = 2,
 ) -> Path:
     pack_directory = root / "fixture"
     package_directory = pack_directory / "src" / package_name
@@ -201,7 +201,7 @@ def test_invalid_pack_returns_one_exact_nonzero_structured_diagnostic(
                 "exception_type": "ValueError",
                 "message": (
                     "Pack fixture.invalid requires engine content API 999; "
-                    "supported API is 1"
+                    "supported API is 2"
                 ),
             },
             "ok": False,

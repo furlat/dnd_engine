@@ -25,6 +25,7 @@ from dnd.core.modifiers import ContextAwareCondition
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
+from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import GuardianWarded, SpiritGuardiansTriggered
 from dnd.spells.transmutation import SpikeGrowthZone
@@ -165,6 +166,7 @@ def test_entity_projection_is_authoritative_filtered_and_deterministic(
         source_entity_uuid=uuid4(),
         name="Condition bearer",
         config=EntityConfig(position=(1, 0), faction="heroes"),
+        content_ref=PLAYER_CHARACTER_BODY_DECLARATION.ref,
     )
     beta = _condition(
         BetaPresentationCondition,
@@ -283,6 +285,7 @@ def test_tile_details_share_name_visibility_and_subjective_memory_policy(
         source_entity_uuid=uuid4(),
         name="Tile observer",
         config=EntityConfig(position=(0, 0), faction="heroes"),
+        content_ref=PLAYER_CHARACTER_BODY_DECLARATION.ref,
     )
     observer.senses.visible = {(0, 0): True, (1, 0): True}
     observer.senses.seen = {(0, 0), (1, 0)}

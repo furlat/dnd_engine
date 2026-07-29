@@ -1,71 +1,93 @@
-from dnd.core.modifiers import DamageType
-from dnd.blocks.abilities import (AbilityConfig,AbilityScoresConfig)
-from dnd.blocks.saving_throws import (SavingThrowConfig,SavingThrowSetConfig)
-from dnd.blocks.health import (HealthConfig,HitDiceConfig)
+"""Retained NeuroDragon circus-warrior construction."""
+
+from uuid import UUID, uuid4
+
+from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
+from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Weapon
+from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
+from dnd.blocks.skills import SkillConfig, SkillSetConfig
+from dnd.conditions import Blinded
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_runtime_materialization import (
     materialize_item_from_installed_runtime,
 )
+from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import WeaponSlot
-from dnd.blocks.action_economy import (ActionEconomyConfig)
-from dnd.blocks.skills import (SkillSetConfig,SkillConfig)
-from dnd.conditions import Blinded
+from dnd.entity import Entity, EntityConfig
+from dnd.monsters.circus_fighter_conditions import (
+    CircusPerformer,
+    DualWielder,
+    ElementalAffinity,
+    ElementalWeaponMastery,
+)
 from dnd.monsters.circus_fighter_items import (
     FLAMING_SCIMITAR_RECIPE,
     PERFORMER_LEATHER_RECIPE,
     RUSTY_DAGGER_RECIPE,
 )
-from dnd.monsters.circus_fighter_conditions import (
-    DualWielder, ElementalWeaponMastery, ElementalAffinity, CircusPerformer
-)
-
-from dnd.entity import Entity, EntityConfig
-
-from uuid import uuid4, UUID
-from typing import Optional, Tuple
-from dnd.core.events import EventHandler, Trigger, EventType, EventPhase
-from dnd.actions import AttackEvent
 from dnd.reactions import add_opportunity_attack_handler
-def attack_processor(event: AttackEvent, source_entity_uuid: UUID ) -> Optional[AttackEvent]:
-        print(f"Simple Attack event received for {source_entity_uuid} with target {event.target_entity_uuid} in phase {event.phase}")
-        return event
-
-attack_trigger = Trigger(name="Attack Trigger",
-                         event_type=EventType.ATTACK,
-                         event_phase=EventPhase.DECLARATION)
 
 
-def create_self_blinded(source_id: UUID) -> Blinded:
-    blinded = Blinded(source_entity_uuid=source_id, target_entity_uuid=source_id)
-    return blinded
-
-
-def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="Ganger",blinded: bool=False, position: Tuple[int,int]=(0,0),sprite_name: Optional[str]=None) -> Entity:
+def create_warrior(
+    source_id: UUID | None = None,
+    proficiency_bonus: int = 0,
+    name: str = "Ganger",
+    blinded: bool = False,
+    position: tuple[int, int] = (0, 0),
+    sprite_name: str | None = None,
+) -> Entity:
     """Creates a level 4 fighter character with a past in the circus and spiked claws for hands"""
+    if source_id is None:
+        source_id = uuid4()
 
-    strength_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)], modifier_bonus=1, modifier_bonus_modifiers=[])
+    strength_config = AbilityConfig(
+        ability_score=15,
+        ability_scores_modifiers=[("level 4 talent", 1)],
+        modifier_bonus=1,
+        modifier_bonus_modifiers=[],
+    )
     dexterity_config = AbilityConfig(ability_score=12)
-    constitution_config = AbilityConfig(ability_score=15, ability_scores_modifiers=[("level 4 talent",1)])
+    constitution_config = AbilityConfig(
+        ability_score=15, ability_scores_modifiers=[("level 4 talent", 1)]
+    )
     intelligence_config = AbilityConfig(ability_score=10)
     wisdom_config = AbilityConfig(ability_score=10)
     charisma_config = AbilityConfig(ability_score=10)
-    ability_scores_config = AbilityScoresConfig(strength=strength_config, dexterity=dexterity_config, constitution=constitution_config, intelligence=intelligence_config, wisdom=wisdom_config, charisma=charisma_config)
+    ability_scores_config = AbilityScoresConfig(
+        strength=strength_config,
+        dexterity=dexterity_config,
+        constitution=constitution_config,
+        intelligence=intelligence_config,
+        wisdom=wisdom_config,
+        charisma=charisma_config,
+    )
 
     acrobatics_config = SkillConfig(expertise=True, proficiency=True)
     history_config = SkillConfig(expertise=False, proficiency=False)
-    skill_set_config = SkillSetConfig(acrobatics=acrobatics_config, history=history_config)
+    skill_set_config = SkillSetConfig(
+        acrobatics=acrobatics_config, history=history_config
+    )
 
     strength_st_config = SavingThrowConfig(proficiency=True)
     intelligence_st_config = SavingThrowConfig()
-    saving_throw_set_config = SavingThrowSetConfig(strength_saving_throw=strength_st_config, intelligence_saving_throw=intelligence_st_config)
+    saving_throw_set_config = SavingThrowSetConfig(
+        strength_saving_throw=strength_st_config,
+        intelligence_saving_throw=intelligence_st_config,
+    )
 
-    warrior_hitpoints_config = HitDiceConfig(hit_dice_value=10,hit_dice_count=4,mode="average", ignore_first_level=False)
-    gang_hitpoints_config = HitDiceConfig(hit_dice_value=8,hit_dice_count=1,mode="average", ignore_first_level=True)
-    health_config = HealthConfig(hit_dices=[warrior_hitpoints_config,gang_hitpoints_config],
-                                damage_reduction=1,
-                                temporary_hit_points_modifiers=[("permanentfalse_life", 10)],
-                                )
+    warrior_hitpoints_config = HitDiceConfig(
+        hit_dice_value=10, hit_dice_count=4, mode="average", ignore_first_level=False
+    )
+    gang_hitpoints_config = HitDiceConfig(
+        hit_dice_value=8, hit_dice_count=1, mode="average", ignore_first_level=True
+    )
+    health_config = HealthConfig(
+        hit_dices=[warrior_hitpoints_config, gang_hitpoints_config],
+        damage_reduction=1,
+        temporary_hit_points_modifiers=[("permanentfalse_life", 10)],
+    )
 
     action_economy_config = ActionEconomyConfig()
 
@@ -82,11 +104,16 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
         action_economy=action_economy_config,
         proficiency_bonus=proficiency_bonus,
         sprite_name=sprite_name,
-        position=position
-        )
+        position=position,
+    )
 
     description = """A level 4 fighter character with a past in the circus and spiked claws for hands."""
-    entity = Entity.create(name=name, source_entity_uuid=source_id, description=description, config=entity_config)
+    entity = Entity.create(
+        name=name,
+        source_entity_uuid=source_id,
+        description=description,
+        config=entity_config,
+    )
 
     dagger = materialize_item_from_installed_runtime(
         RUSTY_DAGGER_RECIPE,
@@ -111,10 +138,18 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     entity.equipment.equip(flaming_scimitar, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
 
-    dual_wielder = DualWielder(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
-    elemental_mastery = ElementalWeaponMastery(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
-    elemental_affinity = ElementalAffinity(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
-    circus_performer = CircusPerformer(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+    dual_wielder = DualWielder(
+        source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid
+    )
+    elemental_mastery = ElementalWeaponMastery(
+        source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid
+    )
+    elemental_affinity = ElementalAffinity(
+        source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid
+    )
+    circus_performer = CircusPerformer(
+        source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid
+    )
 
     entity.add_condition(dual_wielder)
     entity.add_condition(elemental_mastery)
@@ -122,19 +157,10 @@ def create_warrior(source_id: UUID=uuid4(),proficiency_bonus: int=0, name: str="
     entity.add_condition(circus_performer)
 
     if blinded:
-        blinded_condition = Blinded(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid)
+        blinded_condition = Blinded(
+            source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid
+        )
         entity.add_condition(blinded_condition)
-
-        attack_handler = EventHandler(name="Attack Handler",
-                                trigger_conditions=[attack_trigger],
-                                event_processor=attack_processor,
-                                source_entity_uuid=entity.uuid)
-        entity.add_event_handler(attack_handler)
 
     add_opportunity_attack_handler(entity)
     return entity
-
-if __name__ == "__main__":
-    source_id = uuid4()
-    proficiency_bonus = 2
-    entity = create_warrior(source_id,proficiency_bonus)

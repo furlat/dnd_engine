@@ -11,7 +11,10 @@ from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena, reset_ai_validation_arena_state
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+    reset_authored_encounter_state,
+)
 
 
 def _materialize_roster_fixture(
@@ -63,7 +66,7 @@ def test_srd_roster_has_at_least_twenty_structured_monsters() -> None:
 def test_each_srd_monster_builds_with_legal_actions() -> None:
     """Every SRD roster row should create a live entity with action rows."""
     for monster_id in SRD_CREATURE_RECIPES_BY_ID:
-        reset_ai_validation_arena_state()
+        reset_authored_encounter_state()
         monster = _materialize_roster_fixture(
             monster_id,
             name=f"Roster {monster_id}",
@@ -80,18 +83,22 @@ def test_each_srd_monster_builds_with_legal_actions() -> None:
         assert total_rows > 0
 
 
-def test_new_srd_validation_arenas_build() -> None:
-    """The new SRD validation arenas should be discoverable and constructible."""
-    arena_ids = [
+def test_authored_srd_encounters_build_through_canonical_recipes() -> None:
+    """The retained SRD encounters should assemble through exact recipes."""
+    encounter_ids = [
         "srd_low_cr_patrol",
         "srd_undead_crypt",
         "srd_goblinoid_warband",
         "srd_divine_cult_cell",
         "srd_elite_mercenary_contract",
     ]
-    for arena_id in arena_ids:
-        arena = create_ai_validation_arena(arena_id)
-        assert arena.spec.arena_id == arena_id
-        assert arena.hero.faction == "heroes"
+    for encounter_id in encounter_ids:
+        arena = assemble_authored_encounter(encounter_id)
+        recipe = arena.assembled.recipe
+        assert recipe.encounter_id == f"encounter.{encounter_id}"
+        assert arena.hero.faction == recipe.roster_slots[0].faction_id
         assert len(arena.monsters) >= 4
-        assert all(monster.faction == "monsters" for monster in arena.monsters)
+        assert all(
+            monster.faction == recipe.roster_slots[1].faction_id
+            for monster in arena.monsters
+        )

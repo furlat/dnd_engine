@@ -33,7 +33,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
@@ -52,19 +52,19 @@ from dnd.items.spell_items import (
     WAND_OF_MAGIC_MISSILES_RECIPE,
     fireball_scroll_recipe,
 )
-from dnd.items.test_items import (
+from dnd.items.environment_interactables import (
     PullLeverAction,
     StorageChest,
-    TestDoorA as OverrideDoorFixture,
+    DoorObject as OverrideDoorFixture,
     TrapLever,
 )
 from dnd.items.weapons import LONGSWORD_RECIPE, SHORTSWORD_RECIPE
 from dnd.tiles import create_spike_zone
-from dnd.utils import get_hp, reset_combat_state, set_hp
+from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
 THIS_FILE = "tests/manual/test_134_stackable_usable_item_legacy_contract.py"
-BOOK_ITEMS_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
+BOOK_ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
 INVENTORY_USE_FILE = (
     "tests/manual/test_131_inventory_use_actions_legacy_contract.py"
 )
@@ -653,7 +653,7 @@ def test_multi_action_environment_item_executes_and_depletes() -> None:
         for row in rows
     } == {"Rest", "Cook"}
 
-    with patch("dnd.items.test_items.random.randint", return_value=4):
+    with patch("dnd.items.environment_interactables.random.randint", return_value=4):
         rest = execute_use_action(actor, campfire.uuid, "Rest")
     assert rest is not None and not rest.canceled
     assert get_hp(actor) == before + 4

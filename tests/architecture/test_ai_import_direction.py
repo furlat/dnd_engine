@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 from pathlib import Path
 
 
@@ -17,7 +18,10 @@ AI_BOUNDARY_FILES = (
     REPOSITORY_ROOT / "dnd" / "action_dispatch.py",
     REPOSITORY_ROOT / "server" / "ai_policy_composition.py",
     REPOSITORY_ROOT / "server" / "external_ai_protocol.py",
-    REPOSITORY_ROOT / "server" / "external_ai_registry.py",
+    REPOSITORY_ROOT
+    / "services"
+    / "ai_policy_server"
+    / "external_ai_registry.py",
     REPOSITORY_ROOT / "server" / "registered_ai_controller.py",
     REPOSITORY_ROOT / "server" / "registered_ai_provider.py",
 )
@@ -43,6 +47,83 @@ FORBIDDEN_POLICY_INSTRUMENTATION_PREFIXES = (
     "dnd.ai.instrumentation",
 )
 
+RETIRED_EVALUATION_IMPORT_PREFIXES = (
+    "ai.evaluation",
+    "ai.external_selfplay",
+    "ai.validation_harness",
+    "dnd.scenarios.ai_validation_arenas",
+    "dnd.scenarios.evaluation",
+    "server.agent_protocol.gauntlet",
+    "server.gauntlet_event_stream",
+)
+RETIRED_SCENARIO_SYMBOLS = frozenset({
+    "ActorBlueprint",
+    "BattlefieldSpec",
+    "LegacyScenarioRecipe",
+    "SideConfigurationSpec",
+    "ValidationArena",
+    "ValidationArenaSpec",
+})
+RETIRED_EVALUATION_SYMBOLS = frozenset({
+    "ConnectedRatingSchedule",
+    "EloConfig",
+    "EloGauntletEvent",
+    "EloGauntletEventSink",
+    "EloGauntletEventStream",
+    "EloGauntletSummary",
+    "EloMatrixSchedule",
+    "GauntletEvent",
+    "GauntletEventIngestRequest",
+    "GauntletEventSink",
+    "GauntletEventStream",
+    "GauntletFailureRow",
+    "GauntletPerformanceSummary",
+    "GauntletSchedule",
+    "GauntletSummary",
+    "GauntletWatcherState",
+    "LiveGauntletEventStream",
+    "RatingAdmissionCreate",
+    "RatingAdmissionRecord",
+    "RatingEstimateCreate",
+    "RatingEstimateRecord",
+    "RatingRunCreate",
+    "RatingRunRecord",
+    "RatingRunStatus",
+    "RatingSnapshot",
+    "ValidationBoundaryResult",
+    "ValidationEncounterInfo",
+    "ValidationGameStatus",
+    "ValidationHarnessClient",
+    "ValidationHarnessHTTPError",
+    "ValidationMode",
+    "ValidationScheduleEntry",
+    "ValidationSessionPing",
+    "ValidationSessionRow",
+    "ValidationStartResult",
+    "build_validation_schedule",
+    "encounter_matches_focus",
+    "mode_for_focus",
+})
+RETIRED_EVALUATION_SOURCE_PATHS = (
+    REPOSITORY_ROOT / "ai" / "external_selfplay.py",
+    REPOSITORY_ROOT / "ai" / "validation_harness.py",
+    REPOSITORY_ROOT / "dnd" / "scenarios" / "ai_validation_arenas.py",
+    REPOSITORY_ROOT / "server" / "agent_protocol" / "gauntlet.py",
+    REPOSITORY_ROOT / "server" / "gauntlet_event_stream.py",
+)
+RETIRED_SURFACE_SEARCH_PATTERN = (
+    r"ai\.evaluation|ai\.external_selfplay|external_selfplay|"
+    r"ai\.validation_harness|validation_harness|ValidationHarness|"
+    r"Validation(?:BoundaryResult|EncounterInfo|GameStatus|Mode|"
+    r"ScheduleEntry|SessionPing|SessionRow|StartResult)|"
+    r"build_validation_schedule|encounter_matches_focus|mode_for_focus|"
+    r"dnd\.scenarios\.evaluation|ai_validation_arenas|"
+    r"ValidationArena|SideConfigurationSpec|ActorBlueprint|"
+    r"LegacyScenarioRecipe|BattlefieldSpec|Gauntlet|Elo|"
+    r"Rating(?:Run|Admission|Estimate|Snapshot)|"
+    r"gauntlet_event_stream|/ai/gauntlets"
+)
+
 
 def _production_paths() -> tuple[Path, ...]:
     return tuple(
@@ -51,6 +132,60 @@ def _production_paths() -> tuple[Path, ...]:
             for root in (REPOSITORY_ROOT / "dnd", REPOSITORY_ROOT / "server")
             for path in root.rglob("*.py")
             if "__pycache__" not in path.parts
+        )
+    )
+
+
+def _maintained_python_paths() -> tuple[Path, ...]:
+    roots = (
+        "ai",
+        "custom_ai",
+        "devtools",
+        "dnd",
+        "server",
+        "services",
+        "tests",
+    )
+    ignored_directories = {
+        "__pycache__",
+        "archive",
+        "archived",
+        "to_archive",
+    }
+    source_roots = tuple(
+        str(REPOSITORY_ROOT / root_name)
+        for root_name in roots
+        if (REPOSITORY_ROOT / root_name).exists()
+    )
+    result = subprocess.run(
+        [
+            "rg",
+            "-l",
+            "--glob",
+            "*.py",
+            "--glob",
+            "!**/archive/**",
+            "--glob",
+            "!**/archived/**",
+            "--glob",
+            "!**/to_archive/**",
+            RETIRED_SURFACE_SEARCH_PATTERN,
+            *source_roots,
+        ],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode in {0, 1}, result.stderr
+    return tuple(
+        sorted(
+            path
+            for raw_path in result.stdout.splitlines()
+            if raw_path
+            if not ignored_directories.intersection(
+                (path := Path(raw_path)).parts
+            )
         )
     )
 
@@ -250,6 +385,81 @@ def test_engine_and_server_do_not_import_the_abandoned_top_level_ai_package() ->
                 relative = path.relative_to(REPOSITORY_ROOT)
                 violations.append(f"{relative}:{node.lineno} imports {target}")
     assert violations == []
+
+
+def test_maintained_python_has_no_retired_evaluation_imports_or_symbols() -> None:
+    """The hard cut has no import alias or relocated compatibility surface."""
+    violations: list[str] = []
+    for path in _maintained_python_paths():
+        if path == Path(__file__).resolve():
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node, target in _import_targets(tree):
+            if _is_prefixed(target, RETIRED_EVALUATION_IMPORT_PREFIXES):
+                relative = path.relative_to(REPOSITORY_ROOT)
+                violations.append(f"{relative}:{node.lineno} imports {target}")
+        for node in ast.walk(tree):
+            identifier: str | None = None
+            if isinstance(node, ast.Name):
+                identifier = node.id
+            elif isinstance(node, ast.Attribute):
+                identifier = node.attr
+            elif isinstance(
+                node,
+                (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+            ):
+                identifier = node.name
+            elif isinstance(node, ast.alias):
+                identifier = node.name.rsplit(".", 1)[-1]
+            if identifier is None:
+                continue
+            if (
+                identifier in RETIRED_SCENARIO_SYMBOLS
+                or identifier.endswith("ActorBlueprint")
+                or identifier in RETIRED_EVALUATION_SYMBOLS
+            ):
+                relative = path.relative_to(REPOSITORY_ROOT)
+                violations.append(
+                    f"{relative}:{getattr(node, 'lineno', 0)} uses {identifier}"
+                )
+    assert violations == []
+
+
+def test_abandoned_evaluation_runtime_is_absent() -> None:
+    """Elo, gauntlet, and direct self-play are not parallel production paths."""
+    evaluation_sources = tuple(
+        path.relative_to(REPOSITORY_ROOT)
+        for root in (
+            REPOSITORY_ROOT / "ai" / "evaluation",
+            REPOSITORY_ROOT / "dnd" / "scenarios" / "evaluation",
+        )
+        if root.exists()
+        for path in root.rglob("*.py")
+    )
+    assert evaluation_sources == ()
+    assert [
+        path.relative_to(REPOSITORY_ROOT)
+        for path in RETIRED_EVALUATION_SOURCE_PATHS
+        if path.exists()
+    ] == []
+
+    route_violations: list[str] = []
+    for path in _production_paths():
+        source = path.read_text(encoding="utf-8")
+        if "/ai/gauntlets" not in source:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and "/ai/gauntlets" in node.value
+            ):
+                relative = path.relative_to(REPOSITORY_ROOT)
+                route_violations.append(
+                    f"{relative}:{node.lineno} retains {node.value!r}"
+                )
+    assert route_violations == []
 
 
 def test_deleted_server_owned_ai_contract_modules_are_not_imported() -> None:

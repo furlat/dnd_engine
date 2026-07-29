@@ -20,15 +20,14 @@ from ai.knowledge import derive_agent_facts
 from ai.knowledge.models import TargetEffectBlockHypothesis
 from ai.knowledge.topology import grid_distance_feet, known_line_of_sight
 from ai.codex_tools.hot_runtime import HotCodexSession
-from ai.external_selfplay import SelfPlayStoreTiming, _catch_up_store, _store_for_active_session, run_external_selfplay
-from server.agent_runtime import observation_projector
+from dnd.ai.runtime import subjective_projection
+from server.agent_runtime import observation_journal
 from dnd.ai.contracts.observation import AdjacentOffset, KnowledgeState, ObservationFrame, ObservationSnapshot
 from ai.policy import PolicyHost
 from ai.policy import candidates as policy_candidates
 from ai.policy.economy import AffordabilityWorkspace
 from ai.policy.generations.registry import (
-    CANDIDATE_GENERATION_ID,
-    get_policy_implementation,
+    get_active_policy_implementation,
 )
 from ai.policy.memory import RoutineProgress, SemanticActionGoal
 from ai.policy.routines import RoutinePlanningInstrumentation, plan_enable_then_act
@@ -53,7 +52,7 @@ from server.agent_protocol.observation_legacy import (
 from server.runtime_performance import MINIMUM_FULL_COLLECTION_INTERVAL, latency_sensitive_gc
 from dnd.ai.runtime import decision_epoch as subjective_epochs
 from dnd.ai.runtime.decision_epoch import _build_affordance_set_from_actions
-from ai.subjective.store import ApplyResultKind, SubjectiveStore
+from ai.subjective.store import SubjectiveStore
 from ai.subjective.models import AgentState
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.actions import SpellAction
@@ -88,9 +87,14 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.blocks.sensory import spatial_senses_system
 import dnd.core.gridmap as gridmap_module
 from dnd.entity import Entity
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+)
 from dnd.spells.evocation import Fireball
-from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
+from tests.manual.server_test_client import (
+    ServerTestClient,
+    reset_server_test_runtime,
+)
 from server.session import SessionManager
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 
@@ -394,127 +398,11 @@ def test_latency_sensitive_gc_defers_full_scans_and_restores_process_defaults() 
     assert gc.get_threshold() == previous
 
 
-def test_selfplay_reuses_current_epoch_without_empty_pre_command_fetch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A hot local self-play store should not poll frames before every action."""
-    store = SimpleNamespace(
-        world=SimpleNamespace(
-            current_epoch=SimpleNamespace(actor_uuid="actor-current"),
-        ),
-    )
-    catch_up_calls: list[str] = []
-    snapshot_calls: list[str] = []
-
-    def fake_catch_up(*args: Any, **kwargs: Any) -> SelfPlayStoreTiming:
-        catch_up_calls.append("catch_up")
-        return SelfPlayStoreTiming()
-
-    def fake_snapshot(*args: Any, **kwargs: Any) -> SelfPlayStoreTiming:
-        snapshot_calls.append("snapshot")
-        return SelfPlayStoreTiming(snapshot_loaded=True)
-
-    monkeypatch.setattr("ai.external_selfplay._catch_up_store", fake_catch_up)
-    monkeypatch.setattr("ai.external_selfplay._load_store_snapshot", fake_snapshot)
-
-    returned_store, timing = _store_for_active_session(
-        cast(Any, object()),
-        "session",
-        cast(dict[str, Any], {"session": store}),
-        active_uuid="actor-current",
-    )
-
-    assert returned_store is store
-    assert catch_up_calls == []
-    assert snapshot_calls == []
-    assert timing.frame_count == 0
-    assert timing.snapshot_loaded is False
-
-
-def test_selfplay_catches_up_when_cached_epoch_is_stale(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A stale local epoch should still be advanced before policy evaluation."""
-    store = SimpleNamespace(
-        world=SimpleNamespace(
-            current_epoch=SimpleNamespace(actor_uuid="actor-old"),
-        ),
-    )
-    catch_up_calls: list[str] = []
-
-    def fake_catch_up(
-        client: Any,
-        session_id: str,
-        target_store: Any,
-        **kwargs: Any,
-    ) -> SelfPlayStoreTiming:
-        catch_up_calls.append(session_id)
-        target_store.world.current_epoch = SimpleNamespace(actor_uuid="actor-new")
-        return SelfPlayStoreTiming(frame_count=1)
-
-    monkeypatch.setattr("ai.external_selfplay._catch_up_store", fake_catch_up)
-
-    returned_store, timing = _store_for_active_session(
-        cast(Any, object()),
-        "session",
-        cast(dict[str, Any], {"session": store}),
-        active_uuid="actor-new",
-    )
-
-    assert returned_store is store
-    assert catch_up_calls == ["session"]
-    assert timing.frame_count == 1
-
-
-def test_selfplay_catch_up_uses_direct_subjective_projection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The in-process gauntlet harness should not add an HTTP frame poll."""
-    calls: list[tuple[str, int, int]] = []
-
-    def fake_iter_observation_frames(
-        session_id: str,
-        *,
-        since: int,
-        limit: int,
-        session_manager: Any,
-    ) -> SimpleNamespace:
-        calls.append((session_id, since, limit))
-        frames = [{"observation_cursor": 1}] if since == 0 else []
-        return SimpleNamespace(frames=frames)
-
-    class RejectingClient:
-        def get(self, *_args: Any, **_kwargs: Any) -> Any:
-            raise AssertionError("self-play catch-up should use direct projection")
-
-    class DirectStore:
-        def __init__(self) -> None:
-            self.world = SimpleNamespace(observation_cursor=0)
-            self.frames: list[Any] = []
-
-        def apply_frame(self, frame: Any, *, capture_previous: bool = False) -> SimpleNamespace:
-            self.frames.append(frame)
-            self.world.observation_cursor = frame["observation_cursor"]
-            return SimpleNamespace(kind=ApplyResultKind.APPLIED)
-
-    monkeypatch.setattr(
-        "ai.external_selfplay.iter_observation_frames",
-        fake_iter_observation_frames,
-    )
-
-    store = DirectStore()
-    timing = _catch_up_store(cast(Any, RejectingClient()), "session-1", cast(Any, store))
-
-    assert calls == [("session-1", 0, 500)]
-    assert store.frames == [{"observation_cursor": 1}]
-    assert timing.frame_count == 1
-
-
 def _post_session_with_request_local() -> weakref.ReferenceType[_RequestLocalMarker]:
     """Issue one POST while retaining a marker only in the caller frame."""
     marker = _RequestLocalMarker()
     reference = weakref.ref(marker)
-    response = ArenaApiClient().post(
+    response = ServerTestClient().post(
         "/session/create",
         json={"player_type": "ai", "name": "Request lifetime probe"},
     )
@@ -524,7 +412,7 @@ def _post_session_with_request_local() -> weakref.ReferenceType[_RequestLocalMar
 
 def test_post_request_does_not_retain_its_caller_until_cyclic_gc() -> None:
     """Completed POST requests release large policy caller frames immediately."""
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
     gc.collect()
     was_enabled = gc.isenabled()
     gc.disable()
@@ -535,7 +423,7 @@ def test_post_request_does_not_retain_its_caller_until_cyclic_gc() -> None:
         if was_enabled:
             gc.enable()
         gc.collect()
-        reset_standard_arena_runtime()
+        reset_server_test_runtime()
 
     assert retained_without_collection is False
 
@@ -639,21 +527,22 @@ def test_epoch_build_expands_registered_action_variants_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One epoch reuses one fresh discovery snapshot across rows and capabilities."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
-    variant_calls: Counter[str] = Counter()
+    base_variant_calls: Counter[str] = Counter()
+    spell_variant_calls: Counter[str] = Counter()
     make_info_calls = 0
     original_base_variants = BaseAction.get_discovery_variants
     original_spell_variants = SpellAction.get_discovery_variants
     original_make_info = Entity._make_action_info
 
     def track_base_variants(self: BaseAction, entity: Any) -> list[BaseAction]:
-        variant_calls[str(self.uuid)] += 1
+        base_variant_calls[str(self.uuid)] += 1
         return original_base_variants(self, entity)
 
     def track_spell_variants(self: SpellAction, entity: Any) -> list[BaseAction]:
-        variant_calls[str(self.uuid)] += 1
+        spell_variant_calls[str(self.uuid)] += 1
         return original_spell_variants(self, entity)
 
     def track_make_info(self: Entity, *args: Any, **kwargs: Any):
@@ -706,8 +595,30 @@ def test_epoch_build_expands_registered_action_variants_once(
     assert None not in source_counts
     assert len(source_counts) == len(actions.all_actions)
     assert max(source_counts.values()) > 1
-    assert set(variant_calls) == {str(template.uuid) for template in archmage.registered_actions}
-    assert set(variant_calls.values()) == {1}
+    registered_spells = tuple(
+        template
+        for template in archmage.registered_actions
+        if isinstance(template, SpellAction)
+    )
+    registered_non_spells = tuple(
+        template
+        for template in archmage.registered_actions
+        if not isinstance(template, SpellAction)
+    )
+    assert set(spell_variant_calls) == {
+        str(template.uuid)
+        for template in registered_spells
+    }
+    assert set(spell_variant_calls.values()) == {1}
+    assert set(base_variant_calls) == {
+        str(template.uuid)
+        for template in registered_non_spells
+    } | {
+        str(variant.uuid)
+        for variant in actions.registered_action_variants
+        if isinstance(variant, SpellAction)
+    }
+    assert set(base_variant_calls.values()) == {1}
     assert capability_make_info_calls == missing_capability_rows
 
 
@@ -715,7 +626,7 @@ def test_epoch_derives_semantics_and_cost_once_per_source_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Capabilities and affordances reuse one build-local row descriptor."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     actions = archmage.get_available_actions()
@@ -778,7 +689,7 @@ def test_aoe_shape_definition_is_not_serialized_per_candidate_cell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """AoE discovery reuses one immutable shape key across candidate cells."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     original_shape_key = Entity._aoe_shape_definition_key
@@ -815,7 +726,7 @@ def test_aoe_shape_definition_is_not_serialized_per_candidate_cell(
 
 def test_footprint_limited_propagation_matches_full_fov_for_candidates() -> None:
     """Bounded propagation filtering is exact for a supplied AoE footprint."""
-    create_ai_validation_arena("standard_skeleton_doors")
+    assemble_authored_encounter("standard_skeleton_doors")
     grid = get_map()
     origin = (9, 7)
     candidate_positions = circle_positions(origin, radius=4)
@@ -828,7 +739,7 @@ def test_footprint_limited_propagation_matches_full_fov_for_candidates() -> None
 
 def test_footprint_limited_propagation_reuses_identical_candidate_filters() -> None:
     """Repeated spell footprints should share one physical-propagation filter."""
-    create_ai_validation_arena("standard_skeleton_doors")
+    assemble_authored_encounter("standard_skeleton_doors")
     grid = get_map()
     origin = (9, 7)
     candidate_positions = circle_positions(origin, radius=4)
@@ -855,7 +766,7 @@ def test_aoe_preview_filters_footprints_without_full_origin_fov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """AoE previews filter known footprints instead of scanning full origin FOV."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -904,7 +815,7 @@ def test_aoe_propagation_footprints_survive_visibility_only_changes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Light/fog changes should not rebuild propagation footprints."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     original_compute = Entity._compute_aoe_propagation_footprint
@@ -969,7 +880,7 @@ def test_aoe_discovery_reuses_one_preview_shape_per_variant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """AoE preview discovery should not clone a shape for every candidate cell."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     original_model_copy = AoEShape.model_copy
@@ -1010,7 +921,7 @@ def test_directional_aoe_discovery_compacts_duplicate_target_rays(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line-style AoEs should expose semantic rays, not every cell on a ray."""
-    arena = create_ai_validation_arena("standard_skeleton_doors")
+    arena = assemble_authored_encounter("standard_skeleton_doors")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     actions = actor.get_available_actions()
@@ -1064,7 +975,7 @@ def test_required_target_aoe_prefilter_uses_action_relationship_filter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Enemy-only AoEs should not generate candidate centers from allies."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     ally_positions = {
@@ -1230,7 +1141,7 @@ def test_adjacent_domain_projection_reuses_static_topology_cache(
 ) -> None:
     """Visible tile projection should not repeatedly query fixed neighbors."""
     get_map().create_rectangle(0, 0, 4, 4)
-    observation_projector.clear_observation_projection_cache()
+    observation_journal.clear_observation_projection_cache()
     grid = get_map()
     original_get_tile = grid.get_tile
     calls = 0
@@ -1242,16 +1153,16 @@ def test_adjacent_domain_projection_reuses_static_topology_cache(
 
     monkeypatch.setattr(grid, "get_tile", count_get_tile)
 
-    first = observation_projector._adjacent_domain_knowledge((1, 1))
-    second = observation_projector._adjacent_domain_knowledge((1, 1))
+    first = subjective_projection.adjacent_domain_knowledge((1, 1))
+    second = subjective_projection.adjacent_domain_knowledge((1, 1))
     cold_calls = calls
     movement_revision = grid.movement_revision
-    grid.set_tile(4, 4)
-    third = observation_projector._adjacent_domain_knowledge((1, 1))
+    grid.set_tile(3, 3)
+    third = subjective_projection.adjacent_domain_knowledge((1, 1))
     calls_after_equivalent_replacement = calls
-    grid.set_tile(4, 4, walkable=False)
+    grid.set_tile(3, 3, walkable=False)
     calls_before_changed_lookup = calls
-    fourth = observation_projector._adjacent_domain_knowledge((1, 1))
+    fourth = subjective_projection.adjacent_domain_knowledge((1, 1))
     changed_lookup_calls = calls - calls_before_changed_lookup
 
     assert first == second == third == fourth
@@ -1265,7 +1176,7 @@ def test_observation_tile_projection_skips_hazard_scan_on_safe_maps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """No-hazard maps should not perform entity-aware hazard checks per tile."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1276,7 +1187,12 @@ def test_observation_tile_projection_skips_hazard_scan_on_safe_maps(
 
     monkeypatch.setattr(grid, "is_position_hazardous_for", reject_hazard_scan)
 
-    facts = observation_projector._known_tile_facts([actor])
+    facts = tuple(
+        subjective_projection.project_known_tiles(
+            observers=[actor],
+            prior_world=None,
+        ).values()
+    )
 
     assert facts
     assert all(fact.is_hazardous is False for fact in facts if fact.knowledge_state == KnowledgeState.VISIBLE)
@@ -1286,7 +1202,7 @@ def test_observation_tile_projection_keeps_entity_aware_hazard_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Hazard-bearing maps must still resolve hazards for the observer entity."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1301,7 +1217,12 @@ def test_observation_tile_projection_keeps_entity_aware_hazard_checks(
 
     monkeypatch.setattr(grid, "is_position_hazardous_for", track_hazard_scan)
 
-    facts = observation_projector._known_tile_facts([actor])
+    facts = tuple(
+        subjective_projection.project_known_tiles(
+            observers=[actor],
+            prior_world=None,
+        ).values()
+    )
 
     assert facts
     assert calls > 0
@@ -1311,7 +1232,7 @@ def test_fireball_uses_resolved_save_roll_bonus_without_second_bonus_rebuild(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Fireball should not rebuild the same save bonus after each target rolls."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     actions = mage.get_available_actions()
@@ -1356,7 +1277,7 @@ def test_epoch_normalizes_one_outcome_profile_per_source_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Target flattening reuses one normalized stochastic profile per row."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     actions = mage.get_available_actions()
@@ -1409,7 +1330,7 @@ def test_epoch_normalizes_one_outcome_profile_per_source_action(
 
 def test_dense_epoch_wire_factors_shared_action_metadata_and_round_trips() -> None:
     """Dense legal rows travel as source definitions plus compact target references."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     affordances = _build_affordance_set_from_actions(
@@ -1459,7 +1380,7 @@ def test_dense_epoch_wire_factors_shared_action_metadata_and_round_trips() -> No
 
 def test_dense_epoch_factors_action_sources_in_memory() -> None:
     """Executable rows retain only row-local data and share source definitions."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
 
@@ -1485,7 +1406,7 @@ def test_dense_epoch_factors_action_sources_in_memory() -> None:
 
 def test_dense_epoch_wire_round_trip_preserves_factored_source_identity() -> None:
     """Wire parsing rebuilds one immutable source object per discovered action."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     affordances = _build_affordance_set_from_actions(
@@ -1508,7 +1429,7 @@ def test_epoch_hashes_each_distinct_semantic_contract_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Capabilities and legal rows share one content address per contract."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     actions = mage.get_available_actions()
@@ -1534,7 +1455,7 @@ def test_epoch_hashes_each_distinct_semantic_contract_once(
 def test_unchanged_epochs_reuse_only_exact_immutable_capability_values() -> None:
     """Fresh discovery can intern equal capabilities without caching legal rows."""
     subjective_epochs.clear_epoch_value_caches()
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     actor = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     actor.update_entity_senses(max_distance=20)
 
@@ -1578,7 +1499,7 @@ def test_unchanged_epochs_reuse_only_exact_immutable_capability_values() -> None
 
 def test_zero_movement_dirty_paths_are_deferred_until_movement_exists() -> None:
     """No-movement epochs should not recompute Dijkstra just to discover rows."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     actor.action_economy.consume("movement", actor.action_economy.movement.normalized_score)
@@ -1602,7 +1523,7 @@ def test_no_hazard_map_skips_per_path_hazard_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """No-hazard maps should not scan every movement path for hazards."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1622,7 +1543,7 @@ def test_bright_visibility_skips_per_tile_effective_light(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Fully bright FOVs should not resolve observer-specific light per tile."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
 
     def reject_effective_light(*_args: Any, **_kwargs: Any) -> LightLevel:
@@ -1639,7 +1560,7 @@ def test_dark_visibility_still_uses_subjective_light_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Dark FOVs must still apply observer-specific senses such as darkvision."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     for tile in get_map().get_all_tiles().values():
         tile.default_light = LightLevel.DARKNESS
@@ -1662,7 +1583,7 @@ def test_light_batch_candidate_selection_uses_bulk_subscriber_union(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Light batches should not copy subscribers once per changed cell."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1696,7 +1617,7 @@ def test_bright_light_refresh_skips_per_tile_effective_light(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Incremental bright light updates should use objective light directly."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1725,7 +1646,7 @@ def test_dark_light_refresh_still_uses_subjective_light_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Incremental dark light updates must still respect observer senses."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     grid = get_map()
@@ -1760,7 +1681,7 @@ def test_dirty_action_discovery_limits_path_radius_to_movement_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Dirty movement rows should not recompute full visibility-radius paths."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     actor.senses._paths_dirty = True
@@ -1786,7 +1707,7 @@ def test_dirty_action_discovery_limits_path_radius_to_movement_budget(
 
 def test_dash_expands_limited_path_radius_when_movement_budget_grows() -> None:
     """Dash should force path expansion after a movement-budget-limited refresh."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     actor.senses._paths_dirty = True
@@ -1807,7 +1728,7 @@ def test_dash_expands_limited_path_radius_when_movement_budget_grows() -> None:
 
 def test_full_budget_move_refreshes_visibility_without_full_path_radius() -> None:
     """A completed move should not recompute full-radius paths after movement is spent."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     available = actor.get_available_actions()
@@ -1848,7 +1769,7 @@ def test_grid_compute_paths_reuses_same_revision_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Repeated identical path queries should not rerun Dijkstra."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     grid = get_map()
     grid._path_cache.clear()
@@ -1900,7 +1821,7 @@ def test_unit_cost_paths_use_breadth_first_fast_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Unit-cost maps should use BFS while preserving compute_paths output."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     grid = get_map()
     grid._path_cache.clear()
@@ -1938,7 +1859,7 @@ def test_weighted_paths_keep_dijkstra_selection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Non-unit movement costs must keep weighted Dijkstra semantics."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     grid = get_map()
     grid._path_cache.clear()
@@ -1990,7 +1911,7 @@ def test_move_discovery_uses_cached_senses_path_costs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Movement rows should reuse pathfinder distances stored on senses."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
 
@@ -2016,7 +1937,7 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cached path costs preserve weighted terrain in movement rows."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     grid = get_map()
     actor.update_entity_senses(max_distance=20)
@@ -2060,7 +1981,7 @@ def test_grid_compute_paths_invalidates_on_occupancy_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Entity movement/blocking changes must invalidate cached paths."""
-    arena = create_ai_validation_arena("srd_low_cr_patrol")
+    arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     blocker = arena.monsters[0]
     grid = get_map()
@@ -2123,12 +2044,12 @@ def test_normal_subjective_projection_does_not_run_deep_timing_probes(
         clock_calls += 1
         return 1.0
 
-    monkeypatch.setattr(observation_projector.time, "perf_counter", count_clock)
+    monkeypatch.setattr(observation_journal.time, "perf_counter", count_clock)
     assert session is not None
-    observation_projector._update_projection_cache(session, game, encounter)
+    observation_journal._update_projection_cache(session, game, encounter)
     assert clock_calls == 0
 
-    observation_projector._update_projection_cache(
+    observation_journal._update_projection_cache(
         session,
         game,
         encounter,
@@ -2152,12 +2073,12 @@ def test_projection_cache_current_cursor_skips_context_rebuild(
         raise AssertionError("current projection cursor rebuilt observer context")
 
     monkeypatch.setattr(
-        observation_projector,
-        "_controlled_observers",
+        observation_journal,
+        "resolve_controlled_observers",
         fail_controlled_observers,
     )
 
-    entry = observation_projector._update_projection_cache(session, game, encounter)
+    entry = observation_journal._update_projection_cache(session, game, encounter)
 
     assert entry.source_event_cursor == EventQueue.event_cursor()
 
@@ -2173,7 +2094,7 @@ def test_sensory_projection_skips_combat_log_filtering(
         raise AssertionError("sensory projection filtered combat logs")
 
     monkeypatch.setattr(
-        observation_projector,
+        observation_journal,
         "_filtered_combat_log",
         fail_filtered_combat_log,
     )
@@ -2412,56 +2333,6 @@ def test_v194_dense_epoch_bounds_explicit_planning_and_preempts_dominated_work()
     assert median(samples_ms) < 3.5
 
 
-def test_dominant_durable_setup_does_not_plan_offensive_movement_starters() -> None:
-    """A dominant setup command should not spend the epoch planning starters."""
-    result = run_external_selfplay(
-        "srd_low_cr_patrol",
-        max_commands=2,
-        hero_first=True,
-        random_seed=606,
-    )
-    setup_trace = result.traces[1]
-
-    assert setup_trace.actor_name == "Validation SRD Patrol Archer"
-    assert setup_trace.template_name is not None
-    assert setup_trace.template_name.startswith("Drink Haste Potion")
-    assert setup_trace.reason == "establish_durable_combat_setup"
-    assert setup_trace.policy_diagnostics
-
-    routine = cast(dict[str, int], setup_trace.policy_diagnostics["routine"])
-    assert routine["movement_endpoints"] == 0
-    assert routine["damage_capabilities"] == 0
-    assert routine["line_of_sight_evaluations"] == 0
-    assert setup_trace.policy_ms is not None
-    assert setup_trace.policy_ms < 5.0
-
-
-def test_retained_offensive_followup_does_not_restart_pursuit_planning() -> None:
-    """A retained legal attack resolves without another pursuit route search."""
-    result = run_external_selfplay(
-        "srd_low_cr_patrol",
-        max_commands=4,
-        hero_first=True,
-        random_seed=606,
-    )
-    followup_trace = result.traces[3]
-
-    assert followup_trace.actor_name == "Validation SRD Patrol Archer"
-    assert followup_trace.command_type == "execute"
-    assert followup_trace.template_name is not None
-    assert followup_trace.template_name.startswith("Attack_")
-    assert followup_trace.reason == "legal semantic damage against a visible hostile"
-    assert followup_trace.policy_diagnostics
-
-    stages = cast(dict[str, dict[str, float]], followup_trace.policy_diagnostics["stages"])
-    routine = cast(dict[str, int], followup_trace.policy_diagnostics["routine"])
-    assert stages["routine_planning"]["wall_ms"] < 1.0
-    assert routine["movement_endpoints"] == 0
-    assert routine["line_of_sight_evaluations"] == 0
-    assert followup_trace.policy_ms is not None
-    assert followup_trace.policy_ms < 5.0
-
-
 def test_v216_dense_spacing_epoch_preserves_exhaustive_choice_under_five_ms() -> None:
     """Dense endpoint geometry stays exhaustive, deterministic, and bounded."""
     world = _load_v216_world_at_cursor_68()
@@ -2603,7 +2474,7 @@ def test_v219_visible_distant_hostile_starts_bounded_capability_pursuit() -> Non
     epoch = world.current_epoch
     assert epoch is not None
     host = PolicyHost(
-        implementation=get_policy_implementation(CANDIDATE_GENERATION_ID)
+        implementation=get_active_policy_implementation()
     )
 
     decision = host.decide(world, facts=facts)
@@ -2688,7 +2559,7 @@ def test_pursuit_searches_actor_local_line_of_sight_inside_range() -> None:
     epoch = world.current_epoch
     assert epoch is not None
     host = PolicyHost(
-        implementation=get_policy_implementation(CANDIDATE_GENERATION_ID)
+        implementation=get_active_policy_implementation()
     )
     memory = host.memory_for(world.session.session_id, epoch.actor_uuid)
     memory.active_routine = RoutineProgress(

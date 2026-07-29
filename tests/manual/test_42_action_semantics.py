@@ -406,7 +406,7 @@ def test_open_door_exposes_interaction_topology_and_possible_information_gain() 
     """Opening a door changes topology and may reveal facts beyond it."""
     row = _action(
         "Open Door",
-        semantic_key="dnd.items.test_items.OpenDoorAction",
+        semantic_key="dnd.items.environment_interactables.OpenDoorAction",
         is_item_use=True,
     )
 
@@ -430,7 +430,7 @@ def test_pull_lever_exposes_typed_hazard_deactivation() -> None:
     """Trap controls predict hazard removal without pretending to open a blocker."""
     row = _action(
         "Pull Lever__item_test",
-        semantic_key="dnd.items.test_items.PullLeverAction",
+        semantic_key="dnd.items.environment_interactables.PullLeverAction",
         is_item_use=True,
     )
 
@@ -1362,7 +1362,7 @@ def test_display_tags_are_deterministic() -> None:
     """Flat display tags have stable ordering across Python hash seeds."""
     semantics = action_semantics_for_available_action(_action(
         "Open Door",
-        semantic_key="dnd.items.test_items.OpenDoorAction",
+        semantic_key="dnd.items.environment_interactables.OpenDoorAction",
         is_item_use=True,
     ))
 

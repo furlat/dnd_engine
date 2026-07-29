@@ -10,6 +10,13 @@ from dnd.action_dispatch import (
     ActionDispatchResult,
     dispatch_available_action as canonical_dispatch_available_action,
 )
+from dnd.blocks.equipment import Weapon
+from dnd.content_system.creature_materialization import materialize_creature
+from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.spell_catalog_composition import (
+    SPELL_CATALOG_COMPOSITION_ROWS,
+)
 from dnd.controller import Controller, HumanController, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
@@ -17,15 +24,22 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.items.weapons import SCIMITAR_RECIPE, SHORTSWORD_RECIPE
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.reactions import add_opportunity_attack_handler
 from server import event_server
 from server.event_server import app, sim
 from server.player_replication_contract import SubjectiveReplicationBootstrap
+from server.spell_catalog import CATALOG_VERSION
 from server.session import (
     ConnectionStatus,
     PlayerSession,
@@ -79,8 +93,48 @@ def reset_client_api_state(width: int = 16, height: int = 10) -> None:
 
 def create_api_pair() -> tuple[Entity, Entity]:
     """Create a hero and an adjacent monster for client API examples."""
-    hero = create_goblin(name="Manual Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Manual Skeleton", position=(2, 1), faction="monsters")
+    hero = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Manual Hero",
+        faction="heroes",
+        position=(1, 1),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.client_api.hero",
+        ),
+        possession_mode=(
+            CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+        ),
+    )
+    hero_weapon = materialize_item(
+        SCIMITAR_RECIPE,
+        hero.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    assert hero.loot_item(hero_weapon)
+    assert hero.equip_item(hero_weapon.uuid, WeaponSlot.MELEE_MAIN)
+    monster = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["skeleton"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Manual Skeleton",
+        faction="monsters",
+        position=(2, 1),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.client_api.monster",
+        ),
+        possession_mode=(
+            CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+        ),
+    )
+    monster_weapon = materialize_item(
+        SHORTSWORD_RECIPE,
+        monster.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    assert monster.loot_item(monster_weapon)
+    assert monster.equip_item(monster_weapon.uuid, WeaponSlot.MELEE_MAIN)
     Entity.update_all_entities_senses(max_distance=20)
     return hero, monster
 
@@ -569,7 +623,11 @@ def test_execute_action_by_index_acknowledges_then_journals_state_and_logs(capsy
         "execute result: success=yes, event=attack_melee_main, turn_continues=yes",
         "journal damage: monster=17->11",
         "command ack: actions_remaining=0, ended=no",
-        "cursors: events=72, logs=2, log_frames=1",
+        (
+            f"cursors: events={result['event_cursor_after']}, "
+            f"logs={result['combat_log_cursor_after']}, "
+            f"log_frames={len(logs['frames'])}"
+        ),
     ]
 
     print("\n".join(readout_lines))
@@ -731,15 +789,30 @@ def test_spell_catalog_route_exposes_design_time_spell_metadata(capsys) -> None:
     assert response.status_code == 200
     assert payload["version"]
     assert {"fire_bolt", "magic_missile", "fireball"} <= set(spells)
-    assert len({
+    wire_identities = {
         (
             spell["content_ref"]["pack_id"],
             spell["content_ref"]["definition_kind"],
             spell["content_ref"]["content_id"],
             spell["content_ref"]["content_version"],
+            spell["content_ref"]["definition_contract_hash"],
         )
         for spell in spells.values()
-    }) == len(spells) == 110
+    }
+    expected_identities = {
+        (
+            row.declaration.ref.pack_id,
+            row.declaration.ref.definition_kind.value,
+            row.declaration.ref.content_id,
+            row.declaration.ref.content_version,
+            row.declaration.ref.definition_contract_hash,
+        )
+        for row in SPELL_CATALOG_COMPOSITION_ROWS
+    }
+    assert wire_identities == expected_identities
+    assert len(wire_identities) == len(spells) == len(
+        SPELL_CATALOG_COMPOSITION_ROWS,
+    )
     assert spells["fire_bolt"]["content_ref"]["content_id"] == "spell.fire_bolt"
     assert spells["fire_bolt"]["content_ref"]["pack_id"] == "content.srd_5_1_cc"
     assert spells["fire_bolt"]["content_ref"]["definition_kind"] == "spell"
@@ -788,7 +861,11 @@ def test_spell_catalog_route_exposes_design_time_spell_metadata(capsys) -> None:
         ),
     ]
     expected_lines = [
-        "catalog response: status=200, version=2026-07-26.1, spells=110",
+        (
+            "catalog response: "
+            f"status=200, version={CATALOG_VERSION}, "
+            f"spells={len(SPELL_CATALOG_COMPOSITION_ROWS)}"
+        ),
         "fire bolt: category=spell, attack_roll=yes, range=120",
         "magic missile: multi_target=yes",
         "fireball: aoe=sphere, damage_types=['Fire']",

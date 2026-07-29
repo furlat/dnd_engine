@@ -21,7 +21,7 @@ import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
-import dnd.items.test_items as test_items
+import dnd.items.environment_interactables as environment_interactables
 import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
 import dnd.spells.abjuration as abjuration
@@ -1372,7 +1372,7 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             ),
         ),
     ),
-    test_items.PullLeverAction: (
+    environment_interactables.PullLeverAction: (
         _branch(
             "deactivate-trap",
             ConditionEffectDisposition.BENEFICIAL,

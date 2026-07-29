@@ -5,7 +5,6 @@ definition. Durable identity belongs exclusively to the private factories
 declared below and to their authenticated `ContentRecipe` values.
 """
 
-from types import MappingProxyType
 from typing import Any, Optional, cast as type_cast
 from uuid import UUID, uuid4
 
@@ -57,7 +56,7 @@ from dnd.core.events import (
     Range,
     RangeType,
 )
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.abjuration import MageArmor
@@ -1143,16 +1142,3 @@ NEURODRAGON_SPELL_ITEM_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     ACID_FLASK_DECLARATION,
     INVISIBILITY_SCROLL_DECLARATION,
 )
-
-NEURODRAGON_SPELL_ITEM_RECIPES_BY_LEGACY_ID = MappingProxyType({
-    "scroll_of_fireball": FIREBALL_SCROLL_RECIPE,
-    "scroll_of_magic_missile": MAGIC_MISSILE_SCROLL_RECIPE,
-    "scroll_of_hold_person": HOLD_PERSON_SCROLL_RECIPE,
-    "scroll_of_mage_armor": MAGE_ARMOR_SCROLL_RECIPE,
-    "scroll_of_spike_growth": SPIKE_GROWTH_SCROLL_RECIPE,
-    "scroll_of_fire_bolt": FIRE_BOLT_SCROLL_RECIPE,
-    "wand_of_magic_missiles": WAND_OF_MAGIC_MISSILES_RECIPE,
-    "wand_of_fire": WAND_OF_FIRE_RECIPE,
-    "acid_flask": ACID_FLASK_RECIPE,
-    "scroll_of_invisibility": INVISIBILITY_SCROLL_RECIPE,
-})

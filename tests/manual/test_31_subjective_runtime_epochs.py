@@ -4,7 +4,7 @@ from collections import Counter
 from uuid import uuid4
 
 import dnd.ai.runtime.decision_epoch as subjective_epochs_module
-from server.agent_runtime.observation_projector import _combat_log_cursor
+from server.agent_runtime.observation_journal import _combat_log_cursor
 from dnd.ai.contracts.observation import ObservationSnapshot
 from dnd.ai.runtime.decision_epoch import (
     _action_cost_profile_from_cost_rows,
@@ -44,12 +44,14 @@ from dnd.entity import Entity
 from dnd.encounter import Encounter, TurnState
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE
-from dnd.items.test_items import TrapLever
+from dnd.items.environment_interactables import TrapLever
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+)
 from dnd.spells.abjuration import (
     Aid,
     DeathWard,
@@ -235,7 +237,7 @@ def test_decision_epoch_omits_unaffordable_debug_rows() -> None:
 
 def test_epoch_bindings_preserve_exact_duplicate_named_action_sources() -> None:
     """Private execution authority binds rows by object identity, never display names."""
-    arena = create_ai_validation_arena("sorcerer_barbarian_duel")
+    arena = assemble_authored_encounter("sorcerer_barbarian_duel")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
     discovered = actor.get_available_actions()
@@ -463,7 +465,7 @@ def test_jump_epoch_discloses_its_voluntary_threat_exit() -> None:
 
 def test_simple_entity_epoch_rows_are_lean_but_multi_entity_rows_keep_options() -> None:
     """Simple entity rows avoid duplicate targets while multi-target spells keep choices."""
-    arena = create_ai_validation_arena("line_aoe_corridor")
+    arena = assemble_authored_encounter("line_aoe_corridor")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     actions = mage.get_available_actions()
     direct_affordances = _build_affordance_set_from_actions(mage, actions, 42)
@@ -486,7 +488,7 @@ def test_simple_entity_epoch_rows_are_lean_but_multi_entity_rows_keep_options() 
 
 def test_spell_outcome_profiles_reach_epoch_without_registry_growth() -> None:
     """Rule-owned stochastic profiles are pure and reach typed epoch rows."""
-    arena = create_ai_validation_arena("line_aoe_corridor")
+    arena = assemble_authored_encounter("line_aoe_corridor")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     fire_template = next(action for action in mage.registered_actions if action.name == "Fire Bolt")
     missile_template = next(action for action in mage.registered_actions if action.name == "Magic Missile")
@@ -552,7 +554,7 @@ def test_weapon_attack_outcome_profiles_reach_epochs_without_registry_growth() -
 
 def test_eldritch_blast_outcome_profile_reaches_actor_capabilities() -> None:
     """A Warlock's ranged fallback remains quantified after legal rows expire."""
-    arena = create_ai_validation_arena("skeleton_anti_aoe_split")
+    arena = assemble_authored_encounter("skeleton_anti_aoe_split")
     warlock = next(monster for monster in arena.monsters if "Warlock" in monster.name)
     blast_template = next(
         action
@@ -593,7 +595,7 @@ def test_eldritch_blast_outcome_profile_reaches_actor_capabilities() -> None:
 
 def test_execution_honest_necromancy_profiles_reach_actor_capabilities() -> None:
     """Epoch capabilities expose modeled necromancy damage profiles."""
-    arena = create_ai_validation_arena("necrotic_anti_healing_duel")
+    arena = assemble_authored_encounter("necrotic_anti_healing_duel")
     necromancer = next(
         monster
         for monster in arena.monsters
@@ -673,7 +675,7 @@ def test_srd_command_epoch_exposes_save_control_target_effect() -> None:
 
 def test_condition_lock_control_spells_expose_target_effects() -> None:
     """Disabling arena spells should reach epochs as typed target effects."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     controller = next(monster for monster in arena.monsters if "Controller" in monster.name)
     controller.update_entity_senses(max_distance=60)
 
@@ -730,7 +732,7 @@ def test_condition_lock_control_spells_expose_target_effects() -> None:
 
 def test_sleep_epoch_exposes_hp_pool_agency_denial() -> None:
     """Sleep should disclose automatic unconsciousness and undead exclusion."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     register_spell(support, Sleep, caster_level=5)
     support.update_entity_senses(max_distance=60)
@@ -763,7 +765,7 @@ def test_sleep_epoch_exposes_hp_pool_agency_denial() -> None:
 
 def test_condition_lock_support_spells_expose_target_buffs() -> None:
     """Support rows should disclose the concrete buff/debuff they apply."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     support.update_entity_senses(max_distance=60)
 
@@ -823,7 +825,7 @@ def test_condition_lock_support_spells_expose_target_buffs() -> None:
 
 def test_zone_and_removal_control_spells_expose_profiles() -> None:
     """Zone/removal spell rows should not collapse to generic spell damage."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     controller = next(monster for monster in arena.monsters if "Controller" in monster.name)
     controller.update_entity_senses(max_distance=80)
     controller_affordances = _build_affordance_set_from_actions(
@@ -859,7 +861,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
         "dnd.spells.transmutation.SlowedEffect",
     })
 
-    zone_arena = create_ai_validation_arena("zone_control_web_gauntlet")
+    zone_arena = assemble_authored_encounter("zone_control_web_gauntlet")
     mage = next(monster for monster in zone_arena.monsters if "Web Mage" in monster.name)
     mage.update_entity_senses(max_distance=80)
     zone_affordances = _build_affordance_set_from_actions(
@@ -942,7 +944,7 @@ def test_defensive_spell_profile_hooks_are_valid_contracts() -> None:
 
 def test_blindness_deafness_epoch_exposes_save_control_target_effect() -> None:
     """Blindness/Deafness should disclose its save-based condition branch."""
-    arena = create_ai_validation_arena("necrotic_anti_healing_duel")
+    arena = assemble_authored_encounter("necrotic_anti_healing_duel")
     necromancer = next(
         monster
         for monster in arena.monsters
@@ -1035,7 +1037,7 @@ def test_extra_attack_resource_is_normalized_as_attack_economy() -> None:
 
 def test_weapon_attack_wrappers_share_one_stochastic_profile() -> None:
     """Normal, granted, and frenzy attacks publish the same weapon outcome."""
-    arena = create_ai_validation_arena("caster_crossfire")
+    arena = assemble_authored_encounter("caster_crossfire")
     barbarian = arena.hero
     normal = next(
         action
@@ -1120,7 +1122,7 @@ def test_actor_capabilities_survive_absent_targets_without_leaking_contacts() ->
 
 def test_visible_environment_interaction_is_a_capability_before_it_is_legal() -> None:
     """A known lever remains plannable at range without becoming an executable row."""
-    arena = create_ai_validation_arena("trap_lever_killzone")
+    arena = assemble_authored_encounter("trap_lever_killzone")
     assert arena.environment is not None
     lever = arena.environment.trap_lever
     assert isinstance(lever, TrapLever)
@@ -1166,7 +1168,7 @@ def test_visible_environment_interaction_is_a_capability_before_it_is_legal() ->
 
 def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> None:
     """Real discovery exposes transform contracts plus intrinsic spell-level inputs."""
-    arena = create_ai_validation_arena("standard_skeleton_doors")
+    arena = assemble_authored_encounter("standard_skeleton_doors")
     sorcerer = arena.hero
     sorcerer.update_entity_senses(max_distance=20)
 
@@ -1259,7 +1261,7 @@ def test_slotless_actor_keeps_fixed_spell_scroll_capability() -> None:
 
 def test_spell_epoch_rows_expose_full_spell_slot_costs() -> None:
     """Leveled spell rows expose slot costs in typed epochs and the human API."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     support.update_entity_senses(max_distance=20)
 
@@ -1283,7 +1285,7 @@ def test_spell_epoch_rows_expose_full_spell_slot_costs() -> None:
 
 def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
     """Concentration metadata reaches the typed epoch and human serialization."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     support.update_entity_senses(max_distance=20)
 
@@ -1436,7 +1438,7 @@ def test_srd_active_monster_actions_reach_setup_semantics() -> None:
 
 def test_aoe_discovery_reuses_preview_rows_for_upcast_variants(monkeypatch) -> None:
     """Upcast AoE variants do not recompute identical shape previews per slot."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     compute_calls: Counter[str] = Counter()
@@ -1484,7 +1486,7 @@ def test_aoe_discovery_reuses_preview_rows_for_upcast_variants(monkeypatch) -> N
 
 def test_epoch_reuses_immutable_targets_shared_by_spell_variants() -> None:
     """Flattened upcast rows retain one typed target value per engine preview."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     affordances = _build_affordance_set_from_actions(
@@ -1514,7 +1516,7 @@ def test_epoch_reuses_immutable_targets_shared_by_spell_variants() -> None:
 
 def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
     """Parsed selected rows and source options share one immutable target value."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     affordances = _build_affordance_set_from_actions(
@@ -1543,7 +1545,7 @@ def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
 
 def test_aoe_discovery_reads_visible_field_once_per_query_context() -> None:
     """AoE candidates share one immutable snapshot of caster-visible cells."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
 
@@ -1577,7 +1579,7 @@ def test_aoe_discovery_reads_visible_field_once_per_query_context() -> None:
 
 def test_aoe_discovery_caches_empty_previews_for_upcast_variants(monkeypatch) -> None:
     """Empty AoE previews are shared across slots and unchanged epochs."""
-    arena = create_ai_validation_arena("skeleton_anti_aoe_split")
+    arena = assemble_authored_encounter("skeleton_anti_aoe_split")
     warlock = next(monster for monster in arena.monsters if "Warlock" in monster.name)
     warlock.update_entity_senses(max_distance=20)
     compute_calls: Counter[str] = Counter()
@@ -1639,7 +1641,7 @@ def test_aoe_discovery_caches_empty_previews_for_upcast_variants(monkeypatch) ->
 
 def test_aoe_discovery_cache_key_covers_complete_shape_definition() -> None:
     """AoE previews with different cone angles cannot share cached targets."""
-    arena = create_ai_validation_arena("condition_lock_sanctum")
+    arena = assemble_authored_encounter("condition_lock_sanctum")
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     burning_hands = next(
         action
@@ -1715,7 +1717,7 @@ def test_aoe_occupancy_resolution_uses_only_subjective_entity_positions(
     monkeypatch,
 ) -> None:
     """Preview occupancy never consults objective grid entity placement."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     visible_uuid, visible_position = next(iter(archmage.senses.entities.items()))
@@ -1744,7 +1746,7 @@ def test_aoe_discovery_reuses_footprints_until_subjective_topology_changes(
     monkeypatch,
 ) -> None:
     """Repeated discovery reuses pure footprints and invalidates on blockers."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     compute_calls = 0
@@ -1779,7 +1781,7 @@ def test_aoe_discovery_reuses_previews_until_subjective_contacts_change(
     monkeypatch,
 ) -> None:
     """Repeated discovery caches previews against subjective contact facts."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     compute_calls = 0
@@ -1812,7 +1814,7 @@ def test_aoe_discovery_reuses_previews_until_subjective_contacts_change(
 
 def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
     """Movement rows reuse projected paths and costs without rescanning paths."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     path_cost_calls = 0
@@ -1849,7 +1851,7 @@ def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
 
 def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
     """Plain position spells retain spell metadata through discovery."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
 
@@ -1891,7 +1893,7 @@ def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
 
 def test_teleport_escape_rows_expose_mobility_semantics() -> None:
     """Short-range teleport rows should be visible as escape/reposition tools."""
-    arena = create_ai_validation_arena("teleport_escape_skirmish")
+    arena = assemble_authored_encounter("teleport_escape_skirmish")
     mage = next(monster for monster in arena.monsters if "Escape Mage" in monster.name)
     mage.update_entity_senses(max_distance=80)
 
@@ -1916,7 +1918,7 @@ def test_teleport_escape_rows_expose_mobility_semantics() -> None:
 
 def test_position_spell_discovery_does_not_leak_unseen_occupancy() -> None:
     """A hidden occupant cannot remove a subjectively valid destination row."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     hidden_entity = arena.hero
@@ -1936,7 +1938,7 @@ def test_position_spell_discovery_does_not_leak_unseen_occupancy() -> None:
 
 def test_visible_position_spell_targets_are_not_limited_to_walkable_paths() -> None:
     """Ground-zone spells can target visible occupied cells with no move path."""
-    arena = create_ai_validation_arena("zone_control_web_gauntlet")
+    arena = assemble_authored_encounter("zone_control_web_gauntlet")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     mage.update_entity_senses(max_distance=20)
     occupied_positions = set(mage.senses.entities.values())
@@ -1961,7 +1963,7 @@ def test_position_spell_variants_reuse_subjective_target_projection(
     monkeypatch,
 ) -> None:
     """Equivalent position variants share one subjective destination scan."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
     walkability_checks = 0
@@ -1983,7 +1985,7 @@ def test_position_spell_variants_reuse_subjective_target_projection(
 
 def test_jump_discovery_exposes_subjective_distance_and_movement_cost() -> None:
     """Jump candidates carry the same distance bound used by action economy."""
-    arena = create_ai_validation_arena("high_level_spell_resource_duel")
+    arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
 

@@ -1,5 +1,5 @@
 {
-  "contract_hash": "4b4b0dc9a2d27daae7ffb8ad95925f0c6faeae77916b29a305a6ba507618b468",
+  "contract_hash": "9aee4d4913a2121033f6bfbb9afea4efa6d88b8f9bdd3e6b01f8346921805e82",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -82,6 +82,53 @@
         "non_source"
       ]
     },
+    "dnd.core.content.dragonborn.DragonbornAncestry": {
+      "python": "dnd.core.content.dragonborn.DragonbornAncestry",
+      "typescript": "DragonbornAncestry",
+      "values": [
+        "black",
+        "blue",
+        "brass",
+        "bronze",
+        "copper",
+        "gold",
+        "green",
+        "red",
+        "silver",
+        "white"
+      ]
+    },
+    "dnd.core.content.dragonborn.DragonbornBreathGeometry": {
+      "python": "dnd.core.content.dragonborn.DragonbornBreathGeometry",
+      "typescript": "DragonbornBreathGeometry",
+      "values": [
+        "line",
+        "cone"
+      ]
+    },
+    "dnd.core.content.identities.ContentDefinitionKind": {
+      "python": "dnd.core.content.identities.ContentDefinitionKind",
+      "typescript": "ContentDefinitionKind",
+      "values": [
+        "item",
+        "creature",
+        "action",
+        "spell",
+        "condition",
+        "trait",
+        "reaction",
+        "feat",
+        "class_feature",
+        "class",
+        "subclass",
+        "species",
+        "species_variant",
+        "background",
+        "starting_equipment_package",
+        "environment_object",
+        "rule_primitive"
+      ]
+    },
     "dnd.core.content.runtime.RuntimeBehaviorKind": {
       "python": "dnd.core.content.runtime.RuntimeBehaviorKind",
       "typescript": "RuntimeBehaviorKind",
@@ -97,6 +144,37 @@
         "environment_interaction",
         "system",
         "unclassified"
+      ]
+    },
+    "dnd.core.creature_types.DamageType": {
+      "python": "dnd.core.creature_types.DamageType",
+      "typescript": "DamageType",
+      "values": [
+        "Acid",
+        "Bludgeoning",
+        "Cold",
+        "Fire",
+        "Force",
+        "Lightning",
+        "Necrotic",
+        "Piercing",
+        "Poison",
+        "Psychic",
+        "Radiant",
+        "Slashing",
+        "Thunder"
+      ]
+    },
+    "dnd.core.creature_types.Size": {
+      "python": "dnd.core.creature_types.Size",
+      "typescript": "Size",
+      "values": [
+        "Tiny",
+        "Small",
+        "Medium",
+        "Large",
+        "Huge",
+        "Gargantuan"
       ]
     },
     "dnd.core.dice.AttackOutcome": {
@@ -206,14 +284,12 @@
         "item_charge_consumption",
         "trigger_event",
         "dice_roll",
-        "dice_roll_result",
         "d20_roll_result",
         "attack_d20_roll",
         "save_d20_roll",
         "check_d20_roll",
         "damage_roll_result",
         "heal_roll_result",
-        "damage_rolled",
         "enemy_spotted",
         "enemy_killed",
         "enemy_engaged",
@@ -258,6 +334,14 @@
         "Reach",
         "Range",
         "Self"
+      ]
+    },
+    "dnd.core.events.RollModificationOperation": {
+      "python": "dnd.core.events.RollModificationOperation",
+      "typescript": "RollModificationOperation",
+      "values": [
+        "replace",
+        "append"
       ]
     },
     "dnd.core.events.SensoryUpdateReason": {
@@ -384,25 +468,6 @@
         "Critical Immune"
       ]
     },
-    "dnd.core.modifiers.DamageType": {
-      "python": "dnd.core.modifiers.DamageType",
-      "typescript": "DamageType",
-      "values": [
-        "Acid",
-        "Bludgeoning",
-        "Cold",
-        "Fire",
-        "Force",
-        "Lightning",
-        "Necrotic",
-        "Piercing",
-        "Poison",
-        "Psychic",
-        "Radiant",
-        "Slashing",
-        "Thunder"
-      ]
-    },
     "dnd.core.modifiers.ResistanceStatus": {
       "python": "dnd.core.modifiers.ResistanceStatus",
       "typescript": "ResistanceStatus",
@@ -413,16 +478,13 @@
         "Vulnerability"
       ]
     },
-    "dnd.core.modifiers.Size": {
-      "python": "dnd.core.modifiers.Size",
-      "typescript": "Size",
+    "dnd.core.saving_throw_types.SavingThrowEffectTag": {
+      "python": "dnd.core.saving_throw_types.SavingThrowEffectTag",
+      "typescript": "SavingThrowEffectTag",
       "values": [
-        "Tiny",
-        "Small",
-        "Medium",
-        "Large",
-        "Huge",
-        "Gargantuan"
+        "charm",
+        "fear",
+        "poison"
       ]
     },
     "dnd.core.senses.SensesType": {
@@ -579,13 +641,6 @@
       "model": "dnd.core.events.DamageRollResultEvent",
       "typescript": "DamageRollResultEvent"
     },
-    "dnd.core.events.DamageRolledEvent": {
-      "event_types": [
-        "damage_rolled"
-      ],
-      "model": "dnd.core.events.DamageRolledEvent",
-      "typescript": "DamageRolledEvent"
-    },
     "dnd.core.events.DeathEvent": {
       "event_types": [
         "death"
@@ -599,13 +654,6 @@
       ],
       "model": "dnd.core.events.DeathSaveEvent",
       "typescript": "DeathSaveEvent"
-    },
-    "dnd.core.events.DiceRollResultEvent": {
-      "event_types": [
-        "dice_roll_result"
-      ],
-      "model": "dnd.core.events.DiceRollResultEvent",
-      "typescript": "DiceRollResultEvent"
     },
     "dnd.core.events.EncounterEndEvent": {
       "event_types": [
@@ -651,14 +699,12 @@
         "item_charge_consumption",
         "trigger_event",
         "dice_roll",
-        "dice_roll_result",
         "d20_roll_result",
         "attack_d20_roll",
         "save_d20_roll",
         "check_d20_roll",
         "damage_roll_result",
         "heal_roll_result",
-        "damage_rolled",
         "enemy_spotted",
         "enemy_killed",
         "enemy_engaged",
@@ -845,6 +891,13 @@
       "model": "dnd.core.events.WindExposureEvent",
       "typescript": "WindExposureEvent"
     },
+    "dnd.origins.dragonborn.DragonbornBreathWeaponEvent": {
+      "event_types": [
+        "base_action"
+      ],
+      "model": "dnd.origins.dragonborn.DragonbornBreathWeaponEvent",
+      "typescript": "DragonbornBreathWeaponEvent"
+    },
     "dnd.spells.abjuration.CounterspellReactionEvent": {
       "event_types": [
         "trigger_event"
@@ -882,14 +935,12 @@
     "item_charge_consumption",
     "trigger_event",
     "dice_roll",
-    "dice_roll_result",
     "d20_roll_result",
     "attack_d20_roll",
     "save_d20_roll",
     "check_d20_roll",
     "damage_roll_result",
     "heal_roll_result",
-    "damage_rolled",
     "enemy_spotted",
     "enemy_killed",
     "enemy_engaged",
@@ -1064,7 +1115,7 @@
         "damage_types": {
           "items": {
             "kind": "enum",
-            "ref": "dnd.core.modifiers.DamageType"
+            "ref": "dnd.core.creature_types.DamageType"
           },
           "kind": "array"
         },
@@ -2674,7 +2725,7 @@
         "damage_types": {
           "items": {
             "kind": "enum",
-            "ref": "dnd.core.modifiers.DamageType"
+            "ref": "dnd.core.creature_types.DamageType"
           },
           "kind": "array"
         },
@@ -6014,6 +6065,28 @@
       "python": "dnd.core.base_conditions.OutcomeProtection",
       "typescript": "OutcomeProtection"
     },
+    "dnd.core.content.identities.ContentRef": {
+      "fields": {
+        "content_id": {
+          "kind": "string"
+        },
+        "content_version": {
+          "kind": "number"
+        },
+        "definition_contract_hash": {
+          "kind": "string"
+        },
+        "definition_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.content.identities.ContentDefinitionKind"
+        },
+        "pack_id": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.content.identities.ContentRef",
+      "typescript": "ContentRef"
+    },
     "dnd.core.damage.DamageComponentResolution": {
       "fields": {
         "affinity_prevented_damage": {
@@ -6024,7 +6097,7 @@
         },
         "damage_type": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.DamageType"
+          "ref": "dnd.core.creature_types.DamageType"
         },
         "incoming_damage": {
           "kind": "number"
@@ -6518,21 +6591,10 @@
           ],
           "kind": "union"
         },
-        "roll": {
-          "kind": "model",
-          "ref": "dnd.core.dice.DiceRoll"
-        },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -6781,21 +6843,10 @@
           ],
           "kind": "union"
         },
-        "roll": {
-          "kind": "model",
-          "ref": "dnd.core.dice.DiceRoll"
-        },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -6933,7 +6984,7 @@
         },
         "damage_type": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.DamageType"
+          "ref": "dnd.core.creature_types.DamageType"
         },
         "dice_numbers": {
           "kind": "number"
@@ -7035,7 +7086,7 @@
         },
         "damage_type": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.DamageType"
+          "ref": "dnd.core.creature_types.DamageType"
         },
         "damages": {
           "items": {
@@ -7223,6 +7274,24 @@
       "python": "dnd.core.events.DamageAppliedEvent",
       "typescript": "DamageAppliedEvent"
     },
+    "dnd.core.events.DamageRollPacket": {
+      "fields": {
+        "damage": {
+          "kind": "model",
+          "ref": "dnd.core.events.Damage"
+        },
+        "final_roll": {
+          "kind": "model",
+          "ref": "dnd.core.dice.DiceRoll"
+        },
+        "original_roll": {
+          "kind": "model",
+          "ref": "dnd.core.dice.DiceRoll"
+        }
+      },
+      "python": "dnd.core.events.DamageRollPacket",
+      "typescript": "DamageRollPacket"
+    },
     "dnd.core.events.DamageRollResultEvent": {
       "fields": {
         "attack_outcome": {
@@ -7262,23 +7331,16 @@
             "kind": "json"
           }
         },
-        "damages": {
+        "damage_packets": {
           "items": {
             "kind": "model",
-            "ref": "dnd.core.events.Damage"
+            "ref": "dnd.core.events.DamageRollPacket"
           },
           "kind": "array"
         },
         "event_type": {
           "kind": "enum",
           "ref": "dnd.core.events.EventType"
-        },
-        "final_rolls": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.dice.DiceRoll"
-          },
-          "kind": "array"
         },
         "is_first": {
           "kind": "boolean"
@@ -7300,13 +7362,6 @@
         },
         "name": {
           "kind": "string"
-        },
-        "original_rolls": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.dice.DiceRoll"
-          },
-          "kind": "array"
         },
         "outcome_code": {
           "items": [
@@ -7358,24 +7413,8 @@
         },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -7457,245 +7496,6 @@
       },
       "python": "dnd.core.events.DamageRollResultEvent",
       "typescript": "DamageRollResultEvent"
-    },
-    "dnd.core.events.DamageRolledEvent": {
-      "fields": {
-        "attack_outcome": {
-          "kind": "enum",
-          "ref": "dnd.core.dice.AttackOutcome"
-        },
-        "canceled": {
-          "kind": "boolean"
-        },
-        "canceled_from_phase": {
-          "items": [
-            {
-              "kind": "enum",
-              "ref": "dnd.core.events.EventPhase"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "children_lineages": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "context": {
-          "items": [
-            {
-              "kind": "record",
-              "values": {
-                "kind": "json"
-              }
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "damages": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.events.Damage"
-          },
-          "kind": "array"
-        },
-        "event_type": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventType"
-        },
-        "final_rolls": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.dice.DiceRoll"
-          },
-          "kind": "array"
-        },
-        "is_first": {
-          "kind": "boolean"
-        },
-        "is_last": {
-          "kind": "boolean"
-        },
-        "lineage_children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "lineage_uuid": {
-          "kind": "string"
-        },
-        "modified": {
-          "kind": "boolean"
-        },
-        "name": {
-          "kind": "string"
-        },
-        "original_rolls": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.dice.DiceRoll"
-          },
-          "kind": "array"
-        },
-        "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "outcome_source_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_event": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_lineage": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "phase": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventPhase"
-        },
-        "roll_modifications": {
-          "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "number"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
-          },
-          "kind": "array"
-        },
-        "source_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "source_entity_uuid": {
-          "kind": "string"
-        },
-        "status_message": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "timestamp": {
-          "kind": "string"
-        },
-        "turn_execution_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "use_register": {
-          "kind": "boolean"
-        },
-        "uuid": {
-          "kind": "string"
-        },
-        "weapon_slot": {
-          "kind": "enum",
-          "ref": "dnd.core.equipment_types.WeaponSlot"
-        }
-      },
-      "python": "dnd.core.events.DamageRolledEvent",
-      "typescript": "DamageRolledEvent"
     },
     "dnd.core.events.DeathEvent": {
       "fields": {
@@ -8154,203 +7954,6 @@
       },
       "python": "dnd.core.events.DeathSaveEvent",
       "typescript": "DeathSaveEvent"
-    },
-    "dnd.core.events.DiceRollResultEvent": {
-      "fields": {
-        "canceled": {
-          "kind": "boolean"
-        },
-        "canceled_from_phase": {
-          "items": [
-            {
-              "kind": "enum",
-              "ref": "dnd.core.events.EventPhase"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "children_lineages": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "context": {
-          "kind": "record",
-          "values": {
-            "kind": "json"
-          }
-        },
-        "event_type": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventType"
-        },
-        "is_first": {
-          "kind": "boolean"
-        },
-        "is_last": {
-          "kind": "boolean"
-        },
-        "lineage_children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "lineage_uuid": {
-          "kind": "string"
-        },
-        "modified": {
-          "kind": "boolean"
-        },
-        "name": {
-          "kind": "string"
-        },
-        "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "outcome_source_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_event": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_lineage": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "phase": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventPhase"
-        },
-        "roll_modifications": {
-          "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
-          },
-          "kind": "array"
-        },
-        "roll_type": {
-          "kind": "enum",
-          "ref": "dnd.core.dice.RollType"
-        },
-        "source_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "source_entity_uuid": {
-          "kind": "string"
-        },
-        "status_message": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "timestamp": {
-          "kind": "string"
-        },
-        "turn_execution_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "use_register": {
-          "kind": "boolean"
-        },
-        "uuid": {
-          "kind": "string"
-        }
-      },
-      "python": "dnd.core.events.DiceRollResultEvent",
-      "typescript": "DiceRollResultEvent"
     },
     "dnd.core.events.EncounterEndEvent": {
       "fields": {
@@ -9949,15 +9552,8 @@
         },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -10680,6 +10276,47 @@
       "python": "dnd.core.events.ReviveEvent",
       "typescript": "ReviveEvent"
     },
+    "dnd.core.events.RollModification": {
+      "fields": {
+        "final_total": {
+          "kind": "number"
+        },
+        "handler_name": {
+          "kind": "string"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.events.RollModificationOperation"
+        },
+        "packet_index": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "previous_total": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "reason": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.RollModification",
+      "typescript": "RollModification"
+    },
     "dnd.core.events.RoundEndEvent": {
       "fields": {
         "canceled": {
@@ -11071,28 +10708,36 @@
         "ability_name": {
           "items": [
             {
-              "kind": "literal",
-              "value": "strength"
+              "items": [
+                {
+                  "kind": "literal",
+                  "value": "strength"
+                },
+                {
+                  "kind": "literal",
+                  "value": "dexterity"
+                },
+                {
+                  "kind": "literal",
+                  "value": "constitution"
+                },
+                {
+                  "kind": "literal",
+                  "value": "intelligence"
+                },
+                {
+                  "kind": "literal",
+                  "value": "wisdom"
+                },
+                {
+                  "kind": "literal",
+                  "value": "charisma"
+                }
+              ],
+              "kind": "union"
             },
             {
-              "kind": "literal",
-              "value": "dexterity"
-            },
-            {
-              "kind": "literal",
-              "value": "constitution"
-            },
-            {
-              "kind": "literal",
-              "value": "intelligence"
-            },
-            {
-              "kind": "literal",
-              "value": "wisdom"
-            },
-            {
-              "kind": "literal",
-              "value": "charisma"
+              "kind": "null"
             }
           ],
           "kind": "union"
@@ -11253,21 +10898,10 @@
           ],
           "kind": "union"
         },
-        "roll": {
-          "kind": "model",
-          "ref": "dnd.core.dice.DiceRoll"
-        },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -11560,6 +11194,18 @@
           "items": [
             {
               "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "saving_throw_context": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.saving_throw_types.SavingThrowContext"
             },
             {
               "kind": "null"
@@ -12450,21 +12096,10 @@
           ],
           "kind": "union"
         },
-        "roll": {
-          "kind": "model",
-          "ref": "dnd.core.dice.DiceRoll"
-        },
         "roll_modifications": {
           "items": {
-            "items": [
-              {
-                "kind": "string"
-              },
-              {
-                "kind": "string"
-              }
-            ],
-            "kind": "tuple"
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
           },
           "kind": "array"
         },
@@ -12475,76 +12110,84 @@
         "skill_name": {
           "items": [
             {
-              "kind": "literal",
-              "value": "acrobatics"
+              "items": [
+                {
+                  "kind": "literal",
+                  "value": "acrobatics"
+                },
+                {
+                  "kind": "literal",
+                  "value": "animal_handling"
+                },
+                {
+                  "kind": "literal",
+                  "value": "arcana"
+                },
+                {
+                  "kind": "literal",
+                  "value": "athletics"
+                },
+                {
+                  "kind": "literal",
+                  "value": "deception"
+                },
+                {
+                  "kind": "literal",
+                  "value": "history"
+                },
+                {
+                  "kind": "literal",
+                  "value": "insight"
+                },
+                {
+                  "kind": "literal",
+                  "value": "intimidation"
+                },
+                {
+                  "kind": "literal",
+                  "value": "investigation"
+                },
+                {
+                  "kind": "literal",
+                  "value": "medicine"
+                },
+                {
+                  "kind": "literal",
+                  "value": "nature"
+                },
+                {
+                  "kind": "literal",
+                  "value": "perception"
+                },
+                {
+                  "kind": "literal",
+                  "value": "performance"
+                },
+                {
+                  "kind": "literal",
+                  "value": "persuasion"
+                },
+                {
+                  "kind": "literal",
+                  "value": "religion"
+                },
+                {
+                  "kind": "literal",
+                  "value": "sleight_of_hand"
+                },
+                {
+                  "kind": "literal",
+                  "value": "stealth"
+                },
+                {
+                  "kind": "literal",
+                  "value": "survival"
+                }
+              ],
+              "kind": "union"
             },
             {
-              "kind": "literal",
-              "value": "animal_handling"
-            },
-            {
-              "kind": "literal",
-              "value": "arcana"
-            },
-            {
-              "kind": "literal",
-              "value": "athletics"
-            },
-            {
-              "kind": "literal",
-              "value": "deception"
-            },
-            {
-              "kind": "literal",
-              "value": "history"
-            },
-            {
-              "kind": "literal",
-              "value": "insight"
-            },
-            {
-              "kind": "literal",
-              "value": "intimidation"
-            },
-            {
-              "kind": "literal",
-              "value": "investigation"
-            },
-            {
-              "kind": "literal",
-              "value": "medicine"
-            },
-            {
-              "kind": "literal",
-              "value": "nature"
-            },
-            {
-              "kind": "literal",
-              "value": "perception"
-            },
-            {
-              "kind": "literal",
-              "value": "performance"
-            },
-            {
-              "kind": "literal",
-              "value": "persuasion"
-            },
-            {
-              "kind": "literal",
-              "value": "religion"
-            },
-            {
-              "kind": "literal",
-              "value": "sleight_of_hand"
-            },
-            {
-              "kind": "literal",
-              "value": "stealth"
-            },
-            {
-              "kind": "literal",
-              "value": "survival"
+              "kind": "null"
             }
           ],
           "kind": "union"
@@ -15949,7 +15592,7 @@
         },
         "value": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.DamageType"
+          "ref": "dnd.core.creature_types.DamageType"
         }
       },
       "python": "dnd.core.modifiers.DamageTypeModifier",
@@ -16052,7 +15695,7 @@
         },
         "damage_type": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.DamageType"
+          "ref": "dnd.core.creature_types.DamageType"
         },
         "name": {
           "items": [
@@ -16189,7 +15832,7 @@
         },
         "value": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.Size"
+          "ref": "dnd.core.creature_types.Size"
         }
       },
       "python": "dnd.core.modifiers.SizeModifier",
@@ -16393,6 +16036,41 @@
       "python": "dnd.core.presentation_geometry.SpherePresentationGeometry",
       "typescript": "SpherePresentationGeometry"
     },
+    "dnd.core.saving_throw_types.SavingThrowContext": {
+      "fields": {
+        "cause_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "condition_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.identities.ContentRef"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "effect_id": {
+          "kind": "string"
+        },
+        "effect_tags": {
+          "items": {
+            "kind": "enum",
+            "ref": "dnd.core.saving_throw_types.SavingThrowEffectTag"
+          },
+          "kind": "array"
+        },
+        "is_magical": {
+          "kind": "boolean"
+        }
+      },
+      "python": "dnd.core.saving_throw_types.SavingThrowContext",
+      "typescript": "SavingThrowContext"
+    },
     "dnd.core.senses.SenseMode": {
       "fields": {
         "range_feet": {
@@ -16462,7 +16140,7 @@
           "items": [
             {
               "kind": "enum",
-              "ref": "dnd.core.modifiers.DamageType"
+              "ref": "dnd.core.creature_types.DamageType"
             },
             {
               "kind": "null"
@@ -16480,7 +16158,7 @@
         "damage_types": {
           "items": {
             "kind": "enum",
-            "ref": "dnd.core.modifiers.DamageType"
+            "ref": "dnd.core.creature_types.DamageType"
           },
           "kind": "array"
         },
@@ -16566,7 +16244,7 @@
         },
         "size": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.Size"
+          "ref": "dnd.core.creature_types.Size"
         },
         "size_modifiers": {
           "kind": "record",
@@ -16663,7 +16341,7 @@
           "items": [
             {
               "kind": "enum",
-              "ref": "dnd.core.modifiers.DamageType"
+              "ref": "dnd.core.creature_types.DamageType"
             },
             {
               "kind": "null"
@@ -16674,7 +16352,7 @@
         "damage_types": {
           "items": {
             "kind": "enum",
-            "ref": "dnd.core.modifiers.DamageType"
+            "ref": "dnd.core.creature_types.DamageType"
           },
           "kind": "array"
         },
@@ -16780,7 +16458,7 @@
         },
         "size": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.Size"
+          "ref": "dnd.core.creature_types.Size"
         },
         "source_entity_name": {
           "items": [
@@ -16892,7 +16570,7 @@
           "items": [
             {
               "kind": "enum",
-              "ref": "dnd.core.modifiers.DamageType"
+              "ref": "dnd.core.creature_types.DamageType"
             },
             {
               "kind": "null"
@@ -16910,7 +16588,7 @@
         "damage_types": {
           "items": {
             "kind": "enum",
-            "ref": "dnd.core.modifiers.DamageType"
+            "ref": "dnd.core.creature_types.DamageType"
           },
           "kind": "array"
         },
@@ -16996,7 +16674,7 @@
         },
         "size": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.Size"
+          "ref": "dnd.core.creature_types.Size"
         },
         "size_modifiers": {
           "kind": "record",
@@ -17057,6 +16735,369 @@
       },
       "python": "dnd.core.values.StaticValue",
       "typescript": "StaticValue"
+    },
+    "dnd.origins.dragonborn.DragonbornBreathWeaponEvent": {
+      "fields": {
+        "ancestry": {
+          "kind": "enum",
+          "ref": "dnd.core.content.dragonborn.DragonbornAncestry"
+        },
+        "ancestry_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "aoe_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "application_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "application_index": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "breath_geometry": {
+          "kind": "enum",
+          "ref": "dnd.core.content.dragonborn.DragonbornBreathGeometry"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "costs": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.base_actions.BaseCost"
+          },
+          "kind": "array"
+        },
+        "damage_dice_count": {
+          "kind": "number"
+        },
+        "damage_rolls": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.dice.DiceRoll"
+          },
+          "kind": "array"
+        },
+        "damage_type": {
+          "kind": "enum",
+          "ref": "dnd.core.creature_types.DamageType"
+        },
+        "damages": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.events.Damage"
+          },
+          "kind": "array"
+        },
+        "declared_target_entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "description": {
+          "kind": "string"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "item_charge_action_lineage_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "item_charge_cost": {
+          "kind": "number"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "presentation_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.action_types.ActionPresentationKind"
+        },
+        "save_ability": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "dexterity"
+            },
+            {
+              "kind": "literal",
+              "value": "constitution"
+            }
+          ],
+          "kind": "union"
+        },
+        "save_dc": {
+          "kind": "number"
+        },
+        "save_roll": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.dice.DiceRoll"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "save_success": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "source_item_presentation": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.item_types.ItemPresentationState"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_item_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "total_damage": {
+          "kind": "number"
+        },
+        "total_targets": {
+          "kind": "number"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.origins.dragonborn.DragonbornBreathWeaponEvent",
+      "typescript": "DragonbornBreathWeaponEvent"
     },
     "dnd.spells.abjuration.CounterspellReactionEvent": {
       "fields": {

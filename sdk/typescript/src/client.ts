@@ -12,10 +12,12 @@ import type {
   GameCreationActivateRequest,
   GameCreationActivateResponse,
   GameCreationCatalogResponse,
-  GameCreationPreflightRequest,
+  GameCreationComposeRequest,
+  GameCreationComposeResponse,
+  GameCreationEncounterVisualPreviewResponse,
+  GameCreationPreviewRequest,
   GameCreationStartRequest,
   GameCreationStartResponse,
-  CompatibilityReport,
   ContentCatalogResponse,
   ContentManifestResponse,
   JoinGameRequest,
@@ -97,13 +99,25 @@ export class DndEngineClient {
     return this.getModel("GameCreationCatalogResponse", "/game-creation/catalog", signal);
   }
 
-  async preflightGameCreation(
-    request: GameCreationPreflightRequest,
+  async composeGameCreation(
+    request: GameCreationComposeRequest,
     signal?: AbortSignal,
-  ): Promise<CompatibilityReport> {
+  ): Promise<GameCreationComposeResponse> {
     return this.postModel(
-      "CompatibilityReport",
-      "/game-creation/preflight",
+      "GameCreationComposeResponse",
+      "/game-creation/compose",
+      request,
+      signal,
+    );
+  }
+
+  async previewGameCreation(
+    request: GameCreationPreviewRequest,
+    signal?: AbortSignal,
+  ): Promise<GameCreationEncounterVisualPreviewResponse> {
+    return this.postModel(
+      "GameCreationEncounterVisualPreviewResponse",
+      "/game-creation/preview",
       request,
       signal,
     );

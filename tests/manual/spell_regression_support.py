@@ -8,9 +8,10 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.events import AbilityName
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import CreatureType, NumericalModifier
+from dnd.core.creature_types import CreatureType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 def reset_spell_regression_arena(width: int, height: int) -> None:

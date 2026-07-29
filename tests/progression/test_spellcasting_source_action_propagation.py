@@ -10,7 +10,7 @@ from dnd.core.base_actions import ActionOutcomeProfile
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import AbilityName, EventPhase
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
 from dnd.spells.evocation import FireBolt, MagicMissile, SacredFlame

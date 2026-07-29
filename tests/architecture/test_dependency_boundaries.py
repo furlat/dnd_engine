@@ -59,11 +59,14 @@ CONCRETE_ENTITY_DEPENDENCY_PREFIXES = (
 SAFE_LEAF_MODULES = frozenset({
     "dnd.core.action_types",
     "dnd.core.condition_types",
+    "dnd.core.creature_types",
+    "dnd.core.content.origin_support",
     "dnd.core.effect_types",
     "dnd.core.equipment_types",
     "dnd.core.item_types",
     "dnd.core.life_types",
     "dnd.core.presentation_geometry",
+    "dnd.core.senses",
 })
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
@@ -76,6 +79,9 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "HandlerDispatchEvidence": "dnd.core.content.runtime",
     "EffectiveHandlerPresentation": "dnd.core.content.runtime",
     "ConditionTag": "dnd.core.condition_types",
+    "CreatureType": "dnd.core.creature_types",
+    "DamageType": "dnd.core.creature_types",
+    "Size": "dnd.core.creature_types",
     "LifeState": "dnd.core.life_types",
     "WeaponSlot": "dnd.core.equipment_types",
     "BodyPart": "dnd.core.equipment_types",
@@ -84,6 +90,8 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "EffectOrigin": "dnd.core.effect_types",
     "ItemLocation": "dnd.core.item_types",
     "ItemPresentationState": "dnd.core.item_types",
+    "OriginRuntimeSupport": "dnd.core.content.origin_support",
+    "OriginRuntimeSupportStatus": "dnd.core.content.origin_support",
     "APIItemSummary": "server.world_contracts",
     "APIEquipmentSlot": "server.world_contracts",
     "APIEquipmentOverview": "server.world_contracts",
@@ -104,8 +112,11 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
 CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
 CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.condition_types",
+    "dnd.core.creature_types",
     "dnd.core.equipment_types",
     "dnd.core.progression",
+    "dnd.core.saving_throw_types",
+    "dnd.core.senses",
 })
 CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
 CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"
@@ -1028,6 +1039,25 @@ def test_neutral_symbols_have_one_canonical_leaf_owner() -> None:
     )
 
 
+def test_creature_fact_enums_are_not_imported_from_stateful_modifiers() -> None:
+    """Creature facts have one import surface instead of a modifiers alias."""
+    retired_symbols = {"CreatureType", "DamageType", "Size"}
+    stale_imports = [
+        reference
+        for reference in _import_references()
+        if reference.target == "dnd.core.modifiers"
+        and any(
+            reference.syntax.endswith(f" import {symbol}")
+            for symbol in retired_symbols
+        )
+    ]
+    assert stale_imports == [], (
+        "Import dependency-neutral creature facts from dnd.core.creature_types, "
+        "never dnd.core.modifiers:\n"
+        + _format_import_references(stale_imports)
+    )
+
+
 def test_world_contract_dtos_are_not_reexported_through_api_models() -> None:
     """World DTOs have one import surface instead of an api_models compatibility alias."""
     api_models = _source_modules()["server.api_models"]
@@ -1133,7 +1163,9 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
     script = (
         "import json, sys\n"
         "import dnd.core.content.identities\n"
+        "import dnd.core.content.origin_support\n"
         "import dnd.core.content.runtime\n"
+        "import dnd.core.content.durable_characters\n"
         "forbidden = ('ai', 'server', 'dnd.entity', 'dnd.items', "
         "'dnd.monsters', 'dnd.actions', 'dnd.conditions', 'dnd.spells')\n"
         "loaded = sorted(name for name in sys.modules if any("

@@ -32,12 +32,6 @@ from dnd.items.apparel_presets import (
     APPAREL_RECIPE_PRESETS_BY_VISUAL_VARIANT_ID,
     NEURODRAGON_APPAREL_RECIPE_PRESETS,
 )
-from dnd.scenarios.evaluation.wardrobes import (
-    BERSERKER_WARDROBE,
-    BESTIARY_WARDROBES,
-    CASTER_WARDROBES,
-    SRD_WARDROBES,
-)
 from server.content_catalog import build_public_content_catalog
 
 
@@ -263,23 +257,15 @@ def test_every_apparel_preset_materializes_its_exact_name_and_visual_identity() 
         assert item.content_ref == preset.recipe.ref
 
 
-def test_wardrobes_reference_registered_presets_for_every_named_variant() -> None:
-    grants = [*BERSERKER_WARDROBE]
-    for rows in (
-        CASTER_WARDROBES.values(),
-        BESTIARY_WARDROBES.values(),
-        SRD_WARDROBES.values(),
-    ):
-        for group in rows:
-            grants.extend(group)
+def test_every_named_apparel_variant_is_a_registered_preset() -> None:
     registered_digests = {
         preset.recipe.recipe_digest
         for preset in NEURODRAGON_APPAREL_RECIPE_PRESETS
     }
-
-    for grant in grants:
-        if "visual_variant_id" in grant.recipe.parameters:
-            assert grant.recipe.recipe_digest in registered_digests
+    assert registered_digests == {
+        preset.recipe.recipe_digest
+        for preset in APPAREL_RECIPE_PRESETS_BY_VISUAL_VARIANT_ID.values()
+    }
 
 
 def test_consumers_do_not_recreate_aesthetic_recipes_ad_hoc() -> None:
@@ -291,7 +277,7 @@ def test_consumers_do_not_recreate_aesthetic_recipes_ad_hoc() -> None:
         / "content_system"
         / "builtin_character_builds.py",
         repository_root / "dnd" / "premade_characters.py",
-        repository_root / "dnd" / "scenarios" / "evaluation" / "wardrobes.py",
+        repository_root / "dnd" / "monsters" / "bestiary_content.py",
     )
 
     for path in consumer_paths:

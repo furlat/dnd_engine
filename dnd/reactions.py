@@ -4,7 +4,10 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import (
+    RuntimeBehaviorKind,
+    active_runtime_behavior_binding,
+)
 from dnd.entity import Entity
 from uuid import UUID
 from typing import Optional
@@ -53,6 +56,7 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
                 evaluator=entity_action_economy_cost_evaluator
             )]
         )
+        reaction_attack.behavior_binding = active_runtime_behavior_binding()
         if reaction_attack.pre_validate():
             reaction_attack.add_to_register()
             reaction_attack.apply(parent_event=event)
@@ -88,11 +92,6 @@ def create_opportunity_attack_handler(
         source_entity_uuid=source_entity_uuid,
         player_toggleable=True
     )
-
-
-def create_opputinity_attack_handler(source_entity_uuid: UUID) -> EventHandler:
-    """Create opportunity-attack handler using the legacy misspelled API name."""
-    return create_opportunity_attack_handler(source_entity_uuid)
 
 
 def add_opportunity_attack_handler(entity: Entity) -> None:

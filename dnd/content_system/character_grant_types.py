@@ -6,6 +6,7 @@ from uuid import UUID
 
 from dnd.core.content.durable_characters import ProficiencySubject
 from dnd.core.content.identities import ContentRef
+from dnd.core.content.origin_features import OriginCapability
 
 
 class ModifierHandleChannel(str, Enum):
@@ -24,6 +25,7 @@ class ModifierHandleKind(str, Enum):
     ADVANTAGE = "advantage"
     CRITICAL = "critical"
     AUTO_HIT = "auto_hit"
+    RESISTANCE = "resistance"
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,12 +83,17 @@ class CharacterGrantReceipt:
         LearnedReactionSpellHandle,
         ...,
     ] = ()
-    condition_handles: tuple[tuple[UUID, UUID], ...] = ()
     resource_contribution_ids: tuple[tuple[str, UUID], ...] = ()
     resource_recovery_contribution_ids: tuple[tuple[str, UUID], ...] = ()
     armor_class_formula_ids: tuple[UUID, ...] = ()
     attack_multiplicity_grant_ids: tuple[UUID, ...] = ()
     condition_immunity_handles: tuple[ConditionImmunityHandle, ...] = ()
+    sense_mode_source_ids: tuple[UUID, ...] = ()
+    structural_size_source_ids: tuple[UUID, ...] = ()
+    origin_capability_source_ids: tuple[
+        tuple[OriginCapability, UUID],
+        ...,
+    ] = ()
     transient_condition_refs_to_remove: tuple[ContentRef, ...] = ()
 
 

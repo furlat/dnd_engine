@@ -8,11 +8,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
 from dnd.core.action_types import HasteActionPolicy, RestrictedActionGrant
-from dnd.core.content.identities import ContentRef
-from dnd.core.feature_grants import (
-    AttackMultiplicityApplicability,
-    AttackMultiplicityGrant,
-)
+from dnd.core.feature_grants import AttackMultiplicityGrant
 
 from dnd.core.base_block import BaseBlock
 
@@ -425,31 +421,13 @@ class ActionEconomy(BaseBlock):
             None,
         ) is not None
 
-    def resolve_attacks_per_attack_action(
-        self,
-        *,
-        applicability: AttackMultiplicityApplicability = (
-            AttackMultiplicityApplicability.ORDINARY_ATTACK
-        ),
-        weapon_tags: frozenset[str] = frozenset(),
-        body_tags: frozenset[str] = frozenset(),
-        action_ref: ContentRef | None = None,
-    ) -> int:
-        """Resolve the strongest applicable grant without adding class ranks."""
-        matching = tuple(
-            grant
-            for grant in self._attack_multiplicity_grants.values()
-            if grant.applies_to(
-                applicability=applicability,
-                weapon_tags=weapon_tags,
-                body_tags=body_tags,
-                action_ref=action_ref,
-            )
-        )
-        if not matching:
+    def resolve_attacks_per_attack_action(self) -> int:
+        """Resolve the strongest owned grant without adding class ranks."""
+        grants = tuple(self._attack_multiplicity_grants.values())
+        if not grants:
             return 1
         winner = min(
-            matching,
+            grants,
             key=lambda grant: (
                 -grant.attacks_per_attack_action,
                 grant.acquisition_ordinal,
@@ -611,7 +589,7 @@ class ActionEconomy(BaseBlock):
         for resource in self.resources.values():
             resource.recover_for(RechargeType.TURN_START)
 
-    def _get_spell_slot_value(self, level: int) -> ModifiableValue:
+    def spell_slot_value(self, level: int) -> ModifiableValue:
         """Get the ModifiableValue for a spell slot level."""
         slot_map = {
             1: self.spell_slot_1, 2: self.spell_slot_2, 3: self.spell_slot_3,
@@ -659,7 +637,7 @@ class ActionEconomy(BaseBlock):
         if receipt is None:
             return
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
-            value = self._get_spell_slot_value(rank)
+            value = self.spell_slot_value(rank)
             if modifier_uuid not in value.self_static.value_modifiers:
                 raise RuntimeError(
                     "installed normal spell-slot capacity lost an owned "
@@ -668,7 +646,7 @@ class ActionEconomy(BaseBlock):
 
     def _ensure_normal_spell_slot_floor(self, rank: int) -> UUID:
         """Install the infrastructure floor that prevents negative slots."""
-        value = self._get_spell_slot_value(rank)
+        value = self.spell_slot_value(rank)
         existing_uuid = self._normal_spell_slot_floor_modifier_uuids.get(rank)
         if existing_uuid is not None:
             existing = value.self_static.min_constraints.get(existing_uuid)
@@ -734,14 +712,14 @@ class ActionEconomy(BaseBlock):
             old_handle = old_handles.get(rank)
             if old_handle is not None:
                 excluded_modifier_uuids.add(old_handle)
-            baselines[rank] = self._get_spell_slot_value(
+            baselines[rank] = self.spell_slot_value(
                 rank
             ).normalized_score_excluding_static_modifiers(
                 excluded_modifier_uuids
             )
 
         for rank, modifier_uuid in old_handles.items():
-            self._get_spell_slot_value(rank).self_static.remove_value_modifier(
+            self.spell_slot_value(rank).self_static.remove_value_modifier(
                 modifier_uuid
             )
 
@@ -756,7 +734,7 @@ class ActionEconomy(BaseBlock):
                 ),
                 value=desired_by_rank.get(rank, 0) - baselines[rank],
             )
-            self._get_spell_slot_value(rank).self_static.add_value_modifier(
+            self.spell_slot_value(rank).self_static.add_value_modifier(
                 capacity_modifier
             )
             new_handles.append((rank, capacity_modifier.uuid))
@@ -787,7 +765,7 @@ class ActionEconomy(BaseBlock):
             return False
         self._validate_installed_normal_spell_slot_capacity()
         for rank, modifier_uuid in receipt.capacity_modifier_uuids:
-            self._get_spell_slot_value(rank).self_static.remove_value_modifier(
+            self.spell_slot_value(rank).self_static.remove_value_modifier(
                 modifier_uuid
             )
         self._normal_spell_slot_capacity_receipt = None
@@ -805,7 +783,7 @@ class ActionEconomy(BaseBlock):
             return self.movement
         elif cost_type.startswith("spell_slot_"):
             level = int(cost_type.split("_")[-1])
-            return self._get_spell_slot_value(level)
+            return self.spell_slot_value(level)
         else:
             raise ValueError(f"Unknown cost type: {cost_type}")
 
@@ -872,7 +850,7 @@ class ActionEconomy(BaseBlock):
         """
         for level in range(1, 10):
             cost_type = spell_slot_cost_type(level)
-            value = self._get_spell_slot_value(level)
+            value = self.spell_slot_value(level)
             for modifier in self.get_cost_modifiers(cost_type):
                 value.self_static.remove_value_modifier(modifier.uuid)
 
@@ -886,6 +864,29 @@ class ActionEconomy(BaseBlock):
         if value.normalized_score - amount < 0:
             raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
 
+        self.consume_prevalidated(cost_type, amount, cost_name)
+
+    def consume_prevalidated(
+        self,
+        cost_type: CostType,
+        amount: int,
+        cost_name: Optional[str] = None,
+    ) -> None:
+        """Commit a cost that was admitted before the action's causal effects.
+
+        Action application validates affordability before publishing its
+        declaration. A reaction during that action may then incapacitate or
+        kill the actor, installing capability constraints before the terminal
+        cost is recorded. Rechecking the post-effect normalized value would
+        reject an already-admitted action and break its event lifecycle.
+
+        Callers must use this method only at that committed action boundary;
+        ordinary callers use :meth:`consume`, which performs affordability
+        validation.
+        """
+        if amount < 0:
+            raise ValueError("Committed action-economy cost cannot be negative")
+        value = self._get_value_for_cost_type(cost_type)
         modifier_name = f"{cost_name}_cost" if cost_name is not None else "cost"
         cost_modifier = NumericalModifier.create(
             source_entity_uuid=self.source_entity_uuid,

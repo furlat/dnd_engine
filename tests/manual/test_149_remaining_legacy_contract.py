@@ -23,11 +23,11 @@ from server.event_server import (
     subscribe_objective_diagnostics,
 )
 from server.event_stream import event_stream
-from tests.engine_book.test_chapter_08_standard_conditions import (
+from tests.engine.test_standard_conditions import (
     configured_entity,
     reset_condition_state,
 )
-from tests.engine_book.test_chapter_18_encounters_apis import (
+from tests.engine.test_encounter_apis import (
     reset_chapter_18_state,
 )
 
@@ -64,11 +64,11 @@ SPATIAL_COEXIST_SELECTOR = (
     "test_spatial_registry_dispatches_multiple_indexed_and_global_handlers"
 )
 SPATIAL_CLEANUP_SELECTOR = (
-    "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+    "tests/engine/test_grid_pathfinding.py::"
     "test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers"
 )
 TURN_START_ZONE_SELECTOR = (
-    "tests/engine_book/test_chapter_15_spell_families.py::"
+    "tests/engine/test_spell_families.py::"
     "test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges"
 )
 

@@ -31,6 +31,10 @@ from dnd.core.condition_types import (
     DurationType,
     HazardFilter,
 )
+from dnd.core.saving_throw_types import (
+    SavingThrowContext,
+    SavingThrowEffectTag,
+)
 
 
 class OutcomeProtection(BaseModel):
@@ -282,6 +286,32 @@ class BaseCondition(BaseObject):
         default=False,
         description="Whether removing this condition may reveal its target.",
     )
+
+    def saving_throw_context(
+        self,
+        *,
+        effect_id: str,
+        effect_tags: Tuple[SavingThrowEffectTag, ...] = (),
+        is_magical: Optional[bool] = None,
+    ) -> SavingThrowContext:
+        """Build exact typed context for a save caused by this live condition."""
+        binding = self.behavior_binding
+        if binding is None:
+            raise ValueError(
+                "Condition requires an exact runtime behavior binding before "
+                "it can request a saving throw",
+            )
+        return SavingThrowContext(
+            cause_ref=binding.definition_ref,
+            effect_id=effect_id,
+            condition_ref=binding.definition_ref,
+            is_magical=(
+                ConditionTag.MAGICAL in self.tags
+                if is_magical is None
+                else is_magical
+            ),
+            effect_tags=effect_tags,
+        )
 
     def format_application_log(self, target_name: str) -> str:
         """Return condition-owned compact presentation for application."""

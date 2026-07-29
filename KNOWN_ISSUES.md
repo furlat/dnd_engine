@@ -21,6 +21,126 @@ This section is the canonical status index as of 2026-07-24. The historical
 ledger below is preserved as discovery evidence, but an older `OPEN` label does
 not override a status recorded here.
 
+### Stale Berserker assertion caused unbounded Pytest entity rendering
+
+- **Found**: 2026-07-29 during the complete pre-commit manual-test sweep.
+- **Behavior**: the
+  `tests/manual/test_37_authored_encounter_mechanics.py::test_caster_crossfire_opens_door_and_mixes_frontline_ranged_and_spell_pressure`
+  regression expected a normal `Rage` action from a canonical Berserker, whose
+  authored class grant intentionally replaces that row with `Frenzy`. Pytest's
+  failed-assertion rewriting then tried to render the recursive Pydantic
+  `Entity`; the process ran for 10 minutes 50 seconds at roughly 98% CPU and
+  reached 41.6 GB RSS before it was interrupted.
+- **Resolution**: the four stale arena assertions now require the exact
+  `Frenzy`/no-`Rage` surface and assert against bounded sets of action names.
+  The two weapon-affinity cases also select their executable base-attack rows
+  explicitly instead of accidentally selecting the stable unavailable Extra
+  Attack rows. Entity-target discovery now reports those source-owned Extra
+  Attack prerequisites as `requirements_unmet`, distinct from
+  `no_valid_targets`.
+- **Automated proof**: the exact former reproducer passes in 2.37 seconds at
+  272 MB RSS under a 1.5 GB virtual-memory ceiling. The full
+  `tests/manual/test_37_authored_encounter_mechanics.py` file reports `39
+  passed in 32.12s`. Related action-discovery, Haste,
+  Fighter-grant, and stable-action suites report 91 additional passes.
+- **Status**: RESOLVED 2026-07-29.
+
+### Isolated evaluation workers eagerly bootstrapped the full engine
+
+- **Found**: 2026-07-29 during the complete pre-commit test sweep.
+- **Behavior**: a protocol-only
+  `python -m ai.evaluation.config_ladder.worker --help` process took roughly
+  15 seconds and exceeded both 10-second isolated-worker regressions.
+- **Cause**: the `config_ladder` and `promotion` package initializers re-exported
+  executable schedule/model functions. Importing their worker contracts
+  consequently bootstrapped scenarios, installed content, the policy runtime,
+  NumPy, and SciPy before decoding a request.
+- **Resolution**: the abandoned config-ladder, promotion, Elo, and evaluation
+  worker platform was deleted. AI gameplay validation now starts canonical
+  product encounters from focused `tests/ai/` regressions.
+- **Automated proof**:
+  `tests/architecture/test_ai_import_direction.py` rejects the removed worker
+  packages, evaluator imports, and scenario-construction aliases throughout
+  maintained production and test roots.
+- **Status**: RESOLVED 2026-07-29.
+
+### Inventory-provided authored actions disappeared after spending action economy
+
+- **Found**: 2026-07-29 during the complete pre-commit test sweep.
+- **Behavior**: charge-valid Wand of Fireballs actions disappeared after one
+  cast even though entity-owned authored affordances are required to remain
+  present with a closed unavailable status for stable action UI.
+- **Cause**: `_collect_use_actions` dropped every inventory-provided row whose
+  current action requirements failed instead of projecting the same
+  `SOURCE_UNAFFORDABLE`, `REQUIREMENTS_UNMET`, or `NO_VALID_TARGETS` contract
+  used by registered entity actions.
+- **Resolution**: inventory-provided authored actions preserve their exact
+  charge-valid variants and typed unavailable status. `legal_only` discovery
+  still omits unavailable rows, finite-charge filtering remains item-owned,
+  and contextual environment/object affordances remain sparse.
+- **Automated proof**:
+  `tests/manual/test_131_inventory_use_actions_legacy_contract.py` reports
+  `17 passed`, including the spent-economy 3/4-charge Wand variants, and
+  `tests/manual/test_09_action_discovery_and_costs.py` reports `30 passed`.
+- **Status**: RESOLVED 2026-07-29.
+
+### Provider-owned condition handlers used the provider block as runtime owner
+
+- **Found**: 2026-07-29 during the complete pre-commit test sweep.
+- **Behavior**: Bestow Curse damage placed its condition on the target and its
+  handler on the caster; runtime admission rejected the handler because its
+  attribution named the provider block instead of the handler's actual owner.
+- **Resolution**: child handler attribution now binds the handler's exact
+  source/owner UUID while preserving the provider behavior identity.
+- **Automated proof**:
+  `tests/manual/test_134_cleric_batch1_legacy_contract.py` reports `24 passed`
+  and `tests/manual/test_172_behavior_runtime_binding.py` reports `22 passed`.
+- **Status**: RESOLVED 2026-07-29.
+
+### Subjective paths disclosed an imperceivable occupant as an endpoint
+
+- **Found**: 2026-07-29 during the complete pre-commit test sweep.
+- **Behavior**: subjective path construction could transit an imperceivable
+  physical occupant, but endpoint selection exposed the occupied cell itself.
+- **Resolution**: subjective endpoint checks ignore only imperceivable physical
+  occupancy, preserving privacy without changing objective collision
+  authority. Visible larger creatures still block Halfling endpoints while
+  Halfling Nimbleness permits the intended transit.
+- **Automated proof**:
+  `tests/manual/test_12_perception_light_stealth_and_invisibility.py` reports
+  `11 passed` and `tests/progression/test_halfling_origin_runtime.py` reports
+  `5 passed`, including traverse-but-not-end coverage.
+- **Status**: RESOLVED 2026-07-29.
+
+### Origin feature content contract imported non-neutral engine modules
+
+- **Found**: 2026-07-28 while validating origin innate-spell composition.
+- **Behavior**: `dnd/core/content/origin_features.py` imports `DamageType` and
+  `Size` from `dnd.core.modifiers`, `SavingThrowEffectTag` from
+  `dnd.core.saving_throw_types`, and `SenseMode` from `dnd.core.senses`.
+  The content-contract dependency boundary rejects all four edges because
+  those modules are not dependency-neutral leaves allowed beneath
+  `dnd.core.content`.
+- **Cause**: `CreatureType`, `DamageType`, and `Size` were still defined in
+  stateful `dnd.core.modifiers`, while the architecture allowlist also omitted
+  the already dependency-neutral senses contract and saving-throw cause
+  contract.
+- **Resolution**: the three creature facts now have one canonical owner in
+  `dnd.core.creature_types`; active engine, server, AI, and test imports use
+  that leaf directly. The content-contract allowlist names the exact neutral
+  sense and saving-throw contract edges. A static regression rejects importing
+  the creature facts through `dnd.core.modifiers`.
+- **Automated reproducer**:
+  `tests/architecture/test_dependency_boundaries.py::test_content_contract_package_has_one_exact_import_surface_and_direction`
+  deterministically fails and reports the four forbidden import edges.
+- **Automated proof**:
+  `test_safe_leaf_modules_have_no_project_dependencies`,
+  `test_neutral_symbols_have_one_canonical_leaf_owner`,
+  `test_creature_fact_enums_are_not_imported_from_stateful_modifiers`, and
+  `test_content_contract_package_has_one_exact_import_surface_and_direction`
+  all pass in `tests/architecture/test_dependency_boundaries.py`.
+- **Status**: RESOLVED 2026-07-28.
+
 ### Hosted character terminal evidence has release-only holdings disposition
 
 - **Found**: 2026-07-27 local-profile terminal-settlement convergence.
@@ -219,19 +339,20 @@ not override a status recorded here.
 - **The old `ExternalAIController`, managed-service readiness path, and
   validation-start aliases are deleted.** `RegisteredAIController` is the sole
   production external-provider controller. Codex takeover remains functional
-  through its public subjective surface, and the validation harness now uses
-  canonical game creation, joining, bootstrap, and activation. Absence and
+  through its public subjective surface. Retained Direct Codex artifact capture
+  uses a focused tooling client for canonical game creation, joining, bootstrap,
+  and activation; the production validation harness is deleted. Absence and
   retained Codex behavior are measured by
   `tests/manual/test_96_game_creation_api.py`,
   `tests/manual/test_30_codex_takeover_tools.py`,
   `tests/manual/test_38_ai_validation_server_start.py`,
-  `tests/manual/test_39_ai_validation_harness.py`, and
-  `tests/manual/test_47_direct_codex_artifacts.py`.
+  `tests/manual/test_47_direct_codex_artifacts.py`, and
+  `tests/architecture/test_ai_import_direction.py`.
   **Status: RESOLVED 2026-07-24.**
 - **Simulation delay correction metadata now agrees with the accepted
   boundary.** The engine default and endpoint accept `0.0`, so structured
   errors now advertise `min_delay=0.0` rather than the stale `0.1`.
-  `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_014_replication_identity_and_simulation_errors_are_explicit`
+  `tests/engine/test_encounter_apis.py::test_eb_18_014_replication_identity_and_simulation_errors_are_explicit`
   failed before the correction and owns the boundary.
   **Status: RESOLVED 2026-07-24.**
 
@@ -338,21 +459,23 @@ not override a status recorded here.
 - **Exact reproducers**:
   `tests/progression/test_normal_spell_slot_capacity.py::test_normal_slot_capacity_sets_all_ranks_without_touching_turn_resources`
   and
-  `tests/manual/test_39_ai_validation_harness.py::test_external_selfplay_runs_sorcerer_barbarian_duel_through_epoch_commands`.
+  `tests/progression/test_schema2_character_materialization.py::test_schema2_materializer_installs_one_shared_normal_slot_table`.
 - **Status**: RESOLVED 2026-07-27.
 
-### Standalone self-play omitted cold content startup
+### Retired standalone self-play omitted cold content startup
 
 - **Found**: 2026-07-27 in the retained cross-process deterministic replay
   check.
 - **Behavior**: calling `run_external_selfplay()` from a fresh Python process
   failed with `RuntimeError: Content system is not installed`; pytest masked
   the defect through its session fixture.
-- **Resolution**: the standalone evaluator boundary installs the authenticated
-  content system exactly once before creating engine state, while installed
-  server/test processes retain the existing immutable runtime.
-- **Exact reproducer**:
-  `tests/manual/test_39_ai_validation_harness.py::test_external_selfplay_seed_replays_across_fresh_processes`.
+- **Resolution**: the abandoned standalone self-play/evaluation framework was
+  deleted. Native/external and external/external gameplay validation now uses
+  the ordinary server composition path in `tests/ai/test_live_ai_matchups.py`.
+- **Automated proof**:
+  `tests/architecture/test_ai_import_direction.py` requires
+  `ai/external_selfplay.py` and `ai/validation_harness.py` to remain absent and
+  rejects imports of either retired surface.
 - **Status**: RESOLVED 2026-07-27.
 
 ### Weapon attack affordances dropped their exact dynamic icon provider
@@ -821,7 +944,7 @@ not override a status recorded here.
   lifecycle retained for ordinary stand-up behavior. Focused validation
   reports `16 passed` in
   `tests/manual/test_134_cleric_batch1_legacy_contract.py`, `13 passed` in
-  `tests/engine_book/test_condition_transform_ownership.py`, and zero Pyright
+  `tests/engine/test_condition_transform_ownership.py`, and zero Pyright
   errors across the changed production and test files.
   **Status: RESOLVED 2026-07-24.**
 - **Join-gated human games report `waiting_for_human`.** The accidental
@@ -840,8 +963,14 @@ not override a status recorded here.
 - **Command**: `uv run pyright`; reproduced in isolation with `uv run pyright ai/evaluation/config_ladder/coordinator.py ai/evaluation/config_ladder/experiment.py ai/evaluation/config_ladder/match_runner.py ai/evaluation/config_ladder/strength_model.py server/request_timing.py`.
 - **Result**: `19 errors, 0 warnings, 0 informations`: 3 in `coordinator.py`, 2 in `experiment.py`, 5 in `match_runner.py`, 7 in `strength_model.py`, and 2 in `server/request_timing.py`.
 - **Error**: The connected config-ladder paths pass the broad `ScheduleEntry` union, which also permits `PromotionScheduleEntry`, into APIs and factories requiring `ConnectedScheduleEntry`; the strength model has unresolved SciPy/NumPy return-shape indexing plus general-`str` values passed to literal-typed model fields; and the request-timing ASGI response-header copy is inferred as `Never`, rejecting iteration and append.
-- **Hypothesis**: The schedule model was broadened without discriminator-based narrowing at connected-only boundaries. The strength-model array results and loop constants need explicit type-preserving normalization/literal annotations, while `send_with_status()` needs an explicitly typed raw-header list after the response-start message is narrowed. These files are outside the managed-AI/objective-journal task and should be corrected in a dedicated typing pass.
-- **Status**: OPEN; documented only. No affected implementation source was changed.
+- **Resolution**: Connected-only schedule boundaries now narrow the schedule
+  union explicitly, strength-model array/scalar results and literal fields are
+  normalized through typed values, and request-timing response headers retain
+  their concrete ASGI list type.
+- **Verification**: `uv run pyright` reports
+  `0 errors, 0 warnings, 0 informations` across the complete repository on
+  2026-07-29.
+- **Status**: RESOLVED 2026-07-29.
 
 ### Codex takeover test patched an obsolete action-execution wrapper
 - **Found**: 2026-07-23 during focused registered-agent service validation; unrelated to the launcher changes.
@@ -923,8 +1052,8 @@ not override a status recorded here.
 
 ### Invalid-player session error supplies duplicate player-type context
 - **Found**: 2026-07-23 during focused world DTO split validation; unrelated to the DTO changes.
-- **Test file**: `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities`
-- **Command**: `uv run pytest tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities -q`
+- **Test file**: `tests/engine/test_encounter_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities`
+- **Command**: `uv run pytest tests/engine/test_encounter_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities -q`
 - **Error**: The invalid-player request reaches `_session_http_exception()`, which raises `TypeError: server.event_server._api_http_exception() got multiple values for keyword argument 'valid_player_types'` instead of returning the expected structured 400 response.
 - **Cause**: `_session_context()` already supplied `valid_player_types`, while
   `create_session()` passed the same key explicitly for its invalid-player
@@ -1004,8 +1133,8 @@ not override a status recorded here.
 
 ### Stacked healing potion test attempts two bonus-action uses in one turn
 - **Found**: 2026-07-21 during focused wardrobe validation; reconfirmed 2026-07-22 during dependency-neutral type extraction and the item-location fact refactor, unrelated to all three changes.
-- **Test file**: `tests/engine_book/test_chapter_13_items_inventory_equipment.py::test_eb_13_008_consumable_use_actions_consume_charges_and_stacks`
-- **Command**: `uv run pytest tests/engine_book/test_chapter_13_items_inventory_equipment.py -q` (`21 passed, 1 failed`).
+- **Test file**: `tests/engine/test_items_inventory_equipment.py::test_eb_13_008_consumable_use_actions_consume_charges_and_stacks`
+- **Command**: `uv run pytest tests/engine/test_items_inventory_equipment.py -q` (`21 passed, 1 failed`).
 - **Error**: The first use heals HP from 1 to 8, decrements the stack from 2 to 1, restores the surviving potion's charge, and keeps it registered. The immediate second `execute_use_action()` call returns `None`, while the test expects another non-canceled event.
 - **Evidence**: `PotionDrinkAction` has a one-bonus-action cost in both the current tree and `HEAD`; the item-location work did not introduce this cost or alter the failing action-economy path.
 - **Hypothesis**: The test expectation is outdated, not evidence of lost stack discoverability. The entity starts with one bonus action, the first completed potion use consumes it, and `BaseAction._apply_action()` returns `None` when the immediate second use fails `check_costs()`. The test must either begin a new turn/recharge the bonus action before checking final-stack consumption or explicitly configure enough bonus actions if two same-turn drinks are the intended contract.
@@ -1037,7 +1166,7 @@ not override a status recorded here.
 
 ### Caster potion action-cost expectation disagrees with current bonus-action cost
 - **Found**: 2026-07-21 during focused wardrobe validation; unrelated to the wardrobe changes.
-- **Test file**: `tests/engine_book/test_chapter_17_monsters_presets.py::test_eb_17_011_create_caster_inventory_potions_are_item_use_actions`
+- **Test file**: `tests/engine/test_monster_presets.py::test_eb_17_011_create_caster_inventory_potions_are_item_use_actions`
 - **Error**: The caster's potion use action exposes a bonus-action entry in `effective_costs`, while the test expects an empty list.
 - **Hypothesis**: The test expectation is stale relative to the current potion action-economy contract, or the potion factory and monster-preset fixture disagree about the intended use cost.
 - **Cause**: Both preset potions derive from `PotionDrinkAction`, whose
@@ -1091,8 +1220,8 @@ not override a status recorded here.
 
 ### Chapter 12 Fireball visibility test observes an unexpected level-3 slot count
 - **Found**: 2026-07-16 while running an over-broad Chapter 12 light/senses regression selection during AI movement visibility optimization; unrelated to the bright-light fast path under test.
-- **Test file**: `tests/engine_book/test_chapter_12_senses_light_stealth.py::test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them`
-- **Command**: `uv run pytest tests/engine_book/test_chapter_12_senses_light_stealth.py -q -k "darkvision or magical or light or self_movement_updates_visibility or visibility_cache"`
+- **Test file**: `tests/engine/test_senses_light_stealth.py::test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them`
+- **Command**: `uv run pytest tests/engine/test_senses_light_stealth.py -q -k "darkvision or magical or light or self_movement_updates_visibility or visibility_cache"`
 - **Error**: The action resolves correctly, both hidden and visible targets take Fireball damage, and Hidden is removed, but the test expects `caster.action_economy.spell_slot_3.normalized_score == 2`; the current result is `1`.
 - **Cause**: The level-5 caster starts with two level-3 slots and the valid
   Fireball cast correctly consumes one. The post-cast result of `1` is
@@ -1210,7 +1339,7 @@ not override a status recorded here.
 - **Resolution**: Refreshed the tutorial readouts while retaining the semantic replay, cursor continuity, stream-id, completion ordering, and combat-log ordering assertions.
 - **Status**: RESOLVED 2026-07-20
 
-### Spell-family manual test has stale Pyright annotations and optional narrowing
+### Resolved: Spell-family manual test had stale Pyright annotations and optional narrowing
 - **Found**: 2026-07-15 during focused type checking of entity and spell-family changes; unrelated and pre-existing relative to that work.
 - **Test file**: `tests/manual/test_14_spell_families.py`
 - **Command**: `uv run pyright dnd/entity.py dnd/spells/abjuration.py dnd/spells/illusion.py tests/manual/test_14_spell_families.py`
@@ -1218,7 +1347,13 @@ not override a status recorded here.
   original general-`str` saving-throw argument and optional event/entity
   accesses remain, and later edits added further optional-member diagnostics.
 - **Hypothesis**: These are stale test typing issues rather than production spell failures. The helper parameter should use `AbilityName`, and the readout paths should explicitly narrow the completed event fields and entity lookup before member access.
-- **Status**: OPEN
+- **Resolution**: The test helpers now use the exact ability enum and explicitly
+  narrow optional event fields and entity lookups before accessing typed
+  members.
+- **Verification**: `tests/manual/test_14_spell_families.py` passes all 14
+  runtime tests, and focused Pyright over the maintained manual typing-debt
+  set reports zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
 ### Local read-model test double does not satisfy the subjective runtime protocol
 - **Found**: 2026-07-14 during focused type checking of the local read-model tests.
@@ -1249,7 +1384,7 @@ not override a status recorded here.
 
 ### Engine-book integrity is missing five parity rows
 - **Found**: 2026-07-14 while running focused validation during legacy AI cleanup; appears unrelated and pre-existing relative to that cleanup.
-- **Test file**: `tests/engine_book/test_book_integrity.py`
+- **Test file**: `tests/architecture/test_source_model_hygiene.py`
 - **Error**: The integrity checks report missing parity rows for `EB-11-022`, `EB-11-023`, `EB-12-020`, `EB-12-021`, and `EB-12-022`.
 - **Hypothesis**: New or renumbered Chapter 11 and 12 examples were not added to the engine-book parity metadata.
 - **Status**: SUPERSEDED 2026-07-24 by **Engine-book source fixtures are
@@ -1257,7 +1392,7 @@ not override a status recorded here.
 
 ### Engine-book Chapter 11 and 12 outline ranges are stale
 - **Found**: 2026-07-14 while running focused validation during legacy AI cleanup; appears unrelated and pre-existing relative to that cleanup.
-- **Test file**: `tests/engine_book/test_book_integrity.py`
+- **Test file**: `tests/architecture/test_source_model_hygiene.py`
 - **Error**: Chapter 11 is expected to extend through `023` but the outline ends at `021`; Chapter 12 is expected to extend through `022` but the outline ends at `019`.
 - **Hypothesis**: The chapter outline ranges were not updated when later examples were introduced.
 - **Status**: SUPERSEDED 2026-07-24 by **Engine-book source fixtures are
@@ -1265,7 +1400,7 @@ not override a status recorded here.
 
 ### Engine-book integrity expects a missing timing middleware symbol
 - **Found**: 2026-07-14 while running focused validation during legacy AI cleanup; appears unrelated and pre-existing relative to that cleanup.
-- **Test file**: `tests/engine_book/test_book_integrity.py`
+- **Test file**: `tests/architecture/test_source_model_hygiene.py`
 - **Error**: The integrity check expects a top-level `server.event_server.timing_middleware`, but that symbol is absent.
 - **Resolution**: The current integrity inventory no longer requires the
   obsolete top-level symbol.
@@ -1273,7 +1408,7 @@ not override a status recorded here.
 
 ### advance_encounter lacks the required Google-style Args block
 - **Found**: 2026-07-14 while running focused validation during legacy AI cleanup; appears unrelated and pre-existing relative to that cleanup.
-- **Test file**: `tests/engine_book/test_book_integrity.py`
+- **Test file**: `tests/architecture/test_source_model_hygiene.py`
 - **Error**: The docstring integrity check reports that `advance_encounter` has parameters but no Google-style `Args:` block.
 - **Resolution**: `advance_encounter` now contains the required Google-style
   `Args:` block.
@@ -1289,12 +1424,18 @@ not override a status recorded here.
 - **Verification**: `tests/manual/test_44_typed_agent_policy.py::test_equal_multi_target_choices_are_invariant_to_opaque_uuid_labels` permutes target UUIDs and preserves primary position and projectile allocation. `tests/manual/test_39_ai_validation_harness.py::test_external_selfplay_seed_replays_across_fresh_processes` launches fresh interpreters with different `PYTHONHASHSEED` values, confirms disjoint actor UUIDs and an equal composite policy hash, then reproduces the complete normalized split-skeleton trace and final HP. Full focused files pass: `40 passed` in test 44, `16 passed` in test 48, and `17 passed` in test 39.
 - **Status**: RESOLVED
 
-### Combat tutorial test file has stale pyright narrowing errors
+### Resolved: Combat tutorial test file had stale Pyright narrowing errors
 - **Found**: 2026-07-04 while validating the prone auto-stand regression added during AI zone-control iteration.
 - **Test file**: `tests/manual/test_10_combat_resolution.py`
 - **Error**: `uv run pyright ai/external/state.py ai/external/policy.py dnd/actions_functional.py tests/manual/test_35_subjective_external_ai.py tests/manual/test_10_combat_resolution.py` reports pre-existing typing issues in the combat tutorial file: an unused `DamageType` import, optional subscripts/member access, and generic `Event` values that are not narrowed before reading `contest_success` / `push_distance`.
 - **Hypothesis**: Runtime tests pass, but the tutorial test file predates stricter pyright narrowing for concrete event subclasses. The issue is local to test typing, not the prone auto-stand behavior.
-- **Status**: OPEN
+- **Resolution**: The tutorial now narrows concrete contest/forced-movement
+  events and optional payloads before member access and no longer retains the
+  unused damage-type import.
+- **Verification**: `tests/manual/test_10_combat_resolution.py` passes all 7
+  runtime tests, and focused Pyright over the maintained manual typing-debt
+  set reports zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
 ### Hold Person initial save may leave caster concentrating with no held target
 - **Found**: 2026-07-04 during `condition_lock_sanctum` external self-play while adding control outcome telemetry.
@@ -1345,7 +1486,9 @@ not override a status recorded here.
   projection regressions pass. The exact terminal Codex brief from this report
   has no retained durable artifact, so the UI-level symptom is not presently
   reproducible.
-- **Status**: NEEDS FRESH REPRODUCTION 2026-07-24.
+- **Status**: RETIRED AS AN UNMEASURED HISTORICAL LEAD 2026-07-29. Current
+  remembered-death and terminal-replay regressions pass; reopen only with a
+  retained artifact and deterministic automated reproducer.
 
 ### External AI can submit a stale command immediately after turn-start epoch
 - **Found**: 2026-07-02 in server logs during Codex barbarian playtest cleanup.
@@ -1372,7 +1515,7 @@ not override a status recorded here.
 - **Error**: `uv run pyright dnd/blocks/health.py examples/test_engine_book_entity_composition.py examples/test_engine_book_core_actions_combat.py` reports stale typing in the core-action example script: indirect `dnd.core.dice` monkeypatch attributes, generic `Event` values passed to `Attack._validate()`, optional status-message string access, generic event attributes, and shield/weapon union narrowing.
 - **Hypothesis**: Runtime behavior is protected by the script and pytest parity layer, but the example uses dynamic test helpers and event filtering patterns that pyright cannot narrow. This appears to be an example typing backlog, not a health-block regression.
 - **Resolution**: Fixed in `examples/test_engine_book_core_actions_combat.py` by importing the dice module directly for deterministic monkeypatching, narrowing attack declaration events with `isinstance(..., AttackEvent)` before validation, guarding optional status messages, filtering event history to concrete event payload classes, and narrowing melee-main equipment to `Weapon` before adding extra damage dice.
-- **Verification**: `uv run pyright dnd/blocks/health.py examples/test_engine_book_entity_composition.py examples/test_engine_book_core_actions_combat.py`, `uv run python examples/test_engine_book_core_actions_combat.py`, `uv run pytest -q tests/engine_book/test_chapter_10_core_actions_combat.py tests/engine_book/test_book_integrity.py`, and `uv run pytest -q tests/engine_book` pass.
+- **Verification**: `uv run pyright dnd/blocks/health.py examples/test_engine_book_entity_composition.py examples/test_engine_book_core_actions_combat.py`, `uv run python examples/test_engine_book_core_actions_combat.py`, `uv run pytest -q tests/engine/test_combat_actions.py tests/architecture/test_source_model_hygiene.py`, and `uv run pytest -q tests/engine_book` pass.
 - **Status**: RESOLVED
 
 ### Retaliation reaction attack also spent the normal action
@@ -1494,16 +1637,16 @@ not override a status recorded here.
 
 ### Intermittent control-spell repeat-save cleanup failure
 - **Found**: 2026-06-27 during Chapter 07 condition-lifecycle hygiene verification
-- **Test file**: `tests/engine_book/test_chapter_15_spell_families.py`
+- **Test file**: `tests/engine/test_spell_families.py`
 - **Error**: One run of `uv run pytest -s -q tests/engine_book` failed `test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup`: after `target.on_turn_end(...)`, `"Hold Person"` remained in `target.active_conditions`. Running the Chapter 15 spell-family parity file in isolation passed, and an immediate full `tests/engine_book` rerun also passed (`221 passed`).
-- **Repeat**: Recurred on 2026-06-27 during Chapter 15 illusion hygiene verification. The full `tests/engine_book` run failed the same assertion after `target.on_turn_end(...)`; an immediate focused rerun of `tests/engine_book/test_chapter_15_spell_families.py::test_chapter_15_example_parity` passed (`21 passed`).
+- **Repeat**: Recurred on 2026-06-27 during Chapter 15 illusion hygiene verification. The full `tests/engine_book` run failed the same assertion after `target.on_turn_end(...)`; an immediate focused rerun of `tests/engine/test_spell_families.py::test_chapter_15_example_parity` passed (`21 passed`).
 - **Repeat**: Recurred on 2026-06-27 during Chapter 15 necromancy hygiene verification. `uv run python examples/test_engine_book_spell_families.py` failed the same assertion in `test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup` after `target.on_turn_end(...)`, while the focused Chapter 15/book-integrity pytest layer passed in the same verification window.
 - **Repeat**: Recurred again on 2026-06-27 during the same necromancy verification rerun. `uv run python examples/test_engine_book_spell_families.py` next failed the sibling assertion in `test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup`: after `target.on_turn_end(...)`, `"Hold Monster"` remained in `target.active_conditions`.
-- **Repeat**: Recurred on 2026-06-27 during Chapter 15 conjuration hygiene verification. `uv run pytest -s -q tests/engine_book/test_chapter_15_spell_families.py tests/engine_book/test_book_integrity.py` failed `test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup` with `"Hold Monster"` still active after `target.on_turn_end(...)`; an immediate rerun of the same command passed (`27 passed`), and the full `tests/engine_book` suite passed in the same verification window (`221 passed`).
-- **Repeat**: Recurred on 2026-06-27 during Chapter 15 evocation hygiene verification. `uv run pytest -s -q tests/engine_book/test_chapter_15_spell_families.py tests/engine_book/test_book_integrity.py` failed `test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup` with `"Hold Monster"` still active after `target.on_turn_end(...)`; an immediate focused Chapter 15 rerun passed (`21 passed`), the narrow Chapter 15/book-integrity gate passed (`27 passed`), and the full `tests/engine_book` suite passed (`221 passed`).
+- **Repeat**: Recurred on 2026-06-27 during Chapter 15 conjuration hygiene verification. `uv run pytest -s -q tests/engine/test_spell_families.py tests/architecture/test_source_model_hygiene.py` failed `test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup` with `"Hold Monster"` still active after `target.on_turn_end(...)`; an immediate rerun of the same command passed (`27 passed`), and the full `tests/engine_book` suite passed in the same verification window (`221 passed`).
+- **Repeat**: Recurred on 2026-06-27 during Chapter 15 evocation hygiene verification. `uv run pytest -s -q tests/engine/test_spell_families.py tests/architecture/test_source_model_hygiene.py` failed `test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup` with `"Hold Monster"` still active after `target.on_turn_end(...)`; an immediate focused Chapter 15 rerun passed (`21 passed`), the narrow Chapter 15/book-integrity gate passed (`27 passed`), and the full `tests/engine_book` suite passed (`221 passed`).
 - **Hypothesis**: This looks like an intermittent full-suite ordering/state leak or nondeterministic handler/save interaction around repeat-save cleanup. Check global registries, `EventQueue` handlers, and spell-family reset helpers if it repeats.
 - **Resolution**: Fixed on 2026-06-27 in `dnd/entity.py` by making `determine_attack_outcome()` apply natural 1/critical-face semantics only to `RollType.ATTACK`. Saving throws and skill checks now compare `DiceRoll.total` to DC, matching the SRD relationship recorded in Chapter 03. The apparent intermittent cleanup failure was a natural-1 repeat save with a total high enough to beat the DC being treated as `CRIT_MISS`, so the hold condition correctly stayed active under the old engine behavior.
-- **Verification**: Added EB-03-007 in `examples/test_engine_book_dice_events.py`; 200-iteration Hold Person and Hold Monster cleanup repro loops passed; `uv run pytest -s -q tests/engine_book/test_chapter_03_dice_events.py tests/engine_book/test_book_integrity.py` passed (`13 passed`); `uv run pytest -s -q tests/engine_book/test_chapter_15_spell_families.py tests/engine_book/test_book_integrity.py` passed (`27 passed`); full `uv run pytest -s -q tests/engine_book` passed (`222 passed`).
+- **Verification**: Added EB-03-007 in `examples/test_engine_book_dice_events.py`; 200-iteration Hold Person and Hold Monster cleanup repro loops passed; `uv run pytest -s -q tests/engine/test_dice_event_semantics.py tests/architecture/test_source_model_hygiene.py` passed (`13 passed`); `uv run pytest -s -q tests/engine/test_spell_families.py tests/architecture/test_source_model_hygiene.py` passed (`27 passed`); full `uv run pytest -s -q tests/engine_book` passed (`222 passed`).
 - **Status**: RESOLVED
 
 ### Partial stack merge can mutate inventory before capacity failure
@@ -1928,7 +2071,7 @@ not override a status recorded here.
 - **Hypothesis**: Remaining endpoint families should move toward structured detail payloads with a machine-readable code, current resource state, and valid alternatives. The action routes can use available-action discovery as their correction source; other endpoints need endpoint-specific context.
 - **Progress**: `/action/execute` now returns structured `detail` objects for unknown action names and invalid target indexes. `/action/self`, `/action/entity`, and ordinary `/action/position` now return the same structure for unknown actions and wrong endpoint/action-shape requests. EB-18-009 and EB-18-010 prove the payload includes `code`, `message`, acting entity identity, action economy, valid action names, and the grouped available-actions correction payload. EB-18-023 proves malformed or missing `/action/entity` target UUIDs also return structured target context, known entities, action economy, and available-action corrections. EB-18-011 proves `/entity/{uuid}` lookup and handler-toggle errors include known entities or valid handler choices. EB-18-012 proves equipment/item/equip/unequip errors include valid slots, inventory item UUIDs, equipped item UUIDs, and the current equipment snapshot. EB-18-013 proves session and game-join errors include valid player types, known sessions, active-game state, requested entities/faction, and known entities. EB-18-026 proves the lower-level session action-authority validator now reports invalid sessions, disconnected sessions, missing active games, unowned entities, wrong turns, and stopped turn states with structured context. EB-18-014 proves event-filter, SSE session UUID, and simulation-control errors include valid event/phase choices, cursor state, simulation state, requested delay, and delay bounds. EB-18-015 proves mapeditor failures include valid preset/tile/object/loot IDs, saved map IDs, current map summary, directional-patch required fields, and request-specific context. EB-18-024 proves `/tile/{x}/{y}` missing-tile errors include the requested position, current grid bounds, tile count, entity count, and object count. EB-18-025 proves `/action/end-turn` no-active-encounter errors include the requested session/entity, active game context, simulation state, and known entities.
 - **Resolution**: Server action/API errors now use structured `detail` dictionaries. `server/event_server.py` and `server/session.py` have no bare string `HTTPException(detail=...)` calls; remaining direct constructors use structured helper payloads.
-- **Verification**: EB-18-009 through EB-18-015 and EB-18-023 through EB-18-026 cover the endpoint families above. `tests/engine_book/test_book_integrity.py::test_server_http_errors_do_not_use_bare_string_details` guards the source-level contract, and `rg -n "HTTPException\\(|detail=\\\"|detail=f\\\"" server -g '*.py'` now reports only structured constructors/helper calls.
+- **Verification**: EB-18-009 through EB-18-015 and EB-18-023 through EB-18-026 cover the endpoint families above. `tests/architecture/test_source_model_hygiene.py::test_server_http_errors_do_not_use_bare_string_details` guards the source-level contract, and `rg -n "HTTPException\\(|detail=\\\"|detail=f\\\"" server -g '*.py'` now reports only structured constructors/helper calls.
 - **Status**: RESOLVED
 
 ### Raw ability-score modifiers were counted as direct ability-modifier bonuses
@@ -1957,8 +2100,8 @@ not override a status recorded here.
 
 ### Pytest capture mode fails in the Codex shell during engine-book runs
 - **Found**: 2026-06-28 during Chapter 18 API parity verification
-- **Test file**: `tests/engine_book/test_chapter_18_encounters_apis.py`
-- **Error**: Running `uv run pytest -q tests/engine_book/test_chapter_18_encounters_apis.py tests/engine_book/test_book_integrity.py` from the Codex shell reported `no tests ran`, then failed during pytest shutdown with `FileNotFoundError` in `_pytest/capture.py` while truncating the capture temp file. `uv run pytest --collect-only --capture=no -q tests/engine_book/test_chapter_18_encounters_apis.py` collected the expected ten Chapter 18 parity cases, and a `pytest.main(["-q", "--capture=no", "tests/engine_book"])` driver passed the full engine-book suite.
+- **Test file**: `tests/engine/test_encounter_apis.py`
+- **Error**: Running `uv run pytest -q tests/engine/test_encounter_apis.py tests/architecture/test_source_model_hygiene.py` from the Codex shell reported `no tests ran`, then failed during pytest shutdown with `FileNotFoundError` in `_pytest/capture.py` while truncating the capture temp file. `uv run pytest --collect-only --capture=no -q tests/engine/test_encounter_apis.py` collected the expected ten Chapter 18 parity cases, and a `pytest.main(["-q", "--capture=no", "tests/engine_book"])` driver passed the full engine-book suite.
 - **Hypothesis**: This looks like an interaction between pytest 9 capture handling and the current Codex shell/WSL output capture path rather than an engine failure.
 - **Resolution**: `pyproject.toml` now sets pytest `addopts = ["--capture=no"]`, and the book-integrity test asserts that the uv-driven pytest contract keeps capture disabled.
 - **Verification**: The previously failing no-`-s` command now passes, and full `uv run pytest -q tests/engine_book` runs through the configured capture mode.
@@ -1966,11 +2109,11 @@ not override a status recorded here.
 
 ### Intermittent EB-10 forced-movement spatial-entered ordering in full-suite runs
 - **Found**: 2026-06-28 during full engine-book verification after Chapter 16 Primal Champion expansion
-- **Test file**: `tests/engine_book/test_chapter_10_core_actions_combat.py`
+- **Test file**: `tests/engine/test_combat_actions.py`
 - **Error**: One `uv run pytest -s -q tests/engine_book` run failed `test_eb_10_021_forced_movement_traverses_terrain_without_step_costs` because the collected `SPATIAL_ENTITY_ENTERED` EFFECT positions included the pushed target's starting cell `(6, 5)` after the expected traversal positions `(7, 5)`, `(8, 5)`, `(9, 5)`, `(10, 5)`.
 - **Root cause**: `EventQueue._store_event()` appended to `_all_events` and then sorted the same list by timestamp. `event_cursor()` and `iter_events_since()` use `_all_events` length and slicing as an append-stream cursor, so a late-registered event with an older timestamp could move pre-cursor events after the cursor and hide the newly registered event. EB-10-021 then observed a pre-cursor starting-cell `SPATIAL_ENTITY_ENTERED` event as though it happened after the cursor.
 - **Resolution**: `_all_events` is now append-stable. `get_events_chronological()` returns a timestamp-sorted copy for chronological reads, while cursor-based APIs keep raw append-stream semantics. EB-04-013 pins this invariant.
-- **Verification**: A focused reproducer now returns only the late appended event after the cursor, `uv run python examples/test_engine_book_event_lifecycle.py` passes, `uv run pytest -q tests/engine_book/test_chapter_04_event_lifecycle.py tests/engine_book/test_chapter_10_core_actions_combat.py tests/engine_book/test_book_integrity.py` passes 46/46, `uv run pyright dnd/core/events.py examples/test_engine_book_event_lifecycle.py examples/test_engine_book_core_actions_combat.py` reports 0 errors, a 300-iteration EB-10-021 stress loop passes, full `uv run pytest -q tests/engine_book` passes 341/341, and the direct Chapter 10 example script passes.
+- **Verification**: A focused reproducer now returns only the late appended event after the cursor, `uv run python examples/test_engine_book_event_lifecycle.py` passes, `uv run pytest -q tests/engine/test_event_lifecycle.py tests/engine/test_combat_actions.py tests/architecture/test_source_model_hygiene.py` passes 46/46, `uv run pyright dnd/core/events.py examples/test_engine_book_event_lifecycle.py examples/test_engine_book_core_actions_combat.py` reports 0 errors, a 300-iteration EB-10-021 stress loop passes, full `uv run pytest -q tests/engine_book` passes 341/341, and the direct Chapter 10 example script passes.
 - **Status**: RESOLVED 2026-06-28
 
 ### Barbarian unarmored-defense shield example assumed shield with two-handed weapon
@@ -2001,7 +2144,7 @@ not override a status recorded here.
   2. Orphaned commands were routed through the agent CLI without validating that the command still belonged to the entity whose turn originally spawned the subprocess.
 - **Impact**: Entity gets actions applied without spending action economy (Archer got Dodging for free). Turn log file for the affected entity is never created.
 - **Resolution**: The orchestrator now builds `codex exec --json` invocations and injects an exact guarded command prefix into each turn prompt: `uv run python -m cli.agent --token ... --expect-entity ... <command>`. The agent CLI validates the expected entity UUID against the server's current active controlled entity before executing any game command, so stale buffered commands are rejected instead of being applied to the next turn's entity. The old `claude` player/session/controller surface was migrated to `codex`.
-- **Verification**: `uv run pyright dnd/controller.py dnd/encounter.py server/session.py server/event_server.py cli/agent.py cli/orchestrator.py examples/test_engine_book_encounters_apis.py` passed with 0 errors. `uv run pytest -q tests/engine_book/test_chapter_18_encounters_apis.py tests/engine_book/test_book_integrity.py` passed 35/35. `uv run python examples/test_engine_book_encounters_apis.py` passed.
+- **Verification**: `uv run pyright dnd/controller.py dnd/encounter.py server/session.py server/event_server.py cli/agent.py cli/orchestrator.py examples/test_engine_book_encounters_apis.py` passed with 0 errors. `uv run pytest -q tests/engine/test_encounter_apis.py tests/architecture/test_source_model_hygiene.py` passed 35/35. `uv run python examples/test_engine_book_encounters_apis.py` passed.
 - **Status**: RESOLVED 2026-06-28
 
 ### Codex self-play metrics missed current stream command and token events
@@ -2009,7 +2152,7 @@ not override a status recorded here.
 - **Test file**: N/A yet; observed in `game_logs/selfplay_sorcerer_smoke_2`.
 - **Error**: The orchestrator completed a one-turn victory and the turn log contains multiple `command_execution` stream items plus a `turn.completed` usage payload, but `metrics.json` reports `game_actions: 0`, zero action timestamps, and zero token usage.
 - **Resolution**: `cli/orchestrator.py` now handles the current `thread.started`, `item.started`, `item.completed`, and `turn.completed` Codex stream events. It records Codex thread IDs for resume, counts completed `cli.agent` command executions, records first-action time, counts agent messages, reads current usage fields such as `cached_input_tokens`, and writes current-schema command steps into trajectory logs.
-- **Verification**: EB-18-029 proves current Codex item streams produce nonzero command metrics, token metrics, and trajectory steps. `uv run pytest tests/engine_book/test_chapter_18_encounters_apis.py -q` passes 35/35, and `uv run pyright cli/orchestrator.py tests/engine_book/test_chapter_18_encounters_apis.py` reports 0 errors.
+- **Verification**: EB-18-029 proves current Codex item streams produce nonzero command metrics, token metrics, and trajectory steps. `uv run pytest tests/engine/test_encounter_apis.py -q` passes 35/35, and `uv run pyright cli/orchestrator.py tests/engine/test_encounter_apis.py` reports 0 errors.
 - **Status**: RESOLVED 2026-07-01
 
 ### Published AI decision epoch was rejected as stale after its own control frame
@@ -2046,9 +2189,10 @@ not override a status recorded here.
 - **Additional evidence**: 2026-07-04 in-process `skeleton_mark_focus_fire` self-play timing shows policy selection is tiny (`0.19 ms` average, `0.635 ms` max), while snapshot fetch/validation, dense epoch reduction, and command submission dominate the command-loop cost. This narrows the speed problem away from the behavior-tree selector itself.
 - **Additional evidence**: 2026-07-04 `forced_movement_hazard_bridge` self-play shows the same shape after route tracing: policy averaged `0.179 ms` with `0.742 ms` max, while snapshot, reduction, and command submission still produced larger spikes (`337.237 ms`, `282.276 ms`, and `399.482 ms` max respectively).
 - **Verification**: `test_runtime_command_followup_ignores_initial_stream_sync` now proves `sync -> command_result -> decision_epoch` completes without snapshot resync. `test_epoch_clear_for_previous_actor_does_not_invalidate_current_server_epoch` proves a clear for actor A does not invalidate actor B's current server epoch. A fresh full game has now separated the concerns: false stale/resync appears fixed, but snapshot/subscription volume and disconnect cleanup remain open.
-- **Status**: NEEDS FRESH REPRODUCTION 2026-07-24. The focused sync/epoch
-  correctness tests pass, while the quantitative churn evidence is confined to
-  removed `/tmp` logs and predates the canonical replication runtime.
+- **Status**: RETIRED AS AN UNMEASURED HISTORICAL LEAD 2026-07-29. The focused
+  sync/epoch and stream-cleanup regressions pass; the quantitative evidence was
+  confined to removed `/tmp` logs and predates the canonical replication
+  runtime. Reopen only with a checked-in deterministic load gate.
 
 ### Codex watch blocked after encounter end
 - **Found**: 2026-07-03 during Sorcerer v7 default-monster playtest.
@@ -2063,9 +2207,9 @@ not override a status recorded here.
 - **Test file**: N/A yet; live artifact `/tmp/dnd_sorcerer_v7_default_monsters/000_play_summary.json`.
 - **Error**: The largest compact Sorcerer turn summary still reached `50222` characters and `653` normalized action choices.
 - **Hypothesis**: Spell-slot variants, scroll variants, multi-target rows, and position-targeted area rows are still being serialized too broadly even after variant grouping. The agent needs a tighter default summary plus expandable detail, not every legal row in the primary surface.
-- **Status**: NEEDS FRESH REPRODUCTION 2026-07-24. The only cited 50,222-byte
-  artifact was under `/tmp` and is no longer available; measure the current
-  compact surface before changing it.
+- **Status**: RETIRED AS AN UNMEASURED HISTORICAL LEAD 2026-07-29. The only
+  cited artifact was under `/tmp` and is unavailable; reopen only with a
+  checked-in current compact-surface size regression.
 
 ### Caster useful movement could require raw fallback when no retreat row existed
 - **Found**: 2026-07-03 during skeleton-side v7 playtest against external Barbarian.
@@ -2103,7 +2247,7 @@ not override a status recorded here.
 - **Found**: 2026-07-13 during a read-only AI architecture review.
 - **Command**: `uv run pyright dnd/entity.py dnd/core/base_actions.py`.
 - **Failure**: `dnd/entity.py:3459` passes `paths_by_position` with type `DefaultDict[...] | dict[...]` to `_collect_fast_move_targets`, whose parameter is annotated `DefaultDict[...]`, producing `reportArgumentType`. Runtime tests were not failing.
-- **Repeat**: The same sole diagnostic appeared while type-checking the typed AI routine and entity-composition changes with `uv run pyright dnd/entity.py ai/policy/routines.py ai/external/policy.py ai/external_melee_agent.py ai/external_selfplay.py ai/evaluation/artifacts.py ai/knowledge/deriver.py ai/external/state.py tests/engine_book/test_chapter_06_entity_composition.py tests/manual/test_45_policy_routines.py`.
+- **Repeat**: The same sole diagnostic appeared while type-checking the typed AI routine and entity-composition changes with `uv run pyright dnd/entity.py ai/policy/routines.py ai/external/policy.py ai/external_melee_agent.py ai/external_selfplay.py ai/evaluation/artifacts.py ai/knowledge/deriver.py ai/external/state.py tests/engine/test_entity_composition.py tests/manual/test_45_policy_routines.py`.
 - **Hypothesis**: The helper annotation is narrower than the actual branch result. Its read-only access may accept a `Mapping[Tuple[int, int], List[Tuple[int, int]]]` rather than requiring default-factory behavior.
 - **Status**: RESOLVED 2026-07-13; `_collect_fast_move_targets` now accepts the read-only `Mapping` contract used by walking and swimming path maps. Focused Pyright reports zero errors.
 
@@ -2118,24 +2262,29 @@ not override a status recorded here.
   2026-07-24.
 - **Status**: RESOLVED 2026-07-24.
 
-### Action-discovery manual test has stale optional target narrowing
+### Resolved: Action-discovery manual test had stale optional target narrowing
 - **Found**: 2026-07-14 during focused Pyright validation over touched files; reproduced on 2026-07-15 during focused type checking of action changes.
 - **Test file**: `tests/manual/test_09_action_discovery_and_costs.py` (9 Pyright errors at lines 117, 282, 605, 611, and 623)
 - **Command**: `uv run pyright dnd/actions.py tests/manual/test_09_action_discovery_and_costs.py`
 - **Error**: The test passes optional `target_uuid` values to `Entity.get()` without narrowing at all five locations (`reportArgumentType`) and accesses `.name` on optional `Entity.get()` results at lines 282, 605, 611, and 623 (`reportOptionalMemberAccess`).
 - **Scope**: The newly changed `dnd/actions.py` itself has no reported error; these diagnostics are pre-existing test typing issues unrelated to the action changes.
 - **Hypothesis**: The readout paths should explicitly narrow each target UUID and entity lookup before member access.
-- **Status**: OPEN
+- **Resolution**: The affected readout paths now explicitly require target
+  UUIDs and entity lookups before accessing their typed members.
+- **Verification**: `tests/manual/test_09_action_discovery_and_costs.py` passes
+  all 30 runtime tests, and focused Pyright over the maintained manual
+  typing-debt set reports zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
 ### EB-10-021 reuses an exhausted event iterator
 - **Found**: 2026-07-13 during focused forced-movement verification.
-- **Test command**: `uv run pytest tests/engine_book/test_chapter_10_core_actions_combat.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs`.
+- **Test command**: `uv run pytest tests/engine/test_combat_actions.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs`.
 - **Failure**: The later `next(...)` lookup raises `StopIteration`, even though `forced_event` was found during the first pass over the same event sequence.
 - **Cause**: `indexed_events = EventQueue.iter_events_since(cursor)` is a one-shot iterator. The `new_events = [...]` comprehension exhausts it, and the test later attempts to reuse `indexed_events` in `next(...)`.
 - **Resolution**: The test materializes the event sequence once before its two
   searches.
 - **Verification**:
-  `tests/engine_book/test_chapter_10_core_actions_combat.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs`
+  `tests/engine/test_combat_actions.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs`
   passes on 2026-07-24.
 - **Status**: RESOLVED 2026-07-24.
 
@@ -2195,7 +2344,7 @@ not override a status recorded here.
 
 ### Engine-book integrity metadata and documentation lag current coverage
 - **Found**: 2026-07-15 while running unrelated focused validation; consolidated rerun of the four existing engine-book integrity issues above.
-- **Command**: `uv run pytest tests/engine_book/test_book_integrity.py -q`
+- **Command**: `uv run pytest tests/architecture/test_source_model_hygiene.py -q`
 - **Result**: 27 integrity tests passed and four failed: parity rows are missing for `EB-11-022`, `EB-11-023`, `EB-12-020`, `EB-12-021`, and `EB-12-022`; outline ranges stop before Chapter 11 `023` and Chapter 12 `022`; the manifest expects missing `server/event_server.py::timing_middleware`; and `advance_encounter` lacks the manifest-required Google-style `Args:` block.
 - **Hypothesis**: The integrity metadata and documentation lag the current code and tests.
 - **Resolution**: Live code/test inventories and docstrings were updated during
@@ -2204,13 +2353,18 @@ not override a status recorded here.
   **Engine-book source fixtures are absent** entry.
 - **Status**: SUPERSEDED 2026-07-23.
 
-### Spellcasting core test has pre-existing Optional UUID typing errors
+### Resolved: Spellcasting core test had Optional UUID typing errors
 - **Found**: 2026-07-15 during focused Pyright validation of combat-log, base-action, and Eldritch Blast outcome-profile changes.
 - **Command**: `uv run pyright tests/manual/test_13_spellcasting_core.py`
 - **Error**: Six pre-existing Optional/UUID diagnostics occur at the current lines 369, 414, 620, and 623. Optional UUIDs reach `BaseObject.get()`, and optional event or lookup results are accessed through `.value` or `.name` without narrowing.
 - **Scope**: The new Eldritch Blast test is not implicated. Focused runtime tests pass, and focused Pyright over the changed production, epoch, and policy files reports zero errors.
 - **Hypothesis**: Narrow the optional event fields, UUIDs, and lookup results explicitly in the tutorial readout paths.
-- **Status**: OPEN; test typing issue only, no fix attempted.
+- **Resolution**: The tutorial now narrows optional event fields, UUIDs, and
+  registry lookups before accessing values or names.
+- **Verification**: `tests/manual/test_13_spellcasting_core.py` passes all 17
+  runtime tests, and focused Pyright over the maintained manual typing-debt
+  set reports zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
 ### Policy host consumer-parity fixture omits the current conditional-target trace node
 - **Found**: 2026-07-15 during focused policy-host test validation.
@@ -2235,14 +2389,14 @@ not override a status recorded here.
 
 ### Forced-movement focused test reuses an exhausted event iterator
 - **Found**: 2026-07-15 during focused Counterspell/EventQueue UUID-idempotency validation.
-- **Test**: `tests/engine_book/test_chapter_10_core_actions_combat.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs` failed at approximately line 561; 24 other tests passed.
+- **Test**: `tests/engine/test_combat_actions.py::test_eb_10_021_forced_movement_traverses_terrain_without_step_costs` failed at approximately line 561; 24 other tests passed.
 - **Failure**: The test consumes `EventQueue.iter_events_since(cursor)` into `new_events`, then calls `next(...)` on the same exhausted iterator, raising `StopIteration`.
 - **Status**: SUPERSEDED 2026-07-24 by **EB-10-021 reuses an exhausted event
   iterator**, whose correction and passing regression are recorded above.
 
 ### EB-13-008 second potion use returns no result
 - **Found**: 2026-07-15 while auditing unrelated Counterspell item-charge behavior.
-- **Test**: `tests/engine_book/test_chapter_13_items_inventory_equipment.py::test_eb_13_008_consumable_use_actions_consume_charges_and_stacks`.
+- **Test**: `tests/engine/test_items_inventory_equipment.py::test_eb_13_008_consumable_use_actions_consume_charges_and_stacks`.
 - **Failure**: The second `execute_use_action()` call returns `None`, failing the assertion that the second potion use succeeds and consumes the final stack item.
 - **Status**: SUPERSEDED 2026-07-24 by **Stacked healing potion test attempts
   two bonus-action uses in one turn**, now resolved by advancing to a second
@@ -2278,7 +2432,7 @@ not override a status recorded here.
 
 ### EB-12-018 expects the pre-cast level-3 spell-slot count
 - **Found**: 2026-07-15 during focused sensory-indexing validation.
-- **Test**: `tests/engine_book/test_chapter_12_senses_light_stealth.py::test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them` fails at approximately line 774.
+- **Test**: `tests/engine/test_senses_light_stealth.py::test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them` fails at approximately line 774.
 - **Failure**: The test expects `spell_slot_3 == 2` after a level-5 caster successfully casts Fireball.
 - **Reproduction**: The exact focused test reproduces the failure. `create_caster` initializes the level-5 character with `full_caster_spell_slots_for_level(5)`, which provides two level-3 slots. One valid Fireball cast correctly consumes one slot, leaving `spell_slot_3 == 1`.
 - **Hypothesis**: The assertion is stale; the spell behavior and action cost are correct.
@@ -2286,7 +2440,7 @@ not override a status recorded here.
   observes an unexpected level-3 slot count**, now resolved by correcting and
   strengthening the stale maintained assertion.
 
-### Seamless subjective-runtime test doubles do not match Starlette interfaces
+### Resolved: Seamless subjective-runtime test doubles did not match Starlette interfaces
 - **Found**: 2026-07-15 during focused Pyright validation for unrelated subjective-runtime work.
 - **Command**: `uv run pyright tests/manual/test_36_seamless_subjective_runtime.py`
 - **Current result**: A focused 2026-07-24 Pyright run reports `10` errors,
@@ -2294,15 +2448,27 @@ not override a status recorded here.
   two newer accesses to `.closed` on a telemetry object that does not declare
   that member.
 - **Hypothesis**: The test doubles and response annotations model only the runtime behavior used by the tests, but their declared types do not conform to the corresponding Starlette request, response, and async-stream interfaces.
-- **Status**: OPEN; test-helper typing issue only, no production code or tests changed.
+- **Resolution**: The test doubles now implement the Starlette request,
+  response, and async-stream surfaces they exercise, and telemetry probes
+  declare the members asserted by the tests. The missing-engine-event
+  regression also patches the canonical action-dispatch seam.
+- **Verification**:
+  `tests/manual/test_36_seamless_subjective_runtime.py` passes all 49 runtime
+  tests, and focused Pyright reports zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
-### Policy-host fixtures use a Pydantic flat constructor shape invisible to Pyright
+### Resolved: Policy-host fixtures used a Pydantic flat constructor shape invisible to Pyright
 - **Found**: 2026-07-15 during focused Pyright validation for unrelated policy investigation.
 - **Command**: `uv run pyright ai/policy/routines.py tests/manual/test_48_policy_host.py`
 - **Result**: `ai/policy/routines.py` reports no errors; `tests/manual/test_48_policy_host.py` reports 177 construction errors.
 - **Representative errors**: At line 1519, Pyright reports that `ActionAffordance(...)` is missing required parameter `source`; lines 1521-1527 then report no parameters named `bucket`, `template_name`, `display_name`, `action_category`, `target_type`, `can_afford`, or `cost`. The same pattern recurs in later fixture constructors, including around lines 1646 and 1752.
 - **Hypothesis**: `ActionAffordance` statically declares the canonical factored `source: ActionSourceDefinition` field, while its Pydantic `mode="before"` validator accepts and factors the legacy flat input shape at runtime. Pyright sees only the canonical constructor signature. Tests should use the factored constructor or a typed fixture/factory (or deliberately validate a mapping) rather than relying on runtime-only input normalization.
-- **Status**: OPEN; test-construction/static-typing mismatch only, with no reported production error in `ai/policy/routines.py`.
+- **Resolution**: The fixtures now construct the canonical factored source
+  model instead of relying on the runtime-only flat-input normalizer.
+- **Verification**: `tests/manual/test_48_policy_host.py` passes all 54 runtime
+  tests, and focused Pyright over the maintained manual typing-debt set reports
+  zero errors.
+- **Status**: RESOLVED 2026-07-29.
 
 ### Ranged spell attacks did not receive Threatened disadvantage
 - **Found**: 2026-07-16 during Rotation 13 in `standard_skeleton_doors`.
@@ -2311,7 +2477,7 @@ not override a status recorded here.
 - **Evidence**: `ai/evidence/direct_codex_runs/20260716T150526_870617_0000-standard_skeleton_doors-direct-codex-bbfbd73d.json` retains the subjective run and engine-rule annotation.
 - **Cause**: Spell subclasses rolled directly from `spell_attack_bonus()` and bypassed the shared ranged-attack consequence path. `SpellEvent` also lacked a field through which combat logs could retain the threat state.
 - **Resolution**: `SpellAction.resolve_spell_attack()` now owns spell-attack propagation, ranged Threatened disadvantage, spell-specific advantage modifiers, d20 resolution, and typed result evidence. Every attack-roll spell uses it; actor-side outcome profiles apply the same rule; `SpellEvent` forwards `is_threatened` into `AttackLogData`.
-- **Verification**: The adjacent-hostile regression passes, `tests/manual/test_14_spell_families.py` reports `14 passed`, `tests/engine_book/test_chapter_15_spell_families.py` reports `46 passed`, the existing weapon-threat contract passes, and touched production files report zero Pyright errors.
+- **Verification**: The adjacent-hostile regression passes, `tests/manual/test_14_spell_families.py` reports `14 passed`, `tests/engine/test_spell_families.py` reports `46 passed`, the existing weapon-threat contract passes, and touched production files report zero Pyright errors.
 - **Status**: RESOLVED 2026-07-16.
 
 ### External self-play exact-policy assertion expects Hold Person
@@ -2361,9 +2527,9 @@ not override a status recorded here.
 - **Command**: `npm run studio:targeting-smoke` from `/home/tommaso/Dev/NeuroClient/app`.
 - **Observed output**: The process exited `1` after `8.19s` with `ok: false`, no `pageerror`, and correct target toggle/removal facts. The final fact reported `projectileSpeed: "18"` instead of the asserted `"220"`; the remaining console output was limited to Chromium WebGL `ReadPixels` performance warnings.
 - **Hypothesis**: The harness's positional selector `input[type='number']:nth(1)` is stale and now selects the target-distance input, whose production control correctly clamps values to `18`, rather than the timeline's projectile-speed input. The elapsed time comes from navigation, studio readiness, fixed waits, screenshot capture, and browser teardown; no harness timeout fired.
-- **Status**: UNVERIFIED HISTORICAL LEAD. The mutable external UI no longer
-  reproduces this exact locator failure deterministically; it must gain a
-  pinned, self-starting semantic-selector regression before reopening.
+- **Status**: RETIRED AS AN UNMEASURED HISTORICAL LEAD 2026-07-29. The mutable
+  external UI no longer reproduces this locator failure; reopen only with a
+  pinned, self-starting semantic-selector regression.
 
 ### External AI start-human response reports `started` instead of `waiting_for_human`
 - **Found**: 2026-07-21 during focused external-AI subprocess validation.
@@ -2421,7 +2587,8 @@ not override a status recorded here.
 - **Current finding**: The cited unused imports are no longer present in the
   current NeuroClient source. No frontend build was run during this backend
   audit because concurrent UI work owns that tree.
-- **Status**: STALE BY SOURCE INSPECTION 2026-07-24.
+- **Status**: RETIRED AS STALE 2026-07-29. The cited imports no longer exist;
+  any future frontend build failure requires its own exact current gate.
 
 ### Arena-mode inactive status omits the expected `game` field
 - **Found**: 2026-07-22 during independent clean-HEAD arena/server-boundary validation.
@@ -2439,8 +2606,8 @@ not override a status recorded here.
 
 ### EB-18-022 mapeditor load treats a typed directional-block model as a mapping
 - **Found**: 2026-07-22 during full Chapter 18 regression validation for unrelated architecture refactoring.
-- **Command**: `uv run pytest tests/engine_book/test_chapter_18_encounters_apis.py -q`
-- **Test**: `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state`
+- **Command**: `uv run pytest tests/engine/test_encounter_apis.py -q`
+- **Test**: `tests/engine/test_encounter_apis.py::test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state`
 - **Failure**: Map loading reaches `_restore_directional_tile_state()` and calls `.items()` on an `APIDirectionalBlockMap` at `server/mapeditor_support.py:532`, raising `AttributeError: 'APIDirectionalBlockMap' object has no attribute 'items'`.
 - **Static corroboration**: Pyright flags the same invalid `.items()` access at that production line.
 - **Scope**: The full Chapter 18 file reported 31 passed and 2 failed; the other failure is EB-18-013 below.
@@ -2448,15 +2615,15 @@ not override a status recorded here.
   `APIDirectionalBlockMap` with `model_dump()` before iterating its directional
   flags, preserving the cold DTO boundary without treating the model as a raw
   mapping.
-- **Verification**: `tests/engine_book/test_chapter_18_encounters_apis.py`
+- **Verification**: `tests/engine/test_encounter_apis.py`
   reports `33 passed`, including EB-18-022, and the final scoped Pyright run is
   clean.
 - **Status**: RESOLVED 2026-07-23.
 
 ### EB-18-013 invalid-player error supplies duplicate session context
 - **Found**: 2026-07-22 during full Chapter 18 regression validation for unrelated architecture refactoring.
-- **Command**: `uv run pytest tests/engine_book/test_chapter_18_encounters_apis.py -q`
-- **Test**: `tests/engine_book/test_chapter_18_encounters_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities`
+- **Command**: `uv run pytest tests/engine/test_encounter_apis.py -q`
+- **Test**: `tests/engine/test_encounter_apis.py::test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities`
 - **Failure**: The invalid `player_type` branch passes `valid_player_types` explicitly to `_session_http_exception()`, while `_session_http_exception()` also expands `_session_context()` containing the same key at `server/event_server.py:1297`. Python raises `TypeError` for the duplicate `valid_player_types` keyword before the intended structured HTTP error can be returned.
 - **Scope**: The full Chapter 18 file reported 31 passed and 2 failed; the other failure is EB-18-022 above.
 - **Resolution**: `_session_http_exception()` now merges shared and call-specific correction context before forwarding it, and `/session/create` no longer redundantly supplies `valid_player_types`.
@@ -2466,7 +2633,7 @@ not override a status recorded here.
 ### Engine-book source fixtures are absent
 - **Found**: 2026-07-22 during focused architecture-refactor validation; expanded and reverified 2026-07-23 during integrity cleanup.
 - **Commands**:
-  - `uv run pytest tests/engine_book/test_book_integrity.py::test_engine_book_required_files_exist tests/engine_book/test_book_integrity.py::test_every_engine_book_test_function_has_a_parity_matrix_row tests/engine_book/test_book_integrity.py::test_parity_matrix_rows_reference_existing_engine_book_tests tests/engine_book/test_book_integrity.py::test_outline_book_example_ranges_match_executable_tests tests/engine_book/test_book_integrity.py::test_goal_records_uv_pytest_parity_requirement -q`
+  - `uv run pytest tests/architecture/test_source_model_hygiene.py::test_engine_book_required_files_exist tests/architecture/test_source_model_hygiene.py::test_every_engine_book_test_function_has_a_parity_matrix_row tests/architecture/test_source_model_hygiene.py::test_parity_matrix_rows_reference_existing_engine_book_tests tests/architecture/test_source_model_hygiene.py::test_outline_book_example_ranges_match_executable_tests tests/architecture/test_source_model_hygiene.py::test_goal_records_uv_pytest_parity_requirement -q`
   - `uv run pytest tests/engine_book/test_architecture_surface_audit.py -q`
 - **Result**: The selected integrity checks report `5 failed` because `engine_book/goal.md`, `engine_book/outline.md`, and `engine_book/parity_matrix.md` cannot be read; the audit suite reports `3 failed` because `engine_book/architecture_surface_audit.md` is absent. The entire `engine_book/` source-documentation directory is missing in this workspace, while its executable tests remain under `tests/engine_book/`.
 - **Hypothesis**: The documentation source tree was omitted from or removed before the current refactor. These are missing authoritative artifacts, not failures caused by the transport/API cleanup; reconstructing their contents from test expectations would fabricate project documentation.
@@ -2517,8 +2684,8 @@ not override a status recorded here.
 
 ### Engine-book arena tutorial expects pre-join AI game start
 - **Found**: 2026-07-23 during the managed AI service refactor validation.
-- **Command**: `uv run pytest tests/engine_book/test_manual_21_arena_game_sessions_client_state.py`
-- **Test**: `tests/engine_book/test_manual_21_arena_game_sessions_client_state.py::test_start_human_mode_creates_ai_session_and_waits_for_player_join`
+- **Command**: `uv run pytest tests/engine/test_manual_21_arena_game_sessions_client_state.py`
+- **Test**: `tests/engine/test_manual_21_arena_game_sessions_client_state.py::test_start_human_mode_creates_ai_session_and_waits_for_player_join`
 - **Failure**: The tutorial test expects the start payload status to be `"started"`, while the canonical route returns `"waiting_for_human"`.
 - **Corroboration**: Other focused route tests explicitly expect `"waiting_for_human"` for the same join-gated start flow.
 - **Resolution**: The tutorial expectation was restored to
@@ -2726,7 +2893,7 @@ not override a status recorded here.
   updates shared spatial indices once, and applies all three facts only to
   added cells. Retained cells preserve their condition and modifier identity.
 - **Verification**:
-  `tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers`
+  `tests/engine/test_grid_pathfinding.py::test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers`
   asserts the old marker/terrain disappear, the new marker/terrain and handler
   appear, and final zone removal cleans the union of both footprints.
 - **Status**: RESOLVED 2026-07-24.
@@ -2962,3 +3129,44 @@ not override a status recorded here.
   passes with an adjacent armed attacker and an injected typed target movement
   cost.
 - **Status**: RESOLVED 2026-07-26.
+
+### Dragon Wings declaration omitted its active-condition dependency
+
+- **Found**: 2026-07-29 while running the Sorcerer progression suite for the
+  level-bounded spell-choice correction.
+- **Behavior**: The public Dragon Wings structural declaration grants its
+  toggle action but does not declare the exact
+  `APPLIES_CONDITION -> class_feature.sorcerer.dragon_wings.active`
+  relationship required by the authored catalog contract.
+- **Resolution**: The pure structural declaration now carries an exact
+  dependency-neutral `APPLIES_CONDITION` reference alongside its toggle-action
+  dependency. The reference is constructed from the behavior contract without
+  importing the concrete condition upward into the structural layer.
+- **Verification**:
+  `tests/progression/test_sorcerer_progression_definitions.py::test_dragon_wings_closes_toggle_flight_and_active_state`
+  passes as an ordinary regression and asserts the complete two-edge
+  dependency set.
+- **Status**: RESOLVED 2026-07-29.
+
+### Population-only content advances blocked durable character deployment
+
+- **Found**: 2026-07-29 after the level-bounded Sorcerer spell catalog
+  correction advanced the installed content-set digest.
+- **Behavior**: otherwise unchanged persistent characters created under the
+  immediately prior digest failed every encounter compose preview with
+  `Character definition content set differs from this worker`.
+- **Cause**: explicit content rebasing existed for respec and level-up, but the
+  cold character-deployment boundary sent historical definition heads directly
+  to the current-content preview worker.
+- **Resolution**: deployment now resolves every persisted content reference
+  through the canonical rebaser, validates the complete resulting build, and
+  atomically appends current-content definition/loadout heads through the
+  existing three-head CAS before recipe normalization. Historical choices that
+  are no longer legal still fail closed; no digest or `ContentRef` check was
+  weakened.
+- **Automated reproducer**:
+  `tests/manual/test_187_standalone_local_game_lifecycle.py::test_standalone_compose_rebases_prior_content_character_before_start`
+  creates an exact persistent character under a prior digest and proves the
+  same owned roster composes, previews, starts, pins current heads, and
+  preserves the historical definition revision.
+- **Status**: RESOLVED 2026-07-29.

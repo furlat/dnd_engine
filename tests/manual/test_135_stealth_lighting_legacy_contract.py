@@ -39,7 +39,8 @@ from dnd.core.events import (
     SkillCheckEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import AdvantageStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.core.values import BaseValue
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -52,16 +53,16 @@ from dnd.items.weapons import ASSASSIN_DAGGER_RECIPE
 from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility
-from dnd.utils import get_max_hp, reset_combat_state, set_hp
+from tests.engine.support import get_max_hp, reset_combat_state, set_hp
 
 
 THIS_FILE = "tests/manual/test_135_stealth_lighting_legacy_contract.py"
-CONDITIONS_FILE = "tests/engine_book/test_chapter_08_standard_conditions.py"
-SENSES_FILE = "tests/engine_book/test_chapter_12_senses_light_stealth.py"
+CONDITIONS_FILE = "tests/engine/test_standard_conditions.py"
+SENSES_FILE = "tests/engine/test_senses_light_stealth.py"
 PERCEPTION_FILE = "tests/manual/test_12_perception_light_stealth_and_invisibility.py"
-ITEMS_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
-SPELLS_FILE = "tests/engine_book/test_manual_17_spell_families.py"
-SPELL_FAMILIES_FILE = "tests/engine_book/test_chapter_15_spell_families.py"
+ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
+SPELLS_FILE = "tests/engine/test_manual_17_spell_families.py"
+SPELL_FAMILIES_FILE = "tests/engine/test_spell_families.py"
 
 
 class CoverageStatus(StrEnum):
@@ -1043,7 +1044,10 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
 
     assert seen_result is not None and seen_result.phase == EventPhase.COMPLETION
     seen_damage = latest_damage_roll_result()
-    assert [roll.results for roll in seen_damage.final_rolls] == [[4]]
+    assert [
+        packet.final_roll.results
+        for packet in seen_damage.damage_packets
+    ] == [[4]]
     assert seen_damage.roll_modifications == []
     assert target_hp - target.get_hp() == 6
 
@@ -1051,10 +1055,7 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
     attacker.action_economy.reset_all_costs()
     attacker.set_invisible(True)
     assert attacker.uuid not in target.senses.entities
-    with (
-        fixed_dice_faces(10, 4),
-        patch("dnd.items.weapons.random.randint", return_value=3),
-    ):
+    with fixed_dice_faces(10, 4, 3):
         unseen_result = Attack(
             source_entity_uuid=attacker.uuid,
             target_entity_uuid=target.uuid,
@@ -1063,10 +1064,18 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
 
     assert unseen_result is not None and unseen_result.phase == EventPhase.COMPLETION
     unseen_damage = latest_damage_roll_result()
-    assert [roll.results for roll in unseen_damage.final_rolls] == [[4], [3]]
-    assert unseen_damage.roll_modifications == [
-        ("Unseen Strike", 1, 0, 3, "1d6 piercing (unseen attacker)")
-    ]
+    assert len(unseen_damage.damage_packets) == 2
+    assert [
+        packet.final_roll.results
+        for packet in unseen_damage.damage_packets
+    ] == [[4], [3]]
+    assert len(unseen_damage.roll_modifications) == 1
+    modification = unseen_damage.roll_modifications[0]
+    assert modification.handler_name == "Unseen Strike"
+    assert modification.packet_index == 1
+    assert modification.previous_total is None
+    assert modification.final_total == 3
+    assert modification.reason == "1d6 piercing (unseen attacker)"
     assert target_hp - target.get_hp() == 9
 
     assert attacker.unequip_item(WeaponSlot.MELEE_MAIN) is dagger
@@ -1206,6 +1215,56 @@ def test_light_add_spots_only_the_hidden_enemy() -> None:
     assert spotted[0].data["observer_uuid"] == str(observer.uuid)
     assert spotted[0].data["target_uuid"] == str(hidden_enemy.uuid)
     assert spotted[0].data["target_position"] == hidden_enemy.position
+
+
+def test_torch_light_change_refreshes_move_targets() -> None:
+    """Authoritative illumination invalidates cached movement affordances."""
+    reset_stealth_world(width=16, default_light=LightLevel.DARKNESS)
+    carrier = create_skeleton(
+        name="Torchbearer",
+        position=(0, 1),
+        faction="heroes",
+        darkvision=False,
+    )
+    Entity.update_all_entities_senses(max_distance=16)
+
+    before = carrier.get_available_actions()
+    before_move = next(
+        action
+        for action in before.position_actions
+        if action.template_name == "Move"
+    )
+    before_positions = {
+        target.position
+        for target in before_move.valid_targets
+    }
+    before_revision = carrier.senses.path_revision
+    assert (3, 1) not in before_positions
+    assert not carrier.senses._paths_dirty
+
+    torch = materialize_item(
+        TORCH_RECIPE,
+        carrier.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
+    assert carrier.loot_item(torch)
+    torch.ignite(carrier.uuid)
+
+    assert carrier.senses._paths_dirty
+    after = carrier.get_available_actions()
+    after_move = next(
+        action
+        for action in after.position_actions
+        if action.template_name == "Move"
+    )
+    after_positions = {
+        target.position
+        for target in after_move.valid_targets
+    }
+    assert carrier.senses.path_revision > before_revision
+    assert not carrier.senses._paths_dirty
+    assert (3, 1) in after_positions
 
 
 def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:

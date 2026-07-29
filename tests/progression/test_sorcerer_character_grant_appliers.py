@@ -52,7 +52,8 @@ from dnd.content_system.sorcerer_character_grant_appliers import (
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.identities import ContentRef
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.modifiers import DamageType, ResistanceStatus
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -155,10 +156,6 @@ def _remove(
         CharacterCompositionReceipt(
             runtime_entity_uuid=context.entity.uuid,
             character_id=context.character_id,
-            definition_revision=1,
-            definition_digest="a" * 64,
-            loadout_revision=1,
-            loadout_digest="b" * 64,
             grants=receipts,
             automatic_grant_refs=(),
         ),

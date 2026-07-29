@@ -12,7 +12,7 @@ from dnd.classes.rage import RageFeature
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
-from tests.engine_book.test_chapter_07_condition_lifecycle import (
+from tests.engine.test_condition_lifecycle import (
     EngineBookMarkerCondition,
     reset_condition_state,
 )
@@ -48,13 +48,13 @@ class LegacyCoverage:
 
 
 THIS_FILE = "tests/manual/test_143_condition_removal_legacy_contract.py"
-EB07_FILE = "tests/engine_book/test_chapter_07_condition_lifecycle.py"
+EB07_FILE = "tests/engine/test_condition_lifecycle.py"
 BASIC_SELECTOR = (
-    "tests/engine_book/test_chapter_08_standard_conditions.py::"
+    "tests/engine/test_standard_conditions.py::"
     "test_eb_08_012_standard_condition_removal_cleans_owned_state"
 )
 DIRECT_OWNERSHIP_SELECTOR = (
-    "tests/engine_book/test_chapter_08_standard_conditions.py::"
+    "tests/engine/test_standard_conditions.py::"
     "test_eb_08_006_severe_conditions_own_direct_denial_transforms"
 )
 LINKED_SELECTOR = (
@@ -64,7 +64,7 @@ DURATION_SELECTOR = (
     f"{EB07_FILE}::test_eb_07_009_entity_duration_advancement_expires_and_removes_condition"
 )
 UUID_SELECTOR = (
-    "tests/engine_book/test_condition_transform_ownership.py::"
+    "tests/engine/test_condition_transform_ownership.py::"
     "test_visual_access_remains_denied_until_every_owner_is_removed"
 )
 FEATURE_SELECTOR = (

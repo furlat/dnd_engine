@@ -4,7 +4,7 @@ import asyncio
 
 from dnd.controller import PassController
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
-from dnd.scenarios.controller_catalogue import (
+from tests.manual.controller_test_support import (
     create_controller_pair,
     reset_controller_catalogue_state,
     start_ordered_controller_encounter,

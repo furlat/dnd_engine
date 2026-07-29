@@ -49,7 +49,7 @@ def test_content_manifest_exposes_exact_packs_sources_and_deployment_digest() ->
     loaded = bootstrap_content_system()
     manifest = build_content_manifest(loaded)
 
-    assert manifest.engine_content_api == 1
+    assert manifest.engine_content_api == 2
     assert manifest.content_set_digest == loaded.content_set_digest
     assert manifest.built_in_artifact_digest == loaded.built_in_artifact_digest
     assert tuple(pack.pack_id for pack in manifest.packs) == (
@@ -129,6 +129,7 @@ def test_public_catalog_is_complete_code_free_and_self_authenticating() -> None:
                 ContentDefinitionKind.SPECIES_VARIANT,
                 ContentDefinitionKind.BACKGROUND,
                 ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
+                ContentDefinitionKind.TRAIT,
             }
             assert entry.runtime_behavior_kind is None
             assert entry.item_definition is None

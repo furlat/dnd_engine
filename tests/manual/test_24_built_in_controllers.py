@@ -9,7 +9,7 @@ from dnd.controller import (
     PassController,
 )
 from dnd.encounter import TurnState
-from dnd.scenarios.controller_catalogue import (
+from tests.manual.controller_test_support import (
     create_controller_pair,
     make_turn_context,
     reset_controller_catalogue_state,

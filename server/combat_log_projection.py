@@ -35,6 +35,7 @@ SUBJECTIVE_COMBAT_LOG_ENTRY_TYPES = frozenset({
     CombatLogEntryType.SPELL_INTERRUPTION,
     CombatLogEntryType.ENTITY_SPOTTED,
     CombatLogEntryType.HAZARD_DETECTED,
+    CombatLogEntryType.ROLL_MODIFICATION,
 })
 """Entry types whose subjective projection policy has been reviewed."""
 

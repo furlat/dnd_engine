@@ -302,12 +302,15 @@ def bind_runtime_behavior_child(
 def runtime_behavior_provider(
     behavior: object,
 ) -> Iterator[None]:
-    """Expose one already-bound action/condition while it creates children."""
+    """Expose one behavior while it creates children, masking unbound scopes.
+
+    An intentionally undeclared internal behavior is still a causal boundary.
+    It must not let an outer action, condition, or handler become the implicit
+    provider of private children created inside that behavior.
+    """
     binding = getattr(behavior, "behavior_binding", None)
-    if not isinstance(binding, BehaviorBinding):
-        yield
-        return
-    token = _active_behavior_provider.set(behavior)
+    provider = behavior if isinstance(binding, BehaviorBinding) else None
+    token = _active_behavior_provider.set(provider)
     try:
         yield
     finally:
@@ -402,7 +405,7 @@ def bind_runtime_handler_before_admission(
     return gateway.bind_child(
         handler,
         provider=provider,
-        runtime_owner_uuid=provider_binding.runtime_owner_uuid,
+        runtime_owner_uuid=owner_uuid,
     )
 
 

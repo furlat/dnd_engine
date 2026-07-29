@@ -6,7 +6,6 @@ no permanent ``BaseCondition`` is created merely to reuse its old lifecycle.
 """
 
 from collections.abc import Callable
-from uuid import UUID, uuid5
 
 from dnd.blocks.action_economy import (
     RechargeType,
@@ -19,6 +18,15 @@ from dnd.content_system.character_build_validation import (
 )
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
+)
+from dnd.content_system.character_grant_applier_runtime import (
+    character_grant_id,
+    grant_receipt,
+    install_bound_handler,
+    is_first_grant_for_ref,
+    register_bound_action,
+    require_grant_ref,
+    validated_class_level,
 )
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
@@ -101,63 +109,6 @@ FighterCharacterGrantApplier = Callable[
 ]
 
 
-def _require_ref(
-    entry: CharacterGrantScheduleEntry,
-    expected_ref: ContentRef,
-) -> None:
-    if entry.content_ref != expected_ref:
-        raise ValueError(
-            "Fighter grant applier received a different content ref",
-        )
-
-
-def _grant_id(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-):
-    return uuid5(context.character_id, entry.grant_token)
-
-
-def _base_receipt(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    modifier_handles: tuple[ModifierHandle, ...] = (),
-    action_uuids: tuple[UUID, ...] = (),
-    handler_uuids: tuple[UUID, ...] = (),
-    resource_contribution_ids: tuple[tuple[str, UUID], ...] = (),
-) -> CharacterGrantReceipt:
-    return CharacterGrantReceipt(
-        grant_id=_grant_id(context, entry),
-        grant_token=entry.grant_token,
-        definition_ref=entry.content_ref,
-        modifier_handles=modifier_handles,
-        action_uuids=action_uuids,
-        handler_uuids=handler_uuids,
-        resource_contribution_ids=resource_contribution_ids,
-    )
-
-
-def _is_first_grant_for_ref(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-) -> bool:
-    """Return whether this row owns its repeated feature's runtime family."""
-    if entry.content_ref is None:
-        return False
-    for scheduled in context.preview.grant_schedule:
-        if scheduled.content_ref == entry.content_ref:
-            return scheduled.grant_token == entry.grant_token
-    raise ValueError("grant entry is absent from its validated preview")
-
-
-def _fighter_level(context: BuiltinCharacterGrantContext) -> int:
-    for class_ref, level in context.preview.class_level_counts:
-        if class_ref == FIGHTER_CLASS_REF:
-            return level
-    raise ValueError("Fighter feature grant requires Fighter class levels")
-
-
 def _install_static_modifier(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
@@ -172,7 +123,7 @@ def _install_static_modifier(
         value=amount,
     )
     value.self_static.add_value_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -199,7 +150,7 @@ def _install_contextual_modifier(
         callable=callable_,
     )
     value.self_contextual.add_value_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -216,7 +167,7 @@ def _apply_archery(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_ARCHERY_REF)
+    require_grant_ref(entry, FIGHTING_STYLE_ARCHERY_REF)
     return _install_static_modifier(
         context,
         entry,
@@ -230,7 +181,7 @@ def _apply_defense(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_DEFENSE_REF)
+    require_grant_ref(entry, FIGHTING_STYLE_DEFENSE_REF)
     return _install_contextual_modifier(
         context,
         entry,
@@ -244,7 +195,7 @@ def _apply_dueling(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_DUELING_REF)
+    require_grant_ref(entry, FIGHTING_STYLE_DUELING_REF)
     return _install_contextual_modifier(
         context,
         entry,
@@ -258,7 +209,7 @@ def _apply_two_weapon_fighting(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_TWO_WEAPON_REF)
+    require_grant_ref(entry, FIGHTING_STYLE_TWO_WEAPON_REF)
     entity = context.entity
     installed: list[tuple[ModifiableValue, ContextualNumericalModifier]] = []
     handles: list[ModifierHandle] = []
@@ -292,31 +243,10 @@ def _apply_two_weapon_fighting(
         for value, modifier in reversed(installed):
             value.self_contextual.remove_value_modifier(modifier.uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=tuple(handles),
-    )
-
-
-def _install_handler(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    handler: EventHandler,
-) -> CharacterGrantReceipt:
-    content_ref = entry.content_ref
-    if content_ref is None:
-        raise ValueError("handler grant requires exact content identity")
-    context.runtime.bind_granted_behavior(
-        handler,
-        provider_ref=content_ref,
-        runtime_owner_uuid=context.entity.uuid,
-    )
-    context.entity.add_event_handler(handler)
-    return _base_receipt(
-        context,
-        entry,
-        handler_uuids=(handler.uuid,),
     )
 
 
@@ -324,7 +254,7 @@ def _apply_great_weapon_fighting(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_GREAT_WEAPON_REF)
+    require_grant_ref(entry, FIGHTING_STYLE_GREAT_WEAPON_REF)
     handler = EventHandler(
         name="Great Weapon Fighting",
         source_entity_uuid=context.entity.uuid,
@@ -337,44 +267,28 @@ def _apply_great_weapon_fighting(
         event_processor=fighter.great_weapon_fighting_processor,
         player_toggleable=True,
     )
-    return _install_handler(context, entry, handler)
+    return install_bound_handler(context, entry, handler)
 
 
 def _apply_protection(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FIGHTING_STYLE_PROTECTION_REF)
-    return _install_handler(
+    require_grant_ref(entry, FIGHTING_STYLE_PROTECTION_REF)
+    return install_bound_handler(
         context,
         entry,
         fighter.create_protection_handler(context.entity.uuid),
     )
 
 
-def _register_bound_action(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    action,
-) -> None:
-    content_ref = entry.content_ref
-    if content_ref is None:
-        raise ValueError("action grant requires exact content identity")
-    context.runtime.bind_granted_behavior(
-        action,
-        provider_ref=content_ref,
-        runtime_owner_uuid=context.entity.uuid,
-    )
-    context.entity.register_action(action)
-
-
 def _apply_second_wind(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, SECOND_WIND_REF)
+    require_grant_ref(entry, SECOND_WIND_REF)
     entity = context.entity
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity.action_economy.add_resource_contribution(
         "second_wind",
         grant_id,
@@ -384,18 +298,22 @@ def _apply_second_wind(
     )
     action = fighter.SecondWind(
         source_entity_uuid=entity.uuid,
-        fighter_level=_fighter_level(context),
+        fighter_level=validated_class_level(context, FIGHTER_CLASS_REF),
         template=True,
     )
     try:
-        _register_bound_action(context, entry, action)
+        register_bound_action(
+            context,
+            provider_ref=SECOND_WIND_REF,
+            action=action,
+        )
     except Exception:
         entity.action_economy.remove_resource_contribution(
             "second_wind",
             grant_id,
         )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=(action.uuid,),
@@ -407,9 +325,9 @@ def _apply_action_surge(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, ACTION_SURGE_REF)
+    require_grant_ref(entry, ACTION_SURGE_REF)
     entity = context.entity
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity.action_economy.add_resource_contribution(
         "action_surge",
         grant_id,
@@ -418,13 +336,17 @@ def _apply_action_surge(
         capacity_policy=ResourceCapacityPolicy.SUM,
     )
     action_uuids = ()
-    if _is_first_grant_for_ref(context, entry):
+    if is_first_grant_for_ref(context, entry):
         action = fighter.ActionSurge(
             source_entity_uuid=entity.uuid,
             template=True,
         )
         try:
-            _register_bound_action(context, entry, action)
+            register_bound_action(
+                context,
+                provider_ref=ACTION_SURGE_REF,
+                action=action,
+            )
         except Exception:
             entity.action_economy.remove_resource_contribution(
                 "action_surge",
@@ -432,7 +354,7 @@ def _apply_action_surge(
             )
             raise
         action_uuids = (action.uuid,)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=action_uuids,
@@ -447,7 +369,7 @@ def _install_weapon_critical_upgrade(
     expected_ref: ContentRef,
     name: str,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, expected_ref)
+    require_grant_ref(entry, expected_ref)
     entity = context.entity
     handles: list[ModifierHandle] = []
     installed: list[tuple[ModifiableValue, NumericalModifier]] = []
@@ -473,7 +395,7 @@ def _install_weapon_critical_upgrade(
         for value, modifier in reversed(installed):
             value.self_static.remove_value_modifier(modifier.uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=tuple(handles),
@@ -509,9 +431,9 @@ def _apply_indomitable(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, INDOMITABLE_REF)
+    require_grant_ref(entry, INDOMITABLE_REF)
     entity = context.entity
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity.action_economy.add_resource_contribution(
         "indomitable",
         grant_id,
@@ -520,7 +442,7 @@ def _apply_indomitable(
         capacity_policy=ResourceCapacityPolicy.SUM,
     )
     handler_uuids = ()
-    if _is_first_grant_for_ref(context, entry):
+    if is_first_grant_for_ref(context, entry):
         handler = fighter.create_indomitable_handler(entity.uuid)
         try:
             context.runtime.bind_granted_behavior(
@@ -536,7 +458,7 @@ def _apply_indomitable(
             )
             raise
         handler_uuids = (handler.uuid,)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         handler_uuids=handler_uuids,
@@ -548,8 +470,8 @@ def _apply_survivor(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, SURVIVOR_REF)
-    return _install_handler(
+    require_grant_ref(entry, SURVIVOR_REF)
+    return install_bound_handler(
         context,
         entry,
         fighter.create_survivor_handler(context.entity.uuid),
@@ -560,9 +482,9 @@ def _apply_lucky(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, LUCKY_FEAT_REF)
+    require_grant_ref(entry, LUCKY_FEAT_REF)
     entity = context.entity
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity.action_economy.add_resource_contribution(
         "luck_points",
         grant_id,
@@ -601,7 +523,7 @@ def _apply_lucky(
             grant_id,
         )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         handler_uuids=(handler.uuid,),

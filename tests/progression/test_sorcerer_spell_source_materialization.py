@@ -22,6 +22,7 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.character_appearance import SORCERER_HUMAN_APPEARANCE
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.spell_catalog_composition import (
@@ -44,7 +45,6 @@ from dnd.core.content.durable_characters import (
     AbilityScoreName,
     BackgroundDefinition,
     BuildChoiceRequirement,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -62,6 +62,7 @@ from dnd.core.content.durable_characters import (
     SpellReplacementChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.provenance import (
     ContentFidelity,
@@ -242,12 +243,16 @@ def _loaded_with_classes(
     species = _typed_declaration(
         kind=ContentDefinitionKind.SPECIES,
         content_id="species.human",
-        payload=SpeciesDefinition(),
+        payload=SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     background = _typed_declaration(
         kind=ContentDefinitionKind.BACKGROUND,
         content_id="background.sage",
-        payload=BackgroundDefinition(),
+        payload=BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     declarations = dict(built_in.registry.declarations)
     for declaration in (species, background, *class_declarations):
@@ -280,7 +285,7 @@ def _definition(
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=species_ref,
         background_ref=background_ref,
-        appearance=CharacterAppearanceSelection(),
+        appearance=SORCERER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=15,

@@ -16,7 +16,7 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventQueue
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.monsters.bestiary import (
     create_skeleton,
@@ -26,7 +26,7 @@ from dnd.monsters.bestiary import (
 )
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 from dnd.spells.evocation import BurningHands, EldritchBlast
-from dnd.utils import (
+from tests.engine.support import (
     deal_damage_to,
     force_attack_hit,
     force_spell_attack_hit,
@@ -36,7 +36,7 @@ from dnd.utils import (
     remove_spell_attack_modifier,
     set_hp,
 )
-from tests.engine_book.test_chapter_17_monsters_presets import (
+from tests.engine.test_monster_presets import (
     get_inventory_item,
     reset_monster_state,
 )
@@ -62,11 +62,11 @@ PRESET_INTEGRATION_SELECTOR = (
 ELDRITCH_SELECTOR = f"{THIS_FILE}::test_eldritch_blast_hit_miss_and_range"
 ACID_SELECTOR = f"{THIS_FILE}::test_acid_flask_affects_every_creature_in_its_area"
 MARK_BASE_SELECTOR = (
-    "tests/engine_book/test_chapter_17_monsters_presets.py::"
+    "tests/engine/test_monster_presets.py::"
     "test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_state"
 )
 MARK_STEALTH_SELECTOR = (
-    "tests/engine_book/test_chapter_17_monsters_presets.py::"
+    "tests/engine/test_monster_presets.py::"
     "test_eb_17_004_mark_target_strips_and_blocks_hidden_or_invisible_state"
 )
 MARK_CLEANUP_SELECTOR = (
@@ -130,7 +130,7 @@ SKELETON_UNITS_LEGACY_CASES: dict[str, LegacyCoverage] = {
     "test_acid_flask_consumable": LegacyCoverage(
         "strengthened",
         (
-            "tests/engine_book/test_chapter_17_monsters_presets.py::"
+            "tests/engine/test_monster_presets.py::"
             "test_eb_17_006_warrior_acid_flask_is_a_consumable_spell_item"
         ),
         "The engine-book contract asserts inventory ownership, one charge, one item action, and damage.",
@@ -328,8 +328,8 @@ def test_specialized_skeleton_presets_preserve_identity_and_arena_interop() -> N
     assert warlock.is_spellcaster
     assert warlock.ac_bonus().normalized_score == 13
     assert warlock.ability_scores.charisma.modifier == 2
-    assert warlock.action_economy._get_spell_slot_value(1).normalized_score == 2
-    assert warlock.action_economy._get_spell_slot_value(2).normalized_score == 1
+    assert warlock.action_economy.spell_slot_value(1).normalized_score == 2
+    assert warlock.action_economy.spell_slot_value(2).normalized_score == 1
     assert _equipped_weapon_name(warlock, WeaponSlot.MELEE_MAIN) == "Arcane Staff"
     assert warlock.equipment.helmet is not None
     assert warlock.equipment.helmet.name == "Crown"
@@ -356,7 +356,7 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
     )
     Entity.update_all_entities_senses(max_distance=150)
     initial_slots = (
-        warlock.action_economy._get_spell_slot_value(1).normalized_score
+        warlock.action_economy.spell_slot_value(1).normalized_score
     )
 
     hit_modifier = force_spell_attack_hit(warlock)
@@ -373,7 +373,7 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
     assert hit_event is not None and not hit_event.canceled
     assert get_hp(target) < target.get_max_hp()
     assert (
-        warlock.action_economy._get_spell_slot_value(1).normalized_score
+        warlock.action_economy.spell_slot_value(1).normalized_score
         == initial_slots
     )
 
@@ -659,8 +659,8 @@ def test_warlock_invisibility_scroll_applies_effect_without_spell_slots() -> Non
     use_actions = scroll.get_use_actions(warlock.uuid)
     assert len(use_actions) == 1
     slots_before = (
-        warlock.action_economy._get_spell_slot_value(1).normalized_score,
-        warlock.action_economy._get_spell_slot_value(2).normalized_score,
+        warlock.action_economy.spell_slot_value(1).normalized_score,
+        warlock.action_economy.spell_slot_value(2).normalized_score,
     )
 
     completion = execute_use_action(
@@ -678,8 +678,8 @@ def test_warlock_invisibility_scroll_applies_effect_without_spell_slots() -> Non
     assert "Invisible" in warlock.active_conditions
     assert warlock.is_invisible
     assert (
-        warlock.action_economy._get_spell_slot_value(1).normalized_score,
-        warlock.action_economy._get_spell_slot_value(2).normalized_score,
+        warlock.action_economy.spell_slot_value(1).normalized_score,
+        warlock.action_economy.spell_slot_value(2).normalized_score,
     ) == slots_before
     assert not warlock.inventory.has_item(scroll_uuid)
     assert BaseBlock.get(scroll_uuid) is None
@@ -715,10 +715,10 @@ def test_warlock_burning_hands_spends_only_its_selected_slot() -> None:
         warlock.action_economy.reset_all_costs()
 
     assert (
-        warlock.action_economy._get_spell_slot_value(1).normalized_score == 0
+        warlock.action_economy.spell_slot_value(1).normalized_score == 0
     )
     assert (
-        warlock.action_economy._get_spell_slot_value(2).normalized_score == 1
+        warlock.action_economy.spell_slot_value(2).normalized_score == 1
     )
 
     rows = {

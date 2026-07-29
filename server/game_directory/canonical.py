@@ -40,12 +40,6 @@ def canonical_digest(value: object) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def text_digest(value: str) -> str:
-    """Return the SHA-256 digest of exact UTF-8 text."""
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
 def hash_capability(secret: str, pepper: bytes) -> str:
     """Hash a high-entropy capability using a server-held HMAC pepper.
 

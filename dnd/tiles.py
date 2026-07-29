@@ -14,7 +14,6 @@ for N tiles causes O(N) event processing overhead.
 """
 
 import random
-import warnings
 from typing import List, Optional, Set, Tuple
 from uuid import UUID, uuid4
 
@@ -22,7 +21,7 @@ from dnd.core.base_tiles import Tile
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, EventQueue, SpatialChangeEvent, SensesUpdateHint
 )
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.tile_conditions import SpikeTrapCondition
@@ -140,70 +139,3 @@ def deactivate_spike_zone(tiles: List[Tile], handler: EventHandler) -> None:
         )
         event = event.phase_to(EventPhase.COMPLETION)
         EventQueue.register(event)
-
-
-def spikes_terrain_factory(position: Tuple[int, int]) -> Tile:
-    """
-    DEPRECATED: Use create_spike_zone() instead for better performance.
-
-    Create a spikes terrain tile (2d4 piercing damage on entry).
-
-    WARNING: This creates ONE handler PER tile which causes performance issues
-    when used for many tiles. Use create_spike_zone() for permanent terrain.
-
-    Args:
-        position: The (x, y) position for this tile
-
-    Returns:
-        Configured Tile with entry damage handler registered
-    """
-    warnings.warn(
-        "spikes_terrain_factory() creates one handler per tile. "
-        "Use create_spike_zone() for better performance with multiple tiles.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-
-    tile = Tile.create(
-        position,
-        walkable=True,
-        visible=True,
-        name="Spikes",
-        sprite_name="spikes.png"
-    )
-
-    def damage_processor(event: Event, _: UUID) -> Event | None:
-        """Deal 2d4 piercing damage when entity enters."""
-        if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
-            return None
-
-        entity = Entity.get(event.entity_uuid)
-        if not entity:
-            return None
-
-        damage = sum(random.randint(1, 4) for _ in range(2))
-
-        entity.receive_damage(damage, DamageType.PIERCING, tile.uuid, parent_event=event.parent_event)
-
-        return None
-
-    handler = EventHandler(
-        name="Spikes Entry Damage",
-        source_entity_uuid=tile.uuid,
-        trigger_conditions=[Trigger(
-            event_type=EventType.SPATIAL_ENTITY_ENTERED,
-            event_phase=EventPhase.EFFECT
-        )],
-        event_processor=damage_processor
-    )
-
-    tile.event_handlers[handler.uuid] = handler
-
-    EventQueue.add_spatial_handler(
-        handler=handler,
-        positions={position},
-        event_type=EventType.SPATIAL_ENTITY_ENTERED,
-        event_phase=EventPhase.EFFECT
-    )
-
-    return tile

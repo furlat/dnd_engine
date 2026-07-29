@@ -24,6 +24,7 @@ from dnd.core.content.durable_characters import (
     ClassSkillChoice,
     CantripChoice,
     BuildChoiceRequirement,
+    BackgroundDefinition,
     ChoiceRequirementKind,
     FlexibleAbilityBonusSelection,
     ProficiencySubject,
@@ -32,8 +33,14 @@ from dnd.core.content.durable_characters import (
     RitualPreparationPolicy,
     SpellcastingSourceId,
     StartingProficiencyChoice,
+    SpeciesDefinition,
+    SpeciesVariantDefinition,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import (
+    OriginRuntimeSupport,
+    OriginRuntimeSupportStatus,
+)
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
@@ -120,6 +127,44 @@ def test_progression_definition_kinds_are_exact_content_identities() -> None:
     assert ContentDefinitionKind.SPECIES.value == "species"
     assert ContentDefinitionKind.SPECIES_VARIANT.value == "species_variant"
     assert ContentDefinitionKind.BACKGROUND.value == "background"
+
+
+def test_origin_runtime_support_is_closed_and_requires_an_exact_block_reason() -> None:
+    available = OriginRuntimeSupport.available()
+    blocked = OriginRuntimeSupport.blocked(
+        "The authored runtime grants are not installed.",
+    )
+
+    assert available.status is OriginRuntimeSupportStatus.AVAILABLE
+    assert available.blocked_reason is None
+    assert blocked.status is OriginRuntimeSupportStatus.BLOCKED
+    assert blocked.blocked_reason == (
+        "The authored runtime grants are not installed."
+    )
+
+    with pytest.raises(ValidationError, match="blocked.*reason"):
+        OriginRuntimeSupport(status=OriginRuntimeSupportStatus.BLOCKED)
+    with pytest.raises(ValidationError, match="available.*blocked reason"):
+        OriginRuntimeSupport(
+            status=OriginRuntimeSupportStatus.AVAILABLE,
+            blocked_reason="Contradictory unavailable state.",
+        )
+    with pytest.raises(ValidationError, match="exact reason"):
+        OriginRuntimeSupport.blocked("   ")
+
+
+def test_every_origin_definition_requires_explicit_runtime_support() -> None:
+    with pytest.raises(ValidationError, match="runtime_support"):
+        SpeciesDefinition.model_validate({})
+    with pytest.raises(ValidationError, match="runtime_support"):
+        BackgroundDefinition.model_validate({})
+    with pytest.raises(ValidationError, match="runtime_support"):
+        SpeciesVariantDefinition.model_validate({
+            "parent_species_ref": _ref(
+                ContentDefinitionKind.SPECIES,
+                "species.fixture",
+            ).model_dump(mode="json"),
+        })
 
 
 def test_point_buy_and_flexible_bonuses_follow_selected_bg3_policy() -> None:

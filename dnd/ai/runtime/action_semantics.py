@@ -704,46 +704,6 @@ def _close_door_semantics() -> ActionSemantics:
     )
 
 
-def _toggle_door_semantics() -> ActionSemantics:
-    """Return conservative semantics for a door toggle interaction."""
-    return ActionSemantics(
-        semantic_id="interaction.door.toggle",
-        tags=frozenset({
-            ActionTag.INTERACTION_DOOR_OPEN,
-            ActionTag.INTERACTION_DOOR_CLOSE,
-            ActionTag.INTERACTION_OBJECT,
-            ActionTag.INFORMATION_REVEAL,
-        }),
-        planning_preconditions=_predicate("actor.adjacent_to_target", True),
-        guaranteed_effects=(
-            LogicalEffect(
-                fact_id="selected_object.open",
-                operation=EffectOperation.INVALIDATE,
-            ),
-        ),
-        topology_effects=(
-            TopologyEffect(
-                operation=TopologyOperation.TOGGLE,
-                certainty=EffectCertainty.GUARANTEED,
-                anchor=WorldEffectAnchor.SELECTED_OBJECT,
-                scope=WorldEffectScope.TARGET,
-                subject_ref="selected_object",
-                affects_movement=True,
-                affects_vision=True,
-            ),
-        ),
-        information_effects=(
-            InformationEffect(
-                operation=InformationOperation.REVEAL_FRONTIER,
-                certainty=EffectCertainty.POTENTIAL,
-                anchor=WorldEffectAnchor.SELECTED_OBJECT,
-                scope=WorldEffectScope.FRONTIER,
-                scope_ref="selected_object.far_side",
-            ),
-        ),
-    )
-
-
 def _deactivate_hazard_semantics() -> ActionSemantics:
     """Return semantics for disabling a known linked hazard region."""
     return ActionSemantics(
@@ -1155,10 +1115,9 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.spells.transmutation.SpikeGrowth": _spike_growth_semantics,
     "dnd.items.environment.CloseDirectionalDoorAction": _close_door_semantics,
     "dnd.items.environment.OpenDirectionalDoorAction": _open_door_semantics,
-    "dnd.items.test_items.CloseDoorAction": _close_door_semantics,
-    "dnd.items.test_items.InteractDoorAction": _toggle_door_semantics,
-    "dnd.items.test_items.OpenDoorAction": _open_door_semantics,
-    "dnd.items.test_items.PullLeverAction": _deactivate_hazard_semantics,
+    "dnd.items.environment_interactables.CloseDoorAction": _close_door_semantics,
+    "dnd.items.environment_interactables.OpenDoorAction": _open_door_semantics,
+    "dnd.items.environment_interactables.PullLeverAction": _deactivate_hazard_semantics,
 }
 
 

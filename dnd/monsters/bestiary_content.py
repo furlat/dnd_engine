@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+)
+from dnd.content_system.creature_possessions import (
+    CreaturePossessionDisposition,
+    CreaturePossessionGrant,
+    apply_creature_possessions,
+    creature_possession_dependencies,
 )
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.dependencies import (
@@ -35,11 +42,22 @@ from dnd.core.content.registration import (
     creature_factory,
     get_content_declaration,
 )
+from dnd.core.equipment_types import BodyPart
 from dnd.entity import Entity
 from dnd.items.armors import (
+    CLOTH_SHOES_RECIPE,
     CROWN_RECIPE,
     LEATHER_ARMOR_RECIPE,
     WOODEN_SHIELD_RECIPE,
+)
+from dnd.items.apparel_presets import (
+    DARK_CLOTH_SHOES_PRESET,
+    DARK_BOOTS_PRESET,
+    DARK_CULTIST_ROBES_PRESET,
+    HEDGE_WIZARD_ROBE_PRESET,
+    NECROMANCER_ROBE_PRESET,
+    PRIEST_VESTMENTS_PRESET,
+    ROPE_SANDALS_PRESET,
 )
 from dnd.items.consumables import (
     GREATER_INVISIBILITY_POTION_RECIPE,
@@ -61,6 +79,7 @@ from dnd.monsters.bestiary import (
     create_caster,
     create_goblin,
     create_goblin_archer,
+    create_goblin_caster,
     create_skeleton,
     create_skeleton_archer,
     create_skeleton_warlock,
@@ -103,6 +122,21 @@ class GenericCasterParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     level: int = Field(default=5, ge=1, le=20)
+    wardrobe: Literal[
+        "arcane",
+        "dark",
+        "divine",
+        "necromancer",
+    ] = "arcane"
+
+
+class GoblinCasterParameters(BaseModel):
+    """Durable authored parameters for the goblin full-caster variant."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    level: int = Field(default=5, ge=1, le=20)
+    weight: int = Field(default=40, ge=1)
 
 
 class SkeletonVariantParameters(BaseModel):
@@ -257,6 +291,53 @@ def _grants_action(
 _STANDARD_ACTION_DEPENDENCIES = _standard_action_dependencies()
 
 
+def _wardrobe_item(
+    recipe: ContentRecipe,
+    slot: BodyPart,
+) -> CreaturePossessionGrant:
+    return CreaturePossessionGrant(
+        recipe=recipe,
+        disposition=CreaturePossessionDisposition.EQUIPPED,
+        equipment_slot=slot,
+    )
+
+
+_GOBLIN_WARDROBE = (
+    _wardrobe_item(DARK_BOOTS_PRESET.recipe, BodyPart.FEET),
+)
+_GENERIC_CASTER_WARDROBES = MappingProxyType({
+    "arcane": (
+        _wardrobe_item(HEDGE_WIZARD_ROBE_PRESET.recipe, BodyPart.BODY),
+        _wardrobe_item(CLOTH_SHOES_RECIPE, BodyPart.FEET),
+    ),
+    "dark": (
+        _wardrobe_item(DARK_CULTIST_ROBES_PRESET.recipe, BodyPart.BODY),
+        _wardrobe_item(DARK_CLOTH_SHOES_PRESET.recipe, BodyPart.FEET),
+    ),
+    "divine": (
+        _wardrobe_item(PRIEST_VESTMENTS_PRESET.recipe, BodyPart.BODY),
+        _wardrobe_item(ROPE_SANDALS_PRESET.recipe, BodyPart.FEET),
+    ),
+    "necromancer": (
+        _wardrobe_item(NECROMANCER_ROBE_PRESET.recipe, BodyPart.BODY),
+        _wardrobe_item(DARK_CLOTH_SHOES_PRESET.recipe, BodyPart.FEET),
+    ),
+})
+_GOBLIN_CASTER_WARDROBE = (
+    _wardrobe_item(HEDGE_WIZARD_ROBE_PRESET.recipe, BodyPart.BODY),
+    _wardrobe_item(DARK_CLOTH_SHOES_PRESET.recipe, BodyPart.FEET),
+)
+BESTIARY_CREATURE_WARDROBE_GRANTS_BY_KEY = MappingProxyType({
+    "goblin": _GOBLIN_WARDROBE,
+    "goblin_archer": _GOBLIN_WARDROBE,
+    **{
+        f"generic_caster.{variant}": grants
+        for variant, grants in _GENERIC_CASTER_WARDROBES.items()
+    },
+    "goblin_caster": _GOBLIN_CASTER_WARDROBE,
+})
+
+
 @creature_factory(
     pack_id="content.neurodragon",
     content_id="creature.goblin",
@@ -284,6 +365,7 @@ _STANDARD_ACTION_DEPENDENCIES = _standard_action_dependencies()
                 WOODEN_SHIELD_RECIPE,
             ),
         ),
+        *creature_possession_dependencies(_GOBLIN_WARDROBE),
     ),
 )
 def _build_goblin(
@@ -291,7 +373,7 @@ def _build_goblin(
     parameters: GoblinParameters,
 ) -> Entity:
     context = CreatureBuildContext.model_validate(raw_context)
-    return create_goblin(
+    entity = create_goblin(
         source_id=context.runtime_entity_uuid,
         name=context.display_name,
         position=context.position,
@@ -300,6 +382,12 @@ def _build_goblin(
         possession_mode=context.possession_mode,
         content_ref=context.requested_ref,
     )
+    apply_creature_possessions(
+        entity,
+        _GOBLIN_WARDROBE,
+        possession_mode=context.possession_mode,
+    )
+    return entity
 
 
 @creature_factory(
@@ -373,6 +461,7 @@ def _build_skeleton(
                 LEATHER_ARMOR_RECIPE,
             ),
         ),
+        *creature_possession_dependencies(_GOBLIN_WARDROBE),
     ),
 )
 def _build_goblin_archer(
@@ -380,7 +469,7 @@ def _build_goblin_archer(
     parameters: GoblinArcherParameters,
 ) -> Entity:
     context = CreatureBuildContext.model_validate(raw_context)
-    return create_goblin_archer(
+    entity = create_goblin_archer(
         source_id=context.runtime_entity_uuid,
         name=context.display_name,
         position=context.position,
@@ -389,6 +478,12 @@ def _build_goblin_archer(
         possession_mode=context.possession_mode,
         content_ref=context.requested_ref,
     )
+    apply_creature_possessions(
+        entity,
+        _GOBLIN_WARDROBE,
+        possession_mode=context.possession_mode,
+    )
+    return entity
 
 
 @creature_factory(
@@ -414,6 +509,11 @@ def _build_goblin_archer(
                 HASTE_POTION_RECIPE,
             ),
         ),
+        *creature_possession_dependencies(
+            grant
+            for grants in _GENERIC_CASTER_WARDROBES.values()
+            for grant in grants
+        ),
         *_spell_dependencies(
             FireBolt,
             MagicMissile,
@@ -428,7 +528,7 @@ def _build_generic_caster(
     parameters: GenericCasterParameters,
 ) -> Entity:
     context = CreatureBuildContext.model_validate(raw_context)
-    return create_caster(
+    entity = create_caster(
         source_id=context.runtime_entity_uuid,
         name=context.display_name,
         position=context.position,
@@ -437,6 +537,72 @@ def _build_generic_caster(
         possession_mode=context.possession_mode,
         content_ref=context.requested_ref,
     )
+    apply_creature_possessions(
+        entity,
+        _GENERIC_CASTER_WARDROBES[parameters.wardrobe],
+        possession_mode=context.possession_mode,
+    )
+    return entity
+
+
+@creature_factory(
+    pack_id="content.neurodragon",
+    content_id="creature.goblin_caster",
+    version=1,
+    parameters=GoblinCasterParameters,
+    descriptor=_descriptor(
+        content_id="creature.goblin_caster",
+        display_name="Goblin Caster",
+        description=(
+            "A small darkvision hedge caster with goblinoid mobility."
+        ),
+        tags=("caster", "goblinoid", "neurodragon", "small", "spellcasting"),
+        sort_order=21,
+        pack_group="creatures.neurodragon.bestiary",
+    ),
+    provenance=_original_provenance("Goblin Caster"),
+    dependencies=(
+        *_STANDARD_ACTION_DEPENDENCIES,
+        *_possession_dependencies(
+            equipped=(
+                DAGGER_RECIPE,
+            ),
+            inventory=(
+                GREATER_INVISIBILITY_POTION_RECIPE,
+                HASTE_POTION_RECIPE,
+            ),
+        ),
+        *creature_possession_dependencies(_GOBLIN_CASTER_WARDROBE),
+        *_spell_dependencies(
+            FireBolt,
+            MagicMissile,
+            Fireball,
+            BurningHands,
+            Invisibility,
+        ),
+    ),
+)
+def _build_goblin_caster(
+    raw_context: object,
+    parameters: GoblinCasterParameters,
+) -> Entity:
+    context = CreatureBuildContext.model_validate(raw_context)
+    entity = create_goblin_caster(
+        source_id=context.runtime_entity_uuid,
+        name=context.display_name,
+        position=context.position,
+        faction=context.faction,
+        level=parameters.level,
+        weight=parameters.weight,
+        possession_mode=context.possession_mode,
+        content_ref=context.requested_ref,
+    )
+    apply_creature_possessions(
+        entity,
+        _GOBLIN_CASTER_WARDROBE,
+        possession_mode=context.possession_mode,
+    )
+    return entity
 
 
 @creature_factory(
@@ -576,6 +742,7 @@ BESTIARY_CREATURE_DECLARATIONS: tuple[ContentDeclaration, ...] = tuple(
         _build_skeleton,
         _build_goblin_archer,
         _build_generic_caster,
+        _build_goblin_caster,
         _build_skeleton_warrior,
         _build_skeleton_archer,
         _build_skeleton_warlock,

@@ -1,9 +1,8 @@
-"""Checked-in migration and official-source coverage ledger contracts."""
+"""Checked-in official-source coverage ledger contracts."""
 
 from __future__ import annotations
 
 from enum import Enum
-from types import MappingProxyType
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,146 +12,6 @@ from dnd.core.content.identities import (
     ContentRef,
     validate_namespaced_id,
 )
-
-
-class LegacyContentClassification(str, Enum):
-    """Why a current implementation exists in the migration inventory."""
-
-    INDEPENDENT_DEFINITION = "independent_definition"
-    ROOT_OWNED_BEHAVIOR = "root_owned_behavior"
-    INTERNAL_RUNTIME_MARKER = "internal_runtime_marker"
-    ABSTRACT_MECHANISM = "abstract_mechanism"
-    FIXTURE_ONLY = "fixture_only"
-    APPROVED_DELETION = "approved_deletion"
-
-
-class LegacyMigrationStatus(str, Enum):
-    """Current state of one legacy-to-canonical migration row."""
-
-    INVENTORIED = "inventoried"
-    MIGRATED = "migrated"
-    DELETION_APPROVED = "deletion_approved"
-
-
-class LegacyContentMigrationRow(BaseModel):
-    """Measured destination for one existing definition or derived behavior."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    legacy_id: str
-    legacy_locators: tuple[str, ...] = Field(min_length=1)
-    definition_kind: ContentDefinitionKind | None = None
-    classification: LegacyContentClassification
-    provisional_ref: ContentRef | None = None
-    provided_by_ref: ContentRef | None = None
-    dependency_refs: tuple[ContentRef, ...] = ()
-    measuring_test_nodeids: tuple[str, ...] = Field(min_length=1)
-    migration_status: LegacyMigrationStatus
-    replacement_ref: ContentRef | None = None
-    deletion_rationale: str = ""
-    notes: str = ""
-
-    @field_validator("legacy_id")
-    @classmethod
-    def _validate_legacy_id(cls, value: str) -> str:
-        return validate_namespaced_id(value, "legacy_id")
-
-    @field_validator(
-        "legacy_locators",
-        "measuring_test_nodeids",
-    )
-    @classmethod
-    def _validate_nonempty_rows(
-        cls,
-        value: tuple[str, ...],
-        info,
-    ) -> tuple[str, ...]:
-        if any(not row.strip() for row in value):
-            raise ValueError(f"{info.field_name} cannot contain empty rows")
-        if len(set(value)) != len(value):
-            raise ValueError(f"{info.field_name} cannot contain duplicates")
-        return value
-
-    @model_validator(mode="after")
-    def _validate_destination(self) -> Self:
-        if (
-            self.classification
-            == LegacyContentClassification.INDEPENDENT_DEFINITION
-        ):
-            if self.definition_kind is None or self.provisional_ref is None:
-                raise ValueError(
-                    "independent definitions require definition_kind and "
-                    "provisional_ref",
-                )
-            if self.provisional_ref.definition_kind != self.definition_kind:
-                raise ValueError(
-                    "provisional_ref definition kind must match definition_kind",
-                )
-        if (
-            self.classification
-            == LegacyContentClassification.ROOT_OWNED_BEHAVIOR
-            and self.provided_by_ref is None
-        ):
-            raise ValueError("root-owned behavior requires provided_by_ref")
-        if (
-            self.classification
-            == LegacyContentClassification.APPROVED_DELETION
-        ):
-            if self.migration_status != LegacyMigrationStatus.DELETION_APPROVED:
-                raise ValueError(
-                    "approved deletion requires deletion_approved status",
-                )
-            if not self.deletion_rationale.strip():
-                raise ValueError("approved deletion requires deletion_rationale")
-        elif self.migration_status == LegacyMigrationStatus.DELETION_APPROVED:
-            raise ValueError(
-                "deletion_approved status is reserved for approved deletions",
-            )
-        if (
-            self.migration_status == LegacyMigrationStatus.MIGRATED
-            and self.replacement_ref is None
-        ):
-            raise ValueError("migrated rows require replacement_ref")
-        return self
-
-
-class LegacyContentMigrationLedger(BaseModel):
-    """Deterministic inventory of every pre-refactor content definition."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: int = Field(default=1, ge=1)
-    rows: tuple[LegacyContentMigrationRow, ...]
-
-    @model_validator(mode="after")
-    def _validate_unique_rows(self) -> Self:
-        seen: set[str] = set()
-        duplicates: set[str] = set()
-        for row in self.rows:
-            if row.legacy_id in seen:
-                duplicates.add(row.legacy_id)
-            seen.add(row.legacy_id)
-        if duplicates:
-            raise ValueError(
-                "Duplicate legacy_id rows: " + ", ".join(sorted(duplicates)),
-            )
-        return self
-
-    @property
-    def rows_by_id(self):
-        """Return an immutable identity-keyed row view."""
-        return MappingProxyType({row.legacy_id: row for row in self.rows})
-
-    @property
-    def unmigrated_ids(self) -> tuple[str, ...]:
-        """Return inventoried rows that still need migration or deletion."""
-        return tuple(
-            sorted(
-                row.legacy_id
-                for row in self.rows
-                if row.migration_status == LegacyMigrationStatus.INVENTORIED
-            ),
-        )
 
 
 class SourceCoverageSection(str, Enum):

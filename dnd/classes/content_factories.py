@@ -19,6 +19,11 @@ from dnd.content_system.builtin_character_builds import (
     BuiltinSingleClassBuild,
     compose_builtin_character_revisions,
 )
+from dnd.content_system.character_appearance import (
+    BARBARIAN_HUMAN_APPEARANCE,
+    FIGHTER_HUMAN_APPEARANCE,
+    SORCERER_HUMAN_APPEARANCE,
+)
 from dnd.content_system.character_materialization import materialize_character
 from dnd.content_system.creature_bindings import CreatureRuntimeBindingRegistry
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -223,6 +228,7 @@ def _build_barbarian(
             class_id="barbarian",
             level=parameters.level,
             equipment_preset=parameters.equipment_preset,
+            appearance=BARBARIAN_HUMAN_APPEARANCE,
             asi_by_level=_asi_rows(
                 (4, parameters.asi_4),
                 (8, parameters.asi_8),
@@ -254,6 +260,7 @@ def _build_fighter(
             class_id="fighter",
             level=parameters.level,
             equipment_preset=parameters.equipment_preset,
+            appearance=FIGHTER_HUMAN_APPEARANCE,
             fighting_style=parameters.fighting_style,
             asi_by_level=_asi_rows(
                 (4, parameters.asi_4),
@@ -287,6 +294,7 @@ def _build_sorcerer(
             class_id="sorcerer",
             level=parameters.level,
             equipment_preset=parameters.equipment_preset,
+            appearance=SORCERER_HUMAN_APPEARANCE,
             metamagic_choices=parameters.metamagic_choices,
             spell_names=parameters.spell_names,
             asi_by_level=_asi_rows(

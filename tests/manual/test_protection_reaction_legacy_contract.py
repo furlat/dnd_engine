@@ -16,7 +16,7 @@ from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 from dnd.core.gridmap import get_map
 
 

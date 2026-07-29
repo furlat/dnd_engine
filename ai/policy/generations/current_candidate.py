@@ -1,4 +1,4 @@
-"""Executable current-generation policy behavior built above frozen v31."""
+"""Executable current-generation policy behavior built above accepted V32."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from ai.policy.candidates import (
     PolicyCandidateSet,
     _capability_projection_at_origin,
     _future_capability_target_projections,
-    build_policy_candidate_set as build_v31_candidate_set,
+    build_policy_candidate_set as build_accepted_candidate_set,
 )
 from ai.policy.contracts import (
     CapabilityTargetProjection,
@@ -50,7 +50,7 @@ from ai.policy.routines import (
     RoutinePlanStatus,
     RoutineRevalidation,
     plan_pursue_capability,
-    plan_registered_routines as plan_v31_registered_routines,
+    plan_registered_routines as plan_accepted_routines,
 )
 from dnd.ai.contracts.control import (
     ActionAffordance,
@@ -109,7 +109,7 @@ class SemanticAdmissionRecord(CandidateGenerationModel):
 @logical_policy_method(BUILD_CURRENT_CANDIDATES_CONTRACT)
 def build_current_candidate_set(context: PolicyContext) -> PolicyCandidateSet:
     """Build current-generation candidates without mutating frozen v31 behavior."""
-    legacy = build_v31_candidate_set(context)
+    legacy = build_accepted_candidate_set(context)
     rescored = PolicyCandidateSet(
         direct_damage=_rescore(context, legacy.direct_damage),
         healing=_rescore(context, legacy.healing),
@@ -150,7 +150,7 @@ def plan_current_routines(
         and _dominant_durable_extra_action_setup(candidate_set)
     ):
         return tuple()
-    raw_registered = plan_v31_registered_routines(
+    raw_registered = plan_accepted_routines(
         context,
         prior_progress,
         revalidation,
@@ -209,7 +209,7 @@ def _dominant_durable_extra_action_setup(
     """Skip speculative starters when typed durable extra actions already dominate.
 
     The current generation rescales inherited proposals into common tactical
-    units, so the frozen v31 setup threshold cannot recognize this case. A
+    units, so the accepted baseline setup threshold cannot recognize this case. A
     setup within the existing position-then-pressure margin of the fixed
     pursuit starter already wins the value-of-information trade when it grants
     future actions. Direct pressure and active-routine handling remain outside

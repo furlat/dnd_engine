@@ -78,6 +78,10 @@ class Senses(BaseBlock):
         description="Known safe-path movement costs in feet keyed by destination.",
     )
     sense_modes: List[SenseMode] = Field(default_factory=list, description="Special sense modes with ranges.")
+    sense_mode_sources: Dict[UUID, SenseMode] = Field(
+        default_factory=dict,
+        description="Source-owned structural special senses keyed by grant UUID.",
+    )
     seen: Set[Tuple[int, int]] = Field(default_factory=set, description="Cells this observer has previously seen.")
     collision_blocked: Set[Tuple[int, int]] = Field(
         default_factory=set,
@@ -116,7 +120,8 @@ class Senses(BaseBlock):
     def compute_sense_modes_hash(self) -> int:
         """Hash of current sense modes for quick change detection."""
         return hash(tuple(sorted(
-            (sm.sense_type.value, sm.range_feet) for sm in self.sense_modes
+            (sm.sense_type.value, sm.range_feet)
+            for sm in self.get_sense_modes()
         )))
 
     def snapshot_perception(self, passive_perception: int) -> None:
@@ -131,11 +136,13 @@ class Senses(BaseBlock):
 
     def has_sense(self, sense_type: SensesType) -> bool:
         """Check if entity has a sense type (any range)."""
-        return any(sm.sense_type == sense_type for sm in self.sense_modes)
+        return any(
+            sm.sense_type == sense_type for sm in self.get_sense_modes()
+        )
 
     def has_sense_in_range(self, sense_type: SensesType, distance_feet: int) -> bool:
         """Check if a sense type covers a specific distance."""
-        for sm in self.sense_modes:
+        for sm in self.get_sense_modes():
             if sm.sense_type == sense_type:
                 return sm.range_feet == 0 or distance_feet <= sm.range_feet
         return False
@@ -165,14 +172,46 @@ class Senses(BaseBlock):
 
     def get_sense_range(self, sense_type: SensesType) -> int:
         """Returns range in feet. -1 = not present, 0 = unlimited."""
-        for sm in self.sense_modes:
+        for sm in self.get_sense_modes():
             if sm.sense_type == sense_type:
                 return sm.range_feet
         return -1
 
     def get_sense_modes(self) -> List[SenseMode]:
         """Return this block's sense modes. Override of BaseBlock.get_sense_modes()."""
-        return self.sense_modes
+        ranges: Dict[SensesType, int] = {}
+        for mode in (*self.sense_modes, *self.sense_mode_sources.values()):
+            current = ranges.get(mode.sense_type)
+            if current is None:
+                ranges[mode.sense_type] = mode.range_feet
+            elif current == 0 or mode.range_feet == 0:
+                ranges[mode.sense_type] = 0
+            else:
+                ranges[mode.sense_type] = max(current, mode.range_feet)
+        return [
+            SenseMode(sense_type=sense_type, range_feet=range_feet)
+            for sense_type, range_feet in sorted(
+                ranges.items(),
+                key=lambda row: row[0].value,
+            )
+        ]
+
+    def add_sense_mode_source(
+        self,
+        source_id: UUID,
+        mode: SenseMode,
+    ) -> None:
+        """Install one source-owned special sense contribution."""
+        existing = self.sense_mode_sources.get(source_id)
+        if existing is not None and existing != mode:
+            raise ValueError(
+                f"sense source {source_id} already owns a different mode",
+            )
+        self.sense_mode_sources[source_id] = mode
+
+    def remove_sense_mode_source(self, source_id: UUID) -> bool:
+        """Remove exactly one source-owned special sense contribution."""
+        return self.sense_mode_sources.pop(source_id, None) is not None
 
     def add_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
         """Add a visible entity to the cache."""
@@ -867,6 +906,7 @@ class SpatialSensesCallback:
             refresh_positions = self._light_positions_requiring_visibility_refresh(overlap)
             if refresh_positions:
                 self._update_visibility_for_light_positions(refresh_positions)
+                self.senses._paths_dirty = True
             return
 
         if hint.entity_left:
@@ -1319,13 +1359,6 @@ class SpatialSensesSystem:
         """Register or replace one observer callback and index its current facts."""
         self.callbacks_by_observer[callback.owner_uuid] = callback
         self.refresh_observer(callback.owner_uuid)
-
-    def unregister_observer(self, observer_uuid: UUID) -> None:
-        """Remove one observer from callbacks and all reverse indexes."""
-        self.callbacks_by_observer.pop(observer_uuid, None)
-        old = self.footprints_by_observer.pop(observer_uuid, None)
-        if old is not None:
-            self._remove_footprint(observer_uuid, old)
 
     def refresh_observer(self, observer_uuid: UUID) -> None:
         """Synchronize one observer's reverse indexes with its senses cache."""

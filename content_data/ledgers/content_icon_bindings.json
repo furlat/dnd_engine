@@ -1,6 +1,6 @@
 {
-  "asset_index_digest": "440314e68181847a1a29fcdffe5a8a5444449d478781afb5a24a3233546a3201",
-  "binding_digest": "4bf619374231245896efc18bf7ae5759b43502b6cb0040a0b1e8b5d767fc4fa6",
+  "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
+  "binding_digest": "a4f2ae22f0df05ac60db40884a3911d3f65a23cdd333f9582d1091d1f177b8ea",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -272,14 +272,14 @@
       "asset_sha256": null,
       "content_ref": {
         "content_id": "background.adventurer",
-        "content_version": 1,
-        "definition_contract_hash": "a6c220e89812efc6bcc9d0f9efb316803bfdc9b1c6a78144538425215ed1dc79",
+        "content_version": 2,
+        "definition_contract_hash": "16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7",
         "definition_kind": "background",
         "pack_id": "content.neurodragon"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.neurodragon:background:background.adventurer@1",
+      "evidence_token": "portrait_sprite_owned_presentation:background:content.neurodragon:background:background.adventurer@2",
       "icon_key": null
     },
     {
@@ -397,9 +397,303 @@
     {
       "asset_sha256": null,
       "content_ref": {
+        "content_id": "creature.configured_srd.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.acolyte@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.bandit",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.bandit@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.bandit_captain",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.bandit_captain@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.berserker",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.berserker@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.bugbear@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.commoner",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.commoner@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.cult_fanatic@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.cultist",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.cultist@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.gnoll",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.gnoll@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.guard",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.guard@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.hobgoblin",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.hobgoblin@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.knight",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.knight@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.kobold",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.kobold@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.mage",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.mage@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.orc",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.orc@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.priest",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.priest@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.scout",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.scout@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.spy",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.spy@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.thug",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.thug@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.tribal_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.tribal_warrior@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.configured_srd.veteran",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.configured_srd.veteran@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
         "content_id": "creature.generic_caster",
         "content_version": 1,
-        "definition_contract_hash": "c2dba7e9e7fb83811bf17a05c9865ca7159d326cd4ab3106a5304e3fda6a00f6",
+        "definition_contract_hash": "d1d32fb568ea5bb5923b978c88b4e6847db869607d71c6cd70145ece1a6604d8",
         "definition_kind": "creature",
         "pack_id": "content.neurodragon"
       },
@@ -434,6 +728,20 @@
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
       "evidence_token": "portrait_sprite_owned_presentation:content.neurodragon:creature:creature.goblin_archer@1",
+      "icon_key": null
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.goblin_caster",
+        "content_version": 1,
+        "definition_contract_hash": "1b72578e6081772d3232f3861d4f23c9baf909dc3abb237d4d74b36ee07a3dd2",
+        "definition_kind": "creature",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:creature:content.neurodragon:creature:creature.goblin_caster@1",
       "icon_key": null
     },
     {
@@ -1081,6 +1389,20 @@
       "icon_key": "item.sandals"
     },
     {
+      "asset_sha256": "04d7a5d817a1bedda31494ab0606bed58c84b17b9c71468b24d3f62702867e74",
+      "content_ref": {
+        "content_id": "apparel.spellblade_crown",
+        "content_version": 1,
+        "definition_contract_hash": "1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26",
+        "definition_kind": "item",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:item:apparel.spellblade_crown@1->item.crown",
+      "icon_key": "item.crown"
+    },
+    {
       "asset_sha256": "c1edbe58a08bdbbe73a7a5c45c8eb93a8229c6a940690c8c27db92bf60fb33e2",
       "content_ref": {
         "content_id": "apparel.travelers_clothes",
@@ -1555,6 +1877,62 @@
       "evidence_kind": "backend_spell_catalog",
       "evidence_token": "backend_spell_catalog::necrotic_bless",
       "icon_key": "spell.necrotic-bless"
+    },
+    {
+      "asset_sha256": "71ee96377b21b6c2db9b26199a8426ef6045dac92f8d44acb846426ba6375ece",
+      "content_ref": {
+        "content_id": "starting_apparel.common_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:starting_equipment_package:starting_apparel.common_clothes@1->item.common-clothes",
+      "icon_key": "item.common-clothes"
+    },
+    {
+      "asset_sha256": "4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022",
+      "content_ref": {
+        "content_id": "starting_apparel.fine_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:starting_equipment_package:starting_apparel.fine_clothes@1->item.fine-clothes",
+      "icon_key": "item.fine-clothes"
+    },
+    {
+      "asset_sha256": "e9bdd6c425209913ec4ca0acb4c22540ec199d2039c76c15d438fcf53a4c02be",
+      "content_ref": {
+        "content_id": "starting_apparel.robes",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:starting_equipment_package:starting_apparel.robes@1->item.robes",
+      "icon_key": "item.robes"
+    },
+    {
+      "asset_sha256": "f724d906569f59571f72c365d99b8a88902384716a99294813f6b704e077c030",
+      "content_ref": {
+        "content_id": "starting_apparel.travelers_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:starting_equipment_package:starting_apparel.travelers_clothes@1->item.travelers-clothes",
+      "icon_key": "item.travelers-clothes"
     },
     {
       "asset_sha256": "f593639188027779cc7d4b206582a5d398eae8c73454d33f98f08a0107c5d704",
@@ -2117,6 +2495,20 @@
       "icon_key": "action.bite"
     },
     {
+      "asset_sha256": "4b0d895864345b85586ef78234c864f38f3bc61c75b13ecc10b4166b4e7965fd",
+      "content_ref": {
+        "content_id": "action.origin.dragonborn.breath_weapon",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.origin.dragonborn.breath_weapon@1->action.dragonborn-breath-weapon",
+      "icon_key": "action.dragonborn-breath-weapon"
+    },
+    {
       "asset_sha256": "d5504c1a3cb87d43c7a93c9b5f71606d948daa7e7aa9ab51f6bb85c672401e8a",
       "content_ref": {
         "content_id": "action.spell.call_lightning.strike",
@@ -2288,14 +2680,14 @@
       "asset_sha256": null,
       "content_ref": {
         "content_id": "background.acolyte",
-        "content_version": 1,
-        "definition_contract_hash": "a6c220e89812efc6bcc9d0f9efb316803bfdc9b1c6a78144538425215ed1dc79",
+        "content_version": 2,
+        "definition_contract_hash": "16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7",
         "definition_kind": "background",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:background:background.acolyte@1",
+      "evidence_token": "portrait_sprite_owned_presentation:background:content.srd_5_1_cc:background:background.acolyte@2",
       "icon_key": null
     },
     {
@@ -2303,7 +2695,7 @@
       "content_ref": {
         "content_id": "class.barbarian",
         "content_version": 1,
-        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2317,7 +2709,7 @@
       "content_ref": {
         "content_id": "class.fighter",
         "content_version": 1,
-        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2331,7 +2723,7 @@
       "content_ref": {
         "content_id": "class.sorcerer",
         "content_version": 1,
-        "definition_contract_hash": "eb3885a8814971518d65714213a2acdcdb98055484f7560a95607c2da113ceeb",
+        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -4931,6 +5323,76 @@
       "icon_key": "item.studded-leather"
     },
     {
+      "asset_sha256": "71ee96377b21b6c2db9b26199a8426ef6045dac92f8d44acb846426ba6375ece",
+      "content_ref": {
+        "content_id": "gear.common_clothes",
+        "content_version": 1,
+        "definition_contract_hash": "005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:gear.common_clothes@1->item.common-clothes",
+      "icon_key": "item.common-clothes"
+    },
+    {
+      "asset_sha256": "f8a6549499a84e5a8c76c9c79c06cacd3c894d765360d34502707b7856e35eb9",
+      "content_ref": {
+        "content_id": "gear.holy_symbol",
+        "content_version": 1,
+        "definition_contract_hash": "005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:gear.holy_symbol@1->item.holy-symbol",
+      "icon_key": "item.holy-symbol"
+    },
+    {
+      "asset_sha256": "6ce4a10c00b0cd9d49a04f017a95a224726fb99b69d67eac98896a4cd8dd4497",
+      "content_ref": {
+        "content_id": "gear.incense",
+        "content_version": 1,
+        "definition_contract_hash": "005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:gear.incense@1->item.incense",
+      "icon_key": "item.incense"
+    },
+    {
+      "asset_sha256": "4aa4a7eaec08bfd51384f69f52bfc6d52cf93936a87c0e17d8d0ef3942f4caae",
+      "content_ref": {
+        "content_id": "gear.prayer_book",
+        "content_version": 1,
+        "definition_contract_hash": "005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:gear.prayer_book@1->item.prayer-book",
+      "icon_key": "item.prayer-book"
+    },
+    {
+      "asset_sha256": "465e8ff12b78d071ca4af9f1aecad2a5ab1d1f4a707ff68e12dd2b51b51609f9",
+      "content_ref": {
+        "content_id": "gear.vestments",
+        "content_version": 1,
+        "definition_contract_hash": "005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:gear.vestments@1->item.vestments",
+      "icon_key": "item.vestments"
+    },
+    {
       "asset_sha256": "5cfe8848a0291088d6c230e8c8d910d093420b4eb11df451d2020fe74d5998ec",
       "content_ref": {
         "content_id": "shield.shield",
@@ -5267,6 +5729,20 @@
       "icon_key": "item.light-crossbow"
     },
     {
+      "asset_sha256": "143962f97858a6c9b1643cd43bd5c984bd524b3b4d3547ce43df8a23b2d9e07a",
+      "content_ref": {
+        "content_id": "weapon.light_hammer",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:item:weapon.light_hammer@1->item.light-hammer",
+      "icon_key": "item.light-hammer"
+    },
+    {
       "asset_sha256": "51bd120ba023502d7ce66ef232a27ff9a053a70e2ff38a689a0c745e73ff8461",
       "content_ref": {
         "content_id": "weapon.longbow",
@@ -5463,6 +5939,34 @@
       "icon_key": "item.warhammer"
     },
     {
+      "asset_sha256": "74a284ab8617920e77e84f6f54b15ccbd5ed2443e3c7a0167fb4cb010e46cab5",
+      "content_ref": {
+        "content_id": "reaction.class_feature.barbarian.retaliation",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b",
+        "definition_kind": "reaction",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.class_feature.barbarian.retaliation@1->condition.dnd-classes-barbarian-retaliation",
+      "icon_key": "condition.dnd-classes-barbarian-retaliation"
+    },
+    {
+      "asset_sha256": "78fd10e0e734874b2fd94613c76ab641d830466357a25e98b976592e04b1c7f2",
+      "content_ref": {
+        "content_id": "reaction.class_feature.fighter.protection",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b",
+        "definition_kind": "reaction",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.class_feature.fighter.protection@1->condition.dnd-classes-fighter-fightingstyleprotection",
+      "icon_key": "condition.dnd-classes-fighter-fightingstyleprotection"
+    },
+    {
       "asset_sha256": "e403d09e13b222e91651d052c18d93bdc64da60c962f13dfbb60588dfb7f894e",
       "content_ref": {
         "content_id": "reaction.class_feature.paladin.divine_smite",
@@ -5477,6 +5981,20 @@
       "icon_key": "reaction.divine-smite"
     },
     {
+      "asset_sha256": "40b149a742219fa1ab8e2b57a545fd69a453a847ab2cd9361548eadda9c9e635",
+      "content_ref": {
+        "content_id": "reaction.monster.parry",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b",
+        "definition_kind": "reaction",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.monster.parry@1->condition.dnd-monsters-traits-parryfeature",
+      "icon_key": "condition.dnd-monsters-traits-parryfeature"
+    },
+    {
       "asset_sha256": "3c34a44de377b26ec611560f65164b24959302eaeef6d8bf287d0271f00ef193",
       "content_ref": {
         "content_id": "reaction.spell.counterspell",
@@ -5489,6 +6007,20 @@
       "evidence_kind": "human_reviewed",
       "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.spell.counterspell@1->reaction.counterspell",
       "icon_key": "reaction.counterspell"
+    },
+    {
+      "asset_sha256": "746362f840c24afffbade5fe722583b7ad2fe735093fd2a1d752459d075406c9",
+      "content_ref": {
+        "content_id": "reaction.spell.hellish_rebuke",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b",
+        "definition_kind": "reaction",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:reaction:reaction.spell.hellish_rebuke@1->spell.hellish-rebuke",
+      "icon_key": "spell.hellish-rebuke"
     },
     {
       "asset_sha256": "f679eedfae024e27329c14e0cd27aa32dc59540af7e446c0732ec279d2f51793",
@@ -5508,182 +6040,182 @@
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.dragonborn",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.dragonborn@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.dragonborn@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.dwarf",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.dwarf@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.dwarf@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.elf",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.elf@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.elf@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.gnome",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.gnome@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.gnome@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.half_elf",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.half_elf@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.half_elf@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.half_orc",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.half_orc@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.half_orc@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.halfling",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.halfling@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.halfling@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.human",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.human@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.human@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species.tiefling",
-        "content_version": 1,
-        "definition_contract_hash": "4c1110dce3e2ab688603db91ba767cde7d564c1cc3b4a734b3b33811a6176545",
+        "content_version": 2,
+        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species:species.tiefling@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species:content.srd_5_1_cc:species:species.tiefling@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species_variant.dwarf.hill",
-        "content_version": 1,
-        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "content_version": 2,
+        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species_variant:content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species_variant.elf.high",
-        "content_version": 1,
-        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "content_version": 2,
+        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.elf.high@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species_variant:content.srd_5_1_cc:species_variant:species_variant.elf.high@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species_variant.gnome.rock",
-        "content_version": 1,
-        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "content_version": 2,
+        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.gnome.rock@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species_variant:content.srd_5_1_cc:species_variant:species_variant.gnome.rock@2",
       "icon_key": null
     },
     {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "species_variant.halfling.lightfoot",
-        "content_version": 1,
-        "definition_contract_hash": "5bb6c6b17ebb42df6c89e20876330bbbec4feb0dd0e586f87a230f538553cb44",
+        "content_version": 2,
+        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "intentional_null",
       "evidence_kind": "intentional_non_icon_presentation",
-      "evidence_token": "non_icon_creator_presentation:content.srd_5_1_cc:species_variant:species_variant.halfling.lightfoot@1",
+      "evidence_token": "portrait_sprite_owned_presentation:species_variant:content.srd_5_1_cc:species_variant:species_variant.halfling.lightfoot@2",
       "icon_key": null
     },
     {
@@ -6471,6 +7003,20 @@
       "icon_key": "spell.healing-word"
     },
     {
+      "asset_sha256": "746362f840c24afffbade5fe722583b7ad2fe735093fd2a1d752459d075406c9",
+      "content_ref": {
+        "content_id": "spell.hellish_rebuke",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.hellish_rebuke@1->spell.hellish-rebuke",
+      "icon_key": "spell.hellish-rebuke"
+    },
+    {
       "asset_sha256": "f9582cd3cd96c3340c59c4b2f12ba04ee91cbe91342a202bd6470cc6b0a8f5ba",
       "content_ref": {
         "content_id": "spell.heroes_feast",
@@ -7171,6 +7717,20 @@
       "icon_key": "spell.telekinesis"
     },
     {
+      "asset_sha256": "4c892a0ae0b2b95e27d7c7757d4600fddd068918d950d3d9d02a04488e72305e",
+      "content_ref": {
+        "content_id": "spell.thaumaturgy",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.thaumaturgy@1->spell.thaumaturgy",
+      "icon_key": "spell.thaumaturgy"
+    },
+    {
       "asset_sha256": "4e031214e33668e0a96e35207bfce06a4bdfc1749db73fd422d5d575d0a08468",
       "content_ref": {
         "content_id": "spell.thunderwave",
@@ -7353,11 +7913,25 @@
       "icon_key": "item.quarterstaff"
     },
     {
+      "asset_sha256": "f8a6549499a84e5a8c76c9c79c06cacd3c894d765360d34502707b7856e35eb9",
+      "content_ref": {
+        "content_id": "starting_holdings.background.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_kind": "starting_equipment_package",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:starting_equipment_package:starting_holdings.background.acolyte@1->item.holy-symbol",
+      "icon_key": "item.holy-symbol"
+    },
+    {
       "asset_sha256": "b7078278f019a8966ca7dbf1b338bb6f1559be54220b77993ee262a82008397d",
       "content_ref": {
         "content_id": "subclass.barbarian.berserker",
         "content_version": 1,
-        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7371,7 +7945,7 @@
       "content_ref": {
         "content_id": "subclass.fighter.champion",
         "content_version": 1,
-        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7385,7 +7959,7 @@
       "content_ref": {
         "content_id": "subclass.sorcerer.draconic_bloodline",
         "content_version": 1,
-        "definition_contract_hash": "7400714a0765a50e1a4e37872d3ea28e209b2330b13dbeebc32cce4b02a84de5",
+        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7547,6 +8121,622 @@
       "evidence_kind": "human_reviewed",
       "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.martial_advantage@1->condition.dnd-monsters-traits-bonusdamagefeature",
       "icon_key": "condition.dnd-monsters-traits-bonusdamagefeature"
+    },
+    {
+      "asset_sha256": "1d9935ff3aa8a91c7c06b386b2bce58eb003707d0ff998bc9cbccc4ae114e7e8",
+      "content_ref": {
+        "content_id": "trait.origin.background.acolyte.proficiencies",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.background.acolyte.proficiencies@1->trait.acolyte-proficiencies",
+      "icon_key": "trait.acolyte-proficiencies"
+    },
+    {
+      "asset_sha256": "50df9fb5865694f53cf714e0018cf6444444a54fca8dafc39c85d6a2f257c124",
+      "content_ref": {
+        "content_id": "trait.origin.background.acolyte.shelter_of_the_faithful",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.background.acolyte.shelter_of_the_faithful@1->trait.shelter-of-the-faithful",
+      "icon_key": "trait.shelter-of-the-faithful"
+    },
+    {
+      "asset_sha256": "d698787a0a9f37433914edf797945f2c54ef8ebabb11f7ce48e6bdadd339a8b0",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.black",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.black@1->trait.draconic-ancestry-acid-line",
+      "icon_key": "trait.draconic-ancestry-acid-line"
+    },
+    {
+      "asset_sha256": "cd05d397d2889c933e580e00f0076f412bf8cc2ebbdca244c5251a9cb72e3388",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.blue",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.blue@1->trait.draconic-ancestry-lightning-line",
+      "icon_key": "trait.draconic-ancestry-lightning-line"
+    },
+    {
+      "asset_sha256": "fd669b69fec2a886e6194141cc9a4ca81cfb5b3513469728a2e3dd6e4aefa165",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.brass",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.brass@1->trait.draconic-ancestry-fire-line",
+      "icon_key": "trait.draconic-ancestry-fire-line"
+    },
+    {
+      "asset_sha256": "cd05d397d2889c933e580e00f0076f412bf8cc2ebbdca244c5251a9cb72e3388",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.bronze",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.bronze@1->trait.draconic-ancestry-lightning-line",
+      "icon_key": "trait.draconic-ancestry-lightning-line"
+    },
+    {
+      "asset_sha256": "d698787a0a9f37433914edf797945f2c54ef8ebabb11f7ce48e6bdadd339a8b0",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.copper",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.copper@1->trait.draconic-ancestry-acid-line",
+      "icon_key": "trait.draconic-ancestry-acid-line"
+    },
+    {
+      "asset_sha256": "49b6322ce9720da606f935ae8adbfa1bea56aeb14fa6ee06fc022bc3ddddf16d",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.gold",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.gold@1->trait.draconic-ancestry-fire-cone",
+      "icon_key": "trait.draconic-ancestry-fire-cone"
+    },
+    {
+      "asset_sha256": "55b35896b02306607a8f0fda06cd53aa8c8d3ff27a9c9588dda138d8ba9c3d4d",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.green",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.green@1->trait.draconic-ancestry-poison-cone",
+      "icon_key": "trait.draconic-ancestry-poison-cone"
+    },
+    {
+      "asset_sha256": "49b6322ce9720da606f935ae8adbfa1bea56aeb14fa6ee06fc022bc3ddddf16d",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.red",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.red@1->trait.draconic-ancestry-fire-cone",
+      "icon_key": "trait.draconic-ancestry-fire-cone"
+    },
+    {
+      "asset_sha256": "662db8d0c2f1b31083088b8ec6fdbff2f0288248b16cb5f0f748b8cb0df645c5",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.silver",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.silver@1->trait.draconic-ancestry-cold-cone",
+      "icon_key": "trait.draconic-ancestry-cold-cone"
+    },
+    {
+      "asset_sha256": "662db8d0c2f1b31083088b8ec6fdbff2f0288248b16cb5f0f748b8cb0df645c5",
+      "content_ref": {
+        "content_id": "trait.origin.dragonborn.ancestry.white",
+        "content_version": 1,
+        "definition_contract_hash": "28f4366577afaf2f1c5fdedcce46b9427c609735c69d0b3bfcb5db1204adf47f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dragonborn.ancestry.white@1->trait.draconic-ancestry-cold-cone",
+      "icon_key": "trait.draconic-ancestry-cold-cone"
+    },
+    {
+      "asset_sha256": "b7a1ecdd013455079f1af0990218fb607c1fd506d3fe5830a480add6a80753fb",
+      "content_ref": {
+        "content_id": "trait.origin.dwarf.combat_training",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dwarf.combat_training@1->trait.dwarven-combat-training",
+      "icon_key": "trait.dwarven-combat-training"
+    },
+    {
+      "asset_sha256": "f4ccdcea09643e891671bd8ef5b645d00e5bef766d090f8ad63e035811b22e21",
+      "content_ref": {
+        "content_id": "trait.origin.dwarf.dwarven_resilience",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dwarf.dwarven_resilience@1->trait.dwarven-resilience",
+      "icon_key": "trait.dwarven-resilience"
+    },
+    {
+      "asset_sha256": "d6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75",
+      "content_ref": {
+        "content_id": "trait.origin.dwarf.physical.medium_25",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dwarf.physical.medium_25@1->trait.origin-size-and-speed",
+      "icon_key": "trait.origin-size-and-speed"
+    },
+    {
+      "asset_sha256": "34ff247f71476d06a7121d252156158f4d21369e4a7294a68993d9033b4cf0a3",
+      "content_ref": {
+        "content_id": "trait.origin.dwarf.stonecunning",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.dwarf.stonecunning@1->trait.stonecunning",
+      "icon_key": "trait.stonecunning"
+    },
+    {
+      "asset_sha256": "e12b76662e36b4f9e11d49981925fd104415252a519abeffd043cbb764a6a321",
+      "content_ref": {
+        "content_id": "trait.origin.elf.fey_ancestry",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.elf.fey_ancestry@1->trait.fey-ancestry",
+      "icon_key": "trait.fey-ancestry"
+    },
+    {
+      "asset_sha256": "fd452caea00144c5c9db5484470a9baabde676d927e8218014513e8c54703ee6",
+      "content_ref": {
+        "content_id": "trait.origin.elf.keen_senses",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.elf.keen_senses@1->trait.keen-senses",
+      "icon_key": "trait.keen-senses"
+    },
+    {
+      "asset_sha256": "ff8fef2d2f42336cfe6c0369b916f1b5ba5a973cc9585b223d22fb268634a26a",
+      "content_ref": {
+        "content_id": "trait.origin.elf.trance",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.elf.trance@1->trait.trance",
+      "icon_key": "trait.trance"
+    },
+    {
+      "asset_sha256": "4d3badc33ffada69b47ed3650e6fc04374740c572d3d552fb45cd88383b374fc",
+      "content_ref": {
+        "content_id": "trait.origin.gnome.cunning",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.gnome.cunning@1->trait.gnome-cunning",
+      "icon_key": "trait.gnome-cunning"
+    },
+    {
+      "asset_sha256": "03234891e5b9cf17b0ab3ff6851314038fc83e745fbd7e7ea85c95af1e421778",
+      "content_ref": {
+        "content_id": "trait.origin.half_orc.menacing",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.half_orc.menacing@1->trait.half-orc-menacing",
+      "icon_key": "trait.half-orc-menacing"
+    },
+    {
+      "asset_sha256": "99192caf281cf625dfcfbcb8bdf37a5a90060a287b4fcabbdd329d30a7fe4f61",
+      "content_ref": {
+        "content_id": "trait.origin.half_orc.relentless_endurance",
+        "content_version": 1,
+        "definition_contract_hash": "6705dbfa7598a4399fc43dc4a08dacdb35e7ca731bcdad227f060ae42b64396e",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.half_orc.relentless_endurance@1->trait.half-orc-relentless-endurance",
+      "icon_key": "trait.half-orc-relentless-endurance"
+    },
+    {
+      "asset_sha256": "6e793aae67ac7d2e05d552a8a235ed69b62058ac34c1d33dd5f01b24660aa61b",
+      "content_ref": {
+        "content_id": "trait.origin.half_orc.savage_attacks",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.half_orc.savage_attacks@1->trait.half-orc-savage-attacks",
+      "icon_key": "trait.half-orc-savage-attacks"
+    },
+    {
+      "asset_sha256": "0751831b421482f222d1b19c6aacb55fcb345d3b5c9ccfb172feed02a4c74a9b",
+      "content_ref": {
+        "content_id": "trait.origin.halfling.brave",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.halfling.brave@1->trait.halfling-brave",
+      "icon_key": "trait.halfling-brave"
+    },
+    {
+      "asset_sha256": "81f1127e17126e3cfe57b84b65fd18c6e8478ee67fd38ed1696e91c11c5698a3",
+      "content_ref": {
+        "content_id": "trait.origin.halfling.lucky",
+        "content_version": 1,
+        "definition_contract_hash": "6705dbfa7598a4399fc43dc4a08dacdb35e7ca731bcdad227f060ae42b64396e",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.halfling.lucky@1->trait.halfling-lucky",
+      "icon_key": "trait.halfling-lucky"
+    },
+    {
+      "asset_sha256": "34a609794ff515169a0c9c837836ce367c54263e48159eca68e2703d49e397db",
+      "content_ref": {
+        "content_id": "trait.origin.halfling.nimbleness",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.halfling.nimbleness@1->trait.halfling-nimbleness",
+      "icon_key": "trait.halfling-nimbleness"
+    },
+    {
+      "asset_sha256": "fa0be3b3742270442f25aee32dfaa8e2ab8d6f05f5b9b7dd9deb97e117908a34",
+      "content_ref": {
+        "content_id": "trait.origin.high_elf.weapon_training",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.high_elf.weapon_training@1->trait.elf-weapon-training",
+      "icon_key": "trait.elf-weapon-training"
+    },
+    {
+      "asset_sha256": "5b2f4cc2a0d78128dceb751aebb40ccc58f5123a4836992a2746b668dca3b7f1",
+      "content_ref": {
+        "content_id": "trait.origin.hill_dwarf.dwarven_toughness",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.hill_dwarf.dwarven_toughness@1->trait.dwarven-toughness",
+      "icon_key": "trait.dwarven-toughness"
+    },
+    {
+      "asset_sha256": "45291636d0497a71152af9d769d2b4a95488a91ef353fbba6bce17eb36d8cf05",
+      "content_ref": {
+        "content_id": "trait.origin.lightfoot.naturally_stealthy",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.lightfoot.naturally_stealthy@1->trait.naturally-stealthy",
+      "icon_key": "trait.naturally-stealthy"
+    },
+    {
+      "asset_sha256": "ecaa4cf5567186e81cff38b8f5fc2642b67ead9d6ae11de0101516021e1a0dc8",
+      "content_ref": {
+        "content_id": "trait.origin.rock_gnome.artificers_lore",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.rock_gnome.artificers_lore@1->trait.artificers-lore",
+      "icon_key": "trait.artificers-lore"
+    },
+    {
+      "asset_sha256": "0ee53cb257ff42cc27470d8214692cf3acc59d107e5b8e691e4ca091957cca30",
+      "content_ref": {
+        "content_id": "trait.origin.rock_gnome.tinker",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.rock_gnome.tinker@1->trait.rock-gnome-tinker",
+      "icon_key": "trait.rock-gnome-tinker"
+    },
+    {
+      "asset_sha256": "f9b292c41292ca586a88144105e090455e281e5bc6e0a3b1457264102477d1eb",
+      "content_ref": {
+        "content_id": "trait.origin.shared.darkvision_60",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.shared.darkvision_60@1->trait.darkvision",
+      "icon_key": "trait.darkvision"
+    },
+    {
+      "asset_sha256": "d6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75",
+      "content_ref": {
+        "content_id": "trait.origin.shared.physical.medium_30",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.shared.physical.medium_30@1->trait.origin-size-and-speed",
+      "icon_key": "trait.origin-size-and-speed"
+    },
+    {
+      "asset_sha256": "d6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75",
+      "content_ref": {
+        "content_id": "trait.origin.shared.physical.small_25",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.shared.physical.small_25@1->trait.origin-size-and-speed",
+      "icon_key": "trait.origin-size-and-speed"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.dragonborn.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.dragonborn.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.dwarf.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.dwarf.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.elf.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.elf.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.gnome.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.gnome.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.half_elf.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.half_elf.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.half_orc.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.half_orc.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.halfling.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.halfling.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.human.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.human.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "content_ref": {
+        "content_id": "trait.origin.species.tiefling.languages",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.species.tiefling.languages@1->trait.origin-languages",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_sha256": "ff5a8bc3e9997e8c5467c97b18e0bef3ff9789dbe593a59343e893b4100f9321",
+      "content_ref": {
+        "content_id": "trait.origin.tiefling.fire_resistance",
+        "content_version": 1,
+        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_kind": "trait",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:trait:trait.origin.tiefling.fire_resistance@1->trait.hellish-resistance",
+      "icon_key": "trait.hellish-resistance"
     },
     {
       "asset_sha256": "fc4a1cc2cc26712dcfec23bc859bd046b8e143c701fd7be5154638d443ebd2ed",
@@ -12488,9 +13678,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 477,
+    "asset_count": 515,
     "schema_version": 3,
-    "sha256": "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc",
+    "sha256": "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c",
     "style_id": "fantasy-classic-v1"
   }
 }

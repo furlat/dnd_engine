@@ -24,7 +24,7 @@ from typing import AsyncIterator, Callable, Iterable, TypeVar
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -32,16 +32,9 @@ from pydantic import BaseModel
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
-from server.character_directory_contracts import (
-    CharacterAdvancementResponse,
-    CharacterBuildValidationRequest,
-    CharacterBuildValidationResponse,
-    CharacterDefinitionHistoryResponse,
-    CharacterLevelUpRequest,
-    CharacterLoadoutMutationRequest,
-    CharacterRespecRequest,
-    CharacterSnapshotResponse,
-    CreateCharacterRequest,
+from dnd.core.content.encounters import (
+    EncounterRosterSlot,
+    OwnedCharacterRosterSource,
 )
 from server.character_directory_service import (
     CharacterDirectoryBuildError,
@@ -58,10 +51,12 @@ from server.api_models import (
     GameCreationActivateRequest,
     GameCreationActivateResponse,
     GameCreationCatalogResponse,
-    GameCreationComposedScenario,
-    GameCreationPreflightRequest,
+    GameCreationComposeRequest,
+    GameCreationComposeResponse,
+    GameCreationPreviewRequest,
+    GameCreationStartRequest,
     CreateSessionResponse,
-    GameCreationSideResult,
+    GameCreationRosterResult,
     GameCreationStartResponse,
     JoinGameResponse,
     SpellCatalogResponse,
@@ -75,10 +70,8 @@ from server.directory_event_stream import (
 from server.content_catalog import (
     ContentCatalogResponse,
     ContentManifestResponse,
-    build_content_manifest,
-    build_public_content_catalog,
-    content_response_etag,
 )
+from server.content_http import serve_content_catalog, serve_content_manifest
 from server.event_contract import EVENT_CONTRACT_HASH
 from server.game_directory.canonical import hash_capability
 from server.game_directory.contracts import (
@@ -86,8 +79,8 @@ from server.game_directory.contracts import (
     AttachmentState,
     AttachmentCreate,
     CharacterDeploymentLeaseCreate,
-    CharacterDefinitionRecord,
     CharacterRecord,
+    CharacterRevisionHeads,
     ClientKind,
     DirectoryEventRecord,
     EntityAssignmentCreate,
@@ -109,7 +102,6 @@ from server.game_directory.contracts import (
     PrincipalKind,
     PrincipalRecord,
     ProducerKind,
-    ProfileSettingsRecord,
     WorkerCreate,
     WorkerState,
     WorkerTerminalReadyManifestCreate,
@@ -121,6 +113,7 @@ from server.game_directory.errors import (
     ConflictError,
     DirectoryError,
     NotFoundError,
+    StaleVersionError,
 )
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_artifact_store import GameArtifactStore, ArtifactStoreError
@@ -150,11 +143,25 @@ from server.game_history import (
     create_game_history_router,
 )
 from server.game_history_contracts import GameHistoryListResponse
-from dnd.scenarios.evaluation.compatibility import CompatibilityReport
-from server.game_creation_catalog import (
-    GameCreationCatalogError,
-    build_game_creation_catalog,
-    preflight_game_creation,
+from server.ai_policy_composition import server_native_ai_policy_options
+from server.game_creation_catalog import build_game_creation_catalog
+from server.game_creation_composition import (
+    CharacterRulesetMismatchError,
+    GameCreationCompositionError,
+    character_ruleset_digest,
+    character_source_matches_snapshot,
+    normalize_encounter_recipe,
+    required_character_ids,
+    required_saved_roster_ids,
+)
+from server.game_creation_preview import (
+    GameCreationPreviewError,
+    build_game_creation_encounter_visual_preview,
+    close_game_creation_preview_worker,
+    prewarm_game_creation_preview_worker,
+)
+from server.game_creation_preview_contracts import (
+    GameCreationEncounterVisualPreviewResponse,
 )
 from server.hosted_worker import (
     CORE_HOSTED_WORKER_APPLICATION,
@@ -199,11 +206,18 @@ logger = logging.getLogger("dnd_game_gateway")
 class GatewayError(RuntimeError):
     """Typed public gateway failure."""
 
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        **context: str,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.context = context
 
 
 class GameGatewayService:
@@ -323,8 +337,13 @@ class GameGatewayService:
                 subjective_artifact=subjective_artifact,
                 summary_evidence=bundle.summary.model_dump(mode="json"),
                 settlement_evidence=(
-                    bundle.holdings.model_dump(mode="json")
-                    if bundle.holdings is not None
+                    {
+                        "holdings": [
+                            row.model_dump(mode="json")
+                            for row in bundle.holdings
+                        ],
+                    }
+                    if bundle.holdings
                     else None
                 ),
                 manifest_digest=bundle.manifest.manifest_digest,
@@ -343,12 +362,21 @@ class GameGatewayService:
         evidence = WorkerSummaryEvidence.model_validate(
             manifest.summary_evidence,
         )
-        holdings_evidence = (
-            WorkerCharacterHoldingsEvidence.model_validate(
-                manifest.settlement_evidence,
-            )
+        holdings_payload = (
+            manifest.settlement_evidence.get("holdings")
             if manifest.settlement_evidence is not None
             else None
+        )
+        if holdings_payload is not None and not isinstance(
+            holdings_payload,
+            list,
+        ):
+            raise ConflictError(
+                "Hosted terminal holdings evidence must be an ordered list",
+            )
+        holdings_evidence = tuple(
+            WorkerCharacterHoldingsEvidence.model_validate(row)
+            for row in (holdings_payload or [])
         )
         validate_stored_terminal_artifacts(
             artifact_store=self.artifact_store,
@@ -363,9 +391,9 @@ class GameGatewayService:
                 )
             ),
         )
-        settlement_bundle = None
-        lease_id = None
-        if holdings_evidence is not None:
+        settlement_bundles = []
+        lease_ids = []
+        for holdings_row in holdings_evidence:
             leases = tuple(
                 lease
                 for lease in (
@@ -374,7 +402,7 @@ class GameGatewayService:
                         active_only=True,
                     )
                 )
-                if lease.character_id == holdings_evidence.character_id
+                if lease.character_id == holdings_row.character_id
             )
             if len(leases) != 1:
                 raise ConflictError(
@@ -386,7 +414,7 @@ class GameGatewayService:
                 deployment
                 for deployment in (
                     self.repository.list_character_deployments(
-                        holdings_evidence.character_id,
+                        holdings_row.character_id,
                     )
                 )
                 if (
@@ -399,14 +427,14 @@ class GameGatewayService:
                     "Hosted terminal holdings evidence requires exactly one "
                     "matching pinned deployment",
                 )
-            settlement_bundle = build_terminal_settlement_bundle(
-                holdings_evidence,
+            settlement_bundles.append(build_terminal_settlement_bundle(
+                holdings_row,
                 deployments[0],
                 settlement_namespace=(
                     "dnd-engine:hosted-character-settlement:v1"
                 ),
-            )
-            lease_id = lease.lease_id
+            ))
+            lease_ids.append(lease.lease_id)
         self.repository.finalize_staged_worker_terminal_commit(
             manifest.objective_artifact,
             evidence.summary,
@@ -419,8 +447,8 @@ class GameGatewayService:
             manifest_digest=manifest.manifest_digest,
             summary_evidence=manifest.summary_evidence,
             settlement_evidence=manifest.settlement_evidence,
-            settlement_bundle=settlement_bundle,
-            lease_id=lease_id,
+            settlement_bundles=tuple(settlement_bundles),
+            lease_ids=tuple(lease_ids),
         )
 
     async def close(self) -> None:
@@ -510,7 +538,9 @@ class GameGatewayService:
                 credential_hash=hash_capability(capability, self.capability_pepper),
             )
         )
-        self._create_default_profile_settings(principal.principal_id)
+        self.character_directory.ensure_profile_settings(
+            principal.principal_id,
+        )
         self._publish_new_directory_events()
         return GuestPrincipalResponse(
             principal=principal,
@@ -540,7 +570,9 @@ class GameGatewayService:
                 secret_hash=hash_capability(capability, self.capability_pepper),
             )
         )
-        self._ensure_profile_settings(principal.principal_id)
+        self.character_directory.ensure_profile_settings(
+            principal.principal_id,
+        )
         self._publish_new_directory_events()
         return PlayerIdentityResponse(
             principal=principal,
@@ -548,223 +580,107 @@ class GameGatewayService:
             principal_capability=capability,
         )
 
-    def _create_default_profile_settings(
-        self,
-        principal_id: UUID,
-    ) -> ProfileSettingsRecord:
-        return self.character_directory.ensure_profile_settings(principal_id)
-
-    def _ensure_profile_settings(
-        self,
-        principal_id: UUID,
-    ) -> ProfileSettingsRecord:
-        return self.character_directory.ensure_profile_settings(principal_id)
-
-    def create_character(
+    def compose_game_creation(
         self,
         principal_id: UUID,
         principal_capability: str,
-        request: CreateCharacterRequest,
-    ) -> CharacterSnapshotResponse:
-        """Create one normalized schema-2 persistent character."""
-
+        request: GameCreationComposeRequest,
+    ) -> GameCreationComposeResponse:
+        """Normalize one authenticated selection and preview that exact recipe."""
         principal = self._authenticate_principal(
             principal_id,
             principal_capability,
         )
-        character = self.character_directory.create_character(
-            principal.principal_id,
-            request,
+        saved_rosters = {
+            roster_id: self.character_directory.get_saved_encounter_roster(
+                principal.principal_id,
+                roster_id,
+            )
+            for roster_id in required_saved_roster_ids(request)
+        }
+        deployments = self._character_deployments_for_principal(
+            principal,
+            required_character_ids(
+                request,
+                saved_rosters=saved_rosters,
+            ),
         )
+        recipe, compatibility = normalize_encounter_recipe(
+            request,
+            character_deployments=deployments,
+            saved_rosters=saved_rosters,
+        )
+        ruleset_digest = character_ruleset_digest(deployments)
+        preview = build_game_creation_encounter_visual_preview(
+            recipe,
+            character_deployments=deployments,
+            expected_content_set_digest=self.content_set_digest,
+            expected_ruleset_digest=ruleset_digest,
+        )
+        return GameCreationComposeResponse(
+            content_set_digest=self.content_set_digest,
+            ruleset_digest=ruleset_digest,
+            recipe=recipe,
+            compatibility=compatibility,
+            preview=preview,
+        )
+
+    def preview_game_creation(
+        self,
+        principal_id: UUID,
+        principal_capability: str,
+        request: GameCreationPreviewRequest,
+    ) -> GameCreationEncounterVisualPreviewResponse:
+        """Project an exact authenticated recipe without renormalizing it."""
+        principal = self._authenticate_principal(
+            principal_id,
+            principal_capability,
+        )
+        deployments = self._character_deployments_for_principal(
+            principal,
+            required_character_ids(request.recipe),
+        )
+        if request.expected_content_set_digest != self.content_set_digest:
+            raise GatewayError(
+                409,
+                "game_creation_content_changed",
+                "Installed content changed after encounter normalization",
+                expected_content_set_digest=(
+                    request.expected_content_set_digest
+                ),
+                current_content_set_digest=self.content_set_digest,
+            )
+        ruleset_digest = character_ruleset_digest(deployments)
+        if request.expected_ruleset_digest != ruleset_digest:
+            raise GatewayError(
+                409,
+                "game_creation_ruleset_changed",
+                "Character rules changed after encounter normalization",
+                expected_ruleset_digest=request.expected_ruleset_digest,
+                current_ruleset_digest=ruleset_digest,
+            )
+        return build_game_creation_encounter_visual_preview(
+            request.recipe,
+            character_deployments=deployments,
+            expected_content_set_digest=request.expected_content_set_digest,
+            expected_ruleset_digest=request.expected_ruleset_digest,
+        )
+
+    def _character_deployments_for_principal(
+        self,
+        principal: PrincipalRecord,
+        character_ids: tuple[UUID, ...],
+    ) -> dict[UUID, CharacterDeploymentSnapshot]:
+        deployments = {
+            character_id: build_character_deployment_snapshot(
+                self.character_directory,
+                principal.principal_id,
+                character_id,
+            )
+            for character_id in character_ids
+        }
         self._publish_new_directory_events()
-        return character
-
-    def get_character_definition(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-    ) -> CharacterDefinitionRecord:
-        """Return the authenticated owner's exact current structural revision."""
-
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.get_character_snapshot(
-            principal.principal_id,
-            character_id,
-        ).definition
-
-    def validate_character_build(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        request: CharacterBuildValidationRequest,
-    ) -> CharacterBuildValidationResponse:
-        """Validate a creation build under the authenticated profile policy."""
-
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.validate_new_character(
-            principal.principal_id,
-            request,
-        )
-
-    def get_character_snapshot(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-    ) -> CharacterSnapshotResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.get_character_snapshot(
-            principal.principal_id,
-            character_id,
-        )
-
-    def get_character_definition_history(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-    ) -> CharacterDefinitionHistoryResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.get_definition_history(
-            principal.principal_id,
-            character_id,
-        )
-
-    def get_character_advancement(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-    ) -> CharacterAdvancementResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.get_advancement(
-            principal.principal_id,
-            character_id,
-        )
-
-    def validate_character_level_up(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterLevelUpRequest,
-    ) -> CharacterBuildValidationResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.validate_level_up(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-
-    def level_up_character(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterLevelUpRequest,
-    ) -> CharacterSnapshotResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        result = self.character_directory.level_up(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-        self._publish_new_directory_events()
-        return result
-
-    def validate_character_respec(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterRespecRequest,
-    ) -> CharacterBuildValidationResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.validate_respec(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-
-    def respec_character(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterRespecRequest,
-    ) -> CharacterSnapshotResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        result = self.character_directory.respec(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-        self._publish_new_directory_events()
-        return result
-
-    def validate_character_loadout(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterLoadoutMutationRequest,
-    ) -> CharacterBuildValidationResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        return self.character_directory.validate_loadout(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-
-    def update_character_loadout(
-        self,
-        principal_id: UUID,
-        principal_capability: str,
-        character_id: UUID,
-        request: CharacterLoadoutMutationRequest,
-    ) -> CharacterSnapshotResponse:
-        principal = self._authenticate_principal(
-            principal_id,
-            principal_capability,
-        )
-        result = self.character_directory.update_loadout(
-            principal.principal_id,
-            character_id,
-            request,
-        )
-        self._publish_new_directory_events()
-        return result
+        return deployments
 
     async def create_hosted_game(
         self,
@@ -772,56 +688,57 @@ class GameGatewayService:
         *,
         public_gateway_base_url: str,
     ) -> CreateHostedGameResponse:
-        """Create one worker, game, owner membership, and hot attachment."""
+        """Create one exact recipe and attach its owning principal."""
         principal = self._authenticate_principal(
             request.principal_id,
             request.principal_capability,
         )
-        character: CharacterRecord | None = None
-        character_deployment = None
-        if request.creation.character_id is not None:
-            character = self.repository.get_character(
-                request.creation.character_id,
-            )
-            if character.owner_principal_id != principal.principal_id:
-                raise GatewayError(403, "character_not_owned", "Character belongs to another player")
-            if character.status.value != "active":
-                raise GatewayError(409, "character_not_active", "Character is not active")
-            if request.owner_side != "side_a" or not isinstance(
-                request.creation.scenario,
-                GameCreationComposedScenario,
-            ):
-                raise GatewayError(
-                    400,
-                    "character_seat_invalid",
-                    "Persistent characters can currently enter only the composed hero seat",
-                )
-            if (
-                character.current_definition_revision is None
-                or character.revision_state.value != "canonical"
-            ):
-                raise GatewayError(
-                    409,
-                    "character_revisions_unavailable",
-                    "Persistent character has not been migrated to exact revisions",
-                )
-            character_deployment = build_character_deployment_snapshot(
+        character_ids = required_character_ids(request.creation.recipe)
+        deployments = tuple(
+            build_character_deployment_snapshot(
                 self.character_directory,
                 principal.principal_id,
-                character.character_id,
+                character_id,
             )
-        selected_side_request = (
-            request.creation.side_a
-            if request.owner_side == "side_a"
-            else request.creation.side_b
-            if request.owner_side == "side_b"
-            else None
+            for character_id in character_ids
         )
-        if selected_side_request is not None and selected_side_request.controller == "ai":
+        deployments_by_id = {
+            deployment.character_id: deployment
+            for deployment in deployments
+        }
+        for roster_slot in request.creation.recipe.roster_slots:
+            for member in roster_slot.roster.members:
+                source = member.source
+                if not isinstance(source, OwnedCharacterRosterSource):
+                    continue
+                deployment = deployments_by_id[source.character_id]
+                if not character_source_matches_snapshot(source, deployment):
+                    raise GatewayError(
+                        409,
+                        "character_heads_changed_during_composition",
+                        "An owned character no longer matches the exact recipe",
+                    )
+                if (
+                    request.owner_roster_slot_id
+                    != roster_slot.roster_slot_id
+                ):
+                    raise GatewayError(
+                        400,
+                        "owned_character_roster_not_owned",
+                        "Owned characters must belong to the owner's roster",
+                    )
+        owner_roster = _selected_roster(
+            request.creation,
+            request.owner_roster_slot_id,
+        )
+        if (
+            request.owner_roster_slot_id is not None
+            and owner_roster is None
+        ):
             raise GatewayError(
                 400,
-                "owner_side_is_automatic",
-                "The owner can attach only to a human or Codex side",
+                "owner_roster_unknown",
+                "The selected owner roster is not in the recipe",
             )
         hosted_game_id = uuid4()
         runtime_base_url = (
@@ -833,7 +750,7 @@ class GameGatewayService:
             placement = await self.worker_manager.start(
                 hosted_game_id,
                 public_game_base_url=runtime_base_url,
-                character_deployment=character_deployment,
+                character_deployments=deployments,
             )
             async with self.worker_manager.client(hosted_game_id, timeout=60.0) as client:
                 worker_response = await client.post(
@@ -844,6 +761,10 @@ class GameGatewayService:
                 worker_response,
                 GameCreationStartResponse,
                 "game_creation_failed",
+            )
+            _validate_worker_creation_result(
+                request.creation,
+                creation,
             )
             worker = self.repository.create_worker(
                 WorkerCreate(
@@ -870,8 +791,8 @@ class GameGatewayService:
                     visibility_policy=request.visibility_policy,
                     observer_policy=request.observer_policy,
                     execution_kind=ExecutionKind.HOSTED,
-                    scenario_kind=creation.scenario_kind,
-                    scenario_id=_scenario_id(request),
+                    scenario_kind="encounter_recipe",
+                    scenario_id=request.creation.recipe.encounter_id,
                     display_name=request.display_name,
                     creation_manifest={
                         "request": request.creation.model_dump(mode="json"),
@@ -883,43 +804,52 @@ class GameGatewayService:
                     content_digest=self.content_set_digest,
                 )
             )
-            side = _selected_side(creation, request.owner_side)
+            roster = _selected_roster_result(
+                creation,
+                request.owner_roster_slot_id,
+            )
             membership = self._create_owner_membership(
                 game,
                 principal,
-                request.owner_side,
-                side,
+                request.owner_roster_slot_id,
+                roster,
             )
             runtime_session_id, controlled_entities = await self._create_owner_runtime_session(
                 game,
                 membership,
                 principal,
-                request.owner_side,
-                side,
+                roster,
             )
-            if side is not None:
-                self._persist_entity_assignments(game, membership, side)
-            if character is not None:
-                assert character_deployment is not None
-                if side is None or len(side.entity_assignments) != 1:
+            if roster is not None:
+                self._persist_entity_assignments(
+                    game,
+                    membership,
+                    roster,
+                    controller="human",
+                )
+            assignment_by_character_id = {
+                assignment.character_id: assignment
+                for result in creation.rosters
+                for assignment in result.entity_assignments
+                if assignment.character_id is not None
+            }
+            pinned_requests = []
+            for deployment in deployments:
+                assignment = assignment_by_character_id.get(
+                    deployment.character_id,
+                )
+                if assignment is None:
                     raise GatewayError(
                         409,
-                        "character_deployment_ambiguous",
-                        "Persistent character deployment requires exactly one hero entity",
+                        "character_deployment_missing",
+                        "Worker omitted an owned character assignment",
                     )
-                lease = self.repository.acquire_character_deployment_lease(
-                    CharacterDeploymentLeaseCreate(
-                        character_id=character.character_id,
-                        game_id=game.game_id,
-                        membership_id=membership.membership_id,
-                    ),
-                )
                 current_character = self.repository.get_character(
-                    character.character_id,
+                    deployment.character_id,
                 )
                 if not _character_matches_deployment_snapshot(
                     current_character,
-                    character_deployment,
+                    deployment,
                 ):
                     raise GatewayError(
                         409,
@@ -929,15 +859,72 @@ class GameGatewayService:
                             "being prepared; retry game creation"
                         ),
                     )
-                self.repository.deploy_character_pinned(
-                    PinnedCharacterDeploymentCreate(
+                pinned_requests.append((
+                    deployment,
+                    assignment,
+                ))
+            leases = self.repository.acquire_character_deployment_leases(
+                tuple(
+                    CharacterDeploymentLeaseCreate(
+                        character_id=deployment.character_id,
                         game_id=game.game_id,
                         membership_id=membership.membership_id,
-                        character_id=character.character_id,
-                        entity_uuid=UUID(side.entity_assignments[0].entity_uuid),
-                        lease_id=lease.lease_id,
                     )
+                    for deployment, _assignment in pinned_requests
                 )
+            )
+            try:
+                self.repository.deploy_characters_pinned(
+                    tuple(
+                        PinnedCharacterDeploymentCreate(
+                            game_id=game.game_id,
+                            membership_id=membership.membership_id,
+                            character_id=deployment.character_id,
+                            entity_uuid=UUID(assignment.entity_uuid),
+                            lease_id=lease.lease_id,
+                        )
+                        for (deployment, assignment), lease in zip(
+                            pinned_requests,
+                            leases,
+                            strict=True,
+                        )
+                    ),
+                    expected_character_heads={
+                        deployment.character_id: (
+                            deployment.character_row_version,
+                            CharacterRevisionHeads(
+                                definition_revision=(
+                                    deployment.definition.definition_revision
+                                ),
+                                definition_digest=(
+                                    deployment.definition.definition_digest
+                                ),
+                                holdings_revision=(
+                                    deployment.holdings.holdings_revision
+                                ),
+                                holdings_digest=(
+                                    deployment.holdings.holdings_digest
+                                ),
+                                loadout_revision=(
+                                    deployment.loadout.loadout_revision
+                                ),
+                                loadout_digest=(
+                                    deployment.loadout.loadout_digest
+                                ),
+                            ),
+                        )
+                        for deployment, _assignment in pinned_requests
+                    },
+                )
+            except StaleVersionError as exc:
+                raise GatewayError(
+                    409,
+                    "character_heads_changed_during_deployment",
+                    (
+                        "Character revisions changed while deployment was "
+                        "being pinned; retry game creation"
+                    ),
+                ) from exc
             reconnect = self.repository.issue_access_grant(
                 AccessGrantCreate(
                     game_id=game.game_id,
@@ -958,7 +945,7 @@ class GameGatewayService:
                     membership,
                     controlled_entities,
                 ),
-                takeover_claim_uuids=_side_takeover_claims(side),
+                takeover_claim_uuids=(),
                 client_kind=request.client_kind,
                 client_instance_id=request.client_instance_id,
                 runtime_base_url=runtime_base_url,
@@ -1151,7 +1138,7 @@ class GameGatewayService:
         game_id: UUID,
         request: CreateAgentGrantRequest,
     ) -> CreateAgentGrantResponse:
-        """Bind a remote agent identity to an already configured external side."""
+        """Bind a remote agent to one exact configured Codex member."""
         self._authenticate_principal(request.principal_id, request.principal_capability)
         agent_principal = self.repository.get_principal(request.agent_principal_id)
         game = self.repository.get_game(game_id)
@@ -1168,22 +1155,44 @@ class GameGatewayService:
         if not isinstance(creation_payload, dict):
             raise GatewayError(500, "creation_manifest_invalid", "Game has no resolved creation response")
         creation = GameCreationStartResponse.model_validate(creation_payload)
-        side = creation.side_a if request.side_id == "side_a" else creation.side_b
+        roster = _selected_roster_result(
+            creation,
+            request.roster_slot_id,
+        )
+        member = (
+            next(
+                (
+                    assignment
+                    for assignment in roster.entity_assignments
+                    if assignment.member_id == request.member_id
+                ),
+                None,
+            )
+            if roster is not None
+            else None
+        )
         if (
-            side.controller != "codex"
-            or side.codex_session_id is None
-            or side.takeover_claim_id is None
+            member is None
+            or member.controller != "codex"
+            or member.codex_session_id is None
+            or member.takeover_claim_id is None
         ):
             raise GatewayError(
                 409,
-                "side_not_external",
-                "Remote agents may attach only to a side configured for Codex/external control",
+                "member_not_external",
+                "Remote agents require one exact Codex roster member",
             )
+        member_entity_uuid = UUID(member.entity_uuid)
         if any(
-            assignment.side_id == request.side_id
+            assignment.entity_uuid == member_entity_uuid
+            and assignment.released_at is None
             for assignment in self.repository.list_entity_assignments(game_id)
         ):
-            raise GatewayError(409, "side_already_assigned", "The requested side already has directory authority")
+            raise GatewayError(
+                409,
+                "member_already_assigned",
+                "The requested roster member already has directory authority",
+            )
 
         membership: MembershipRecord | None = None
         assignments: tuple[EntityAssignmentRecord, ...] = ()
@@ -1193,18 +1202,28 @@ class GameGatewayService:
                     game_id=game_id,
                     principal_id=agent_principal.principal_id,
                     role=MembershipRole.AGENT,
-                    side_id=request.side_id,
+                    side_id=request.roster_slot_id,
                     controller_kind="remote_agent",
                     membership_state=MembershipState.ACTIVE,
                     capabilities=_agent_capabilities(),
                 )
             )
-            assignments = self._persist_entity_assignments(game, membership, side)
-            runtime_session_id = UUID(side.codex_session_id)
-            controlled = [
-                UUID(assignment.entity_uuid)
-                for assignment in side.entity_assignments
-            ]
+            assignments = (
+                self.repository.assign_entity(
+                    EntityAssignmentCreate(
+                        game_id=game.game_id,
+                        membership_id=membership.membership_id,
+                        entity_uuid=member_entity_uuid,
+                        entity_name=member.entity_name,
+                        faction=member.faction,
+                        side_id=request.roster_slot_id,
+                        controller_kind="codex",
+                        authority_epoch=membership.authority_epoch,
+                    )
+                ),
+            )
+            runtime_session_id = UUID(member.codex_session_id)
+            controlled = [member_entity_uuid]
             issued = self.repository.issue_access_grant(
                 AccessGrantCreate(
                     game_id=game_id,
@@ -1214,8 +1233,9 @@ class GameGatewayService:
                     scope={
                         "membership_id": str(membership.membership_id),
                         "runtime_session_id": str(runtime_session_id),
-                        "side_id": request.side_id,
-                        "takeover_claim_id": side.takeover_claim_id,
+                        "roster_slot_id": request.roster_slot_id,
+                        "member_id": request.member_id,
+                        "takeover_claim_id": member.takeover_claim_id,
                     },
                     issued_by_principal_id=request.principal_id,
                 )
@@ -1238,7 +1258,7 @@ class GameGatewayService:
             membership=membership,
             runtime_session_id=runtime_session_id,
             controlled_entity_uuids=controlled,
-            takeover_claim_id=UUID(side.takeover_claim_id),
+            takeover_claim_id=UUID(member.takeover_claim_id),
             grant_id=issued.grant.grant_id,
             grant_capability=issued.capability,
         )
@@ -1540,19 +1560,37 @@ class GameGatewayService:
         self,
         game: GameRecord,
         principal: PrincipalRecord,
-        owner_side: str,
-        side: GameCreationSideResult | None,
+        owner_roster_slot_id: str | None,
+        roster: GameCreationRosterResult | None,
     ) -> MembershipRecord:
-        controller_kind = side.controller if side is not None else None
+        controls_entities = (
+            roster is not None
+            and any(
+                assignment.controller == "human"
+                for assignment in roster.entity_assignments
+            )
+        )
         return self.repository.create_membership(
             MembershipCreate(
                 game_id=game.game_id,
                 principal_id=principal.principal_id,
                 role=MembershipRole.OWNER,
-                side_id=side.side_id if side is not None else None,
-                controller_kind=controller_kind,
+                side_id=owner_roster_slot_id,
+                controller_kind=(
+                    "human" if controls_entities else None
+                ),
                 membership_state=MembershipState.ACTIVE,
-                capabilities=_owner_capabilities(owner_side != "observer", controller_kind == "codex"),
+                capabilities=_owner_capabilities(
+                    controls_entities,
+                    any(
+                        assignment.controller == "codex"
+                        for assignment in (
+                            roster.entity_assignments
+                            if roster is not None
+                            else ()
+                        )
+                    ),
+                ),
             )
         )
 
@@ -1561,10 +1599,16 @@ class GameGatewayService:
         game: GameRecord,
         membership: MembershipRecord,
         principal: PrincipalRecord,
-        owner_side: str,
-        side: GameCreationSideResult | None,
+        roster: GameCreationRosterResult | None,
     ) -> tuple[UUID, tuple[UUID, ...]]:
-        if side is None:
+        controlled = tuple(
+            UUID(assignment.entity_uuid)
+            for assignment in (
+                roster.entity_assignments if roster is not None else ()
+            )
+            if assignment.controller == "human"
+        )
+        if not controlled:
             observers = self._observer_entities_for_membership(game, membership, ())
             session_id = await self._create_and_join_session(
                 game.game_id,
@@ -1575,14 +1619,6 @@ class GameGatewayService:
                 active_observer_uuid=min(observers, key=str),
             )
             return session_id, ()
-        controlled = tuple(
-            UUID(assignment.entity_uuid)
-            for assignment in side.entity_assignments
-        )
-        if side.controller == "codex":
-            if side.codex_session_id is None:
-                raise GatewayError(502, "codex_session_missing", "Worker did not return a Codex session")
-            return UUID(side.codex_session_id), controlled
         session_id = await self._create_and_join_session(
             game.game_id,
             player_type="human",
@@ -1685,11 +1721,18 @@ class GameGatewayService:
         self,
         game: GameRecord,
         membership: MembershipRecord,
-        side: GameCreationSideResult,
+        roster: GameCreationRosterResult,
+        *,
+        controller: str | None = None,
     ) -> tuple[EntityAssignmentRecord, ...]:
         assignments: list[EntityAssignmentRecord] = []
         try:
-            for assignment in side.entity_assignments:
+            for assignment in roster.entity_assignments:
+                if (
+                    controller is not None
+                    and assignment.controller != controller
+                ):
+                    continue
                 assignments.append(
                     self.repository.assign_entity(
                         EntityAssignmentCreate(
@@ -1698,8 +1741,8 @@ class GameGatewayService:
                             entity_uuid=UUID(assignment.entity_uuid),
                             entity_name=assignment.entity_name,
                             faction=assignment.faction,
-                            side_id=side.side_id,
-                            controller_kind=side.controller,
+                            side_id=roster.roster_slot_id,
+                            controller_kind=assignment.controller,
                             authority_epoch=membership.authority_epoch,
                         )
                     )
@@ -1789,14 +1832,32 @@ class GameGatewayService:
         membership: MembershipRecord,
     ) -> tuple[UUID, ...]:
         """Return claim leases associated with one persisted side membership."""
-        if membership.side_id not in {"side_a", "side_b"}:
+        if membership.side_id is None:
             return ()
         creation_payload = game.creation_manifest.get("response")
         if not isinstance(creation_payload, dict):
             return ()
         creation = GameCreationStartResponse.model_validate(creation_payload)
-        side = creation.side_a if membership.side_id == "side_a" else creation.side_b
-        return _side_takeover_claims(side)
+        assigned_entities = {
+            assignment.entity_uuid
+            for assignment in self.repository.list_entity_assignments(
+                game.game_id,
+            )
+            if (
+                assignment.membership_id == membership.membership_id
+                and assignment.released_at is None
+            )
+        }
+        return tuple(
+            UUID(assignment.takeover_claim_id)
+            for roster in creation.rosters
+            if roster.roster_slot_id == membership.side_id
+            for assignment in roster.entity_assignments
+            if (
+                UUID(assignment.entity_uuid) in assigned_entities
+                and assignment.takeover_claim_id is not None
+            )
+        )
 
     def _observer_entities_for_membership(
         self,
@@ -1825,12 +1886,10 @@ class GameGatewayService:
         if not isinstance(creation_payload, dict):
             raise GatewayError(500, "creation_manifest_invalid", "Game has no resolved creation response")
         creation = GameCreationStartResponse.model_validate(creation_payload)
-        for side in (creation.side_a, creation.side_b):
-            if side is None:
-                continue
+        for roster in creation.rosters:
             observers.update(
                 UUID(assignment.entity_uuid)
-                for assignment in side.entity_assignments
+                for assignment in roster.entity_assignments
             )
         if not observers:
             raise GatewayError(
@@ -2099,13 +2158,23 @@ def create_gateway_app(
         )
         app.state.gateway = service
         try:
-            await resolved_workers.prewarm()
+            await asyncio.gather(
+                resolved_workers.prewarm(),
+                asyncio.to_thread(
+                    prewarm_game_creation_preview_worker,
+                ),
+            )
             yield
         finally:
-            await service.close()
-            await resolved_workers.stop_all()
-            if owns_repository:
-                resolved_repository.close()
+            try:
+                await service.close()
+                await resolved_workers.stop_all()
+                if owns_repository:
+                    resolved_repository.close()
+            finally:
+                await asyncio.to_thread(
+                    close_game_creation_preview_worker,
+                )
 
     gateway_app = FastAPI(title="D&D Multi-Game Gateway", lifespan=lifespan)
     gateway_app.add_middleware(
@@ -2121,7 +2190,13 @@ def create_gateway_app(
     async def handle_gateway_error(_request: Request, exc: GatewayError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": {"code": exc.code, "message": exc.message}},
+            content={
+                "detail": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    **exc.context,
+                },
+            },
         )
 
     @gateway_app.exception_handler(DirectoryError)
@@ -2139,12 +2214,45 @@ def create_gateway_app(
             content={"detail": {"code": "hosted_worker_error", "message": str(exc)}},
         )
 
-    @gateway_app.exception_handler(GameCreationCatalogError)
-    async def handle_catalog_error(
+    @gateway_app.exception_handler(GameCreationCompositionError)
+    async def handle_composition_error(
         _request: Request,
-        exc: GameCreationCatalogError,
+        exc: GameCreationCompositionError,
     ) -> JSONResponse:
-        return JSONResponse(status_code=400, content={"detail": exc.detail()})
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": {
+                    "code": "game_creation_composition_invalid",
+                    "message": str(exc),
+                },
+            },
+        )
+
+    @gateway_app.exception_handler(CharacterRulesetMismatchError)
+    async def handle_character_ruleset_mismatch(
+        _request: Request,
+        exc: CharacterRulesetMismatchError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": {
+                    "code": "character_ruleset_mismatch",
+                    "message": str(exc),
+                },
+            },
+        )
+
+    @gateway_app.exception_handler(GameCreationPreviewError)
+    async def handle_game_creation_preview_error(
+        _request: Request,
+        exc: GameCreationPreviewError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail()},
+        )
 
     def service(request: Request) -> GameGatewayService:
         return request.app.state.gateway
@@ -2168,7 +2276,50 @@ def create_gateway_app(
     )
     async def get_game_creation_catalog() -> GameCreationCatalogResponse:
         """Return the shared canonical hosted-game creation catalog."""
-        return build_game_creation_catalog()
+        return build_game_creation_catalog(
+            controllers=("human", "ai", "codex"),
+            ai_policies=server_native_ai_policy_options(),
+        )
+
+    @gateway_app.post(
+        "/game-creation/compose",
+        response_model=GameCreationComposeResponse,
+    )
+    async def compose_game_creation(
+        request: Request,
+        body: GameCreationComposeRequest,
+        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+        principal_capability: str = Header(
+            alias="X-Dnd-Principal-Capability",
+        ),
+    ) -> GameCreationComposeResponse:
+        """Normalize one authenticated composition exactly once."""
+        return await asyncio.to_thread(
+            service(request).compose_game_creation,
+            principal_id,
+            principal_capability,
+            body,
+        )
+
+    @gateway_app.post(
+        "/game-creation/preview",
+        response_model=GameCreationEncounterVisualPreviewResponse,
+    )
+    async def preview_game_creation(
+        request: Request,
+        body: GameCreationPreviewRequest,
+        principal_id: UUID = Header(alias="X-Dnd-Principal-Id"),
+        principal_capability: str = Header(
+            alias="X-Dnd-Principal-Capability",
+        ),
+    ) -> GameCreationEncounterVisualPreviewResponse:
+        """Project the exact recipe returned by composition."""
+        return await asyncio.to_thread(
+            service(request).preview_game_creation,
+            principal_id,
+            principal_capability,
+            body,
+        )
 
     @gateway_app.get("/content/manifest", response_model=ContentManifestResponse)
     async def get_content_manifest(
@@ -2176,16 +2327,11 @@ def create_gateway_app(
         response: Response,
     ) -> ContentManifestResponse | Response:
         """Return the exact content identity shared with every worker."""
-        manifest = build_content_manifest(request.app.state.content_system)
-        etag = content_response_etag(manifest.content_set_digest)
-        headers = {
-            "ETag": etag,
-            "Cache-Control": "public, max-age=0, must-revalidate",
-        }
-        if request.headers.get("if-none-match") == etag:
-            return Response(status_code=304, headers=headers)
-        response.headers.update(headers)
-        return manifest
+        return serve_content_manifest(
+            content_system=request.app.state.content_system,
+            request=request,
+            response=response,
+        )
 
     @gateway_app.get("/content/catalog", response_model=ContentCatalogResponse)
     async def get_content_catalog(
@@ -2193,26 +2339,11 @@ def create_gateway_app(
         response: Response,
     ) -> ContentCatalogResponse | Response:
         """Return the shared public descriptor catalog."""
-        catalog = build_public_content_catalog(request.app.state.content_system)
-        etag = content_response_etag(catalog.catalog_digest)
-        headers = {
-            "ETag": etag,
-            "Cache-Control": "public, max-age=0, must-revalidate",
-        }
-        if request.headers.get("if-none-match") == etag:
-            return Response(status_code=304, headers=headers)
-        response.headers.update(headers)
-        return catalog
-
-    @gateway_app.post(
-        "/game-creation/preflight",
-        response_model=CompatibilityReport,
-    )
-    async def run_game_creation_preflight(
-        body: GameCreationPreflightRequest,
-    ) -> CompatibilityReport:
-        """Validate a hosted-game composition without starting a worker."""
-        return preflight_game_creation(body)
+        return serve_content_catalog(
+            content_system=request.app.state.content_system,
+            request=request,
+            response=response,
+        )
 
     @gateway_app.get("/catalog/spells", response_model=SpellCatalogResponse)
     async def get_spell_catalog() -> SpellCatalogResponse:
@@ -2385,6 +2516,7 @@ def create_gateway_app(
     @gateway_app.api_route(
         "/games/{game_id}/runtime/{worker_path:path}",
         methods=runtime_methods,
+        include_in_schema=False,
     )
     async def runtime_proxy(game_id: UUID, worker_path: str, request: Request):
         gateway = service(request)
@@ -2399,15 +2531,116 @@ def create_gateway_app(
     return gateway_app
 
 
-def _selected_side(
+def _selected_roster(
+    creation: GameCreationStartRequest,
+    roster_slot_id: str | None,
+) -> EncounterRosterSlot | None:
+    if roster_slot_id is None:
+        return None
+    return next(
+        (
+            roster
+            for roster in creation.recipe.roster_slots
+            if roster.roster_slot_id == roster_slot_id
+        ),
+        None,
+    )
+
+
+def _selected_roster_result(
     creation: GameCreationStartResponse,
-    owner_side: str,
-) -> GameCreationSideResult | None:
-    if owner_side == "side_a":
-        return creation.side_a
-    if owner_side == "side_b":
-        return creation.side_b
-    return None
+    roster_slot_id: str | None,
+) -> GameCreationRosterResult | None:
+    if roster_slot_id is None:
+        return None
+    return next(
+        (
+            roster
+            for roster in creation.rosters
+            if roster.roster_slot_id == roster_slot_id
+        ),
+        None,
+    )
+
+
+def _validate_worker_creation_result(
+    request: GameCreationStartRequest,
+    response: GameCreationStartResponse,
+) -> None:
+    """Reject any worker that swaps recipe members or their controllers."""
+
+    recipe = request.recipe
+    if (
+        response.recipe_digest != recipe.recipe_digest
+        or len(response.rosters) != len(recipe.roster_slots)
+    ):
+        raise GatewayError(
+            502,
+            "worker_creation_identity_mismatch",
+            "Worker returned another encounter recipe",
+        )
+    for expected_slot, actual_roster in zip(
+        recipe.roster_slots,
+        response.rosters,
+        strict=True,
+    ):
+        expected_members = expected_slot.roster.members
+        actual_assignments = actual_roster.entity_assignments
+        if (
+            actual_roster.roster_slot_id
+            != expected_slot.roster_slot_id
+            or actual_roster.roster_id != expected_slot.roster.roster_id
+            or actual_roster.roster_recipe_digest
+            != expected_slot.roster.recipe_digest
+            or len(actual_assignments) != len(expected_members)
+        ):
+            raise GatewayError(
+                502,
+                "worker_roster_identity_mismatch",
+                "Worker returned another roster identity or order",
+            )
+        overrides = {
+            override.member_id: override
+            for override in (
+                expected_slot.controller_defaults.member_overrides
+            )
+        }
+        for expected_member, actual_assignment in zip(
+            expected_members,
+            actual_assignments,
+            strict=True,
+        ):
+            override = overrides.get(expected_member.member_id)
+            expected_controller = (
+                override.controller
+                if override is not None
+                else expected_slot.controller_defaults.controller
+            )
+            expected_policy_id = (
+                override.policy_id
+                if override is not None
+                else expected_slot.controller_defaults.policy_id
+            )
+            expected_character_id = (
+                expected_member.source.character_id
+                if isinstance(
+                    expected_member.source,
+                    OwnedCharacterRosterSource,
+                )
+                else None
+            )
+            if (
+                actual_assignment.member_id != expected_member.member_id
+                or actual_assignment.character_id != expected_character_id
+                or actual_assignment.controller
+                != expected_controller.value
+                or actual_assignment.policy_id != expected_policy_id
+            ):
+                raise GatewayError(
+                    502,
+                    "worker_member_identity_mismatch",
+                    "Worker swapped a roster member, source, or controller",
+                )
 
 
 def _character_matches_deployment_snapshot(
@@ -2432,25 +2665,6 @@ def _character_matches_deployment_snapshot(
         and character.current_loadout_digest
         == deployment.loadout.loadout_digest
     )
-
-
-def _side_takeover_claims(side: GameCreationSideResult | None) -> tuple[UUID, ...]:
-    """Return the controller lease exposed by one configured Codex side."""
-    if side is None or side.takeover_claim_id is None:
-        return ()
-    return (UUID(side.takeover_claim_id),)
-
-
-def _scenario_id(request: CreateHostedGameRequest) -> str:
-    scenario = request.creation.scenario
-    if scenario.kind == "preset":
-        return scenario.arena_id
-    return ":".join((
-        scenario.hero_configuration_id,
-        scenario.monster_configuration_id,
-        scenario.battlefield_id,
-        scenario.deployment_id,
-    ))
 
 
 def _owner_capabilities(controls_entities: bool, agent: bool) -> MembershipCapabilities:

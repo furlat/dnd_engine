@@ -19,10 +19,6 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.inventory import (
-    LegacyContentMigrationLedger,
-    LegacyMigrationStatus,
-)
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.gridmap import get_map
 from dnd.items.environment import (
@@ -45,7 +41,7 @@ from dnd.items.environment_content import (
     WALL_TORCH_RECIPE,
     storage_chest_recipe,
 )
-from dnd.items.test_items import (
+from dnd.items.environment_interactables import (
     ActivateDeviceAction,
     CloseDoorAction,
     CookAction,
@@ -53,7 +49,7 @@ from dnd.items.test_items import (
     OpenDoorAction,
     PullLeverAction,
     RestAction,
-    TestDoorA as DoorObject,
+    DoorObject as DoorObject,
 )
 from dnd.items.torches import (
     ExtinguishWallTorchAction,
@@ -84,25 +80,6 @@ from server.mapeditor_support import (
 
 
 _ROOT = Path(__file__).resolve().parents[2]
-_LEDGER_PATH = _ROOT / "content_data" / "ledgers" / "legacy_items.json"
-_PRODUCTION_ENVIRONMENT_LEGACY_IDS = frozenset({
-    "legacy.item.factory.test_items.arcane_machine_gun",
-    "legacy.item.factory.test_items.fireball_cannon",
-    "legacy.item.factory.test_items.arcane_device",
-    "legacy.item.factory.test_items.wall_torch",
-    "legacy.environment.directional_wall",
-    "legacy.environment.directional_door",
-    "legacy.environment.test_door_a",
-    "legacy.environment.trap_lever",
-    "legacy.environment.storage_chest",
-    "legacy.environment.campfire",
-    "legacy.environment.blocker.crate",
-    "legacy.environment.blocker.boulder",
-    "legacy.environment.blocker.barricade",
-    "legacy.environment.blocker.oil_barrel",
-    "legacy.environment.spell_object.guardian_of_faith",
-    "legacy.environment.spell_object.heroes_feast",
-})
 _EXPECTED_IDENTITY_KEYS = frozenset({
     "content.neurodragon:environment_object:environment.arcane_machine_gun@1",
     "content.neurodragon:environment_object:environment.fireball_cannon@1",
@@ -152,7 +129,7 @@ _LEGACY_FACTORY_NAMES = frozenset({
 _DIRECT_CONSTRUCTOR_NAMES = frozenset({
     "DirectionalDoor",
     "DirectionalWall",
-    "TestDoorA",
+    "DoorObject",
     "TrapLever",
     "StorageChest",
     "GuardianOfFaithObject",
@@ -168,12 +145,6 @@ _CANONICAL_FACTORY_FUNCTIONS = frozenset({
     "_build_guardian_of_faith_object",
     "_build_heroes_feast_object",
 })
-
-
-def _ledger() -> LegacyContentMigrationLedger:
-    return LegacyContentMigrationLedger.model_validate_json(
-        _LEDGER_PATH.read_text(encoding="utf-8"),
-    )
 
 
 def _top_level_functions(relative_path: str) -> set[str]:
@@ -218,32 +189,6 @@ def _direct_production_calls() -> list[tuple[str, int, str]]:
                     continue
                 calls.append((relative, node.lineno, node.func.id))
     return sorted(calls)
-
-
-def test_production_environment_inventory_is_exact_and_fully_migrated() -> None:
-    """The hard cut owns all 14 authored roots and both spell-created roots."""
-    ledger = _ledger()
-    actual_ids = {
-        row.legacy_id
-        for row in ledger.rows
-        if (
-            row.provisional_ref is not None
-            and row.provisional_ref.definition_kind
-            == ContentDefinitionKind.ENVIRONMENT_OBJECT
-            and row.provisional_ref.pack_id != "content.fixture_internal"
-        )
-        or row.legacy_id.startswith("legacy.environment.spell_object.")
-    }
-
-    assert actual_ids == _PRODUCTION_ENVIRONMENT_LEGACY_IDS
-    for legacy_id in _PRODUCTION_ENVIRONMENT_LEGACY_IDS:
-        row = ledger.rows_by_id[legacy_id]
-        assert row.migration_status == LegacyMigrationStatus.MIGRATED
-        assert row.replacement_ref is not None
-        assert (
-            row.replacement_ref.definition_kind
-            == ContentDefinitionKind.ENVIRONMENT_OBJECT
-        )
 
 
 def test_bootstrap_registers_exact_public_environment_presentations() -> None:
@@ -509,8 +454,10 @@ def test_environment_actions_bind_through_exact_provider_dependencies() -> None:
 
 def test_no_legacy_environment_constructor_surface_or_callsite_survives() -> None:
     """Production selects authenticated recipes, never Python constructors."""
-    assert _LEGACY_FACTORY_NAMES.isdisjoint(
-        _top_level_functions("dnd/items/test_items.py")
-        | _top_level_functions("dnd/items/torches.py"),
-    )
+    item_functions = set()
+    for path in sorted((_ROOT / "dnd" / "items").rglob("*.py")):
+        item_functions.update(
+            _top_level_functions(path.relative_to(_ROOT).as_posix()),
+        )
+    assert _LEGACY_FACTORY_NAMES.isdisjoint(item_functions)
     assert _direct_production_calls() == []

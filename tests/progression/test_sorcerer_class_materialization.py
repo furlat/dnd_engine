@@ -16,6 +16,7 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.character_appearance import SORCERER_HUMAN_APPEARANCE
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.starting_equipment_definitions import (
@@ -32,7 +33,6 @@ from dnd.core.content.durable_characters import (
     BackgroundDefinition,
     BuildChoiceSelection,
     CantripChoice,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -47,6 +47,7 @@ from dnd.core.content.durable_characters import (
     SubclassChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.provenance import (
     ContentFidelity,
@@ -143,13 +144,17 @@ def _runtime_with_neutral_origins() -> tuple[
     species = _origin_declaration(
         kind=ContentDefinitionKind.SPECIES,
         content_id="species.neutral_sorcerer_origin",
-        payload=SpeciesDefinition(),
+        payload=SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     background = _origin_declaration(
         kind=ContentDefinitionKind.BACKGROUND,
         content_id="background.neutral_sorcerer_origin",
-        payload=BackgroundDefinition(),
+        payload=BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     declarations = dict(loaded.registry.declarations)
@@ -242,7 +247,7 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=species_ref,
         background_ref=background_ref,
-        appearance=CharacterAppearanceSelection(),
+        appearance=SORCERER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=8,
             dexterity=14,

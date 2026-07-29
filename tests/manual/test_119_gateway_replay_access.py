@@ -39,7 +39,7 @@ from server.game_gateway import (
 )
 from server.game_summary_store import WorkerGameSummaryStore, WorkerSummaryEvidence
 from server.hosted_worker import HostedWorkerManager
-from server.live_replication import create_stream_scene, execute_stream_attack
+from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
 from server.player_replay_capture import SubjectiveReplayCaptureStore
 from server.player_replay import SubjectivePlayerReplayArchive
 from server.player_replication.journal import SubjectiveJournalStore
@@ -133,9 +133,12 @@ def _terminal_service(
         )
     )
 
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(game.game_id))
     scene = create_stream_scene()
     summary_store = WorkerGameSummaryStore()
+    summary_store.bind_directory_game_id(
+        scene.encounter.uuid,
+        game.game_id,
+    )
     summary_store.capture_active_encounter(scene.encounter)
     capture_store = SubjectiveReplayCaptureStore()
     runtime = CanonicalSubjectiveReplicationRuntime(

@@ -38,7 +38,16 @@ from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
-from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus, NumericalModifier, AutoHitStatus, AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    ResistanceModifier,
+    ResistanceStatus,
+    NumericalModifier,
+    AutoHitStatus,
+    AdvantageModifier,
+    AdvantageStatus,
+    ContextualAdvantageModifier,
+)
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import ArmorEquipEvent
@@ -287,11 +296,10 @@ def shield_reaction_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         )
         entity.add_condition(buff, parent_event=event)
 
-        return event.model_copy(update={
-            "modified": True,
-            "attack_outcome": AttackOutcome.MISS,
-            "status_message": f"{entity.name} casts Shield (+5 AC, attack blocked)"
-        })
+        return event.with_updates(
+            attack_outcome=AttackOutcome.MISS,
+            status_message=f"{entity.name} casts Shield (+5 AC, attack blocked)",
+        )
 
     if _is_magic_missile_damage(event):
         entity.action_economy.consume("reactions", 1)
@@ -422,10 +430,11 @@ class MageArmorCondition(BaseCondition):
 
             if isinstance(event, ArmorEquipEvent):
                 entity.remove_condition("Mage Armor", parent_event=event)
-                return event.model_copy(update={
-                    "modified": True,
-                    "status_message": f"{entity.name}'s Mage Armor ends (equipped armor)"
-                })
+                return event.with_updates(
+                    status_message=(
+                        f"{entity.name}'s Mage Armor ends (equipped armor)"
+                    ),
+                )
 
             return None
 
@@ -1944,11 +1953,10 @@ class DeathWardEffect(BaseCondition):
                 damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
             if "Death Ward" in entity.active_conditions:
                 entity.remove_condition("Death Ward", parent_event=event)
-            return event.model_copy(update={
-                "modified": True,
-                "normal_hit_point_damage_cap": damage_cap,
-                "status_message": f"Death Ward! {entity.name} survives with 1 HP"
-            })
+            return event.with_updates(
+                normal_hit_point_damage_cap=damage_cap,
+                status_message=f"Death Ward! {entity.name} survives with 1 HP",
+            )
 
         handler = EventHandler(
             name="Death Ward",
@@ -2375,13 +2383,17 @@ def _resistance_processor(
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
-    event.replace_roll(new_roll, "Resistance", f"+{d4_value} (1d4)")
+    modified_event = event.replace_roll(
+        new_roll,
+        "Resistance",
+        f"+{d4_value} (1d4)",
+    )
 
     target = Entity.get(source_entity_uuid)
     if target and "Resistance" in target.active_conditions:
-        target.remove_condition("Resistance", parent_event=event)
+        target.remove_condition("Resistance", parent_event=modified_event)
 
-    return event.model_copy(update={"modified": True})
+    return modified_event
 
 
 class ResistanceEffect(BaseCondition):
@@ -2964,9 +2976,13 @@ class BeaconOfHopeEffect(BaseCondition):
                             "results": new_results,
                             "total": new_total,
                         })
-                        event.replace_roll(new_roll, "Beacon of Hope", "maximize healing dice")
+                        return event.replace_roll(
+                            new_roll,
+                            "Beacon of Hope",
+                            "maximize healing dice",
+                        )
 
-            return event
+            return None
 
         return EventHandler(
             name="Beacon of Hope Heal Maximizer",

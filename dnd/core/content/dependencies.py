@@ -24,6 +24,7 @@ class ContentDependencyRelation(str, Enum):
     CREATES_OBJECT = "creates_object"
     CREATES_ITEM = "creates_item"
     EQUIPS_ITEM = "equips_item"
+    CONFIGURES_CREATURE = "configures_creature"
     SUMMONS_CREATURE = "summons_creature"
     REQUIRES_PRIMITIVE = "requires_primitive"
 

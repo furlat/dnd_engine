@@ -12,6 +12,13 @@ from uuid import UUID, uuid5
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
 )
+from dnd.classes.barbarian_progression_definitions import (
+    BERSERKER_SUBCLASS_REF,
+)
+from dnd.classes.progression_definitions import CHAMPION_SUBCLASS_REF
+from dnd.classes.sorcerer_progression_definitions import (
+    DRACONIC_BLOODLINE_SUBCLASS_REF,
+)
 from dnd.content_system.barbarian_character_grant_appliers import (
     BARBARIAN_CHARACTER_GRANT_APPLIERS,
 )
@@ -28,6 +35,12 @@ from dnd.content_system.character_grant_types import (
     ModifierHandleChannel,
     ProficiencyHandle,
 )
+from dnd.content_system.dragonborn_character_grant_appliers import (
+    install_dragonborn_ancestry_feature,
+)
+from dnd.content_system.dragonborn_origin_definitions import (
+    DRAGONBORN_ANCESTRY_DECLARATIONS,
+)
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_CHARACTER_GRANT_APPLIERS,
 )
@@ -37,10 +50,14 @@ from dnd.content_system.fighter_character_grant_appliers import (
 from dnd.content_system.sorcerer_character_grant_appliers import (
     SORCERER_CHARACTER_GRANT_APPLIERS,
 )
+from dnd.content_system.origin_runtime_character_grant_appliers import (
+    ORIGIN_RUNTIME_CHARACTER_GRANT_APPLIERS,
+)
 from dnd.core.content.durable_characters import (
     ProficiencySubject,
     ProficiencySubjectKind,
 )
+from dnd.core.content.dragonborn import DragonbornAncestryFeatureDefinition
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.events import AbilityName
 from dnd.core.modifiers import (
@@ -55,6 +72,49 @@ CharacterGrantApplier = Callable[
     [BuiltinCharacterGrantContext, CharacterGrantScheduleEntry],
     CharacterGrantReceipt,
 ]
+
+
+_DRAGONBORN_ANCESTRY_REFS = {
+    declaration.ref.identity_key: declaration
+    for declaration in DRAGONBORN_ANCESTRY_DECLARATIONS
+}
+_NON_STRUCTURAL_CONTENT_KINDS = frozenset({
+    ContentDefinitionKind.SPELL,
+    ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
+})
+_METADATA_ONLY_CONTENT_REFS = frozenset({
+    BERSERKER_SUBCLASS_REF.identity_key,
+    CHAMPION_SUBCLASS_REF.identity_key,
+    DRACONIC_BLOODLINE_SUBCLASS_REF.identity_key,
+})
+
+
+def _apply_dragonborn_ancestry(
+    context: BuiltinCharacterGrantContext,
+    entry: CharacterGrantScheduleEntry,
+) -> CharacterGrantReceipt:
+    """Install one validated Dragonborn ancestry choice."""
+    content_ref = entry.content_ref
+    if content_ref is None:
+        raise ValueError("Dragonborn ancestry grant requires exact content")
+    declaration = _DRAGONBORN_ANCESTRY_REFS.get(content_ref.identity_key)
+    if declaration is None or declaration.ref != content_ref:
+        raise ValueError("Dragonborn ancestry applier received another ref")
+    definition = declaration.definition_payload
+    if not isinstance(definition, DragonbornAncestryFeatureDefinition):
+        raise TypeError("Dragonborn ancestry definition has the wrong payload")
+    return install_dragonborn_ancestry_feature(
+        entity=context.entity,
+        character_id=context.character_id,
+        grant_token=entry.grant_token,
+        definition_ref=content_ref,
+        character_level=sum(
+            class_level
+            for _, class_level in context.preview.class_level_counts
+        ),
+        definition=definition,
+        runtime=context.runtime,
+    )
 
 
 def _remarkable_athlete_jump_bonus(
@@ -87,7 +147,7 @@ def _apply_remarkable_athlete(
         )
     source_id = uuid5(context.character_id, entry.grant_token)
     proficiency_handles: list[ProficiencyHandle] = []
-    modifier_handle: ModifierHandle | None = None
+    modifier_handles: list[ModifierHandle] = []
     try:
         for ability_name in ("strength", "dexterity", "constitution"):
             subject = ProficiencySubject(
@@ -116,10 +176,12 @@ def _apply_remarkable_athlete(
         entity.jump_distance_additive.self_contextual.add_value_modifier(
             modifier,
         )
-        modifier_handle = ModifierHandle(
-            value_uuid=entity.jump_distance_additive.uuid,
-            modifier_uuid=modifier.uuid,
-            channel=ModifierHandleChannel.SELF_CONTEXTUAL,
+        modifier_handles.append(
+            ModifierHandle(
+                value_uuid=entity.jump_distance_additive.uuid,
+                modifier_uuid=modifier.uuid,
+                channel=ModifierHandleChannel.SELF_CONTEXTUAL,
+            ),
         )
     except Exception:
         for handle in reversed(proficiency_handles):
@@ -132,7 +194,7 @@ def _apply_remarkable_athlete(
                     subject_id.removeprefix("ability_check."),
                 ),
             ).remove_check_proficiency_source(handle.source_id)
-        if modifier_handle is not None:
+        for modifier_handle in reversed(modifier_handles):
             entity.jump_distance_additive.self_contextual.remove_value_modifier(
                 modifier_handle.modifier_uuid,
             )
@@ -142,7 +204,7 @@ def _apply_remarkable_athlete(
         grant_id=source_id,
         grant_token=entry.grant_token,
         definition_ref=entry.content_ref,
-        modifier_handles=(modifier_handle,),
+        modifier_handles=tuple(modifier_handles),
         proficiency_handles=tuple(proficiency_handles),
     )
 
@@ -151,10 +213,15 @@ _BUILTIN_CHARACTER_GRANT_APPLIERS: dict[str, CharacterGrantApplier] = {
     REMARKABLE_ATHLETE_DECLARATION.ref.identity_key: (
         _apply_remarkable_athlete
     ),
+    **{
+        identity_key: _apply_dragonborn_ancestry
+        for identity_key in _DRAGONBORN_ANCESTRY_REFS
+    },
     **EXTRA_ATTACK_CHARACTER_GRANT_APPLIERS,
     **FIGHTER_CHARACTER_GRANT_APPLIERS,
     **BARBARIAN_CHARACTER_GRANT_APPLIERS,
     **SORCERER_CHARACTER_GRANT_APPLIERS,
+    **ORIGIN_RUNTIME_CHARACTER_GRANT_APPLIERS,
 }
 
 
@@ -174,15 +241,15 @@ def apply_builtin_character_grant(
         raise ValueError("content grant schedule row has no content reference")
     applier = _BUILTIN_CHARACTER_GRANT_APPLIERS.get(content_ref.identity_key)
     if applier is None:
-        if content_ref.definition_kind in {
-            ContentDefinitionKind.CLASS_FEATURE,
-            ContentDefinitionKind.FEAT,
-        }:
-            raise RuntimeError(
-                "No structural character applier is installed for "
-                f"{content_ref.identity_key}",
-            )
-        return None
+        if (
+            content_ref.definition_kind in _NON_STRUCTURAL_CONTENT_KINDS
+            or content_ref.identity_key in _METADATA_ONLY_CONTENT_REFS
+        ):
+            return None
+        raise RuntimeError(
+            "No structural character applier is installed for "
+            f"{content_ref.identity_key}",
+        )
     return applier(context, entry)
 
 

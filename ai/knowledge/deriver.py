@@ -27,6 +27,7 @@ from ai.knowledge.replay import entity_fact_replay_token
 from dnd.ai.contracts.control import ActionAffordance
 from dnd.ai.contracts.immutable import FrozenDict
 from dnd.ai.contracts.semantics import ActionSemantics, ActionTag
+from dnd.core.geometry import grid_distance_cells
 
 
 SectionT = TypeVar("SectionT")
@@ -323,7 +324,7 @@ def _derive_threat(world: SubjectiveWorldState, contacts: ContactFacts) -> Threa
         hostile = world.known_entities.get(hostile_uuid)
         if hostile is None or hostile.position is None:
             continue
-        distance = _grid_distance_cells(actor.position, hostile.position)
+        distance = grid_distance_cells(actor.position, hostile.position)
         replay_token = entity_fact_replay_token(hostile)
         if distance <= 1:
             adjacent.append(hostile_uuid)
@@ -846,8 +847,3 @@ def _optional_bool(values: Mapping[str, object], key: str) -> Optional[bool]:
     """Return a known boolean without coercing arbitrary object state."""
     value = values.get(key)
     return value if type(value) is bool else None
-
-
-def _grid_distance_cells(origin: tuple[int, int], target: tuple[int, int]) -> int:
-    """Return the engine-style floored Euclidean distance in cells."""
-    return int(((origin[0] - target[0]) ** 2 + (origin[1] - target[1]) ** 2) ** 0.5)

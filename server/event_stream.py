@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from bisect import bisect_right
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -36,6 +37,8 @@ from server.objective_timeline import (
 from server.timeline_contracts import WireEvent
 
 DEFAULT_SUBSCRIPTION_MAX_DEPTH = 512
+
+logger = logging.getLogger(__name__)
 
 
 class StreamSyncPayload(BaseModel):
@@ -715,7 +718,12 @@ class DndEventStream:
             try:
                 listener(slot)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive finalized-combat-log listener %r failed for stream %s cursor %s",
+                    listener,
+                    slot.source_stream_id,
+                    slot.combat_log_cursor,
+                )
 
     def _publish(self, event: str, data: BaseModel) -> None:
         event_cursor = int(getattr(data, "event_cursor", self.current_event_cursor()))

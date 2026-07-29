@@ -1,9 +1,14 @@
+import logging
+
 from pydantic import Field, computed_field, model_validator
 from typing import List, Literal, Optional, Dict, Any, Callable, TypeVar, Union, Tuple, Self
 from uuid import UUID
 from enum import Enum
 
 from dnd.core.base_object import BaseObject
+from dnd.core import creature_types as _creature_types
+
+logger = logging.getLogger(__name__)
 
 T_co = TypeVar('T_co', covariant=True)
 
@@ -33,47 +38,6 @@ class ResistanceStatus(str, Enum):
     VULNERABILITY = "Vulnerability"
 
 
-class Size(str, Enum):
-    TINY = "Tiny"
-    SMALL = "Small"
-    MEDIUM = "Medium"
-    LARGE = "Large"
-    HUGE = "Huge"
-    GARGANTUAN = "Gargantuan"
-
-
-class CreatureType(str, Enum):
-    """D&D 5e creature types."""
-    ABERRATION = "aberration"
-    BEAST = "beast"
-    CELESTIAL = "celestial"
-    CONSTRUCT = "construct"
-    DRAGON = "dragon"
-    ELEMENTAL = "elemental"
-    FEY = "fey"
-    FIEND = "fiend"
-    GIANT = "giant"
-    HUMANOID = "humanoid"
-    MONSTROSITY = "monstrosity"
-    OOZE = "ooze"
-    PLANT = "plant"
-    UNDEAD = "undead"
-
-
-class DamageType(str, Enum):
-    ACID = "Acid"
-    BLUDGEONING = "Bludgeoning"
-    COLD = "Cold"
-    FIRE = "Fire"
-    FORCE = "Force"
-    LIGHTNING = "Lightning"
-    NECROTIC = "Necrotic"
-    PIERCING = "Piercing"
-    POISON = "Poison"
-    PSYCHIC = "Psychic"
-    RADIANT = "Radiant"
-    SLASHING = "Slashing"
-    THUNDER = "Thunder"
 saving_throws = Literal[
     "strength_saving_throw",
     "dexterity_saving_throw",
@@ -349,10 +313,7 @@ class ContextualModifier(BaseObject):
                 modifier's target UUID.
         """
         self.callable_arguments = (source_entity_uuid, target_entity_uuid, context)
-        try:
-            self.callable_validation_function()
-        except ValueError as e:
-            raise ValueError(str(e))
+        self.callable_validation_function()
 
     def evaluate(
         self,
@@ -369,10 +330,7 @@ class ContextualModifier(BaseObject):
         'DamageTypeModifier',
         'ResistanceModifier',
     ]]:
-        """Evaluate the callable and cache the result.
-
-        Callable exceptions are swallowed and cached as `None`; this is the
-        normal contextual aggregation path.
+        """Evaluate the callable through the fail-soft aggregation boundary.
 
         Args:
             source_entity_uuid: Source UUID passed to the callable.
@@ -381,11 +339,22 @@ class ContextualModifier(BaseObject):
             event_lineage_uuid: Optional event lineage UUID used in the cache key.
 
         Returns:
-            Callable result, or `None` when the callable raises.
+            Callable result, or ``None`` when the rule does not apply or its
+            contextual evaluator fails. Failures are logged; strict callers
+            use :meth:`execute_callable`.
         """
         try:
-            result = self.callable(source_entity_uuid, target_entity_uuid, context)
+            result = self.callable(
+                source_entity_uuid,
+                target_entity_uuid,
+                context,
+            )
         except Exception:
+            logger.exception(
+                "Contextual modifier %s (%s) failed during aggregation",
+                self.name,
+                self.uuid,
+            )
             result = None
         key = f"{source_entity_uuid}|{target_entity_uuid or 'none'}|{event_lineage_uuid or 'none'}"
         self.cached_results[key] = result
@@ -561,7 +530,7 @@ class ContextualNumericalModifier(ContextualModifier):
 class SizeModifier(BaseObject):
     """Creature or object size payload."""
 
-    value: Size = Field(
+    value: _creature_types.Size = Field(
         ...,
         description="Size value contributed by this modifier."
     )
@@ -590,7 +559,7 @@ class SizeModifier(BaseObject):
 class DamageTypeModifier(BaseObject):
     """Damage type payload."""
 
-    value: DamageType = Field(
+    value: _creature_types.DamageType = Field(
         ...,
         description="Damage type contributed by this modifier."
     )
@@ -686,7 +655,7 @@ class ResistanceModifier(BaseObject):
         ...,
         description="Resistance state contributed by this modifier."
     )
-    damage_type: DamageType = Field(
+    damage_type: _creature_types.DamageType = Field(
         ...,
         description="Damage type affected by this resistance modifier."
     )

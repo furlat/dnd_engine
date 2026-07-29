@@ -16,6 +16,7 @@ from dnd.classes.sorcerer_progression_definitions import (
     SORCERER_CLASS_REF,
 )
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
@@ -34,7 +35,6 @@ from dnd.core.content.durable_characters import (
     BackgroundDefinition,
     BuildChoiceSelection,
     CantripChoice,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -44,14 +44,18 @@ from dnd.core.content.durable_characters import (
     ElementalAncestryChoice,
     FightingStyleChoice,
     FlexibleAbilityBonusSelection,
+    ProficiencySubject,
+    ProficiencySubjectKind,
     SpeciesDefinition,
     SpeciesVariantDefinition,
     SpellKnownChoice,
     StartingEquipmentPackageChoice,
+    StartingProficiencyChoice,
     SubclassChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.materialization import CreatureDeploymentRole
+from dnd.core.content.origin_support import OriginRuntimeSupportStatus
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentReviewStatus,
@@ -59,6 +63,7 @@ from dnd.core.content.provenance import (
 from dnd.core.content.registration import ContentDeclarationMode
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.core.language_types import SrdLanguageId
 from server.content_catalog import build_public_content_catalog
 
 
@@ -132,18 +137,22 @@ def test_srd_character_origins_are_public_exact_typed_definitions() -> None:
         assert declaration.descriptor.presentation.visual_variant_key
         assert declaration.provenance.primary_source_id == "wotc.srd_5_1_cc"
         assert declaration.provenance.review_status == ContentReviewStatus.REVIEWED
-        if declaration.ref.content_id == "species.human":
-            assert declaration.provenance.fidelity == ContentFidelity.COMPLETE
-            assert "player_capable" in declaration.descriptor.tags
-        else:
-            assert declaration.provenance.fidelity == ContentFidelity.BLOCKED
-            assert "player_capable" not in declaration.descriptor.tags
+        assert declaration.ref.content_version == 2
+        payload = declaration.definition_payload
         assert isinstance(
-            declaration.definition_payload,
+            payload,
             SpeciesDefinition
             | SpeciesVariantDefinition
             | BackgroundDefinition,
         )
+        assert declaration.provenance.fidelity is not ContentFidelity.BLOCKED
+        assert (
+            payload.runtime_support.status
+            is OriginRuntimeSupportStatus.AVAILABLE
+        )
+        assert payload.runtime_support.blocked_reason is None
+        assert "player_capable" not in declaration.descriptor.tags
+        assert "implementation_blocked" not in declaration.descriptor.tags
 
     species_payloads = {
         row.ref.content_id: row.definition_payload
@@ -152,45 +161,54 @@ def test_srd_character_origins_are_public_exact_typed_definitions() -> None:
     }
     for content_id, payload in species_payloads.items():
         assert isinstance(payload, SpeciesDefinition)
-        assert payload.level_grants == ()
-        if content_id == "species.half_elf":
-            assert len(payload.choice_requirements) == 1
-            requirement = payload.choice_requirements[0]
-            assert requirement.choice_id == (
-                "species.half_elf.skill_versatility"
-            )
-            assert requirement.choice_kind.value == "starting_proficiency"
-            assert requirement.minimum_selections == 2
-            assert requirement.maximum_selections == 2
-            assert len(requirement.allowed_proficiency_subjects) == 18
-        else:
-            assert payload.choice_requirements == ()
+        assert payload.level_grants, content_id
+        assert all(row.grant_refs for row in payload.level_grants)
+    half_elf = species_payloads["species.half_elf"]
+    assert isinstance(half_elf, SpeciesDefinition)
+    assert tuple(
+        requirement.choice_id
+        for requirement in half_elf.choice_requirements
+    ) == (
+        "species.half_elf.additional_language",
+        "species.half_elf.skill_versatility",
+    )
+    skill_versatility = half_elf.choice_requirements[1]
+    assert skill_versatility.choice_kind.value == "starting_proficiency"
+    assert skill_versatility.minimum_selections == 2
+    assert skill_versatility.maximum_selections == 2
+    assert len(skill_versatility.allowed_proficiency_subjects) == 18
     background_payload = next(
         row.definition_payload
         for row in origins
         if row.ref.content_id == "background.acolyte"
     )
     assert isinstance(background_payload, BackgroundDefinition)
-    assert background_payload.automatic_grant_refs == ()
-    assert background_payload.choice_requirements == ()
-    acolyte = next(
-        row for row in origins
-        if row.ref.content_id == "background.acolyte"
+    assert len(background_payload.automatic_grant_refs) == 2
+    assert tuple(
+        requirement.choice_id
+        for requirement in background_payload.choice_requirements
+    ) == ("background.acolyte.languages",)
+    assert (
+        background_payload.runtime_support.status
+        is OriginRuntimeSupportStatus.AVAILABLE
     )
-    assert "player_capable" not in acolyte.descriptor.tags
 
     adventurer = next(
         row for row in declarations
         if row.ref.identity_key
-        == "content.neurodragon:background:background.adventurer@1"
+        == "content.neurodragon:background:background.adventurer@2"
     )
     assert adventurer.provenance.fidelity == ContentFidelity.COMPLETE
     assert (
         adventurer.provenance.primary_source_id
         == "neurodragon.original_b2b3930"
     )
-    assert "player_capable" in adventurer.descriptor.tags
     assert isinstance(adventurer.definition_payload, BackgroundDefinition)
+    assert (
+        adventurer.definition_payload.runtime_support.status
+        is OriginRuntimeSupportStatus.AVAILABLE
+    )
+    assert adventurer.definition_payload.runtime_support.blocked_reason is None
     assert adventurer.definition_payload.automatic_grant_refs == ()
     assert adventurer.definition_payload.choice_requirements == ()
 
@@ -203,7 +221,7 @@ def test_srd_species_variant_edges_are_closed_and_catalog_visible() -> None:
 
     for species_id in _EXPECTED_SPECIES_IDS:
         species = declarations[
-            f"content.srd_5_1_cc:species:{species_id}@1"
+            f"content.srd_5_1_cc:species:{species_id}@2"
         ]
         assert species.ref.identity_key in catalog_refs
         variant_edges = tuple(
@@ -223,10 +241,12 @@ def test_srd_species_variant_edges_are_closed_and_catalog_visible() -> None:
         assert {
             ref.content_id
             for ref in species.descriptor.related_content_refs
+            if ref.definition_kind
+            is ContentDefinitionKind.SPECIES_VARIANT
         } == expected_variant_ids
 
     for background_id in _EXPECTED_BACKGROUND_IDS:
-        key = f"content.srd_5_1_cc:background:{background_id}@1"
+        key = f"content.srd_5_1_cc:background:{background_id}@2"
         assert key in declarations
         assert key in catalog_refs
 
@@ -377,12 +397,23 @@ def test_human_adventurer_validates_materializes_and_reverses_existing_classes(
         definition_revision=1,
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=loaded.registry.declarations[
-            "content.srd_5_1_cc:species:species.human@1"
+            "content.srd_5_1_cc:species:species.human@2"
         ].ref,
         background_ref=loaded.registry.declarations[
-            "content.neurodragon:background:background.adventurer@1"
+            "content.neurodragon:background:background.adventurer@2"
         ].ref,
-        appearance=CharacterAppearanceSelection(),
+        immutable_origin_choices=(
+            StartingProficiencyChoice(
+                choice_id="species.human.additional_language",
+                proficiencies=(
+                    ProficiencySubject(
+                        subject_kind=ProficiencySubjectKind.LANGUAGE,
+                        subject_id=SrdLanguageId.DRACONIC.value,
+                    ),
+                ),
+            ),
+        ),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=14,

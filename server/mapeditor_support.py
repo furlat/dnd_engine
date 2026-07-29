@@ -7,6 +7,7 @@ combat entities and subjective visibility.
 
 import os
 import re
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
@@ -41,9 +42,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.items.environment_content import TRAP_LEVER_DECLARATION
 from dnd.items.environment import DirectionalDoor
-from dnd.items.test_items import (
+from dnd.items.environment_interactables import (
     PullLeverAction,
-    TestDoorA,
+    DoorObject,
     TrapLever,
 )
 from dnd.items.torches import WallTorch
@@ -77,6 +78,8 @@ from server.event_stream import event_stream
 from server.session import SessionManager
 from server.world_contracts import APIFloorObject, APITile
 from server.world_projection import project_grid
+
+logger = logging.getLogger(__name__)
 
 _BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
     "use_register",
@@ -161,6 +164,10 @@ def save_current_editor_map(request: MapEditorSaveMapRequest) -> MapEditorSavedM
             created_at = previous.created_at
             revision = previous.revision + 1
         except Exception:
+            logger.exception(
+                "Replacing unreadable saved map document at %s",
+                path,
+            )
             created_at = now
     metadata = MapEditorSavedMapMetadata(
         id=map_id,
@@ -192,6 +199,7 @@ def list_saved_editor_maps() -> MapEditorSavedMapList:
         try:
             maps.append(MapEditorSavedMapDocument.model_validate_json(path.read_text(encoding="utf-8")).metadata)
         except Exception:
+            logger.exception("Ignoring unreadable saved map document at %s", path)
             continue
     maps.sort(key=lambda metadata: metadata.updated_at, reverse=True)
     return MapEditorSavedMapList(maps=maps)
@@ -527,7 +535,7 @@ def _capture_editor_materialization_state(
         frozenset(BaseObject._registry),
         frozenset(BaseValue._registry),
         frozenset(ITEM_RUNTIME_BINDINGS.bindings),
-        frozenset(get_map()._object_positions),
+        frozenset(get_map().get_all_object_positions()),
     )
 
 
@@ -549,7 +557,9 @@ def _rollback_editor_materialization(
         objects_before,
     ) = snapshot
     grid = get_map()
-    for object_uuid in set(grid._object_positions) - set(objects_before):
+    for object_uuid in set(grid.get_all_object_positions()) - set(
+        objects_before
+    ):
         grid.remove_object(object_uuid)
     for block_uuid in set(BaseBlock._registry) - set(blocks_before):
         grid.cleanup_block_light_sources(block_uuid)
@@ -579,7 +589,7 @@ def _validate_editor_runtime_state(
 
     if state.is_open is not None and not isinstance(
         item,
-        (TestDoorA, DirectionalDoor),
+        (DoorObject, DirectionalDoor),
     ):
         raise ValueError("is_open is only valid for door objects")
     if state.is_lit is not None and not isinstance(item, WallTorch):
@@ -594,13 +604,10 @@ def _validate_editor_runtime_state(
         tile_uuids = tuple(UUID(value) for value in state.trap_tile_uuids)
     except ValueError as error:
         raise ValueError("trap linkage contains an invalid UUID") from error
-    handler = (
-        EventQueue._spatial_handlers.get(handler_uuid)
-        or EventQueue._event_handlers.get(handler_uuid)
-    )
-    handler_index = EventQueue._handler_positions.get(handler_uuid)
-    if handler is None or handler_index is None:
+    registration = EventQueue.get_spatial_handler_registration(handler_uuid)
+    if registration is None:
         raise ValueError("trap linkage references an unknown spatial handler")
+    _handler, handler_positions = registration
     tiles = tuple(BaseBlock.get(tile_uuid) for tile_uuid in tile_uuids)
     if any(not isinstance(tile, Tile) for tile in tiles):
         raise ValueError("trap linkage references an unknown trap tile")
@@ -609,7 +616,6 @@ def _validate_editor_runtime_state(
         for tile in tiles
         if isinstance(tile, Tile)
     }
-    _event_key, handler_positions = handler_index
     if tile_positions != set(handler_positions):
         raise ValueError(
             "trap linkage tiles must exactly match the spatial handler",
@@ -630,7 +636,7 @@ def _apply_editor_runtime_state(
             raise AssertionError("runtime state was not validated")
         item.charges = state.charges
 
-    if isinstance(item, TestDoorA):
+    if isinstance(item, DoorObject):
         if state.is_open is not None:
             item.is_open = state.is_open
             item.blocks_movement = not state.is_open
@@ -888,7 +894,7 @@ def _iter_tiles() -> Iterable[Tuple[int, int, Tile]]:
 
 def _floor_objects(grid: Any) -> List[APIFloorObject]:
     result = []
-    for obj_uuid, obj_pos in grid._object_positions.items():
+    for obj_uuid, obj_pos in grid.get_all_object_positions().items():
         result.append(_floor_object(obj_uuid, obj_pos))
     return result
 
@@ -934,7 +940,7 @@ def _saved_object_placements(floor_objects: List[APIFloorObject]) -> List[MapEdi
         runtime_state = MapEditorObjectRuntimeState(
             is_open=(
                 runtime_object.is_open
-                if isinstance(runtime_object, (TestDoorA, DirectionalDoor))
+                if isinstance(runtime_object, (DoorObject, DirectionalDoor))
                 else None
             ),
             is_lit=(

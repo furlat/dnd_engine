@@ -412,7 +412,6 @@ Each has a **Contextual** variant (e.g., `ContextualAdvantageModifier`) that tak
 | `ac_bonus(target)` | Low | No | Building blocks |
 | `skill_bonus(target, skill)` | **High** | **Yes** | Direct use |
 | `saving_throw_bonus(target, ability)` | **High** | **Yes** | Direct use |
-| `skill_bonus_cross(target, skill)` | **High** | **Yes** | Returns both parties' bonuses |
 | `saving_throw(request)` | **High** | **Yes** | Full save execution |
 | `skill_check(request)` | **High** | **Yes** | Full check execution |
 
@@ -624,9 +623,11 @@ See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` c
 **Registration**:
 
 ```python
-from dnd.actions_functional import register_spell, register_spells_by_name
+from dnd.actions_functional import register_spell
+from dnd.spells.evocation import FireBolt, MagicMissile
+
 register_spell(entity, FireBolt, caster_level=5)
-register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
+register_spell(entity, MagicMissile, caster_level=5)
 ```
 
 **Entity spell API**: `spell_attack_bonus(target_uuid)`, `spell_save_dc()`, `has_spell_slot(level)`, `is_spellcaster`. See `dnd/entity.py` for full list.

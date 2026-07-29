@@ -167,6 +167,7 @@ def _appearance(*, tint: int) -> APIAppearance:
         portrait_key=None,
         presentation_kind="layered",
         visual_scale=1.0,
+        visual_scale_x=1.0,
         placeholder_tint=tint,
         body_category="NakedBody",
         skin_tint=tint,
@@ -203,6 +204,11 @@ def test_structural_edge_appearance_is_closed_and_privacy_minimal() -> None:
 def _entity(uuid: str, name: str, position: tuple[int, int], tint: int) -> APIEntitySummary:
     return APIEntitySummary(
         uuid=uuid,
+        content_ref=_content_ref(
+            kind=ContentDefinitionKind.CREATURE,
+            content_id=f"creature.fixture_{uuid}",
+            digest_char="a",
+        ).model_dump(mode="python"),
         name=name,
         position=position,
         hp=10,
@@ -1215,6 +1221,25 @@ def test_generic_action_root_requires_exact_attribution_and_owned_effects() -> N
     unattributed["content_attributions"] = ()
     with pytest.raises(ValidationError, match="exact behavior attribution"):
         ActionPresentationCue.model_validate(unattributed)
+
+    trait_ref = _content_ref(
+        kind=ContentDefinitionKind.TRAIT,
+        content_id="trait.parry",
+        digest_char="b",
+    )
+    trait_attributed = action.model_dump(mode="python")
+    trait_attributed["content_attributions"] = (
+        UnrootedBehaviorPresentationAttribution(
+            role=BehaviorPresentationRole.BEHAVIOR,
+            definition_ref=trait_ref,
+            provided_by_ref=trait_ref,
+        ),
+    )
+    with pytest.raises(
+        ValidationError,
+        match="must identify an action or reaction",
+    ):
+        ActionPresentationCue.model_validate(trait_attributed)
 
     mismatched_effects = action.model_dump(mode="python")
     mismatched_effects["effect_presentation_ids"] = ()

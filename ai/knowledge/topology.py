@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-import math
 from types import MappingProxyType
 from typing import AbstractSet, Optional, Tuple
 
@@ -14,7 +13,10 @@ from dnd.ai.contracts.observation import (
     SubjectiveWorldState,
 )
 from dnd.ai.contracts.semantics import TruthValue
-from dnd.core.geometry import supercover_line
+from dnd.core.geometry import (
+    grid_distance_feet as grid_distance_feet,
+    supercover_line,
+)
 
 
 Position = Tuple[int, int]
@@ -79,15 +81,6 @@ class KnownLineOfSightWorkspace:
             }),
             vision_blocker_positions=blockers,
         )
-
-
-def grid_distance_feet(origin: Position, target: Position) -> int:
-    """Return the engine's floored Euclidean grid distance in feet."""
-    tile_distance = int(math.sqrt(
-        (origin[0] - target[0]) ** 2
-        + (origin[1] - target[1]) ** 2
-    ))
-    return tile_distance * 5
 
 
 def known_line_of_sight(

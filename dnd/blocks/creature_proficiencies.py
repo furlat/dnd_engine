@@ -6,7 +6,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.identities import (
+    ContentDefinitionKind,
+    ContentRef,
+    validate_namespaced_id,
+)
 from dnd.core.equipment_types import ArmorType, WeaponProperty
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
@@ -34,6 +38,8 @@ class CreatureProficienciesConfig(BaseModel):
         ArmorType.HEAVY,
     )
     base_shields: bool = True
+    base_languages: tuple[str, ...] = ()
+    base_tools: tuple[str, ...] = ()
 
 
 class CreatureProficiencies(BaseBlock):
@@ -65,6 +71,14 @@ class CreatureProficiencies(BaseBlock):
     shield_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
     )
+    base_languages: frozenset[str] = Field(default_factory=frozenset)
+    base_tools: frozenset[str] = Field(default_factory=frozenset)
+    language_sources: dict[str, ProficiencySourceSet] = Field(
+        default_factory=dict,
+    )
+    tool_sources: dict[str, ProficiencySourceSet] = Field(
+        default_factory=dict,
+    )
 
     @classmethod
     def create(
@@ -94,6 +108,20 @@ class CreatureProficiencies(BaseBlock):
             base_weapon_ref_keys=frozenset(base_weapon_ref_keys),
             base_armor_types=frozenset(resolved.base_armor_types),
             base_shields=resolved.base_shields,
+            base_languages=frozenset(
+                validate_namespaced_id(
+                    language,
+                    "base language",
+                )
+                for language in resolved.base_languages
+            ),
+            base_tools=frozenset(
+                validate_namespaced_id(
+                    tool,
+                    "base tool",
+                )
+                for tool in resolved.base_tools
+            ),
         )
 
     def add_weapon_source(
@@ -141,6 +169,30 @@ class CreatureProficiencies(BaseBlock):
         """Grant shield proficiency from one exact source."""
         self.shield_sources.add(source_id, ProficiencyMode.FULL)
 
+    def add_language_source(
+        self,
+        source_id: UUID,
+        language_id: str,
+    ) -> None:
+        """Grant knowledge of one exact language from one source."""
+        language_key = validate_namespaced_id(language_id, "language_id")
+        self.language_sources.setdefault(
+            language_key,
+            ProficiencySourceSet(),
+        ).add(source_id, ProficiencyMode.FULL)
+
+    def add_tool_source(
+        self,
+        source_id: UUID,
+        tool_id: str,
+    ) -> None:
+        """Grant proficiency with one exact tool from one source."""
+        tool_key = validate_namespaced_id(tool_id, "tool_id")
+        self.tool_sources.setdefault(
+            tool_key,
+            ProficiencySourceSet(),
+        ).add(source_id, ProficiencyMode.FULL)
+
     def remove_source(self, source_id: UUID) -> bool:
         """Remove one source from every creature-training category."""
         removed = self.shield_sources.remove(source_id)
@@ -155,6 +207,14 @@ class CreatureProficiencies(BaseBlock):
             del self.specific_weapon_sources[weapon_key]
         for sources in self.armor_sources.values():
             removed = sources.remove(source_id) or removed
+        for source_sets in (self.language_sources, self.tool_sources):
+            empty_keys: list[str] = []
+            for identity, sources in source_sets.items():
+                removed = sources.remove(source_id) or removed
+                if not sources.sources:
+                    empty_keys.append(identity)
+            for identity in empty_keys:
+                del source_sets[identity]
         return removed
 
     def is_weapon_proficient(
@@ -200,6 +260,24 @@ class CreatureProficiencies(BaseBlock):
     def is_shield_proficient(self) -> bool:
         """Return whether any base or source-owned shield training exists."""
         return self.base_shields or bool(self.shield_sources.sources)
+
+    def knows_language(self, language_id: str) -> bool:
+        """Return whether a base or source-owned language is known."""
+        language_key = validate_namespaced_id(language_id, "language_id")
+        sources = self.language_sources.get(language_key)
+        return (
+            language_key in self.base_languages
+            or (sources is not None and bool(sources.sources))
+        )
+
+    def is_tool_proficient(self, tool_id: str) -> bool:
+        """Return whether a base or source-owned tool proficiency exists."""
+        tool_key = validate_namespaced_id(tool_id, "tool_id")
+        sources = self.tool_sources.get(tool_key)
+        return (
+            tool_key in self.base_tools
+            or (sources is not None and bool(sources.sources))
+        )
 
 
 __all__ = [

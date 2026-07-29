@@ -1,4 +1,4 @@
-"""Field Focus content pack used by extension tutorials."""
+"""Field Focus item, action, and condition content."""
 
 from typing import Optional
 
@@ -6,11 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import UsableItem
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
-from dnd.core.base_actions import ActionEvent, AvailableActionInfo, BaseAction, Cost, TargetType
+from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.dependencies import (
@@ -47,7 +43,6 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import Event, EventPhase
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin
 
 
 class FieldFocus(BaseCondition):
@@ -215,55 +210,6 @@ class DeployFieldFocus(BaseAction):
             Event returned by the action economy cost applier.
         """
         return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-def find_action_info(actions, template_name: str) -> AvailableActionInfo:
-    """Return a discovered action row by template name.
-
-    Args:
-        actions: Available-actions result returned by discovery.
-        template_name: Template name to find.
-
-    Returns:
-        Matching action info row.
-    """
-    for action_info in actions.all_actions:
-        if action_info.template_name == template_name:
-            return action_info
-    raise AssertionError(f"{template_name} was not discovered")
-
-
-def find_item_action(actions, action_name: str, item_uuid) -> AvailableActionInfo:
-    """Return a discovered item-provided action row.
-
-    Args:
-        actions: Available-actions result returned by discovery.
-        action_name: Base action name before item suffixing.
-        item_uuid: Item UUID expected to provide the action.
-
-    Returns:
-        Matching item-use action info row.
-    """
-    return find_action_info(actions, f"{action_name}__item_{item_uuid}")
-
-
-def inventory_item_named(entity: Entity, name: str) -> UsableItem:
-    """Return one usable inventory item by name.
-
-    Args:
-        entity: Entity whose inventory should be searched.
-        name: Item display name to find.
-
-    Returns:
-        Matching usable item.
-    """
-    for item in entity.inventory.items.values():
-        if item.name == name:
-            assert isinstance(item, UsableItem)
-            return item
-    raise AssertionError(f"{entity.name} does not carry {name}")
-
-
 class FieldKitParameters(BaseModel):
     """Durable authored parameters for a finite-use Field Kit."""
 
@@ -353,50 +299,3 @@ FIELD_KIT_RECIPE = field_kit_recipe()
 NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     FIELD_KIT_DECLARATION,
 )
-
-
-def create_field_medic(
-    name: str = "Field Medic",
-    position: tuple[int, int] = (1, 1),
-    faction: str = "heroes",
-) -> Entity:
-    """Create a goblin-based support actor carrying the field content pack.
-
-    Args:
-        name: Entity display name.
-        position: Starting grid position.
-        faction: Faction assigned to the actor.
-
-    Returns:
-        Configured support actor.
-    """
-    medic = create_goblin(name=name, position=position, faction=faction)
-    medic.register_action(DeployFieldFocus(source_entity_uuid=medic.uuid, template=True))
-    medic.loot_item(
-        materialize_item_from_installed_runtime(
-            FIELD_KIT_RECIPE,
-            medic.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=UsableItem,
-        ),
-    )
-    return medic
-
-
-def create_field_training_scene():
-    """Create one custom actor, an ally, and one floor field kit.
-
-    Returns:
-        Tuple of the field medic, allied actor, and floor kit.
-    """
-    medic = create_field_medic()
-    ally = create_goblin(name="Field Ally", position=(2, 1), faction="heroes")
-    floor_kit = materialize_item_from_installed_runtime(
-        FIELD_KIT_RECIPE,
-        medic.uuid,
-        origin=ItemRuntimeOrigin.LOOT,
-        expected_type=UsableItem,
-    )
-    floor_kit.place_on_grid((1, 2))
-    Entity.update_all_entities_senses(max_distance=20)
-    return medic, ally, floor_kit

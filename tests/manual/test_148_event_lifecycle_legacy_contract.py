@@ -17,11 +17,11 @@ from dnd.core.events import (
 )
 from dnd.entity import Entity
 from dnd.spells.evocation import Fireball
-from tests.engine_book.test_chapter_10_core_actions_combat import (
+from tests.engine.test_combat_actions import (
     reset_core_action_state,
     strong_entity,
 )
-from tests.engine_book.test_chapter_15_spell_families import (
+from tests.engine.test_spell_families import (
     assert_completed_spell,
     create_family_caster,
     create_family_target,

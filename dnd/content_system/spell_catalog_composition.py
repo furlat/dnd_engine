@@ -31,6 +31,14 @@ from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_SPECS,
     LearnedReactionHandlerFactory,
 )
+from dnd.spells.infernal import (
+    HELLISH_REBUKE_METADATA,
+    HELLISH_REBUKE_SPELL_DECLARATION,
+    THAUMATURGY_METADATA,
+    THAUMATURGY_SPELL_DECLARATION,
+    Thaumaturgy,
+    create_hellish_rebuke_reaction_handler,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +110,27 @@ _AEGIS_SPARK_ROW = SpellCatalogCompositionRow(
     level=0,
     catalog_order=125,
 )
+_INFERNAL_ROWS: tuple[SpellCatalogCompositionRow, ...] = (
+    SpellCatalogCompositionRow(
+        display_name="Thaumaturgy",
+        spell_type=Thaumaturgy,
+        declaration=THAUMATURGY_SPELL_DECLARATION,
+        metadata=THAUMATURGY_METADATA,
+        school="transmutation",
+        level=0,
+        catalog_order=25,
+    ),
+    SpellCatalogCompositionRow(
+        display_name="Hellish Rebuke",
+        spell_type=None,
+        declaration=HELLISH_REBUKE_SPELL_DECLARATION,
+        metadata=HELLISH_REBUKE_METADATA,
+        school="evocation",
+        level=1,
+        catalog_order=185,
+        reaction_handler_factory=create_hellish_rebuke_reaction_handler,
+    ),
+)
 
 _LEARNED_REACTION_ROWS: tuple[SpellCatalogCompositionRow, ...] = tuple(
     SpellCatalogCompositionRow(
@@ -123,7 +152,12 @@ SPELL_CATALOG_COMPOSITION_ROWS: tuple[
     SpellCatalogCompositionRow,
     ...,
 ] = tuple(sorted(
-    (*_NATIVE_ROWS, _AEGIS_SPARK_ROW, *_LEARNED_REACTION_ROWS),
+    (
+        *_NATIVE_ROWS,
+        _AEGIS_SPARK_ROW,
+        *_INFERNAL_ROWS,
+        *_LEARNED_REACTION_ROWS,
+    ),
     key=lambda row: row.catalog_order,
 ))
 SPELL_CATALOG_COMPOSITION_BY_CLASS = MappingProxyType({

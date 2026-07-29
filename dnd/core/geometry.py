@@ -4,6 +4,25 @@ from functools import lru_cache
 from typing import Set, Tuple, List, Optional
 
 
+def grid_distance_cells(
+    origin: Tuple[int, int],
+    target: Tuple[int, int],
+) -> int:
+    """Return the engine's floored Euclidean distance in grid cells."""
+    return int(math.sqrt(
+        (origin[0] - target[0]) ** 2
+        + (origin[1] - target[1]) ** 2
+    ))
+
+
+def grid_distance_feet(
+    origin: Tuple[int, int],
+    target: Tuple[int, int],
+) -> int:
+    """Return the engine's floored Euclidean distance in feet."""
+    return grid_distance_cells(origin, target) * 5
+
+
 def circle_positions(
     center: Tuple[int, int],
     radius: int,

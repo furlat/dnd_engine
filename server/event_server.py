@@ -5,7 +5,7 @@ This server:
 1. Hooks into EventQueue to capture all events
 2. Projects private player replication journals
 3. Exposes authorized objective diagnostics separately
-4. Controls simulation (start/pause/resume/step)
+4. Activates and advances games through one controller coordinator
 
 Usage:
     # Start the canonical game server
@@ -29,7 +29,7 @@ import traceback
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 from uuid import UUID
 from contextlib import asynccontextmanager, nullcontext
 
@@ -46,7 +46,6 @@ from dnd.core.events import (
     Event,
     EventPhase,
     EventQueue,
-    EventType,
 )
 from dnd.core.gridmap import get_map
 from dnd.content_system.bootstrap import bootstrap_content_system
@@ -58,16 +57,16 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.scenarios.evaluation.assembler import (
-    IncompatibleScenarioError,
-    prepare_composed_scenario,
-    prepare_legacy_scenario,
+from dnd.core.content.encounters import (
+    EncounterRosterSlot,
+    OwnedCharacterRosterSource,
+    RosterControllerKind,
 )
-from dnd.scenarios.evaluation.combatant_catalog import (
-    get_combatant_configuration,
+from dnd.scenarios.encounter_assembler import (
+    AssembledEncounter,
+    IncompatibleEncounterError,
+    prepare_encounter_recipe,
 )
-from dnd.scenarios.evaluation.compatibility import CompatibilityReport
-from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES, get_legacy_recipe
 from dnd.ai.instrumentation import (
     AIInstrumentation,
     BoundedAIInstrumentationSink,
@@ -77,7 +76,6 @@ from dnd.ai.registry import UnknownPolicyError
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.controller import (
     Controller,
-    ControllerExecutionMode,
     ControllerStepResult,
     HumanController,
 )
@@ -100,9 +98,10 @@ from server.api_models import (
     AIProviderCatalogEntry, AIProviderCatalogResponse,
     AIProviderDeleteResponse, AIProviderRegistrationRequest,
     GameCreationAIPolicyOption,
-    GameCreationCatalogResponse, GameCreationComposedScenario,
-    GameCreationPreflightRequest, GameCreationPresetScenario,
-    GameCreationEntityAssignment, GameCreationSideRequest, GameCreationSideResult,
+    GameCreationCatalogResponse,
+    GameCreationComposeRequest, GameCreationComposeResponse,
+    GameCreationPreviewRequest,
+    GameCreationEntityAssignment, GameCreationRosterResult,
     GameCreationActivateRequest, GameCreationActivateResponse,
     GameCreationStartRequest, GameCreationStartResponse,
     EventContractSummary,
@@ -125,14 +124,13 @@ from server.api_models import (
 from server.ai_policy_composition import (
     DEFAULT_NATIVE_POLICY_ID,
     SERVER_NATIVE_POLICY_REGISTRY,
+    server_native_ai_policy_options,
 )
 from server.content_catalog import (
     ContentCatalogResponse,
     ContentManifestResponse,
-    build_content_manifest,
-    build_public_content_catalog,
-    content_response_etag,
 )
+from server.content_http import serve_content_catalog, serve_content_manifest
 from server.character_directory_routes import create_character_directory_router
 from server.character_directory_contracts import (
     AdminCharacterAdvancementAwardRequest,
@@ -206,10 +204,23 @@ from server.hosted_worker import (
 )
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from server.spell_catalog import build_spell_catalog
-from server.game_creation_catalog import (
-    GameCreationCatalogError,
-    build_game_creation_catalog,
-    preflight_game_creation as run_game_creation_preflight,
+from server.game_creation_catalog import build_game_creation_catalog
+from server.game_creation_composition import (
+    CharacterRulesetMismatchError,
+    GameCreationCompositionError,
+    character_ruleset_digest,
+    normalize_encounter_recipe,
+    required_character_ids,
+    required_saved_roster_ids,
+)
+from server.game_creation_preview import (
+    GameCreationPreviewError,
+    build_game_creation_encounter_visual_preview,
+    close_game_creation_preview_worker,
+    prewarm_game_creation_preview_worker,
+)
+from server.game_creation_preview_contracts import (
+    GameCreationEncounterVisualPreviewResponse,
 )
 from server.event_stream import (
     BoundedSubscription,
@@ -223,7 +234,6 @@ from server.event_contract import (
     event_contract_summary,
 )
 from server.agent_event_stream import agent_event_stream
-from server.gauntlet_event_stream import gauntlet_event_stream
 from server.game_summary_store import WorkerSummaryEvidence, game_summary_store
 from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import SubjectivePlayerReplayArchive
@@ -297,20 +307,13 @@ from server.player_replication_contract import (
     SubjectiveReplicationBootstrap,
     SubjectiveSyncDelivery,
 )
-from server.agent_protocol.gauntlet import (
-    GauntletEventIngestRequest,
-    GauntletSummary,
-    apply_gauntlet_latency_audit,
-    project_live_watcher_state,
-    project_watcher_state,
-)
 from server.ai_takeover_manager import AITakeoverManager, TakeoverClaim, TakeoverError
 from dnd.ai.contracts.observation import (
     ObservationFrame,
     ObservationFramesResponse,
     ObservationSnapshot,
 )
-from server.agent_runtime.observation_projector import (
+from server.agent_runtime.observation_journal import (
     ObservationAccessError,
     ObservationOwnershipBoundary,
     append_command_result_frame,
@@ -484,14 +487,13 @@ def _forget_current_epoch(session_id: str) -> Optional[DecisionEpoch]:
     return epoch
 
 
-class SimulationState:
-    """Hold mutable server simulation state.
+class StandaloneGameState:
+    """Hold mutable standalone game runtime state.
 
     Attributes:
         encounter: Active encounter, if one has been created.
         combat_task: Background task advancing AI combat, if running.
-        paused: Whether automatic simulation advancement is paused.
-        turn_delay: Delay in seconds between automatic turns.
+        paused: Whether automatic game advancement is inactive.
         auto_run_ai: Whether AI turns should advance automatically.
         _session_manager: Session registry backing game/player sessions.
         _game_session: Active game session for the current encounter.
@@ -501,7 +503,6 @@ class SimulationState:
         self.encounter: Optional[Encounter] = None
         self.combat_task: Optional[asyncio.Task] = None
         self.paused: bool = True
-        self.turn_delay: float = 0.0
         self.auto_run_ai: bool = True
         self._session_manager = get_session_manager()
         self._game_session: Optional[GameSession] = None
@@ -557,7 +558,7 @@ class SimulationState:
         if self.registered_ai_controllers:
             raise RuntimeError(
                 "registered AI controllers require asynchronous teardown "
-                "before synchronous simulation reset"
+                "before synchronous game reset"
             )
         self.close_native_ai_controllers()
         self.native_ai_instrumentation = BoundedAIInstrumentationSink()
@@ -598,7 +599,7 @@ class SimulationState:
                 "registered AI controller teardown failed"
             ) from first_error
 
-sim = SimulationState()
+sim = StandaloneGameState()
 
 native_policy_registry = SERVER_NATIVE_POLICY_REGISTRY
 
@@ -832,22 +833,8 @@ def _publish_hosted_terminal_ready(encounter_uuid: UUID) -> bool:
 
     if os.environ.get("DND_GAME_WORKER") != "1":
         return False
-    game_id_text = os.environ.get("DND_HOSTED_GAME_ID")
-    worker_id_text = os.environ.get("DND_WORKER_INSTANCE_ID")
-    worker_generation_text = os.environ.get("DND_WORKER_GENERATION")
-    runtime_directory = os.environ.get("DND_WORKER_RUNTIME_DIR")
-    if (
-        game_id_text is None
-        or worker_id_text is None
-        or worker_generation_text is None
-        or runtime_directory is None
-    ):
-        raise RuntimeError(
-            "hosted terminal spool authority is not configured",
-        )
-    game_id = UUID(game_id_text)
-    worker_instance_id = UUID(worker_id_text)
-    worker_generation = int(worker_generation_text)
+    assignment = _require_hosted_worker_assignment()
+    game_id = assignment.hosted_game_id
     encounter = Encounter.get(encounter_uuid)
     evidence = game_summary_store.get_evidence(game_id)
     capture = game_summary_store.get_replay_capture(game_id)
@@ -862,25 +849,31 @@ def _publish_hosted_terminal_ready(encounter_uuid: UUID) -> bool:
         subjective_replay = build_worker_subjective_replays(capture)
     except WorkerPlayerReplayNotReady:
         return False
-    holdings_evidence = None
-    if _hosted_character_deployment is not None:
-        if _hosted_character_entity_uuid is None:
-            raise RuntimeError(
-                "hosted character deployment has no runtime entity",
-            )
-        terminal = evidence.summary.terminal_cursor
-        holdings_evidence = project_terminal_character_holdings(
-            _hosted_character_deployment,
+    if set(_hosted_character_deployments) != set(
+        _hosted_character_entity_uuids,
+    ):
+        raise RuntimeError(
+            "hosted character deployments and runtime entities differ",
+        )
+    terminal = evidence.summary.terminal_cursor
+    holdings_evidence = tuple(
+        project_terminal_character_holdings(
+            deployment,
             game_id=game_id,
             generation_id=evidence.generation_id,
             terminal_event_cursor=terminal.event_cursor,
             terminal_combat_log_cursor=terminal.combat_log_cursor,
-            runtime_entity_uuid=_hosted_character_entity_uuid,
+            runtime_entity_uuid=_hosted_character_entity_uuids[
+                character_id
+            ],
         )
-    WorkerTerminalSpool(runtime_directory).publish(
+        for character_id, deployment
+        in _hosted_character_deployments.items()
+    )
+    WorkerTerminalSpool(assignment.terminal_runtime_directory).publish(
         game_id=game_id,
-        worker_instance_id=worker_instance_id,
-        worker_generation=worker_generation,
+        worker_instance_id=assignment.worker_instance_id,
+        worker_generation=assignment.worker_generation,
         summary=evidence,
         objective_replay=objective_replay,
         subjective_replay=subjective_replay,
@@ -889,7 +882,7 @@ def _publish_hosted_terminal_ready(encounter_uuid: UUID) -> bool:
     return True
 
 
-async def prepare_new_simulation_start() -> None:
+async def prepare_new_game_start() -> None:
     """Stop active automation and clear session-side projection state."""
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
@@ -918,7 +911,7 @@ async def prepare_new_simulation_start() -> None:
     _available_actions_cache.clear()
     sim.paused = True
 
-async def _abort_failed_simulation_start() -> None:
+async def _abort_failed_game_start() -> None:
     """Tear down every engine and server fact from a failed start transaction."""
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
@@ -1088,11 +1081,6 @@ async def _run_activated_game() -> None:
                 )
                 sim.paused = True
                 return
-            if (
-                controller.execution_mode is ControllerExecutionMode.AUTONOMOUS
-                and encounter.turn_state is not TurnState.IN_PROGRESS
-            ):
-                await asyncio.sleep(max(0.0, sim.turn_delay))
             if (
                 sim.encounter is not encounter
                 or sim.activation_identity != activation
@@ -1570,15 +1558,14 @@ def _resolve_replication_request(
                 "runtime projection headers are only accepted by a private game worker"
             )
 
-        configured_game_id = os.environ.get("DND_HOSTED_GAME_ID")
-        if is_worker and configured_game_id is None:
+        assignment = _hosted_worker_assignment
+        if is_worker and assignment is None:
             raise RuntimeAuthorityError("worker hosted-game identity is unavailable")
-        if projection_authority is not None and configured_game_id is not None:
-            try:
-                matches_worker = projection_authority.hosted_game_id == UUID(configured_game_id)
-            except ValueError as exc:
-                raise RuntimeAuthorityError("worker hosted-game identity is malformed") from exc
-            if not matches_worker:
+        if projection_authority is not None and assignment is not None:
+            if (
+                projection_authority.hosted_game_id
+                != assignment.hosted_game_id
+            ):
                 raise RuntimeAuthorityError("runtime authority belongs to another hosted game")
 
         local_game = _active_local_game_coordinator()
@@ -1735,16 +1722,10 @@ def _assert_objective_diagnostics_access(request: Request) -> None:
             raise RuntimeAuthorityError(
                 "runtime projection headers are only accepted by a private game worker"
             )
-        configured_game_id = os.environ.get("DND_HOSTED_GAME_ID")
-        if configured_game_id is None:
+        assignment = _hosted_worker_assignment
+        if assignment is None:
             raise RuntimeAuthorityError("worker hosted-game identity is unavailable")
-        try:
-            hosted_game_id = UUID(configured_game_id)
-        except ValueError as exc:
-            raise RuntimeAuthorityError(
-                "worker hosted-game identity is malformed"
-            ) from exc
-        if authority.hosted_game_id != hosted_game_id:
+        if authority.hosted_game_id != assignment.hosted_game_id:
             raise RuntimeAuthorityError(
                 "runtime authority belongs to another hosted game"
             )
@@ -1883,71 +1864,18 @@ def _observation_http_exception(
     )
 
 
-def _event_filter_http_exception(
-    code: str,
-    message: str,
-    event_type: Optional[str] = None,
-    phase: Optional[str] = None,
-) -> HTTPException:
-    """Create a structured event-history filter error.
-
-    Args:
-        code: Machine-readable error code.
-        message: Human-readable error message.
-        event_type: Optional event-type filter supplied by the client.
-        phase: Optional event-phase filter supplied by the client.
+def _encounter_context() -> dict:
+    """Build correction context for the active standalone encounter.
 
     Returns:
-        HTTP exception with valid event types, phases, and cursor context.
-    """
-    return _api_http_exception(
-        status_code=400,
-        code=code,
-        message=message,
-        event_type=event_type,
-        phase=phase,
-        valid_event_types=[event_type.value for event_type in EventType],
-        valid_phases=[phase.value for phase in EventPhase],
-        event_cursor=EventQueue.event_cursor(),
-        event_count=len(EventQueue._all_events),
-    )
-
-
-def _simulation_context() -> dict:
-    """Build correction context for simulation-control endpoints.
-
-    Returns:
-        Simulation status fields used by structured control errors.
+        Encounter status fields used by structured command errors.
     """
     return {
         "has_encounter": sim.encounter is not None,
         "paused": sim.paused,
         "encounter_state": sim.encounter.state.value if sim.encounter else None,
         "round_number": sim.encounter.round_number if sim.encounter else None,
-        "turn_delay": sim.turn_delay,
-        "min_delay": 0.0,
-        "max_delay": 10.0,
     }
-
-
-def _simulation_http_exception(code: str, message: str, **context: Any) -> HTTPException:
-    """Create a structured simulation-control API error.
-
-    Args:
-        code: Machine-readable error code.
-        message: Human-readable error message.
-        **context: Additional JSON-serializable correction context.
-
-    Returns:
-        HTTP exception with current simulation-control context.
-    """
-    return _api_http_exception(
-        status_code=400,
-        code=code,
-        message=message,
-        **_simulation_context(),
-        **context,
-    )
 
 
 def _mapeditor_context() -> dict:
@@ -2156,6 +2084,11 @@ async def lifespan(app: FastAPI):
         app,
         installed_content_system,
     )
+    owns_preview_worker = os.environ.get("DND_GAME_WORKER") != "1"
+    if owns_preview_worker:
+        await asyncio.to_thread(
+            prewarm_game_creation_preview_worker,
+        )
 
     with latency_sensitive_gc():
         event_stream.start()
@@ -2190,11 +2123,18 @@ async def lifespan(app: FastAPI):
                             try:
                                 sim.reset()
                             finally:
+                                reset_hosted_worker_assignment()
                                 try:
                                     reset_engine_runtime()
                                 finally:
-                                    if local_profile is not None:
-                                        local_profile.close()
+                                    try:
+                                        if local_profile is not None:
+                                            local_profile.close()
+                                    finally:
+                                        if owns_preview_worker:
+                                            await asyncio.to_thread(
+                                                close_game_creation_preview_worker,
+                                            )
 
 app = FastAPI(
     title="D&D Engine Event Server",
@@ -2203,8 +2143,40 @@ app = FastAPI(
 )
 
 _world_replacement_lock = asyncio.Lock()
-_hosted_character_deployment: CharacterDeploymentSnapshot | None = None
-_hosted_character_entity_uuid: UUID | None = None
+_hosted_worker_assignment: HostedWorkerAssignment | None = None
+_hosted_character_deployments: dict[
+    UUID,
+    CharacterDeploymentSnapshot,
+] = {}
+_hosted_character_entity_uuids: dict[UUID, UUID] = {}
+
+
+def install_hosted_worker_assignment(
+    assignment: HostedWorkerAssignment,
+) -> None:
+    """Install one immutable assignment into a ready worker process."""
+    global _hosted_worker_assignment
+    frozen = assignment.model_copy(deep=True)
+    existing = _hosted_worker_assignment
+    if existing is not None and existing != frozen:
+        raise ValueError(
+            "hosted worker already owns a different assignment",
+        )
+    _hosted_worker_assignment = frozen
+
+
+def reset_hosted_worker_assignment() -> None:
+    """Clear process assignment state during app shutdown or test isolation."""
+    global _hosted_worker_assignment
+    _hosted_worker_assignment = None
+
+
+def _require_hosted_worker_assignment() -> HostedWorkerAssignment:
+    """Return the configured worker assignment or reject an unclaimed worker."""
+    assignment = _hosted_worker_assignment
+    if assignment is None:
+        raise RuntimeError("hosted worker assignment is not configured")
+    return assignment
 
 
 async def _serialize_world_replacement() -> AsyncIterator[None]:
@@ -2515,7 +2487,7 @@ async def hosted_worker_readiness() -> HostedWorkerReadiness:
 async def configure_hosted_worker(
     assignment: HostedWorkerAssignment,
 ) -> dict[str, str]:
-    """Assign a ready worker to one hosted game before simulation creation.
+    """Assign a ready worker to one hosted game before encounter creation.
 
     Args:
         assignment: Trusted hosted-game identity and public routing metadata.
@@ -2526,7 +2498,7 @@ async def configure_hosted_worker(
     Raises:
         HTTPException: If the process is not a worker or already owns game state.
     """
-    global _hosted_character_deployment
+    global _hosted_character_deployments
     if os.environ.get("DND_GAME_WORKER") != "1":
         raise _api_http_exception(
             status_code=404,
@@ -2539,18 +2511,25 @@ async def configure_hosted_worker(
             code="hosted_worker_already_initialized",
             message="Hosted worker already owns a game",
         )
-    os.environ["DND_HOSTED_GAME_ID"] = str(assignment.hosted_game_id)
-    os.environ["DND_PUBLIC_GAME_BASE_URL"] = assignment.public_game_base_url.rstrip("/")
-    os.environ["DND_WORKER_INSTANCE_ID"] = str(
-        assignment.worker_instance_id,
-    )
-    os.environ["DND_WORKER_GENERATION"] = str(
-        assignment.worker_generation,
-    )
-    os.environ["DND_WORKER_RUNTIME_DIR"] = (
-        assignment.terminal_runtime_directory
-    )
-    _hosted_character_deployment = assignment.character_deployment
+    deployments = {
+        deployment.character_id: deployment
+        for deployment in assignment.character_deployments
+    }
+    if len(deployments) != len(assignment.character_deployments):
+        raise _api_http_exception(
+            status_code=400,
+            code="hosted_character_deployment_duplicate",
+            message="Hosted character deployments cannot repeat an identity",
+        )
+    try:
+        install_hosted_worker_assignment(assignment)
+    except ValueError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="hosted_worker_already_assigned",
+            message=str(exc),
+        ) from exc
+    _hosted_character_deployments = deployments
     return {"status": "configured"}
 
 
@@ -2571,18 +2550,11 @@ async def get_content_manifest(
     response: Response,
 ) -> ContentManifestResponse | Response:
     """Return the exact installed content-set and source identity."""
-    manifest = build_content_manifest(
-        SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+    return serve_content_manifest(
+        content_system=SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+        request=request,
+        response=response,
     )
-    etag = content_response_etag(manifest.content_set_digest)
-    headers = {
-        "ETag": etag,
-        "Cache-Control": "public, max-age=0, must-revalidate",
-    }
-    if request.headers.get("if-none-match") == etag:
-        return Response(status_code=304, headers=headers)
-    response.headers.update(headers)
-    return manifest
 
 
 @app.get("/content/catalog", response_model=ContentCatalogResponse)
@@ -2591,18 +2563,11 @@ async def get_content_catalog(
     response: Response,
 ) -> ContentCatalogResponse | Response:
     """Return public code-free descriptors for the installed content set."""
-    catalog = build_public_content_catalog(
-        SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+    return serve_content_catalog(
+        content_system=SERVER_CONTENT_SYSTEM_RUNTIME.require(),
+        request=request,
+        response=response,
     )
-    etag = content_response_etag(catalog.catalog_digest)
-    headers = {
-        "ETag": etag,
-        "Cache-Control": "public, max-age=0, must-revalidate",
-    }
-    if request.headers.get("if-none-match") == etag:
-        return Response(status_code=304, headers=headers)
-    response.headers.update(headers)
-    return catalog
 
 
 @app.get("/mapeditor/catalog", response_model=MapEditorCatalog)
@@ -2643,7 +2608,7 @@ async def create_mapeditor_map(request: MapEditorCreateMapRequest):
         HTTPException: If the requested map source, preset, or size is invalid.
     """
     try:
-        await prepare_new_simulation_start()
+        await prepare_new_game_start()
         return create_editor_map(request)
     except ValueError as exc:
         raise _mapeditor_http_exception(
@@ -2746,7 +2711,7 @@ async def load_mapeditor_save(map_id: str):
         HTTPException: If the saved map cannot be loaded.
     """
     try:
-        await prepare_new_simulation_start()
+        await prepare_new_game_start()
         return load_saved_editor_map(map_id)
     except ValueError as exc:
         raise _mapeditor_http_exception(
@@ -2888,103 +2853,6 @@ async def get_mapeditor_light():
         Objective light layer DTO.
     """
     return get_objective_light()
-
-
-@app.post("/simulation/pause")
-async def pause_simulation():
-    """Pause the combat loop.
-
-    Returns:
-        Status payload confirming the paused state.
-    """
-    sim.paused = True
-    return {"status": "paused"}
-
-
-@app.post("/simulation/resume")
-async def resume_simulation():
-    """Resume the combat loop for an existing simulation.
-
-    Returns:
-        Status payload confirming the resumed state.
-
-    Raises:
-        HTTPException: If no simulation exists.
-    """
-    if sim.encounter is None or sim.activation_identity is None:
-        raise _simulation_http_exception(
-            code="simulation_not_started",
-            message="No activated game is available to resume.",
-        )
-
-    sim.paused = False
-    _schedule_activated_game_coordinator()
-
-    return {"status": "resumed"}
-
-
-@app.post("/simulation/step")
-async def step_simulation():
-    """Execute a single encounter turn.
-
-    Returns:
-        Status payload describing the stepped turn or terminal encounter state.
-
-    Raises:
-        HTTPException: If no simulation exists.
-    """
-    if sim.encounter is None:
-        raise _simulation_http_exception(
-            code="simulation_not_started",
-            message="No simulation. Call /simulation/reset first.",
-        )
-
-    if sim.encounter.state == EncounterState.NOT_STARTED:
-        sim.encounter.start_encounter()
-
-    if sim.encounter.state != EncounterState.ACTIVE:
-        return {
-            "status": "encounter_ended",
-            "state": sim.encounter.state.value
-        }
-
-    sim.encounter.run_turn()
-
-    return {
-        "status": "stepped",
-        "round": sim.encounter.round_number,
-        "turn_index": sim.encounter.current_turn_index
-    }
-
-
-@app.post("/simulation/set-delay")
-async def set_turn_delay(delay: float):
-    """Set the delay between automated turns.
-
-    Args:
-        delay: Delay in seconds.
-
-    Returns:
-        Status payload with the effective turn delay.
-
-    Raises:
-        HTTPException: If the delay is outside supported bounds.
-    """
-    if delay < 0:
-        raise _simulation_http_exception(
-            code="delay_too_low",
-            message="Delay cannot be negative",
-            requested_delay=delay,
-        )
-    if delay > 10:
-        raise _simulation_http_exception(
-            code="delay_too_high",
-            message="Delay cannot exceed 10 seconds",
-            requested_delay=delay,
-        )
-
-    sim.turn_delay = delay
-    return {"status": "delay_set", "turn_delay": sim.turn_delay}
 
 
 @app.post("/session/create", response_model=CreateSessionResponse)
@@ -3455,7 +3323,10 @@ async def get_worker_terminal_summary() -> WorkerSummaryEvidence:
     This endpoint is private to the hosting gateway. Standalone servers may
     still use it for local inspection, but it never reads or writes a database.
     """
-    evidence = game_summary_store.get_evidence(os.environ.get("DND_HOSTED_GAME_ID"))
+    assignment = _hosted_worker_assignment
+    evidence = game_summary_store.get_evidence(
+        assignment.hosted_game_id if assignment is not None else None,
+    )
     if evidence is None:
         raise _api_http_exception(
             status_code=404,
@@ -3468,8 +3339,9 @@ async def get_worker_terminal_summary() -> WorkerSummaryEvidence:
 @app.get("/game/evidence/objective-replay", response_model=ObjectiveReplayBundle)
 async def get_worker_terminal_objective_replay() -> ObjectiveReplayBundle:
     """Materialize the private immutable replay after terminal journals close."""
+    assignment = _hosted_worker_assignment
     capture = game_summary_store.get_replay_capture(
-        os.environ.get("DND_HOSTED_GAME_ID")
+        assignment.hosted_game_id if assignment is not None else None,
     )
     if capture is None:
         raise _api_http_exception(
@@ -3505,8 +3377,9 @@ async def get_worker_terminal_objective_replay() -> ObjectiveReplayBundle:
 async def get_worker_terminal_subjective_replay() -> SubjectivePlayerReplayArchive:
     """Freeze the exact canonical player reducer inputs retained during play."""
 
+    assignment = _hosted_worker_assignment
     capture = game_summary_store.get_replay_capture(
-        os.environ.get("DND_HOSTED_GAME_ID")
+        assignment.hosted_game_id if assignment is not None else None,
     )
     if capture is None:
         raise _api_http_exception(
@@ -3751,6 +3624,7 @@ async def subscribe_objective_diagnostics(
             code="objective_diagnostics_source_unavailable",
             message="Objective diagnostics require an encounter",
         )
+    subscription = None
     try:
         subscribed = event_stream.subscribe_with_objective_backfill(
             encounter,
@@ -3794,9 +3668,10 @@ async def subscribe_objective_diagnostics(
             since_log=since_log,
         ) from exc
     except Exception:
-        if "subscription" in locals():
+        if subscription is not None:
             event_stream.unsubscribe(subscription)
         raise
+    assert subscription is not None
 
     async def event_generator():
         last_event_cursor = sync.event_cursor
@@ -4295,14 +4170,6 @@ def _compact_command_failure_payload(result: CommandResult) -> dict[str, Any]:
             if key in action_result
         }
     return payload
-
-
-def _publish_command_result_ack(
-    session_id: str,
-    result: CommandResult,
-) -> CommandResult:
-    """Publish a detailed command result frame and return a small HTTP ack."""
-    return _command_ack(_publish_command_result(session_id, result))
 
 
 def _command_ack_with_timing(
@@ -5180,11 +5047,7 @@ async def _advance_after_non_continuing_action(
         return None
 
     _available_actions_cache.clear()
-    sim.encounter.end_turn()
-    sim.encounter.current_turn_index += 1
-    if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
-        sim.encounter._advance_round()
-    sim.encounter.turn_state = TurnState.NOT_STARTED
+    sim.encounter.complete_current_turn()
     if sim.activation_identity is not None:
         result = _scheduled_advance_result()
         _schedule_activated_game_coordinator()
@@ -5499,176 +5362,6 @@ async def subscribe_agent_events(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-GAUNTLET_SUMMARY_DIRECTORY = Path(
-    os.environ.get("DND_GAUNTLET_SUMMARY_DIRECTORY", "evidence/gauntlets")
-)
-
-
-@app.get("/ai/gauntlets/latest")
-async def get_latest_gauntlet_summary():
-    """Return the latest retained gauntlet summary JSON."""
-    summary = _load_gauntlet_summary("latest")
-    return summary.model_dump(mode="json")
-
-
-@app.get("/ai/gauntlets/live/latest")
-async def get_latest_live_gauntlet_watcher_state():
-    """Return watcher state for the most recently observed live gauntlet."""
-    gauntlet_id = gauntlet_event_stream.latest_gauntlet_id()
-    if gauntlet_id is None:
-        raise _api_http_exception(
-            status_code=404,
-            code="live_gauntlet_not_found",
-            message="No live gauntlet watcher events are retained.",
-        )
-    events = gauntlet_event_stream.since(0, gauntlet_id=gauntlet_id, limit=0)
-    return project_live_watcher_state(gauntlet_id, events).model_dump(mode="json")
-
-
-@app.get("/ai/gauntlets/{gauntlet_id}/watch")
-async def get_gauntlet_watcher_state(gauntlet_id: str):
-    """Return the current watcher projection for a gauntlet."""
-    live_events = gauntlet_event_stream.since(0, gauntlet_id=gauntlet_id, limit=0)
-    try:
-        summary = _load_gauntlet_summary(gauntlet_id)
-    except HTTPException as exc:
-        if exc.status_code != 404:
-            raise
-        if not live_events:
-            raise
-        return project_live_watcher_state(gauntlet_id, live_events).model_dump(mode="json")
-    events = live_events or summary.events
-    return project_watcher_state(summary, events).model_dump(mode="json")
-
-
-@app.get("/ai/gauntlets/{gauntlet_id}/events")
-async def get_gauntlet_events(
-    gauntlet_id: str,
-    since: int = 0,
-    limit: int = 100,
-):
-    """Return retained live watcher events after a gauntlet cursor."""
-    _ensure_gauntlet_known(gauntlet_id)
-    rows = gauntlet_event_stream.since(since, gauntlet_id=gauntlet_id, limit=limit)
-    return {
-        "events": [row.model_dump(mode="json") for row in rows],
-        "count": len(rows),
-        "total": gauntlet_event_stream.current_cursor(),
-        "next_cursor": rows[-1].cursor if rows else max(0, since),
-        "earliest_cursor": gauntlet_event_stream.earliest_cursor(gauntlet_id),
-        "resync_required": gauntlet_event_stream.is_cursor_evicted(since, gauntlet_id),
-    }
-
-
-@app.post("/ai/gauntlets/events")
-async def post_gauntlet_events(request: GauntletEventIngestRequest):
-    """Publish externally produced gauntlet watcher events."""
-    rows = [gauntlet_event_stream.publish(event) for event in request.events]
-    return {
-        "events": [row.model_dump(mode="json") for row in rows],
-        "count": len(rows),
-        "total": gauntlet_event_stream.current_cursor(),
-        "next_cursor": rows[-1].cursor if rows else gauntlet_event_stream.current_cursor(),
-    }
-
-
-@app.get("/ai/gauntlets/{gauntlet_id}/events/subscribe")
-async def subscribe_gauntlet_events(
-    request: Request,
-    gauntlet_id: str,
-    since: int = 0,
-):
-    """Subscribe to live gauntlet watcher events."""
-    _ensure_gauntlet_known(gauntlet_id)
-
-    async def event_generator():
-        cursor = max(0, since)
-        subscription = gauntlet_event_stream.subscribe(gauntlet_id)
-        try:
-            if gauntlet_event_stream.is_cursor_evicted(cursor, gauntlet_id):
-                yield format_sse(
-                    "evicted",
-                    EvictedPayload(reason="gauntlet_history_evicted"),
-                    gauntlet_event_stream.current_stream_id(),
-                )
-                return
-            yield format_sse(
-                "sync",
-                {
-                    "gauntlet_id": gauntlet_id,
-                    "cursor": gauntlet_event_stream.current_cursor(),
-                    "earliest_cursor": gauntlet_event_stream.earliest_cursor(gauntlet_id),
-                },
-                gauntlet_event_stream.current_stream_id(),
-            )
-            for event in gauntlet_event_stream.since(cursor, gauntlet_id=gauntlet_id, limit=500):
-                cursor = event.cursor
-                yield format_sse("gauntlet_event", event, f"g={event.cursor}")
-
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    envelope = await asyncio.wait_for(subscription.get(), timeout=10.0)
-                except asyncio.TimeoutError:
-                    yield format_sse(
-                        "heartbeat",
-                        {
-                            "gauntlet_id": gauntlet_id,
-                            "cursor": gauntlet_event_stream.current_cursor(),
-                            "server_time": time.time(),
-                        },
-                        gauntlet_event_stream.current_stream_id(),
-                    )
-                    continue
-
-                if envelope["event"] == "evicted":
-                    yield format_sse("evicted", envelope["data"], envelope.get("id"))
-                    break
-                payload = envelope["data"]
-                cursor = payload.cursor if hasattr(payload, "cursor") else cursor
-                yield format_sse(envelope["event"], payload, envelope.get("id"))
-        finally:
-            gauntlet_event_stream.unsubscribe(gauntlet_id, subscription)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-def _load_gauntlet_summary(gauntlet_id: str) -> GauntletSummary:
-    """Load a retained gauntlet summary by id or latest pointer."""
-    file_name = "latest.json" if gauntlet_id == "latest" else f"{gauntlet_id}.json"
-    path = GAUNTLET_SUMMARY_DIRECTORY / file_name
-    if not path.exists():
-        raise _api_http_exception(
-            status_code=404,
-            code="gauntlet_summary_not_found",
-            message="Gauntlet summary was not found.",
-            gauntlet_id=gauntlet_id,
-            path=str(path),
-        )
-    try:
-        return apply_gauntlet_latency_audit(GauntletSummary.model_validate_json(path.read_text(encoding="utf-8")))
-    except ValueError as exc:
-        raise _api_http_exception(
-            status_code=500,
-            code="invalid_gauntlet_summary",
-            message="Gauntlet summary JSON could not be parsed.",
-            gauntlet_id=gauntlet_id,
-            path=str(path),
-            error=str(exc),
-        ) from exc
-
-
-def _ensure_gauntlet_known(gauntlet_id: str) -> None:
-    """Accept a gauntlet id when it has retained JSON or live events."""
-    if gauntlet_id == "latest":
-        _load_gauntlet_summary("latest")
-        return
-    if gauntlet_event_stream.since(0, gauntlet_id=gauntlet_id, limit=1):
-        return
-    _load_gauntlet_summary(gauntlet_id)
-
-
 def _serialize_agent_session_row(session_id: str, takeover_claim_ids: list[str]) -> AgentSessionRow:
     """Serialize one AI/Codex session for the observer index."""
     session = _require_agent_stream_session(session_id)
@@ -5934,23 +5627,15 @@ async def _end_turn_and_advance(
             entity_uuid=entity_uuid,
             entity_name=entity.name,
             **_session_context(),
-            **_simulation_context(),
+            **_encounter_context(),
         )
 
     _available_actions_cache.clear()
 
     started = time.perf_counter()
-    sim.encounter.end_turn()
+    sim.encounter.complete_current_turn()
     if timing is not None:
-        timing.add("end_turn.encounter_end_turn_ms", started)
-
-    started = time.perf_counter()
-    sim.encounter.current_turn_index += 1
-    if sim.encounter.current_turn_index >= len(sim.encounter.initiative_order):
-        sim.encounter._advance_round()
-    sim.encounter.turn_state = TurnState.NOT_STARTED
-    if timing is not None:
-        timing.add("end_turn.advance_turn_index_ms", started)
+        timing.add("end_turn.complete_current_turn_ms", started)
 
     if sim.activation_identity is not None:
         result = _scheduled_advance_result()
@@ -6198,117 +5883,34 @@ async def preview_position_action(request: PositionPreviewRequest) -> AoEPreview
     )
 
 
-def _game_creation_preflight(
-    request: GameCreationPreflightRequest,
-) -> CompatibilityReport:
-    """Validate one composed scenario selection without constructing engine state.
+def _game_creation_character_deployments(
+    character_ids: tuple[UUID, ...],
+) -> dict[UUID, CharacterDeploymentSnapshot]:
+    """Resolve every trusted durable character source for this process."""
 
-    Args:
-        request: Four canonical scenario component identifiers.
-
-    Returns:
-        Static compatibility report for the selected components.
-
-    Raises:
-        HTTPException: If a component identifier is unknown.
-    """
-    try:
-        return run_game_creation_preflight(request)
-    except GameCreationCatalogError as exc:
-        raise _api_http_exception(
-            status_code=400,
-            code=exc.code,
-            message=exc.message,
-            **exc.context,
-        ) from exc
-
-
-def _game_creation_selection(
-    scenario: GameCreationPresetScenario | GameCreationComposedScenario,
-) -> tuple[GameCreationPreflightRequest, Optional[str]]:
-    """Resolve a preset or composed selection to four canonical component ids.
-
-    Args:
-        scenario: Discriminated game-creation scenario request.
-
-    Returns:
-        Preflight request and optional historical preset identifier.
-
-    Raises:
-        HTTPException: If a preset identifier is unknown.
-    """
-    if isinstance(scenario, GameCreationComposedScenario):
-        return GameCreationPreflightRequest(
-            hero_configuration_id=scenario.hero_configuration_id,
-            monster_configuration_id=scenario.monster_configuration_id,
-            battlefield_id=scenario.battlefield_id,
-            deployment_id=scenario.deployment_id,
-        ), None
-    try:
-        recipe = get_legacy_recipe(scenario.arena_id)
-    except ValueError as exc:
-        raise _api_http_exception(
-            status_code=400,
-            code="invalid_game_creation_preset",
-            message=str(exc),
-            arena_id=scenario.arena_id,
-            valid_arena_ids=[recipe.arena_id for recipe in LEGACY_RECIPES],
-        ) from exc
-    return GameCreationPreflightRequest(
-        hero_configuration_id=recipe.hero_configuration_id,
-        monster_configuration_id=recipe.monster_configuration_id,
-        battlefield_id=recipe.battlefield_id,
-        deployment_id=recipe.deployment_id,
-    ), recipe.arena_id
-
-
-def _game_creation_character_deployment(
-    creation: GameCreationStartRequest,
-) -> CharacterDeploymentSnapshot | None:
-    """Resolve the one trusted persistent-character source for this process."""
-
-    selected_character_id = creation.character_id
     is_worker = os.environ.get("DND_GAME_WORKER") == "1"
-    if selected_character_id is None:
-        if is_worker and _hosted_character_deployment is not None:
+    if not character_ids:
+        if is_worker and _hosted_character_deployments:
             raise _api_http_exception(
                 status_code=409,
                 code="character_deployment_selection_missing",
                 message=(
-                    "Hosted character deployment requires the matching "
-                    "game-creation character_id"
+                    "Hosted character deployments require the matching "
+                    "normalized encounter sources"
                 ),
             )
-        return None
-    if not isinstance(creation.scenario, GameCreationComposedScenario):
-        raise _api_http_exception(
-            status_code=400,
-            code="character_deployment_requires_composed_scenario",
-            message=(
-                "Persistent characters can enter only a composed hero seat"
-            ),
-        )
+        return {}
     if is_worker:
-        deployment = _hosted_character_deployment
-        if deployment is None:
-            raise _api_http_exception(
-                status_code=403,
-                code="character_deployment_not_authorized",
-                message=(
-                    "Hosted worker has no gateway-authenticated character "
-                    "deployment"
-                ),
-            )
-        if deployment.character_id != selected_character_id:
+        if set(character_ids) != set(_hosted_character_deployments):
             raise _api_http_exception(
                 status_code=403,
                 code="character_deployment_identity_mismatch",
                 message=(
-                    "Game-creation character_id differs from the gateway "
-                    "assignment"
+                    "Normalized encounter characters differ from the "
+                    "gateway-authenticated deployments"
                 ),
             )
-        return deployment
+        return dict(_hosted_character_deployments)
 
     service = app.state.character_directory
     handle = app.state.local_profile_handle
@@ -6321,11 +5923,16 @@ def _game_creation_character_deployment(
             code="local_character_directory_unavailable",
             message="No local profile is available for character deployment",
         )
-    return build_character_deployment_snapshot(
-        service,
-        handle.profile_id,
-        selected_character_id,
-    )
+    deployments = {
+        character_id: build_character_deployment_snapshot(
+            service,
+            handle.profile_id,
+            character_id,
+        )
+        for character_id in character_ids
+    }
+    _publish_standalone_directory_events()
+    return deployments
 
 
 @dataclass(frozen=True)
@@ -6337,179 +5944,217 @@ class _ResolvedAIPolicy:
     provider_id: Optional[str] = None
 
 
-async def _set_game_creation_side_controllers(
+def _member_controller(
+    roster_slot: EncounterRosterSlot,
+    member_id: str,
+) -> tuple[RosterControllerKind, str | None]:
+    override = next(
+        (
+            row
+            for row in roster_slot.controller_defaults.member_overrides
+            if row.member_id == member_id
+        ),
+        None,
+    )
+    if override is not None:
+        return override.controller, override.policy_id
+    defaults = roster_slot.controller_defaults
+    return defaults.controller, defaults.policy_id
+
+
+async def _set_game_creation_member_controller(
     encounter: Encounter,
     game: GameSession,
-    entities: tuple[Entity, ...],
-    participant: GameCreationSideRequest,
-    side_id: str,
+    entity: Entity,
+    *,
+    member_address: tuple[str, str],
+    controller_kind: RosterControllerKind,
     resolved_policy: Optional[_ResolvedAIPolicy],
-) -> Optional[Controller]:
-    """Assign human actors or one policy/memory assignment for the whole side."""
-    if participant.controller == "human":
-        for entity in entities:
-            encounter.set_controller_for(
-                entity.uuid,
-                HumanController(source_entity_uuid=entity.uuid),
-            )
+) -> None:
+    """Install one isolated controller assignment for one exact member."""
+    if controller_kind is RosterControllerKind.HUMAN:
+        encounter.set_controller_for(
+            entity.uuid,
+            HumanController(source_entity_uuid=entity.uuid),
+        )
         return None
 
-    if not entities or resolved_policy is None:
-        raise ValueError(f"{side_id} cannot create an AI without entities and policy")
-    controlled_entity_uuids = tuple(entity.uuid for entity in entities)
-    assignment_id = f"{game.game_id}:{side_id}"
+    if resolved_policy is None:
+        raise ValueError(
+            f"{member_address!r} cannot create automation without a policy",
+        )
+    assignment_id = (
+        f"{game.game_id}:{member_address[0]}:{member_address[1]}"
+    )
     instrumentation = AIInstrumentation(
         sink=sim.native_ai_instrumentation,
     )
     if resolved_policy.execution == "in_process":
         controller = NativeAIController.create(
-            source_entity_uuid=controlled_entity_uuids[0],
+            source_entity_uuid=entity.uuid,
             game_id=str(game.game_id),
             assignment_id=assignment_id,
-            controlled_entity_uuids=controlled_entity_uuids,
+            controlled_entity_uuids=(entity.uuid,),
             policy_id=resolved_policy.descriptor.policy_id,
             registry=native_policy_registry,
             instrumentation=instrumentation,
         )
-        controller.start(list(entities))
-        for entity in entities:
-            encounter.set_controller_for(entity.uuid, controller)
+        controller.start([entity])
+        encounter.set_controller_for(entity.uuid, controller)
         sim.native_ai_controllers.append(controller)
-        return controller
+        return None
 
-    first_controller: RegisteredAIController | None = None
-    for entity in entities:
-        controller = await RegisteredAIController.create(
-            source_entity_uuid=entity.uuid,
-            game_id=str(game.game_id),
-            assignment_id=(
-                f"{assignment_id}:entity:{entity.uuid}"
-            ),
-            controlled_entity_uuids=(entity.uuid,),
-            policy_id=resolved_policy.descriptor.policy_id,
-            provider_catalog=_active_registered_ai_provider_catalog(),
-            instrumentation=instrumentation,
-        )
-        try:
-            controller.start([entity])
-            encounter.set_controller_for(entity.uuid, controller)
-        except BaseException:
-            await controller.close()
-            raise
-        sim.registered_ai_controllers.append(controller)
-        if first_controller is None:
-            first_controller = controller
-    return first_controller
+    controller = await RegisteredAIController.create(
+        source_entity_uuid=entity.uuid,
+        game_id=str(game.game_id),
+        assignment_id=assignment_id,
+        controlled_entity_uuids=(entity.uuid,),
+        policy_id=resolved_policy.descriptor.policy_id,
+        provider_catalog=_active_registered_ai_provider_catalog(),
+        instrumentation=instrumentation,
+    )
+    try:
+        controller.start([entity])
+        encounter.set_controller_for(entity.uuid, controller)
+    except BaseException:
+        await controller.close()
+        raise
+    sim.registered_ai_controllers.append(controller)
+    return None
 
 
 def _resolve_game_creation_policies(
     creation: GameCreationStartRequest,
-) -> dict[str, Optional[_ResolvedAIPolicy]]:
+) -> dict[tuple[str, str], Optional[_ResolvedAIPolicy]]:
     """Validate all policy selections before replacing live engine state."""
-    resolved: dict[str, Optional[_ResolvedAIPolicy]] = {}
+    resolved: dict[
+        tuple[str, str],
+        Optional[_ResolvedAIPolicy],
+    ] = {}
     provider_catalog = _active_registered_ai_provider_catalog()
-    for side_id, participant in (
-        ("side_a", creation.side_a),
-        ("side_b", creation.side_b),
-    ):
-        if participant.controller == "human":
-            if participant.policy_id is not None:
-                raise _api_http_exception(
-                    status_code=400,
-                    code="ai_policy_not_applicable",
-                    message="Human sides cannot select an AI policy",
-                    side_id=side_id,
-                    policy_id=participant.policy_id,
-                )
-            resolved[side_id] = None
-            continue
-        policy_id = participant.policy_id or DEFAULT_NATIVE_POLICY_ID
-        try:
-            descriptor = native_policy_registry.require_descriptor(policy_id)
-        except UnknownPolicyError:
-            try:
-                descriptor = provider_catalog.policy_descriptor(policy_id)
-                provider = provider_catalog.provider_for_policy(policy_id)
-            except RegisteredAIProviderNotFoundError as exc:
-                valid_policy_ids = [
-                    option.descriptor.policy_id
-                    for option in _game_creation_ai_policy_options()
-                ]
-                raise _api_http_exception(
-                    status_code=400,
-                    code="ai_policy_not_registered",
-                    message="Requested AI policy is not registered",
-                    side_id=side_id,
-                    policy_id=policy_id,
-                    valid_policy_ids=valid_policy_ids,
-                ) from exc
-            resolved[side_id] = _ResolvedAIPolicy(
-                descriptor=descriptor,
-                execution="registered_provider",
-                provider_id=provider.provider_id,
+    for roster_slot in creation.recipe.roster_slots:
+        for member in roster_slot.roster.members:
+            address = (roster_slot.roster_slot_id, member.member_id)
+            controller_kind, configured_policy_id = _member_controller(
+                roster_slot,
+                member.member_id,
             )
-            continue
-        resolved[side_id] = _ResolvedAIPolicy(
-            descriptor=descriptor,
-            execution="in_process",
-        )
+            if controller_kind is RosterControllerKind.HUMAN:
+                resolved[address] = None
+                continue
+            policy_id = configured_policy_id or DEFAULT_NATIVE_POLICY_ID
+            try:
+                descriptor = native_policy_registry.require_descriptor(
+                    policy_id,
+                )
+            except UnknownPolicyError:
+                try:
+                    descriptor = provider_catalog.policy_descriptor(policy_id)
+                    provider = provider_catalog.provider_for_policy(policy_id)
+                except RegisteredAIProviderNotFoundError as exc:
+                    valid_policy_ids = [
+                        option.descriptor.policy_id
+                        for option in _game_creation_ai_policy_options()
+                    ]
+                    raise _api_http_exception(
+                        status_code=400,
+                        code="ai_policy_not_registered",
+                        message="Requested AI policy is not registered",
+                        roster_slot_id=address[0],
+                        member_id=address[1],
+                        policy_id=policy_id,
+                        valid_policy_ids=valid_policy_ids,
+                    ) from exc
+                resolved[address] = _ResolvedAIPolicy(
+                    descriptor=descriptor,
+                    execution="registered_provider",
+                    provider_id=provider.provider_id,
+                )
+                continue
+            resolved[address] = _ResolvedAIPolicy(
+                descriptor=descriptor,
+                execution="in_process",
+            )
     return resolved
 
 
-def _game_creation_side_result(
-    *,
-    side_id: Literal["side_a", "side_b"],
-    title: str,
-    entities: tuple[Entity, ...],
-    participant: GameCreationSideRequest,
-    resolved_policy: Optional[_ResolvedAIPolicy],
-    takeover_claim: Optional[TakeoverClaim],
-) -> GameCreationSideResult:
-    """Serialize one resolved side assignment."""
-    return GameCreationSideResult(
-        side_id=side_id,
-        title=title,
-        controller=participant.controller,
-        participant_name=participant.name,
-        entity_assignments=[
-            GameCreationEntityAssignment(
+def _game_creation_roster_results(
+    assembled: AssembledEncounter,
+    policies: dict[tuple[str, str], Optional[_ResolvedAIPolicy]],
+    claims: dict[tuple[str, str], TakeoverClaim],
+) -> tuple[GameCreationRosterResult, ...]:
+    """Serialize exact member sources, controllers, and runtime identities."""
+    results: list[GameCreationRosterResult] = []
+    for roster_slot in assembled.recipe.roster_slots:
+        assignments: list[GameCreationEntityAssignment] = []
+        for member in roster_slot.roster.members:
+            address = (roster_slot.roster_slot_id, member.member_id)
+            entity = assembled.entities_by_member_address[address]
+            controller_kind, _ = _member_controller(
+                roster_slot,
+                member.member_id,
+            )
+            resolved_policy = policies[address]
+            claim = claims.get(address)
+            assignments.append(GameCreationEntityAssignment(
+                member_id=member.member_id,
                 entity_uuid=str(entity.uuid),
                 entity_name=entity.name,
                 faction=entity.faction,
-            )
-            for entity in entities
-        ],
-        policy_id=(
-            resolved_policy.descriptor.policy_id
-            if resolved_policy is not None
-            else None
-        ),
-        policy_execution=(
-            resolved_policy.execution
-            if resolved_policy is not None
-            else None
-        ),
-        provider_id=(
-            resolved_policy.provider_id
-            if resolved_policy is not None
-            else None
-        ),
-        codex_session_id=(
-            str(takeover_claim.session_id)
-            if takeover_claim is not None
-            else None
-        ),
-        takeover_claim_id=(
-            str(takeover_claim.claim_id)
-            if takeover_claim is not None
-            else None
-        ),
-        takeover_expires_at=(
-            takeover_claim.expires_at
-            if takeover_claim is not None
-            else None
-        ),
-    )
+                character_id=(
+                    member.source.character_id
+                    if isinstance(
+                        member.source,
+                        OwnedCharacterRosterSource,
+                    )
+                    else None
+                ),
+                controller=controller_kind.value,
+                participant_name=(
+                    roster_slot.controller_defaults.participant_name
+                ),
+                policy_id=(
+                    resolved_policy.descriptor.policy_id
+                    if (
+                        controller_kind is RosterControllerKind.AI
+                        and resolved_policy is not None
+                    )
+                    else None
+                ),
+                policy_execution=(
+                    resolved_policy.execution
+                    if (
+                        controller_kind is RosterControllerKind.AI
+                        and resolved_policy is not None
+                    )
+                    else None
+                ),
+                provider_id=(
+                    resolved_policy.provider_id
+                    if (
+                        controller_kind is RosterControllerKind.AI
+                        and resolved_policy is not None
+                    )
+                    else None
+                ),
+                codex_session_id=(
+                    str(claim.session_id) if claim is not None else None
+                ),
+                takeover_claim_id=(
+                    str(claim.claim_id) if claim is not None else None
+                ),
+                takeover_expires_at=(
+                    claim.expires_at if claim is not None else None
+                ),
+            ))
+        results.append(GameCreationRosterResult(
+            roster_slot_id=roster_slot.roster_slot_id,
+            roster_id=roster_slot.roster.roster_id,
+            roster_recipe_digest=roster_slot.roster.recipe_digest,
+            title=roster_slot.roster.title,
+            entity_assignments=tuple(assignments),
+        ))
+    return tuple(results)
 
 
 def _require_ai_provider_admin(
@@ -6557,13 +6202,7 @@ def _provider_catalog_entry(
 
 def _game_creation_ai_policy_options() -> tuple[GameCreationAIPolicyOption, ...]:
     """Merge native and authenticated provider policies by global identity."""
-    options = [
-        GameCreationAIPolicyOption(
-            descriptor=descriptor,
-            execution="in_process",
-        )
-        for descriptor in native_policy_registry.descriptors()
-    ]
+    options = list(server_native_ai_policy_options())
     for provider in _active_registered_ai_provider_catalog().providers():
         options.extend(
             GameCreationAIPolicyOption(
@@ -6670,16 +6309,147 @@ async def unregister_ai_provider(
 async def get_game_creation_catalog() -> GameCreationCatalogResponse:
     """Return canonical scenarios, formations, and controller choices."""
     return build_game_creation_catalog(
+        controllers=("human", "ai", "codex"),
         ai_policies=_game_creation_ai_policy_options(),
     )
 
 
-@app.post("/game-creation/preflight", response_model=CompatibilityReport)
-async def preflight_game_creation(
-    request: GameCreationPreflightRequest,
-) -> CompatibilityReport:
-    """Check a composed scenario without replacing the active game."""
-    return _game_creation_preflight(request)
+def _validate_game_creation_protocol_identity(
+    request: GameCreationPreviewRequest,
+    deployments: dict[UUID, CharacterDeploymentSnapshot],
+) -> None:
+    content_digest = (
+        SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest
+    )
+    if request.expected_content_set_digest != content_digest:
+        raise _api_http_exception(
+            status_code=409,
+            code="game_creation_content_changed",
+            message="Installed content changed after encounter normalization",
+            expected_content_set_digest=request.expected_content_set_digest,
+            current_content_set_digest=content_digest,
+        )
+    try:
+        ruleset_digest = character_ruleset_digest(deployments)
+    except CharacterRulesetMismatchError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="character_ruleset_mismatch",
+            message=str(exc),
+        ) from exc
+    except GameCreationCompositionError as exc:
+        raise _api_http_exception(
+            status_code=409,
+            code="character_ruleset_mismatch",
+            message=str(exc),
+        ) from exc
+    if request.expected_ruleset_digest != ruleset_digest:
+        raise _api_http_exception(
+            status_code=409,
+            code="game_creation_ruleset_changed",
+            message="Character rules changed after encounter normalization",
+            expected_ruleset_digest=request.expected_ruleset_digest,
+            current_ruleset_digest=ruleset_digest,
+        )
+
+
+@app.post(
+    "/game-creation/compose",
+    response_model=GameCreationComposeResponse,
+)
+async def compose_game_creation(
+    request: GameCreationComposeRequest,
+) -> GameCreationComposeResponse:
+    """Normalize ids and owned heads once, then project that exact recipe."""
+    try:
+        saved_roster_ids = required_saved_roster_ids(request)
+        saved_rosters = {}
+        if saved_roster_ids:
+            service = getattr(app.state, "character_directory", None)
+            handle = getattr(app.state, "local_profile_handle", None)
+            if (
+                not isinstance(service, CharacterDirectoryService)
+                or not isinstance(handle, LocalProfileHandle)
+            ):
+                raise _api_http_exception(
+                    status_code=404,
+                    code="local_character_directory_unavailable",
+                    message="No local profile is available for saved rosters",
+                )
+            saved_rosters = {
+                roster_id: service.get_saved_encounter_roster(
+                    handle.profile_id,
+                    roster_id,
+                )
+                for roster_id in saved_roster_ids
+            }
+        deployments = _game_creation_character_deployments(
+            required_character_ids(
+                request,
+                saved_rosters=saved_rosters,
+            ),
+        )
+        recipe, compatibility = normalize_encounter_recipe(
+            request,
+            character_deployments=deployments,
+            saved_rosters=saved_rosters,
+        )
+        content_digest = (
+            SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest
+        )
+        ruleset_digest = character_ruleset_digest(deployments)
+        preview = await asyncio.to_thread(
+            build_game_creation_encounter_visual_preview,
+            recipe,
+            character_deployments=deployments,
+            expected_content_set_digest=content_digest,
+            expected_ruleset_digest=ruleset_digest,
+        )
+        return GameCreationComposeResponse(
+            content_set_digest=content_digest,
+            ruleset_digest=ruleset_digest,
+            recipe=recipe,
+            compatibility=compatibility,
+            preview=preview,
+        )
+    except GameCreationCompositionError as exc:
+        raise _api_http_exception(
+            status_code=400,
+            code="game_creation_composition_invalid",
+            message=str(exc),
+        ) from exc
+    except GameCreationPreviewError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail(),
+        ) from exc
+
+
+@app.post(
+    "/game-creation/preview",
+    response_model=GameCreationEncounterVisualPreviewResponse,
+)
+async def preview_game_creation(
+    request: GameCreationPreviewRequest,
+) -> GameCreationEncounterVisualPreviewResponse:
+    """Project an already-normalized recipe without mutating the live engine."""
+    deployments = _game_creation_character_deployments(
+        required_character_ids(request.recipe),
+    )
+    _validate_game_creation_protocol_identity(request, deployments)
+    try:
+        return await asyncio.to_thread(
+            build_game_creation_encounter_visual_preview,
+            request.recipe,
+            character_deployments=deployments,
+            expected_content_set_digest=request.expected_content_set_digest,
+            expected_ruleset_digest=request.expected_ruleset_digest,
+        )
+    except GameCreationPreviewError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail(),
+        ) from exc
 
 
 @app.post(
@@ -6690,93 +6460,96 @@ async def preflight_game_creation(
 async def start_created_game(
     creation: GameCreationStartRequest,
 ) -> GameCreationStartResponse:
-    """Atomically assemble a scenario and configure both controller sides."""
+    """Atomically assemble and configure one normalized encounter recipe."""
 
-    global _hosted_character_entity_uuid
-    _hosted_character_entity_uuid = None
-    selection, preset_arena_id = _game_creation_selection(creation.scenario)
-    static_report = _game_creation_preflight(selection)
-    if not static_report.admitted:
-        raise _api_http_exception(
-            status_code=400,
-            code="incompatible_game_creation",
-            message="The selected scenario components are incompatible",
-            compatibility=static_report.model_dump(mode="json"),
-        )
-
-    character_deployment = _game_creation_character_deployment(creation)
+    global _hosted_character_entity_uuids
+    _hosted_character_entity_uuids = {}
+    is_hosted_worker = os.environ.get("DND_GAME_WORKER") == "1"
+    hosted_assignment = (
+        _require_hosted_worker_assignment()
+        if is_hosted_worker
+        else None
+    )
+    character_ids = required_character_ids(creation.recipe)
+    character_deployments = _game_creation_character_deployments(
+        character_ids,
+    )
+    _validate_game_creation_protocol_identity(
+        creation,
+        character_deployments,
+    )
     policies = _resolve_game_creation_policies(creation)
-    await prepare_new_simulation_start()
-    opening_faction = {
-        "initiative": None,
-        "side_a": "heroes",
-        "side_b": "monsters",
-    }[creation.opening_side]
+    await prepare_new_game_start()
     try:
         local_game = _active_local_game_coordinator()
         prepared_local_game = None
         if local_game is not None:
-            scenario_id = (
-                preset_arena_id
-                if preset_arena_id is not None
-                else ":".join(
-                    (
-                        selection.hero_configuration_id,
-                        selection.monster_configuration_id,
-                        selection.battlefield_id,
-                        selection.deployment_id,
-                    ),
+            character_roster_slot_ids = {
+                roster_slot.roster_slot_id
+                for roster_slot in creation.recipe.roster_slots
+                if any(
+                    isinstance(
+                        member.source,
+                        OwnedCharacterRosterSource,
+                    )
+                    for member in roster_slot.roster.members
                 )
+            }
+            if len(character_roster_slot_ids) > 1:
+                raise ValueError(
+                    "local owned characters must share one encounter roster",
+                )
+            membership_roster_slot_id = next(
+                iter(character_roster_slot_ids),
+                creation.recipe.roster_slots[0].roster_slot_id,
             )
             prepared_local_game = local_game.prepare(
                 creation_manifest=creation.model_dump(mode="json"),
-                scenario_kind=creation.scenario.kind,
-                scenario_id=scenario_id,
-                display_name=f"Local Game: {scenario_id}",
-                character_id=creation.character_id,
+                scenario_kind="encounter_recipe",
+                scenario_id=creation.recipe.encounter_id,
+                display_name=creation.recipe.title,
+                character_ids=character_ids,
+                membership_roster_slot_id=membership_roster_slot_id,
             )
-            character_deployment = prepared_local_game.character_snapshot
-        if preset_arena_id is not None:
-            arena = prepare_legacy_scenario(
-                preset_arena_id,
-                opening_faction=opening_faction,
-            )
-            compatibility = static_report
-        else:
-            assembled = prepare_composed_scenario(
-                selection.hero_configuration_id,
-                selection.monster_configuration_id,
-                selection.battlefield_id,
-                selection.deployment_id,
-                opening_faction=opening_faction,
-                hero_deployment=character_deployment,
-            )
-            arena = assembled.arena
-            compatibility = assembled.compatibility
+            character_deployments = {
+                row.snapshot.character_id: row.snapshot
+                for row in prepared_local_game.characters
+            }
+        assembled = prepare_encounter_recipe(
+            creation.recipe,
+            character_deployments=character_deployments,
+        )
 
-        sim.encounter = arena.encounter
+        sim.encounter = assembled.encounter
         sim.paused = True
         sim.encounter.clear_combat_log()
         game_summary_store.reset()
         event_stream.ensure_attached()
         _ensure_local_terminal_callback()
-        side_a = tuple(arena.side_a)
-        side_b = tuple(arena.side_b)
-        if (
-            os.environ.get("DND_GAME_WORKER") == "1"
-            and character_deployment is not None
-        ):
-            if len(side_a) != 1:
-                raise RuntimeError(
-                    "hosted persistent character requires exactly one hero "
-                    "runtime entity",
+        if is_hosted_worker:
+            _hosted_character_entity_uuids = {
+                member.source.character_id: (
+                    assembled.entities_by_member_address[
+                        (roster_slot.roster_slot_id, member.member_id)
+                    ].uuid
                 )
-            _hosted_character_entity_uuid = side_a[0].uuid
+                for roster_slot in creation.recipe.roster_slots
+                for member in roster_slot.roster.members
+                if isinstance(
+                    member.source,
+                    OwnedCharacterRosterSource,
+                )
+            }
 
         if prepared_local_game is not None:
             game_summary_store.bind_directory_game_id(
                 sim.encounter.uuid,
                 prepared_local_game.game.game_id,
+            )
+        elif hosted_assignment is not None:
+            game_summary_store.bind_directory_game_id(
+                sim.encounter.uuid,
+                hosted_assignment.hosted_game_id,
             )
         game = sim.create_game_session(
             sim.encounter,
@@ -6786,110 +6559,100 @@ async def start_created_game(
                 else None
             ),
         )
-        if (
-            prepared_local_game is not None
-            and character_deployment is not None
-        ):
-            if len(side_a) != 1:
-                raise RuntimeError(
-                    "persistent local character requires exactly one hero "
-                    "runtime entity",
-                )
+        if prepared_local_game is not None and character_deployments:
             local_game = _active_local_game_coordinator()
             if local_game is None:
                 raise RuntimeError("local game lifecycle ownership disappeared")
-            local_game.pin_character(side_a[0].uuid)
-        await _set_game_creation_side_controllers(
-            sim.encounter,
-            game,
-            side_a,
-            creation.side_a,
-            "side_a",
-            policies["side_a"],
-        )
-        await _set_game_creation_side_controllers(
-            sim.encounter,
-            game,
-            side_b,
-            creation.side_b,
-            "side_b",
-            policies["side_b"],
-        )
+            local_game.pin_characters({
+                member.source.character_id: (
+                    assembled.entities_by_member_address[
+                        (roster_slot.roster_slot_id, member.member_id)
+                    ].uuid
+                )
+                for roster_slot in creation.recipe.roster_slots
+                for member in roster_slot.roster.members
+                if isinstance(
+                    member.source,
+                    OwnedCharacterRosterSource,
+                )
+            })
+        for roster_slot in creation.recipe.roster_slots:
+            for member in roster_slot.roster.members:
+                address = (roster_slot.roster_slot_id, member.member_id)
+                controller_kind, _ = _member_controller(
+                    roster_slot,
+                    member.member_id,
+                )
+                await _set_game_creation_member_controller(
+                    sim.encounter,
+                    game,
+                    assembled.entities_by_member_address[address],
+                    member_address=address,
+                    controller_kind=controller_kind,
+                    resolved_policy=policies[address],
+                )
 
-        claims: dict[str, TakeoverClaim] = {}
+        claims: dict[tuple[str, str], TakeoverClaim] = {}
         manager = sim.get_session_manager()
         subjective_authority_before = _capture_subjective_session_authority(manager)
         ownership_boundary = prepare_observation_ownership_change(manager)
-        for side_id, entities, participant in (
-            ("side_a", side_a, creation.side_a),
-            ("side_b", side_b, creation.side_b),
-        ):
-            if participant.controller != "codex":
-                continue
-            claims[side_id] = ai_takeover_manager.claim(
-                encounter=sim.encounter,
-                game=game,
-                session_manager=sim.get_session_manager(),
-                faction=None,
-                entity_uuids=[entity.uuid for entity in entities],
-                name=participant.name,
-                lease_seconds=creation.codex_lease_seconds,
-            )
+        for roster_slot in creation.recipe.roster_slots:
+            for member in roster_slot.roster.members:
+                controller_kind, _ = _member_controller(
+                    roster_slot,
+                    member.member_id,
+                )
+                if controller_kind is not RosterControllerKind.CODEX:
+                    continue
+                address = (roster_slot.roster_slot_id, member.member_id)
+                entity = assembled.entities_by_member_address[address]
+                claims[address] = ai_takeover_manager.claim(
+                    encounter=sim.encounter,
+                    game=game,
+                    session_manager=sim.get_session_manager(),
+                    faction=None,
+                    entity_uuids=[entity.uuid],
+                    name=(
+                        roster_slot.controller_defaults.participant_name
+                    ),
+                    lease_seconds=creation.codex_lease_seconds,
+                )
         _publish_takeover_ownership_changes(
             ownership_boundary,
             "game_creation_claimed",
             subjective_authority_before=subjective_authority_before,
         )
 
-        hero_spec = get_combatant_configuration(
-            selection.hero_configuration_id
-        )
-        monster_spec = get_combatant_configuration(
-            selection.monster_configuration_id
-        )
         response = GameCreationStartResponse(
-            scenario_kind=creation.scenario.kind,
-            preset_arena_id=preset_arena_id,
+            recipe_digest=creation.recipe.recipe_digest,
             encounter_uuid=str(sim.encounter.uuid),
             game_id=str(game.game_id),
             encounter_name=sim.encounter.name,
-            opening_side=creation.opening_side,
-            compatibility=compatibility,
-            side_a=_game_creation_side_result(
-                side_id="side_a",
-                title=hero_spec.title,
-                entities=side_a,
-                participant=creation.side_a,
-                resolved_policy=policies["side_a"],
-                takeover_claim=claims.get("side_a"),
-            ),
-            side_b=_game_creation_side_result(
-                side_id="side_b",
-                title=monster_spec.title,
-                entities=side_b,
-                participant=creation.side_b,
-                resolved_policy=policies["side_b"],
-                takeover_claim=claims.get("side_b"),
+            compatibility=assembled.compatibility,
+            rosters=_game_creation_roster_results(
+                assembled,
+                policies,
+                claims,
             ),
         )
         sim.current_creation = response
         return response
-    except (IncompatibleScenarioError, ValueError) as exc:
-        await _abort_failed_simulation_start()
+    except (IncompatibleEncounterError, ValueError) as exc:
+        await _abort_failed_game_start()
         raise _api_http_exception(
             status_code=400,
             code="game_creation_assembly_failed",
             message=str(exc),
-            selection=selection.model_dump(mode="json"),
+            recipe_digest=creation.recipe.recipe_digest,
         ) from exc
     except TakeoverError as exc:
-        await _abort_failed_simulation_start()
+        await _abort_failed_game_start()
         raise _takeover_http_exception(exc, faction=None) from exc
     except RegisteredAIProviderError as exc:
-        await _abort_failed_simulation_start()
+        await _abort_failed_game_start()
         raise _registered_ai_provider_http_exception(exc) from exc
     except BaseException:
-        await _abort_failed_simulation_start()
+        await _abort_failed_game_start()
         raise
 
 
@@ -7055,7 +6818,6 @@ def run_server(host: str = "0.0.0.0", port: int = 8000, force: bool = False) -> 
     """Run the event server."""
     if force:
         kill_process_on_port(port)
-        time.sleep(0.5)
 
     config = uvicorn.Config(
         app=app,

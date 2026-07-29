@@ -105,10 +105,6 @@ def test_receipt_removes_each_modifier_collection_from_its_exact_channel() -> No
     receipt = CharacterCompositionReceipt(
         runtime_entity_uuid=entity.uuid,
         character_id=uuid4(),
-        definition_revision=1,
-        definition_digest="definition",
-        loadout_revision=1,
-        loadout_digest="loadout",
         grants=(grant,),
         automatic_grant_refs=(),
     )
@@ -145,10 +141,6 @@ def test_receipt_removes_only_its_exact_condition_immunity_sources() -> None:
     receipt = CharacterCompositionReceipt(
         runtime_entity_uuid=entity.uuid,
         character_id=uuid4(),
-        definition_revision=1,
-        definition_digest="definition",
-        loadout_revision=1,
-        loadout_digest="loadout",
         grants=(
             CharacterGrantReceipt(
                 grant_id=owned,
@@ -188,10 +180,6 @@ def test_receipt_removes_dynamic_state_by_exact_condition_ref() -> None:
     receipt = CharacterCompositionReceipt(
         runtime_entity_uuid=entity.uuid,
         character_id=uuid4(),
-        definition_revision=1,
-        definition_digest="definition",
-        loadout_revision=1,
-        loadout_digest="loadout",
         grants=(
             CharacterGrantReceipt(
                 grant_id=uuid4(),

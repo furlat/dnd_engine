@@ -24,7 +24,7 @@ def test_normal_slot_capacity_sets_all_ranks_without_touching_turn_resources() -
     assert economy.get_normal_spell_slot_capacity_source() == source_id
     assert economy.get_normal_spell_slot_capacities() == {1: 4, 2: 3, 3: 2}
     assert [
-        economy._get_spell_slot_value(rank).normalized_score
+        economy.spell_slot_value(rank).normalized_score
         for rank in range(1, 10)
     ] == [4, 3, 2, 0, 0, 0, 0, 0, 0]
     assert economy.actions.normalized_score == 0
@@ -44,7 +44,7 @@ def test_replacing_capacity_preserves_spend_across_raise_and_lower() -> None:
     for rank, modifier_uuid in first.capacity_modifier_uuids:
         assert (
             modifier_uuid
-            not in economy._get_spell_slot_value(rank).self_static.value_modifiers
+            not in economy.spell_slot_value(rank).self_static.value_modifiers
         )
 
     economy.set_normal_spell_slot_capacity(uuid4(), {1: 5, 2: 3})

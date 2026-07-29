@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import AttackEvent, SpellAction
+from dnd.actions import Attack, AttackEvent, SpellAction
 from dnd.actions_functional import (
     execute_action,
     execute_by_index,
@@ -28,6 +28,7 @@ from dnd.classes.fighter import (
     ExtraAttackFeature,
     create_extra_attack_resource_handler,
 )
+from dnd.classes.rage import FrenziedStrike
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
@@ -42,13 +43,14 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.action_types import HasteActionPolicy
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 HASTE_GRANT_SUFFIX = "__grant_haste"
@@ -374,6 +376,54 @@ def test_haste_extra_attack_miss_keeps_weapon_presentation_metadata() -> None:
     assert event.weapon_name == "Greatsword"
     assert event.name == "Extra Attack (Greatsword)"
     assert event.damage_types == [DamageType.SLASHING]
+    weapon = fighter.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
+    assert weapon is not None
+    assert weapon.content_ref is not None
+    assert event.source_item_uuid == weapon.uuid
+    assert event.source_item_presentation is not None
+    assert event.source_item_presentation.item_uuid == weapon.uuid
+    assert event.source_item_presentation.content_ref is not None
+    assert (
+        event.source_item_presentation.content_ref.model_dump(mode="python")
+        == weapon.content_ref.model_dump(mode="python")
+    )
+
+
+def test_all_equipped_weapon_attack_families_use_the_cold_item_snapshot() -> None:
+    """Normal, Extra, and Frenzied attacks share one item-identity boundary."""
+    fighter, target = _create_hasted_fighter(extra_attacks=1)
+    weapon = fighter.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
+    assert weapon is not None
+    assert weapon.content_ref is not None
+
+    actions = (
+        Attack(
+            source_entity_uuid=fighter.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ),
+        ExtraAttack(
+            source_entity_uuid=fighter.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ),
+        FrenziedStrike(
+            source_entity_uuid=fighter.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ),
+    )
+    for action in actions:
+        event = action._create_declaration_event(use_register=False)
+        assert isinstance(event, AttackEvent)
+        assert event.source_item_uuid == weapon.uuid
+        assert event.source_item_presentation is not None
+        assert event.source_item_presentation.item_uuid == weapon.uuid
+        assert event.source_item_presentation.content_ref is not None
+        assert (
+            event.source_item_presentation.content_ref.model_dump(mode="python")
+            == weapon.content_ref.model_dump(mode="python")
+        )
 
 
 def test_weapon_attack_metadata_snapshot_is_typed_and_handles_unarmed_slots() -> None:
