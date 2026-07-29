@@ -7,12 +7,12 @@ from dnd.blocks.equipment import Weapon
 from dnd.core.equipment_types import WeaponProperty
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
     ContextualAdvantageModifier,
     ContextualNumericalModifier,
-    DamageType,
     NumericalModifier,
     ResistanceModifier,
     ResistanceStatus,

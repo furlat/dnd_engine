@@ -31,6 +31,10 @@ _ATTACKS_PER_ACTION_BY_FEATURE_LEVEL = {
     11: 3,
     20: 4,
 }
+_EXTRA_ATTACK_FAMILY_GRANT_TOKEN = (
+    "character-structural-family:v1:"
+    f"{EXTRA_ATTACK_FEATURE_REF.identity_key}"
+)
 
 
 def apply_extra_attack_grant(
@@ -92,11 +96,14 @@ def install_extra_attack_family(
 ) -> CharacterGrantReceipt | None:
     """Install one equipment-independent action/handler for resolved ranks."""
     entity = context.entity
-    if not entity.action_economy.get_attack_multiplicity_grants():
+    if not any(
+        entry.content_ref == EXTRA_ATTACK_FEATURE_REF
+        for entry in context.preview.grant_schedule
+    ):
         return None
     grant_id = uuid5(
         context.character_id,
-        "character-structural-family:v1:extra_attack",
+        _EXTRA_ATTACK_FAMILY_GRANT_TOKEN,
     )
     action = ExtraAttack(
         source_entity_uuid=entity.uuid,
@@ -123,6 +130,7 @@ def install_extra_attack_family(
         raise
     return CharacterGrantReceipt(
         grant_id=grant_id,
+        grant_token=_EXTRA_ATTACK_FAMILY_GRANT_TOKEN,
         definition_ref=EXTRA_ATTACK_FEATURE_REF,
         action_uuids=(action.uuid,),
         handler_uuids=(handler.uuid,),

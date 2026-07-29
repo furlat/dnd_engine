@@ -177,6 +177,7 @@ _TYPED_DEFINITION_KINDS = frozenset({
     ContentDefinitionKind.SPECIES_VARIANT,
     ContentDefinitionKind.BACKGROUND,
     ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
+    ContentDefinitionKind.TRAIT,
 })
 
 

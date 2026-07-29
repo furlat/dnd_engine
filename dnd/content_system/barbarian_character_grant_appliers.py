@@ -7,7 +7,7 @@ created merely to hold cold character structure.
 """
 
 from collections.abc import Callable
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from dnd.blocks.action_economy import (
     RechargeType,
@@ -24,6 +24,15 @@ from dnd.content_system.character_build_validation import (
 )
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
+)
+from dnd.content_system.character_grant_applier_runtime import (
+    character_grant_id,
+    grant_receipt,
+    install_bound_handler,
+    is_first_grant_for_ref,
+    register_bound_action,
+    require_grant_ref,
+    validated_class_level,
 )
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
@@ -102,49 +111,6 @@ BarbarianCharacterGrantApplier = Callable[
 ]
 
 
-def _grant_id(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-) -> UUID:
-    return uuid5(context.character_id, entry.grant_token)
-
-
-def _require_ref(
-    entry: CharacterGrantScheduleEntry,
-    expected_ref: ContentRef,
-) -> None:
-    if entry.content_ref != expected_ref:
-        raise ValueError(
-            "Barbarian grant applier received a different content ref",
-        )
-
-
-def _base_receipt(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    modifier_handles: tuple[ModifierHandle, ...] = (),
-    action_uuids: tuple[UUID, ...] = (),
-    handler_uuids: tuple[UUID, ...] = (),
-    resource_contribution_ids: tuple[tuple[str, UUID], ...] = (),
-    armor_class_formula_ids: tuple[UUID, ...] = (),
-    condition_immunity_handles: tuple[ConditionImmunityHandle, ...] = (),
-    transient_condition_refs_to_remove: tuple[ContentRef, ...] = (),
-) -> CharacterGrantReceipt:
-    return CharacterGrantReceipt(
-        grant_id=_grant_id(context, entry),
-        grant_token=entry.grant_token,
-        definition_ref=entry.content_ref,
-        modifier_handles=modifier_handles,
-        action_uuids=action_uuids,
-        handler_uuids=handler_uuids,
-        resource_contribution_ids=resource_contribution_ids,
-        armor_class_formula_ids=armor_class_formula_ids,
-        condition_immunity_handles=condition_immunity_handles,
-        transient_condition_refs_to_remove=transient_condition_refs_to_remove,
-    )
-
-
 def _preview_has(
     context: BuiltinCharacterGrantContext,
     content_ref: ContentRef,
@@ -152,58 +118,6 @@ def _preview_has(
     return any(
         ref == content_ref
         for ref in context.preview.automatic_grant_refs
-    )
-
-
-def _is_first_grant_for_ref(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-) -> bool:
-    for scheduled in context.preview.grant_schedule:
-        if scheduled.content_ref == entry.content_ref:
-            return scheduled.grant_token == entry.grant_token
-    raise ValueError("grant entry is absent from its validated preview")
-
-
-def _barbarian_level(context: BuiltinCharacterGrantContext) -> int:
-    for class_ref, level in context.preview.class_level_counts:
-        if class_ref == BARBARIAN_CLASS_REF:
-            return level
-    raise ValueError("Barbarian feature grant requires Barbarian class levels")
-
-
-def _register_bound_action(
-    context: BuiltinCharacterGrantContext,
-    *,
-    provider_ref: ContentRef,
-    action,
-) -> None:
-    context.runtime.bind_granted_behavior(
-        action,
-        provider_ref=provider_ref,
-        runtime_owner_uuid=context.entity.uuid,
-    )
-    context.entity.register_action(action)
-
-
-def _install_bound_handler(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    handler: EventHandler,
-) -> CharacterGrantReceipt:
-    content_ref = entry.content_ref
-    if content_ref is None:
-        raise ValueError("handler grant requires exact content identity")
-    context.runtime.bind_granted_behavior(
-        handler,
-        provider_ref=content_ref,
-        runtime_owner_uuid=context.entity.uuid,
-    )
-    context.entity.add_event_handler(handler)
-    return _base_receipt(
-        context,
-        entry,
-        handler_uuids=(handler.uuid,),
     )
 
 
@@ -221,7 +135,7 @@ def _install_static_value(
         value=amount,
     )
     value.self_static.add_value_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -237,8 +151,8 @@ def _apply_unarmored_defense(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, UNARMORED_DEFENSE_DECLARATION.ref)
-    source_id = _grant_id(context, entry)
+    require_grant_ref(entry, UNARMORED_DEFENSE_DECLARATION.ref)
+    source_id = character_grant_id(context, entry)
     context.entity.equipment.add_armor_class_formula_candidate(
         ArmorClassFormulaCandidate(
             source_id=source_id,
@@ -248,7 +162,7 @@ def _apply_unarmored_defense(
             allows_shield=True,
         ),
     )
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         armor_class_formula_ids=(source_id,),
@@ -271,12 +185,12 @@ def _apply_rage(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, RAGE_REF)
+    require_grant_ref(entry, RAGE_REF)
     class_level = entry.provenance.class_level
     if class_level not in _RAGE_ADVANCEMENT:
         raise ValueError(f"Unsupported Rage advancement level {class_level}")
     rage_uses, _rage_damage = _RAGE_ADVANCEMENT[class_level]
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity = context.entity
     entity.action_economy.add_resource_contribution(
         "rage",
@@ -288,7 +202,7 @@ def _apply_rage(
 
     action_uuids: tuple[UUID, ...] = ()
     try:
-        if _is_first_grant_for_ref(context, entry):
+        if is_first_grant_for_ref(context, entry):
             actions: list[BaseAction] = [
                 rage.EndRage(
                     source_entity_uuid=entity.uuid,
@@ -301,8 +215,18 @@ def _apply_rage(
                     rage.Rage(
                         source_entity_uuid=entity.uuid,
                         rage_damage=(
-                            4 if _barbarian_level(context) >= 16
-                            else 3 if _barbarian_level(context) >= 9
+                            4
+                            if validated_class_level(
+                                context,
+                                BARBARIAN_CLASS_REF,
+                            )
+                            >= 16
+                            else 3
+                            if validated_class_level(
+                                context,
+                                BARBARIAN_CLASS_REF,
+                            )
+                            >= 9
                             else 2
                         ),
                         mindless_rage=_preview_has(
@@ -319,7 +243,7 @@ def _apply_rage(
             installed: list[UUID] = []
             try:
                 for action in actions:
-                    _register_bound_action(
+                    register_bound_action(
                         context,
                         provider_ref=RAGE_REF,
                         action=action,
@@ -334,7 +258,7 @@ def _apply_rage(
         entity.action_economy.remove_resource_contribution("rage", grant_id)
         raise
 
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=action_uuids,
@@ -347,17 +271,17 @@ def _apply_reckless_attack(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, RECKLESS_ATTACK_REF)
+    require_grant_ref(entry, RECKLESS_ATTACK_REF)
     action = barbarian.RecklessAttack(
         source_entity_uuid=context.entity.uuid,
         template=True,
     )
-    _register_bound_action(
+    register_bound_action(
         context,
         provider_ref=RECKLESS_ATTACK_REF,
         action=action,
     )
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=(action.uuid,),
@@ -369,7 +293,7 @@ def _apply_danger_sense(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, DANGER_SENSE_REF)
+    require_grant_ref(entry, DANGER_SENSE_REF)
     value = context.entity.saving_throws.get_saving_throw("dexterity").bonus
     modifier = ContextualAdvantageModifier(
         name="Danger Sense",
@@ -378,7 +302,7 @@ def _apply_danger_sense(
         callable=barbarian.danger_sense_check,
     )
     value.self_contextual.add_advantage_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -396,7 +320,7 @@ def _apply_fast_movement(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FAST_MOVEMENT_REF)
+    require_grant_ref(entry, FAST_MOVEMENT_REF)
     value = context.entity.action_economy.movement
     modifier = ContextualNumericalModifier(
         name="Fast Movement",
@@ -405,7 +329,7 @@ def _apply_fast_movement(
         callable=barbarian.fast_movement_check,
     )
     value.self_contextual.add_value_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -422,8 +346,8 @@ def _apply_mindless_rage(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, MINDLESS_RAGE_REF)
-    source_id = _grant_id(context, entry)
+    require_grant_ref(entry, MINDLESS_RAGE_REF)
+    source_id = character_grant_id(context, entry)
     entity = context.entity
     handles: list[ConditionImmunityHandle] = []
     try:
@@ -447,7 +371,7 @@ def _apply_mindless_rage(
                 handle.source_id,
             )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         condition_immunity_handles=tuple(handles),
@@ -459,7 +383,7 @@ def _apply_feral_instinct(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FERAL_INSTINCT_REF)
+    require_grant_ref(entry, FERAL_INSTINCT_REF)
     value = context.entity.initiative
     modifier = AdvantageModifier(
         name="Feral Instinct",
@@ -468,7 +392,7 @@ def _apply_feral_instinct(
         target_entity_uuid=context.entity.uuid,
     )
     value.self_static.add_advantage_modifier(modifier)
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -485,7 +409,7 @@ def _apply_brutal_critical(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, BRUTAL_CRITICAL_REF)
+    require_grant_ref(entry, BRUTAL_CRITICAL_REF)
     return _install_static_value(
         context,
         entry,
@@ -499,9 +423,9 @@ def _apply_relentless_rage(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, RELENTLESS_RAGE_REF)
+    require_grant_ref(entry, RELENTLESS_RAGE_REF)
     entity = context.entity
-    grant_id = _grant_id(context, entry)
+    grant_id = character_grant_id(context, entry)
     entity.action_economy.add_resource_contribution(
         "relentless_rage",
         grant_id,
@@ -533,7 +457,7 @@ def _apply_relentless_rage(
             grant_id,
         )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         handler_uuids=(handler.uuid,),
@@ -545,8 +469,8 @@ def _apply_persistent_rage(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, PERSISTENT_RAGE_REF)
-    return _base_receipt(
+    require_grant_ref(entry, PERSISTENT_RAGE_REF)
+    return grant_receipt(
         context,
         entry,
         transient_condition_refs_to_remove=(RAGING_REF, FRENZIED_REF),
@@ -557,8 +481,8 @@ def _apply_indomitable_might(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, INDOMITABLE_MIGHT_REF)
-    return _install_bound_handler(
+    require_grant_ref(entry, INDOMITABLE_MIGHT_REF)
+    return install_bound_handler(
         context,
         entry,
         barbarian.create_indomitable_might_handler(context.entity.uuid),
@@ -569,7 +493,7 @@ def _apply_primal_champion(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, PRIMAL_CHAMPION_REF)
+    require_grant_ref(entry, PRIMAL_CHAMPION_REF)
     entity = context.entity
     installed: list[tuple[ModifiableValue, NumericalModifier]] = []
     handles: list[ModifierHandle] = []
@@ -595,7 +519,7 @@ def _apply_primal_champion(
         for value, modifier in reversed(installed):
             value.self_static.remove_value_modifier(modifier.uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=tuple(handles),
@@ -606,8 +530,11 @@ def _apply_frenzy(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, FRENZY_REF)
-    barbarian_level = _barbarian_level(context)
+    require_grant_ref(entry, FRENZY_REF)
+    barbarian_level = validated_class_level(
+        context,
+        BARBARIAN_CLASS_REF,
+    )
     action = rage.Frenzy(
         source_entity_uuid=context.entity.uuid,
         rage_damage=4 if barbarian_level >= 16 else 3 if barbarian_level >= 9 else 2,
@@ -615,12 +542,12 @@ def _apply_frenzy(
         persistent_rage=_preview_has(context, PERSISTENT_RAGE_REF),
         template=True,
     )
-    _register_bound_action(
+    register_bound_action(
         context,
         provider_ref=FRENZY_REF,
         action=action,
     )
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=(action.uuid,),
@@ -632,7 +559,7 @@ def _apply_intimidating_presence(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, INTIMIDATING_PRESENCE_REF)
+    require_grant_ref(entry, INTIMIDATING_PRESENCE_REF)
     actions = (
         barbarian.IntimidatingPresence(
             source_entity_uuid=context.entity.uuid,
@@ -646,7 +573,7 @@ def _apply_intimidating_presence(
     installed: list[UUID] = []
     try:
         for action in actions:
-            _register_bound_action(
+            register_bound_action(
                 context,
                 provider_ref=INTIMIDATING_PRESENCE_REF,
                 action=action,
@@ -656,7 +583,7 @@ def _apply_intimidating_presence(
         for action_uuid in reversed(installed):
             context.entity.unregister_action_by_uuid(action_uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=tuple(installed),
@@ -667,8 +594,8 @@ def _apply_retaliation(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, RETALIATION_REF)
-    return _install_bound_handler(
+    require_grant_ref(entry, RETALIATION_REF)
+    return install_bound_handler(
         context,
         entry,
         barbarian.create_retaliation_handler(context.entity.uuid),

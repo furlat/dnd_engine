@@ -8,50 +8,39 @@ import pytest
 
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
-from dnd.scenarios.evaluation.battlefield_catalog import BATTLEFIELDS
-from dnd.scenarios.evaluation.combatant_catalog import (
-    HERO_CONFIGURATIONS,
-    MONSTER_PARTY_CONFIGURATIONS,
+from dnd.scenarios.encounter_catalog import (
+    AUTHORED_DEPLOYMENTS,
+    AUTHORED_ENCOUNTER_RECIPES,
+    AUTHORED_ROSTER_RECIPES,
 )
-from dnd.scenarios.evaluation.deployment_catalog import DEPLOYMENTS
-from dnd.scenarios.evaluation.legacy_recipes import LEGACY_RECIPES
+from dnd.scenarios.battlefield_catalog import BATTLEFIELDS
 from server import event_server
-from server.arena_mode import ArenaApiClient, reset_standard_arena_runtime
 from server.event_stream import event_stream
-from server.live_replication import drain_subscription
+from tests.manual.live_replication_support import drain_subscription
+from tests.manual.game_creation_test_support import (
+    compose_and_preview,
+    roster_result,
+    start_composed_game,
+)
+from tests.manual.server_test_client import (
+    ServerTestClient,
+    reset_server_test_runtime,
+)
 
 
 @pytest.fixture(autouse=True)
 def clean_game_creation_runtime() -> Iterator[None]:
     """Isolate global engine, claim, controller, and session state per test."""
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
     yield
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
 
 
 @pytest.fixture
-def client() -> Iterator[ArenaApiClient]:
+def client() -> Iterator[ServerTestClient]:
     """Provide one persistent in-process API client per test."""
-    with ArenaApiClient() as api_client:
+    with ServerTestClient() as api_client:
         yield api_client
-
-
-def _preset_start_request(
-    *,
-    side_a: str = "human",
-    side_b: str = "ai",
-    opening_side: str = "side_a",
-) -> dict[str, object]:
-    """Build the smallest representative game-creation request."""
-    return {
-        "scenario": {
-            "kind": "preset",
-            "arena_id": "standard_skeleton_doors",
-        },
-        "side_a": {"controller": side_a, "name": "Side A"},
-        "side_b": {"controller": side_b, "name": "Side B"},
-        "opening_side": opening_side,
-    }
 
 
 def _controller_types(assignment_rows: list[dict[str, object]]) -> set[str]:
@@ -69,14 +58,14 @@ def _controller_types(assignment_rows: list[dict[str, object]]) -> set[str]:
 
 
 def test_catalog_is_a_lossless_projection_of_canonical_content(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """The setup UI receives every canonical composition and historical recipe."""
     response = client.get("/game-creation/catalog")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 3
     assert payload["controllers"] == ["human", "ai", "codex"]
     assert [
         row["descriptor"]["policy_id"]
@@ -93,23 +82,13 @@ def test_catalog_is_a_lossless_projection_of_canonical_content(
         and row["available_capacity"] is None
         for row in payload["ai_policies"]
     )
-    assert payload["opening_sides"] == ["initiative", "side_a", "side_b"]
-    assert [row["configuration_id"] for row in payload["hero_configurations"]] == [
-        spec.configuration_id for spec in HERO_CONFIGURATIONS
+    assert payload["roster_recipes"] == [
+        recipe.model_dump(mode="json")
+        for recipe in AUTHORED_ROSTER_RECIPES
     ]
-    berserker = next(
-        row
-        for row in payload["hero_configurations"]
-        if row["configuration_id"] == "hero.barbarian_l5_berserker_torch"
-    )
-    assert berserker["members"][0]["augmentations"][0] == {
-        "kind": "apparel_grant",
-        "item_id": "costume",
-        "visual_variant_id": "85000004",
-        "display_name": "Pit Fighter's Wrap",
-    }
-    assert [row["configuration_id"] for row in payload["monster_configurations"]] == [
-        spec.configuration_id for spec in MONSTER_PARTY_CONFIGURATIONS
+    assert payload["encounter_recipes"] == [
+        recipe.model_dump(mode="json")
+        for recipe in AUTHORED_ENCOUNTER_RECIPES
     ]
     assert [row["battlefield_id"] for row in payload["battlefields"]] == [
         spec.battlefield_id for spec in BATTLEFIELDS
@@ -124,16 +103,14 @@ def test_catalog_is_a_lossless_projection_of_canonical_content(
         obj["kind"] == "door" and obj["position"] == [7, 7] and obj["is_open"] is False
         for obj in closed["preview"]["objects"]
     )
-    assert [row["deployment_id"] for row in payload["deployments"]] == [
-        spec.deployment_id for spec in DEPLOYMENTS
-    ]
-    assert [row["arena_id"] for row in payload["presets"]] == [
-        recipe.arena_id for recipe in LEGACY_RECIPES
+    assert payload["deployments"] == [
+        deployment.model_dump(mode="json")
+        for deployment in AUTHORED_DEPLOYMENTS
     ]
 
 
 def test_openapi_has_one_game_creation_and_native_ai_path(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """Deleted managed-service and scenario-start aliases cannot return."""
     response = client.get("/openapi.json")
@@ -142,10 +119,16 @@ def test_openapi_has_one_game_creation_and_native_ai_path(
     paths = set(response.json()["paths"])
     assert {
         "/game-creation/catalog",
-        "/game-creation/preflight",
+        "/game-creation/compose",
+        "/game-creation/preview",
         "/game-creation/start",
         "/game-creation/activate",
     }.issubset(paths)
+    assert "/game-creation/preflight" not in paths
+    assert not any(
+        path.startswith("/game-creation/preview/configurations/")
+        for path in paths
+    )
     assert "/ai/service" not in paths
     assert "/ai/sessions/{session_id}/service-ready" not in paths
     assert not {
@@ -159,102 +142,69 @@ def test_openapi_has_one_game_creation_and_native_ai_path(
     }.intersection(paths)
 
 
-def test_preflight_is_pure_and_reports_incompatibility(
-    client: ArenaApiClient,
+def test_compose_and_preview_are_pure_and_preserve_the_live_game(
+    client: ServerTestClient,
 ) -> None:
-    """Compatibility checks neither replace nor mutate the current live encounter."""
-    start = client.post(
-        "/game-creation/start",
-        json=_preset_start_request(),
-    )
-    assert start.status_code == 200
+    """Cold normalization and preview never replace the prepared encounter."""
+    _composition, _started = start_composed_game(client)
     encounter = event_server.sim.encounter
     game = event_server.sim.game
     entities_before = tuple(entity.uuid for entity in Entity.get_all_entities())
 
-    recipe = LEGACY_RECIPES[0]
-    valid = client.post(
-        "/game-creation/preflight",
-        json={
-            "hero_configuration_id": recipe.hero_configuration_id,
-            "monster_configuration_id": recipe.monster_configuration_id,
-            "battlefield_id": recipe.battlefield_id,
-            "deployment_id": recipe.deployment_id,
-        },
-    )
-    invalid = client.post(
-        "/game-creation/preflight",
-        json={
-            "hero_configuration_id": recipe.hero_configuration_id,
-            "monster_configuration_id": recipe.monster_configuration_id,
-            "battlefield_id": "battlefield.open_floor_bright",
-            "deployment_id": recipe.deployment_id,
-        },
+    composition = compose_and_preview(
+        client,
+        encounter_id="encounter.goblin_water_skirmish",
     )
 
-    assert valid.status_code == 200
-    assert valid.json()["admitted"] is True
-    assert invalid.status_code == 200
-    assert invalid.json()["admitted"] is False
-    assert {issue["code"] for issue in invalid.json()["issues"]} >= {"battlefield_mismatch"}
+    assert composition["compatibility"]["admitted"] is True
     assert event_server.sim.encounter is encounter
     assert event_server.sim.game is game
     assert tuple(entity.uuid for entity in Entity.get_all_entities()) == entities_before
 
 
 def test_human_vs_ai_start_wires_exact_sides_and_join_authority(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """Preparation wires native controllers without manufacturing AI sessions."""
-    response = client.post(
-        "/game-creation/start",
-        json=_preset_start_request(),
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    side_a_assignments = payload["side_a"]["entity_assignments"]
-    side_b_assignments = payload["side_b"]["entity_assignments"]
-    human_entity_uuids = [row["entity_uuid"] for row in side_a_assignments]
+    composition, payload = start_composed_game(client)
+    player_roster = roster_result(payload, "roster_1")
+    opposition_roster = roster_result(payload, "roster_2")
+    player_assignments = player_roster["entity_assignments"]
+    opposition_assignments = opposition_roster["entity_assignments"]
+    human_entity_uuids = [row["entity_uuid"] for row in player_assignments]
     assert payload["status"] == "prepared"
-    assert _controller_types(side_a_assignments) == {"human"}
-    assert _controller_types(side_b_assignments) == {"native_ai"}
-    assert all(set(row) == {"entity_uuid", "entity_name", "faction"} for row in side_a_assignments + side_b_assignments)
-    assert payload["side_a"]["policy_id"] is None
-    assert payload["side_a"]["policy_execution"] is None
-    assert payload["side_a"]["provider_id"] is None
-    assert payload["side_b"]["policy_id"] == "builtin.basic"
-    assert payload["side_b"]["policy_execution"] == "in_process"
-    assert payload["side_b"]["provider_id"] is None
+    assert _controller_types(player_assignments) == {"human"}
+    assert _controller_types(opposition_assignments) == {"native_ai"}
+    assert {
+        row["controller"] for row in player_assignments
+    } == {"human"}
+    assert all(
+        row["policy_id"] is None
+        and row["policy_execution"] is None
+        and row["provider_id"] is None
+        for row in player_assignments
+    )
+    assert {
+        (
+            row["policy_id"],
+            row["policy_execution"],
+            row["provider_id"],
+        )
+        for row in opposition_assignments
+    } == {("builtin.basic", "in_process", None)}
     assert event_server.sim.get_session_manager().sessions == {}
-    recipe = next(row for row in LEGACY_RECIPES if row.arena_id == "standard_skeleton_doors")
     objective_entities = client.get("/diagnostics/objective/bootstrap").json()["world"]["state"]["entities"]
-    side_a_ids = set(human_entity_uuids)
-    side_b_ids = {row["entity_uuid"] for row in side_b_assignments}
-    assert {
-        row["appearance"]["portrait_key"]
-        for row in objective_entities
-        if row["uuid"] in side_a_ids
-    } == {
-        f"{recipe.hero_configuration_id}::{member.actor_id}"
-        for member in next(
-            spec
-            for spec in HERO_CONFIGURATIONS
-            if spec.configuration_id == recipe.hero_configuration_id
-        ).members
+    objective_by_uuid = {row["uuid"]: row for row in objective_entities}
+    preview_members = {
+        member["member_id"]: member["entity"]
+        for roster in composition["preview"]["rosters"]
+        for member in roster["members"]
     }
-    assert {
-        row["appearance"]["portrait_key"]
-        for row in objective_entities
-        if row["uuid"] in side_b_ids
-    } == {
-        f"{recipe.monster_configuration_id}::{member.actor_id}"
-        for member in next(
-            spec
-            for spec in MONSTER_PARTY_CONFIGURATIONS
-            if spec.configuration_id == recipe.monster_configuration_id
-        ).members
-    }
+    for assignment in player_assignments + opposition_assignments:
+        objective = objective_by_uuid[assignment["entity_uuid"]]
+        preview = preview_members[assignment["member_id"]]
+        assert objective["content_ref"] == preview["content_ref"]
+        assert objective["appearance"] == preview["appearance"]
 
     session = client.post(
         "/session/create",
@@ -273,16 +223,14 @@ def test_human_vs_ai_start_wires_exact_sides_and_join_authority(
 
 
 def test_live_stream_preserves_cursor_order_during_recursive_movement(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """Movement and its sensory children reach clients in storage order."""
-    start = client.post(
-        "/game-creation/start",
-        json=_preset_start_request(),
-    )
-    assert start.status_code == 200
-    payload = start.json()
-    hero_uuid = payload["side_a"]["entity_assignments"][0]["entity_uuid"]
+    _composition, payload = start_composed_game(client)
+    hero_uuid = roster_result(
+        payload,
+        "roster_1",
+    )["entity_assignments"][0]["entity_uuid"]
 
     session = client.post(
         "/session/create",
@@ -355,58 +303,61 @@ def test_live_stream_preserves_cursor_order_during_recursive_movement(
 
 
 def test_codex_side_claims_exact_entities_over_native_ai_fallback(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """Configured Codex play is an exact-side lease with deterministic recovery."""
-    response = client.post(
-        "/game-creation/start",
-        json=_preset_start_request(side_a="codex", side_b="ai"),
+    _composition, payload = start_composed_game(
+        client,
+        controllers=("codex", "ai"),
     )
-
-    assert response.status_code == 200
-    payload = response.json()
+    player_roster = roster_result(payload, "roster_1")
+    opposition_roster = roster_result(payload, "roster_2")
+    player_assignments = player_roster["entity_assignments"]
+    opposition_assignments = opposition_roster["entity_assignments"]
+    player_assignment = player_assignments[0]
     assert payload["status"] == "prepared"
-    assert payload["side_a"]["codex_session_id"] is not None
-    assert payload["side_a"]["takeover_claim_id"] is not None
-    assert payload["side_a"]["policy_id"] == "builtin.basic"
-    assert payload["side_a"]["policy_execution"] == "in_process"
-    assert payload["side_a"]["provider_id"] is None
-    assert payload["side_b"]["policy_id"] == "builtin.basic"
-    assert payload["side_b"]["policy_execution"] == "in_process"
-    assert payload["side_b"]["provider_id"] is None
-    assert _controller_types(payload["side_a"]["entity_assignments"]) == {"codex"}
-    assert _controller_types(payload["side_b"]["entity_assignments"]) == {"native_ai"}
-    assert len(event_server.sim.native_ai_controllers) == 2
+    assert player_assignment["codex_session_id"] is not None
+    assert player_assignment["takeover_claim_id"] is not None
+    assert player_assignment["policy_id"] is None
+    assert player_assignment["policy_execution"] is None
+    assert player_assignment["provider_id"] is None
+    assert _controller_types(player_assignments) == {"codex"}
+    assert _controller_types(opposition_assignments) == {"native_ai"}
+    assert len(event_server.sim.native_ai_controllers) == (
+        len(player_assignments) + len(opposition_assignments)
+    )
     assert event_server.sim.get_session_manager().sessions.keys() == {
-        UUID(payload["side_a"]["codex_session_id"])
+        UUID(player_assignment["codex_session_id"])
     }
 
     claim = event_server.ai_takeover_manager.get_claim(
-        UUID(payload["side_a"]["takeover_claim_id"]),
+        UUID(player_assignment["takeover_claim_id"]),
     )
     assert claim is not None
     assert {str(entity_uuid) for entity_uuid in claim.entity_uuids} == {
-        row["entity_uuid"] for row in payload["side_a"]["entity_assignments"]
+        row["entity_uuid"] for row in player_assignments
     }
     released = client.post(
-        f"/ai/takeover/{payload['side_a']['takeover_claim_id']}/release",
+        f"/ai/takeover/{player_assignment['takeover_claim_id']}/release",
     )
     assert released.status_code == 200
-    assert _controller_types(payload["side_a"]["entity_assignments"]) == {
+    assert _controller_types(player_assignments) == {
         "native_ai"
     }
 
 
 def test_observer_join_has_no_entity_authority(
-    client: ArenaApiClient,
+    client: ServerTestClient,
 ) -> None:
     """Spectator identity can join the game but can never claim a combatant."""
-    start = client.post(
-        "/game-creation/start",
-        json=_preset_start_request(side_a="ai", side_b="ai"),
+    _composition, payload = start_composed_game(
+        client,
+        controllers=("ai", "ai"),
     )
-    assert start.status_code == 200
-    entity_uuid = start.json()["side_a"]["entity_assignments"][0]["entity_uuid"]
+    entity_uuid = roster_result(
+        payload,
+        "roster_1",
+    )["entity_assignments"][0]["entity_uuid"]
     session = client.post(
         "/session/create",
         json={"player_type": "observer", "name": "Match Observer"},

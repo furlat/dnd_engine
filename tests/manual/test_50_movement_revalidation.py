@@ -20,7 +20,7 @@ from dnd.ai.contracts.observation import (
     ObservationTileFact,
 )
 from dnd.ai.contracts.observation_replay import materialize_snapshot
-from server.agent_runtime.observation_projector import build_observation_snapshot
+from server.agent_runtime.observation_journal import build_observation_snapshot
 from dnd.ai.runtime.movement_revalidation import (
     MovementRevalidationCause,
     movement_revalidation_cause,

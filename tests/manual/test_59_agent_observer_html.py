@@ -118,7 +118,7 @@ def test_ai_readme_documents_agent_observer_contract() -> None:
     assert "GET /ai/sessions/{session_id}/agent-events?since=<cursor>&limit=<n>" in readme
     assert "GET /ai/sessions/{session_id}/agent-events/subscribe?since=<cursor>" in readme
     assert "agent_events_response.events" in readme
-    assert "ai.evaluation.agent_observer_projection" in readme
+    assert "ai.telemetry.observer_projection" in readme
     assert "AgentEventHistoryResponse" in readme
     assert "same local renderer as the live SSE stream" in readme
     assert "not gameplay authority" in readme

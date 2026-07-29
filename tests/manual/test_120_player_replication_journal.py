@@ -11,6 +11,7 @@ from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from server.world_contracts import (
     APIAppearance,
+    APIContentRefSnapshot,
     APIDirectionalBlockMap,
     APIEntitySummary,
     APIEntityVisibility,
@@ -193,6 +194,13 @@ def _world() -> SubjectiveReplicatedWorld:
     )
     entity = APIEntitySummary(
         uuid="hero",
+        content_ref=APIContentRefSnapshot(
+            pack_id="fixture.player_replication",
+            definition_kind="creature",
+            content_id="creature.hero",
+            content_version=1,
+            definition_contract_hash="a" * 64,
+        ),
         name="Hero",
         position=(0, 0),
         hp=10,
@@ -209,6 +217,7 @@ def _world() -> SubjectiveReplicatedWorld:
             portrait_key=None,
             presentation_kind="layered",
             visual_scale=1.0,
+            visual_scale_x=1.0,
             placeholder_tint=0xDDAA88,
             body_category="NakedBody",
             skin_tint=0xDDAA88,

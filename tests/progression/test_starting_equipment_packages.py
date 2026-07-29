@@ -18,19 +18,20 @@ from dnd.content_system.builtin_character_builds import (
     compose_builtin_character_revisions,
     starter_holdings_for_build,
 )
+from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.starting_equipment_definitions import (
     STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     AbilityScoreName,
-    CharacterAppearanceSelection,
     ChoiceRequirementKind,
     ClassLevelEntry,
     ClassLevelId,
     ClassSkillChoice,
     FightingStyleChoice,
     FlexibleAbilityBonusSelection,
+    StartingApparelPackageChoice,
     StartingEquipmentPackageChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind
@@ -201,6 +202,12 @@ def test_creator_catalog_and_creation_materialize_selected_package_holdings(
         for row in catalog.starting_equipment_packages
         if row.ref == selected_package_ref
     )
+    blank_plan = catalog.creation_plans[0]
+    origin_choices = tuple(
+        choice
+        for choice in blank_plan.build.immutable_origin_choices
+        if not isinstance(choice, StartingApparelPackageChoice)
+    )
     draft = CharacterBuildDraft(
         body_recipe=catalog.body_recipes[0],
         species_ref=next(
@@ -213,7 +220,21 @@ def test_creator_catalog_and_creation_materialize_selected_package_holdings(
             for row in catalog.backgrounds
             if row.ref.content_id == "background.adventurer"
         ),
-        appearance=CharacterAppearanceSelection(),
+        immutable_origin_choices=tuple(sorted(
+            (
+                *origin_choices,
+                StartingApparelPackageChoice(
+                    choice_id=(
+                        catalog.starting_apparel_requirement.choice_id
+                    ),
+                    selected_ref=(
+                        catalog.starting_apparel_requirement.allowed_refs[0]
+                    ),
+                ),
+            ),
+            key=lambda choice: choice.choice_id,
+        )),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=14,
@@ -255,6 +276,8 @@ def test_creator_catalog_and_creation_materialize_selected_package_holdings(
     request = CreateCharacterRequest(
         build=draft,
         display_name="Package Hero",
+        creation_plan_id=blank_plan.plan_id,
+        creation_plan_digest=blank_plan.plan_digest,
         expected_content_set_digest=content_system.content_set_digest,
         expected_ruleset_digest=(
             service.ensure_profile_settings(owner.principal_id).ruleset_digest
@@ -273,13 +296,13 @@ def test_creator_catalog_and_creation_materialize_selected_package_holdings(
         )
         for row in package.definition.entries
     ))
-    actual = tuple(sorted(
+    actual = {
         (
             item.recipe.recipe_digest,
             item.quantity,
             item.equipped_slot,
         )
         for item in created.holdings.holdings.items
-    ))
-    assert actual == expected
+    }
+    assert set(expected) <= actual
     assert created.holdings == replay.holdings

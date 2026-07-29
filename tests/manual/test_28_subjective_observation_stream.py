@@ -6,7 +6,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-import server.agent_runtime.observation_projector as observation_projector
+import server.agent_runtime.observation_journal as observation_projector
 from ai.knowledge import derive_agent_facts
 from dnd.ai.contracts.observation_replay import (
     apply_observation_frame,
@@ -15,6 +15,7 @@ from dnd.ai.contracts.observation_replay import (
 from dnd.ai.contracts.observation import ObservationFrame
 from dnd.actions_functional import execute_use_action
 from dnd.conditions import Invisible
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.controller import Controller, HumanController, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import (
@@ -24,6 +25,10 @@ from dnd.core.base_conditions import (
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import (
     Event,
@@ -39,21 +44,28 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import AutoHitModifier, AutoHitStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    AutoHitModifier,
+    AutoHitStatus,
+)
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.items.test_items import PullLeverAction, TrapLever
-from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
-from dnd.spells import MagicMissile
+from dnd.items.environment_interactables import PullLeverAction, TrapLever
+from dnd.items.environment_content import trap_lever_recipe
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+)
+from tests.spell_test_exports import MagicMissile
 from dnd.spells.enchantment import HoldPersonEffect
 from dnd.spells.illusion import HypnoticPatternEffect
 from dnd.spells.abjuration import ShieldBuff
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
-from dnd.utils import set_hp
+from tests.engine.support import set_hp
 from dnd.tiles import create_spike_zone
-from server.agent_runtime.observation_projector import (
+from server.agent_runtime.observation_journal import (
     _projection_cache,
     _completion_sequence_needs_immediate_projection,
     _event_should_patch_entity_hit_points,
@@ -100,11 +112,26 @@ def create_observation_game(
 ) -> tuple[TestClient, str, Entity, Entity, Encounter]:
     """Create an active game with one session controlling the hero side."""
     reset_observation_state()
-    hero = create_goblin(name="Observation Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Observation Skeleton", position=(2, 1), faction="monsters")
+    hero = _materialize_observation_actor(
+        "goblin",
+        name="Observation Hero",
+        position=(1, 1),
+        faction="heroes",
+    )
+    monster = _materialize_observation_actor(
+        "skeleton",
+        name="Observation Skeleton",
+        position=(2, 1),
+        faction="monsters",
+    )
     extra_hero = None
     if second_hero:
-        extra_hero = create_goblin(name="Observation Ally", position=(1, 2), faction="heroes")
+        extra_hero = _materialize_observation_actor(
+            "goblin",
+            name="Observation Ally",
+            position=(1, 2),
+            faction="heroes",
+        )
     if hidden_monster:
         monster.add_condition(Invisible(source_entity_uuid=monster.uuid, target_entity_uuid=monster.uuid))
 
@@ -131,6 +158,33 @@ def create_observation_game(
         game.assign_entity(extra_hero.uuid, session.session_id)
 
     return TestClient(app), str(session.session_id), hero, monster, encounter
+
+
+def _materialize_observation_actor(
+    creature_id: str,
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Materialize one exact bestiary actor with its authored possessions."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=(
+                "tests.subjective_observation."
+                f"{creature_id}.actor_{runtime_entity_uuid.hex}"
+            ),
+        ),
+        possession_mode=(
+            CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
+    )
 
 
 def bootstrap_player_replication(client: TestClient, session_id: str) -> dict:
@@ -627,7 +681,7 @@ def test_condition_application_frame_matches_post_application_snapshot() -> None
 
     expected = {"Paralyzed", "Hold Person"}
     expected_semantic_keys = {
-        f"{type(condition).__module__}.{type(condition).__qualname__}"
+        condition.get_semantic_key()
         for condition in monster.active_conditions.values()
         if condition.name in expected
     }
@@ -1399,16 +1453,21 @@ def test_visible_lever_charge_and_linked_tile_removals_replay_from_events() -> N
     spike_tiles, spike_handler = create_spike_zone({(3, 2), (4, 2)})
     for tile in spike_tiles:
         grid.set_tile(*tile.position, tile=tile, fire_event=False)
-    lever_action = PullLeverAction(
-        source_entity_uuid=uuid4(),
-        trap_handler_uuid=spike_handler.uuid,
-        trap_tile_uuids=[tile.uuid for tile in spike_tiles],
-        template=True,
+    lever = materialize_item(
+        trap_lever_recipe(charges=1),
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=TrapLever,
     )
-    lever = TrapLever(
-        source_entity_uuid=uuid4(),
-        use_action_templates=[lever_action],
-        charges=1,
+    lever.use_action_templates.append(
+        lever.bind_dynamic_use_action(
+            PullLeverAction(
+                source_entity_uuid=lever.uuid,
+                trap_handler_uuid=spike_handler.uuid,
+                trap_tile_uuids=[tile.uuid for tile in spike_tiles],
+                template=True,
+            ),
+        ),
     )
     grid.place_object(lever.uuid, (1, 2))
     Entity.update_all_entities_senses(max_distance=20)
@@ -1550,7 +1609,7 @@ def test_damage_ending_control_semantics_replay_and_redact_with_visibility() -> 
         client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     )
 
-    semantic_key = "dnd.spells.illusion.HypnoticPatternEffect"
+    semantic_key = condition.get_semantic_key()
     for visible in (state.known_entities[str(monster.uuid)], fresh.known_entities[str(monster.uuid)]):
         assert visible.condition_facts is not None
         fact = next(row for row in visible.condition_facts if row.semantic_key == semantic_key)
@@ -1635,8 +1694,18 @@ def test_unseen_enemy_movement_does_not_leak_live_position_or_identity() -> None
     """Seeing a movement event area must not reveal an unseen moving entity."""
     reset_observation_state()
     client = TestClient(app)
-    hero = create_goblin(name="Hidden Observation Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Observation Skeleton", position=(4, 1), faction="monsters")
+    hero = _materialize_observation_actor(
+        "goblin",
+        name="Hidden Observation Hero",
+        position=(1, 1),
+        faction="heroes",
+    )
+    monster = _materialize_observation_actor(
+        "skeleton",
+        name="Observation Skeleton",
+        position=(4, 1),
+        faction="monsters",
+    )
     hero.add_condition(Invisible(source_entity_uuid=hero.uuid, target_entity_uuid=hero.uuid))
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -1908,7 +1977,7 @@ def test_subjective_combat_logs_scrub_nested_hidden_identity_payloads() -> None:
 
 def test_repeated_projectile_keeps_declared_target_identity_after_lethal_hit() -> None:
     """Later projectiles retain a target identified when the cast was declared."""
-    arena = create_ai_validation_arena("multi_projectile_no_aoe_lab")
+    arena = assemble_authored_encounter("multi_projectile_no_aoe_lab")
     sim.encounter = arena.encounter
     game = sim.create_game_session(arena.encounter)
     session = sim.get_session_manager().create_session(PlayerType.AI, "Projectile Agent")

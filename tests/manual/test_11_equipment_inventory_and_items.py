@@ -5,14 +5,18 @@ from uuid import UUID, uuid4
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem, ItemChargeConsumptionEvent
+from dnd.blocks.base_item import (
+    BaseItem,
+    ItemChargeConsumptionEvent,
+    UsableItem,
+)
 from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_actions import ActionPresentationKind
+from dnd.core.base_actions import ActionEvent, ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.condition_types import ConditionTag
@@ -25,7 +29,8 @@ from dnd.core.events import (
     RangeType,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import AdvantageStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
@@ -36,6 +41,7 @@ from dnd.items.consumables import (
 )
 from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
 from dnd.items.environment import DirectionalDoor as TutorialDoor
+from dnd.items.environment_content import directional_door_recipe
 from dnd.items.weapons import (
     GREATSWORD_RECIPE,
     SHORTBOW_RECIPE,
@@ -628,15 +634,21 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     assert skirmisher.equip_item(skirmisher_shield.uuid, WeaponSlot.MELEE_OFF)
     assert skirmisher.equip_item(bow.uuid, WeaponSlot.RANGED_MAIN)
 
-    assert skirmisher.equipment.weapon_melee_main is sword
-    assert skirmisher.equipment.weapon_melee_off is skirmisher_shield
-    assert skirmisher.equipment.weapon_ranged_main is bow
+    melee_main = skirmisher.equipment.weapon_melee_main
+    melee_off = skirmisher.equipment.weapon_melee_off
+    ranged_main = skirmisher.equipment.weapon_ranged_main
+    assert melee_main is not None
+    assert melee_off is not None
+    assert ranged_main is not None
+    assert melee_main is sword
+    assert melee_off is skirmisher_shield
+    assert ranged_main is bow
     assert WeaponProperty.TWO_HANDED in bow.properties
     assert WeaponProperty.RANGED in bow.properties
     bow_state = (
-        skirmisher.equipment.weapon_melee_main.name,
-        skirmisher.equipment.weapon_melee_off.name,
-        skirmisher.equipment.weapon_ranged_main.name,
+        melee_main.name,
+        melee_off.name,
+        ranged_main.name,
         WeaponProperty.TWO_HANDED in bow.properties,
         WeaponProperty.RANGED in bow.properties,
     )
@@ -644,16 +656,24 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     assert skirmisher.equip_item(main_crossbow.uuid, WeaponSlot.RANGED_MAIN)
     assert skirmisher.equip_item(off_crossbow.uuid, WeaponSlot.RANGED_OFF)
 
-    assert skirmisher.equipment.weapon_melee_main is sword
-    assert skirmisher.equipment.weapon_melee_off is skirmisher_shield
-    assert skirmisher.equipment.weapon_ranged_main is main_crossbow
-    assert skirmisher.equipment.weapon_ranged_off is off_crossbow
+    melee_main = skirmisher.equipment.weapon_melee_main
+    melee_off = skirmisher.equipment.weapon_melee_off
+    ranged_main = skirmisher.equipment.weapon_ranged_main
+    ranged_off = skirmisher.equipment.weapon_ranged_off
+    assert melee_main is not None
+    assert melee_off is not None
+    assert ranged_main is not None
+    assert ranged_off is not None
+    assert melee_main is sword
+    assert melee_off is skirmisher_shield
+    assert ranged_main is main_crossbow
+    assert ranged_off is off_crossbow
     assert skirmisher.inventory.has_item(bow.uuid)
     parallel_state = (
-        skirmisher.equipment.weapon_melee_main.name,
-        skirmisher.equipment.weapon_melee_off.name,
-        skirmisher.equipment.weapon_ranged_main.name,
-        skirmisher.equipment.weapon_ranged_off.name,
+        melee_main.name,
+        melee_off.name,
+        ranged_main.name,
+        ranged_off.name,
         skirmisher.inventory.has_item(bow.uuid),
     )
 
@@ -709,6 +729,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         HEALING_POTION_RECIPE,
         patient.uuid,
         origin=ItemRuntimeOrigin.STARTER,
+        expected_type=UsableItem,
     )
     potion.stack_count = 2
     put_in_inventory(patient, potion)
@@ -734,7 +755,8 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
 
     first_drink = execute_use_action(patient, potion.uuid, "Drink Potion")
 
-    assert first_drink is not None and not first_drink.canceled
+    assert isinstance(first_drink, ActionEvent)
+    assert not first_drink.canceled
     assert first_drink.presentation_kind is ActionPresentationKind.DRINK
     assert patient.get_hp() == full_hp
     assert patient.action_economy.bonus_actions.normalized_score == 0
@@ -758,6 +780,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
     assert not charge_completion.item_destroyed
     assert charge_completion.parent_lineage == first_drink.lineage_uuid
     assert charge_completion.lineage_uuid in first_drink.children_lineages
+    assert charge_completion.parent_event is not None
     charge_parent = EventQueue.get_event_by_uuid(charge_completion.parent_event)
     assert charge_parent is not None
     assert charge_parent.phase is EventPhase.EFFECT
@@ -790,7 +813,12 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         BaseBlock.get(potion.uuid) is not None,
     )
 
-    door = TutorialDoor(source_entity_uuid=uuid4())
+    door = materialize_item(
+        directional_door_recipe(display_name="Tutorial Door"),
+        patient.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=TutorialDoor,
+    )
     door.place_on_grid((1, 0))
     patient.update_entity_senses(max_distance=5)
 
@@ -871,7 +899,8 @@ def test_condition_potion_keeps_presentation_and_condition_log_in_one_lineage() 
 
     completion = execute_use_action(actor, potion.uuid, "Drink Haste Potion")
 
-    assert completion is not None and not completion.canceled
+    assert isinstance(completion, ActionEvent)
+    assert not completion.canceled
     assert completion.presentation_kind is ActionPresentationKind.DRINK
     assert completion.model_dump(mode="json")["presentation_kind"] == "drink"
     assert "Haste" in actor.active_conditions

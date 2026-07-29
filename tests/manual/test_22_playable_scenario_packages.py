@@ -4,9 +4,9 @@ from uuid import uuid4
 
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.encounter import Encounter, EncounterState, TurnState
-from dnd.scenarios.gatehouse import (
+from tests.manual.gatehouse_test_support import (
     ScenarioHumanController,
     ScenarioPassController,
     add_melee_auto_hit,

@@ -33,12 +33,13 @@ from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.spell_items import fireball_scroll_recipe, fire_bolt_scroll_recipe
-from dnd.items.test_reactions import PrepareIntercept
+from tests.manual.reactive_fixture_support import PrepareIntercept
 from dnd.items.weapons import CLUB_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.spells.evocation import Fireball
@@ -732,10 +733,10 @@ def test_entity_row_reports_target_cost_unaffordable(
     assert not any(candidate.is_attack for candidate in legal.entity_actions)
 
 
-def test_unaffordable_contextual_self_item_stays_sparse_without_validation(
+def test_unaffordable_contextual_self_item_stays_stable_without_validation(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """A disabled self-use item does not run its action prerequisite."""
+    """A disabled self-use item projects status without prerequisite work."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
     potion = materialize_item(
@@ -748,18 +749,28 @@ def test_unaffordable_contextual_self_item_stays_sparse_without_validation(
     monkeypatch.setattr(BaseAction, "pre_validate", unexpected_discovery_work)
     deny_nonreaction_actions(hero)
 
-    for legal_only in (False, True):
-        available = get_available_actions(hero, legal_only=legal_only)
-        assert not any(
-            action.source_item_uuid == potion.uuid
-            for action in available.all_actions
-        )
+    available = get_available_actions(hero)
+    rows = [
+        action
+        for action in available.all_actions
+        if action.source_item_uuid == potion.uuid
+    ]
+    assert len(rows) == 1
+    assert rows[0].availability_status == "source_unaffordable"
+    assert not rows[0].can_afford
+    assert rows[0].valid_targets == []
+
+    legal_only = get_available_actions(hero, legal_only=True)
+    assert not any(
+        action.source_item_uuid == potion.uuid
+        for action in legal_only.all_actions
+    )
 
 
-def test_unaffordable_contextual_entity_item_avoids_target_pool_work(
+def test_unaffordable_contextual_entity_item_stays_stable_without_target_work(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """A disabled entity-target scroll is omitted before target enumeration."""
+    """A disabled entity scroll projects status before target enumeration."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
     scroll = materialize_item(
@@ -773,18 +784,28 @@ def test_unaffordable_contextual_entity_item_avoids_target_pool_work(
     monkeypatch.setattr(Entity, "_compute_target_pool", unexpected_discovery_work)
     deny_nonreaction_actions(hero)
 
-    for legal_only in (False, True):
-        available = get_available_actions(hero, legal_only=legal_only)
-        assert not any(
-            action.source_item_uuid == scroll.uuid
-            for action in available.all_actions
-        )
+    available = get_available_actions(hero)
+    rows = [
+        action
+        for action in available.all_actions
+        if action.source_item_uuid == scroll.uuid
+    ]
+    assert len(rows) == 1
+    assert rows[0].availability_status == "source_unaffordable"
+    assert not rows[0].can_afford
+    assert rows[0].valid_targets == []
+
+    legal_only = get_available_actions(hero, legal_only=True)
+    assert not any(
+        action.source_item_uuid == scroll.uuid
+        for action in legal_only.all_actions
+    )
 
 
-def test_unaffordable_contextual_aoe_item_avoids_position_preview_work(
+def test_unaffordable_contextual_aoe_item_stays_stable_without_preview_work(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """A disabled AoE scroll is omitted before position enumeration."""
+    """A disabled AoE scroll projects status before position enumeration."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
     scroll = materialize_item(
@@ -803,12 +824,22 @@ def test_unaffordable_contextual_aoe_item_avoids_position_preview_work(
     )
     deny_nonreaction_actions(hero)
 
-    for legal_only in (False, True):
-        available = get_available_actions(hero, legal_only=legal_only)
-        assert not any(
-            action.source_item_uuid == scroll.uuid
-            for action in available.all_actions
-        )
+    available = get_available_actions(hero)
+    rows = [
+        action
+        for action in available.all_actions
+        if action.source_item_uuid == scroll.uuid
+    ]
+    assert len(rows) == 1
+    assert rows[0].availability_status == "source_unaffordable"
+    assert not rows[0].can_afford
+    assert rows[0].valid_targets == []
+
+    legal_only = get_available_actions(hero, legal_only=True)
+    assert not any(
+        action.source_item_uuid == scroll.uuid
+        for action in legal_only.all_actions
+    )
 
 
 def test_execute_by_index_instantiates_and_pays_costs(capsys) -> None:

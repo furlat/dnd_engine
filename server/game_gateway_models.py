@@ -74,8 +74,13 @@ class CreateHostedGameRequest(GatewayModel):
     principal_capability: str = Field(min_length=32, description="Owner identity capability.")
     display_name: str = Field(min_length=1, max_length=120, description="Directory display name.")
     creation: GameCreationStartRequest = Field(description="Canonical worker game-creation request.")
-    owner_side: Literal["side_a", "side_b", "observer"] = Field(
-        description="Side controlled by the owner, or observer-only attachment.",
+    owner_roster_slot_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Roster whose human-controlled members belong to the owner; "
+            "null creates an observer-only attachment."
+        ),
     )
     visibility_policy: VisibilityPolicy = Field(
         default=VisibilityPolicy.PRIVATE,
@@ -214,12 +219,13 @@ class ObserveHostedGameResponse(GatewayModel):
 
 
 class CreateAgentGrantRequest(GatewayModel):
-    """Authorize one remote agent principal to control a configured Codex side."""
+    """Authorize one remote agent for one configured Codex roster member."""
 
     principal_id: UUID = Field(description="Game administrator issuing the grant.")
     principal_capability: str = Field(min_length=32, description="Administrator identity capability.")
     agent_principal_id: UUID = Field(description="Remote agent identity receiving the grant.")
-    side_id: Literal["side_a", "side_b"] = Field(description="Externally controlled side.")
+    roster_slot_id: str = Field(min_length=1)
+    member_id: str = Field(min_length=1)
 
 
 class CreateAgentGrantResponse(GatewayModel):

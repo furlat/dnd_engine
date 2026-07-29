@@ -9,13 +9,16 @@ from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary_content import (
+    BESTIARY_CREATURE_DECLARATIONS_BY_ID,
+)
 from server import event_server
 from dnd.ai.contracts.observation import SubjectiveWorldState
 from dnd.ai.contracts.observation_replay import (
     apply_observation_frame,
     materialize_snapshot,
 )
-from server.agent_runtime.observation_projector import (
+from server.agent_runtime.observation_journal import (
     _event_should_patch_entity_hit_points,
     _event_should_patch_referenced_entities,
 )
@@ -24,18 +27,28 @@ from server.world_projection import (
     project_encounter,
     project_entity_summary,
 )
-from server.arena_mode import reset_standard_arena_runtime
+from tests.manual.server_test_client import reset_server_test_runtime
 from server.session import PlayerType
 
 
 def _create_life_state_game() -> tuple[TestClient, str, Entity, Entity, Encounter]:
     """Create one visible controlled actor and an opposing observer target."""
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
     get_map().create_rectangle(0, 0, 6, 4)
 
-    hero = create_goblin(name="Lifecycle Hero", position=(1, 1), faction="heroes")
+    hero = create_goblin(
+        name="Lifecycle Hero",
+        position=(1, 1),
+        faction="heroes",
+        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
+    )
     hero.uses_death_saves = True
-    monster = create_skeleton(name="Lifecycle Skeleton", position=(2, 1), faction="monsters")
+    monster = create_skeleton(
+        name="Lifecycle Skeleton",
+        position=(2, 1),
+        faction="monsters",
+        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
+    )
     Entity.update_all_entities_senses(max_distance=20)
 
     encounter = Encounter(name="Lifecycle Contract", source_entity_uuid=hero.uuid)

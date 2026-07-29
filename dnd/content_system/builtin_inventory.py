@@ -25,17 +25,29 @@ from dnd.content_system.character_origin_definitions import (
     NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS,
     SRD_CHARACTER_ORIGIN_DECLARATIONS,
 )
+from dnd.content_system.origin_feature_definitions import (
+    SRD_PASSIVE_ORIGIN_FEATURE_DECLARATIONS,
+)
 from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_DECLARATIONS,
 )
 from dnd.content_system.condition_effect_population import (
     populate_builtin_condition_effects,
 )
+from dnd.content_system.dragonborn_origin_definitions import (
+    DRAGONBORN_ANCESTRY_DECLARATIONS,
+)
 from dnd.content_system.reaction_definitions import (
     REACTION_BEHAVIOR_DECLARATIONS,
 )
 from dnd.content_system.starting_equipment_definitions import (
     STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
+)
+from dnd.content_system.starting_apparel_definitions import (
+    STARTING_APPAREL_PACKAGE_DECLARATIONS,
+)
+from dnd.content_system.acolyte_starting_holdings import (
+    ACOLYTE_STARTING_HOLDINGS_DECLARATION,
 )
 from dnd.core.content.recipe_presets import ContentRecipePreset
 from dnd.core.content.registration import ContentDeclaration
@@ -46,6 +58,7 @@ from dnd.items.armors import (
     NEURODRAGON_ARMOR_DECLARATIONS,
     SRD_ARMOR_DECLARATIONS,
 )
+from dnd.items.acolyte_gear import SRD_ACOLYTE_GEAR_DECLARATIONS
 from dnd.items.authored_variant_presets import (
     NEURODRAGON_AUTHORED_ITEM_RECIPE_PRESETS,
 )
@@ -72,9 +85,19 @@ from dnd.monsters.circus_fighter_items import (
 from dnd.monsters.multiattack_definitions import (
     SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
 )
+from dnd.monsters.configured_srd_creatures import (
+    CONFIGURED_SRD_CREATURE_DECLARATIONS,
+)
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
 from dnd.monsters.srd_roster_items import (
     SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
+)
+from dnd.origins.dragonborn import (
+    DRAGONBORN_BREATH_WEAPON_DECLARATION,
+)
+from dnd.origins.halfling import HALFLING_LUCKY_DECLARATION
+from dnd.origins.half_orc import (
+    HALF_ORC_RELENTLESS_ENDURANCE_DECLARATION,
 )
 from dnd.premade_characters import NEURODRAGON_PREMADE_CREATURE_DECLARATIONS
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
@@ -88,6 +111,11 @@ from dnd.spells.conjuration import (
 )
 from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_DECLARATIONS,
+)
+from dnd.spells.infernal import (
+    HELLISH_REBUKE_REACTION_DECLARATION,
+    HELLISH_REBUKE_SPELL_DECLARATION,
+    THAUMATURGY_SPELL_DECLARATION,
 )
 
 
@@ -104,16 +132,27 @@ _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY: tuple[
     *SORCERER_STRUCTURAL_FEATURE_DECLARATIONS,
     *SRD_CHARACTER_ORIGIN_DECLARATIONS,
     *NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS,
+    *SRD_PASSIVE_ORIGIN_FEATURE_DECLARATIONS,
+    *DRAGONBORN_ANCESTRY_DECLARATIONS,
+    DRAGONBORN_BREATH_WEAPON_DECLARATION,
+    HALF_ORC_RELENTLESS_ENDURANCE_DECLARATION,
+    HALFLING_LUCKY_DECLARATION,
     *STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
+    *STARTING_APPAREL_PACKAGE_DECLARATIONS,
+    ACOLYTE_STARTING_HOLDINGS_DECLARATION,
     *BARBARIAN_PROGRESSION_DECLARATIONS,
     *FIGHTER_PROGRESSION_DECLARATIONS,
     *SORCERER_PROGRESSION_DECLARATIONS,
     COUNTERSPELL_REACTION_DECLARATION,
     SHIELD_REACTION_DECLARATION,
     *LEARNED_REACTION_SPELL_DECLARATIONS,
+    HELLISH_REBUKE_REACTION_DECLARATION,
+    HELLISH_REBUKE_SPELL_DECLARATION,
+    THAUMATURGY_SPELL_DECLARATION,
     *NEURODRAGON_ARMOR_DECLARATIONS,
     *NEURODRAGON_BESTIARY_ITEM_DECLARATIONS,
     *NEURODRAGON_CIRCUS_ITEM_DECLARATIONS,
+    *CONFIGURED_SRD_CREATURE_DECLARATIONS,
     *BESTIARY_CREATURE_DECLARATIONS,
     *NEURODRAGON_CONSUMABLE_DECLARATIONS,
     *NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS,
@@ -128,6 +167,7 @@ _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY: tuple[
     *SPELL_CONTENT_DECLARATIONS,
     *SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
     *SRD_ARMOR_DECLARATIONS,
+    *SRD_ACOLYTE_GEAR_DECLARATIONS,
     *SRD_CREATURE_POSSESSION_ITEM_DECLARATIONS,
     *SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
     *SRD_CREATURE_DECLARATIONS,

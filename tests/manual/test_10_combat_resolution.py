@@ -2,7 +2,7 @@
 
 from uuid import UUID, uuid4
 
-from dnd.actions import Attack, Move, Shove
+from dnd.actions import Attack, Move, Shove, ShoveEvent
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -15,13 +15,12 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.creature_types import Size
 from dnd.core.modifiers import (
     AutoHitModifier,
     AutoHitStatus,
     CriticalModifier,
     CriticalStatus,
-    DamageType,
-    Size,
 )
 from dnd.core.values import BaseValue
 from dnd.conditions import Incapacitated, Prone
@@ -127,6 +126,8 @@ def test_first_combat_example_prints_visible_hit_damage_and_heal(capsys) -> None
 
     clear_melee_attack_modifier(attacker, hit_modifier)
     assert event is not None
+    assert event.damage_rolls is not None
+    assert event.attack_outcome is not None
     damage_roll = event.damage_rolls[0]
     target_hp_after_hit = target.get_hp()
     healing = target.receive_healing(
@@ -254,6 +255,7 @@ def test_successful_attack_rolls_damage_spends_action_and_can_be_healed(capsys) 
     assert event is not None
     assert event.phase == EventPhase.COMPLETION
     assert event.damage_rolls
+    assert event.attack_outcome is not None
     assert target.get_hp() < target_hp_before
     assert attacker.action_economy.actions.normalized_score == 0
     assert EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
@@ -447,7 +449,7 @@ def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(
             target_entity_uuid=target.uuid,
         ).apply()
 
-    assert shove_event is not None
+    assert isinstance(shove_event, ShoveEvent)
     assert shove_event.phase == EventPhase.COMPLETION
     assert shove_event.contest_success is True
     assert shove_event.push_distance == 10

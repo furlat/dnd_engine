@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -22,6 +22,10 @@ from server.game_directory.migrations import (
     configure_connection,
 )
 from server.game_directory.repository import GameDirectoryRepository
+from dnd.scenarios.encounter_catalog import (
+    AUTHORED_ENCOUNTER_RECIPES,
+    AUTHORED_ROSTER_RECIPES,
+)
 
 NOW = datetime(2026, 7, 21, 18, 0, tzinfo=UTC)
 PEPPER = b"test-only-directory-pepper"
@@ -69,9 +73,6 @@ def test_fresh_migration_configures_sqlite_and_is_restart_idempotent(tmp_path: P
         "directory_events",
         "game_artifacts",
         "game_summaries",
-        "rating_runs",
-        "rating_admissions",
-        "rating_estimates",
         "player_identities",
         "principal_credentials",
         "characters",
@@ -84,7 +85,13 @@ def test_fresh_migration_configures_sqlite_and_is_restart_idempotent(tmp_path: P
         "character_settlements",
         "profile_settings",
         "directory_mutation_receipts",
+        "character_presentation_preferences",
     }.issubset(foreign_key_tables)
+    assert {
+        "rating_runs",
+        "rating_admissions",
+        "rating_estimates",
+    }.isdisjoint(foreign_key_tables)
 
     restarted = _open(database_path)
     restarted.close()
@@ -95,6 +102,118 @@ def test_fresh_migration_configures_sqlite_and_is_restart_idempotent(tmp_path: P
     ).fetchone()[0]
     connection.close()
     assert migration_count == LATEST_SCHEMA_VERSION
+
+
+def test_saved_resource_identity_migration_preserves_v12_rows(
+    tmp_path: Path,
+) -> None:
+    """V13 keeps saved rows while decoupling resource and recipe identities."""
+
+    database_path = tmp_path / "directory-v12.sqlite3"
+    connection = sqlite3.connect(database_path, isolation_level=None)
+    configure_connection(connection, 5_000)
+    apply_migrations(connection, NOW, migrations=MIGRATIONS[:12])
+    principal_id = str(uuid4())
+    timestamp = NOW.isoformat().replace("+00:00", "Z")
+    connection.execute(
+        """
+        INSERT INTO principals(
+            principal_id, principal_kind, display_name, credential_hash,
+            created_at, last_seen_at, disabled_at, metadata_json,
+            metadata_digest
+        ) VALUES (?, 'human', 'Migration Owner', NULL, ?, NULL, NULL, '{}', ?)
+        """,
+        (principal_id, timestamp, canonical_digest({})),
+    )
+    roster = AUTHORED_ROSTER_RECIPES[0]
+    encounter = AUTHORED_ENCOUNTER_RECIPES[0]
+    roster_json = canonical_json(roster.model_dump(mode="json"))
+    encounter_json = canonical_json(encounter.model_dump(mode="json"))
+    connection.execute(
+        """
+        INSERT INTO saved_encounter_rosters(
+            roster_id, owner_principal_id, schema_version, title,
+            recipe_json, recipe_digest, revision, created_at, updated_at
+        ) VALUES (?, ?, 1, ?, ?, ?, 1, ?, ?)
+        """,
+        (
+            roster.roster_id,
+            principal_id,
+            roster.title,
+            roster_json,
+            roster.recipe_digest,
+            timestamp,
+            timestamp,
+        ),
+    )
+    connection.execute(
+        """
+        INSERT INTO saved_encounters(
+            encounter_id, owner_principal_id, schema_version, title,
+            recipe_json, recipe_digest, revision, created_at, updated_at
+        ) VALUES (?, ?, 1, ?, ?, ?, 1, ?, ?)
+        """,
+        (
+            encounter.encounter_id,
+            principal_id,
+            encounter.title,
+            encounter_json,
+            encounter.recipe_digest,
+            timestamp,
+            timestamp,
+        ),
+    )
+
+    assert apply_migrations(connection, NOW) == LATEST_SCHEMA_VERSION
+    roster_columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(saved_encounter_rosters)",
+        ).fetchall()
+    }
+    encounter_columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(saved_encounters)",
+        ).fetchall()
+    }
+    migrated_roster = connection.execute(
+        """
+        SELECT saved_roster_id, recipe_digest
+        FROM saved_encounter_rosters
+        """,
+    ).fetchone()
+    migrated_encounter = connection.execute(
+        """
+        SELECT saved_encounter_id, recipe_digest
+        FROM saved_encounters
+        """,
+    ).fetchone()
+    connection.close()
+
+    assert "saved_roster_id" in roster_columns
+    assert "roster_id" not in roster_columns
+    assert "saved_encounter_id" in encounter_columns
+    assert "encounter_id" not in encounter_columns
+    assert tuple(migrated_roster) == (
+        roster.roster_id,
+        roster.recipe_digest,
+    )
+    assert tuple(migrated_encounter) == (
+        encounter.encounter_id,
+        encounter.recipe_digest,
+    )
+
+    repository = _open(database_path)
+    assert repository.get_saved_encounter_roster(
+        UUID(principal_id),
+        roster.roster_id,
+    ).recipe == roster
+    assert repository.get_saved_encounter(
+        UUID(principal_id),
+        encounter.encounter_id,
+    ).recipe == encounter
+    repository.close()
 
 
 def test_schema2_definition_migration_preserves_v1_and_rejects_unknown_versions(

@@ -15,7 +15,6 @@ from dnd.classes.content_factories import materialize_authored_class_root
 from dnd.content_system.builtin_character_builds import (
     BUILTIN_PREMADE_BUILDS,
     BuiltinCharacterBuild,
-    starter_holdings_for_build,
 )
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -48,17 +47,6 @@ FIGHTER_2_SORCERER_3_SPELLBLADE_PREMADE_ID = (
 )
 SORCERER_L5_STANDARD_TORCH_PREMADE_ID = (
     "hero.sorcerer_l5_standard_torch"
-)
-
-PREMADE_LEVEL_5_SORCERER_SPELLS = (
-    "Fire Bolt",
-    "Ray of Frost",
-    "Magic Missile",
-    "Burning Hands",
-    "Scorching Ray",
-    "Hold Person",
-    "Fireball",
-    "Lightning Bolt",
 )
 
 PREMADE_CHARACTER_BUILDS: MappingProxyType[
@@ -235,45 +223,18 @@ NEURODRAGON_PREMADE_CREATURE_DECLARATIONS: tuple[
     SORCERER_L5_STANDARD_TORCH_DECLARATION,
 )
 
-BARBARIAN_L5_BERSERKER_TORCH_STARTER_HOLDINGS = (
-    starter_holdings_for_build(
-        PREMADE_CHARACTER_BUILDS[
-            BARBARIAN_L5_BERSERKER_TORCH_PREMADE_ID
-        ],
-    )
-)
-FIGHTER_L5_SHIELD_TORCH_STARTER_HOLDINGS = (
-    starter_holdings_for_build(
-        PREMADE_CHARACTER_BUILDS[
-            FIGHTER_L5_SHIELD_TORCH_PREMADE_ID
-        ],
-    )
-)
-SORCERER_L5_STANDARD_TORCH_STARTER_HOLDINGS = (
-    starter_holdings_for_build(
-        PREMADE_CHARACTER_BUILDS[
-            SORCERER_L5_STANDARD_TORCH_PREMADE_ID
-        ],
-    )
-)
-
-
 __all__ = [
     "BARBARIAN_L5_BERSERKER_TORCH_DECLARATION",
     "BARBARIAN_L5_BERSERKER_TORCH_PREMADE_ID",
     "BARBARIAN_L5_BERSERKER_TORCH_RECIPE",
-    "BARBARIAN_L5_BERSERKER_TORCH_STARTER_HOLDINGS",
     "FIGHTER_L5_SHIELD_TORCH_DECLARATION",
     "FIGHTER_2_SORCERER_3_SPELLBLADE_PREMADE_ID",
     "FIGHTER_L5_SHIELD_TORCH_PREMADE_ID",
     "FIGHTER_L5_SHIELD_TORCH_RECIPE",
-    "FIGHTER_L5_SHIELD_TORCH_STARTER_HOLDINGS",
     "NEURODRAGON_PREMADE_CREATURE_DECLARATIONS",
     "PREMADE_CHARACTER_BUILDS",
-    "PREMADE_LEVEL_5_SORCERER_SPELLS",
     "PremadeCreatureParameters",
     "SORCERER_L5_STANDARD_TORCH_DECLARATION",
     "SORCERER_L5_STANDARD_TORCH_PREMADE_ID",
     "SORCERER_L5_STANDARD_TORCH_RECIPE",
-    "SORCERER_L5_STANDARD_TORCH_STARTER_HOLDINGS",
 ]

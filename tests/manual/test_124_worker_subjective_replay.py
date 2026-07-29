@@ -13,7 +13,7 @@ from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
 from server.game_summary_store import WorkerGameSummaryStore
-from server.live_replication import create_stream_scene, execute_stream_attack
+from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
 from server.player_replay_capture import (
     SubjectiveReplayCaptureFrozenError,
     SubjectiveReplayCaptureKey,
@@ -43,9 +43,12 @@ def test_worker_freezes_recorded_subjective_inputs_without_event_reconstruction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     hosted_game_id = uuid4()
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(hosted_game_id))
     scene = create_stream_scene()
     summary_store = WorkerGameSummaryStore()
+    summary_store.bind_directory_game_id(
+        scene.encounter.uuid,
+        hosted_game_id,
+    )
     summary_store.capture_active_encounter(scene.encounter)
     capture_store = SubjectiveReplayCaptureStore()
     runtime = CanonicalSubjectiveReplicationRuntime(
@@ -169,14 +172,16 @@ def test_worker_freezes_recorded_subjective_inputs_without_event_reconstruction(
 
 
 def test_worker_preserves_exact_private_capture_failure_diagnosis(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed player reducer names its first invariant instead of a generic 500."""
 
     hosted_game_id = uuid4()
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(hosted_game_id))
     scene = create_stream_scene()
     summary_store = WorkerGameSummaryStore()
+    summary_store.bind_directory_game_id(
+        scene.encounter.uuid,
+        hosted_game_id,
+    )
     summary_store.capture_active_encounter(scene.encounter)
     capture_store = SubjectiveReplayCaptureStore()
     runtime = CanonicalSubjectiveReplicationRuntime(

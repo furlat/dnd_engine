@@ -8,7 +8,11 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
-from dnd.core.base_actions import ActionEvent, TargetType
+from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
+    ActionEvent,
+    TargetType,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import GridMap, get_map
@@ -18,9 +22,11 @@ from dnd.extensions.field_focus import (
     DeployFieldFocus,
     FIELD_KIT_RECIPE,
     FieldFocus,
+    field_kit_recipe,
+)
+from tests.manual.extension_scenario_support import (
     create_field_medic,
     create_field_training_scene,
-    field_kit_recipe,
     find_action_info,
     find_item_action,
     inventory_item_named,
@@ -174,6 +180,10 @@ def test_custom_action_registers_discovers_executes_and_spends_cost(capsys) -> N
     event = execute_by_index(hero, "Deploy Field Focus", 0, available=actions)
 
     assert action_info.target_type == TargetType.SELF
+    assert action_info.availability_status is (
+        ActionAvailabilityStatus.AVAILABLE
+    )
+    assert action_info.can_afford
     assert action_info.valid_targets[0].index == 0
     assert action_info.cost_type == "bonus_actions"
     assert event is not None
@@ -185,8 +195,13 @@ def test_custom_action_registers_discovers_executes_and_spends_cost(capsys) -> N
     bonus_actions_after_execution = hero.action_economy.bonus_actions.normalized_score
     hero.action_economy.reset_all_costs()
     refreshed = get_available_actions(hero)
+    refreshed_action = find_action_info(refreshed, "Deploy Field Focus")
 
-    assert all(info.template_name != "Deploy Field Focus" for info in refreshed.self_actions)
+    assert refreshed_action.availability_status is (
+        ActionAvailabilityStatus.REQUIREMENTS_UNMET
+    )
+    assert refreshed_action.can_afford
+    assert refreshed_action.valid_targets == []
 
     readout_lines = [
         (
@@ -204,14 +219,15 @@ def test_custom_action_registers_discovers_executes_and_spends_cost(capsys) -> N
         ),
         (
             "after refresh: "
-            f"action_available={any(info.template_name == 'Deploy Field Focus' for info in refreshed.self_actions)}, "
+            f"action_status={refreshed_action.availability_status.value}, "
+            f"executable={bool(refreshed_action.valid_targets)}, "
             f"bonus_actions={hero.action_economy.bonus_actions.normalized_score}"
         ),
     ]
     expected_lines = [
         "discovered action: name=Deploy Field Focus, target=self, index=0, cost=bonus_actions",
         "execution: phase=completion, condition=True, bonus_actions=0",
-        "after refresh: action_available=False, bonus_actions=1",
+        "after refresh: action_status=requirements_unmet, executable=False, bonus_actions=1",
     ]
 
     print("\n".join(readout_lines))

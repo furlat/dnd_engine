@@ -11,7 +11,7 @@ from dnd.core.condition_types import DurationType
 from dnd.items.consumables import HASTE_POTION_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from dnd.spells.transmutation import HasteEffect
-from tests.engine_book.test_chapter_17_monsters_presets import (
+from tests.engine.test_monster_presets import (
     reset_monster_state,
 )
 
@@ -29,7 +29,7 @@ class LegacyCoverage:
 
 
 EB15_HASTE = (
-    "tests/engine_book/test_chapter_15_spell_families.py::"
+    "tests/engine/test_spell_families.py::"
     "test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup"
 )
 HASTE_FILE = "tests/manual/test_125_haste_restricted_action.py"

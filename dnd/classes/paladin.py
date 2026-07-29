@@ -12,7 +12,7 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.dice import AttackOutcome
-from dnd.core.modifiers import CreatureType, DamageType
+from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.values import ModifiableValue
 
@@ -100,19 +100,28 @@ def create_divine_smite_processor(slot_level: int):
         )
         smite_roll = smite_dice.roll
 
-        event.damages.append(smite_damage)
-        event.final_rolls.append(smite_roll)
-
-        event.context["divine_smite_applied"] = True
-        event.context["divine_smite_slot_level"] = slot_level
-        event.context["divine_smite_dice_count"] = dice_count
-        event.context["divine_smite_creature_type_bonus"] = creature_type_bonus
+        modified_event = event.append_damage_roll(
+            smite_damage,
+            smite_roll,
+            "Divine Smite",
+            f"Level {slot_level} spell slot",
+        )
+        context = {
+            **modified_event.context,
+            "divine_smite_applied": True,
+            "divine_smite_slot_level": slot_level,
+            "divine_smite_dice_count": dice_count,
+            "divine_smite_creature_type_bonus": creature_type_bonus,
+        }
 
         entity_name = entity.name if entity else "Unknown"
-        return event.model_copy(update={
-            "modified": True,
-            "status_message": f"{entity_name} uses Divine Smite (L{slot_level} slot, {dice_count}d8 radiant)"
-        })
+        return modified_event.with_updates(
+            context=context,
+            status_message=(
+                f"{entity_name} uses Divine Smite "
+                f"(L{slot_level} slot, {dice_count}d8 radiant)"
+            ),
+        )
 
     return divine_smite_processor
 

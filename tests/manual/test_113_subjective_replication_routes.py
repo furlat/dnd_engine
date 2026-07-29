@@ -16,17 +16,23 @@ from fastapi.responses import Response
 from starlette.requests import Request
 
 from dnd.blocks.equipment import Weapon
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.actions_functional import get_available_actions
-from dnd.entity import Entity, EntityConfig
+from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.weapons import DAGGER_RECIPE
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from server.api_models import (
     ActionResult,
@@ -34,9 +40,9 @@ from server.api_models import (
     EquipmentMutationResult,
     EquipRequest,
     ExecuteByIndexRequest,
-    GameCreationStartResponse,
     GameCreationEntityAssignment,
-    GameCreationSideResult,
+    GameCreationRosterResult,
+    GameCreationStartResponse,
     JoinGameRequest,
     ToggleHandlerRequest,
     UnequipRequest,
@@ -101,17 +107,22 @@ def canonical_route_scene(
 ) -> Iterator[CanonicalRouteScene]:
     """Install one standalone participant with a renderer-complete perspective."""
     monkeypatch.delenv("DND_GAME_WORKER", raising=False)
-    monkeypatch.delenv("DND_HOSTED_GAME_ID", raising=False)
     sim.reset()
     grid = reset_engine_runtime(grid_size=(3, 1))
     event_stream.ensure_attached()
     event_stream._clear_source_journal()
     clear_subjective_projection_state()
 
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Route observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+    observer = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Route observer",
+        faction="heroes",
+        position=(0, 0),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.subjective_replication.route_observer",
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
     )
     observer.senses.visible = {(0, 0): True, (1, 0): True}
     observer.senses.seen = {(0, 0), (1, 0)}
@@ -619,10 +630,16 @@ def test_authority_mutation_immediately_closes_existing_partition(
     subscription = context.subscribe()
     asyncio.run(subscription.get())
 
-    second = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Second controlled actor",
-        config=EntityConfig(position=(1, 0), faction="heroes"),
+    second = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Second controlled actor",
+        faction="heroes",
+        position=(1, 0),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.subjective_replication.second_controlled_actor",
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
     )
     second.senses.visible = {(0, 0): True, (1, 0): True}
     second.senses.seen = {(0, 0), (1, 0)}
@@ -650,7 +667,6 @@ def test_hosted_worker_rejects_missing_private_authority(
 ) -> None:
     """A worker never treats a query-string session as subjective authority."""
     monkeypatch.setenv("DND_GAME_WORKER", "1")
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(uuid4()))
 
     with pytest.raises(HTTPException) as rejected:
         asyncio.run(get_replication_bootstrap(
@@ -760,13 +776,23 @@ def test_command_ack_models_do_not_duplicate_replica_or_diagnostics_facts() -> N
     assert set(EquipRequest.model_fields) == {"session_id", "item_uuid", "slot"}
     assert set(UnequipRequest.model_fields) == {"session_id", "slot"}
     assert set(ToggleHandlerRequest.model_fields) == {"session_id", "enabled"}
-    assert "entities" not in GameCreationSideResult.model_fields
-    assert "human_entity_uuids" not in GameCreationSideResult.model_fields
-    assert "entity_assignments" in GameCreationSideResult.model_fields
+    assert "entities" not in GameCreationRosterResult.model_fields
+    assert "human_entity_uuids" not in GameCreationRosterResult.model_fields
+    assert "entity_assignments" in GameCreationRosterResult.model_fields
     assert set(GameCreationEntityAssignment.model_fields) == {
+        "member_id",
         "entity_uuid",
         "entity_name",
         "faction",
+        "character_id",
+        "controller",
+        "participant_name",
+        "policy_id",
+        "policy_execution",
+        "provider_id",
+        "codex_session_id",
+        "takeover_claim_id",
+        "takeover_expires_at",
     }
 
 

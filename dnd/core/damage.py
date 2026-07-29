@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dnd.core.modifiers import DamageType, ResistanceStatus
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import ResistanceStatus
 
 
 class DamageResolutionModel(BaseModel):

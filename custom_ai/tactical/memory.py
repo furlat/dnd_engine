@@ -10,6 +10,7 @@ from dnd.ai.contracts.observation import (
     SubjectiveWorldState,
 )
 from dnd.ai.feedback import NativeAIDecisionFeedback, NativeAIDecisionOutcome
+from dnd.core.geometry import grid_distance_cells
 
 
 MAXIMUM_RETAINED_OUTCOMES = 16
@@ -158,7 +159,13 @@ def _focus_key(
     known_hp = target.normal_hp if target.normal_hp is not None else target.hp
     hp_unknown = 1 if known_hp is None else 0
     hp_value = known_hp if known_hp is not None else 0
-    distance = _known_distance(actor, target)
+    distance = (
+        grid_distance_cells(actor.position, target.position)
+        if actor is not None
+        and actor.position is not None
+        and target.position is not None
+        else None
+    )
     distance_value = distance if distance is not None else 1_000_000
     return (
         visible_rank,
@@ -166,17 +173,5 @@ def _focus_key(
         hp_value,
         distance_value,
         target.uuid,
-    )
-
-
-def _known_distance(
-    actor: ObservationEntityFact | None,
-    target: ObservationEntityFact,
-) -> int | None:
-    if actor is None or actor.position is None or target.position is None:
-        return None
-    return max(
-        abs(actor.position[0] - target.position[0]),
-        abs(actor.position[1] - target.position[1]),
     )
 

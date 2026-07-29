@@ -34,7 +34,7 @@ def _manifest(**updates) -> ContentPackManifest:
         "schema_version": 1,
         "pack_id": "fixture.example_pack",
         "pack_version": "1.0.0",
-        "engine_content_api": 1,
+        "engine_content_api": 2,
         "python_root": "src",
         "python_package": "example_pack",
         "assets_root": "assets",

@@ -11,7 +11,13 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import Any
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from dnd.content_system import builtin_inventory
 from dnd.core.content.descriptors import (
@@ -22,8 +28,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.recipe_presets import ContentRecipePreset
 
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ASSET_INDEX_PATH = (
     REPOSITORY_ROOT
     / "content_data"
@@ -44,14 +48,52 @@ DEFAULT_GENERATED_BINDINGS_PATH = (
     / "icon_bindings_generated.py"
 )
 EXPECTED_MANIFEST_SHA256 = (
-    "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc"
+    "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c"
 )
-EXPECTED_MANIFEST_ASSET_COUNT = 477
+EXPECTED_MANIFEST_ASSET_COUNT = 515
 EXPECTED_MANIFEST_SCHEMA_VERSION = 3
 EXPECTED_STYLE_ID = "fantasy-classic-v1"
 
 
 _HUMAN_REVIEWED_BINDINGS = {
+    # Creator apparel packages use the exact icon owned by their principal
+    # reviewed body recipe; footwear remains visible in package contents.
+    (
+        "content.neurodragon:starting_equipment_package:"
+        "starting_apparel.common_clothes@1"
+    ): "item.common-clothes",
+    (
+        "content.neurodragon:starting_equipment_package:"
+        "starting_apparel.travelers_clothes@1"
+    ): "item.travelers-clothes",
+    (
+        "content.neurodragon:starting_equipment_package:"
+        "starting_apparel.fine_clothes@1"
+    ): "item.fine-clothes",
+    (
+        "content.neurodragon:starting_equipment_package:"
+        "starting_apparel.robes@1"
+    ): "item.robes",
+    # The spellblade crown is a distinct mechanical definition that reuses
+    # the reviewed crown artwork through an exact backend-owned binding.
+    (
+        "content.neurodragon:item:"
+        "apparel.spellblade_crown@1"
+    ): "item.crown",
+    # The public Parry reaction intentionally shares the reviewed icon owned
+    # by its persistent trait provider.
+    (
+        "content.srd_5_1_cc:reaction:"
+        "reaction.monster.parry@1"
+    ): "condition.dnd-monsters-traits-parryfeature",
+    (
+        "content.srd_5_1_cc:reaction:"
+        "reaction.class_feature.fighter.protection@1"
+    ): "condition.dnd-classes-fighter-fightingstyleprotection",
+    (
+        "content.srd_5_1_cc:reaction:"
+        "reaction.class_feature.barbarian.retaliation@1"
+    ): "condition.dnd-classes-barbarian-retaliation",
     # Definition identity owns the selected authored inventory asset.
     (
         "content.srd_5_1_cc:action:"
@@ -546,6 +588,249 @@ _HUMAN_REVIEWED_BINDINGS = {
     ): "item.morningstar",
 }
 
+_HUMAN_REVIEWED_BINDINGS.update({
+    (
+        "content.srd_5_1_cc:action:"
+        "action.origin.dragonborn.breath_weapon@1"
+    ): "action.dragonborn-breath-weapon",
+    (
+        "content.srd_5_1_cc:reaction:"
+        "reaction.spell.hellish_rebuke@1"
+    ): "spell.hellish-rebuke",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.hellish_rebuke@1"
+    ): "spell.hellish-rebuke",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.thaumaturgy@1"
+    ): "spell.thaumaturgy",
+    (
+        "content.srd_5_1_cc:item:"
+        "gear.common_clothes@1"
+    ): "item.common-clothes",
+    (
+        "content.srd_5_1_cc:item:"
+        "gear.holy_symbol@1"
+    ): "item.holy-symbol",
+    (
+        "content.srd_5_1_cc:item:"
+        "gear.incense@1"
+    ): "item.incense",
+    (
+        "content.srd_5_1_cc:item:"
+        "gear.prayer_book@1"
+    ): "item.prayer-book",
+    (
+        "content.srd_5_1_cc:item:"
+        "gear.vestments@1"
+    ): "item.vestments",
+    (
+        "content.srd_5_1_cc:item:"
+        "weapon.light_hammer@1"
+    ): "item.light-hammer",
+    (
+        "content.srd_5_1_cc:starting_equipment_package:"
+        "starting_holdings.background.acolyte@1"
+    ): "item.holy-symbol",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.background.acolyte.proficiencies@1"
+    ): "trait.acolyte-proficiencies",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.background.acolyte.shelter_of_the_faithful@1"
+    ): "trait.shelter-of-the-faithful",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.black@1"
+    ): "trait.draconic-ancestry-acid-line",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.blue@1"
+    ): "trait.draconic-ancestry-lightning-line",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.brass@1"
+    ): "trait.draconic-ancestry-fire-line",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.bronze@1"
+    ): "trait.draconic-ancestry-lightning-line",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.copper@1"
+    ): "trait.draconic-ancestry-acid-line",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.gold@1"
+    ): "trait.draconic-ancestry-fire-cone",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.green@1"
+    ): "trait.draconic-ancestry-poison-cone",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.red@1"
+    ): "trait.draconic-ancestry-fire-cone",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.silver@1"
+    ): "trait.draconic-ancestry-cold-cone",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dragonborn.ancestry.white@1"
+    ): "trait.draconic-ancestry-cold-cone",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dwarf.combat_training@1"
+    ): "trait.dwarven-combat-training",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dwarf.dwarven_resilience@1"
+    ): "trait.dwarven-resilience",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dwarf.physical.medium_25@1"
+    ): "trait.origin-size-and-speed",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.dwarf.stonecunning@1"
+    ): "trait.stonecunning",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.elf.fey_ancestry@1"
+    ): "trait.fey-ancestry",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.elf.keen_senses@1"
+    ): "trait.keen-senses",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.elf.trance@1"
+    ): "trait.trance",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.high_elf.weapon_training@1"
+    ): "trait.elf-weapon-training",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.gnome.cunning@1"
+    ): "trait.gnome-cunning",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.half_orc.menacing@1"
+    ): "trait.half-orc-menacing",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.half_orc.relentless_endurance@1"
+    ): "trait.half-orc-relentless-endurance",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.half_orc.savage_attacks@1"
+    ): "trait.half-orc-savage-attacks",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.halfling.brave@1"
+    ): "trait.halfling-brave",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.halfling.lucky@1"
+    ): "trait.halfling-lucky",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.halfling.nimbleness@1"
+    ): "trait.halfling-nimbleness",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.hill_dwarf.dwarven_toughness@1"
+    ): "trait.dwarven-toughness",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.lightfoot.naturally_stealthy@1"
+    ): "trait.naturally-stealthy",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.rock_gnome.artificers_lore@1"
+    ): "trait.artificers-lore",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.rock_gnome.tinker@1"
+    ): "trait.rock-gnome-tinker",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.shared.darkvision_60@1"
+    ): "trait.darkvision",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.shared.physical.medium_30@1"
+    ): "trait.origin-size-and-speed",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.shared.physical.small_25@1"
+    ): "trait.origin-size-and-speed",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.dragonborn.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.dwarf.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.elf.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.gnome.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.half_elf.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.half_orc.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.halfling.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.human.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.species.tiefling.languages@1"
+    ): "trait.origin-languages",
+    (
+        "content.srd_5_1_cc:trait:"
+        "trait.origin.tiefling.fire_resistance@1"
+    ): "trait.hellish-resistance",
+})
+
+
+_RETIRED_PUBLIC_IDENTITIES = frozenset({
+    "content.neurodragon:background:background.adventurer@1",
+    "content.srd_5_1_cc:background:background.acolyte@1",
+    "content.srd_5_1_cc:species:species.dragonborn@1",
+    "content.srd_5_1_cc:species:species.dwarf@1",
+    "content.srd_5_1_cc:species:species.elf@1",
+    "content.srd_5_1_cc:species:species.gnome@1",
+    "content.srd_5_1_cc:species:species.half_elf@1",
+    "content.srd_5_1_cc:species:species.half_orc@1",
+    "content.srd_5_1_cc:species:species.halfling@1",
+    "content.srd_5_1_cc:species:species.human@1",
+    "content.srd_5_1_cc:species:species.tiefling@1",
+    "content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@1",
+    "content.srd_5_1_cc:species_variant:species_variant.elf.high@1",
+    "content.srd_5_1_cc:species_variant:species_variant.gnome.rock@1",
+    "content.srd_5_1_cc:species_variant:"
+    "species_variant.halfling.lightfoot@1",
+})
+
 
 _HUMAN_REVIEWED_TRAIT_REUSES = {
     "trait.brave": (
@@ -963,6 +1248,10 @@ def _definition_rows_from_existing(
     for identity in retired_non_public:
         rows_by_identity.pop(identity)
     unknown -= all_identity_keys
+    retired_public = unknown & _RETIRED_PUBLIC_IDENTITIES
+    for identity in retired_public:
+        rows_by_identity.pop(identity)
+    unknown -= _RETIRED_PUBLIC_IDENTITIES
     if unknown:
         raise ValueError(
             "existing icon ledger contains unknown public definitions: "
@@ -1017,9 +1306,20 @@ def _definition_rows_from_existing(
     for identity in sorted(refs_by_identity):
         row = dict(rows_by_identity[identity])
         if row["content_ref"] != refs_by_identity[identity]:
-            raise ValueError(
-                f"existing icon ledger ContentRef is stale: {identity}",
+            declaration = next(
+                value
+                for value in public
+                if value.ref.identity_key == identity
             )
+            if (
+                identity not in _HUMAN_REVIEWED_BINDINGS
+                and declaration.ref.definition_kind
+                not in _NON_GAME_ICON_DEFINITION_KINDS
+            ):
+                raise ValueError(
+                    f"existing icon ledger ContentRef is stale: {identity}",
+                )
+            row["content_ref"] = refs_by_identity[identity]
         manual_key = _HUMAN_REVIEWED_BINDINGS.get(identity)
         if manual_key is not None:
             asset = assets_by_key.get(manual_key)

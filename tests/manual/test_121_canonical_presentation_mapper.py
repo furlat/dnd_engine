@@ -13,6 +13,7 @@ from dnd.actions import (
     JumpEvent,
     Move,
     MovementEvent,
+    Shove,
     ShoveEvent,
     SpellEvent,
 )
@@ -38,6 +39,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     Damage,
     DamageAppliedEvent,
+    DamageRollResultEvent,
     EncounterEndEvent,
     Event,
     EventPhase,
@@ -47,6 +49,7 @@ from dnd.core.events import (
     HealEvent,
     LifeStateChangeEvent,
     MovementTrajectory,
+    RollModificationOperation,
     SensoryUpdateEvent,
     SpatialChangeEvent,
     SpatialChangeType,
@@ -62,19 +65,26 @@ from dnd.core.item_types import (
     ItemRarity,
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.core.modifiers import DamageType, ResistanceModifier, ResistanceStatus
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    ResistanceModifier,
+    ResistanceStatus,
+)
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
 )
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.traits import ParryFeature
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.abjuration import (
     CounterspellReactionEvent,
     create_shield_reaction_handler,
 )
-from dnd.utils import force_attack_miss, reset_combat_state
+from dnd.spells.evocation import GustOfWind, Thunderwave
+from dnd.spells.transmutation import TelekinesisMove
+from tests.engine.support import force_attack_miss, reset_combat_state
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.mapper import (
     CanonicalSubjectivePresentationMapper,
@@ -112,6 +122,7 @@ from server.player_replication_contract import (
     PlayerReplicationWatermarks,
     PresentationDamageType,
     PresentationProjectile,
+    ShoveOutcome,
     ShovePresentationCue,
     RootedBehaviorPresentationAttribution,
     SourceItemPresentationAttribution,
@@ -121,6 +132,11 @@ from server.player_replication_contract import (
     SubjectiveReplicationFrame,
     VisualLoadoutReplacePatch,
     UnrootedBehaviorPresentationAttribution,
+)
+from tests.manual.spell_regression_support import (
+    create_spell_regression_actor,
+    force_save_result,
+    reset_spell_regression_arena,
 )
 
 
@@ -235,6 +251,26 @@ def _batch(
     )
 
 
+def _project_event_queue_since(
+    source_cursor: int,
+    perspective: SubjectivePerspective,
+) -> tuple[SubjectiveReplicationFrame, tuple[ProjectedEventSlot, ...]]:
+    slots = tuple(
+        ProjectedEventSlot(source_event_cursor=cursor + 1, event=event)
+        for cursor, event in EventQueue.iter_events_since(source_cursor)
+    )
+    return (
+        MAPPER.project_frame(
+            CausalEventBatch(
+                slots=slots,
+                through_source_event_cursor=EventQueue.event_cursor(),
+            ),
+            _context(perspective, source_cursor=source_cursor),
+        ),
+        slots,
+    )
+
+
 def _damage(
     *,
     source_uuid: UUID,
@@ -289,6 +325,8 @@ class _ReactiveMovementProjection:
     mover_uuid: UUID
     path: tuple[tuple[int, int], ...]
     reactor_uuid_by_path_index: dict[int, UUID]
+    reaction_ref_by_path_index: dict[int, ContentRef]
+    weapon_ref_by_path_index: dict[int, ContentRef]
     step_slot_by_path_index: dict[int, ProjectedEventSlot]
     attack_slots_by_path_index: dict[int, tuple[ProjectedEventSlot, ...]]
 
@@ -313,6 +351,8 @@ def _project_real_multi_reaction_movement(
             reactor_specs = (((0, 2), 1), ((2, 1), 3))
 
         reactor_uuid_by_path_index: dict[int, UUID] = {}
+        reaction_ref_by_path_index: dict[int, ContentRef] = {}
+        weapon_ref_by_path_index: dict[int, ContentRef] = {}
         for reactor_number, (position, path_index) in enumerate(
             reactor_specs,
             start=1,
@@ -325,6 +365,19 @@ def _project_real_multi_reaction_movement(
             add_opportunity_attack_handler(reactor)
             force_attack_miss(reactor)
             reactor_uuid_by_path_index[path_index] = reactor.uuid
+            reaction_handler = next(
+                handler
+                for handler in reactor.event_handlers.values()
+                if handler.semantic_key == "reaction.opportunity_attack"
+            )
+            assert reaction_handler.behavior_binding is not None
+            reaction_ref_by_path_index[path_index] = (
+                reaction_handler.behavior_binding.definition_ref
+            )
+            weapon = reactor.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
+            assert weapon is not None
+            assert weapon.content_ref is not None
+            weapon_ref_by_path_index[path_index] = weapon.content_ref
 
         Entity.update_all_entities_senses(max_distance=20)
         observer_key = str(mover.uuid)
@@ -402,6 +455,8 @@ def _project_real_multi_reaction_movement(
             mover_uuid=mover.uuid,
             path=path,
             reactor_uuid_by_path_index=reactor_uuid_by_path_index,
+            reaction_ref_by_path_index=reaction_ref_by_path_index,
+            weapon_ref_by_path_index=weapon_ref_by_path_index,
             step_slot_by_path_index=step_slot_by_path_index,
             attack_slots_by_path_index={
                 path_index: tuple(attack_slots)
@@ -442,6 +497,26 @@ def _assert_exact_reactive_movement_segments(
         assert attack.source_entity_uuid == reactor_uuid
         assert attack.target_entity_uuid == projection.mover_uuid
         assert attack.attack_outcome is AttackOutcome.MISS
+        assert attack.behavior_binding is not None
+        assert (
+            attack.behavior_binding.definition_ref
+            == projection.reaction_ref_by_path_index[path_index]
+        )
+        assert (
+            attack.behavior_binding.provided_by_ref
+            == projection.reaction_ref_by_path_index[path_index]
+        )
+        assert attack.source_item_uuid is not None
+        assert attack.source_item_presentation is not None
+        assert attack.source_item_presentation.content_ref is not None
+        assert (
+            ContentRef.model_validate(
+                attack.source_item_presentation.content_ref.model_dump(
+                    mode="python",
+                ),
+            )
+            == projection.weapon_ref_by_path_index[path_index]
+        )
         # Opportunity reactions finish while the Step EFFECT is dispatching;
         # the entity has not entered the destination until Step COMPLETION.
         assert attack_slot.source_event_cursor < step_slot.source_event_cursor
@@ -476,6 +551,36 @@ def _assert_exact_reactive_movement_segments(
     assert all(cue.movement_kind is movement_kind for cue in movement_cues)
     assert all(cue.path_total_steps == total_steps for cue in movement_cues)
     assert len(attack_cues) == len(projection.reactor_uuid_by_path_index)
+    for path_index, reactor_uuid in projection.reactor_uuid_by_path_index.items():
+        cue = next(cue for cue in attack_cues if cue.actor_uuid == str(reactor_uuid))
+        behaviors = tuple(
+            attribution
+            for attribution in cue.content_attributions
+            if isinstance(
+                attribution,
+                (
+                    UnrootedBehaviorPresentationAttribution,
+                    RootedBehaviorPresentationAttribution,
+                ),
+            )
+        )
+        assert behaviors == (
+            UnrootedBehaviorPresentationAttribution(
+                role=BehaviorPresentationRole.BEHAVIOR,
+                definition_ref=projection.reaction_ref_by_path_index[path_index],
+                provided_by_ref=projection.reaction_ref_by_path_index[path_index],
+            ),
+        )
+        source_items = tuple(
+            attribution
+            for attribution in cue.content_attributions
+            if isinstance(attribution, SourceItemPresentationAttribution)
+        )
+        assert source_items == (
+            SourceItemPresentationAttribution(
+                definition_ref=projection.weapon_ref_by_path_index[path_index],
+            ),
+        )
 
     reconstructed_path = [projection.path[0]]
     next_path_start = 0
@@ -1193,6 +1298,102 @@ def test_real_shield_handler_reaches_the_canonical_action_root() -> None:
         reset_combat_state()
 
 
+def test_real_parry_handler_uses_public_reaction_identity_for_action_root() -> None:
+    """Parry activation must not expose its persistent trait as an action root."""
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 6, 6)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        defender = create_goblin(
+            name="Parry Defender",
+            position=(2, 2),
+            faction="heroes",
+        )
+        attacker = create_goblin(
+            name="Parry Attacker",
+            position=(2, 3),
+            faction="monsters",
+        )
+        defender.add_condition(
+            ParryFeature(
+                source_entity_uuid=defender.uuid,
+                target_entity_uuid=defender.uuid,
+            ),
+        )
+        handler = next(
+            candidate
+            for candidate in defender.event_handlers.values()
+            if candidate.name == "Parry"
+        )
+        assert handler.behavior_binding is not None
+        assert (
+            handler.behavior_binding.definition_ref.definition_kind
+            is ContentDefinitionKind.REACTION
+        )
+        assert (
+            handler.behavior_binding.definition_ref.content_id
+            == "reaction.monster.parry"
+        )
+        assert (
+            handler.behavior_binding.provided_by_ref
+            == get_content_declaration(ParryFeature).ref
+        )
+        Entity.update_all_entities_senses(max_distance=20)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {str(defender.uuid)}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        before = EventQueue.event_cursor()
+        attack_action = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=defender.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        )
+        attack_action.behavior_binding = _binding(
+            definition_ref=get_content_declaration(Attack).ref,
+            owner_uuid=attacker.uuid,
+        )
+        with fixed_dice_faces(10):
+            result = attack_action.apply()
+        assert isinstance(result, AttackEvent)
+
+        source_events = tuple(
+            event
+            for _, event in EventQueue.iter_events_since(before)
+        )
+        frame = MAPPER.project_frame(
+            _batch(*source_events),
+            _context(_perspective(defender.uuid)),
+        )
+
+        parry = next(
+            cue
+            for cue in frame.presentation
+            if (
+                isinstance(cue, ActionPresentationCue)
+                and cue.content_attributions
+                and cue.content_attributions[0].definition_ref
+                == handler.behavior_binding.definition_ref
+            )
+        )
+        incoming = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, AttackPresentationCue)
+        )
+        assert parry.action_name == "Parry"
+        assert parry.actor_uuid == str(defender.uuid)
+        assert parry.target_uuids == (str(defender.uuid),)
+        assert parry.trigger_presentation_id == incoming.presentation_id
+        assert parry.effect_presentation_ids == ()
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
 def test_handler_only_divine_smite_reaction_gets_an_exact_root() -> None:
     """A modifying reaction with no emitted child remains an authored action cue."""
 
@@ -1359,6 +1560,24 @@ def test_real_divine_smite_handler_reaches_the_canonical_action_root() -> None:
             event
             for _, event in EventQueue.iter_events_since(before)
         )
+        damage_result = next(
+            event
+            for event in source_events
+            if (
+                isinstance(event, DamageRollResultEvent)
+                and event.phase is EventPhase.COMPLETION
+            )
+        )
+        assert len(damage_result.damage_packets) == 2
+        assert (
+            damage_result.damage_packets[1].damage.damage_type
+            is DamageType.RADIANT
+        )
+        assert damage_result.roll_modifications[-1].operation is (
+            RollModificationOperation.APPEND
+        )
+        assert damage_result.roll_modifications[-1].handler_name == "Divine Smite"
+        assert damage_result.roll_modifications[-1].packet_index == 1
         frame = MAPPER.project_frame(
             _batch(*source_events),
             _context(_perspective(paladin.uuid)),
@@ -1611,6 +1830,434 @@ def test_shove_owns_its_exact_forced_movement_child() -> None:
     _assert_closed_graph(frame)
 
 
+@pytest.mark.parametrize("controlled", [False, True])
+def test_real_shove_keeps_child_before_root_forced_movement(
+    controlled: bool,
+) -> None:
+    """The real engine path preserves spectated and controlled shoves."""
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 8, 8)
+    try:
+        shover = create_goblin(
+            name="Spectated Shove Hero",
+            position=(2, 2),
+            faction="heroes",
+        )
+        target = create_goblin(
+            name="Spectated Shove Target",
+            position=(3, 2),
+            faction="monsters",
+        )
+        target.weight = 40
+        Entity.update_all_entities_senses(max_distance=20)
+        observer_key = str(shover.uuid)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {observer_key}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        source_cursor = EventQueue.event_cursor()
+        with fixed_dice_faces(20):
+            result = Shove(
+                source_entity_uuid=shover.uuid,
+                target_entity_uuid=target.uuid,
+            ).apply()
+        assert isinstance(result, ShoveEvent)
+        assert result.contest_success is True
+        assert result.push_distance > 0
+
+        source_slots = tuple(
+            ProjectedEventSlot(source_event_cursor=cursor + 1, event=event)
+            for cursor, event in EventQueue.iter_events_since(source_cursor)
+        )
+        forced_completion_index = next(
+            index
+            for index, slot in enumerate(source_slots)
+            if isinstance(slot.event, ForcedMovementEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+        )
+        shove_completion_index = next(
+            index
+            for index, slot in enumerate(source_slots)
+            if isinstance(slot.event, ShoveEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+        )
+        assert forced_completion_index < shove_completion_index
+
+        forced_completion = source_slots[forced_completion_index].event
+        assert isinstance(forced_completion, ForcedMovementEvent)
+        expected_position_evidence = {
+            position_evidence_key((3, 2)): {observer_key},
+            position_evidence_key(target.position): {observer_key},
+        }
+        assert (
+            forced_completion.located_position_observer_uuids
+            == expected_position_evidence
+        )
+        assert forced_completion.combat_log is not None
+        assert (
+            forced_completion.combat_log.located_position_observer_uuids
+            == expected_position_evidence
+        )
+
+        perspective = _perspective(shover.uuid, controlled=controlled)
+        frame = MAPPER.project_frame(
+            CausalEventBatch(
+                slots=source_slots,
+                through_source_event_cursor=EventQueue.event_cursor(),
+            ),
+            _context(perspective, source_cursor=source_cursor),
+        )
+
+        shove_cues = tuple(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ShovePresentationCue)
+        )
+        forced_cues = tuple(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ForcedMovementPresentationCue)
+        )
+        assert len(shove_cues) == 1
+        assert len(forced_cues) == 1
+        shove_cue = shove_cues[0]
+        forced_cue = forced_cues[0]
+        assert shove_cue.forced_movement_presentation_id == forced_cue.presentation_id
+        assert forced_cue.parent_presentation_id == shove_cue.presentation_id
+        assert forced_cue.actor_action_presentation_id == shove_cue.presentation_id
+        assert forced_cue.cause is ForcedMovementCause.SHOVE
+        assert forced_cue.start_position == (3, 2)
+        assert forced_cue.end_position == target.position
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
+def test_spectator_union_cannot_combine_forced_movement_endpoint_grants() -> None:
+    """Different observers seeing one endpoint each disclose no shove geometry."""
+    observer_a = uuid4()
+    observer_b = uuid4()
+    actor = uuid4()
+    target = uuid4()
+    perspective = SubjectivePerspective(
+        perspective_epoch_id=f"epoch-{observer_a}",
+        kind=PerspectiveKind.SPECTATOR_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(),
+        observer_entity_uuids=(str(observer_a), str(observer_b)),
+        active_observer_uuid=str(observer_a),
+    )
+    shove = ShoveEvent(
+        source_entity_uuid=actor,
+        target_entity_uuid=target,
+        contest_success=True,
+        push_distance=5,
+        end_position=(6, 5),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    ).model_copy(
+        update={
+            "identified_entity_observer_uuids": {
+                str(actor): {str(observer_a), str(observer_b)},
+                str(target): {str(observer_a), str(observer_b)},
+            },
+        },
+    )
+    forced = ForcedMovementEvent(
+        source_entity_uuid=actor,
+        target_entity_uuid=target,
+        start_position=(5, 5),
+        end_position=(6, 5),
+        direction=(1, 0),
+        intended_distance=5,
+        actual_distance=5,
+        cause="shove",
+        parent_lineage=shove.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    ).model_copy(
+        update={
+            "identified_entity_observer_uuids": {
+                str(actor): {str(observer_a), str(observer_b)},
+                str(target): {str(observer_a), str(observer_b)},
+            },
+            "located_position_observer_uuids": {
+                position_evidence_key((5, 5)): {str(observer_a)},
+                position_evidence_key((6, 5)): {str(observer_b)},
+            },
+        },
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(forced, shove),
+        _context(perspective),
+    )
+
+    assert not any(
+        isinstance(
+            cue,
+            (ShovePresentationCue, ForcedMovementPresentationCue),
+        )
+        for cue in frame.presentation
+    )
+    serialized = frame.model_dump_json().replace(" ", "")
+    assert "[5,5]" not in serialized
+    assert "[6,5]" not in serialized
+
+
+def test_real_telekinesis_move_owns_visible_forced_movement() -> None:
+    """Telekinesis follow-up completes displacement before its action root."""
+
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 10, 10)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        caster = create_goblin(
+            name="Telekinesis Caster",
+            position=(2, 2),
+            faction="heroes",
+        )
+        target = create_goblin(
+            name="Telekinesis Target",
+            position=(3, 2),
+            faction="monsters",
+        )
+        Entity.update_all_entities_senses(max_distance=20)
+        observer_key = str(caster.uuid)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {observer_key}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        source_cursor = EventQueue.event_cursor()
+        move = TelekinesisMove(
+            source_entity_uuid=caster.uuid,
+            grabbed_entity_uuid=target.uuid,
+            end_position=(5, 2),
+        )
+        move.behavior_binding = _binding(
+            definition_ref=get_content_declaration(TelekinesisMove).ref,
+            owner_uuid=caster.uuid,
+        )
+        result = move.apply()
+        assert isinstance(result, ActionEvent)
+        assert result.phase is EventPhase.COMPLETION
+        assert target.position == (5, 2)
+
+        frame, slots = _project_event_queue_since(
+            source_cursor,
+            _perspective(caster.uuid, controlled=False),
+        )
+        forced_slot = next(
+            slot
+            for slot in slots
+            if isinstance(slot.event, ForcedMovementEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+        )
+        action_slot = next(
+            slot
+            for slot in slots
+            if isinstance(slot.event, ActionEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+            and slot.event.name == "Telekinesis: Move"
+        )
+        assert forced_slot.source_event_cursor < action_slot.source_event_cursor
+        forced_event = forced_slot.event
+        assert forced_event.located_position_observer_uuids == {
+            position_evidence_key((3, 2)): {observer_key},
+            position_evidence_key((5, 2)): {observer_key},
+        }
+
+        forced_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ForcedMovementPresentationCue)
+        )
+        action_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ActionPresentationCue)
+            and cue.action_name == "Telekinesis: Move"
+        )
+        assert forced_cue.parent_presentation_id == action_cue.presentation_id
+        assert forced_cue.cause is ForcedMovementCause.RULE_EFFECT
+        assert action_cue.effect_presentation_ids.count(
+            forced_cue.presentation_id
+        ) == 1
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
+def test_real_thunderwave_owns_visible_forced_movement() -> None:
+    """Thunderwave moves before completion and owns its failed-save push."""
+
+    reset_spell_regression_arena(20, 12)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        caster = create_spell_regression_actor(
+            "Thunderwave Mapper Caster",
+            (5, 5),
+            "heroes",
+            spell_slots={1: 1},
+        )
+        target = create_spell_regression_actor(
+            "Thunderwave Mapper Target",
+            (7, 5),
+            "monsters",
+        )
+        force_save_result(target, "constitution", succeeds=False)
+        Entity.update_all_entities_senses(max_distance=100)
+        observer_key = str(caster.uuid)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {observer_key}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        source_cursor = EventQueue.event_cursor()
+        action = Thunderwave(
+            source_entity_uuid=caster.uuid,
+            end_position=(12, 5),
+            cast_at_level=1,
+        )
+        action.behavior_binding = _binding(
+            definition_ref=get_content_declaration(Thunderwave).ref,
+            owner_uuid=caster.uuid,
+        )
+        with fixed_dice_faces(*([4] * 20)):
+            result = action.apply()
+        assert isinstance(result, SpellEvent)
+        assert not result.canceled
+        assert target.position == (9, 5)
+
+        frame, slots = _project_event_queue_since(
+            source_cursor,
+            _perspective(caster.uuid, controlled=False),
+        )
+        forced_slot = next(
+            slot
+            for slot in slots
+            if isinstance(slot.event, ForcedMovementEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+        )
+        forced_event = forced_slot.event
+        assert forced_event.located_position_observer_uuids == {
+            position_evidence_key((7, 5)): {observer_key},
+            position_evidence_key((9, 5)): {observer_key},
+        }
+
+        forced_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ForcedMovementPresentationCue)
+        )
+        spell_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, SpellPresentationCue)
+            and cue.spell_id == "thunderwave"
+        )
+        assert forced_cue.parent_presentation_id == spell_cue.presentation_id
+        assert forced_cue.cause is ForcedMovementCause.SPELL
+        assert sum(
+            target_row.effect_presentation_ids.count(
+                forced_cue.presentation_id
+            )
+            for target_row in spell_cue.targets
+        ) == 1
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
+def test_real_gust_of_wind_owns_visible_forced_movement() -> None:
+    """Gust of Wind moves before completion and owns its failed-save push."""
+
+    reset_spell_regression_arena(30, 14)
+    try:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+        caster = create_spell_regression_actor(
+            "Gust Mapper Caster",
+            (3, 6),
+            "heroes",
+            spell_slots={2: 1},
+        )
+        target = create_spell_regression_actor(
+            "Gust Mapper Target",
+            (7, 6),
+            "monsters",
+        )
+        force_save_result(target, "strength", succeeds=False)
+        Entity.update_all_entities_senses(max_distance=140)
+        observer_key = str(caster.uuid)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(entity_uuid): {observer_key}
+                for entity_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        source_cursor = EventQueue.event_cursor()
+        action = GustOfWind(
+            source_entity_uuid=caster.uuid,
+            end_position=(20, 6),
+            cast_at_level=2,
+        )
+        action.behavior_binding = _binding(
+            definition_ref=get_content_declaration(GustOfWind).ref,
+            owner_uuid=caster.uuid,
+        )
+        with fixed_dice_faces(10):
+            result = action.apply()
+        assert isinstance(result, SpellEvent)
+        assert not result.canceled
+        assert target.position == (10, 6)
+
+        frame, slots = _project_event_queue_since(
+            source_cursor,
+            _perspective(caster.uuid, controlled=False),
+        )
+        forced_slot = next(
+            slot
+            for slot in slots
+            if isinstance(slot.event, ForcedMovementEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+            and slot.event.target_entity_uuid == target.uuid
+        )
+        forced_event = forced_slot.event
+        assert forced_event.located_position_observer_uuids == {
+            position_evidence_key((7, 6)): {observer_key},
+            position_evidence_key((10, 6)): {observer_key},
+        }
+
+        forced_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, ForcedMovementPresentationCue)
+            and cue.entity_uuid == str(target.uuid)
+        )
+        spell_cue = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, SpellPresentationCue)
+            and cue.spell_id == "gust_of_wind"
+        )
+        assert forced_cue.parent_presentation_id == spell_cue.presentation_id
+        assert forced_cue.cause is ForcedMovementCause.SPELL
+        assert sum(
+            target_row.effect_presentation_ids.count(
+                forced_cue.presentation_id
+            )
+            for target_row in spell_cue.targets
+        ) == 1
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
+
+
 def test_damage_life_transition_reparents_across_technical_siblings() -> None:
     """Damage and death technical nodes become one exact impact transaction."""
     actor = uuid4()
@@ -1750,6 +2397,134 @@ def test_real_jump_starts_segments_at_multiple_opportunity_attack_edges() -> Non
             (2, ((3, 2), (4, 2))),
         ),
     )
+
+
+def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:
+    """A delivered spell reaction resolves before the exact committed edge."""
+    mover = uuid4()
+    reactor = uuid4()
+    perspective = _perspective(mover)
+    movement = MovementEvent(
+        source_entity_uuid=mover,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=[(1, 1), (2, 1)],
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    step = StepMovementEvent(
+        source_entity_uuid=mover,
+        from_position=(1, 1),
+        to_position=(2, 1),
+        path_index=1,
+        total_path_length=2,
+        committed=True,
+        parent_lineage=movement.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = SpellEvent(
+        name="Reactive Ward",
+        spell_id="reactive_ward",
+        source_entity_uuid=reactor,
+        target_entity_uuid=mover,
+        spell_school="abjuration",
+        spell_level=1,
+        cast_at_level=1,
+        range_type="ranged",
+        parent_lineage=step.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = _visible(
+        reaction,
+        mover,
+        identified=(reactor, mover),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(reaction, step, movement),
+        _context(perspective),
+    )
+
+    movement_cue = next(
+        cue
+        for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    spell_cue = next(
+        cue
+        for cue in frame.presentation
+        if isinstance(cue, SpellPresentationCue)
+    )
+    assert movement_cue.child_presentation_ids == (
+        spell_cue.presentation_id,
+    )
+    assert spell_cue.parent_presentation_id == movement_cue.presentation_id
+    assert spell_cue.source_event_cursor < movement_cue.source_event_cursor
+    _assert_closed_graph(frame)
+
+
+def test_visible_pre_step_shove_reaction_owns_exact_movement_segment() -> None:
+    """A delivered resisted shove reaction stays on its exact movement edge."""
+    mover = uuid4()
+    reactor = uuid4()
+    perspective = _perspective(mover)
+    movement = MovementEvent(
+        source_entity_uuid=mover,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=[(1, 1), (2, 1)],
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    step = StepMovementEvent(
+        source_entity_uuid=mover,
+        from_position=(1, 1),
+        to_position=(2, 1),
+        path_index=1,
+        total_path_length=2,
+        committed=True,
+        parent_lineage=movement.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = ShoveEvent(
+        source_entity_uuid=reactor,
+        target_entity_uuid=mover,
+        contest_success=False,
+        parent_lineage=step.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = _visible(
+        reaction,
+        mover,
+        identified=(reactor, mover),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(reaction, step, movement),
+        _context(perspective),
+    )
+
+    movement_cue = next(
+        cue
+        for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    shove_cue = next(
+        cue
+        for cue in frame.presentation
+        if isinstance(cue, ShovePresentationCue)
+    )
+    assert shove_cue.outcome is ShoveOutcome.RESISTED
+    assert movement_cue.child_presentation_ids == (
+        shove_cue.presentation_id,
+    )
+    assert shove_cue.parent_presentation_id == movement_cue.presentation_id
+    assert shove_cue.source_event_cursor < movement_cue.source_event_cursor
+    _assert_closed_graph(frame)
 
 
 def test_hidden_step_reaction_does_not_leak_through_movement_segmentation() -> None:

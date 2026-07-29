@@ -492,10 +492,10 @@ ORDINAL_SPECS: Final = (
     ),
 )
 
-EB03_FILE: Final = "tests/engine_book/test_chapter_03_dice_events.py"
-EB06_FILE: Final = "tests/engine_book/test_chapter_06_entity_composition.py"
+EB03_FILE: Final = "tests/engine/test_dice_event_semantics.py"
+EB06_FILE: Final = "tests/engine/test_entity_composition.py"
 EB15_FAMILIES_FILE: Final = (
-    "tests/engine_book/test_chapter_15_spell_families.py"
+    "tests/engine/test_spell_families.py"
 )
 MANUAL_95_FILE: Final = (
     "tests/manual/test_95_creature_presentation_contract.py"
@@ -618,9 +618,9 @@ OVERRIDE_ID_PATTERN: Final = re.compile(
     r"(?:/(?:EX-)?[A-Z]\d+[a-z]?)*):"
 )
 
-EB07_FILE: Final = "tests/engine_book/test_chapter_07_condition_lifecycle.py"
-EB14_FILE: Final = "tests/engine_book/test_chapter_14_spellcasting_core.py"
-EB15_FILE: Final = "tests/engine_book/test_chapter_15_spell_families.py"
+EB07_FILE: Final = "tests/engine/test_condition_lifecycle.py"
+EB14_FILE: Final = "tests/engine/test_spellcasting.py"
+EB15_FILE: Final = "tests/engine/test_spell_families.py"
 
 CHILD_PARENT_NOTIFICATION_MAPPINGS: Final = {
     1: f"{EB07_FILE}::test_eb_07_007_linked_conditions_clean_forward_and_notify_reverse",
@@ -1120,7 +1120,7 @@ def overlay_audit_report(
         "test_gust_terrain_reactive_paths"
     )
     gust_live = (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_045_gust_terrain_removal_restores_cached_move_targets"
     )
     apply_explicit_row(

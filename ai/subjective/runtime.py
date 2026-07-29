@@ -28,7 +28,7 @@ from ai.subjective.hooks import HookContext, HookPoint, HookRegistry
 from server.agent_protocol.telemetry import AgentEvent
 from ai.subjective.processors import default_processors
 from ai.subjective.queries import SubjectiveQueries
-from ai.subjective.runtime_gc import (
+from dnd.ai.runtime_gc import (
     RuntimeGcPolicy,
     SUSPEND_AUTOMATIC_GC,
     automatic_gc_suspended,

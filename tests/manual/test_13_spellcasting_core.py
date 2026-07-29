@@ -26,10 +26,10 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, MultiEntityL
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.events import EventQueue, _enrich_multi_entity_log_from_children
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import CreatureType
+from dnd.core.creature_types import CreatureType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.spells import (
+from tests.spell_test_exports import (
     BurningHands,
     ChillTouch,
     EldritchBlast,
@@ -464,6 +464,7 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
     fire_bolt = find_action(available, "Fire Bolt")
     missile = find_action(available, "Magic Missile__slot_1")
     fire_target = fire_bolt.valid_targets[0]
+    assert fire_target.target_uuid is not None
     fire_target_entity = Entity.get(fire_target.target_uuid)
     assert fire_target_entity is not None
 
@@ -482,6 +483,7 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
     assert isinstance(event, SpellEvent)
     assert event.dice_roll is not None
     assert event.damage_rolls is not None
+    assert event.attack_outcome is not None
     assert event.combat_log is not None
     damage_roll = event.damage_rolls[0]
 
@@ -743,12 +745,19 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
         enemy.uuid,
         ally.uuid,
     }
-    fire_target_names = [
-        Entity.get(target.target_uuid).name for target in fire_bolt.valid_targets
-    ]
-    haste_target_names = sorted(
-        Entity.get(target.target_uuid).name for target in haste.valid_targets
-    )
+    fire_target_names: list[str] = []
+    for target_row in fire_bolt.valid_targets:
+        assert target_row.target_uuid is not None
+        target_entity = Entity.get(target_row.target_uuid)
+        assert target_entity is not None
+        fire_target_names.append(target_entity.name)
+    haste_target_names: list[str] = []
+    for target_row in haste.valid_targets:
+        assert target_row.target_uuid is not None
+        target_entity = Entity.get(target_row.target_uuid)
+        assert target_entity is not None
+        haste_target_names.append(target_entity.name)
+    haste_target_names.sort()
     discovery_lines = [
         (
             "fire bolt row: "

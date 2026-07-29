@@ -22,6 +22,10 @@ from services.ai_policy_server.app import create_ai_policy_service
 from services.ai_policy_server.composition import (
     create_ai_policy_service_runtime,
 )
+from tests.manual.game_creation_test_support import (
+    authored_compose_request,
+    roster_result,
+)
 
 
 EXTERNAL_POLICY = PolicyDescriptor(
@@ -158,30 +162,36 @@ def _provider_fixture(
     )
 
 
-def _start_payload(
+async def _compose_and_preview(
+    client: httpx.AsyncClient,
     *,
-    side_a: str,
-    side_b: str,
-    opening_side: str = "side_a",
-) -> dict[str, object]:
-    def side(controller: str, side_id: str) -> dict[str, str]:
-        payload = {
-            "controller": controller,
-            "name": side_id,
-        }
-        if controller == "ai":
-            payload["policy_id"] = EXTERNAL_POLICY.policy_id
-        return payload
-
-    return {
-        "scenario": {
-            "kind": "preset",
-            "arena_id": "standard_skeleton_doors",
-        },
-        "side_a": side(side_a, "Side A"),
-        "side_b": side(side_b, "Side B"),
-        "opening_side": opening_side,
+    controllers: tuple[str, str],
+    opening_roster_index: int = 0,
+) -> tuple[dict[str, Any], dict[str, object]]:
+    """Normalize and preview one exact externally controlled recipe."""
+    policy_ids = tuple(
+        EXTERNAL_POLICY.policy_id if controller == "ai" else None
+        for controller in controllers
+    )
+    composed = await client.post(
+        "/game-creation/compose",
+        json=authored_compose_request(
+            controllers=controllers,
+            policy_ids=policy_ids,
+            opening_roster_index=opening_roster_index,
+        ),
+    )
+    assert composed.status_code == 200, composed.text
+    composition = composed.json()
+    exact: dict[str, object] = {
+        "expected_content_set_digest": composition["content_set_digest"],
+        "expected_ruleset_digest": composition["ruleset_digest"],
+        "recipe": composition["recipe"],
     }
+    preview = await client.post("/game-creation/preview", json=exact)
+    assert preview.status_code == 200, preview.text
+    assert preview.json() == composition["preview"]
+    return composition, exact
 
 
 async def _with_isolated_provider_catalog(
@@ -192,7 +202,7 @@ async def _with_isolated_provider_catalog(
     *,
     capacity: int,
 ) -> None:
-    await event_server.prepare_new_simulation_start()
+    await event_server.prepare_new_game_start()
     previous_catalog = event_server.registered_ai_provider_catalog
     if not previous_catalog.closed:
         await previous_catalog.close()
@@ -213,7 +223,7 @@ async def _with_isolated_provider_catalog(
         ) as client:
             await operation(client, runtime, factory, probe)
     finally:
-        await event_server.prepare_new_simulation_start()
+        await event_server.prepare_new_game_start()
         await catalog.close()
         event_server.registered_ai_provider_catalog = (
             event_server._new_registered_ai_provider_catalog()
@@ -269,25 +279,35 @@ def test_registered_provider_is_one_prepared_ai_path_and_defers_logic() -> None:
             "available_capacity": 8,
         }
 
-        started = await client.post(
-            "/game-creation/start",
-            json=_start_payload(
-                side_a="human",
-                side_b="ai",
-                opening_side="side_b",
-            ),
+        _composition, exact = await _compose_and_preview(
+            client,
+            controllers=("human", "ai"),
+            opening_roster_index=1,
         )
+        started = await client.post("/game-creation/start", json=exact)
         assert started.status_code == 200
         result = started.json()
-        assert result["side_b"]["policy_id"] == EXTERNAL_POLICY.policy_id
-        assert result["side_b"]["policy_execution"] == (
-            "registered_provider"
-        )
-        assert result["side_b"]["provider_id"] == "provider.example"
+        player_roster = roster_result(result, "roster_1")
+        opposition_roster = roster_result(result, "roster_2")
+        player_entities = player_roster["entity_assignments"]
+        external_entities = opposition_roster["entity_assignments"]
+        assert {
+            (
+                row["policy_id"],
+                row["policy_execution"],
+                row["provider_id"],
+            )
+            for row in external_entities
+        } == {
+            (
+                EXTERNAL_POLICY.policy_id,
+                "registered_provider",
+                "provider.example",
+            ),
+        }
         assert probe.calls == []
         assert event_server.sim.encounter is not None
         assert event_server.sim.encounter.state is EncounterState.NOT_STARTED
-        external_entities = result["side_b"]["entity_assignments"]
         assert runtime.provider.handshake().active_assignments == len(
             external_entities
         )
@@ -350,7 +370,7 @@ def test_registered_provider_is_one_prepared_ai_path_and_defers_logic() -> None:
                 "session_id": session_id,
                 "entity_uuids": [
                     row["entity_uuid"]
-                    for row in result["side_a"]["entity_assignments"]
+                    for row in player_entities
                 ],
             },
         )
@@ -389,12 +409,18 @@ def test_registered_provider_is_one_prepared_ai_path_and_defers_logic() -> None:
         assert event_server.sim.game is not None
         assert str(event_server.sim.game.active_entity_uuid) in {
             row["entity_uuid"]
-            for row in result["side_a"]["entity_assignments"]
+            for row in player_entities
         }
 
+        _replacement_composition, replacement_exact = (
+            await _compose_and_preview(
+                client,
+                controllers=("human", "human"),
+            )
+        )
         replacement = await client.post(
             "/game-creation/start",
-            json=_start_payload(side_a="human", side_b="human"),
+            json=replacement_exact,
         )
         assert replacement.status_code == 200
         assert runtime.provider.handshake().active_assignments == 0
@@ -431,10 +457,11 @@ def test_second_provider_side_capacity_failure_rolls_back_first_lease() -> None:
         )
         assert registered.status_code == 200
 
-        rejected = await client.post(
-            "/game-creation/start",
-            json=_start_payload(side_a="ai", side_b="ai"),
+        _composition, exact = await _compose_and_preview(
+            client,
+            controllers=("ai", "ai"),
         )
+        rejected = await client.post("/game-creation/start", json=exact)
 
         assert rejected.status_code == 503
         assert rejected.json()["detail"]["code"] == (

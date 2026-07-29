@@ -23,9 +23,11 @@ from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
     RangeType,
 )
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
-    NumericalModifier, DamageType,
-    ResistanceModifier, ResistanceStatus,
+    NumericalModifier,
+    ResistanceModifier,
+    ResistanceStatus,
 )
 from dnd.entity import Entity
 from dnd.actions import (
@@ -101,7 +103,13 @@ class DraconicResilience(BaseCondition):
 
 
 class ElementalAffinityResistance(BaseCondition):
-    """Temporary ancestry resistance purchased with one sorcery point."""
+    """Temporary ancestry resistance purchased with one sorcery point.
+
+    Attributes:
+        name: Player-facing temporary resistance name.
+        description: Rules summary for the temporary resistance.
+        damage_type: Ancestry damage type resisted by this instance.
+    """
 
     name: str = Field(
         default="Elemental Affinity Resistance",
@@ -165,7 +173,16 @@ class ElementalAffinityResistance(BaseCondition):
 
 
 class ElementalAffinityResistanceAction(BaseAction):
-    """Spend one sorcery point for one hour of ancestry resistance."""
+    """Spend one sorcery point for one hour of ancestry resistance.
+
+    Attributes:
+        name: Human-readable Elemental Affinity action name.
+        description: Rules summary for the resistance decision.
+        target_type: Elemental Affinity affects only the sorcerer.
+        action_category: Classifies Elemental Affinity as a class ability.
+        damage_type: Selected ancestry damage type.
+        costs: One sorcery point and no action-economy cost.
+    """
 
     name: str = Field(
         default="Elemental Affinity Resistance",
@@ -1062,7 +1079,7 @@ class ConvertSPToSlot(BaseAction):
             return execution_event.cancel(status_message="Entity not found")
 
         slot_cost_type_name: CostType = spell_slot_cost_type(self.slot_level)
-        slot_value = entity.action_economy._get_spell_slot_value(self.slot_level)
+        slot_value = entity.action_economy.spell_slot_value(self.slot_level)
 
         cost_modifiers = entity.action_economy.get_cost_modifiers(slot_cost_type_name)
         if cost_modifiers:
@@ -1120,7 +1137,7 @@ class SorceryPointsFeature(BaseCondition):
                 ))
 
         for slot_level in range(1, 6):
-            slot_value = target.action_economy._get_spell_slot_value(slot_level)
+            slot_value = target.action_economy.spell_slot_value(slot_level)
             base_mod = slot_value.get_base_modifier()
             if base_mod and base_mod.normalized_value > 0:
                 target.register_action(ConvertSlotToSP(

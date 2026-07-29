@@ -6,7 +6,6 @@ and are removed by exact behavior identity when their owning choice is removed.
 """
 
 from collections.abc import Callable
-from uuid import UUID, uuid5
 
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.blocks.equipment import ArmorClassFormulaCandidate
@@ -28,6 +27,14 @@ from dnd.content_system.character_build_validation import (
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
+from dnd.content_system.character_grant_applier_runtime import (
+    character_grant_id,
+    grant_receipt,
+    is_first_grant_for_ref,
+    register_bound_action,
+    require_grant_ref,
+    validated_class_level,
+)
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
     ModifierHandle,
@@ -36,8 +43,8 @@ from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.core.base_actions import BaseAction
-from dnd.core.content.identities import ContentRef
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 
 
 SORCERY_POINTS_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
@@ -84,75 +91,6 @@ _METAMAGIC_ACTION_BY_OPTION: dict[
 }
 
 
-def _grant_id(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-) -> UUID:
-    return uuid5(context.character_id, entry.grant_token)
-
-
-def _base_receipt(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    modifier_handles: tuple[ModifierHandle, ...] = (),
-    spell_damage_affinity_contribution_ids: tuple[UUID, ...] = (),
-    action_uuids: tuple[UUID, ...] = (),
-    resource_contribution_ids: tuple[tuple[str, UUID], ...] = (),
-    resource_recovery_contribution_ids: tuple[
-        tuple[str, UUID],
-        ...,
-    ] = (),
-    armor_class_formula_ids: tuple[UUID, ...] = (),
-    transient_condition_refs_to_remove: tuple[ContentRef, ...] = (),
-) -> CharacterGrantReceipt:
-    return CharacterGrantReceipt(
-        grant_id=_grant_id(context, entry),
-        grant_token=entry.grant_token,
-        definition_ref=entry.content_ref,
-        modifier_handles=modifier_handles,
-        spell_damage_affinity_contribution_ids=(
-            spell_damage_affinity_contribution_ids
-        ),
-        action_uuids=action_uuids,
-        resource_contribution_ids=resource_contribution_ids,
-        resource_recovery_contribution_ids=(
-            resource_recovery_contribution_ids
-        ),
-        armor_class_formula_ids=armor_class_formula_ids,
-        transient_condition_refs_to_remove=(
-            transient_condition_refs_to_remove
-        ),
-    )
-
-
-def _require_ref(
-    entry: CharacterGrantScheduleEntry,
-    expected_ref: ContentRef,
-) -> None:
-    if entry.content_ref != expected_ref:
-        raise ValueError(
-            "Sorcerer grant applier received a different content ref",
-        )
-
-
-def _sorcerer_level(context: BuiltinCharacterGrantContext) -> int:
-    for class_ref, level in context.preview.class_level_counts:
-        if class_ref == SORCERER_CLASS_REF:
-            return level
-    raise ValueError("Sorcerer feature grant requires Sorcerer class levels")
-
-
-def _is_first_grant_for_ref(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-) -> bool:
-    for scheduled in context.preview.grant_schedule:
-        if scheduled.content_ref == entry.content_ref:
-            return scheduled.grant_token == entry.grant_token
-    raise ValueError("grant entry is absent from its validated preview")
-
-
 def _selected_ancestry_damage_type(
     context: BuiltinCharacterGrantContext,
 ) -> DamageType:
@@ -181,29 +119,15 @@ def _selected_ancestry_damage_type(
     return DamageType[damage_type.upper()]
 
 
-def _register_bound_action(
-    context: BuiltinCharacterGrantContext,
-    *,
-    provider_ref: ContentRef,
-    action: BaseAction,
-) -> None:
-    context.runtime.bind_granted_behavior(
-        action,
-        provider_ref=provider_ref,
-        runtime_owner_uuid=context.entity.uuid,
-    )
-    context.entity.register_action(action)
-
-
 def _apply_sorcery_points(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, SORCERY_POINTS_REF)
+    require_grant_ref(entry, SORCERY_POINTS_REF)
     class_level = entry.provenance.class_level
     if class_level is None or class_level < 2:
         raise ValueError("Sorcery Points require Sorcerer class level 2")
-    source_id = _grant_id(context, entry)
+    source_id = character_grant_id(context, entry)
     economy = context.entity.action_economy
     economy.add_resource_contribution(
         "sorcery_points",
@@ -214,7 +138,7 @@ def _apply_sorcery_points(
     )
     actions: list[BaseAction] = []
     try:
-        if _is_first_grant_for_ref(context, entry):
+        if is_first_grant_for_ref(context, entry):
             for slot_level, capacity in context.preview.normal_spell_slots:
                 if capacity <= 0 or not 1 <= slot_level <= 5:
                     continue
@@ -231,7 +155,7 @@ def _apply_sorcery_points(
                     ),
                 ))
             for action in actions:
-                _register_bound_action(
+                register_bound_action(
                     context,
                     provider_ref=SORCERY_POINTS_REF,
                     action=action,
@@ -241,7 +165,7 @@ def _apply_sorcery_points(
             context.entity.unregister_action_by_uuid(action.uuid)
         economy.remove_resource_contribution("sorcery_points", source_id)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=tuple(action.uuid for action in actions),
@@ -278,12 +202,12 @@ def _apply_metamagic_option(
         source_entity_uuid=context.entity.uuid,
         template=True,
     )
-    _register_bound_action(
+    register_bound_action(
         context,
         provider_ref=content_ref,
         action=action,
     )
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=(action.uuid,),
@@ -295,13 +219,13 @@ def _apply_draconic_resilience(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, DRACONIC_RESILIENCE_REF)
-    source_id = _grant_id(context, entry)
+    require_grant_ref(entry, DRACONIC_RESILIENCE_REF)
+    source_id = character_grant_id(context, entry)
     hp_modifier = NumericalModifier.create(
         source_entity_uuid=context.entity.uuid,
         target_entity_uuid=context.entity.uuid,
         name="Draconic Resilience HP",
-        value=_sorcerer_level(context),
+        value=validated_class_level(context, SORCERER_CLASS_REF),
     )
     context.entity.health.max_hit_points_bonus.self_static.add_value_modifier(
         hp_modifier,
@@ -321,7 +245,7 @@ def _apply_draconic_resilience(
             hp_modifier.uuid,
         )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         modifier_handles=(
@@ -354,16 +278,16 @@ def _apply_draconic_ancestry(
         raise ValueError(
             "Draconic ancestry applier received a different feature",
         )
-    return _base_receipt(context, entry)
+    return grant_receipt(context, entry)
 
 
 def _apply_elemental_affinity(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, ELEMENTAL_AFFINITY_REF)
+    require_grant_ref(entry, ELEMENTAL_AFFINITY_REF)
     damage_type = _selected_ancestry_damage_type(context)
-    source_id = _grant_id(context, entry)
+    source_id = character_grant_id(context, entry)
     context.entity.spellcasting.add_spell_damage_affinity_contribution(
         source_id,
         damage_type=damage_type,
@@ -375,7 +299,7 @@ def _apply_elemental_affinity(
         template=True,
     )
     try:
-        _register_bound_action(
+        register_bound_action(
             context,
             provider_ref=ELEMENTAL_AFFINITY_REF,
             action=action,
@@ -385,7 +309,7 @@ def _apply_elemental_affinity(
             source_id,
         )
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         spell_damage_affinity_contribution_ids=(source_id,),
@@ -400,21 +324,21 @@ def _apply_sorcerous_restoration(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, SORCEROUS_RESTORATION_DECLARATION.ref)
+    require_grant_ref(entry, SORCEROUS_RESTORATION_DECLARATION.ref)
     definition = SORCERER_STRUCTURAL_FEATURE_DEFINITIONS_BY_REF[
         SORCEROUS_RESTORATION_DECLARATION.ref
     ]
     amount = definition.short_rest_sorcery_point_recovery
     if amount is None:
         raise RuntimeError("Sorcerous Restoration omitted recovery amount")
-    source_id = _grant_id(context, entry)
+    source_id = character_grant_id(context, entry)
     context.entity.action_economy.add_resource_recovery_contribution(
         "sorcery_points",
         source_id,
         trigger=RechargeType.SHORT_REST,
         amount=amount,
     )
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         resource_recovery_contribution_ids=(
@@ -427,7 +351,7 @@ def _apply_dragon_wings(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, DRAGON_WINGS_DECLARATION.ref)
+    require_grant_ref(entry, DRAGON_WINGS_DECLARATION.ref)
     actions: tuple[BaseAction, ...] = (
         sorcerer.DragonWings(
             source_entity_uuid=context.entity.uuid,
@@ -441,7 +365,7 @@ def _apply_dragon_wings(
     registered: list[BaseAction] = []
     try:
         for action in actions:
-            _register_bound_action(
+            register_bound_action(
                 context,
                 provider_ref=DRAGON_WINGS_DECLARATION.ref,
                 action=action,
@@ -451,7 +375,7 @@ def _apply_dragon_wings(
         for action in reversed(registered):
             context.entity.unregister_action_by_uuid(action.uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=tuple(action.uuid for action in registered),
@@ -463,7 +387,7 @@ def _apply_draconic_presence(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    _require_ref(entry, DRACONIC_PRESENCE_DECLARATION.ref)
+    require_grant_ref(entry, DRACONIC_PRESENCE_DECLARATION.ref)
     actions: tuple[BaseAction, ...] = (
         sorcerer.DraconicPresence(
             source_entity_uuid=context.entity.uuid,
@@ -479,7 +403,7 @@ def _apply_draconic_presence(
     registered: list[BaseAction] = []
     try:
         for action in actions:
-            _register_bound_action(
+            register_bound_action(
                 context,
                 provider_ref=DRACONIC_PRESENCE_DECLARATION.ref,
                 action=action,
@@ -489,7 +413,7 @@ def _apply_draconic_presence(
         for action in reversed(registered):
             context.entity.unregister_action_by_uuid(action.uuid)
         raise
-    return _base_receipt(
+    return grant_receipt(
         context,
         entry,
         action_uuids=tuple(action.uuid for action in registered),

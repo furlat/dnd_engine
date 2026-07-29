@@ -14,18 +14,24 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, EventType
+from dnd.core.events import (
+    AbilityName,
+    DamageAppliedEvent,
+    EventPhase,
+    EventQueue,
+    EventType,
+    TakeDamageEvent,
+)
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
     AdvantageStatus,
-    CreatureType,
-    DamageType,
     NumericalModifier,
     ResistanceStatus,
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.spells import (
+from tests.spell_test_exports import (
     ALL_SPELLS,
     CANTRIPS,
     LEVEL_1_SPELLS,
@@ -103,7 +109,11 @@ def create_spell_family_actor(
     )
 
 
-def penalize_saving_throw(entity: Entity, ability_name: str, value: int = -100) -> None:
+def penalize_saving_throw(
+    entity: Entity,
+    ability_name: AbilityName,
+    value: int = -100,
+) -> None:
     """Make one saving throw fail deterministically."""
     saving_throw = entity.saving_throws.get_saving_throw(ability_name)
     saving_throw.bonus.self_static.add_value_modifier(
@@ -202,6 +212,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
         ).apply()
 
     fire_event = assert_completed_spell(fire_event)
+    assert fire_event.attack_outcome is not None
     assert fire_event.damage_rolls is not None
     assert fire_event.dice_roll is not None
     fire_damage = fire_event.damage_rolls[0]
@@ -382,6 +393,7 @@ def test_offensive_spell_families_cover_attack_save_and_auto_hit_damage(capsys) 
 
     fire_event = assert_completed_spell(fire_event)
     assert fire_event.attack_outcome is not None
+    assert fire_event.dice_roll is not None
     assert fire_event.damage_rolls is not None
     assert fire_event.damage_rolls[0].results == [5, 6]
     assert target.get_hp() == hp_before - 11
@@ -757,7 +769,11 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
     assert high.uuid not in selected_targets
     assert undead.uuid not in selected_targets
     assert selector.hp_pool_remaining == 1
-    selected_names = [Entity.get(uuid).name for uuid in selected_targets]
+    selected_names: list[str] = []
+    for entity_uuid in selected_targets:
+        selected_entity = Entity.get(entity_uuid)
+        assert selected_entity is not None
+        selected_names.append(selected_entity.name)
     readout_lines.append(
         (
             f"sleep selection: selected={selected_names}, "
@@ -889,6 +905,7 @@ def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences(
         for event in EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
         if event.phase == EventPhase.COMPLETION
     ][-1]
+    assert isinstance(force_completion, TakeDamageEvent)
     assert force_completion.resolution is not None
     assert force_completion.resolution.incoming_damage == 5
     assert force_completion.resolution.affinity_prevented_damage == 5

@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.events import (
     Event,

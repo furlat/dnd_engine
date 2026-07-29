@@ -22,7 +22,6 @@ import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
-import dnd.items.test_reactions as test_reactions
 import dnd.monsters.circus_fighter_conditions as circus_conditions
 import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
@@ -65,6 +64,11 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
+from dnd.content_system.reaction_definitions import (
+    PARRY_REACTION_DECLARATION,
+    PROTECTION_REACTION_DECLARATION,
+    RETALIATION_REACTION_DECLARATION,
+)
 
 
 SRD_5_1_PACK_ID = "content.srd_5_1_cc"
@@ -80,18 +84,22 @@ class ConditionBehaviorIdentitySpec:
     pack_id: str
     content_id: str
     visibility: ContentVisibility = ContentVisibility.PUBLIC
+    dependencies: tuple[ContentDependency, ...] = ()
 
 
 def _srd(
     condition_type: type[BaseCondition],
     definition_kind: ContentDefinitionKind,
     content_id: str,
+    *,
+    dependencies: tuple[ContentDependency, ...] = (),
 ) -> ConditionBehaviorIdentitySpec:
     return ConditionBehaviorIdentitySpec(
         condition_type=condition_type,
         definition_kind=definition_kind,
         pack_id=SRD_5_1_PACK_ID,
         content_id=content_id,
+        dependencies=dependencies,
     )
 
 
@@ -129,14 +137,44 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(barbarian.RecklessAttackFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.reckless_attack"),
     _srd(barbarian.RecklessAttacking, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.reckless_attacking"),
     _srd(barbarian.RelentlessRage, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.relentless_rage"),
-    _srd(barbarian.Retaliation, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.retaliation"),
+    _srd(
+        barbarian.Retaliation,
+        ContentDefinitionKind.CLASS_FEATURE,
+        "class_feature.barbarian.retaliation",
+        dependencies=(
+            ContentDependency(
+                relation=ContentDependencyRelation.INSTALLS_HANDLER,
+                target_ref=RETALIATION_REACTION_DECLARATION.ref,
+                phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+                notes=(
+                    "The persistent class feature installs the independently "
+                    "authored Retaliation reaction."
+                ),
+            ),
+        ),
+    ),
     _srd(feats.LuckyFeature, ContentDefinitionKind.FEAT, "feat.lucky"),
     _srd(fighter.ActionSurgeFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.action_surge"),
     _srd(fighter.ExtraAttackFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.extra_attack"),
     _srd(fighter.FightingStyleArchery, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.archery"),
     _srd(fighter.FightingStyleDefense, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.defense"),
     _srd(fighter.FightingStyleDueling, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.dueling"),
-    _srd(fighter.FightingStyleProtection, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.protection"),
+    _srd(
+        fighter.FightingStyleProtection,
+        ContentDefinitionKind.CLASS_FEATURE,
+        "class_feature.fighter.fighting_style.protection",
+        dependencies=(
+            ContentDependency(
+                relation=ContentDependencyRelation.INSTALLS_HANDLER,
+                target_ref=PROTECTION_REACTION_DECLARATION.ref,
+                phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+                notes=(
+                    "The persistent fighting style installs the independently "
+                    "authored Protection reaction."
+                ),
+            ),
+        ),
+    ),
     _srd(fighter.FightingStyleTwoWeaponFighting, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.two_weapon_fighting"),
     _srd(fighter.GreatWeaponFighting, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.great_weapon_fighting"),
     _srd(fighter.ImprovedCritical, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.improved_critical"),
@@ -188,8 +226,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
         ContentDefinitionKind.CONDITION,
         "condition.consumable.weapon_coat.timed_fire",
     ),
-    _original(test_reactions.DodgeRollFeature, ContentDefinitionKind.CONDITION, "condition.fixture.dodge_roll", visibility=ContentVisibility.DEVELOPER),
-    _original(test_reactions.Intercepting, ContentDefinitionKind.CONDITION, "condition.fixture.intercepting", visibility=ContentVisibility.DEVELOPER),
 
     # Original circus and skeleton behaviors.
     _original(circus_conditions.CircusPerformer, ContentDefinitionKind.TRAIT, "trait.circus_performer"),
@@ -212,7 +248,22 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(monster_traits.LeadershipAura, ContentDefinitionKind.TRAIT, "trait.leadership_aura"),
     _srd(monster_traits.MartialAdvantageFeature, ContentDefinitionKind.TRAIT, "trait.martial_advantage"),
     _srd(monster_traits.PackTacticsFeature, ContentDefinitionKind.TRAIT, "trait.pack_tactics"),
-    _srd(monster_traits.ParryFeature, ContentDefinitionKind.TRAIT, "trait.parry"),
+    _srd(
+        monster_traits.ParryFeature,
+        ContentDefinitionKind.TRAIT,
+        "trait.parry",
+        dependencies=(
+            ContentDependency(
+                relation=ContentDependencyRelation.INSTALLS_HANDLER,
+                target_ref=PARRY_REACTION_DECLARATION.ref,
+                phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+                notes=(
+                    "The persistent monster trait installs the independently "
+                    "authored Parry reaction."
+                ),
+            ),
+        ),
+    ),
     _srd(monster_traits.RampageAvailable, ContentDefinitionKind.TRAIT, "trait.rampage_available"),
     _srd(monster_traits.RampageFeature, ContentDefinitionKind.TRAIT, "trait.rampage"),
     _srd(monster_traits.SneakAttackFeature, ContentDefinitionKind.TRAIT, "trait.sneak_attack"),
@@ -468,7 +519,10 @@ def _declare_condition_behavior(
                 ),
             ),
             provenance=_provenance(spec, display_name),
-            dependencies=_granted_action_dependencies(spec.condition_type),
+            dependencies=(
+                *_granted_action_dependencies(spec.condition_type),
+                *spec.dependencies,
+            ),
         )
         decorator(spec.condition_type)
         declaration = get_content_declaration(spec.condition_type)

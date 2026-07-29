@@ -319,13 +319,17 @@ def _guidance_processor(
     effective = event.get_effective_roll()
     new_total = effective.total + d4_value
     new_roll = effective.model_copy(update={"total": new_total})
-    event.replace_roll(new_roll, "Guidance", f"+{d4_value} (1d4)")
+    modified_event = event.replace_roll(
+        new_roll,
+        "Guidance",
+        f"+{d4_value} (1d4)",
+    )
 
     target = Entity.get(source_entity_uuid)
     if target and "Guidance" in target.active_conditions:
-        target.remove_condition("Guidance", parent_event=event)
+        target.remove_condition("Guidance", parent_event=modified_event)
 
-    return event.model_copy(update={"modified": True})
+    return modified_event
 
 
 class GuidanceEffect(BaseCondition):

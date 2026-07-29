@@ -21,7 +21,9 @@ from server.external_ai_protocol import (
     ExternalAIDecisionRequest,
     ExternalAIDecisionResponse,
 )
-from server.external_ai_registry import ExternalAIProviderRegistry
+from services.ai_policy_server.external_ai_registry import (
+    ExternalAIProviderRegistry,
+)
 from services.ai_policy_server.app import create_ai_policy_service
 from services.ai_policy_server.composition import (
     AIPolicyServiceRuntime,

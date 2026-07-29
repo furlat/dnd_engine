@@ -27,7 +27,8 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.events import RangeType
-from dnd.core.modifiers import AdvantageStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.runtime_reset import reset_engine_runtime
 
 

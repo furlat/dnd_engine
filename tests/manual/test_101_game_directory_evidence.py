@@ -32,6 +32,7 @@ from server.game_directory.contracts import (
     ArtifactCreate,
     ArtifactKind,
     CharacterDeploymentLeaseCreate,
+    CharacterRevisionHeads,
     GameCreate,
     GameLifecycleState,
     MembershipCapabilities,
@@ -41,10 +42,6 @@ from server.game_directory.contracts import (
     PrincipalCreate,
     PrincipalKind,
     ProducerKind,
-    RatingAdmissionCreate,
-    RatingEstimateCreate,
-    RatingRunCreate,
-    RatingRunStatus,
     WorkerCreate,
     WorkerState,
     WorkerTerminalReadyManifestCreate,
@@ -57,6 +54,9 @@ from server.game_directory.errors import (
 )
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_summary_store import WorkerSummaryEvidence
+from server.worker_terminal_spool import (
+    WorkerCharacterHoldingsEvidenceSet,
+)
 
 NOW = datetime(2026, 7, 21, 19, 0, tzinfo=UTC)
 STARTED = datetime(2026, 7, 21, 18, 58, tzinfo=UTC)
@@ -324,18 +324,23 @@ def test_hosted_terminal_settles_pinned_character_holdings(
         bootstrap_content_system(),
     )
     catalog = service.build_creation_catalog()
-    premade = next(
+    plan = next(
         row
-        for row in catalog.premades
-        if row.premade_id == "hero.fighter_2_sorcerer_3_spellblade"
+        for row in catalog.creation_plans
+        if (
+            row.source_premade_id
+            == "hero.fighter_2_sorcerer_3_spellblade"
+        )
     )
     settings = service.ensure_profile_settings(owner_id)
     character = service.create_character(
         owner_id,
         CreateCharacterRequest(
             display_name="Hosted Settlement Proof",
-            build=premade.build,
+            build=plan.build,
             loadout=CharacterLoadoutDraft(),
+            creation_plan_id=plan.plan_id,
+            creation_plan_digest=plan.plan_digest,
             expected_content_set_digest=catalog.content_set_digest,
             expected_ruleset_digest=settings.ruleset_digest,
             idempotency_key=uuid4(),
@@ -366,6 +371,15 @@ def test_hosted_terminal_settles_pinned_character_holdings(
             character_id=character.character_id,
             entity_uuid=runtime_entity_uuid,
             lease_id=lease.lease_id,
+        ),
+        expected_character_row_version=character.row_version,
+        expected_heads=CharacterRevisionHeads(
+            definition_revision=character.current_definition_revision,
+            definition_digest=character.current_definition_digest,
+            holdings_revision=character.current_holdings_revision,
+            holdings_digest=character.current_holdings_digest,
+            loadout_revision=character.current_loadout_revision,
+            loadout_digest=character.current_loadout_digest,
         ),
     )
     _activate_game(repository, game_id)
@@ -408,6 +422,9 @@ def test_hosted_terminal_settles_pinned_character_holdings(
         source_event_digest="e" * 64,
         source_combat_log_digest="c" * 64,
     )
+    settlement_evidence = WorkerCharacterHoldingsEvidenceSet(
+        evidence=(holdings_evidence,),
+    ).model_dump(mode="json")
     manifest = repository.stage_worker_terminal_ready_manifest(
         WorkerTerminalReadyManifestCreate(
             game_id=game_id,
@@ -416,7 +433,7 @@ def test_hosted_terminal_settles_pinned_character_holdings(
             objective_artifact=replay,
             subjective_artifact=subjective_replay,
             summary_evidence=summary_evidence.model_dump(mode="json"),
-            settlement_evidence=holdings_evidence.model_dump(mode="json"),
+            settlement_evidence=settlement_evidence,
             manifest_digest="d" * 64,
             ready_at=NOW,
         ),
@@ -441,9 +458,9 @@ def test_hosted_terminal_settles_pinned_character_holdings(
             source_combat_log_digest=summary_evidence.source_combat_log_digest,
             manifest_digest=manifest.manifest_digest,
             summary_evidence=summary_evidence.model_dump(mode="json"),
-            settlement_evidence=holdings_evidence.model_dump(mode="json"),
-            settlement_bundle=settlement_bundle,
-            lease_id=lease.lease_id,
+            settlement_evidence=settlement_evidence,
+            settlement_bundles=(settlement_bundle,),
+            lease_ids=(lease.lease_id,),
         )
     assert repository.get_game(game_id).lifecycle_state is GameLifecycleState.ACTIVE
     assert repository.list_artifacts(game_id) == ()
@@ -478,9 +495,9 @@ def test_hosted_terminal_settles_pinned_character_holdings(
         ),
         manifest_digest=manifest.manifest_digest,
         summary_evidence=summary_evidence.model_dump(mode="json"),
-        settlement_evidence=holdings_evidence.model_dump(mode="json"),
-        settlement_bundle=settlement_bundle,
-        lease_id=lease.lease_id,
+        settlement_evidence=settlement_evidence,
+        settlement_bundles=(settlement_bundle,),
+        lease_ids=(lease.lease_id,),
     )
     retry = repository.finalize_staged_worker_terminal_commit(
         replay,
@@ -493,9 +510,9 @@ def test_hosted_terminal_settles_pinned_character_holdings(
         ),
         manifest_digest=manifest.manifest_digest,
         summary_evidence=summary_evidence.model_dump(mode="json"),
-        settlement_evidence=holdings_evidence.model_dump(mode="json"),
-        settlement_bundle=settlement_bundle,
-        lease_id=lease.lease_id,
+        settlement_evidence=settlement_evidence,
+        settlement_bundles=(settlement_bundle,),
+        lease_ids=(lease.lease_id,),
     )
 
     assert retry == first
@@ -515,89 +532,6 @@ def test_hosted_terminal_settles_pinned_character_holdings(
     assert repository.get_worker_terminal_ready_manifest(
         game_id,
     ).adopted_at is not None
-
-
-def test_rating_runs_reference_exact_immutable_summary_evidence_and_survive_restart(
-    tmp_path: Path,
-) -> None:
-    """Ratings remain derived runs over exact summary digests."""
-
-    database_path = tmp_path / "directory.sqlite3"
-    repository = _open(database_path)
-    game_id = _create_game(repository)
-    _activate_game(repository, game_id)
-    replay, subjective_replay = _terminal_artifacts(
-        game_id,
-        objective_digest="1" * 64,
-        subjective_digest="2" * 64,
-    )
-    _, summary = repository.publish_terminal_evidence(
-        replay,
-        _summary(game_id),
-        additional_artifacts=(subjective_replay,),
-        summary_revision=1,
-        source_event_digest="3" * 64,
-        source_combat_log_digest="4" * 64,
-    )
-    run = repository.create_rating_run(
-        RatingRunCreate(
-            algorithm_id="elo",
-            algorithm_version="1",
-            parameters={"initial": 1500, "k": 24},
-            selection_query={"execution_kind": "evaluation"},
-            compatibility_constraints={"ruleset_version": "one-ruleset"},
-        )
-    )
-    admission = repository.add_rating_admission(
-        RatingAdmissionCreate(
-            rating_run_id=run.rating_run_id,
-            game_id=game_id,
-            summary_digest=summary.summary_digest,
-            admitted=True,
-            treatment_id="baseline-policy",
-            configuration_id="hero-config-a",
-            weight=1.0,
-        )
-    )
-    estimate = repository.publish_rating_estimate(
-        RatingEstimateCreate(
-            rating_run_id=run.rating_run_id,
-            subject_id="hero-config-a",
-            estimate=1532.5,
-            uncertainty=21.0,
-            games=12,
-            wins=8,
-            losses=3,
-            draws=1,
-            rank=1,
-            diagnostics={"converged": True},
-        )
-    )
-    completed = repository.set_rating_run_status(
-        run.rating_run_id,
-        status=RatingRunStatus.COMPLETED,
-        output_artifact_digest="9" * 64,
-    )
-    repository.close()
-
-    restarted = _open(database_path)
-    assert restarted.get_rating_run(run.rating_run_id) == completed
-    assert restarted.list_rating_admissions(run.rating_run_id) == (admission,)
-    assert restarted.list_rating_estimates(run.rating_run_id) == (estimate,)
-
-    duplicate = restarted.add_rating_admission(
-        RatingAdmissionCreate(
-            rating_run_id=run.rating_run_id,
-            game_id=game_id,
-            summary_digest=summary.summary_digest,
-            admitted=True,
-            treatment_id="baseline-policy",
-            configuration_id="hero-config-a",
-            weight=1.0,
-        )
-    )
-    assert duplicate == admission
-    restarted.close()
 
 
 def test_terminal_replay_and_summary_publish_as_one_idempotent_transition(

@@ -18,9 +18,9 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import runtime_behavior_provider
 from dnd.core.events import EventPhase
 from dnd.entity import Entity, EntityConfig
-from dnd.items import spell_items
+import dnd.items.spell_items as spell_items
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells import (
+from tests.spell_test_exports import (
     ALL_SPELLS,
     SPELL_CATALOG_METADATA_BY_CLASS,
     SPELL_CATALOG_METADATA_BY_ID,
@@ -57,6 +57,7 @@ from server.player_replication_contract import (
 EXPECTED_CATALOG_IDS = (
     "fire_bolt",
     "sacred_flame",
+    "thaumaturgy",
     "poison_spray",
     "ray_of_frost",
     "acid_splash",
@@ -74,6 +75,7 @@ EXPECTED_CATALOG_IDS = (
     "thunderwave",
     "false_life",
     "charm_person",
+    "hellish_rebuke",
     "sleep",
     "color_spray",
     "shield",
@@ -174,7 +176,9 @@ EXPECTED_NATIVE_CATALOG_IDS = tuple(
     if catalog_id not in {
         "aegis_spark",
         "counterspell",
+        "hellish_rebuke",
         "shield",
+        "thaumaturgy",
     }
 )
 

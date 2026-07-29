@@ -31,6 +31,7 @@ from server.game_directory.contracts import (
     CharacterAdvancementSourceKind,
     CharacterBootstrapCreate,
     CharacterDeploymentLeaseCreate,
+    CharacterRevisionHeads,
     CharacterRevisionState,
     GameCreate,
     MembershipCapabilities,
@@ -59,6 +60,17 @@ ITEM_ID = UUID("20000000-0000-0000-0000-000000000001")
 
 def _open(path: Path) -> GameDirectoryRepository:
     return GameDirectoryRepository(path, capability_pepper=PEPPER, clock=lambda: NOW)
+
+
+def _heads(character) -> CharacterRevisionHeads:
+    return CharacterRevisionHeads(
+        definition_revision=character.current_definition_revision,
+        definition_digest=character.current_definition_digest,
+        holdings_revision=character.current_holdings_revision,
+        holdings_digest=character.current_holdings_digest,
+        loadout_revision=character.current_loadout_revision,
+        loadout_digest=character.current_loadout_digest,
+    )
 
 
 def _recipe(
@@ -609,6 +621,8 @@ def test_exclusive_lease_release_reacquire_and_pinned_deployment(
             character_id=CHARACTER_ID,
             entity_uuid=uuid4(),
         ),
+        expected_character_row_version=advanced.row_version,
+        expected_heads=_heads(advanced),
     )
     repository.close()
 
@@ -702,7 +716,7 @@ def test_released_lease_is_idempotent_but_cannot_authorize_a_deployment(
 ) -> None:
     repository = _open(tmp_path / "directory.sqlite3")
     principal = _principal(repository)
-    repository.create_character_with_revisions(
+    created = repository.create_character_with_revisions(
         _bootstrap(principal.principal_id),
     )
     game, membership = _game_and_membership(repository, principal.principal_id)
@@ -736,6 +750,8 @@ def test_released_lease_is_idempotent_but_cannot_authorize_a_deployment(
                 character_id=CHARACTER_ID,
                 entity_uuid=uuid4(),
             ),
+            expected_character_row_version=created.row_version,
+            expected_heads=_heads(created),
         )
     repository.close()
 
@@ -747,7 +763,7 @@ def test_pinned_deployment_rejects_a_lease_tuple_mismatch(
 ) -> None:
     repository = _open(tmp_path / "directory.sqlite3")
     principal = _principal(repository)
-    repository.create_character_with_revisions(
+    created = repository.create_character_with_revisions(
         _bootstrap(principal.principal_id),
     )
     game, membership = _game_and_membership(repository, principal.principal_id)
@@ -788,6 +804,8 @@ def test_pinned_deployment_rejects_a_lease_tuple_mismatch(
                     entity_uuid=uuid4(),
                     **mismatch,
                 ),
+                expected_character_row_version=created.row_version,
+                expected_heads=_heads(created),
             )
     repository.close()
 
@@ -798,7 +816,7 @@ def test_canonical_heads_and_all_pinned_deployment_lineage_are_immutable(
     database_path = tmp_path / "directory.sqlite3"
     repository = _open(database_path)
     principal = _principal(repository)
-    repository.create_character_with_revisions(
+    created = repository.create_character_with_revisions(
         _bootstrap(principal.principal_id),
     )
     game, membership = _game_and_membership(repository, principal.principal_id)
@@ -817,6 +835,8 @@ def test_canonical_heads_and_all_pinned_deployment_lineage_are_immutable(
             character_id=CHARACTER_ID,
             entity_uuid=uuid4(),
         ),
+        expected_character_row_version=created.row_version,
+        expected_heads=_heads(created),
     )
 
     raw = sqlite3.connect(database_path)

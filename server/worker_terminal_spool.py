@@ -36,9 +36,9 @@ from server.player_replay import (
 )
 
 
-WORKER_TERMINAL_SPOOL_SCHEMA_VERSION = 1
+WORKER_TERMINAL_SPOOL_SCHEMA_VERSION = 2
 WORKER_SUMMARY_EVIDENCE_SCHEMA = "dnd.worker-summary-evidence.v1"
-WORKER_HOLDINGS_EVIDENCE_SCHEMA = "dnd.worker-character-holdings-evidence.v1"
+WORKER_HOLDINGS_EVIDENCE_SCHEMA = "dnd.worker-character-holdings-evidence-set.v1"
 OBJECTIVE_REPLAY_SCHEMA = (
     f"dnd.objective-replay.v{OBJECTIVE_REPLAY_CONTRACT_VERSION}."
     f"{OBJECTIVE_REPLAY_CONTRACT_HASH}"
@@ -117,7 +117,7 @@ class WorkerTerminalReadyManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[1] = WORKER_TERMINAL_SPOOL_SCHEMA_VERSION
+    schema_version: Literal[2] = WORKER_TERMINAL_SPOOL_SCHEMA_VERSION
     game_id: UUID
     worker_instance_id: UUID
     worker_generation: int = Field(ge=1)
@@ -125,7 +125,7 @@ class WorkerTerminalReadyManifest(BaseModel):
     summary: WorkerTerminalComponentDescriptor
     objective_replay: WorkerTerminalComponentDescriptor
     subjective_replay: WorkerTerminalComponentDescriptor
-    holdings: WorkerTerminalComponentDescriptor | None = None
+    holdings: WorkerTerminalComponentDescriptor
     manifest_digest: str = Field(
         min_length=_DIGEST_LENGTH,
         max_length=_DIGEST_LENGTH,
@@ -141,7 +141,7 @@ class WorkerTerminalReadyManifest(BaseModel):
         summary: WorkerTerminalComponentDescriptor,
         objective_replay: WorkerTerminalComponentDescriptor,
         subjective_replay: WorkerTerminalComponentDescriptor,
-        holdings: WorkerTerminalComponentDescriptor | None,
+        holdings: WorkerTerminalComponentDescriptor,
         ready_at: datetime | None = None,
     ) -> Self:
         """Create one ready manifest with its canonical self-authentication."""
@@ -187,8 +187,7 @@ class WorkerTerminalReadyManifest(BaseModel):
                 "terminal manifest component occupies the wrong field",
             )
         if (
-            self.holdings is not None
-            and self.holdings.component_kind
+            self.holdings.component_kind
             is not WorkerTerminalComponentKind.HOLDINGS
         ):
             raise ValueError(
@@ -219,7 +218,24 @@ class WorkerTerminalSpoolBundle:
     summary: WorkerSummaryEvidence
     objective_replay: ObjectiveReplayBundle
     subjective_replay: SubjectivePlayerReplayArchive
-    holdings: WorkerCharacterHoldingsEvidence | None
+    holdings: tuple[WorkerCharacterHoldingsEvidence, ...]
+
+
+class WorkerCharacterHoldingsEvidenceSet(BaseModel):
+    """Ordered terminal holdings evidence for every deployed character."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence: tuple[WorkerCharacterHoldingsEvidence, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_unique_characters(self) -> Self:
+        character_ids = tuple(row.character_id for row in self.evidence)
+        if len(character_ids) != len(set(character_ids)):
+            raise ValueError(
+                "terminal holdings evidence repeats a character",
+            )
+        return self
 
 
 _COMPONENT_SCHEMAS = {
@@ -270,7 +286,7 @@ class WorkerTerminalSpool:
         summary: WorkerSummaryEvidence,
         objective_replay: ObjectiveReplayBundle,
         subjective_replay: SubjectivePlayerReplayArchive,
-        holdings: WorkerCharacterHoldingsEvidence | None = None,
+        holdings: tuple[WorkerCharacterHoldingsEvidence, ...] = (),
     ) -> WorkerTerminalReadyManifest:
         """Durably publish components followed by the generation-fenced manifest."""
 
@@ -316,13 +332,9 @@ class WorkerTerminalSpool:
             WorkerTerminalComponentKind.SUBJECTIVE_REPLAY,
             subjective_replay,
         )
-        holdings_descriptor = (
-            None
-            if holdings is None
-            else self._publish_component(
-                WorkerTerminalComponentKind.HOLDINGS,
-                holdings,
-            )
+        holdings_descriptor = self._publish_component(
+            WorkerTerminalComponentKind.HOLDINGS,
+            WorkerCharacterHoldingsEvidenceSet(evidence=holdings),
         )
         manifest = WorkerTerminalReadyManifest.create(
             game_id=game_id,
@@ -383,14 +395,11 @@ class WorkerTerminalSpool:
             manifest.subjective_replay,
             SubjectivePlayerReplayArchive,
         )
-        holdings = (
-            None
-            if manifest.holdings is None
-            else self._read_component(
-                manifest.holdings,
-                WorkerCharacterHoldingsEvidence,
-            )
+        holdings_set = self._read_component(
+            manifest.holdings,
+            WorkerCharacterHoldingsEvidenceSet,
         )
+        holdings = holdings_set.evidence
         _validate_terminal_components(
             game_id=expected_game_id,
             summary=summary,
@@ -496,7 +505,7 @@ def _validate_terminal_components(
     summary: WorkerSummaryEvidence,
     objective_replay: ObjectiveReplayBundle,
     subjective_replay: SubjectivePlayerReplayArchive,
-    holdings: WorkerCharacterHoldingsEvidence | None,
+    holdings: tuple[WorkerCharacterHoldingsEvidence, ...],
 ) -> None:
     """Require every component to describe one exact terminal boundary."""
 
@@ -534,11 +543,12 @@ def _validate_terminal_components(
         raise WorkerTerminalSpoolIntegrityError(
             "worker terminal component cursor mismatch",
         )
-    if holdings is not None and (
-        holdings.game_id != game_id
-        or holdings.generation_id != summary.generation_id
-        or holdings.terminal_event_cursor != terminal.event_cursor
-        or holdings.terminal_combat_log_cursor != terminal.combat_log_cursor
+    if any(
+        row.game_id != game_id
+        or row.generation_id != summary.generation_id
+        or row.terminal_event_cursor != terminal.event_cursor
+        or row.terminal_combat_log_cursor != terminal.combat_log_cursor
+        for row in holdings
     ):
         raise WorkerTerminalSpoolIntegrityError(
             "worker terminal holdings boundary mismatch",

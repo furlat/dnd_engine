@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
@@ -11,6 +10,7 @@ from ai.codex_tools.hot_runtime import (
     HotCodexQueryRequest,
     HotCodexSession,
 )
+from ai.codex_tools.artifacts import DirectCodexRunArtifact
 from dnd.ai.contracts.observation_replay import apply_observation_frame, materialize_snapshot
 from dnd.ai.contracts.observation import SubjectiveWorldState
 from ai.policy import PolicyDecisionTelemetry
@@ -185,12 +185,14 @@ class _ArtifactRuntime:
 
 def _dense_artifact_world() -> SubjectiveWorldState:
     """Replay the retained run to its densest current-epoch revision."""
-    payload = json.loads(ARTIFACT.read_text(encoding="utf-8"))
-    world = materialize_snapshot(payload["initial_subjective_snapshot"])
+    artifact = DirectCodexRunArtifact.model_validate_json(
+        ARTIFACT.read_text(encoding="utf-8"),
+    )
+    world = materialize_snapshot(artifact.initial_subjective_snapshot)
     best = world
     best_row_count = len(world.current_epoch.affordances.all_rows) if world.current_epoch else 0
-    for frame in payload["observation_frames_response"]["frames"]:
-        if frame["observation_cursor"] <= world.observation_cursor:
+    for frame in artifact.observation_frames_response.frames:
+        if frame.observation_cursor <= world.observation_cursor:
             continue
         world = apply_observation_frame(world, frame)
         row_count = len(world.current_epoch.affordances.all_rows) if world.current_epoch else 0

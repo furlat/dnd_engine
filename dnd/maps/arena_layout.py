@@ -17,7 +17,7 @@ from dnd.items.environment_content import (
     directional_wall_recipe,
     trap_lever_recipe,
 )
-from dnd.items.test_items import (
+from dnd.items.environment_interactables import (
     PullLeverAction,
     TrapLever,
 )
@@ -112,7 +112,7 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
 
 def darken_arena(grid: GridMap) -> None:
     """Set every current arena tile to darkness."""
-    for tile in grid._tiles.values():
+    for tile in grid.get_all_tiles().values():
         tile.default_light = LightLevel.DARKNESS
 
 

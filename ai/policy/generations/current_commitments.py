@@ -22,10 +22,7 @@ from ai.policy.contracts import (
 )
 from dnd.ai.contracts.decision import ExecuteIntent
 from ai.policy.default import DefaultPolicyEvaluation, evaluate_default_policy
-from ai.policy.definitions import (
-    PolicyGenerationRole,
-    PolicyImplementation,
-)
+from ai.policy.definitions import PolicyImplementation
 from ai.policy.host import (
     PolicyHost,
     PolicyTelemetrySink,
@@ -631,8 +628,6 @@ class CurrentCandidatePolicyHost(PolicyHost):
         telemetry_sink: Optional[PolicyTelemetrySink] = None,
     ) -> None:
         """Wrap the candidate evaluator while retaining host lifecycle logic."""
-        if implementation.identity.role is not PolicyGenerationRole.CANDIDATE:
-            raise ValueError("CurrentCandidatePolicyHost requires a candidate generation")
         evaluator = CandidateCommitmentEvaluator(
             policy_id=implementation.identity.generation_id,
             store=commitment_store,
@@ -668,11 +663,8 @@ def create_generation_policy_host(
     memory_store: Optional[PolicyMemoryStore] = None,
     telemetry_sink: Optional[PolicyTelemetrySink] = None,
 ) -> PolicyHost:
-    """Create the correct host without changing frozen baseline behavior."""
-    if (
-        implementation is not None
-        and implementation.identity.role is PolicyGenerationRole.CANDIDATE
-    ):
+    """Create the commitment-aware host for the active policy."""
+    if implementation is not None:
         return CurrentCandidatePolicyHost(
             implementation=implementation,
             policy_id=policy_id,

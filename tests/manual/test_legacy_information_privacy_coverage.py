@@ -19,7 +19,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_skeleton
 from dnd.spells.evocation import Fireball
-from dnd.utils import get_hp, reset_combat_state
+from tests.engine.support import get_hp, reset_combat_state
 
 
 CoverageStatus = Literal["active", "strengthened", "retired", "stale", "unresolved"]
@@ -35,7 +35,7 @@ class LegacyCoverage:
 
 
 THIS_FILE = "tests/manual/test_legacy_information_privacy_coverage.py"
-SENSES_FILE = "tests/engine_book/test_chapter_12_senses_light_stealth.py"
+SENSES_FILE = "tests/engine/test_senses_light_stealth.py"
 PROJECTION_FILE = "tests/manual/test_113_subjective_combat_log_projection.py"
 OBSERVATION_FILE = "tests/manual/test_28_subjective_observation_stream.py"
 

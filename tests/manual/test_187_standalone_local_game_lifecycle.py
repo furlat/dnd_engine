@@ -5,16 +5,25 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from pathlib import Path
+import time
 from types import SimpleNamespace
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.core.content.durable_characters import (
+    CharacterDefinitionRevisionV2,
+    CharacterLoadoutRevisionV1,
+)
+from dnd.core.content.encounters import EncounterRosterRecipe
 from dnd.core.events import EventQueue
 from dnd.core.life_types import LifeState
+from dnd.encounter import TurnState
 from dnd.entity import Entity
+from dnd.scenarios.encounter_catalog import AUTHORED_ROSTER_RECIPES_BY_ID
 from server.character_directory_contracts import (
     CharacterLoadoutMutationRequest,
     CharacterLoadoutDraft,
@@ -23,6 +32,7 @@ from server.character_directory_contracts import (
 from server.character_directory_service import CharacterDirectoryService
 from server.game_directory.contracts import (
     ArtifactCreate,
+    CharacterRevisionBundleCommit,
     ExecutionKind,
     GameLifecycleState,
 )
@@ -40,18 +50,23 @@ def _create_character(
     owner_id: UUID,
 ) -> UUID:
     catalog = service.build_creation_catalog()
-    premade = next(
+    plan = next(
         row
-        for row in catalog.premades
-        if row.premade_id == "hero.fighter_2_sorcerer_3_spellblade"
+        for row in catalog.creation_plans
+        if (
+            row.source_premade_id
+            == "hero.fighter_2_sorcerer_3_spellblade"
+        )
     )
     settings = service.ensure_profile_settings(owner_id)
     created = service.create_character(
         owner_id,
         CreateCharacterRequest(
             display_name="Spellblade",
-            build=premade.build,
+            build=plan.build,
             loadout=CharacterLoadoutDraft(),
+            creation_plan_id=plan.plan_id,
+            creation_plan_digest=plan.plan_digest,
             expected_content_set_digest=catalog.content_set_digest,
             expected_ruleset_digest=settings.ruleset_digest,
             idempotency_key=uuid4(),
@@ -87,6 +102,160 @@ def _coordinator(
     return coordinator, service, handle.profile_id
 
 
+def _compose_start_payload(
+    client: TestClient,
+    *,
+    character_ids: tuple[UUID, ...] = (),
+    player_roster_selection: dict[str, Any] | None = None,
+    player_controller: str = "human",
+    second_character_controller: str | None = None,
+    opponent_controller: str = "human",
+    opponent_roster_id: str = "monsters.skeleton_trio",
+    battlefield_id: str = "battlefield.open_floor_bright",
+    deployment_id: str = "neutral.battlefield.open_floor_bright",
+) -> dict[str, Any]:
+    def controller(kind: str, name: str) -> dict[str, object]:
+        row: dict[str, object] = {
+            "controller": kind,
+            "participant_name": name,
+            "member_overrides": [],
+        }
+        if kind == "ai":
+            row["policy_id"] = "builtin.basic"
+        return row
+
+    character_overrides: list[dict[str, object]] = []
+    if second_character_controller is not None:
+        assert len(character_ids) >= 2
+        override: dict[str, object] = {
+            "character_id": str(character_ids[1]),
+            "controller": second_character_controller,
+        }
+        if second_character_controller == "ai":
+            override["policy_id"] = "builtin.basic"
+        character_overrides.append(override)
+    player_roster: dict[str, object]
+    if player_roster_selection is not None:
+        player_roster = player_roster_selection
+    elif character_ids:
+        player_roster = {
+            "kind": "owned_characters",
+            "title": "Owned Party",
+            "character_ids": [str(value) for value in character_ids],
+            "member_controller_overrides": character_overrides,
+        }
+    else:
+        player_roster = {
+            "kind": "authored_roster",
+            "roster_id": "hero.fighter_l5_archer_torch",
+        }
+    composed = client.post(
+        "/game-creation/compose",
+        json={
+            "title": "Local Lifecycle Test",
+            "roster_slots": [
+                {
+                    "roster_slot_id": "players",
+                    "roster": player_roster,
+                    "faction_id": "players",
+                    "deployment_zone_id": "zone_1",
+                    "controller_defaults": controller(
+                        player_controller,
+                        "Players",
+                    ),
+                },
+                {
+                    "roster_slot_id": "opposition",
+                    "roster": {
+                        "kind": "authored_roster",
+                        "roster_id": opponent_roster_id,
+                    },
+                    "faction_id": "opposition",
+                    "deployment_zone_id": "zone_2",
+                    "controller_defaults": controller(
+                        opponent_controller,
+                        "Opposition",
+                    ),
+                },
+            ],
+            "battlefield_id": battlefield_id,
+            "deployment_id": deployment_id,
+            "opening_policy": {
+                "kind": "fixed_roster",
+                "roster_slot_id": "players",
+            },
+        },
+    )
+    assert composed.status_code == 200, composed.text
+    body = composed.json()
+    return {
+        "expected_content_set_digest": body["content_set_digest"],
+        "expected_ruleset_digest": body["ruleset_digest"],
+        "recipe": body["recipe"],
+    }
+
+
+def test_standalone_composes_saved_roster_from_active_local_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local saved-roster CRUD feeds the one exact composition route."""
+    monkeypatch.setenv(
+        "DND_LOCAL_PROFILE_RUNTIME_ROOT",
+        str(tmp_path / "runtime"),
+    )
+    monkeypatch.delenv("DND_LOCAL_PROFILE_ID", raising=False)
+    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
+    source = AUTHORED_ROSTER_RECIPES_BY_ID[
+        "hero.fighter_l5_shield_torch"
+    ]
+    saved_recipe = EncounterRosterRecipe.create(
+        roster_id="roster.saved.local-fighter",
+        title="Local Saved Fighter",
+        members=source.members,
+        tags=("saved",),
+        required_battlefield_capabilities=(
+            source.required_battlefield_capabilities
+        ),
+        forbidden_battlefield_capabilities=(
+            source.forbidden_battlefield_capabilities
+        ),
+    )
+
+    with TestClient(event_server.app) as client:
+        profile = client.get("/directory/local-profile").json()
+        headers = {
+            "X-Dnd-Principal-Id": profile["profile_id"],
+            "X-Dnd-Principal-Capability": profile[
+                "principal_capability"
+            ],
+        }
+        saved_response = client.post(
+            "/directory/encounter-rosters",
+            headers=headers,
+            json={
+                "title": saved_recipe.title,
+                "recipe": saved_recipe.model_dump(mode="json"),
+            },
+        )
+        assert saved_response.status_code == 200, saved_response.text
+        saved = saved_response.json()
+
+        composed = _compose_start_payload(
+            client,
+            player_roster_selection={
+                "kind": "saved_roster",
+                "saved_roster_id": saved["saved_roster_id"],
+                "expected_revision": saved["revision"],
+                "expected_recipe_digest": saved["recipe_digest"],
+            },
+        )
+
+    assert composed["recipe"]["roster_slots"][0]["roster"] == (
+        saved_recipe.model_dump(mode="json")
+    )
+
+
 def test_local_lifecycle_notifies_after_each_durable_boundary(
     tmp_path: Path,
 ) -> None:
@@ -111,9 +280,10 @@ def test_local_lifecycle_notifies_after_each_durable_boundary(
         scenario_kind="composed",
         scenario_id="fixture.directory-notifications",
         display_name="Directory Notifications",
-        character_id=character_id,
+        character_ids=(character_id,),
+        membership_roster_slot_id="players",
     )
-    coordinator.pin_character(uuid4())
+    coordinator.pin_characters({character_id: uuid4()})
     coordinator.activate()
     coordinator.interrupt("test_complete")
 
@@ -164,11 +334,13 @@ def test_prepare_pins_local_game_identity_and_exclusively_leases_character(
         scenario_kind="composed",
         scenario_id="fixture.spellblade",
         display_name="Spellblade Test",
-        character_id=character_id,
+        character_ids=(character_id,),
+        membership_roster_slot_id="players",
     )
 
-    assert prepared.character_snapshot is not None
-    assert prepared.character_snapshot.character_id == character_id
+    assert len(prepared.characters) == 1
+    prepared_character = prepared.characters[0]
+    assert prepared_character.snapshot.character_id == character_id
     assert prepared.game.execution_kind is ExecutionKind.LOCAL
     assert prepared.game.lifecycle_state is GameLifecycleState.STARTING
     assert prepared.game.engine_game_id is None
@@ -178,7 +350,7 @@ def test_prepare_pins_local_game_identity_and_exclusively_leases_character(
         character_id,
     )
     assert active_lease is not None
-    assert active_lease.lease_id == prepared.lease_id
+    assert active_lease.lease_id == prepared_character.lease_id
 
     snapshot = service.get_character_snapshot(owner_id, character_id)
     with pytest.raises(ConflictError, match="active deployment"):
@@ -199,9 +371,8 @@ def test_prepare_pins_local_game_identity_and_exclusively_leases_character(
             ),
         )
 
-    deployment = coordinator.pin_character(uuid4())
-    assert deployment is not None
-    assert deployment.lease_id == prepared.lease_id
+    deployment = coordinator.pin_characters({character_id: uuid4()})[0]
+    assert deployment.lease_id == prepared_character.lease_id
     assert deployment.game_id == prepared.game.game_id
     assert deployment.pin_state == "pinned"
 
@@ -218,6 +389,56 @@ def test_prepare_pins_local_game_identity_and_exclusively_leases_character(
     )
 
 
+def test_two_character_roster_is_leased_pinned_and_released_together(
+    tmp_path: Path,
+) -> None:
+    coordinator, service, owner_id = _coordinator(tmp_path)
+    first_id = _create_character(service, owner_id)
+    second_id = _create_character(service, owner_id)
+
+    prepared = coordinator.prepare(
+        creation_manifest={"kind": "two-character-test"},
+        scenario_kind="encounter_recipe",
+        scenario_id="fixture.two-character-roster",
+        display_name="Two Character Roster",
+        character_ids=(first_id, second_id),
+        membership_roster_slot_id="players",
+    )
+    assert tuple(
+        row.snapshot.character_id for row in prepared.characters
+    ) == (first_id, second_id)
+    assert all(
+        service.repository.get_active_character_deployment_lease(
+            character_id,
+        )
+        is not None
+        for character_id in (first_id, second_id)
+    )
+
+    entity_uuids = {
+        first_id: uuid4(),
+        second_id: uuid4(),
+    }
+    deployments = coordinator.pin_characters(entity_uuids)
+    assert tuple(row.character_id for row in deployments) == (
+        first_id,
+        second_id,
+    )
+    assert tuple(row.entity_uuid for row in deployments) == (
+        entity_uuids[first_id],
+        entity_uuids[second_id],
+    )
+    coordinator.activate()
+    coordinator.interrupt("two_character_test_complete")
+    assert all(
+        service.repository.get_active_character_deployment_lease(
+            character_id,
+        )
+        is None
+        for character_id in (first_id, second_id)
+    )
+
+
 def test_recover_marks_abandoned_local_games_interrupted_and_releases_leases(
     tmp_path: Path,
 ) -> None:
@@ -228,7 +449,8 @@ def test_recover_marks_abandoned_local_games_interrupted_and_releases_leases(
         scenario_kind="composed",
         scenario_id="fixture.crash",
         display_name="Crash Recovery",
-        character_id=character_id,
+        character_ids=(character_id,),
+        membership_roster_slot_id="players",
     )
 
     recovered = StandaloneLocalGameCoordinator(
@@ -261,7 +483,8 @@ def test_nonreplay_termination_rolls_back_lease_release_when_transition_fails(
         scenario_kind="composed",
         scenario_id="fixture.atomic-interrupt",
         display_name="Atomic Interrupt",
-        character_id=character_id,
+        character_ids=(character_id,),
+        membership_roster_slot_id="players",
     )
     coordinator.activate()
     original_transition = (
@@ -423,10 +646,10 @@ def test_standalone_game_creation_uses_durable_local_game_and_pinned_character(
     with TestClient(event_server.app) as client:
         profile = client.get("/directory/local-profile").json()
         catalog = client.get("/character-creation/catalog").json()
-        premade = next(
+        plan = next(
             row
-            for row in catalog["premades"]
-            if row["premade_id"]
+            for row in catalog["creation_plans"]
+            if row["source_premade_id"]
             == "hero.fighter_2_sorcerer_3_spellblade"
         )
         headers = {
@@ -438,8 +661,10 @@ def test_standalone_game_creation_uses_durable_local_game_and_pinned_character(
             headers=headers,
             json={
                 "display_name": "Local Spellblade",
-                "build": premade["build"],
-                "loadout": premade["loadout"],
+                "build": plan["build"],
+                "loadout": plan["loadout"],
+                "creation_plan_id": plan["plan_id"],
+                "creation_plan_digest": plan["plan_digest"],
                 "expected_content_set_digest": catalog["content_set_digest"],
                 "expected_ruleset_digest": profile["settings"][
                     "ruleset_digest"
@@ -452,25 +677,15 @@ def test_standalone_game_creation_uses_durable_local_game_and_pinned_character(
 
         started = client.post(
             "/game-creation/start",
-            json={
-                "character_id": str(character_id),
-                "scenario": {
-                    "kind": "composed",
-                    "hero_configuration_id": (
-                        "hero.fighter_l5_archer_torch"
-                    ),
-                    "monster_configuration_id": "monsters.skeleton_trio",
-                    "battlefield_id": (
-                        "battlefield.standard_hazards_closed"
-                    ),
-                    "deployment_id": (
-                        "neutral.battlefield.standard_hazards_closed"
-                    ),
-                },
-                "side_a": {"controller": "human", "name": "Hero"},
-                "side_b": {"controller": "human", "name": "Opposition"},
-                "opening_side": "side_a",
-            },
+            json=_compose_start_payload(
+                client,
+                character_ids=(character_id,),
+                opponent_roster_id="monsters.goblin_water_cell",
+                battlefield_id="battlefield.standard_hazards_closed",
+                deployment_id=(
+                    "neutral.battlefield.standard_hazards_closed"
+                ),
+            ),
         )
         assert started.status_code == 200, started.text
         game_id = UUID(started.json()["game_id"])
@@ -496,15 +711,7 @@ def test_standalone_game_creation_uses_durable_local_game_and_pinned_character(
 
         replaced = client.post(
             "/game-creation/start",
-            json={
-                "scenario": {
-                    "kind": "preset",
-                    "arena_id": "standard_skeleton_doors",
-                },
-                "side_a": {"controller": "human", "name": "Hero"},
-                "side_b": {"controller": "human", "name": "Opposition"},
-                "opening_side": "side_a",
-            },
+            json=_compose_start_payload(client),
         )
         assert replaced.status_code == 200, replaced.text
         assert (
@@ -517,6 +724,451 @@ def test_standalone_game_creation_uses_durable_local_game_and_pinned_character(
             )
             is None
         )
+
+
+def test_standalone_compose_rebases_prior_content_character_before_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A population-only content advance preserves exact durable characters."""
+
+    runtime_root = tmp_path / "runtime"
+    monkeypatch.setenv("DND_LOCAL_PROFILE_RUNTIME_ROOT", str(runtime_root))
+    monkeypatch.delenv("DND_LOCAL_PROFILE_ID", raising=False)
+    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
+
+    with TestClient(event_server.app) as client:
+        profile = client.get("/directory/local-profile").json()
+        catalog = client.get("/character-creation/catalog").json()
+        plan = next(
+            row
+            for row in catalog["creation_plans"]
+            if row["source_premade_id"]
+            == "hero.fighter_2_sorcerer_3_spellblade"
+        )
+        headers = {
+            "X-Dnd-Principal-Id": profile["profile_id"],
+            "X-Dnd-Principal-Capability": profile[
+                "principal_capability"
+            ],
+        }
+        created = client.post(
+            "/directory/characters",
+            headers=headers,
+            json={
+                "display_name": "Prior Content Spellblade",
+                "build": plan["build"],
+                "loadout": plan["loadout"],
+                "creation_plan_id": plan["plan_id"],
+                "creation_plan_digest": plan["plan_digest"],
+                "expected_content_set_digest": catalog[
+                    "content_set_digest"
+                ],
+                "expected_ruleset_digest": profile["settings"][
+                    "ruleset_digest"
+                ],
+                "idempotency_key": str(uuid4()),
+            },
+        )
+        assert created.status_code == 200, created.text
+        character_id = UUID(created.json()["character"]["character_id"])
+        service = event_server.app.state.character_directory
+        assert isinstance(service, CharacterDirectoryService)
+        owner_id = UUID(profile["profile_id"])
+        current = service.get_character_snapshot(owner_id, character_id)
+        source_definition = current.definition.definition
+        assert isinstance(source_definition, CharacterDefinitionRevisionV2)
+        source_loadout = current.loadout.loadout
+        prior_content_digest = "f" * 64
+        prior_definition = CharacterDefinitionRevisionV2.create(
+            character_id=character_id,
+            definition_revision=source_definition.definition_revision + 1,
+            body_recipe=source_definition.body_recipe,
+            species_ref=source_definition.species_ref,
+            species_variant_ref=source_definition.species_variant_ref,
+            background_ref=source_definition.background_ref,
+            immutable_origin_choices=(
+                source_definition.immutable_origin_choices
+            ),
+            appearance=source_definition.appearance,
+            base_ability_scores=source_definition.base_ability_scores,
+            flexible_ability_bonuses=(
+                source_definition.flexible_ability_bonuses
+            ),
+            class_levels=source_definition.class_levels,
+            premade_id=source_definition.premade_id,
+            earned_character_level=(
+                source_definition.earned_character_level
+            ),
+            content_set_digest=prior_content_digest,
+            ruleset_digest=source_definition.ruleset_digest,
+        )
+        prior_loadout = CharacterLoadoutRevisionV1.create(
+            character_id=character_id,
+            loadout_revision=source_loadout.loadout_revision + 1,
+            based_on_definition_revision=(
+                prior_definition.definition_revision
+            ),
+            prepared_spells=source_loadout.prepared_spells,
+            feature_toggles=source_loadout.feature_toggles,
+        )
+        service.repository.commit_character_revisions(
+            CharacterRevisionBundleCommit(
+                character_id=character_id,
+                expected_row_version=current.character.row_version,
+                expected_heads=current.heads,
+                require_no_active_deployment=True,
+                new_definition=prior_definition,
+                new_loadout=prior_loadout,
+            ),
+        )
+
+        start_request = _compose_start_payload(
+            client,
+            character_ids=(character_id,),
+            opponent_roster_id="monsters.goblin_water_cell",
+        )
+        rebased = service.get_character_snapshot(owner_id, character_id)
+        assert (
+            rebased.definition.definition.content_set_digest
+            == catalog["content_set_digest"]
+        )
+        assert (
+            rebased.definition.definition.definition_revision
+            == prior_definition.definition_revision + 1
+        )
+        assert (
+            rebased.loadout.loadout.based_on_definition_revision
+            == rebased.definition.definition.definition_revision
+        )
+        assert tuple(
+            record.definition.content_set_digest
+            for record in service.get_definition_history(
+                owner_id,
+                character_id,
+            ).definitions
+        )[-2:] == (
+            prior_content_digest,
+            catalog["content_set_digest"],
+        )
+
+        started = client.post(
+            "/game-creation/start",
+            json=start_request,
+        )
+        assert started.status_code == 200, started.text
+
+
+@pytest.mark.parametrize("second_controller", ["ai", "codex"])
+def test_standalone_two_owned_characters_preserve_member_controllers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    second_controller: str,
+) -> None:
+    """Standalone start keeps ordered character sources across control kinds."""
+    monkeypatch.setenv(
+        "DND_LOCAL_PROFILE_RUNTIME_ROOT",
+        str(tmp_path / "runtime"),
+    )
+    monkeypatch.delenv("DND_LOCAL_PROFILE_ID", raising=False)
+    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
+
+    with TestClient(event_server.app) as client:
+        profile = client.get("/directory/local-profile").json()
+        catalog = client.get("/character-creation/catalog").json()
+        plan = next(
+            row
+            for row in catalog["creation_plans"]
+            if row["source_premade_id"]
+            == "hero.fighter_2_sorcerer_3_spellblade"
+        )
+        headers = {
+            "X-Dnd-Principal-Id": profile["profile_id"],
+            "X-Dnd-Principal-Capability": profile[
+                "principal_capability"
+            ],
+        }
+        character_ids: list[UUID] = []
+        for display_name in ("First Local", "Second Local"):
+            created = client.post(
+                "/directory/characters",
+                headers=headers,
+                json={
+                    "display_name": display_name,
+                    "build": plan["build"],
+                    "loadout": plan["loadout"],
+                    "creation_plan_id": plan["plan_id"],
+                    "creation_plan_digest": plan["plan_digest"],
+                    "expected_content_set_digest": catalog[
+                        "content_set_digest"
+                    ],
+                    "expected_ruleset_digest": profile["settings"][
+                        "ruleset_digest"
+                    ],
+                    "idempotency_key": str(uuid4()),
+                },
+            )
+            assert created.status_code == 200, created.text
+            character_ids.append(
+                UUID(created.json()["character"]["character_id"]),
+            )
+
+        started = client.post(
+            "/game-creation/start",
+            json=_compose_start_payload(
+                client,
+                character_ids=tuple(character_ids),
+                player_controller="human",
+                second_character_controller=second_controller,
+            ),
+        )
+        assert started.status_code == 200, started.text
+        payload = started.json()
+        assignments = payload["rosters"][0]["entity_assignments"]
+        assert [UUID(row["character_id"]) for row in assignments] == (
+            character_ids
+        )
+        assert [row["controller"] for row in assignments] == [
+            "human",
+            second_controller,
+        ]
+        coordinator = event_server._active_local_game_coordinator()
+        assert coordinator is not None
+        current = coordinator.current
+        assert current is not None
+        assert [
+            row.snapshot.character_id for row in current.characters
+        ] == character_ids
+        for character_id, assignment in zip(
+            character_ids,
+            assignments,
+            strict=True,
+        ):
+            lease = (
+                coordinator.repository.get_active_character_deployment_lease(
+                    character_id,
+                )
+            )
+            assert lease is not None
+            deployments = coordinator.repository.list_character_deployments(
+                character_id,
+            )
+            assert str(deployments[-1].entity_uuid) == assignment[
+                "entity_uuid"
+            ]
+        if second_controller == "ai":
+            assert assignments[1]["policy_id"] == "builtin.basic"
+            assert assignments[1]["codex_session_id"] is None
+        else:
+            assert assignments[1]["policy_id"] is None
+            assert assignments[1]["codex_session_id"] is not None
+
+
+def test_standalone_two_owned_humans_both_wait_for_player_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ending Human A cannot autonomously execute or end Human B's turn."""
+    monkeypatch.setenv(
+        "DND_LOCAL_PROFILE_RUNTIME_ROOT",
+        str(tmp_path / "runtime"),
+    )
+    monkeypatch.delenv("DND_LOCAL_PROFILE_ID", raising=False)
+    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
+
+    with TestClient(event_server.app) as client:
+        profile = client.get("/directory/local-profile").json()
+        catalog = client.get("/character-creation/catalog").json()
+        plan = next(
+            row
+            for row in catalog["creation_plans"]
+            if row["source_premade_id"]
+            == "hero.fighter_2_sorcerer_3_spellblade"
+        )
+        headers = {
+            "X-Dnd-Principal-Id": profile["profile_id"],
+            "X-Dnd-Principal-Capability": profile[
+                "principal_capability"
+            ],
+        }
+        character_ids: list[UUID] = []
+        for display_name in ("Human A", "Human B"):
+            created = client.post(
+                "/directory/characters",
+                headers=headers,
+                json={
+                    "display_name": display_name,
+                    "build": plan["build"],
+                    "loadout": plan["loadout"],
+                    "creation_plan_id": plan["plan_id"],
+                    "creation_plan_digest": plan["plan_digest"],
+                    "expected_content_set_digest": catalog[
+                        "content_set_digest"
+                    ],
+                    "expected_ruleset_digest": profile["settings"][
+                        "ruleset_digest"
+                    ],
+                    "idempotency_key": str(uuid4()),
+                },
+            )
+            assert created.status_code == 200, created.text
+            character_ids.append(
+                UUID(created.json()["character"]["character_id"]),
+            )
+
+        started = client.post(
+            "/game-creation/start",
+            json=_compose_start_payload(
+                client,
+                character_ids=tuple(character_ids),
+                player_controller="human",
+                opponent_controller="ai",
+                opponent_roster_id="monsters.goblin_water_cell",
+            ),
+        )
+        assert started.status_code == 200, started.text
+        assignments = started.json()["rosters"][0]["entity_assignments"]
+        assert [row["controller"] for row in assignments] == [
+            "human",
+            "human",
+        ]
+        first_uuid, second_uuid = (
+            UUID(row["entity_uuid"]) for row in assignments
+        )
+        encounter = event_server.sim.encounter
+        assert encounter is not None
+        remaining = [
+            entity_uuid
+            for entity_uuid in encounter.initiative_order
+            if entity_uuid not in {first_uuid, second_uuid}
+        ]
+        encounter.initiative_order = [
+            first_uuid,
+            remaining[0],
+            second_uuid,
+            *remaining[1:],
+        ]
+        encounter.current_turn_index = 0
+
+        created_session = client.post(
+            "/session/create",
+            json={"player_type": "human", "name": "Party Owner"},
+        )
+        assert created_session.status_code == 200, created_session.text
+        session_id = created_session.json()["session_id"]
+        joined = client.post(
+            "/game/join",
+            json={
+                "session_id": session_id,
+                "entity_uuids": [
+                    str(first_uuid),
+                    str(second_uuid),
+                ],
+            },
+        )
+        assert joined.status_code == 200, joined.text
+        assert set(joined.json()["controlled_entities"]) == {
+            str(first_uuid),
+            str(second_uuid),
+        }
+        bootstrap_response = client.get(
+            "/replication/bootstrap",
+            params={"session_id": session_id},
+        )
+        assert bootstrap_response.status_code == 200, bootstrap_response.text
+        bootstrap = bootstrap_response.json()
+        activated = client.post(
+            "/game-creation/activate",
+            json={
+                "session_id": session_id,
+                "expected_source_stream_id": bootstrap["protocol"][
+                    "source_stream_id"
+                ],
+                "expected_generation_id": bootstrap["protocol"][
+                    "generation_id"
+                ],
+                "expected_perspective_epoch_id": bootstrap["perspective"][
+                    "perspective_epoch_id"
+                ],
+            },
+        )
+        assert activated.status_code == 200, activated.text
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            current = encounter.get_current_entity()
+            if (
+                current is not None
+                and current.uuid == first_uuid
+                and encounter.turn_state is TurnState.IN_PROGRESS
+            ):
+                break
+            time.sleep(0.01)
+        current = encounter.get_current_entity()
+        assert current is not None
+        assert current.uuid == first_uuid
+        assert encounter.turn_state is TurnState.IN_PROGRESS
+
+        ended = client.post(
+            "/action/end-turn",
+            json={
+                "session_id": session_id,
+                "entity_uuid": str(first_uuid),
+            },
+        )
+        assert ended.status_code == 200, ended.text
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            current = encounter.get_current_entity()
+            if (
+                current is not None
+                and current.uuid == second_uuid
+                and encounter.turn_state is TurnState.IN_PROGRESS
+            ):
+                break
+            time.sleep(0.01)
+        current = encounter.get_current_entity()
+        assert current is not None
+        assert current.uuid == second_uuid
+        assert encounter.turn_state is TurnState.IN_PROGRESS
+
+        second_turn_count = encounter.combatants[second_uuid].turn_count
+        time.sleep(0.1)
+        current = encounter.get_current_entity()
+        assert current is not None
+        assert current.uuid == second_uuid
+        assert encounter.turn_state is TurnState.IN_PROGRESS
+        assert encounter.combatants[second_uuid].turn_count == second_turn_count
+        available_response = client.get(
+            f"/entity/{second_uuid}/available-actions",
+            params={"session_id": session_id},
+        )
+        assert available_response.status_code == 200, available_response.text
+        move = next(
+            row
+            for row in available_response.json()["position_actions"]
+            if (
+                row["template_name"] == "Move"
+                and row["availability_status"] == "available"
+            )
+        )
+        second_entity = Entity.get(second_uuid)
+        assert second_entity is not None
+        move_target = next(
+            target
+            for target in move["valid_targets"]
+            if target["position"] != list(second_entity.position)
+        )
+        moved = client.post(
+            "/action/execute",
+            json={
+                "session_id": session_id,
+                "entity_uuid": str(second_uuid),
+                "template_name": "Move",
+                "target_index": move_target["index"],
+                "return_available_actions": False,
+            },
+        )
+        assert moved.status_code == 200, moved.text
 
 
 def test_ai_match_publishes_local_terminal_replays_and_game_history(
@@ -539,10 +1191,10 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
             ],
         }
         catalog = client.get("/character-creation/catalog").json()
-        premade = next(
+        plan = next(
             row
-            for row in catalog["premades"]
-            if row["premade_id"]
+            for row in catalog["creation_plans"]
+            if row["source_premade_id"]
             == "hero.fighter_2_sorcerer_3_spellblade"
         )
         created = client.post(
@@ -550,8 +1202,10 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
             headers=headers,
             json={
                 "display_name": "Terminal Spellblade",
-                "build": premade["build"],
-                "loadout": premade["loadout"],
+                "build": plan["build"],
+                "loadout": plan["loadout"],
+                "creation_plan_id": plan["plan_id"],
+                "creation_plan_digest": plan["plan_digest"],
                 "expected_content_set_digest": catalog[
                     "content_set_digest"
                 ],
@@ -565,33 +1219,20 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
         character_id = UUID(created.json()["character"]["character_id"])
         started = client.post(
             "/game-creation/start",
-            json={
-                "character_id": str(character_id),
-                "scenario": {
-                    "kind": "composed",
-                    "hero_configuration_id": (
-                        "hero.fighter_l5_archer_torch"
-                    ),
-                    "monster_configuration_id": "monsters.skeleton_trio",
-                    "battlefield_id": (
-                        "battlefield.standard_hazards_closed"
-                    ),
-                    "deployment_id": (
-                        "neutral.battlefield.standard_hazards_closed"
-                    ),
-                },
-                "side_a": {"controller": "ai", "name": "Heroes"},
-                "side_b": {"controller": "ai", "name": "Skeletons"},
-                "opening_side": "side_a",
-            },
+            json=_compose_start_payload(
+                client,
+                character_ids=(character_id,),
+                player_controller="ai",
+                opponent_controller="ai",
+            ),
         )
         assert started.status_code == 200, started.text
         payload = started.json()
         game_id = UUID(payload["game_id"])
         observer_uuids = [
             row["entity_uuid"]
-            for side in (payload["side_a"], payload["side_b"])
-            for row in side["entity_assignments"]
+            for roster in payload["rosters"]
+            for row in roster["entity_assignments"]
         ]
         materialized_combatants = [
             Entity.get(UUID(entity_uuid))
@@ -643,9 +1284,9 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
         assert coordinator is not None
         current = coordinator.current
         assert current is not None
-        assert current.deployment_id is not None
+        assert current.characters[0].deployment_id is not None
         membership_id = current.membership.membership_id
-        deployment_id = current.deployment_id
+        deployment_id = current.characters[0].deployment_id
         _drive_ai_game_to_terminal_boundary(
             client,
             coordinator,
@@ -739,10 +1380,10 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                 ],
             }
             catalog = client.get("/character-creation/catalog").json()
-            premade = next(
+            plan = next(
                 row
-                for row in catalog["premades"]
-                if row["premade_id"]
+                for row in catalog["creation_plans"]
+                if row["source_premade_id"]
                 == "hero.fighter_2_sorcerer_3_spellblade"
             )
             created = client.post(
@@ -750,8 +1391,10 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                 headers=headers,
                 json={
                     "display_name": "Recoverable Spellblade",
-                    "build": premade["build"],
-                    "loadout": premade["loadout"],
+                    "build": plan["build"],
+                    "loadout": plan["loadout"],
+                    "creation_plan_id": plan["plan_id"],
+                    "creation_plan_digest": plan["plan_digest"],
                     "expected_content_set_digest": catalog[
                         "content_set_digest"
                     ],
@@ -767,38 +1410,20 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
             )
             started = client.post(
                 "/game-creation/start",
-                json={
-                    "character_id": str(character_id),
-                    "scenario": {
-                        "kind": "composed",
-                        "hero_configuration_id": (
-                            "hero.fighter_l5_archer_torch"
-                        ),
-                        "monster_configuration_id": (
-                            "monsters.skeleton_trio"
-                        ),
-                        "battlefield_id": (
-                            "battlefield.standard_hazards_closed"
-                        ),
-                        "deployment_id": (
-                            "neutral.battlefield.standard_hazards_closed"
-                        ),
-                    },
-                    "side_a": {"controller": "ai", "name": "Heroes"},
-                    "side_b": {
-                        "controller": "ai",
-                        "name": "Skeletons",
-                    },
-                    "opening_side": "side_a",
-                },
+                json=_compose_start_payload(
+                    client,
+                    character_ids=(character_id,),
+                    player_controller="ai",
+                    opponent_controller="ai",
+                ),
             )
             assert started.status_code == 200, started.text
             payload = started.json()
             game_id = UUID(payload["game_id"])
             observer_uuids = [
                 row["entity_uuid"]
-                for side in (payload["side_a"], payload["side_b"])
-                for row in side["entity_assignments"]
+                for roster in payload["rosters"]
+                for row in roster["entity_assignments"]
             ]
             session = client.post(
                 "/session/create",
@@ -826,8 +1451,8 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
             assert coordinator is not None
             current = coordinator.current
             assert current is not None
-            assert current.deployment_id is not None
-            deployment_id = current.deployment_id
+            assert current.characters[0].deployment_id is not None
+            deployment_id = current.characters[0].deployment_id
 
             def injected_settlement_failure(*_args, **_kwargs):
                 raise RuntimeError("injected settlement failure")

@@ -12,8 +12,11 @@ from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import (
     BuiltinSingleClassBuild,
 )
-from dnd.content_system.builtin_character_materialization import (
+from tests.progression.materialization_support import (
     materialize_builtin_character,
+)
+from dnd.content_system.character_appearance import (
+    SORCERER_HUMAN_APPEARANCE,
 )
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_actions import spell_slot_cost_type
@@ -36,6 +39,7 @@ def _sorcerer(*metamagic: str) -> Entity:
             class_id="sorcerer",
             level=5,
             equipment_preset="dagger",
+            appearance=SORCERER_HUMAN_APPEARANCE,
             asi_by_level=(
                 (4, ((AbilityScoreName.CHARISMA, 2),)),
             ),
@@ -133,7 +137,7 @@ def test_font_of_magic_conversions_preserve_slot_and_point_accounting() -> None:
         "sorcery_points",
         5,
     )
-    level_one = slot_to_points.action_economy._get_spell_slot_value(1)
+    level_one = slot_to_points.action_economy.spell_slot_value(1)
     before = level_one.normalized_score
     converted = _action(
         slot_to_points,
@@ -146,7 +150,7 @@ def test_font_of_magic_conversions_preserve_slot_and_point_accounting() -> None:
     ) == 1
 
     points_to_slot = _sorcerer("quickened", "twinned")
-    level_one = points_to_slot.action_economy._get_spell_slot_value(1)
+    level_one = points_to_slot.action_economy.spell_slot_value(1)
     before = level_one.normalized_score
     points_to_slot.action_economy.consume(
         spell_slot_cost_type(1),

@@ -28,10 +28,8 @@ from ai.policy.generations.current_scoring import (
     scalarize_tactical_value,
 )
 from ai.policy.generations.registry import (
-    BASELINE_GENERATION_ID,
-    CANDIDATE_GENERATION_ID,
-    EXPECTED_V31_BEHAVIOR_SHA256,
-    get_policy_implementation,
+    ACTIVE_GENERATION_ID,
+    get_active_policy_implementation,
 )
 from ai.policy.routines import revalidate_active_routine
 from dnd.ai.contracts.control import (
@@ -78,17 +76,14 @@ from tests.manual.test_44_typed_agent_policy import _world
 from tests.manual.test_45_policy_routines import _context, _row
 
 
-def test_candidate_generation_owns_builder_planner_and_hash() -> None:
-    """Accepted and candidate generations execute different policy callables."""
-    baseline = get_policy_implementation(BASELINE_GENERATION_ID)
-    candidate = get_policy_implementation(CANDIDATE_GENERATION_ID)
+def test_active_generation_owns_builder_planner_and_hash() -> None:
+    """The advanced runtime owns one authenticated implementation."""
+    implementation = get_active_policy_implementation()
 
-    assert baseline.identity.implementation_sha256 == EXPECTED_V31_BEHAVIOR_SHA256
-    assert baseline.build_candidates.__module__ == "ai.policy.candidates"
-    assert baseline.plan_routines.__module__ == "ai.policy.routines"
-    assert candidate.build_candidates.__module__ == "ai.policy.generations.current_candidate"
-    assert candidate.plan_routines.__module__ == "ai.policy.generations.current_candidate"
-    assert candidate.identity.implementation_sha256 != baseline.identity.implementation_sha256
+    assert implementation.identity.generation_id == ACTIVE_GENERATION_ID
+    assert implementation.identity.implementation_sha256
+    assert implementation.build_candidates.__module__ == "ai.policy.generations.current_candidate"
+    assert implementation.plan_routines.__module__ == "ai.policy.generations.current_candidate"
 
 
 def test_common_value_profile_scores_identical_vectors_identically() -> None:
@@ -131,24 +126,15 @@ def test_candidate_rejects_healthy_dodge_without_disclosed_pressure() -> None:
         "current_epoch": epoch.model_copy(update={"affordances": affordances}),
     })
     context = PolicyContext(world=candidate_world, facts=derive_agent_facts(candidate_world).facts)
-    baseline = get_policy_implementation(BASELINE_GENERATION_ID)
-    current = get_policy_implementation(CANDIDATE_GENERATION_ID)
-
-    baseline_evaluation = baseline.evaluate(
-        context,
-        tuple(),
-        baseline.build_candidates(context),
-    )
-    candidate_evaluation = current.evaluate(
+    current = get_active_policy_implementation()
+    evaluation = current.evaluate(
         context,
         tuple(),
         current.build_candidates(context),
     )
 
-    assert baseline_evaluation.decision is not None
-    assert baseline_evaluation.decision.selected.intent == ExecuteIntent(row_id=defense_row.row_id)
-    assert candidate_evaluation.decision is not None
-    assert candidate_evaluation.decision.selected.goal is PolicyGoal.DIRECT_PRESSURE
+    assert evaluation.decision is not None
+    assert evaluation.decision.selected.goal is PolicyGoal.DIRECT_PRESSURE
 
 
 def test_candidate_keeps_dodge_under_adjacent_low_hp_pressure() -> None:
@@ -179,7 +165,7 @@ def test_candidate_keeps_dodge_under_adjacent_low_hp_pressure() -> None:
         "current_epoch": epoch.model_copy(update={"affordances": affordances}),
     })
     context = PolicyContext(world=pressured_world, facts=derive_agent_facts(pressured_world).facts)
-    implementation = get_policy_implementation(CANDIDATE_GENERATION_ID)
+    implementation = get_active_policy_implementation()
 
     evaluation = implementation.evaluate(
         context,
@@ -603,10 +589,7 @@ def test_position_then_pressure_competes_with_immediate_weak_damage() -> None:
         capabilities=[strong_capability],
         extra_semantics=[strong_semantics],
     )
-    baseline = get_policy_implementation(BASELINE_GENERATION_ID)
-    current = get_policy_implementation(CANDIDATE_GENERATION_ID)
-
-    baseline_evaluation = baseline.evaluate(context, tuple(), baseline.build_candidates(context))
+    current = get_active_policy_implementation()
     candidate_candidates = current.build_candidates(context)
     candidate_plans = current.plan_routines(
         context,
@@ -616,8 +599,6 @@ def test_position_then_pressure_competes_with_immediate_weak_damage() -> None:
     )
     candidate_evaluation = current.evaluate(context, candidate_plans, candidate_candidates)
 
-    assert baseline_evaluation.decision is not None
-    assert baseline_evaluation.decision.selected.intent == ExecuteIntent(row_id=weak_row.row_id)
     assert candidate_evaluation.decision is not None
     assert candidate_evaluation.decision.selected.intent == ExecuteIntent(row_id=move_row.row_id)
     assert (
@@ -776,7 +757,7 @@ def test_position_then_pressure_skips_capability_that_is_already_legal() -> None
     context = PolicyContext(world=current_world, facts=derive_agent_facts(current_world).facts)
 
     candidates = build_current_candidate_set(context)
-    plans = get_policy_implementation(CANDIDATE_GENERATION_ID).plan_routines(
+    plans = get_active_policy_implementation().plan_routines(
         context,
         None,
         revalidate_active_routine(context, None, candidates),
@@ -933,7 +914,7 @@ def test_typed_durable_bonus_attack_keeps_future_agency_value() -> None:
 def test_pursuit_uses_common_terminal_value_and_exact_goal() -> None:
     """Inherited pursuit competes through projected outcomes, not score 65."""
     context, move_row = _short_range_pressure_context(include_weak_attack=False)
-    implementation = get_policy_implementation(CANDIDATE_GENERATION_ID)
+    implementation = get_active_policy_implementation()
     candidates = implementation.build_candidates(context)
 
     plans = implementation.plan_routines(
@@ -967,7 +948,7 @@ def test_pursuit_uses_common_terminal_value_and_exact_goal() -> None:
 def test_interrupted_enable_cannot_restart_in_same_turn() -> None:
     """One accepted enabler exhausts same-turn move/action routine starts."""
     context, _ = _short_range_pressure_context(include_weak_attack=True)
-    implementation = get_policy_implementation(CANDIDATE_GENERATION_ID)
+    implementation = get_active_policy_implementation()
     candidates = implementation.build_candidates(context)
     idle_revalidation = revalidate_active_routine(context, None, candidates)
     fresh_plans = implementation.plan_routines(

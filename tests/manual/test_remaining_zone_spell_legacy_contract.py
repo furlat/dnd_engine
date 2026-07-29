@@ -34,7 +34,7 @@ from dnd.spells.conjuration import (
 )
 from dnd.spells.evocation import GustOfWind, GustOfWindZone
 from dnd.spells.transmutation import SpikeGrowth, SpikeGrowthZone
-from dnd.utils import get_hp, has_condition
+from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,
@@ -562,7 +562,15 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     saves_after = EventQueue.get_events_by_type(EventType.SAVING_THROW)
     pushes_after = EventQueue.get_events_by_type(EventType.FORCED_MOVEMENT)
     assert len(saves_after) - saves_before == 4
-    assert len(pushes_after) - pushes_before == 2
+    assert [
+        event.phase
+        for event in pushes_after[pushes_before:]
+    ] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
     assert sum(
         event.phase is EventPhase.COMPLETION
         and event.target_entity_uuid == entrant.uuid

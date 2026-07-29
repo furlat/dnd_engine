@@ -1813,6 +1813,119 @@ WORKER_TERMINAL_READY_MANIFESTS = Migration(
     ),
 )
 
+CHARACTER_PRESENTATION_PREFERENCES = Migration(
+    version=11,
+    name="character_presentation_preferences",
+    statements=(
+        """
+        CREATE TABLE character_presentation_preferences (
+            character_id TEXT PRIMARY KEY
+                REFERENCES characters(character_id) ON DELETE CASCADE,
+            schema_version INTEGER NOT NULL
+                CHECK (schema_version = 1),
+            preferences_json TEXT NOT NULL,
+            preferences_digest TEXT NOT NULL
+                CHECK (
+                    length(preferences_digest) = 64
+                    AND preferences_digest NOT GLOB '*[^0-9a-f]*'
+                ),
+            revision INTEGER NOT NULL
+                CHECK (revision >= 1),
+            updated_at TEXT NOT NULL
+        )
+        """,
+    ),
+)
+
+ROSTERS_ENCOUNTERS_AND_PLURAL_DEPLOYMENTS = Migration(
+    version=12,
+    name="rosters_encounters_and_plural_deployments",
+    statements=(
+        """
+        ALTER TABLE local_terminal_commit_intents
+        ADD COLUMN lease_ids_json TEXT NOT NULL DEFAULT '[]'
+        """,
+        """
+        UPDATE local_terminal_commit_intents
+        SET lease_ids_json = CASE
+            WHEN lease_id IS NULL THEN '[]'
+            ELSE '["' || lease_id || '"]'
+        END
+        """,
+        """
+        CREATE TABLE saved_encounter_rosters (
+            roster_id TEXT PRIMARY KEY,
+            owner_principal_id TEXT NOT NULL
+                REFERENCES principals(principal_id),
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            title TEXT NOT NULL,
+            recipe_json TEXT NOT NULL,
+            recipe_digest TEXT NOT NULL
+                CHECK (
+                    length(recipe_digest) = 64
+                    AND recipe_digest NOT GLOB '*[^0-9a-f]*'
+                ),
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(owner_principal_id, title)
+        )
+        """,
+        """
+        CREATE INDEX saved_encounter_rosters_owner_idx
+        ON saved_encounter_rosters(owner_principal_id, updated_at, roster_id)
+        """,
+        """
+        CREATE TABLE saved_encounters (
+            encounter_id TEXT PRIMARY KEY,
+            owner_principal_id TEXT NOT NULL
+                REFERENCES principals(principal_id),
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            title TEXT NOT NULL,
+            recipe_json TEXT NOT NULL,
+            recipe_digest TEXT NOT NULL
+                CHECK (
+                    length(recipe_digest) = 64
+                    AND recipe_digest NOT GLOB '*[^0-9a-f]*'
+                ),
+            revision INTEGER NOT NULL CHECK (revision >= 1),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(owner_principal_id, title)
+        )
+        """,
+        """
+        CREATE INDEX saved_encounters_owner_idx
+        ON saved_encounters(owner_principal_id, updated_at, encounter_id)
+        """,
+    ),
+)
+
+STABLE_SAVED_RESOURCE_IDENTITIES = Migration(
+    version=13,
+    name="stable_saved_resource_identities",
+    statements=(
+        """
+        ALTER TABLE saved_encounter_rosters
+        RENAME COLUMN roster_id TO saved_roster_id
+        """,
+        """
+        ALTER TABLE saved_encounters
+        RENAME COLUMN encounter_id TO saved_encounter_id
+        """,
+    ),
+)
+
+REMOVE_ABANDONED_RATING_STORAGE = Migration(
+    version=14,
+    name="remove_abandoned_rating_storage",
+    statements=(
+        "DROP TABLE IF EXISTS rating_estimates",
+        "DROP TABLE IF EXISTS rating_admissions",
+        "DROP TABLE IF EXISTS rating_runs",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     INITIAL_SCHEMA,
     PLAYER_IDENTITIES_AND_CHARACTERS,
@@ -1824,6 +1937,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     DIRECTORY_MUTATION_RECEIPTS,
     LOCAL_TERMINAL_COMMIT_INTENTS,
     WORKER_TERMINAL_READY_MANIFESTS,
+    CHARACTER_PRESENTATION_PREFERENCES,
+    ROSTERS_ENCOUNTERS_AND_PLURAL_DEPLOYMENTS,
+    STABLE_SAVED_RESOURCE_IDENTITIES,
+    REMOVE_ABANDONED_RATING_STORAGE,
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

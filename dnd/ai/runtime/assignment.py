@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from enum import Enum
 from typing import Final
 from uuid import UUID
 
@@ -28,6 +27,15 @@ from dnd.ai.runtime.execution import (
     AIDecisionValidationError,
     resolve_policy_intent,
 )
+from dnd.ai.runtime.assignment_lifecycle import (
+    AIAssignmentState,
+    AIDecisionBudget,
+    DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS,
+    DEFAULT_MAXIMUM_DECISIONS_PER_TURN,
+    assignment_turn_key,
+    require_controlled_entities,
+    validate_assignment_ownership,
+)
 from dnd.ai.runtime.state_projection import (
     AIDecisionState,
     SubjectiveAIStateProjector,
@@ -36,17 +44,7 @@ from dnd.controller import ControllerStepResult, TurnContext
 from dnd.entity import Entity
 
 
-DEFAULT_MAXIMUM_DECISIONS_PER_TURN: Final = 32
-DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS: Final = 3
 DEFAULT_FEEDBACK_RETENTION: Final = 128
-
-
-class NativeAIAssignmentState(str, Enum):
-    """Explicit lifecycle for one side-owned policy assignment."""
-
-    CREATED = "created"
-    STARTED = "started"
-    CLOSED = "closed"
 
 
 class NativeAIAssignment:
@@ -80,12 +78,6 @@ class NativeAIAssignment:
             if maximum_decisions_per_turn is None
             else maximum_decisions_per_turn
         )
-        if maximum < 1:
-            raise ValueError("maximum_decisions_per_turn must be positive")
-        if maximum_consecutive_canceled_actions < 1:
-            raise ValueError(
-                "maximum_consecutive_canceled_actions must be positive"
-            )
         if feedback_retention < 1:
             raise ValueError("feedback_retention must be positive")
 
@@ -100,11 +92,13 @@ class NativeAIAssignment:
             maximum_consecutive_canceled_actions
         )
         self._instrumentation = instrumentation
-        self._state = NativeAIAssignmentState.CREATED
-        self._decision_sequence = 0
-        self._turn_key: tuple[str, int, int] | None = None
-        self._turn_decisions = 0
-        self._consecutive_canceled_actions = 0
+        self._state = AIAssignmentState.CREATED
+        self._budget = AIDecisionBudget(
+            maximum_decisions_per_turn=maximum,
+            maximum_consecutive_canceled_actions=(
+                maximum_consecutive_canceled_actions
+            ),
+        )
         self._feedback: deque[NativeAIDecisionFeedback] = deque(
             maxlen=feedback_retention
         )
@@ -139,7 +133,7 @@ class NativeAIAssignment:
             ] = InstrumentedPolicyRunner(instrumentation)
 
     @property
-    def state(self) -> NativeAIAssignmentState:
+    def state(self) -> AIAssignmentState:
         """Return the explicit assignment lifecycle state."""
         return self._state
 
@@ -162,19 +156,14 @@ class NativeAIAssignment:
 
     def start(self, entities: list[Entity]) -> None:
         """Start once after exact encounter ownership has been established."""
-        if self._state is NativeAIAssignmentState.CLOSED:
+        if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("native AI assignment is closed")
-        actual = {entity.uuid for entity in entities}
-        expected = set(self.controlled_entity_uuids)
-        if actual != expected:
-            raise ValueError(
-                "encounter controller ownership does not match native AI assignment"
-            )
-        self._state = NativeAIAssignmentState.STARTED
+        validate_assignment_ownership(self.controlled_entity_uuids, entities)
+        self._state = AIAssignmentState.STARTED
 
     def close(self) -> None:
         """Close idempotently and time teardown outside custom policy code."""
-        if self._state is NativeAIAssignmentState.CLOSED:
+        if self._state is AIAssignmentState.CLOSED:
             return
         context = AIInstrumentationContext(
             game_id=self.game_id,
@@ -187,10 +176,8 @@ class NativeAIAssignment:
             context=context,
             phase=AIExecutionPhase.ASSIGNMENT_TEARDOWN,
         ):
-            self._state = NativeAIAssignmentState.CLOSED
-            self._turn_key = None
-            self._turn_decisions = 0
-            self._consecutive_canceled_actions = 0
+            self._state = AIAssignmentState.CLOSED
+            self._budget.close_turn()
 
     def execute_next_action(
         self,
@@ -198,25 +185,24 @@ class NativeAIAssignment:
         context: TurnContext,
     ) -> ControllerStepResult:
         """Project, decide, validate, dispatch, and reduce one policy decision."""
-        if self._state is NativeAIAssignmentState.CREATED:
-            self.start(self._live_controlled_entities())
-        if self._state is NativeAIAssignmentState.CLOSED:
+        if self._state is AIAssignmentState.CREATED:
+            self.start(require_controlled_entities(self.controlled_entity_uuids))
+        if self._state is AIAssignmentState.CLOSED:
             return ControllerStepResult(end_turn=True)
         if entity.uuid not in self.controlled_entity_uuids:
             raise ValueError("actor is not owned by this native AI assignment")
 
-        self._reset_turn_counters_if_needed(entity, context)
-        if self._turn_decisions >= self.maximum_decisions_per_turn:
+        self._budget.reset_for_turn(assignment_turn_key(entity, context))
+        if self._budget.limit_reached:
             self._record_limit_feedback(entity)
             return ControllerStepResult(end_turn=True)
 
-        self._turn_decisions += 1
-        self._decision_sequence += 1
+        decision_sequence = self._budget.begin_decision()
         instrumentation_context = AIInstrumentationContext(
             game_id=self.game_id,
             assignment_id=self.assignment_id,
             actor_uuid=str(entity.uuid),
-            decision_id=f"{self.assignment_id}:{self._decision_sequence}",
+            decision_id=f"{self.assignment_id}:{decision_sequence}",
             policy=self._binding.descriptor,
         )
         try:
@@ -279,7 +265,7 @@ class NativeAIAssignment:
                 turn_context,
                 reason=(
                     DecisionEpochReason.TURN_START
-                    if self._turn_decisions == 1
+                    if self._budget.turn_decisions == 1
                     else DecisionEpochReason.ACTION_COMPLETED
                 ),
             )
@@ -307,13 +293,8 @@ class NativeAIAssignment:
             ),
         )
         self._reduce_feedback(resolution.feedback, instrumentation_context)
-        if resolution.action_canceled:
-            self._consecutive_canceled_actions += 1
-        else:
-            self._consecutive_canceled_actions = 0
-        if (
-            self._consecutive_canceled_actions
-            >= self.maximum_consecutive_canceled_actions
+        if self._budget.record_resolution(
+            action_canceled=resolution.action_canceled,
         ):
             return ControllerStepResult(
                 event=resolution.step.event,
@@ -350,25 +331,10 @@ class NativeAIAssignment:
             },
         )
 
-    def _reset_turn_counters_if_needed(
-        self,
-        entity: Entity,
-        context: TurnContext,
-    ) -> None:
-        turn_key = (
-            str(entity.uuid),
-            context.round_number,
-            context.turn_index,
-        )
-        if self._turn_key == turn_key:
-            return
-        self._turn_key = turn_key
-        self._turn_decisions = 0
-        self._consecutive_canceled_actions = 0
-
     def _record_limit_feedback(self, entity: Entity) -> None:
-        self._decision_sequence += 1
-        decision_id = f"{self.assignment_id}:{self._decision_sequence}"
+        decision_id = (
+            f"{self.assignment_id}:{self._budget.next_sequence()}"
+        )
         context = AIInstrumentationContext(
             game_id=self.game_id,
             assignment_id=self.assignment_id,
@@ -391,14 +357,3 @@ class NativeAIAssignment:
             ),
             context,
         )
-
-    def _live_controlled_entities(self) -> list[Entity]:
-        entities = [
-            entity
-            for entity_uuid in self.controlled_entity_uuids
-            for entity in [Entity.get(entity_uuid)]
-            if entity is not None
-        ]
-        if len(entities) != len(self.controlled_entity_uuids):
-            raise ValueError("native AI assignment has missing controlled entities")
-        return entities

@@ -20,6 +20,7 @@ from dnd.ai.contracts.semantics import (
 from dnd.ai.feedback import NativeAIDecisionFeedback, NativeAIDecisionOutcome
 from dnd.ai.policy import PolicyDescriptor, StatelessPolicyMemory
 from dnd.ai.registry import PolicyRegistry
+from dnd.core.geometry import grid_distance_cells
 from dnd.ai.specification import (
     DataDrivenPolicy,
     PolicyCandidate,
@@ -50,7 +51,6 @@ BASIC_POLICY_DESCRIPTOR = PolicyDescriptor(
 
 BASIC_POLICY_SPEC = PolicySpec(
     descriptor=BASIC_POLICY_DESCRIPTOR,
-    maximum_decisions_per_turn=32,
     rules=(
         PolicyRuleSpec(
             rule_id="urgent_recovery",
@@ -418,7 +418,7 @@ def build_basic_candidates(
     )
     for row in epoch.affordances.all_rows:
         semantics = epoch.affordances.semantics_for(row)
-        tags = _canonical_tags(row, semantics)
+        tags = semantics.tags
         metrics = _candidate_metrics(
             state=state,
             actor=actor,
@@ -450,20 +450,6 @@ def build_basic_candidates(
             )
         )
     return tuple(candidates)
-
-
-def _canonical_tags(
-    row: ActionAffordance,
-    semantics: ActionSemantics,
-) -> frozenset[ActionTag]:
-    """Merge canonical semantic tags with validated row-local tag values."""
-    tags = set(semantics.tags)
-    for raw_tag in row.tags:
-        try:
-            tags.add(ActionTag(raw_tag))
-        except ValueError:
-            continue
-    return frozenset(tags)
 
 
 def _candidate_metrics(
@@ -731,7 +717,7 @@ def _row_memory_fact(
     row: ActionAffordance,
     semantics: ActionSemantics,
 ) -> _BasicRowFact:
-    tags = _canonical_tags(row, semantics)
+    tags = semantics.tags
     return _BasicRowFact(
         semantic_id=semantics.semantic_id,
         tags=tags,
@@ -899,24 +885,17 @@ def _progress_value(
     if not destinations or not contacts:
         return 0.0
     before = min(
-        _grid_distance(actor.position, contact.position)
+        grid_distance_cells(actor.position, contact.position)
         for contact in contacts
         if contact.position is not None
     )
     after = min(
-        _grid_distance(destination, contact.position)
+        grid_distance_cells(destination, contact.position)
         for destination in destinations
         for contact in contacts
         if contact.position is not None
     )
     return float(max(0, before - after))
-
-
-def _grid_distance(
-    left: tuple[int, int],
-    right: tuple[int, int],
-) -> int:
-    return max(abs(left[0] - right[0]), abs(left[1] - right[1]))
 
 
 def _risk_value(

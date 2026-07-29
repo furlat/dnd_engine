@@ -15,7 +15,7 @@ from dnd.spells.abjuration import AntimagicField, AntimagicFieldZone
 from dnd.spells.enchantment import BlessEffect
 from dnd.spells.evocation import FireBolt
 from dnd.spells.transmutation import Haste
-from dnd.utils import has_condition
+from tests.engine.support import has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     reset_spell_regression_arena,

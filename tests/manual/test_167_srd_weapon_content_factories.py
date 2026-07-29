@@ -21,7 +21,7 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.events import RangeType
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import WeaponProperty
 
 
@@ -96,6 +96,16 @@ _EXPECTED = {
         1,
         DamageType.PIERCING,
         (WeaponProperty.THROWN,),
+        RangeType.REACH,
+        5,
+        None,
+    ),
+    "light_hammer": (
+        "Light Hammer",
+        4,
+        1,
+        DamageType.BLUDGEONING,
+        (WeaponProperty.LIGHT, WeaponProperty.THROWN),
         RangeType.REACH,
         5,
         None,
@@ -338,7 +348,7 @@ _EXPECTED = {
 
 
 def test_srd_weapon_declarations_are_exact_frozen_content() -> None:
-    """All 24 playable weapons own stable refs, descriptors, and possession policy."""
+    """All 25 playable weapons own stable refs, descriptors, and possession policy."""
     declarations = weapon_definitions.SRD_WEAPON_DECLARATIONS
     recipes = weapon_definitions.SRD_WEAPON_RECIPES_BY_CONTENT_ID
 

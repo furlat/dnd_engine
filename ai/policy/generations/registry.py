@@ -1,14 +1,12 @@
-"""Closed registry for executable baseline and candidate policy generations."""
+"""Authenticated identity for the active advanced policy."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from ai.policy.candidates import build_policy_candidate_set
 from ai.policy.default import evaluate_default_policy
 from ai.policy.definitions import (
     PolicyGenerationIdentity,
-    PolicyGenerationRole,
     PolicyImplementation,
     build_generation_identity,
 )
@@ -16,27 +14,11 @@ from ai.policy.generations.current_candidate import (
     build_current_candidate_set,
     plan_current_routines,
 )
-from ai.policy.generations.v31_baseline import evaluate_v31_policy
-from ai.policy.routines import plan_registered_routines
 from ai.policy.source import POLICY_NAME, POLICY_VERSION, REPOSITORY_ROOT, policy_source_snapshot
 
 
-BASELINE_GENERATION_ID = "policy.v31.accepted"
-CANDIDATE_GENERATION_ID = "policy.current.candidate"
-_BASELINE_BEHAVIOR_PATHS = tuple(
-    REPOSITORY_ROOT / path
-    for path in (
-        "ai/policy/generations/v31_baseline.py",
-        "ai/policy/candidates.py",
-        "ai/policy/economy.py",
-        "ai/policy/memory.py",
-        "ai/policy/outcomes.py",
-        "ai/policy/routines.py",
-        "ai/policy/tree.py",
-        "ai/policy/utility.py",
-    )
-)
-_CURRENT_BEHAVIOR_PATHS = tuple(
+ACTIVE_GENERATION_ID = "policy.advanced.v32"
+_ACTIVE_BEHAVIOR_PATHS = tuple(
     REPOSITORY_ROOT / path
     for path in (
         "ai/policy/generations/current_candidate.py",
@@ -45,9 +27,7 @@ _CURRENT_BEHAVIOR_PATHS = tuple(
         "ai/policy/generations/current_options.py",
         "ai/planning/contracts.py",
         "ai/planning/composition.py",
-        "ai/planning/regression.py",
         "ai/planning/registry.py",
-        "ai/planning/explain.py",
         "ai/policy/generations/current_scoring.py",
         "ai/policy/default.py",
         "ai/policy/candidates.py",
@@ -58,68 +38,28 @@ _CURRENT_BEHAVIOR_PATHS = tuple(
         "ai/policy/utility.py",
     )
 )
-EXPECTED_V31_BEHAVIOR_SHA256 = "c888aa785ca6d353d336e81aea906f188c501f2569395cc93b2e8a47944a0ba6"
-
-
-def _build_registry() -> dict[str, PolicyImplementation]:
+def _build_active_implementation() -> PolicyImplementation:
     substrate_hash = policy_source_snapshot().source_sha256
-    baseline_identity = build_generation_identity(
-        generation_id=BASELINE_GENERATION_ID,
-        policy_name=POLICY_NAME,
-        policy_version="2026-07-17.shared-policy-v31-result-feedback-search",
-        role=PolicyGenerationRole.BASELINE,
-        implementation_path=Path(__file__).with_name("v31_baseline.py"),
-        implementation_paths=_BASELINE_BEHAVIOR_PATHS,
-        repository_root=REPOSITORY_ROOT,
-        shared_substrate_sha256=substrate_hash,
-    )
-    candidate_identity = build_generation_identity(
-        generation_id=CANDIDATE_GENERATION_ID,
+    identity = build_generation_identity(
+        generation_id=ACTIVE_GENERATION_ID,
         policy_name=POLICY_NAME,
         policy_version=POLICY_VERSION,
-        role=PolicyGenerationRole.CANDIDATE,
         implementation_path=Path(__file__).with_name("current_candidate.py"),
-        implementation_paths=_CURRENT_BEHAVIOR_PATHS,
+        implementation_paths=_ACTIVE_BEHAVIOR_PATHS,
         repository_root=REPOSITORY_ROOT,
         shared_substrate_sha256=substrate_hash,
     )
-    if (
-        EXPECTED_V31_BEHAVIOR_SHA256 != "TO_BE_PINNED"
-        and baseline_identity.implementation_sha256 != EXPECTED_V31_BEHAVIOR_SHA256
-    ):
-        raise RuntimeError(
-            "Accepted v31 policy behavior changed in place. Create a new policy generation instead."
-        )
-    return {
-        BASELINE_GENERATION_ID: PolicyImplementation(
-            identity=baseline_identity,
-            build_candidates=build_policy_candidate_set,
-            plan_routines=plan_registered_routines,
-            evaluate=evaluate_v31_policy,
-        ),
-        CANDIDATE_GENERATION_ID: PolicyImplementation(
-            identity=candidate_identity,
-            build_candidates=build_current_candidate_set,
-            plan_routines=plan_current_routines,
-            evaluate=evaluate_default_policy,
-        ),
-    }
-
-
-_POLICY_IMPLEMENTATIONS = _build_registry()
-
-
-def get_policy_implementation(generation_id: str) -> PolicyImplementation:
-    """Return one executable generation or reject an unregistered identity."""
-    try:
-        return _POLICY_IMPLEMENTATIONS[generation_id]
-    except KeyError as exc:
-        raise ValueError(f"Unknown policy generation: {generation_id}") from exc
-
-
-def list_policy_generations() -> tuple[PolicyGenerationIdentity, ...]:
-    """Return registered generation identities in stable order."""
-    return tuple(
-        _POLICY_IMPLEMENTATIONS[generation_id].identity
-        for generation_id in sorted(_POLICY_IMPLEMENTATIONS)
+    return PolicyImplementation(
+        identity=identity,
+        build_candidates=build_current_candidate_set,
+        plan_routines=plan_current_routines,
+        evaluate=evaluate_default_policy,
     )
+
+
+ACTIVE_POLICY_IMPLEMENTATION = _build_active_implementation()
+
+
+def get_active_policy_implementation() -> PolicyImplementation:
+    """Return the sole advanced policy implementation used by the runtime."""
+    return ACTIVE_POLICY_IMPLEMENTATION

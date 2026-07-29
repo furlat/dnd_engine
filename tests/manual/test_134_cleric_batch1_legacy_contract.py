@@ -28,9 +28,8 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
 from dnd.core.gridmap import get_map
+from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
-    CreatureType,
-    DamageType,
     ResistanceModifier,
     ResistanceStatus,
 )
@@ -52,7 +51,7 @@ from dnd.spells.evocation import (
 )
 from dnd.spells.illusion import Silence
 from dnd.spells.transmutation import HasteEffect
-from dnd.utils import (
+from tests.engine.support import (
     force_attack_hit,
     get_hp,
     has_condition,

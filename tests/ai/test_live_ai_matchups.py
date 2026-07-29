@@ -17,6 +17,10 @@ from typing import Any, TextIO
 import httpx
 
 from dnd.ai.policies.basic import BASIC_POLICY_ID
+from dnd.scenarios.encounter_catalog import (
+    AUTHORED_DEPLOYMENTS_BY_ID,
+    AUTHORED_ENCOUNTER_RECIPES_BY_ID,
+)
 from server.external_ai_protocol import (
     ExternalAIAssignmentOpenRequest,
     ExternalAIProtocolIdentity,
@@ -199,30 +203,106 @@ def _require_success(response: httpx.Response) -> dict[str, Any]:
     return payload
 
 
-def _start_payload(
+def _compose_payload(
     *,
-    side_a_policy_id: str,
-    side_b_policy_id: str,
-    opening_side: str,
+    roster_1_policy_id: str | None,
+    roster_2_policy_id: str | None,
     arena_id: str = "standard_skeleton_doors",
 ) -> dict[str, Any]:
+    encounter = AUTHORED_ENCOUNTER_RECIPES_BY_ID[
+        f"encounter.{arena_id}"
+    ]
+    deployment = AUTHORED_DEPLOYMENTS_BY_ID[
+        f"neutral.{encounter.battlefield_id}"
+    ]
     return {
-        "scenario": {
-            "kind": "preset",
-            "arena_id": arena_id,
+        "title": encounter.title,
+        "roster_slots": [
+            {
+                "roster_slot_id": roster_slot.roster_slot_id,
+                "roster": {
+                    "kind": "authored_roster",
+                    "roster_id": roster_slot.roster.roster_id,
+                },
+                "faction_id": roster_slot.faction_id,
+                "deployment_zone_id": roster_slot.deployment_zone_id,
+                "controller_defaults": {
+                    "controller": (
+                        "ai" if policy_id is not None else "human"
+                    ),
+                    "participant_name": roster_slot.roster.title,
+                    "policy_id": policy_id,
+                    "member_overrides": [],
+                },
+            }
+            for roster_slot, policy_id in zip(
+                encounter.roster_slots,
+                (roster_1_policy_id, roster_2_policy_id),
+                strict=True,
+            )
+        ],
+        "battlefield_id": encounter.battlefield_id,
+        "deployment_id": deployment.deployment_id,
+        "opening_policy": {
+            "kind": "fixed_roster",
+            "roster_slot_id": encounter.roster_slots[0].roster_slot_id,
         },
-        "side_a": {
-            "controller": "ai",
-            "name": "Side A",
-            "policy_id": side_a_policy_id,
-        },
-        "side_b": {
-            "controller": "ai",
-            "name": "Side B",
-            "policy_id": side_b_policy_id,
-        },
-        "opening_side": opening_side,
     }
+
+
+def _start_normalized_game(
+    main: httpx.Client,
+    composed: dict[str, Any],
+) -> dict[str, Any]:
+    started = _require_success(
+        main.post(
+            "/game-creation/start",
+            json={
+                "expected_content_set_digest": (
+                    composed["content_set_digest"]
+                ),
+                "expected_ruleset_digest": composed["ruleset_digest"],
+                "recipe": composed["recipe"],
+            },
+        )
+    )
+    assert started["recipe_digest"] == composed["recipe"]["recipe_digest"]
+    return started
+
+
+def _compose_and_start(
+    main: httpx.Client,
+    *,
+    roster_1_policy_id: str,
+    roster_2_policy_id: str,
+    arena_id: str = "standard_skeleton_doors",
+) -> dict[str, Any]:
+    composed = _require_success(
+        main.post(
+            "/game-creation/compose",
+            json=_compose_payload(
+                roster_1_policy_id=roster_1_policy_id,
+                roster_2_policy_id=roster_2_policy_id,
+                arena_id=arena_id,
+            ),
+        )
+    )
+    assert composed["compatibility"]["admitted"] is True
+    return _start_normalized_game(main, composed)
+
+
+def _roster_assignments(
+    creation: dict[str, Any],
+    roster_slot_id: str,
+) -> list[dict[str, Any]]:
+    roster = next(
+        row
+        for row in creation["rosters"]
+        if row["roster_slot_id"] == roster_slot_id
+    )
+    assignments = roster["entity_assignments"]
+    assert isinstance(assignments, list)
+    return assignments
 
 
 def _assignment_rows(
@@ -261,8 +341,8 @@ def _activate_with_observer(
 ) -> _ObserverReplication:
     all_entities = [
         row["entity_uuid"]
-        for side_name in ("side_a", "side_b")
-        for row in creation[side_name]["entity_assignments"]
+        for roster in creation["rosters"]
+        for row in roster["entity_assignments"]
     ]
     session = _require_success(
         main.post(
@@ -323,10 +403,13 @@ def _assert_isolated_assignments(
     rows: list[dict[str, Any]],
     expected_entity_uuids: set[str],
     *,
+    expected_assignment_ids: set[str],
     policy_id: str | dict[str, str],
 ) -> None:
     assert len(rows) == len(expected_entity_uuids)
-    assert len({row["assignment_id"] for row in rows}) == len(rows)
+    assert {row["assignment_id"] for row in rows} == (
+        expected_assignment_ids
+    )
     assert len({row["token_digest"] for row in rows}) == len(rows)
     assert len({row["policy_instance_id"] for row in rows}) == len(rows)
     assert len({row["memory_instance_id"] for row in rows}) == len(rows)
@@ -337,9 +420,6 @@ def _assert_isolated_assignments(
     for row in rows:
         controlled = row["controlled_entity_uuids"]
         assert len(controlled) == 1
-        assert row["assignment_id"].endswith(
-            f":entity:{controlled[0]}"
-        )
         expected_policy_id = (
             policy_id[controlled[0]]
             if isinstance(policy_id, dict)
@@ -443,20 +523,16 @@ def _wait_for_replication_action_groups(
 
 
 def _close_with_human_replacement(main: httpx.Client) -> None:
-    replacement = _require_success(
+    composed = _require_success(
         main.post(
-            "/game-creation/start",
-            json={
-                "scenario": {
-                    "kind": "preset",
-                    "arena_id": "standard_skeleton_doors",
-                },
-                "side_a": {"controller": "human", "name": "Human A"},
-                "side_b": {"controller": "human", "name": "Human B"},
-                "opening_side": "side_a",
-            },
+            "/game-creation/compose",
+            json=_compose_payload(
+                roster_1_policy_id=None,
+                roster_2_policy_id=None,
+            ),
         )
     )
+    replacement = _start_normalized_game(main, composed)
     assert replacement["status"] == "prepared"
 
 
@@ -554,35 +630,39 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                 _LIVE_TEST_POLICY_ID,
             }
 
-            native_external = _require_success(
-                main.post(
-                    "/game-creation/start",
-                    json=_start_payload(
-                        side_a_policy_id=BASIC_POLICY_ID,
-                        side_b_policy_id=EXTERNAL_BASIC_POLICY_ID,
-                        opening_side="side_a",
-                        arena_id="class_party_mirror_scramble",
-                    ),
-                )
+            native_external = _compose_and_start(
+                main,
+                roster_1_policy_id=BASIC_POLICY_ID,
+                roster_2_policy_id=EXTERNAL_BASIC_POLICY_ID,
             )
-            assert native_external["side_a"]["policy_execution"] == (
-                "in_process"
+            native_assignments = _roster_assignments(
+                native_external,
+                "roster_1",
             )
-            assert native_external["side_a"]["provider_id"] is None
-            assert native_external["side_b"]["policy_execution"] == (
-                "registered_provider"
+            external_assignments = _roster_assignments(
+                native_external,
+                "roster_2",
             )
-            assert native_external["side_b"]["provider_id"] == (
-                servers.provider_id
-            )
+            assert {
+                row["policy_execution"] for row in native_assignments
+            } == {"in_process"}
+            assert {
+                row["provider_id"] for row in native_assignments
+            } == {None}
+            assert {
+                row["policy_execution"] for row in external_assignments
+            } == {"registered_provider"}
+            assert {
+                row["provider_id"] for row in external_assignments
+            } == {servers.provider_id}
             first_game_id = native_external["game_id"]
             first_native_entities = {
                 row["entity_uuid"]
-                for row in native_external["side_a"]["entity_assignments"]
+                for row in native_assignments
             }
             first_external_entities = {
                 row["entity_uuid"]
-                for row in native_external["side_b"]["entity_assignments"]
+                for row in external_assignments
             }
             first_audit = _require_success(provider.get("/test/audit"))
             first_rows = _assignment_rows(
@@ -592,6 +672,13 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
             _assert_isolated_assignments(
                 first_rows,
                 first_external_entities,
+                expected_assignment_ids={
+                    (
+                        f"{first_game_id}:roster_2:"
+                        f"{assignment['member_id']}"
+                    )
+                    for assignment in external_assignments
+                },
                 policy_id=EXTERNAL_BASIC_POLICY_ID,
             )
             assert first_audit["active_assignments"] == 3
@@ -636,43 +723,39 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                 game_id=first_game_id,
             )
 
-            shipped_external_external = _require_success(
-                main.post(
-                    "/game-creation/start",
-                    json=_start_payload(
-                        side_a_policy_id=EXTERNAL_BASIC_POLICY_ID,
-                        side_b_policy_id=EXTERNAL_TACTICAL_POLICY_ID,
-                        opening_side="side_a",
-                        arena_id="class_party_mirror_scramble",
-                    ),
-                )
+            shipped_external_external = _compose_and_start(
+                main,
+                roster_1_policy_id=EXTERNAL_BASIC_POLICY_ID,
+                roster_2_policy_id=EXTERNAL_TACTICAL_POLICY_ID,
             )
-            assert shipped_external_external["side_a"][
-                "policy_execution"
-            ] == (
-                "registered_provider"
+            second_roster_1_assignments = _roster_assignments(
+                shipped_external_external,
+                "roster_1",
             )
-            assert shipped_external_external["side_b"][
-                "policy_execution"
-            ] == (
-                "registered_provider"
+            second_roster_2_assignments = _roster_assignments(
+                shipped_external_external,
+                "roster_2",
             )
+            assert {
+                row["policy_execution"]
+                for row in second_roster_1_assignments
+            } == {"registered_provider"}
+            assert {
+                row["policy_execution"]
+                for row in second_roster_2_assignments
+            } == {"registered_provider"}
             second_game_id = shipped_external_external["game_id"]
-            second_side_a_entities = {
+            second_roster_1_entities = {
                 row["entity_uuid"]
-                for row in shipped_external_external["side_a"][
-                    "entity_assignments"
-                ]
+                for row in second_roster_1_assignments
             }
-            second_side_b_entities = {
+            second_roster_2_entities = {
                 row["entity_uuid"]
-                for row in shipped_external_external["side_b"][
-                    "entity_assignments"
-                ]
+                for row in second_roster_2_assignments
             }
             second_external_entities = {
-                *second_side_a_entities,
-                *second_side_b_entities,
+                *second_roster_1_entities,
+                *second_roster_2_entities,
             }
             second_audit = _require_success(provider.get("/test/audit"))
             second_rows = _assignment_rows(
@@ -682,14 +765,30 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
             _assert_isolated_assignments(
                 second_rows,
                 second_external_entities,
+                expected_assignment_ids={
+                    *{
+                        (
+                            f"{second_game_id}:roster_1:"
+                            f"{assignment['member_id']}"
+                        )
+                        for assignment in second_roster_1_assignments
+                    },
+                    *{
+                        (
+                            f"{second_game_id}:roster_2:"
+                            f"{assignment['member_id']}"
+                        )
+                        for assignment in second_roster_2_assignments
+                    },
+                },
                 policy_id={
                     **{
                         entity_uuid: EXTERNAL_BASIC_POLICY_ID
-                        for entity_uuid in second_side_a_entities
+                        for entity_uuid in second_roster_1_entities
                     },
                     **{
                         entity_uuid: EXTERNAL_TACTICAL_POLICY_ID
-                        for entity_uuid in second_side_b_entities
+                        for entity_uuid in second_roster_2_entities
                     },
                 },
             )
@@ -741,7 +840,7 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                                     game_id=second_game_id,
                                 )
                                 if row["controlled_entity_uuids"][0]
-                                in second_side_a_entities
+                                in second_roster_1_entities
                             ]
                         )
                     )
@@ -754,7 +853,7 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                                     game_id=second_game_id,
                                 )
                                 if row["controlled_entity_uuids"][0]
-                                in second_side_b_entities
+                                in second_roster_2_entities
                             ]
                         )
                     )
@@ -768,28 +867,28 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                 second_rows,
                 require_every_assignment=False,
             )
-            second_side_a_execute_actors = _execute_actors(
+            second_roster_1_execute_actors = _execute_actors(
                 [
                     row
                     for row in second_rows
                     if row["controlled_entity_uuids"][0]
-                    in second_side_a_entities
+                    in second_roster_1_entities
                 ]
             )
-            second_side_b_execute_actors = _execute_actors(
+            second_roster_2_execute_actors = _execute_actors(
                 [
                     row
                     for row in second_rows
                     if row["controlled_entity_uuids"][0]
-                    in second_side_b_entities
+                    in second_roster_2_entities
                 ]
             )
             _wait_for_replication_action_groups(
                 main,
                 second_replication,
                 (
-                    second_side_a_execute_actors,
-                    second_side_b_execute_actors,
+                    second_roster_1_execute_actors,
+                    second_roster_2_execute_actors,
                 ),
             )
             _require_success(main.post("/simulation/pause"))
@@ -799,23 +898,16 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                 game_id=second_game_id,
             )
 
-            isolated_external_external = _require_success(
-                main.post(
-                    "/game-creation/start",
-                    json=_start_payload(
-                        side_a_policy_id=_LIVE_TEST_POLICY_ID,
-                        side_b_policy_id=_LIVE_TEST_POLICY_ID,
-                        opening_side="side_a",
-                    ),
-                )
+            isolated_external_external = _compose_and_start(
+                main,
+                roster_1_policy_id=_LIVE_TEST_POLICY_ID,
+                roster_2_policy_id=_LIVE_TEST_POLICY_ID,
             )
             isolated_game_id = isolated_external_external["game_id"]
             isolated_entities = {
                 row["entity_uuid"]
-                for side_name in ("side_a", "side_b")
-                for row in isolated_external_external[side_name][
-                    "entity_assignments"
-                ]
+                for roster in isolated_external_external["rosters"]
+                for row in roster["entity_assignments"]
             }
             isolated_audit = _require_success(provider.get("/test/audit"))
             isolated_rows = _assignment_rows(
@@ -825,6 +917,15 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
             _assert_isolated_assignments(
                 isolated_rows,
                 isolated_entities,
+                expected_assignment_ids={
+                    (
+                        f"{isolated_game_id}:"
+                        f"{roster['roster_slot_id']}:"
+                        f"{assignment['member_id']}"
+                    )
+                    for roster in isolated_external_external["rosters"]
+                    for assignment in roster["entity_assignments"]
+                },
                 policy_id=_LIVE_TEST_POLICY_ID,
             )
             assert isolated_audit["active_assignments"] == 4

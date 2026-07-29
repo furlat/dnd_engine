@@ -12,12 +12,10 @@ from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
 )
-from server.game_directory import (
-    GameDirectoryRepository,
-    ImmutableRecordError,
-)
 from server.game_directory.contracts import PrincipalCreate, PrincipalKind
+from server.game_directory.errors import ImmutableRecordError
 from server.game_directory.local_profiles import LocalProfileManager
+from server.game_directory.repository import GameDirectoryRepository
 
 
 PEPPER = b"local-profile-manager-test-pepper"

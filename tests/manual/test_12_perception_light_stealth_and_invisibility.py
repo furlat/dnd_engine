@@ -21,7 +21,9 @@ from dnd.core.events import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+)
 
 
 def reset_perception_tutorial_state(
@@ -143,7 +145,7 @@ def test_light_change_emits_subjective_levels_without_visibility_membership_delt
 
 def test_movement_end_preserves_contacts_revealed_by_carried_light() -> None:
     """A movement-end refresh does not reuse visibility from before light moved."""
-    arena = create_ai_validation_arena("standard_skeleton_doors")
+    arena = assemble_authored_encounter("standard_skeleton_doors")
     observer = arena.hero
     updates_before = len(completed_sensory_updates(observer))
     actions = observer.get_available_actions()

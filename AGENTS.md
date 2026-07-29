@@ -454,7 +454,6 @@ Each has a **Contextual** variant (e.g., `ContextualAdvantageModifier`) that tak
 | `ac_bonus(target)` | Low | No | Building blocks |
 | `skill_bonus(target, skill)` | **High** | **Yes** | Direct use |
 | `saving_throw_bonus(target, ability)` | **High** | **Yes** | Direct use |
-| `skill_bonus_cross(target, skill)` | **High** | **Yes** | Returns both parties' bonuses |
 | `saving_throw(request)` | **High** | **Yes** | Full save execution |
 | `skill_check(request)` | **High** | **Yes** | Full check execution |
 
@@ -666,9 +665,11 @@ See `claude_docs/CLASS_SYSTEM.md` for complete feature tables, the `_remove()` c
 **Registration**:
 
 ```python
-from dnd.actions_functional import register_spell, register_spells_by_name
+from dnd.actions_functional import register_spell
+from dnd.spells.evocation import FireBolt, MagicMissile
+
 register_spell(entity, FireBolt, caster_level=5)
-register_spells_by_name(entity, ["Fire Bolt", "Magic Missile"], caster_level=5)
+register_spell(entity, MagicMissile, caster_level=5)
 ```
 
 **Entity spell API**: `spell_attack_bonus(target_uuid)`, `spell_save_dc()`, `has_spell_slot(level)`, `is_spellcaster`. See `dnd/entity.py` for full list.
@@ -687,8 +688,8 @@ Concentration spells are fully implemented:
 - **Spell-specific effects**: Each concentration spell creates a spell-specific condition (e.g., `HoldPersonEffect`) with the actual effect (e.g., `Paralyzed`) as a sub-condition
 - **DropConcentration action**: Free action (0 cost) to voluntarily end concentration. Registered via `setup_standard_actions()`, validates that entity is concentrating.
 
-See `tests/engine_book/test_chapter_14_spellcasting_core.py` and
-`tests/engine_book/test_chapter_15_spell_families.py` for active concentration
+See `tests/engine/test_spellcasting.py` and
+`tests/engine/test_spell_families.py` for active concentration
 coverage. Legacy concentration scripts live under `to_archive/examples/`.
 
 #### Stealth System (Layer 1)
@@ -747,7 +748,7 @@ Subjective hazard detection and safe pathfinding. See `claude_docs/TERRAIN_MOVEM
 **CRITICAL: Before writing any code that uses existing classes/methods:**
 
 1. **Never assume method/attribute names** - Always read the actual class definition first
-2. **Check existing tests** - Look at the matching `tests/engine_book/` or `tests/manual/` file for correct usage patterns
+2. **Check existing tests** - Look at the matching `tests/engine/` or `tests/manual/` file for correct usage patterns
 3. **Verify imports exist** - Grep for `class ClassName` to find where things are defined
 4. **Check Config classes** - Many classes have `*Config` counterparts with different field structures (e.g., `AbilityConfig` vs raw int)
 5. **Test imports before running** - Run `python -c "import module_name"` to catch import errors early
@@ -1163,7 +1164,9 @@ not compatibility surfaces. Do not restore aliases or adapters for them.
 **Spatial**: `dnd/core/gridmap.py`, `dnd/core/shadowcast.py`, `dnd/core/dijkstra.py`, `dnd/tiles.py`, `dnd/tile_conditions.py`
 **Monsters**: `dnd/monsters/bestiary.py` (create_goblin, create_skeleton, create_goblin_archer, create_sorcerer)
 **Server/AI**: `dnd/ai/`, `dnd/controller.py`, `server/event_server.py`, `server/registered_ai_controller.py`, `server/registered_ai_provider.py`, `services/ai_policy_server/`, `custom_ai/`
-**Tests**: `tests/` — named by manual/engine-book area and feature
+**Tests**: `tests/` — organized by maintained engine, progression, AI,
+architecture, and integration semantics. Abandoned tutorial/book artifacts live
+under ignored `to_archive/` and are never part of maintained pytest discovery.
 
 ### Documentation
 

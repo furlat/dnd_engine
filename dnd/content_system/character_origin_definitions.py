@@ -23,15 +23,61 @@ from dnd.core.content.descriptors import (
     ContentVisibility,
 )
 from dnd.core.content.durable_characters import (
+    AbilityScoreName,
     BackgroundDefinition,
     BuildChoiceRequirement,
     ChoiceRequirementKind,
+    OriginLevelGrant,
+    OriginInnateSpellGrant,
+    OriginInnateSpellcastingDefinition,
     ProficiencySubject,
     ProficiencySubjectKind,
     SpeciesDefinition,
     SpeciesVariantDefinition,
+    SpellcastingSourceId,
+)
+from dnd.content_system.origin_feature_definitions import (
+    ACOLYTE_PROFICIENCIES_REF,
+    ACOLYTE_SHELTER_OF_THE_FAITHFUL_REF,
+    DRAGONBORN_LANGUAGES_REF,
+    DWARF_COMBAT_TRAINING_REF,
+    DWARF_DWARVEN_RESILIENCE_REF,
+    DWARF_LANGUAGES_REF,
+    DWARF_MEDIUM_25_PHYSICAL_REF,
+    DWARF_STONECUNNING_REF,
+    ELF_FEY_ANCESTRY_REF,
+    ELF_KEEN_SENSES_REF,
+    ELF_LANGUAGES_REF,
+    ELF_TRANCE_REF,
+    GNOME_LANGUAGES_REF,
+    GNOME_CUNNING_REF,
+    HALF_ELF_LANGUAGES_REF,
+    HALF_ORC_LANGUAGES_REF,
+    HALF_ORC_MENACING_REF,
+    HALF_ORC_SAVAGE_ATTACKS_REF,
+    HALFLING_LANGUAGES_REF,
+    HALFLING_BRAVE_REF,
+    HALFLING_NIMBLENESS_REF,
+    HIGH_ELF_WEAPON_TRAINING_REF,
+    HILL_DWARF_DWARVEN_TOUGHNESS_REF,
+    HUMAN_LANGUAGES_REF,
+    LIGHTFOOT_NATURALLY_STEALTHY_REF,
+    ROCK_GNOME_ARTIFICERS_LORE_REF,
+    ROCK_GNOME_TINKER_REF,
+    SHARED_DARKVISION_60_REF,
+    SHARED_MEDIUM_30_PHYSICAL_REF,
+    SHARED_SMALL_25_PHYSICAL_REF,
+    TIEFLING_FIRE_RESISTANCE_REF,
+    TIEFLING_LANGUAGES_REF,
+)
+from dnd.content_system.acolyte_starting_holdings import (
+    ACOLYTE_STARTING_HOLDINGS_REF,
+)
+from dnd.content_system.dragonborn_origin_definitions import (
+    DRAGONBORN_ANCESTRY_DECLARATIONS,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
@@ -43,10 +89,16 @@ from dnd.core.content.registration import (
     ContentDeclarationMode,
     compute_definition_contract_hash,
 )
+from dnd.core.language_types import SrdLanguageId
+from dnd.origins.halfling import HALFLING_LUCKY_REF
+from dnd.origins.half_orc import HALF_ORC_RELENTLESS_ENDURANCE_REF
+from dnd.content_system.spell_catalog_composition import (
+    SPELL_CATALOG_COMPOSITION_ROWS,
+)
 
 
 _PACK_ID = "content.srd_5_1_cc"
-_VERSION = 1
+_VERSION = 2
 _SOURCE_ID = "wotc.srd_5_1_cc"
 _NEURODRAGON_PACK_ID = "content.neurodragon"
 _NEURODRAGON_SOURCE_ID = "neurodragon.original_b2b3930"
@@ -116,6 +168,12 @@ ADVENTURER_BACKGROUND_REF = _typed_ref(
 )
 HUMAN_SPECIES_REF = _SPECIES_REFS["human"]
 
+_AVAILABLE_RUNTIME_SUPPORT = OriginRuntimeSupport.available()
+_DRAGONBORN_ANCESTRY_REFS = tuple(
+    declaration.ref
+    for declaration in DRAGONBORN_ANCESTRY_DECLARATIONS
+)
+
 
 def _provenance(
     source_anchor: str,
@@ -125,7 +183,7 @@ def _provenance(
     relation: ContentProvenanceRelation = (
         ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION
     ),
-    fidelity: ContentFidelity = ContentFidelity.BLOCKED,
+    fidelity: ContentFidelity = ContentFidelity.COMPLETE,
     adapted_from_source_id: str | None = None,
 ) -> ContentProvenance:
     return ContentProvenance(
@@ -152,13 +210,9 @@ def _declaration(
     sort_order: int,
     related_content_refs: tuple[ContentRef, ...] = (),
     dependencies: tuple[ContentDependency, ...] = (),
-    player_capable: bool = False,
     source_tag: str = "srd_5_1",
     provenance: ContentProvenance | None = None,
 ) -> ContentDeclaration:
-    implementation_tag = (
-        "player_capable" if player_capable else "implementation_blocked"
-    )
     return ContentDeclaration(
         ref=ref,
         mode=ContentDeclarationMode.TYPED_DEFINITION,
@@ -170,7 +224,6 @@ def _declaration(
                 tags=(
                     "character_creation",
                     ref.definition_kind.value,
-                    implementation_tag,
                     source_tag,
                 ),
                 visibility=ContentVisibility.PUBLIC,
@@ -189,9 +242,8 @@ def _declaration(
         or _provenance(
             source_anchor,
             notes=(
-                "Exact reviewed creator identity and rules summary. Runtime "
-                "species/background trait installation remains intentionally "
-                "blocked until source-owned origin grant contracts exist."
+                "Complete reviewed creator identity with exact source-owned, "
+                "reversible structural grants and validated choices."
             ),
         ),
         definition_payload=definition,
@@ -213,6 +265,54 @@ def _variant_edges(
             variant_refs,
             key=lambda ref: ref.identity_key,
         )
+    )
+
+
+def _grant_edges(
+    *feature_refs: ContentRef,
+) -> tuple[ContentDependency, ...]:
+    return tuple(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_FEATURE,
+            target_ref=feature_ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes="Authored structural feature granted by this origin.",
+        )
+        for feature_ref in sorted(
+            feature_refs,
+            key=lambda ref: ref.identity_key,
+        )
+    )
+
+
+def _spell_edges(
+    *spell_refs: ContentRef,
+) -> tuple[ContentDependency, ...]:
+    return tuple(
+        ContentDependency(
+            relation=ContentDependencyRelation.GRANTS_SPELL,
+            target_ref=spell_ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes="Authored innate spell granted by this origin.",
+        )
+        for spell_ref in sorted(
+            spell_refs,
+            key=lambda ref: ref.identity_key,
+        )
+    )
+
+
+def _level_one(
+    *feature_refs: ContentRef,
+) -> tuple[OriginLevelGrant, ...]:
+    return (
+        OriginLevelGrant(
+            character_level=1,
+            grant_refs=tuple(sorted(
+                feature_refs,
+                key=lambda ref: ref.identity_key,
+            )),
+        ),
     )
 
 
@@ -242,6 +342,36 @@ _ALL_SKILL_SUBJECTS = tuple(
         "survival",
     )
 )
+_ALL_LANGUAGE_SUBJECTS = tuple(
+    ProficiencySubject(
+        subject_kind=ProficiencySubjectKind.LANGUAGE,
+        subject_id=language.value,
+    )
+    for language in sorted(SrdLanguageId, key=lambda row: row.value)
+)
+_HIGH_ELF_WIZARD_CANTRIP_REFS = tuple(sorted(
+    (
+        row.declaration.ref
+        for row in SPELL_CATALOG_COMPOSITION_ROWS
+        if row.level == 0 and "wizard" in row.metadata.classes
+    ),
+    key=lambda ref: ref.identity_key,
+))
+_THAUMATURGY_REF = next(
+    row.declaration.ref
+    for row in SPELL_CATALOG_COMPOSITION_ROWS
+    if row.metadata.catalog_id == "thaumaturgy"
+)
+_HELLISH_REBUKE_REF = next(
+    row.declaration.ref
+    for row in SPELL_CATALOG_COMPOSITION_ROWS
+    if row.metadata.catalog_id == "hellish_rebuke"
+)
+_DARKNESS_REF = next(
+    row.declaration.ref
+    for row in SPELL_CATALOG_COMPOSITION_ROWS
+    if row.metadata.catalog_id == "darkness"
+)
 
 
 DRAGONBORN_SPECIES_DECLARATION = _declaration(
@@ -251,10 +381,46 @@ DRAGONBORN_SPECIES_DECLARATION = _declaration(
         "A draconic people with a chosen draconic ancestry, an ancestry-shaped "
         "breath weapon, and resistance to its associated damage type."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+            DRAGONBORN_LANGUAGES_REF,
+        ),
+        choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="species.dragonborn.draconic_ancestry",
+                choice_kind=ChoiceRequirementKind.ORIGIN_TRAIT,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_refs=_DRAGONBORN_ANCESTRY_REFS,
+            ),
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Dragonborn Traits",
     sort_group="species",
     sort_order=10,
+    related_content_refs=tuple(sorted(
+        (
+            *_DRAGONBORN_ANCESTRY_REFS,
+            DRAGONBORN_LANGUAGES_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
+        key=lambda ref: ref.identity_key,
+    )),
+    dependencies=_grant_edges(
+        *_DRAGONBORN_ANCESTRY_REFS,
+        DRAGONBORN_LANGUAGES_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
+    provenance=_provenance(
+        "SRD 5.1 Races: Dragonborn Traits",
+        fidelity=ContentFidelity.COMPLETE,
+        notes=(
+            "Complete source-owned runtime grants for Dragonborn size, speed, "
+            "languages, selected ancestry resistance, and Breath Weapon."
+        ),
+    ),
 )
 DWARF_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["dwarf"],
@@ -263,12 +429,62 @@ DWARF_SPECIES_DECLARATION = _declaration(
         "A sturdy people with darkvision, poison resilience, dwarven combat "
         "training, tool training, and stonecunning."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            DWARF_COMBAT_TRAINING_REF,
+            DWARF_DWARVEN_RESILIENCE_REF,
+            DWARF_LANGUAGES_REF,
+            DWARF_MEDIUM_25_PHYSICAL_REF,
+            DWARF_STONECUNNING_REF,
+            SHARED_DARKVISION_60_REF,
+        ),
+        choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="species.dwarf.artisans_tool",
+                choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_proficiency_subjects=(
+                    ProficiencySubject(
+                        subject_kind=ProficiencySubjectKind.TOOL,
+                        subject_id="tool.artisan.brewers_supplies",
+                    ),
+                    ProficiencySubject(
+                        subject_kind=ProficiencySubjectKind.TOOL,
+                        subject_id="tool.artisan.masons_tools",
+                    ),
+                    ProficiencySubject(
+                        subject_kind=ProficiencySubjectKind.TOOL,
+                        subject_id="tool.artisan.smiths_tools",
+                    ),
+                ),
+            ),
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Dwarf Traits",
     sort_group="species",
     sort_order=20,
-    related_content_refs=(_VARIANT_REFS["dwarf.hill"],),
-    dependencies=_variant_edges(_VARIANT_REFS["dwarf.hill"]),
+    related_content_refs=(
+        DWARF_COMBAT_TRAINING_REF,
+        DWARF_DWARVEN_RESILIENCE_REF,
+        DWARF_LANGUAGES_REF,
+        DWARF_MEDIUM_25_PHYSICAL_REF,
+        DWARF_STONECUNNING_REF,
+        SHARED_DARKVISION_60_REF,
+        _VARIANT_REFS["dwarf.hill"],
+    ),
+    dependencies=(
+        *_grant_edges(
+            DWARF_COMBAT_TRAINING_REF,
+            DWARF_DWARVEN_RESILIENCE_REF,
+            DWARF_LANGUAGES_REF,
+            DWARF_MEDIUM_25_PHYSICAL_REF,
+            DWARF_STONECUNNING_REF,
+            SHARED_DARKVISION_60_REF,
+        ),
+        *_variant_edges(_VARIANT_REFS["dwarf.hill"]),
+    ),
 )
 ELF_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["elf"],
@@ -277,12 +493,40 @@ ELF_SPECIES_DECLARATION = _declaration(
         "A perceptive, long-lived people with darkvision, keen senses, fey "
         "ancestry, and trance."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            ELF_FEY_ANCESTRY_REF,
+            ELF_KEEN_SENSES_REF,
+            ELF_LANGUAGES_REF,
+            ELF_TRANCE_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Elf Traits",
     sort_group="species",
     sort_order=30,
-    related_content_refs=(_VARIANT_REFS["elf.high"],),
-    dependencies=_variant_edges(_VARIANT_REFS["elf.high"]),
+    related_content_refs=(
+        ELF_FEY_ANCESTRY_REF,
+        ELF_KEEN_SENSES_REF,
+        ELF_LANGUAGES_REF,
+        ELF_TRANCE_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+        _VARIANT_REFS["elf.high"],
+    ),
+    dependencies=(
+        *_grant_edges(
+            ELF_FEY_ANCESTRY_REF,
+            ELF_KEEN_SENSES_REF,
+            ELF_LANGUAGES_REF,
+            ELF_TRANCE_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
+        *_variant_edges(_VARIANT_REFS["elf.high"]),
+    ),
 )
 GNOME_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["gnome"],
@@ -291,12 +535,34 @@ GNOME_SPECIES_DECLARATION = _declaration(
         "A small, inventive people with darkvision and Gnome Cunning against "
         "mental magic."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            GNOME_CUNNING_REF,
+            GNOME_LANGUAGES_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_SMALL_25_PHYSICAL_REF,
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Gnome Traits",
     sort_group="species",
     sort_order=40,
-    related_content_refs=(_VARIANT_REFS["gnome.rock"],),
-    dependencies=_variant_edges(_VARIANT_REFS["gnome.rock"]),
+    related_content_refs=(
+        GNOME_CUNNING_REF,
+        GNOME_LANGUAGES_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_SMALL_25_PHYSICAL_REF,
+        _VARIANT_REFS["gnome.rock"],
+    ),
+    dependencies=(
+        *_grant_edges(
+            GNOME_CUNNING_REF,
+            GNOME_LANGUAGES_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_SMALL_25_PHYSICAL_REF,
+        ),
+        *_variant_edges(_VARIANT_REFS["gnome.rock"]),
+    ),
 )
 HALF_ELF_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["half_elf"],
@@ -306,7 +572,29 @@ HALF_ELF_SPECIES_DECLARATION = _declaration(
         "proficiencies, and additional languages."
     ),
     definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            ELF_FEY_ANCESTRY_REF,
+            HALF_ELF_LANGUAGES_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
         choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="species.half_elf.additional_language",
+                choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_proficiency_subjects=tuple(
+                    subject
+                    for subject in _ALL_LANGUAGE_SUBJECTS
+                    if subject.subject_id
+                    not in {
+                        SrdLanguageId.COMMON.value,
+                        SrdLanguageId.ELVISH.value,
+                    }
+                ),
+            ),
             BuildChoiceRequirement(
                 choice_id="species.half_elf.skill_versatility",
                 choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
@@ -319,6 +607,18 @@ HALF_ELF_SPECIES_DECLARATION = _declaration(
     source_anchor="SRD 5.1 Races: Half-Elf Traits",
     sort_group="species",
     sort_order=50,
+    related_content_refs=(
+        ELF_FEY_ANCESTRY_REF,
+        HALF_ELF_LANGUAGES_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
+    dependencies=_grant_edges(
+        ELF_FEY_ANCESTRY_REF,
+        HALF_ELF_LANGUAGES_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
 )
 HALF_ORC_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["half_orc"],
@@ -327,10 +627,36 @@ HALF_ORC_SPECIES_DECLARATION = _declaration(
         "A powerful people with darkvision, Menacing, Relentless Endurance, "
         "and Savage Attacks."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            HALF_ORC_LANGUAGES_REF,
+            HALF_ORC_MENACING_REF,
+            HALF_ORC_RELENTLESS_ENDURANCE_REF,
+            HALF_ORC_SAVAGE_ATTACKS_REF,
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Half-Orc Traits",
     sort_group="species",
     sort_order=60,
+    related_content_refs=(
+        HALF_ORC_LANGUAGES_REF,
+        HALF_ORC_MENACING_REF,
+        HALF_ORC_RELENTLESS_ENDURANCE_REF,
+        HALF_ORC_SAVAGE_ATTACKS_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
+    dependencies=_grant_edges(
+        HALF_ORC_LANGUAGES_REF,
+        HALF_ORC_MENACING_REF,
+        HALF_ORC_RELENTLESS_ENDURANCE_REF,
+        HALF_ORC_SAVAGE_ATTACKS_REF,
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
 )
 HALFLING_SPECIES_DECLARATION = _declaration(
     ref=_SPECIES_REFS["halfling"],
@@ -338,12 +664,37 @@ HALFLING_SPECIES_DECLARATION = _declaration(
     description=(
         "A small and nimble people with Lucky, Brave, and Halfling Nimbleness."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            HALFLING_BRAVE_REF,
+            HALFLING_LANGUAGES_REF,
+            HALFLING_LUCKY_REF,
+            HALFLING_NIMBLENESS_REF,
+            SHARED_SMALL_25_PHYSICAL_REF,
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Halfling Traits",
     sort_group="species",
     sort_order=70,
-    related_content_refs=(_VARIANT_REFS["halfling.lightfoot"],),
-    dependencies=_variant_edges(_VARIANT_REFS["halfling.lightfoot"]),
+    related_content_refs=(
+        HALFLING_BRAVE_REF,
+        HALFLING_LANGUAGES_REF,
+        HALFLING_LUCKY_REF,
+        HALFLING_NIMBLENESS_REF,
+        SHARED_SMALL_25_PHYSICAL_REF,
+        _VARIANT_REFS["halfling.lightfoot"],
+    ),
+    dependencies=(
+        *_grant_edges(
+            HALFLING_BRAVE_REF,
+            HALFLING_LANGUAGES_REF,
+            HALFLING_LUCKY_REF,
+            HALFLING_NIMBLENESS_REF,
+            SHARED_SMALL_25_PHYSICAL_REF,
+        ),
+        *_variant_edges(_VARIANT_REFS["halfling.lightfoot"]),
+    ),
 )
 HUMAN_SPECIES_DECLARATION = _declaration(
     ref=HUMAN_SPECIES_REF,
@@ -352,11 +703,37 @@ HUMAN_SPECIES_DECLARATION = _declaration(
         "An adaptable people. Character creation applies the profile's "
         "flexible +2/+1 ability-score policy independently of species."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            HUMAN_LANGUAGES_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+        ),
+        choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="species.human.additional_language",
+                choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_proficiency_subjects=tuple(
+                    subject
+                    for subject in _ALL_LANGUAGE_SUBJECTS
+                    if subject.subject_id != SrdLanguageId.COMMON.value
+                ),
+            ),
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Human Traits",
     sort_group="species",
     sort_order=80,
-    player_capable=True,
+    related_content_refs=(
+        HUMAN_LANGUAGES_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
+    dependencies=_grant_edges(
+        HUMAN_LANGUAGES_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+    ),
     provenance=_provenance(
         "BG3-compatible character creation: flexible ability bonuses",
         relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION,
@@ -376,10 +753,71 @@ TIEFLING_SPECIES_DECLARATION = _declaration(
         "An infernal-blooded people with darkvision, fire resistance, and a "
         "level-based Infernal Legacy."
     ),
-    definition=SpeciesDefinition(),
+    definition=SpeciesDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+            TIEFLING_FIRE_RESISTANCE_REF,
+            TIEFLING_LANGUAGES_REF,
+        ),
+        innate_spellcasting=(
+            OriginInnateSpellcastingDefinition(
+                source_id=SpellcastingSourceId(
+                    value="species.tiefling.infernal_legacy",
+                ),
+                ability=AbilityScoreName.CHARISMA,
+                grants=(
+                    OriginInnateSpellGrant(
+                        grant_id="tiefling.infernal_legacy.darkness",
+                        unlock_character_level=5,
+                        spell_ref=_DARKNESS_REF,
+                        fixed_cast_rank=2,
+                        uses_per_long_rest=1,
+                    ),
+                    OriginInnateSpellGrant(
+                        grant_id="tiefling.infernal_legacy.hellish_rebuke",
+                        unlock_character_level=3,
+                        spell_ref=_HELLISH_REBUKE_REF,
+                        fixed_cast_rank=2,
+                        uses_per_long_rest=1,
+                    ),
+                    OriginInnateSpellGrant(
+                        grant_id="tiefling.infernal_legacy.thaumaturgy",
+                        unlock_character_level=1,
+                        spell_ref=_THAUMATURGY_REF,
+                        fixed_cast_rank=0,
+                        uses_per_long_rest=None,
+                    ),
+                ),
+            ),
+        ),
+    ),
     source_anchor="SRD 5.1 Races: Tiefling Traits",
     sort_group="species",
     sort_order=90,
+    related_content_refs=(
+        SHARED_DARKVISION_60_REF,
+        SHARED_MEDIUM_30_PHYSICAL_REF,
+        TIEFLING_FIRE_RESISTANCE_REF,
+        TIEFLING_LANGUAGES_REF,
+        _DARKNESS_REF,
+        _HELLISH_REBUKE_REF,
+        _THAUMATURGY_REF,
+    ),
+    dependencies=(
+        *_grant_edges(
+            SHARED_DARKVISION_60_REF,
+            SHARED_MEDIUM_30_PHYSICAL_REF,
+            TIEFLING_FIRE_RESISTANCE_REF,
+            TIEFLING_LANGUAGES_REF,
+        ),
+        *_spell_edges(
+            _DARKNESS_REF,
+            _HELLISH_REBUKE_REF,
+            _THAUMATURGY_REF,
+        ),
+    ),
 )
 
 
@@ -392,11 +830,19 @@ HILL_DWARF_VARIANT_DECLARATION = _declaration(
     ),
     definition=SpeciesVariantDefinition(
         parent_species_ref=_SPECIES_REFS["dwarf"],
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            HILL_DWARF_DWARVEN_TOUGHNESS_REF,
+        ),
     ),
     source_anchor="SRD 5.1 Races: Hill Dwarf",
     sort_group="species_variants.dwarf",
     sort_order=10,
-    related_content_refs=(_SPECIES_REFS["dwarf"],),
+    related_content_refs=(
+        HILL_DWARF_DWARVEN_TOUGHNESS_REF,
+        _SPECIES_REFS["dwarf"],
+    ),
+    dependencies=_grant_edges(HILL_DWARF_DWARVEN_TOUGHNESS_REF),
 )
 HIGH_ELF_VARIANT_DECLARATION = _declaration(
     ref=_VARIANT_REFS["elf.high"],
@@ -407,11 +853,70 @@ HIGH_ELF_VARIANT_DECLARATION = _declaration(
     ),
     definition=SpeciesVariantDefinition(
         parent_species_ref=_SPECIES_REFS["elf"],
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            HIGH_ELF_WEAPON_TRAINING_REF,
+        ),
+        choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="species_variant.high_elf.additional_language",
+                choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_proficiency_subjects=tuple(
+                    subject
+                    for subject in _ALL_LANGUAGE_SUBJECTS
+                    if subject.subject_id
+                    not in {
+                        SrdLanguageId.COMMON.value,
+                        SrdLanguageId.ELVISH.value,
+                    }
+                ),
+            ),
+            BuildChoiceRequirement(
+                choice_id="species_variant.high_elf.wizard_cantrip",
+                choice_kind=ChoiceRequirementKind.CANTRIP,
+                minimum_selections=1,
+                maximum_selections=1,
+                allowed_refs=_HIGH_ELF_WIZARD_CANTRIP_REFS,
+            ),
+        ),
+        innate_spellcasting=(
+            OriginInnateSpellcastingDefinition(
+                source_id=SpellcastingSourceId(
+                    value="species_variant.high_elf.innate_spellcasting",
+                ),
+                ability=AbilityScoreName.INTELLIGENCE,
+                grants=(
+                    OriginInnateSpellGrant(
+                        grant_id="high_elf.wizard_cantrip",
+                        unlock_character_level=1,
+                        choice_id=(
+                            "species_variant.high_elf.wizard_cantrip"
+                        ),
+                        allowed_spell_refs=_HIGH_ELF_WIZARD_CANTRIP_REFS,
+                        fixed_cast_rank=0,
+                        uses_per_long_rest=None,
+                    ),
+                ),
+            ),
+        ),
     ),
     source_anchor="SRD 5.1 Races: High Elf",
     sort_group="species_variants.elf",
     sort_order=10,
-    related_content_refs=(_SPECIES_REFS["elf"],),
+    related_content_refs=tuple(sorted(
+        (
+            _SPECIES_REFS["elf"],
+            HIGH_ELF_WEAPON_TRAINING_REF,
+            *_HIGH_ELF_WIZARD_CANTRIP_REFS,
+        ),
+        key=lambda ref: ref.identity_key,
+    )),
+    dependencies=(
+        *_grant_edges(HIGH_ELF_WEAPON_TRAINING_REF),
+        *_spell_edges(*_HIGH_ELF_WIZARD_CANTRIP_REFS),
+    ),
 )
 ROCK_GNOME_VARIANT_DECLARATION = _declaration(
     ref=_VARIANT_REFS["gnome.rock"],
@@ -422,11 +927,24 @@ ROCK_GNOME_VARIANT_DECLARATION = _declaration(
     ),
     definition=SpeciesVariantDefinition(
         parent_species_ref=_SPECIES_REFS["gnome"],
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            ROCK_GNOME_ARTIFICERS_LORE_REF,
+            ROCK_GNOME_TINKER_REF,
+        ),
     ),
     source_anchor="SRD 5.1 Races: Rock Gnome",
     sort_group="species_variants.gnome",
     sort_order=10,
-    related_content_refs=(_SPECIES_REFS["gnome"],),
+    related_content_refs=(
+        ROCK_GNOME_ARTIFICERS_LORE_REF,
+        ROCK_GNOME_TINKER_REF,
+        _SPECIES_REFS["gnome"],
+    ),
+    dependencies=_grant_edges(
+        ROCK_GNOME_ARTIFICERS_LORE_REF,
+        ROCK_GNOME_TINKER_REF,
+    ),
 )
 LIGHTFOOT_HALFLING_VARIANT_DECLARATION = _declaration(
     ref=_VARIANT_REFS["halfling.lightfoot"],
@@ -437,11 +955,19 @@ LIGHTFOOT_HALFLING_VARIANT_DECLARATION = _declaration(
     ),
     definition=SpeciesVariantDefinition(
         parent_species_ref=_SPECIES_REFS["halfling"],
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        level_grants=_level_one(
+            LIGHTFOOT_NATURALLY_STEALTHY_REF,
+        ),
     ),
     source_anchor="SRD 5.1 Races: Lightfoot Halfling",
     sort_group="species_variants.halfling",
     sort_order=10,
-    related_content_refs=(_SPECIES_REFS["halfling"],),
+    related_content_refs=(
+        LIGHTFOOT_NATURALLY_STEALTHY_REF,
+        _SPECIES_REFS["halfling"],
+    ),
+    dependencies=_grant_edges(LIGHTFOOT_NATURALLY_STEALTHY_REF),
 )
 
 
@@ -452,10 +978,59 @@ ACOLYTE_BACKGROUND_DECLARATION = _declaration(
         "A life of temple service granting Insight and Religion training, "
         "two languages, religious equipment, and Shelter of the Faithful."
     ),
-    definition=BackgroundDefinition(),
+    definition=BackgroundDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+        automatic_grant_refs=tuple(sorted(
+            (
+                ACOLYTE_PROFICIENCIES_REF,
+                ACOLYTE_SHELTER_OF_THE_FAITHFUL_REF,
+            ),
+            key=lambda ref: ref.identity_key,
+        )),
+        starting_holdings_package_ref=ACOLYTE_STARTING_HOLDINGS_REF,
+        choice_requirements=(
+            BuildChoiceRequirement(
+                choice_id="background.acolyte.languages",
+                choice_kind=ChoiceRequirementKind.STARTING_PROFICIENCY,
+                minimum_selections=2,
+                maximum_selections=2,
+                allowed_proficiency_subjects=_ALL_LANGUAGE_SUBJECTS,
+            ),
+        ),
+    ),
     source_anchor="SRD 5.1 Backgrounds: Acolyte",
     sort_group="backgrounds",
     sort_order=10,
+    related_content_refs=(
+        ACOLYTE_PROFICIENCIES_REF,
+        ACOLYTE_SHELTER_OF_THE_FAITHFUL_REF,
+        ACOLYTE_STARTING_HOLDINGS_REF,
+    ),
+    dependencies=(
+        *_grant_edges(
+            ACOLYTE_PROFICIENCIES_REF,
+            ACOLYTE_SHELTER_OF_THE_FAITHFUL_REF,
+        ),
+        ContentDependency(
+            relation=ContentDependencyRelation.OFFERS_STARTING_EQUIPMENT,
+            target_ref=ACOLYTE_STARTING_HOLDINGS_REF,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes=(
+                "Acolyte grants one exact background starting-possession "
+                "package."
+            ),
+        ),
+    ),
+    provenance=_provenance(
+        "SRD 5.1 Backgrounds: Acolyte",
+        fidelity=ContentFidelity.PARTIAL,
+        notes=(
+            "Skills, two chosen languages, Shelter of the Faithful, and every "
+            "durable item possession are installed through exact source-owned "
+            "facts. The SRD's 15 gp remains intentionally unclaimed until the "
+            "engine owns canonical durable currency."
+        ),
+    ),
 )
 ADVENTURER_BACKGROUND_DECLARATION = _declaration(
     ref=ADVENTURER_BACKGROUND_REF,
@@ -464,11 +1039,12 @@ ADVENTURER_BACKGROUND_DECLARATION = _declaration(
         "A mechanically neutral Neurodragon background. It grants no skills, "
         "languages, equipment, features, or other background benefits."
     ),
-    definition=BackgroundDefinition(),
+    definition=BackgroundDefinition(
+        runtime_support=_AVAILABLE_RUNTIME_SUPPORT,
+    ),
     source_anchor="Neurodragon original: neutral adventurer background",
     sort_group="backgrounds",
     sort_order=20,
-    player_capable=True,
     source_tag="neurodragon_original",
     provenance=_provenance(
         "Neurodragon original: neutral adventurer background",

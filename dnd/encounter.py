@@ -16,6 +16,7 @@ from uuid import UUID
 from datetime import UTC, datetime
 from pydantic import Field, computed_field
 from enum import Enum
+import logging
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, RollType
@@ -39,6 +40,8 @@ from dnd.controller import (
     TurnContext,
 )
 from dnd.actions_functional import execute_by_index
+
+logger = logging.getLogger(__name__)
 
 
 def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> None:
@@ -233,6 +236,7 @@ class Encounter(BaseObject):
         ended_at: Wall-clock timestamp when the encounter ended.
         combat_log: Unified combat-log entries captured for the encounter.
         current_turn_started_source_event_cursor: Objective cursor of turn start.
+        current_turn_execution_id: Opaque causal identity of the active turn.
     """
 
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
@@ -351,33 +355,6 @@ class Encounter(BaseObject):
         self.combatants[entity.uuid] = combatant
         return combatant
 
-    def remove_combatant(self, entity_uuid: UUID) -> Optional[CombatantState]:
-        """
-        Remove an entity from the encounter.
-
-        Args:
-            entity_uuid: UUID of the entity to remove
-
-        Returns:
-            The removed CombatantState, or None if not found
-        """
-        combatant = self.combatants.pop(entity_uuid, None)
-        if combatant and entity_uuid in self.initiative_order:
-            removed_index = self.initiative_order.index(entity_uuid)
-            self.initiative_order.remove(entity_uuid)
-
-            if removed_index < self.current_turn_index:
-                self.current_turn_index -= 1
-            elif removed_index == self.current_turn_index:
-                if self.current_turn_index >= len(self.initiative_order):
-                    self.current_turn_index = 0
-
-        return combatant
-
-    def get_combatant(self, entity_uuid: UUID) -> Optional[CombatantState]:
-        """Get combatant state for an entity."""
-        return self.combatants.get(entity_uuid)
-
     def get_controller_for(self, entity_uuid: UUID) -> Optional[Controller]:
         """Get the controller for an entity in this encounter."""
         combatant = self.combatants.get(entity_uuid)
@@ -428,21 +405,6 @@ class Encounter(BaseObject):
         )
 
         self.initiative_order = [c.entity_uuid for c in sorted_combatants]
-
-    def get_initiative_order_display(self) -> List[Tuple[str, int, int]]:
-        """
-        Get initiative order for display.
-
-        Returns:
-            List of (entity_name, initiative_total, initiative_roll)
-        """
-        result = []
-        for entity_uuid in self.initiative_order:
-            combatant = self.combatants[entity_uuid]
-            entity = combatant.entity
-            name = entity.name if entity else "Unknown"
-            result.append((name, combatant.initiative_total, combatant.initiative_roll))
-        return result
 
     def get_current_entity(self) -> Optional[Entity]:
         """Get the entity whose turn it is."""
@@ -787,22 +749,22 @@ class Encounter(BaseObject):
         if self.turn_state == TurnState.IN_PROGRESS:
             self.end_turn()
 
+        self._advance_turn_slot()
+        return self.start_turn()
+
+    def _skip_to_next_turn(self) -> Optional[TurnStartEvent]:
+        """Skip to next turn without ending current (for surprised entities)."""
+        self._advance_turn_slot()
+        return self.start_turn()
+
+    def _advance_turn_slot(self) -> None:
+        """Commit the next initiative slot without starting its turn."""
         self.current_turn_index += 1
 
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
 
         self.turn_state = TurnState.NOT_STARTED
-        return self.start_turn()
-
-    def _skip_to_next_turn(self) -> Optional[TurnStartEvent]:
-        """Skip to next turn without ending current (for surprised entities)."""
-        self.current_turn_index += 1
-
-        if self.current_turn_index >= len(self.initiative_order):
-            self._advance_round()
-
-        return self.start_turn()
 
     def can_continue_turn(self) -> bool:
         """
@@ -821,24 +783,6 @@ class Encounter(BaseObject):
         has_five_feet_movement = ae.can_afford("movement", 5)
 
         return has_action or has_bonus or has_five_feet_movement
-
-    def get_remaining_action_economy(self) -> Dict[str, int]:
-        """
-        Get remaining action economy for current entity.
-
-        Returns dict with actions, bonus_actions, reactions, movement.
-        """
-        entity = self.get_current_entity()
-        if not entity:
-            return {"actions": 0, "bonus_actions": 0, "reactions": 0, "movement": 0}
-
-        ae = entity.action_economy
-        return {
-            "actions": ae.actions.normalized_score,
-            "bonus_actions": ae.bonus_actions.normalized_score,
-            "reactions": ae.reactions.normalized_score,
-            "movement": ae.movement.normalized_score
-        }
 
     def _build_turn_context(self, entity: Entity) -> TurnContext:
         """Build a TurnContext for the current turn state."""
@@ -866,24 +810,6 @@ class Encounter(BaseObject):
                 self.current_turn_started_source_event_cursor
             ),
         )
-
-    def _advance_entity_conditions(self, entity: Entity) -> List[str]:
-        """
-        Advance duration for all conditions on entity.
-
-        Called at start of turn. Returns list of removed condition names.
-        This timing makes turn-based conditions (Dash, Dodge, Disengage) last
-        "until the start of your next turn" per SRD.
-        """
-        removed = []
-        condition_names = list(entity.active_conditions.keys())
-
-        for condition_name in condition_names:
-            was_removed = entity.advance_duration_condition(condition_name)
-            if was_removed:
-                removed.append(condition_name)
-
-        return removed
 
     def _on_event_combat_log(self, event: Event) -> None:
         """Callback for auto-capturing event combat logs.
@@ -915,7 +841,12 @@ class Encounter(BaseObject):
             try:
                 listener(self, index, event.combat_log, event)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive combat-log listener %r failed for encounter %s log %s",
+                    listener,
+                    self.uuid,
+                    index,
+                )
         return index
 
     def get_combat_log(self, since: int = 0) -> List[CombatLogEntry]:
@@ -1094,15 +1025,17 @@ class Encounter(BaseObject):
             if deaths and self.state != EncounterState.ACTIVE:
                 return None
 
-        return self._complete_current_turn()
+        return self.complete_current_turn()
 
-    def _complete_current_turn(self) -> Optional[TurnEndEvent]:
-        """Commit the current turn end and advance to the next initiative slot."""
+    def complete_current_turn(self) -> Optional[TurnEndEvent]:
+        """End the active turn and prepare the next initiative slot.
+
+        This is the engine-owned boundary for external controllers.  It does
+        not start or execute the next turn; callers may schedule that work
+        synchronously or asynchronously after the index transition commits.
+        """
         end_event = self.end_turn()
-        self.current_turn_index += 1
-        if self.current_turn_index >= len(self.initiative_order):
-            self._advance_round()
-        self.turn_state = TurnState.NOT_STARTED
+        self._advance_turn_slot()
         return end_event
 
     def advance_until_player(self) -> AdvanceResult:
@@ -1185,10 +1118,7 @@ class Encounter(BaseObject):
 
         if combatant.is_dead or not combatant.is_alive:
             combatant.has_acted_this_round = True
-            self.current_turn_index += 1
-            if self.current_turn_index >= len(self.initiative_order):
-                self._advance_round()
-            self.turn_state = TurnState.NOT_STARTED
+            self._advance_turn_slot()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status="advanced_autonomous",
@@ -1258,7 +1188,7 @@ class Encounter(BaseObject):
             not self.can_continue_turn()
             or not controller.can_continue_turn(entity, context)
         ):
-            self._complete_current_turn()
+            self.complete_current_turn()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status=(
@@ -1303,7 +1233,7 @@ class Encounter(BaseObject):
                 and current is not None
                 and current.uuid == actor_uuid
             ):
-                self._complete_current_turn()
+                self.complete_current_turn()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status=(
@@ -1379,7 +1309,7 @@ class Encounter(BaseObject):
             or not controller.can_continue_turn(entity, context)
         )
         if should_end:
-            self._complete_current_turn()
+            self.complete_current_turn()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status=(

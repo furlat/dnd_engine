@@ -20,8 +20,7 @@ import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
 import dnd.items.environment as environment
-import dnd.items.test_items as test_items
-import dnd.items.test_reactions as test_reactions
+import dnd.items.environment_interactables as environment_interactables
 import dnd.items.torches as torches
 import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
@@ -228,27 +227,13 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(consumables._DrinkHealingPotionAction, "action.item.potion_healing.drink", "Drink Healing Potion", "Drink the potion to recover hit points."),
     _original(environment.CloseDirectionalDoorAction, "action.environment.directional_door.close", "Close Directional Door", "Close the directional door from an adjacent tile."),
     _original(environment.OpenDirectionalDoorAction, "action.environment.directional_door.open", "Open Directional Door", "Open the directional door from an adjacent tile."),
-    _original(test_items.ActivateDeviceAction, "action.environment.arcane_device.activate", "Activate Device", "Activate the selected arcane device."),
-    _original(test_items.CloseDoorAction, "action.environment.door.close", "Close Door", "Close the adjacent door."),
-    _original(test_items.CookAction, "action.environment.campfire.cook", "Cook", "Use the campfire to prepare a restorative meal."),
-    _original(
-        test_items.InteractDoorAction,
-        "action.fixture.interact_door",
-        "Interact Door",
-        "Maintained developer interaction used to exercise generic door actions.",
-        visibility=ContentVisibility.DEVELOPER,
-    ),
-    _original(test_items.LootAllAction, "action.environment.storage_chest.loot_all", "Loot All", "Transfer every accessible item from the container."),
-    _original(test_items.OpenDoorAction, "action.environment.door.open", "Open Door", "Open the adjacent door."),
-    _original(test_items.PullLeverAction, "action.environment.trap_lever.pull", "Pull Lever", "Pull the linked lever to alter its encounter mechanism."),
-    _original(test_items.RestAction, "action.environment.campfire.rest", "Rest", "Rest beside the campfire."),
-    _original(
-        test_reactions.PrepareIntercept,
-        "action.fixture.prepare_intercept",
-        "Prepare Intercept",
-        "Maintained developer action that prepares a movement interception.",
-        visibility=ContentVisibility.DEVELOPER,
-    ),
+    _original(environment_interactables.ActivateDeviceAction, "action.environment.arcane_device.activate", "Activate Device", "Activate the selected arcane device."),
+    _original(environment_interactables.CloseDoorAction, "action.environment.door.close", "Close Door", "Close the adjacent door."),
+    _original(environment_interactables.CookAction, "action.environment.campfire.cook", "Cook", "Use the campfire to prepare a restorative meal."),
+    _original(environment_interactables.LootAllAction, "action.environment.storage_chest.loot_all", "Loot All", "Transfer every accessible item from the container."),
+    _original(environment_interactables.OpenDoorAction, "action.environment.door.open", "Open Door", "Open the adjacent door."),
+    _original(environment_interactables.PullLeverAction, "action.environment.trap_lever.pull", "Pull Lever", "Pull the linked lever to alter its encounter mechanism."),
+    _original(environment_interactables.RestAction, "action.environment.campfire.rest", "Rest", "Rest beside the campfire."),
     _original(torches.ExtinguishTorchAction, "action.item.torch.extinguish", "Extinguish Torch", "Extinguish a carried torch."),
     _original(torches.ExtinguishWallTorchAction, "action.environment.wall_torch.extinguish", "Extinguish Wall Torch", "Extinguish an adjacent wall torch."),
     _original(torches.IgniteTorchAction, "action.item.torch.ignite", "Ignite Torch", "Ignite a carried torch."),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from dnd.ai.contracts.control import CommandResult, DecisionEpoch
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
@@ -108,6 +108,16 @@ class ObservationCombatantState(BaseModel):
     is_controlled: bool = Field(default=False, description="Whether this combatant is controlled by the session.")
     knowledge_state: KnowledgeState = Field(description="Subjective knowledge state for this combatant.")
     observer_uuids: List[str] = Field(default_factory=list, description="Controlled observers that currently know this combatant.")
+
+    @model_validator(mode="after")
+    def validate_life_state_projection(self) -> "ObservationCombatantState":
+        if (
+            self.life_state is not None
+            and self.is_dead is not None
+            and self.is_dead is not (self.life_state is LifeState.DEAD)
+        ):
+            raise ValueError("is_dead must derive from life_state")
+        return self
 
 
 class ObservationEncounterState(BaseModel):
@@ -224,6 +234,16 @@ class ObservationEntityFact(BaseModel):
     faction: Optional[str] = Field(default=None, description="Known faction label.")
     life_state: Optional[LifeState] = Field(default=None, description="Known authoritative lifecycle state.")
     is_dead: Optional[bool] = Field(default=None, description="Known death state.")
+
+    @model_validator(mode="after")
+    def validate_life_state_projection(self) -> "ObservationEntityFact":
+        if (
+            self.life_state is not None
+            and self.is_dead is not None
+            and self.is_dead is not (self.life_state is LifeState.DEAD)
+        ):
+            raise ValueError("is_dead must derive from life_state")
+        return self
 
 
 class ObservationObjectFact(BaseModel):

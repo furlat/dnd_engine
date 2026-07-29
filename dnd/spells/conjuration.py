@@ -77,7 +77,14 @@ import random
 from dnd.core.dice import AttackOutcome
 from dnd.core.values import ModifiableValue
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, FireExposureEvent, SkillCheckEvent, SpatialChangeEvent, WindExposureEvent
-from dnd.core.modifiers import DamageType, NumericalModifier, AdvantageModifier, AdvantageStatus, ResistanceStatus
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    NumericalModifier,
+    AdvantageModifier,
+    AdvantageStatus,
+    ResistanceStatus,
+)
+from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
@@ -359,6 +366,10 @@ class PoisonSpray(SpellAction):
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=10), description="Range contract used when validating targets for poison spray.")
     projectile_type: Optional[str] = Field(default="spray", description="Projectile visualization hint for poison spray.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.POISON, description="Primary damage type for VFX")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.POISON,),
+        description="Exact origin-rule semantics carried by Poison Spray saves.",
+    )
 
     include_self: bool = Field(default=False, description="Whether poison spray can include the caster among valid targets.")
     valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for poison spray.")
@@ -1104,7 +1115,6 @@ class WebZone(ZoneControlCondition):
     )
 
     _burning_positions: Set[Tuple[int, int]] = PrivateAttr(default_factory=set)
-    _burning_fire_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
 
     def _has_entry_effect(self) -> bool:
         """Web causes saves when entities enter."""
@@ -1223,7 +1233,6 @@ class WebZone(ZoneControlCondition):
 
             zone_condition.expose_position_to_fire(
                 event.position,
-                fire_source_uuid=event.source_entity_uuid,
                 parent_event=event,
             )
             return None
@@ -1267,17 +1276,6 @@ class WebZone(ZoneControlCondition):
             event_processor=processor,
         )
 
-    def _ensure_burning_fire_handler(self) -> None:
-        """Register and track the burning-fire handler once."""
-        if self._burning_fire_handler_uuid is not None:
-            return
-
-        fire_handler = self._create_burning_fire_handler()
-        EventQueue.add_event_handler(fire_handler)
-        self._burning_fire_handler_uuid = fire_handler.uuid
-        if fire_handler.uuid not in self.event_handlers_uuids:
-            self.event_handlers_uuids.append(fire_handler.uuid)
-
     def _deal_burning_web_damage(self, entity: Entity, parent_event: Event) -> None:
         """Deal SRD burning Web damage to one entity.
 
@@ -1317,14 +1315,12 @@ class WebZone(ZoneControlCondition):
     def expose_position_to_fire(
         self,
         position: Tuple[int, int],
-        fire_source_uuid: Optional[UUID] = None,
         parent_event: Optional[Event] = None,
     ) -> bool:
         """Burn away one Web cube and leave one round of fire damage.
 
         Args:
             position: Grid position exposed to fire.
-            fire_source_uuid: Entity or object that exposed the cube to fire.
             parent_event: Event that triggered the exposure.
 
         Returns:
@@ -1350,7 +1346,6 @@ class WebZone(ZoneControlCondition):
                 entity.remove_condition("Web Restrained", parent_event=parent_event)
 
         self._burning_positions.add(position)
-        self._ensure_burning_fire_handler()
         return True
 
     def _create_unanchored_collapse_handler(self) -> EventHandler:
@@ -1388,6 +1383,10 @@ class WebZone(ZoneControlCondition):
         fire_handler = self._create_fire_exposure_handler()
         EventQueue.add_event_handler(fire_handler)
         handler_uuids.append(fire_handler.uuid)
+
+        burning_fire_handler = self._create_burning_fire_handler()
+        EventQueue.add_event_handler(burning_fire_handler)
+        handler_uuids.append(burning_fire_handler.uuid)
 
         if not self.anchored_or_layered and self.source_entity_uuid is not None:
             collapse_handler = self._create_unanchored_collapse_handler()
@@ -1621,7 +1620,11 @@ class CloudkillZone(ZoneControlCondition):
                 target_entity_uuid=entity.uuid,
                 ability_name="constitution",
                 dc=dc,
-                parent_event=event.uuid
+                parent_event=event.uuid,
+                saving_throw_context=self.saving_throw_context(
+                    effect_id="condition.spell.cloudkill.zone.poison_save",
+                    effect_tags=(SavingThrowEffectTag.POISON,),
+                ),
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1675,7 +1678,13 @@ class CloudkillZone(ZoneControlCondition):
                 target_entity_uuid=entity.uuid,
                 ability_name="constitution",
                 dc=dc,
-                parent_event=event.uuid
+                parent_event=event.uuid,
+                saving_throw_context=zone_condition.saving_throw_context(
+                    effect_id=(
+                        "condition.spell.stinking_cloud.zone.poison_save"
+                    ),
+                    effect_tags=(SavingThrowEffectTag.POISON,),
+                ),
             )
             _, _, success = entity.saving_throw(save_request)
 
@@ -1791,6 +1800,10 @@ class Cloudkill(SpellAction):
     )
     projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for cloudkill.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.POISON, description="Primary damage type for VFX")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.POISON,),
+        description="Exact origin-rule semantics carried by Cloudkill saves.",
+    )
 
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Cloudkill Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
@@ -3510,6 +3523,10 @@ class StinkingCloud(SpellAction):
     description: str = Field(default="20ft sphere nauseating fog, CON save or spend action", description="Rules-facing summary for the stinking cloud spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast stinking cloud; cantrips use 0.")
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify stinking cloud.")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.POISON,),
+        description="Exact origin-rule semantics carried by Stinking Cloud saves.",
+    )
     concentration: bool = Field(default=True, description="Whether stinking cloud creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for stinking cloud.")
     position_discovery: Optional[PositionDiscoveryContract] = Field(

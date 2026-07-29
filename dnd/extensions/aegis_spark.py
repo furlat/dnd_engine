@@ -1,21 +1,16 @@
-"""Aegis Spark spell and feature extension used by manual tutorials."""
+"""Aegis Spark spell and feature extension content."""
 
 from typing import Optional
-from uuid import uuid4
 
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent
-from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.core.base_actions import AvailableActionInfo, TargetType
+from dnd.core.base_actions import TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import Event, EventPhase, Range, RangeType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entity import Entity
 
 
 class AegisSparkEffect(BaseCondition):
@@ -194,85 +189,3 @@ class AegisTrainingFeature(BaseCondition):
         if target is not None:
             target.unregister_action("Aegis Spark")
         return super()._remove(event)
-
-
-def create_spell_feature_actor(
-    name: str,
-    position: tuple[int, int],
-    faction: str,
-) -> Entity:
-    """Create an actor with spellcasting stats for extension examples.
-
-    Args:
-        name: Entity display name.
-        position: Starting grid position.
-        faction: Faction assigned to the actor.
-
-    Returns:
-        Configured spell-capable actor.
-    """
-    actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
-        name=name,
-        config=EntityConfig(
-            ability_scores=AbilityScoresConfig(
-                strength=AbilityConfig(ability_score=10),
-                dexterity=AbilityConfig(ability_score=12),
-                constitution=AbilityConfig(ability_score=12),
-                intelligence=AbilityConfig(ability_score=16),
-                wisdom=AbilityConfig(ability_score=10),
-                charisma=AbilityConfig(ability_score=10),
-            ),
-            action_economy=ActionEconomyConfig(),
-            health=HealthConfig(
-                hit_dices=[
-                    HitDiceConfig(
-                        hit_dice_value=8,
-                        hit_dice_count=3,
-                        mode="maximums",
-                    )
-                ],
-            ),
-            proficiency_bonus=2,
-            spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
-            position=position,
-            faction=faction,
-        ),
-    )
-
-
-def create_aegis_scene():
-    """Create a caster, ally, and enemy for Aegis Spark examples.
-
-    Returns:
-        Tuple of caster, allied target, and enemy target.
-    """
-    caster = create_spell_feature_actor("Aegis Warden", (1, 1), "heroes")
-    ally = create_spell_feature_actor("Shield Ally", (3, 1), "heroes")
-    enemy = create_spell_feature_actor("Training Dummy", (5, 1), "monsters")
-    caster.add_condition(
-        AegisTrainingFeature(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            caster_level=5,
-        )
-    )
-    Entity.update_all_entities_senses(max_distance=30)
-    return caster, ally, enemy
-
-
-def find_action_info(actions, template_name: str) -> AvailableActionInfo:
-    """Return a discovered action row by template name.
-
-    Args:
-        actions: Available-actions result returned by discovery.
-        template_name: Template name to find.
-
-    Returns:
-        Matching action info row.
-    """
-    for action_info in actions.all_actions:
-        if action_info.template_name == template_name:
-            return action_info
-    raise AssertionError(f"{template_name} was not discovered")

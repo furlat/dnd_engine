@@ -6,13 +6,18 @@ import pytest
 
 from dnd.actions import Attack
 from dnd.blocks.equipment import Weapon
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core import dice as dice_module
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
@@ -26,6 +31,28 @@ from server.player_replication_contract import (
     SubjectivePerspective,
     VisualLoadoutReplacePatch,
 )
+
+
+def _materialize_bestiary_actor(
+    creature_id: str,
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Build one exact bestiary actor with its authored weapon loadout."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=f"tests.active_weapon_stance.actor_{runtime_entity_uuid.hex}",
+        ),
+        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
+    )
 
 
 def _controlled_perspective(
@@ -86,17 +113,20 @@ def test_accepted_attacks_switch_stance_but_canceled_attacks_do_not(
 ) -> None:
     """The attack effect owns stance selection; validation failure owns none."""
     reset_engine_runtime(grid_size=(70, 3))
-    attacker = create_goblin(
+    attacker = _materialize_bestiary_actor(
+        "goblin",
         name="Dual wielder",
         position=(1, 1),
         faction="heroes",
     )
-    adjacent = create_skeleton(
+    adjacent = _materialize_bestiary_actor(
+        "skeleton",
         name="Adjacent target",
         position=(2, 1),
         faction="monsters",
     )
-    out_of_range = create_skeleton(
+    out_of_range = _materialize_bestiary_actor(
+        "skeleton",
         name="Out-of-range target",
         position=(69, 1),
         faction="monsters",
@@ -141,12 +171,14 @@ def test_live_patch_and_fresh_reset_project_the_same_persisted_stance(
 ) -> None:
     """Incremental and bootstrap projection read the same engine-owned fact."""
     grid = reset_engine_runtime(grid_size=(5, 3))
-    attacker = create_goblin(
+    attacker = _materialize_bestiary_actor(
+        "goblin",
         name="Reset actor",
         position=(1, 1),
         faction="heroes",
     )
-    target = create_skeleton(
+    target = _materialize_bestiary_actor(
+        "skeleton",
         name="Reset target",
         position=(2, 1),
         faction="monsters",

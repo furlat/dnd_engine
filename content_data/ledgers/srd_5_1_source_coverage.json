@@ -5102,15 +5102,23 @@
       "source_name": "Javelin"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "weapon.light_hammer",
+        "content_version": 1,
+        "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1",
+        "definition_kind": "item",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "item",
       "dependency_refs": [],
-      "implementation_status": "missing",
-      "legacy_locators": [],
+      "implementation_status": "playable",
+      "legacy_locators": [
+        "dnd/items/weapons.py:_build_light_hammer"
+      ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "",
+      "mechanical_notes": "The migrated content definition is usable for attacks; playable does not claim complete cost, weight, or property parity.",
       "section": "weapons",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), pp. 65-66, Weapons table: Light hammer",
       "source_entry_id": "srd_5_1.weapon.light_hammer",

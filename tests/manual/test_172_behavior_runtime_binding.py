@@ -75,6 +75,7 @@ from dnd.core.content.registry import (
 from dnd.core.content.runtime import (
     BehaviorBinding,
     RuntimeBehaviorKind,
+    active_runtime_behavior_binding,
     bind_runtime_action_before_admission,
     bind_runtime_behavior_child,
     bind_runtime_handler_before_admission,
@@ -717,6 +718,28 @@ def test_action_events_freeze_active_binding_without_serializing_runtime_state()
     assert declaration.model_copy(deep=True).behavior_binding == binding
     assert "behavior_binding" not in declaration.model_dump()
     assert "behavior_binding" not in declaration.model_dump(mode="json")
+
+
+def test_unbound_internal_behavior_masks_outer_authored_provider_scope() -> None:
+    """Private children cannot inherit across an undeclared causal boundary."""
+    owner_uuid = uuid4()
+    action, _, _ = _runtime_chain(owner_uuid)
+    binder = BehaviorBinder(_registry())
+    binding = binder.bind(
+        action,
+        declaration_source=_WindClockworkAction,
+        expected_kind=RuntimeBehaviorKind.ACTION,
+        provided_by_ref=_ROOT_REF,
+        origin_root_ref=_ROOT_REF,
+        runtime_owner_uuid=owner_uuid,
+    )
+
+    with runtime_behavior_provider(action):
+        assert active_runtime_behavior_binding() == binding
+        with runtime_behavior_provider(object()):
+            assert active_runtime_behavior_binding() is None
+        assert active_runtime_behavior_binding() == binding
+    assert active_runtime_behavior_binding() is None
 
 
 def test_handler_emitted_action_event_freezes_handler_binding() -> None:

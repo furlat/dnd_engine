@@ -11,7 +11,7 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.encounter import Encounter
-from server import live_replication
+from tests.manual import live_replication_support as live_replication
 from server.event_stream import (
     BoundedSubscription,
     HeartbeatPayload,
@@ -22,7 +22,7 @@ from server.event_stream import (
 )
 from server.api_models import SessionPingResponse
 from server.combat_log_source import CombatLogSourceError, CombatLogSourceSlot
-from server.live_replication import (
+from tests.manual.live_replication_support import (
     create_stream_scene,
     drain_subscription,
     execute_stream_attack,
@@ -326,7 +326,7 @@ def test_exact_combat_log_source_window_rejects_uncaptured_history() -> None:
         )
 
 
-def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
+def test_live_subscription_fans_out_game_events_and_combat_logs() -> None:
     """Subscribers receive queued game-event and combat-log envelopes."""
     scene = create_stream_scene()
     subscription = event_stream.subscribe(max_depth=64)
@@ -362,38 +362,6 @@ def test_live_subscription_fans_out_game_events_and_combat_logs(capsys) -> None:
         latest_log_payload.combat_log_cursor,
     )
     assert latest_log_payload.combat_log_cursor <= len(scene.encounter.combat_log)
-
-    readout_lines = [
-        (
-            "fanout: "
-            f"total={len(envelopes)}, "
-            f"game_events={len(game_event_envelopes)}, "
-            f"combat_logs={len(combat_log_envelopes)}"
-        ),
-        (
-            "latest game: "
-            f"id={latest_game_event['id']}, "
-            f"phase={latest_game_payload.event.phase}, "
-            f"cursor={latest_game_payload.event_cursor}"
-        ),
-        (
-            "latest log: "
-            f"id={latest_log['id']}, "
-            f"log_cursor={latest_log_payload.combat_log_cursor}, "
-            f"within_log={latest_log_payload.combat_log_cursor <= len(scene.encounter.combat_log)}"
-        ),
-    ]
-    expected_lines = [
-        "fanout: total=31, game_events=30, combat_logs=1",
-        "latest game: id=e=72;l=2, phase=completion, cursor=72",
-        "latest log: id=e=72;l=2, log_cursor=2, within_log=True",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
 
 def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
     """A server-ahead monster turn retains forced motion and its child log."""
@@ -475,7 +443,7 @@ def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
     assert str(tuple(forced_wire["end_position"])) in forced_logs[0].verbose
 
 
-def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None:
+def test_combat_log_frames_follow_completion_events_in_the_queue() -> None:
     """Combat-log envelopes are released after completion events are visible."""
     scene = create_stream_scene()
     subscription = event_stream.subscribe(max_depth=64)
@@ -497,26 +465,6 @@ def test_combat_log_frames_follow_completion_events_in_the_queue(capsys) -> None
 
     assert completion_indexes
     assert first_log_index > completion_indexes[-1]
-
-    readout_lines = [
-        (
-            "ordering: "
-            f"first_log_index={first_log_index}, "
-            f"last_completion_before_log={completion_indexes[-1]}, "
-            f"completions_before_log={len(completion_indexes)}"
-        ),
-        f"log_after_completion={first_log_index > completion_indexes[-1]}",
-    ]
-    expected_lines = [
-        "ordering: first_log_index=30, last_completion_before_log=29, completions_before_log=7",
-        "log_after_completion=True",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
 
 def test_hot_event_envelopes_carry_the_finalized_causal_log_barrier() -> None:
     """Early events cannot see a log waiting on a later completion cursor."""

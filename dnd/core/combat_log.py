@@ -5,7 +5,7 @@ display payloads near the event data that produced them.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -36,6 +36,7 @@ class CombatLogEntryType(str, Enum):
     SPELL_INTERRUPTION = "spell_interruption"
     ENTITY_SPOTTED = "entity_spotted"
     HAZARD_DETECTED = "hazard_detected"
+    ROLL_MODIFICATION = "roll_modification"
 
 
 class CombatLogVerbosity(str, Enum):
@@ -111,6 +112,60 @@ class DamageRollDisplay(BaseModel):
     bonus_breakdown: List[ModifierBreakdown] = Field(
         default_factory=list,
         description="Breakdown of damage bonus modifiers",
+    )
+
+
+class RollModificationLogFact(BaseModel):
+    """Combat-log projection of one rules-owned roll-result change.
+
+    This is intentionally a projection rather than the engine event model:
+    combat-log contracts are dependency-neutral and must not import upward
+    from the event system.
+    """
+
+    operation: Literal["replace", "append"] = Field(
+        description="Whether an effective roll changed or a damage packet was added.",
+    )
+    handler_name: str = Field(
+        min_length=1,
+        description="Rules handler responsible for the change.",
+    )
+    packet_index: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Affected damage-packet index, when applicable.",
+    )
+    previous_total: Optional[int] = Field(
+        default=None,
+        description="Effective total before a replacement.",
+    )
+    final_total: int = Field(
+        description="Effective replacement total or appended packet total.",
+    )
+    reason: str = Field(
+        min_length=1,
+        description="Rules-facing explanation of the modification.",
+    )
+    packet_damage_type: Optional[str] = Field(
+        default=None,
+        description="Damage type for an affected damage packet.",
+    )
+    packet_dice: Optional[str] = Field(
+        default=None,
+        description="Dice expression for an affected damage packet.",
+    )
+
+
+class RollModificationLogData(BaseModel):
+    """Structured ordered changes made to one effective roll result."""
+
+    roll_type: str = Field(
+        min_length=1,
+        description="Mechanical roll category whose result changed.",
+    )
+    modifications: List[RollModificationLogFact] = Field(
+        min_length=1,
+        description="Ordered changes applied by result interceptors.",
     )
 
 
@@ -585,182 +640,14 @@ class CombatLogEntry(BaseModel):
         """Emit unordered UUID knowledge as a canonical JSON array."""
         return sorted(value)
 
-    def get_text(self, verbosity: CombatLogVerbosity) -> str:
-        """Get formatted text at specified verbosity level."""
-        if verbosity == CombatLogVerbosity.COMPACT:
-            return self.compact
-        elif verbosity == CombatLogVerbosity.VERBOSE:
-            return self.verbose
-        return self.detailed
-
-    def get_text_with_children(
-        self,
-        verbosity: str = "compact",
-        indent_str: str = "  ",
-        depth: int = 0
-    ) -> str:
-        """Get formatted text including sub-entries with indentation.
-
-        Recursively processes sub_entries with increasing indentation.
-
-        Args:
-            verbosity: One of "compact", "verbose", or "detailed"
-            indent_str: String to use for each level of indentation
-            depth: Current indentation depth (starts at 0)
-
-        Returns:
-            Formatted text with all sub-entries properly indented
-        """
-        text_field = getattr(self, verbosity, self.compact)
-        prefix = indent_str * depth
-        lines = [prefix + text_field]
-
-        for sub_entry in self.sub_entries:
-            lines.append(sub_entry.get_text_with_children(verbosity, indent_str, depth + 1))
-
-        return "\n".join(lines)
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return self.model_dump(mode='json')
 
 
-def format_attack_roll_line(
-    roll: DiceRollDisplay,
-    attack_breakdown: List[ModifierBreakdown],
-    target_ac: int,
-    ac_breakdown: List[ModifierBreakdown],
-    outcome: str
-) -> str:
-    """Format an attack roll line.
-
-    Args:
-        roll: Attack roll display data.
-        attack_breakdown: Modifiers contributing to the attack roll.
-        target_ac: Target Armor Class.
-        ac_breakdown: Modifiers contributing to the target Armor Class.
-        outcome: Attack outcome label.
-
-    Returns:
-        Text like `d20(15) +4 [Prof +2] = 19 vs AC 13 -> HIT`.
-    """
-    if roll.advantage_status == "advantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
-        d20_str = f"ADV d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
-    elif roll.advantage_status == "disadvantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
-        d20_str = f"DIS d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
-    else:
-        d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
-        d20_str = f"d20({d20_val})"
-
-    bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
-
-    if attack_breakdown:
-        atk_breakdown_str = " [" + ", ".join(
-            f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in attack_breakdown
-        ) + "]"
-    else:
-        atk_breakdown_str = ""
-
-    if ac_breakdown:
-        ac_breakdown_str = " [" + ", ".join(
-            f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in ac_breakdown
-        ) + "]"
-    else:
-        ac_breakdown_str = ""
-
-    outcome_map = {
-        "hit": "HIT",
-        "miss": "MISS",
-        "crit": "CRIT",
-        "crit_miss": "CRIT MISS"
-    }
-    outcome_str = outcome_map.get(outcome.lower(), outcome.upper())
-
-    return f"{d20_str} {bonus_str}{atk_breakdown_str} = {roll.total} vs AC {target_ac}{ac_breakdown_str} → {outcome_str}"
-
-
-def format_damage_line(damage_rolls: List[DamageRollDisplay]) -> str:
-    """Format a damage roll summary line.
-
-    Args:
-        damage_rolls: Damage rolls to summarize.
-
-    Returns:
-        Text like `1d6(5) +2 [DEX +2] = 7 slashing`.
-    """
-    if not damage_rolls:
-        return ""
-
-    parts = []
-    for dr in damage_rolls:
-        dice_str = dr.dice_str
-        dice_results = ",".join(str(r) for r in dr.dice_results) if dr.dice_results else "?"
-
-        bonus_str = ""
-        if dr.bonus != 0:
-            bonus_str = f" +{dr.bonus}" if dr.bonus > 0 else f" {dr.bonus}"
-
-        breakdown_str = ""
-        if dr.bonus_breakdown:
-            breakdown_str = " [" + ", ".join(
-                f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in dr.bonus_breakdown
-            ) + "]"
-
-        parts.append(f"{dice_str}({dice_results}){bonus_str}{breakdown_str} = {dr.total} {dr.damage_type}")
-
-    return ", ".join(parts)
-
-
-def format_d20_roll_line(
-    roll: DiceRollDisplay,
-    bonus_breakdown: List[ModifierBreakdown],
-    dc: int,
-    success: bool,
-    label: str = ""
-) -> str:
-    """Format a generic d20 roll line.
-
-    Args:
-        roll: D20 roll display data.
-        bonus_breakdown: Modifiers contributing to the roll.
-        dc: Difficulty Class.
-        success: Whether the check succeeded.
-        label: Optional prefix label.
-
-    Returns:
-        Text like `d20(8) +2 [DEX +2] = 10 vs DC 14 -> FAIL`.
-    """
-    if roll.advantage_status == "advantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
-        d20_str = f"ADV d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
-    elif roll.advantage_status == "disadvantage" and roll.all_d20_rolls and len(roll.all_d20_rolls) >= 2:
-        d20_str = f"DIS d20({roll.all_d20_rolls[0]},{roll.all_d20_rolls[1]}→{roll.d20_used})"
-    else:
-        d20_val = roll.d20_used if roll.d20_used is not None else (roll.results[0] if roll.results else "?")
-        d20_str = f"d20({d20_val})"
-
-    bonus_str = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
-
-    if bonus_breakdown:
-        breakdown_str = " [" + ", ".join(
-            f"{m.name} {'+' if m.value >= 0 else ''}{m.value}" for m in bonus_breakdown
-        ) + "]"
-    else:
-        breakdown_str = ""
-
-    result_str = "SUCCESS" if success else "FAIL"
-
-    prefix = f"{label}: " if label else ""
-    return f"{prefix}{d20_str} {bonus_str}{breakdown_str} = {roll.total} vs DC {dc} → {result_str}"
-
-
 def md_color(text: str, color: str) -> str:
     """Wrap text in color markdown: {color:text}"""
     return f"{{{color}:{text}}}"
-
-
-def md_bold(text: str) -> str:
-    """Wrap text in bold markdown: **text**"""
-    return f"**{text}**"
 
 
 def md_outcome(outcome: str) -> str:

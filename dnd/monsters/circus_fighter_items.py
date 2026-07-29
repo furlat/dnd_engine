@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
-
 from pydantic import BaseModel, ConfigDict
 
 from dnd.blocks.equipment import BodyArmor, Range, Weapon
@@ -35,10 +33,10 @@ from dnd.core.equipment_types import (
     WeaponProperty,
 )
 from dnd.core.events import RangeType
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
-    DamageType,
 )
 from dnd.core.values import ModifiableValue
 from dnd.items.authored_presentations import (
@@ -447,13 +445,4 @@ NEURODRAGON_CIRCUS_ITEM_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     PERFORMER_LEATHER_DECLARATION,
     LONGSWORD_PLUS_ONE_DECLARATION,
     SOUL_DRAINING_MORNINGSTAR_DECLARATION,
-)
-NEURODRAGON_CIRCUS_ITEM_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "flaming_scimitar": FLAMING_SCIMITAR_RECIPE,
-        "longsword_plus_one": LONGSWORD_PLUS_ONE_RECIPE,
-        "performer_armor": PERFORMER_LEATHER_RECIPE,
-        "rusty_dagger": RUSTY_DAGGER_RECIPE,
-        "soul_draining_morningstar": SOUL_DRAINING_MORNINGSTAR_RECIPE,
-    },
 )

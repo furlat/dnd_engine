@@ -12,10 +12,10 @@ import pytest
 from dnd.actions import SpellEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.spells.transmutation import Disintegrate
-from dnd.utils import has_condition, set_hp
+from tests.engine.support import has_condition, set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,

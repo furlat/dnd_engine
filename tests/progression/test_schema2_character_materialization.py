@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import replace
-from uuid import uuid4, uuid5
+from uuid import UUID, uuid4, uuid5
 
 import pytest
 
@@ -14,6 +14,8 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
+from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
@@ -34,9 +36,9 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     AbilityScoreName,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
+    CharacterItemV1,
     CharacterLoadoutRevisionV1,
     ClassDefinition,
     ClassLevelDefinition,
@@ -51,6 +53,7 @@ from dnd.core.content.durable_characters import (
     SpellcastingSourceId,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.provenance import (
     ContentFidelity,
@@ -64,12 +67,16 @@ from dnd.core.content.registration import (
     compute_definition_contract_hash,
 )
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.equipment_types import ArmorType, WeaponProperty
+from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.progression import CasterProgression
 from dnd.encounter import Encounter, EncounterState
+from dnd.entity import Entity
+from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.torches import TORCH_RECIPE
 from dnd.monsters.bestiary import create_goblin
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -148,12 +155,16 @@ def _runtime_with(
     species = _typed_declaration(
         ContentDefinitionKind.SPECIES,
         "species.human",
-        SpeciesDefinition(),
+        SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     background = _typed_declaration(
         ContentDefinitionKind.BACKGROUND,
         "background.soldier",
-        BackgroundDefinition(),
+        BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
     )
     class_declaration = _typed_declaration(
         ContentDefinitionKind.CLASS,
@@ -194,7 +205,7 @@ def _definition(
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=species_ref,
         background_ref=background_ref,
-        appearance=CharacterAppearanceSelection(),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=14,
@@ -337,6 +348,77 @@ def test_schema2_materializer_applies_and_removes_neutral_structure() -> None:
     assert not entity.creature_proficiencies.is_armor_proficient(
         ArmorType.LIGHT,
     )
+
+
+def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
+    """A late invalid holding leaves no earlier durable runtime possession."""
+    runtime, species_ref, background_ref, class_ref = _runtime_with(
+        ClassDefinition(
+            hit_die=10,
+            caster_progression=CasterProgression.NON_CASTER,
+            level_definitions=(ClassLevelDefinition(class_level=1),),
+        ),
+    )
+    character_id = uuid4()
+    definition = _definition(
+        character_id=character_id,
+        species_ref=species_ref,
+        background_ref=background_ref,
+        class_ref=class_ref,
+        levels=1,
+    )
+    loadout = CharacterLoadoutRevisionV1.create(
+        character_id=character_id,
+        loadout_revision=1,
+        based_on_definition_revision=1,
+    )
+    torch_item_id = UUID(int=1)
+    invalid_item_id = UUID(int=2)
+    holdings = CharacterHoldingsRevision.create(
+        character_id=character_id,
+        holdings_revision=1,
+        items=(
+            CharacterItemV1.create(
+                character_item_id=torch_item_id,
+                recipe=TORCH_RECIPE,
+            ),
+            CharacterItemV1.create(
+                character_item_id=invalid_item_id,
+                recipe=HEALING_POTION_RECIPE,
+                equipped_slot=WeaponSlot.MELEE_MAIN,
+            ),
+        ),
+    )
+    runtime_entity_uuid = uuid4()
+
+    with pytest.raises(
+        TypeError,
+        match="equipped_slot requires an equippable item definition",
+    ):
+        materialize_character(
+            definition=definition,
+            holdings=holdings,
+            loadout=loadout,
+            runtime_entity_uuid=runtime_entity_uuid,
+            display_name="Rollback Hero",
+            faction="heroes",
+            position=(2, 2),
+            deployment_role=CreatureDeploymentRole(
+                role_id="test.schema2.rollback",
+            ),
+            expected_ruleset_digest=_RULESET_DIGEST,
+            runtime=runtime,
+        )
+
+    entity = Entity.get(runtime_entity_uuid)
+    assert entity is not None
+    assert entity.inventory.items == {}
+    assert entity.equipment.get_all_equipped_items() == []
+    assert not {
+        binding.character_item_id
+        for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
+    }.intersection({torch_item_id, invalid_item_id})
+    assert not get_map()._light_sources
 
 
 def test_schema2_player_zero_hp_commits_dead_and_terminal_encounter() -> None:

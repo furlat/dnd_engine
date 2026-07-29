@@ -179,7 +179,7 @@ unresolved coverage: every old selector has a reviewed manifest disposition.
 - script/profiler-style files still counted as baseline behavior;
 - rows marked `covered` represented 1:1 parity.
 
-However, `tests/engine_book/test_book_integrity.py` checked:
+However, `tests/architecture/test_source_model_hygiene.py` checked:
 
 - every active engine-book function had a parity-matrix row;
 - every matrix row naming an engine-book test pointed to a live function;
@@ -266,12 +266,12 @@ The terrain modifier was removed and `_paths_dirty` was set, but the spatial
 movement cache was not invalidated. The current worktree now fixes that and
 adds:
 
-- `tests/engine_book/test_chapter_15_spell_families.py::test_eb_15_045_gust_terrain_removal_restores_cached_move_targets`
+- `tests/engine/test_spell_families.py::test_eb_15_045_gust_terrain_removal_restores_cached_move_targets`
 
 Validation:
 
 ```bash
-uv run pytest -q tests/engine_book/test_chapter_15_spell_families.py \
+uv run pytest -q tests/engine/test_spell_families.py \
   -k gust_terrain_removal_restores_cached_move_targets
 # 1 passed
 
@@ -350,13 +350,13 @@ Validation:
 uv run python -m pytest -q tests/manual/test_134_cleric_batch1_legacy_contract.py
 # 16 passed
 
-uv run python -m pytest -q tests/engine_book/test_condition_transform_ownership.py
+uv run python -m pytest -q tests/engine/test_condition_transform_ownership.py
 # 13 passed
 
 uv run pyright dnd/spells/enchantment.py dnd/creature_transforms.py \
   dnd/core/base_actions.py dnd/conditions.py \
   tests/manual/test_134_cleric_batch1_legacy_contract.py \
-  tests/engine_book/test_condition_transform_ownership.py
+  tests/engine/test_condition_transform_ownership.py
 # 0 errors
 ```
 

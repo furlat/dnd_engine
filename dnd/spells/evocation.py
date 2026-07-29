@@ -38,7 +38,12 @@ from dnd.core.dice import AttackOutcome
 from typing import cast as type_cast
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, AbilityName, WindExposureEvent
-from dnd.core.modifiers import DamageType, AdvantageModifier, AdvantageStatus, CreatureType, NumericalModifier
+from dnd.core.creature_types import CreatureType, DamageType
+from dnd.core.modifiers import (
+    AdvantageModifier,
+    AdvantageStatus,
+    NumericalModifier,
+)
 from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
@@ -1480,9 +1485,18 @@ class Thunderwave(SpellAction):
                     parent_event=effect_event.uuid
                 )
 
-                forced_event.phase_to(EventPhase.COMPLETION)
-
-                Entity.update_entity_position(target, end_pos, parent_event=effect_event.uuid)
+                forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+                forced_event = forced_event.phase_to(EventPhase.EFFECT)
+                if not forced_event.canceled:
+                    Entity.update_entity_position(
+                        target,
+                        end_pos,
+                        parent_event=forced_event.uuid,
+                    )
+                forced_event.phase_to(
+                    EventPhase.COMPLETION,
+                    end_position=target.position,
+                )
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""
@@ -2890,8 +2904,18 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid
         )
-        forced_event.phase_to(EventPhase.COMPLETION)
-        Entity.update_entity_position(entity, current_pos, parent_event=parent_event.uuid)
+        forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+        forced_event = forced_event.phase_to(EventPhase.EFFECT)
+        if not forced_event.canceled:
+            Entity.update_entity_position(
+                entity,
+                current_pos,
+                parent_event=forced_event.uuid,
+            )
+        forced_event.phase_to(
+            EventPhase.COMPLETION,
+            end_position=entity.position,
+        )
 
 
 class GustOfWind(SpellAction):

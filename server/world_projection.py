@@ -214,6 +214,7 @@ def project_appearance(appearance: Appearance) -> APIAppearance:
         portrait_key=appearance.portrait_key,
         presentation_kind=appearance.presentation_kind,
         visual_scale=appearance.visual_scale,
+        visual_scale_x=appearance.visual_scale_x,
         placeholder_tint=appearance.placeholder_tint,
         body_category=appearance.body_category,
         skin_tint=appearance.skin_tint,
@@ -264,6 +265,11 @@ def _project_public_condition_details(
 
 def project_entity_summary(entity: Entity) -> APIEntitySummary:
     """Project one renderer-complete entity summary."""
+    if entity.content_ref is None:
+        raise ValueError(
+            "Player-visible entity has no exact authored creature identity: "
+            f"{entity.uuid}",
+        )
     constitution_modifier = (
         entity.ability_scores
         .get_ability("constitution")
@@ -279,6 +285,32 @@ def project_entity_summary(entity: Entity) -> APIEntitySummary:
     )
     return APIEntitySummary(
         uuid=str(entity.uuid),
+        content_ref=APIContentRefSnapshot.model_validate(
+            entity.content_ref.model_dump(mode="python"),
+        ),
+        species_ref=(
+            APIContentRefSnapshot.model_validate(
+                entity.character_species_ref.model_dump(mode="python"),
+            )
+            if entity.character_species_ref is not None
+            else None
+        ),
+        species_variant_ref=(
+            APIContentRefSnapshot.model_validate(
+                entity.character_species_variant_ref.model_dump(
+                    mode="python",
+                ),
+            )
+            if entity.character_species_variant_ref is not None
+            else None
+        ),
+        background_ref=(
+            APIContentRefSnapshot.model_validate(
+                entity.character_background_ref.model_dump(mode="python"),
+            )
+            if entity.character_background_ref is not None
+            else None
+        ),
         name=entity.name,
         position=entity.position,
         hp=entity.get_hp(),
@@ -307,12 +339,8 @@ def project_grid(
             observer_perception = observer.get_passive_perception()
 
     tiles: list[APITile] = []
-    for (x, y), tile in grid._tiles.items():
-        walking_cost = (
-            int(tile.walking_cost.normalized_score)
-            if hasattr(tile, "walking_cost")
-            else 1
-        )
+    for (x, y), tile in grid.get_all_tiles().items():
+        walking_cost = int(tile.walking_cost.normalized_score)
         condition_details = _project_public_condition_details(
             condition
             for condition in tile.active_conditions.values()
@@ -454,11 +482,7 @@ def project_observed_tile(
             merged[direction] = edge
         return DirectionalStructuralEdgeMap(**merged)
 
-    walking_cost = (
-        int(tile.walking_cost.normalized_score)
-        if hasattr(tile, "walking_cost")
-        else 1
-    )
+    walking_cost = int(tile.walking_cost.normalized_score)
     return APITile(
         x=position[0],
         y=position[1],

@@ -49,7 +49,7 @@ from dnd.core.values import BaseValue
 from dnd.entity import Entity
 
 
-ENGINE_CONTENT_API_VERSION = 1
+ENGINE_CONTENT_API_VERSION = 2
 CONTENT_PACK_MANIFEST_NAME = "content-pack.toml"
 
 _FORBIDDEN_PACK_IMPORT_PREFIXES = (

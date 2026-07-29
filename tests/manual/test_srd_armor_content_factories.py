@@ -46,7 +46,7 @@ from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 EXPECTED_CONTENT_IDS = (

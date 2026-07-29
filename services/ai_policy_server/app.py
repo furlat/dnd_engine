@@ -19,13 +19,15 @@ from server.external_ai_protocol import (
     ExternalAIDecisionResponse,
     ExternalAIPolicyProviderHandshake,
 )
-from server.external_ai_registry import ExternalAIRegistryError
 from services.ai_policy_server.composition import (
     AIPolicyServiceRuntime,
     DEFAULT_PROVIDER_CAPACITY,
     DEFAULT_PROVIDER_ID,
     DEFAULT_RESPONSE_CACHE_SIZE,
     create_ai_policy_service_runtime,
+)
+from services.ai_policy_server.external_ai_registry import (
+    ExternalAIRegistryError,
 )
 
 
@@ -124,4 +126,3 @@ app = create_ai_policy_service()
 
 
 __all__ = ["app", "create_ai_policy_service"]
-

@@ -27,7 +27,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import AbilityName
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
 import dnd.spells.divination as divination

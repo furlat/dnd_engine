@@ -35,6 +35,9 @@ class APIContentRefSnapshot(BaseModel):
         "reaction",
         "feat",
         "class_feature",
+        "species",
+        "species_variant",
+        "background",
         "environment_object",
         "rule_primitive",
     ]
@@ -205,7 +208,16 @@ class APIAppearance(BaseModel):
         default=1.0,
         gt=0,
         le=4.0,
-        description="Presentation-only actor scale independent of rules size.",
+        description="Presentation-only uniform actor scale independent of rules size.",
+    )
+    visual_scale_x: float = Field(
+        default=1.0,
+        gt=0,
+        le=4.0,
+        description=(
+            "Presentation-only horizontal actor multiplier independent of "
+            "rules size."
+        ),
     )
     placeholder_tint: int = Field(
         default=0x36FF62,
@@ -280,6 +292,24 @@ class APIEntitySummary(BaseModel):
     """Lightweight renderer-complete entity snapshot."""
 
     uuid: str = Field(description="Stable entity UUID serialized as a string.")
+    content_ref: APIContentRefSnapshot = Field(
+        description=(
+            "Exact backend-selected authored creature identity. Presentation "
+            "consumers must not infer species or creature variants from names."
+        ),
+    )
+    species_ref: APIContentRefSnapshot | None = Field(
+        default=None,
+        description="Exact installed species identity for a player character.",
+    )
+    species_variant_ref: APIContentRefSnapshot | None = Field(
+        default=None,
+        description="Exact optional installed species-variant identity.",
+    )
+    background_ref: APIContentRefSnapshot | None = Field(
+        default=None,
+        description="Exact installed background identity for a player character.",
+    )
     name: str = Field(description="Display name for the entity.")
     position: Tuple[int, int] = Field(description="Current grid position as an (x, y) pair.")
     hp: int = Field(description="Current hit points.")
@@ -303,9 +333,41 @@ class APIEntitySummary(BaseModel):
     @model_validator(mode="after")
     def validate_condition_name_projection(self) -> "APIEntitySummary":
         """Keep the temporary name list derived from authoritative detail rows."""
+        if self.content_ref.definition_kind != "creature":
+            raise ValueError(
+                "entity content_ref must identify an authored creature",
+            )
+        if self.species_ref is None:
+            if (
+                self.species_variant_ref is not None
+                or self.background_ref is not None
+            ):
+                raise ValueError(
+                    "non-character entities cannot project partial origin refs",
+                )
+        else:
+            if self.species_ref.definition_kind != "species":
+                raise ValueError("species_ref must identify a species")
+            if (
+                self.background_ref is None
+                or self.background_ref.definition_kind != "background"
+            ):
+                raise ValueError(
+                    "character entities require an exact background_ref",
+                )
+            if (
+                self.species_variant_ref is not None
+                and self.species_variant_ref.definition_kind
+                != "species_variant"
+            ):
+                raise ValueError(
+                    "species_variant_ref must identify a species variant",
+                )
         detail_names = [detail.name for detail in self.condition_details]
         if self.conditions != detail_names:
             raise ValueError("conditions must equal condition detail names in order")
+        if self.is_dead is not (self.life_state is LifeState.DEAD):
+            raise ValueError("is_dead must derive from life_state")
         return self
 
 
@@ -436,6 +498,15 @@ class APICombatant(BaseModel):
         description="Authoritative lifecycle state when the entity still resolves.",
     )
     is_dead: bool = Field(description="Whether the authoritative lifecycle state is dead.")
+
+    @model_validator(mode="after")
+    def validate_life_state_projection(self) -> "APICombatant":
+        if (
+            self.life_state is not None
+            and self.is_dead is not (self.life_state is LifeState.DEAD)
+        ):
+            raise ValueError("is_dead must derive from life_state")
+        return self
 
 
 class APIEncounter(BaseModel):

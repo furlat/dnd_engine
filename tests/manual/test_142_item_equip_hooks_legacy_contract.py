@@ -18,13 +18,14 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.events import AbilityName, Event, EventPhase, Range, RangeType
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.items.armors import LEATHER_ARMOR_RECIPE, WOODEN_SHIELD_RECIPE
 from dnd.items.weapons import LONGSWORD_RECIPE
 from dnd.monsters.bestiary import create_skeleton
-from tests.engine_book.test_chapter_13_items_inventory_equipment import (
+from tests.engine.test_items_inventory_equipment import (
     put_in_inventory,
     reset_item_state,
 )
@@ -47,7 +48,7 @@ DIRECT_SELECTOR = (
     f"{THIS_FILE}::"
     "test_direct_equipment_tracks_concrete_items_slots_containers_and_positions"
 )
-EB13_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
+EB13_FILE = "tests/engine/test_items_inventory_equipment.py"
 TRANSFER_SELECTOR = (
     f"{EB13_FILE}::"
     "test_eb_13_004_equip_and_unequip_move_items_between_inventory_and_equipment"
@@ -61,7 +62,7 @@ EXACT_HOOK_SELECTOR = (
     "test_direct_modifier_and_condition_equipment_hooks_clean_exact_state"
 )
 MIXED_DAMAGE_SELECTOR = (
-    "tests/engine_book/test_chapter_10_core_actions_combat.py::"
+    "tests/engine/test_combat_actions.py::"
     "test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component"
 )
 

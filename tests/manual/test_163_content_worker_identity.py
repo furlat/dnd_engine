@@ -20,7 +20,6 @@ def test_worker_readiness_matches_the_parent_content_set(tmp_path: Path) -> None
         manager = HostedWorkerManager(
             tmp_path / "runtime",
             expected_content_set_digest=expected,
-            startup_timeout_seconds=20.0,
         )
         game_id = uuid4()
         placement = await manager.start(
@@ -46,7 +45,6 @@ def test_content_mismatch_never_enters_the_worker_pool(tmp_path: Path) -> None:
         manager = HostedWorkerManager(
             tmp_path / "runtime",
             expected_content_set_digest="f" * 64,
-            startup_timeout_seconds=20.0,
         )
         game_id = uuid4()
         with pytest.raises(

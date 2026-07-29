@@ -31,6 +31,7 @@ from dnd.core.condition_types import (
 )
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
+from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.values import ModifiableValue
@@ -249,7 +250,11 @@ class FearEffect(BaseCondition):
                 target_entity_uuid=target.uuid,
                 ability_name="wisdom",
                 dc=dc,
-                parent_event=event.uuid
+                parent_event=event.uuid,
+                saving_throw_context=fear_effect.saving_throw_context(
+                    effect_id="condition.spell.fear.repeat_save",
+                    effect_tags=(SavingThrowEffectTag.FEAR,),
+                ),
             )
             _roll, _outcome, success = target.saving_throw(save_request)
 
@@ -285,6 +290,10 @@ class Fear(SpellAction):
     description: str = Field(default="30ft cone, WIS save or Frightened + must Dash away", description="Spell description.")
     spell_level: int = Field(default=3, description="Spell slot level.")
     spell_school: str = Field(default="illusion", description="Spell school.")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.FEAR,),
+        description="Exact origin-rule semantics carried by Fear saves.",
+    )
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Spell range.")
@@ -506,6 +515,10 @@ class HypnoticPattern(SpellAction):
     description: str = Field(default="30ft cube, WIS save or Charmed + Incapacitated", description="Spell description.")
     spell_level: int = Field(default=3, description="Spell slot level.")
     spell_school: str = Field(default="illusion", description="Spell school.")
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(SavingThrowEffectTag.CHARM,),
+        description="Exact origin-rule semantics carried by Hypnotic Pattern saves.",
+    )
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=120), description="Spell range.")

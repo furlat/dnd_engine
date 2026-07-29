@@ -12,7 +12,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-import os
 from threading import RLock
 from typing import Sequence
 from uuid import UUID
@@ -40,7 +39,6 @@ from server.objective_state import build_current_objective_world
 
 
 DEFAULT_WORKER_SUMMARY_CAPACITY = 32
-_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE = "DND_HOSTED_GAME_ID"
 
 
 @dataclass(frozen=True)
@@ -328,8 +326,7 @@ class WorkerGameSummaryStore:
         game_id = (
             str(directory_game_id)
             if directory_game_id is not None
-            else os.environ.get(_HOSTED_GAME_ID_ENVIRONMENT_VARIABLE)
-            or str(event.encounter_uuid)
+            else str(event.encounter_uuid)
         )
         summary = reduce_game_summary(
             game_id=game_id,

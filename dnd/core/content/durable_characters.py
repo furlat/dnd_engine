@@ -23,6 +23,7 @@ from dnd.core.content.identities import (
     validate_namespaced_id,
     validate_sha256,
 )
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.core.progression import CasterProgression, point_buy_cost
@@ -346,12 +347,8 @@ class ClassLevelId(_StableProgressionId):
     """Identity of one entry in the ordered class-level ledger."""
 
 
-class GrantId(_StableProgressionId):
-    """Identity of one independently removable build grant."""
-
-
 class SpellcastingSourceId(_StableProgressionId):
-    """Identity of one class-owned spellcasting source."""
+    """Identity of one class-owned or origin-owned spellcasting source."""
 
 
 class AbilityScoreName(str, Enum):
@@ -571,6 +568,18 @@ class ElementalAncestryChoice(_SingleRefChoice):
         return self
 
 
+class OriginTraitChoice(_SingleRefChoice):
+    """One exact trait selected by an immutable character-origin choice."""
+
+    choice_type: Literal["origin_trait"] = "origin_trait"
+
+    @model_validator(mode="after")
+    def _validate_kind(self) -> Self:
+        if self.selected_ref.definition_kind != ContentDefinitionKind.TRAIT:
+            raise ValueError("origin trait choice must reference a trait")
+        return self
+
+
 class FeatChoice(_SingleRefChoice):
     choice_type: Literal["feat"] = "feat"
 
@@ -594,6 +603,26 @@ class StartingEquipmentPackageChoice(_SingleRefChoice):
         ):
             raise ValueError(
                 "starting equipment package must reference a typed starting "
+                "equipment package",
+            )
+        return self
+
+
+class StartingApparelPackageChoice(_SingleRefChoice):
+    """One exact, persistent wardrobe selected independently of class gear."""
+
+    choice_type: Literal["starting_apparel_package"] = (
+        "starting_apparel_package"
+    )
+
+    @model_validator(mode="after")
+    def _validate_kind(self) -> Self:
+        if (
+            self.selected_ref.definition_kind
+            != ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE
+        ):
+            raise ValueError(
+                "starting apparel package must reference a typed starting "
                 "equipment package",
             )
         return self
@@ -719,9 +748,11 @@ BuildChoiceSelection: TypeAlias = Annotated[
     | SpellReplacementChoice
     | MetamagicChoice
     | ElementalAncestryChoice
+    | OriginTraitChoice
     | AbilityScoreImprovementChoice
     | FeatChoice
-    | StartingEquipmentPackageChoice,
+    | StartingEquipmentPackageChoice
+    | StartingApparelPackageChoice,
     Field(discriminator="choice_type"),
 ]
 
@@ -766,12 +797,14 @@ class ChoiceRequirementKind(str, Enum):
     SPELL_REPLACEMENT = "spell_replacement"
     METAMAGIC = "metamagic"
     ELEMENTAL_ANCESTRY = "elemental_ancestry"
+    ORIGIN_TRAIT = "origin_trait"
     ABILITY_SCORE_IMPROVEMENT = "ability_score_improvement"
     ABILITY_SCORE_IMPROVEMENT_OR_FEAT = (
         "ability_score_improvement_or_feat"
     )
     FEAT = "feat"
     STARTING_EQUIPMENT_PACKAGE = "starting_equipment_package"
+    STARTING_APPAREL_PACKAGE = "starting_apparel_package"
 
 
 class BuildChoiceRequirement(BaseModel):
@@ -866,6 +899,7 @@ class ProficiencySubjectKind(str, Enum):
     ARMOR = "armor"
     SHIELD = "shield"
     TOOL = "tool"
+    LANGUAGE = "language"
 
 
 class ProficiencySubject(BaseModel):
@@ -1066,9 +1100,101 @@ class OriginLevelGrant(BaseModel):
         return self
 
 
+class OriginInnateSpellGrant(BaseModel):
+    """One fixed or creator-selected spell owned by an origin source."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    grant_id: str
+    unlock_character_level: int = Field(ge=1, le=20)
+    spell_ref: ContentRef | None = None
+    choice_id: str | None = None
+    allowed_spell_refs: tuple[ContentRef, ...] = ()
+    fixed_cast_rank: int = Field(ge=0, le=9)
+    uses_per_long_rest: int | None = Field(default=None, ge=1)
+
+    @field_validator("grant_id")
+    @classmethod
+    def _validate_grant_id(cls, value: str) -> str:
+        return validate_namespaced_id(value, "grant_id")
+
+    @field_validator("choice_id")
+    @classmethod
+    def _validate_choice_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "choice_id")
+
+    @model_validator(mode="after")
+    def _validate_spell_source(self) -> Self:
+        fixed = self.spell_ref is not None
+        chosen = self.choice_id is not None or bool(self.allowed_spell_refs)
+        if fixed == chosen:
+            raise ValueError(
+                "innate spell grant requires exactly one fixed spell or "
+                "choice-backed spell set",
+            )
+        refs = (
+            (self.spell_ref,)
+            if self.spell_ref is not None
+            else self.allowed_spell_refs
+        )
+        if (
+            not refs
+            or any(
+                ref.definition_kind != ContentDefinitionKind.SPELL
+                for ref in refs
+            )
+        ):
+            raise ValueError("innate spell grants may reference only spells")
+        identities = tuple(ref.identity_key for ref in refs)
+        if identities != tuple(sorted(set(identities))):
+            raise ValueError(
+                "innate spell references must be unique and ordered",
+            )
+        if self.choice_id is None and self.allowed_spell_refs:
+            raise ValueError("chosen innate spells require a choice_id")
+        if self.choice_id is not None and not self.allowed_spell_refs:
+            raise ValueError(
+                "chosen innate spells require allowed_spell_refs",
+            )
+        if self.fixed_cast_rank > 0 and self.uses_per_long_rest is None:
+            raise ValueError(
+                "leveled innate spell requires explicit long-rest uses",
+            )
+        return self
+
+
+class OriginInnateSpellcastingDefinition(BaseModel):
+    """One origin-owned casting source independent of class spellcasting."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: SpellcastingSourceId
+    ability: AbilityScoreName
+    grants: tuple[OriginInnateSpellGrant, ...]
+
+    @model_validator(mode="after")
+    def _validate_grants(self) -> Self:
+        grant_ids = tuple(grant.grant_id for grant in self.grants)
+        if not grant_ids or grant_ids != tuple(sorted(set(grant_ids))):
+            raise ValueError(
+                "innate spell grants must be non-empty, unique, and ordered",
+            )
+        choice_ids = tuple(
+            grant.choice_id
+            for grant in self.grants
+            if grant.choice_id is not None
+        )
+        if len(set(choice_ids)) != len(choice_ids):
+            raise ValueError("innate spell choice_id values must be unique")
+        return self
+
+
 def _validate_origin_rows(
     level_grants: tuple[OriginLevelGrant, ...],
     choice_requirements: tuple[BuildChoiceRequirement, ...],
+    innate_spellcasting: tuple[OriginInnateSpellcastingDefinition, ...],
 ) -> None:
     levels = tuple(row.character_level for row in level_grants)
     if levels != tuple(sorted(set(levels))):
@@ -1076,17 +1202,51 @@ def _validate_origin_rows(
     choice_ids = tuple(row.choice_id for row in choice_requirements)
     if choice_ids != tuple(sorted(set(choice_ids))):
         raise ValueError("origin choice requirements must be unique and ordered")
+    source_ids = tuple(row.source_id.value for row in innate_spellcasting)
+    if source_ids != tuple(sorted(set(source_ids))):
+        raise ValueError(
+            "origin innate spellcasting sources must be unique and ordered",
+        )
+    requirement_by_id = {
+        requirement.choice_id: requirement
+        for requirement in choice_requirements
+    }
+    for source in innate_spellcasting:
+        for grant in source.grants:
+            if grant.choice_id is None:
+                continue
+            requirement = requirement_by_id.get(grant.choice_id)
+            if (
+                requirement is None
+                or requirement.choice_kind is not ChoiceRequirementKind.CANTRIP
+                or requirement.allowed_refs != grant.allowed_spell_refs
+                or requirement.minimum_selections != 1
+                or requirement.maximum_selections != 1
+            ):
+                raise ValueError(
+                    "chosen innate spell must match one exact required "
+                    "cantrip choice",
+                )
 
 
 class SpeciesDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    runtime_support: OriginRuntimeSupport
     level_grants: tuple[OriginLevelGrant, ...] = ()
     choice_requirements: tuple[BuildChoiceRequirement, ...] = ()
+    innate_spellcasting: tuple[
+        OriginInnateSpellcastingDefinition,
+        ...,
+    ] = ()
 
     @model_validator(mode="after")
     def _validate_rows(self) -> Self:
-        _validate_origin_rows(self.level_grants, self.choice_requirements)
+        _validate_origin_rows(
+            self.level_grants,
+            self.choice_requirements,
+            self.innate_spellcasting,
+        )
         return self
 
 
@@ -1094,21 +1254,32 @@ class SpeciesVariantDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     parent_species_ref: ContentRef
+    runtime_support: OriginRuntimeSupport
     level_grants: tuple[OriginLevelGrant, ...] = ()
     choice_requirements: tuple[BuildChoiceRequirement, ...] = ()
+    innate_spellcasting: tuple[
+        OriginInnateSpellcastingDefinition,
+        ...,
+    ] = ()
 
     @model_validator(mode="after")
     def _validate_parent(self) -> Self:
         if self.parent_species_ref.definition_kind != ContentDefinitionKind.SPECIES:
             raise ValueError("species variant parent must reference a species")
-        _validate_origin_rows(self.level_grants, self.choice_requirements)
+        _validate_origin_rows(
+            self.level_grants,
+            self.choice_requirements,
+            self.innate_spellcasting,
+        )
         return self
 
 
 class BackgroundDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    runtime_support: OriginRuntimeSupport
     automatic_grant_refs: tuple[ContentRef, ...] = ()
+    starting_holdings_package_ref: ContentRef | None = None
     choice_requirements: tuple[BuildChoiceRequirement, ...] = ()
 
     @model_validator(mode="after")
@@ -1119,6 +1290,15 @@ class BackgroundDefinition(BaseModel):
         if grant_keys != tuple(sorted(set(grant_keys))):
             raise ValueError(
                 "background automatic grants must be unique and ordered",
+            )
+        if (
+            self.starting_holdings_package_ref is not None
+            and self.starting_holdings_package_ref.definition_kind
+            is not ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE
+        ):
+            raise ValueError(
+                "background starting holdings must reference one starting "
+                "equipment package",
             )
         choice_ids = tuple(
             row.choice_id for row in self.choice_requirements

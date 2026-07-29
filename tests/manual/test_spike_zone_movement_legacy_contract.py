@@ -10,7 +10,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
 from dnd.tiles import create_spike_zone, deactivate_spike_zone
-from dnd.utils import get_hp, reset_combat_state, set_hp
+from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
 def _move_target(entity: Entity, position: tuple[int, int]):

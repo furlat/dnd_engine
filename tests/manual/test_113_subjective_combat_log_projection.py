@@ -122,6 +122,45 @@ def test_fully_unobserved_log_tree_is_omitted() -> None:
     assert project_combat_log(hidden_root, _context()) is None
 
 
+def test_roll_modification_child_uses_parent_visibility_and_scrubs_identity() -> None:
+    """A modified-roll child remains causal while hidden actors stay anonymous."""
+    modification = _log(
+        CombatLogEntryType.ROLL_MODIFICATION,
+        data={
+            "roll_type": "attack",
+            "modifications": [
+                {
+                    "operation": "replace",
+                    "handler_name": "Hidden Assassin's Bless",
+                    "packet_index": None,
+                    "previous_total": 10,
+                    "final_total": 13,
+                    "reason": f"Hidden Assassin/{HIDDEN_SOURCE_UUID} added 1d4",
+                    "packet_damage_type": None,
+                    "packet_dice": None,
+                }
+            ],
+        },
+        perceiver_uuids={CONTROLLED_UUID},
+    )
+    parent = _log(
+        CombatLogEntryType.ATTACK,
+        sub_entries=[modification],
+        perceiver_uuids={CONTROLLED_UUID},
+    )
+
+    projected = project_combat_log(parent, _context())
+
+    assert projected is not None
+    assert [child.entry_type for child in projected.sub_entries] == [
+        CombatLogEntryType.ROLL_MODIFICATION,
+    ]
+    serialized = json.dumps(projected.model_dump(mode="json"), sort_keys=True)
+    assert HIDDEN_SOURCE_UUID not in serialized
+    assert "Hidden Assassin" not in serialized
+    assert projected.sub_entries[0].data["modifications"][0]["final_total"] == 13
+
+
 def test_multi_target_summary_is_rebuilt_from_projected_children_only() -> None:
     """Objective aggregate counts and damage cannot disclose a filtered target."""
     visible_child = _log(

@@ -44,7 +44,13 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualAdvantageModifier, DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    AdvantageModifier,
+    AdvantageStatus,
+    ContextualAdvantageModifier,
+    NumericalModifier,
+)
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
@@ -649,8 +655,7 @@ class NaturalAttack(Attack):
         elif distance_feet > self.natural_range.normal:
             return declaration_event.cancel(status_message=f"Target entity not in reach for {self.name}")
 
-        range_event = declaration_event.phase_to(
-            new_phase=EventPhase.DECLARATION,
+        range_event = declaration_event.with_updates(
             status_message=f"Validated range for {self.name}",
             range=self.natural_range,
             is_long_range=is_long_range,
@@ -751,43 +756,51 @@ class BonusDamageFeature(BaseCondition):
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         if not isinstance(event, DamageRollResultEvent):
-            return event
+            return None
         owner = Entity.get(source_entity_uuid)
         target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
         if owner is None or target is None:
-            return event
+            return None
         if self.once_per_turn and f"{self.name} Used" in owner.active_conditions:
-            return event
+            return None
         if event.attack_outcome not in {AttackOutcome.HIT, AttackOutcome.CRIT}:
-            return event
+            return None
         if self.melee_only and owner.get_weapon_range(event.weapon_slot).type != RangeType.REACH:
-            return event
+            return None
         if self.requires_adjacent_ally and not _has_adjacent_ally(owner, target):
-            return event
+            return None
         if self.requires_sneak_condition and not _has_sneak_attack_condition(owner, target, event):
-            return event
+            return None
         if self.requires_unseen_attacker and not _is_unseen_attacker(owner, target):
-            return event
-        damage_type = self.damage_type or (event.damages[0].damage_type if event.damages else DamageType.PIERCING)
+            return None
+        damage_type = self.damage_type or event.damage_packets[0].damage.damage_type
         bonus = ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name=f"{self.name} Bonus")
         dice = Dice(count=self.dice_numbers, value=self.damage_dice, bonus=bonus, roll_type=RollType.DAMAGE, attack_outcome=event.attack_outcome)
         roll = dice.roll
-        event.final_rolls.append(roll)
-        event.original_rolls.append(roll)
-        event.damages.append(
-            Damage(
-                damage_type=damage_type,
-                dice_numbers=self.dice_numbers,
-                damage_dice=self.damage_dice,
-                damage_bonus=bonus,
-                source_entity_uuid=owner.uuid,
-                target_entity_uuid=target.uuid,
-            )
+        damage = Damage(
+            damage_type=damage_type,
+            dice_numbers=self.dice_numbers,
+            damage_dice=self.damage_dice,
+            damage_bonus=bonus,
+            source_entity_uuid=owner.uuid,
+            target_entity_uuid=target.uuid,
         )
-        event.roll_modifications.append((self.name, len(event.final_rolls) - 1, 0, roll.total, f"+{self.dice_numbers}d{self.damage_dice}"))
+        modified_event = event.append_damage_roll(
+            damage,
+            roll,
+            self.name,
+            f"+{self.dice_numbers}d{self.damage_dice}",
+        )
         if self.once_per_turn:
-            owner.add_condition(SimpleMarkerCondition(name=f"{self.name} Used", source_entity_uuid=owner.uuid, target_entity_uuid=owner.uuid), parent_event=event)
-        return event
+            owner.add_condition(
+                SimpleMarkerCondition(
+                    name=f"{self.name} Used",
+                    source_entity_uuid=owner.uuid,
+                    target_entity_uuid=owner.uuid,
+                ),
+                parent_event=modified_event,
+            )
+        return modified_event
 
 
 class MartialAdvantageFeature(BonusDamageFeature):
@@ -1060,23 +1073,36 @@ class UndeadFortitudeFeature(BaseCondition):
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         if not isinstance(event, TakeDamageEvent):
-            return event
+            return None
         target = Entity.get(source_entity_uuid)
-        if not target or event.damages and event.damages[0].damage_type == DamageType.RADIANT:
-            return event
+        if (
+            not target
+            or any(
+                damage.damage_type is DamageType.RADIANT
+                for damage in event.damages
+            )
+        ):
+            return None
         current_hp = target.get_hp()
         preview = target.preview_take_damage(event)
         if current_hp - preview.normal_hit_point_damage > 0:
-            return event
+            return None
         dc = 5 + event.get_effective_damage()
         request = target.create_saving_throw_request(target.uuid, "constitution", dc, parent_event=event.uuid, condition_context="Undead Fortitude")
         _outcome, _roll, success = target.saving_throw(request)
         if not success:
-            return event
+            return None
         damage_cap = max(0, current_hp - 1)
         if event.normal_hit_point_damage_cap is not None:
             damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
-        return event.model_copy(update={"normal_hit_point_damage_cap": damage_cap, "status_message": "Undead Fortitude keeps target at 1 HP"})
+        return event.with_updates(
+            normal_hit_point_damage_cap=damage_cap,
+            status_message="Undead Fortitude keeps target at 1 HP",
+        )
+
+
+class ParryReactionHandler(EventHandler):
+    """Independently authored reaction installed by the Parry trait."""
 
 
 class ParryFeature(BaseCondition):
@@ -1090,7 +1116,7 @@ class ParryFeature(BaseCondition):
         owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not owner:
             return [], [], [], [], declaration_event.cancel(status_message="Parry owner not found")
-        handler = EventHandler(
+        handler = ParryReactionHandler(
             name="Parry",
             semantic_key="trait.monster.parry",
             content_kind=RuntimeBehaviorKind.REACTION,
@@ -1119,10 +1145,11 @@ class ParryFeature(BaseCondition):
             )
         )
         defender.action_economy.consume("reactions", 1)
-        return event.model_copy(update={
-            "modified": True,
-            "status_message": f"{defender.name} uses Parry for +{self.ac_bonus} AC",
-        })
+        return event.with_updates(
+            status_message=(
+                f"{defender.name} uses Parry for +{self.ac_bonus} AC"
+            ),
+        )
 
 
 class DivineEminenceAction(BaseAction):
@@ -1275,18 +1302,21 @@ class LeadershipAura(BaseCondition):
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         if not isinstance(event, D20RollResultEvent):
-            return event
+            return None
         leader = Entity.get(source_entity_uuid)
         roller = Entity.get(event.source_entity_uuid)
         if leader is None or roller is None or leader.uuid == roller.uuid or not leader.is_ally(roller):
-            return event
+            return None
         if leader.senses.get_feet_distance(roller.position) > 30:
-            return event
+            return None
         roll = event.get_effective_roll()
         d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
         new_roll = roll.model_copy(update={"total": roll.total + d4.total})
-        event.replace_roll(new_roll, "Leadership", f"+{d4.total} (1d4)")
-        return event
+        return event.replace_roll(
+            new_roll,
+            "Leadership",
+            f"+{d4.total} (1d4)",
+        )
 
 
 class RampageFeature(BaseCondition):

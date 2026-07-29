@@ -13,7 +13,7 @@ from dnd.conditions import (
     Restrained,
 )
 from dnd.core.modifiers import AdvantageStatus
-from tests.engine_book.test_chapter_08_standard_conditions import (
+from tests.engine.test_standard_conditions import (
     apply_to_target,
     configured_entity,
     reset_condition_state,
@@ -33,7 +33,7 @@ class LegacyCoverage:
 
 
 THIS_FILE = "tests/manual/test_141_combat_condition_legacy_contract.py"
-EB08_FILE = "tests/engine_book/test_chapter_08_standard_conditions.py"
+EB08_FILE = "tests/engine/test_standard_conditions.py"
 SENSORY_SELECTOR = (
     f"{EB08_FILE}::test_eb_08_001_blinded_and_deafened_apply_sensory_failures"
 )

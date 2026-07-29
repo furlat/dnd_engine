@@ -52,7 +52,12 @@ from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
 )
 from dnd.core.dice import AttackOutcome
-from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, DamageType, Size
+from dnd.core.creature_types import DamageType, Size
+from dnd.core.modifiers import (
+    NumericalModifier,
+    AdvantageModifier,
+    AdvantageStatus,
+)
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
@@ -1806,9 +1811,23 @@ class TelekinesisMove(BaseAction):
             phase=EventPhase.DECLARATION,
             parent_event=effect_event.uuid
         )
-        forced_event.phase_to(EventPhase.COMPLETION)
-
-        Entity.update_entity_position(grabbed, target_pos, parent_event=effect_event.uuid)
+        forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+        forced_event = forced_event.phase_to(EventPhase.EFFECT)
+        if not forced_event.canceled:
+            Entity.update_entity_position(
+                grabbed,
+                target_pos,
+                parent_event=forced_event.uuid,
+            )
+        forced_event.phase_to(
+            EventPhase.COMPLETION,
+            end_position=grabbed.position,
+            actual_distance=(
+                abs(grabbed.position[0] - start_pos[0])
+                + abs(grabbed.position[1] - start_pos[1])
+            )
+            * 5,
+        )
 
         caster.unregister_action("Telekinesis: Restrain")
         caster.unregister_action("Telekinesis: Move")

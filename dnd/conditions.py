@@ -28,6 +28,7 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
 from typing import Callable, Dict, Any, Optional, List, Literal, Tuple, TypeVar
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     ContextAwareAdvantage,
@@ -36,7 +37,6 @@ from dnd.core.modifiers import (
     AutoHitStatus,
     ContextualNumericalModifier,
     NumericalModifier,
-    DamageType,
     ContextAwareNumerical,
     ContextAwareAutoHit,
     ContextualAutoHitModifier,
@@ -1781,10 +1781,13 @@ class Concentrating(BaseCondition):
                     spell_name = conc.spell_name
 
                 entity.remove_condition("Concentrating", parent_event=event)
-                return event.model_copy(update={
-                    "concentration_broken": True,
-                    "status_message": f"{entity.name} lost concentration on {spell_name} (failed DC {dc} CON save)"
-                })
+                return event.with_updates(
+                    concentration_broken=True,
+                    status_message=(
+                        f"{entity.name} lost concentration on {spell_name} "
+                        f"(failed DC {dc} CON save)"
+                    ),
+                )
 
             return None
 
@@ -2280,9 +2283,12 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
 
     dc = condition.base_dc + condition.check_count
     skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
-    stealth_roll, check_event = entity.roll_d20_event(skill_bonus, RollType.CHECK, skill_name="stealth")
-    check_event.parent_event = event.uuid
-    event.add_child_event(check_event)
+    stealth_roll, check_event = entity.roll_d20_event(
+        skill_bonus,
+        RollType.CHECK,
+        skill_name="stealth",
+        parent_event=event.uuid,
+    )
     success = stealth_roll.total >= dc
 
     if success:

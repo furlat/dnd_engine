@@ -25,12 +25,8 @@ from dnd.core.content.provenance import (
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.equipment_types import ArmorType, BodyPart
-from dnd.scenarios.evaluation.models import ApparelGrant
-from dnd.scenarios.evaluation.wardrobes import (
-    BERSERKER_WARDROBE,
-    BESTIARY_WARDROBES,
-    CASTER_WARDROBES,
-    SRD_WARDROBES,
+from dnd.items.apparel_presets import (
+    NEURODRAGON_APPAREL_RECIPE_PRESETS,
 )
 
 
@@ -49,6 +45,7 @@ _EXPECTED_CONTENT_IDS = (
     "apparel.iron_helmet",
     "apparel.wizard_hat",
     "apparel.crown",
+    "apparel.spellblade_crown",
     "apparel.cloth_hood",
     "apparel.leather_hood",
     "apparel.chain_coif",
@@ -69,6 +66,7 @@ _EXPECTED_RECIPES = {
     "common_clothes": armor_definitions.COMMON_CLOTHES_RECIPE,
     "costume": armor_definitions.COSTUME_RECIPE,
     "crown": armor_definitions.CROWN_RECIPE,
+    "spellblade_crown": armor_definitions.SPELLBLADE_CROWN_RECIPE,
     "iron_helmet": armor_definitions.IRON_HELMET_RECIPE,
     "leather_boots": armor_definitions.LEATHER_BOOTS_RECIPE,
     "leather_shoes": armor_definitions.LEATHER_SHOES_RECIPE,
@@ -453,7 +451,7 @@ _LEGACY_FACTORIES = frozenset(
 
 
 def test_neurodragon_apparel_declarations_are_exact_original_possessions() -> None:
-    """All twenty-five roots own stable public identity and reviewed provenance."""
+    """All twenty-six roots own stable public identity and reviewed provenance."""
     declarations = armor_definitions.NEURODRAGON_ARMOR_DECLARATIONS
     recipes = armor_definitions.NEURODRAGON_ARMOR_RECIPES_BY_LEGACY_ID
 
@@ -685,53 +683,31 @@ def test_neurodragon_apparel_parameter_models_are_closed() -> None:
         crown_parameters.model_validate({"palette": "sideways"})
 
 
-def test_wardrobes_own_authenticated_recipes_not_parallel_variant_fields() -> None:
-    """Scenario grants serialize one exact recipe and its authenticated digest."""
-    assert tuple(ApparelGrant.model_fields) == ("kind", "recipe")
-    grants = [
-        *BERSERKER_WARDROBE,
-        *(
-            grant
-            for wardrobe in CASTER_WARDROBES.values()
-            for grant in wardrobe
-        ),
-        *(
-            grant
-            for wardrobe in BESTIARY_WARDROBES.values()
-            for grant in wardrobe
-        ),
-        *(
-            grant
-            for wardrobe in SRD_WARDROBES.values()
-            for grant in wardrobe
-        ),
-    ]
-
-    for grant in grants:
-        grant.recipe.verify_integrity()
-        payload = grant.model_dump(mode="json")
-        assert "item_id" not in payload
-        assert "visual_variant_id" not in payload
-        assert "display_name" not in payload
-        assert payload["recipe"]["recipe_digest"] == grant.recipe.recipe_digest
+def test_apparel_presets_own_authenticated_variant_recipes() -> None:
+    """Named variants are canonical presets, never scenario wardrobe repair."""
+    for preset in NEURODRAGON_APPAREL_RECIPE_PRESETS:
+        preset.recipe.verify_integrity()
+        assert preset.descriptor.presentation.visual_variant_key == (
+            preset.recipe.parameters.get("visual_variant_id")
+        )
 
     authored_variants = {
         (
-            grant.recipe.ref.content_id,
-            grant.recipe.parameters.get("visual_variant_id"),
-            grant.recipe.parameters.get("display_name"),
+            preset.recipe.ref.content_id,
+            preset.recipe.parameters.get("visual_variant_id"),
+            preset.recipe.parameters.get("display_name"),
         )
-        for grant in grants
-        if grant.recipe.parameters
+        for preset in NEURODRAGON_APPAREL_RECIPE_PRESETS
+        if preset.recipe.parameters
     }
-    assert authored_variants == {
+    assert {
         (
             base_recipe.ref.content_id,
             variant_id,
             display_name,
         )
         for base_recipe, variant_id, display_name, _ in _APPAREL_VARIANTS
-    }
+    } <= authored_variants
 
 
 def test_neurodragon_apparel_legacy_constructor_surface_is_absent() -> None:

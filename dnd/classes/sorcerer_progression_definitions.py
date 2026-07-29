@@ -65,7 +65,11 @@ from dnd.core.content.registration import (
     get_content_declaration,
     typed_definition,
 )
-from dnd.core.progression import CasterProgression
+from dnd.core.progression import (
+    CasterProgression,
+    SpellcastingClassContribution,
+    maximum_spell_rank_for_contribution,
+)
 from dnd.items.weapons import (
     DAGGER_REF,
     DART_REF,
@@ -241,11 +245,6 @@ _SORCERER_CANTRIP_REFS = tuple(
     for row in _SORCERER_SPELL_ENTITLEMENTS
     if row.spell_rank == 0
 )
-_SORCERER_RANKED_SPELL_REFS = tuple(
-    row.spell_ref
-    for row in _SORCERER_SPELL_ENTITLEMENTS
-    if row.spell_rank > 0
-)
 _METAMAGIC_REFS = tuple(
     sorted(
         (
@@ -366,6 +365,25 @@ _METAMAGIC_LEARN_COUNTS = {3: 2, 10: 1}
 _ASI_LEVELS = frozenset({4, 8, 12, 16, 19})
 
 
+def _ranked_spell_refs_for_sorcerer_level(
+    level: int,
+) -> tuple[ContentRef, ...]:
+    """Return exact Sorcerer spells legal at the resulting class level."""
+
+    maximum_rank = maximum_spell_rank_for_contribution(
+        SpellcastingClassContribution(
+            class_level=level,
+            progression=CasterProgression.FULL_CASTER,
+            spellcasting_feature_class_level=1,
+        ),
+    )
+    return tuple(
+        entitlement.spell_ref
+        for entitlement in _SORCERER_SPELL_ENTITLEMENTS
+        if 0 < entitlement.spell_rank <= maximum_rank
+    )
+
+
 def _sorcerer_level_choices(
     level: int,
 ) -> tuple[BuildChoiceRequirement, ...]:
@@ -389,14 +407,14 @@ def _sorcerer_level_choices(
         rows.append(_choice(
             choice_id=f"class.sorcerer.level_{level}.spell_known",
             choice_kind=ChoiceRequirementKind.SPELL_KNOWN,
-            allowed_refs=_SORCERER_RANKED_SPELL_REFS,
+            allowed_refs=_ranked_spell_refs_for_sorcerer_level(level),
             count=spell_count,
         ))
     if level > 1:
         rows.append(_choice(
             choice_id=f"class.sorcerer.level_{level}.spell_replacement",
             choice_kind=ChoiceRequirementKind.SPELL_REPLACEMENT,
-            allowed_refs=_SORCERER_RANKED_SPELL_REFS,
+            allowed_refs=_ranked_spell_refs_for_sorcerer_level(level),
             count=1,
             minimum_selections=0,
         ))

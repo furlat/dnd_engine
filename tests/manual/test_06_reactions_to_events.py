@@ -372,8 +372,11 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
                 "total": 18,
             }
         )
-        event.replace_roll(replacement, "Tutorial Focus", "raise low attack roll")
-        return event.model_copy(update={"modified": True})
+        return event.replace_roll(
+            replacement,
+            "Tutorial Focus",
+            "raise low attack roll",
+        )
 
     focus_handler = EventHandler(
         name="Tutorial Focus",
@@ -391,7 +394,6 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
     roll_result = AttackD20RollResultEvent(
         source_entity_uuid=hero_id,
         target_entity_uuid=target_id,
-        roll=low_roll,
         original_roll=low_roll,
         dc=15,
         bonus=attack_bonus,
@@ -404,11 +406,13 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
     assert roll_result.get_effective_roll().results == [14]
     assert roll_result.get_effective_roll().total == 18
     assert len(roll_result.roll_modifications) == 1
-    handler_name, reason = roll_result.roll_modifications[0]
+    modification = roll_result.roll_modifications[0]
+    handler_name = modification.handler_name
+    reason = modification.reason
     assert handler_name == "Tutorial Focus"
-    assert reason.startswith("raise low attack roll")
-    assert "9" in reason
-    assert "18" in reason
+    assert reason == "raise low attack roll"
+    assert modification.previous_total == 9
+    assert modification.final_total == 18
 
     roll_lines = [
         f"original roll: faces={low_roll.results}, total={low_roll.total}",
@@ -419,7 +423,10 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
         ),
         f"event modified: {roll_result.modified}",
         f"modification handler: {handler_name}",
-        f"audit mentions totals: {'9' in reason and '18' in reason}",
+        (
+            "audit captures totals: "
+            f"{modification.previous_total} -> {modification.final_total}"
+        ),
     ]
 
     print("\n".join(roll_lines))
@@ -429,7 +436,7 @@ def test_d20_result_processor_replaces_low_attack_roll(capsys) -> None:
         "effective roll: faces=[14], total=18",
         "event modified: True",
         "modification handler: Tutorial Focus",
-        "audit mentions totals: True",
+        "audit captures totals: 9 -> 18",
     ]
     assert roll_lines == expected_roll_lines
     assert capsys.readouterr().out.splitlines() == expected_roll_lines

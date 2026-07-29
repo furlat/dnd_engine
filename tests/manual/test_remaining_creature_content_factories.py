@@ -29,6 +29,7 @@ from dnd.monsters.bestiary import (
     create_caster,
     create_goblin,
     create_goblin_archer,
+    create_goblin_caster,
     create_skeleton,
     create_skeleton_archer,
     create_skeleton_warlock,
@@ -52,6 +53,7 @@ EXPECTED_BESTIARY_IDS = (
     "skeleton",
     "goblin_archer",
     "generic_caster",
+    "goblin_caster",
     "skeleton_warrior",
     "skeleton_archer",
     "skeleton_warlock",
@@ -170,7 +172,7 @@ def _compare_legacy_and_canonical(
     canonical = _materialize(
         creature_id,
         recipe,
-        CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
+        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
     )
     assert _semantic_snapshot(canonical) == {
         **legacy_snapshot,
@@ -181,7 +183,7 @@ def _compare_legacy_and_canonical(
 
 
 def test_registry_maps_are_exact_immutable_and_context_free() -> None:
-    """Ten roots have one authenticated recipe and no ephemeral parameters."""
+    """Eleven roots have one authenticated recipe and no ephemeral parameters."""
     assert tuple(BESTIARY_CREATURE_DECLARATIONS_BY_ID) == EXPECTED_BESTIARY_IDS
     assert tuple(BESTIARY_CREATURE_RECIPES_BY_ID) == EXPECTED_BESTIARY_IDS
     assert tuple(PLAYER_CLASS_CREATURE_DECLARATIONS_BY_ID) == (
@@ -251,7 +253,7 @@ def test_bootstrap_closes_every_recipe_and_dependency_without_lazy_imports() -> 
     + tuple(PLAYER_CLASS_CREATURE_RECIPES_BY_ID.items()),
 )
 @pytest.mark.parametrize("possession_mode", tuple(CreaturePossessionMode))
-def test_all_ten_roots_materialize_both_possession_modes(
+def test_all_eleven_roots_materialize_both_possession_modes(
     creature_id: str,
     recipe: ContentRecipe,
     possession_mode: CreaturePossessionMode,
@@ -275,65 +277,98 @@ def test_all_ten_roots_materialize_both_possession_modes(
     ("legacy_builder", "creature_id", "recipe"),
     (
         (
-            lambda: create_goblin(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_goblin(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "goblin",
             BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
         ),
         (
-            lambda: create_skeleton(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_skeleton(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "skeleton",
             BESTIARY_CREATURE_RECIPES_BY_ID["skeleton"],
         ),
         (
-            lambda: create_goblin_archer(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_goblin_archer(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "goblin_archer",
             BESTIARY_CREATURE_RECIPES_BY_ID["goblin_archer"],
         ),
         (
-            lambda: create_caster(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_caster(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "generic_caster",
             BESTIARY_CREATURE_RECIPES_BY_ID["generic_caster"],
         ),
         (
-            lambda: create_skeleton_warrior(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_goblin_caster(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
+            "goblin_caster",
+            BESTIARY_CREATURE_RECIPES_BY_ID["goblin_caster"],
+        ),
+        (
+                lambda: create_skeleton_warrior(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "skeleton_warrior",
             BESTIARY_CREATURE_RECIPES_BY_ID["skeleton_warrior"],
         ),
         (
-            lambda: create_skeleton_archer(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_skeleton_archer(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "skeleton_archer",
             BESTIARY_CREATURE_RECIPES_BY_ID["skeleton_archer"],
         ),
         (
-            lambda: create_skeleton_warlock(
-                name="Legacy",
-                position=(3, 4),
-                faction="tests",
-            ),
+                lambda: create_skeleton_warlock(
+                    name="Legacy",
+                    position=(3, 4),
+                    faction="tests",
+                    possession_mode=(
+                        CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+                    ),
+                ),
             "skeleton_warlock",
             BESTIARY_CREATURE_RECIPES_BY_ID["skeleton_warlock"],
         ),
@@ -344,7 +379,7 @@ def test_bestiary_catalog_roots_match_the_existing_constructors(
     creature_id: str,
     recipe: ContentRecipe,
 ) -> None:
-    """The bestiary registry cut preserves its constructor semantics."""
+    """Content roots preserve the mechanical constructor beneath possessions."""
     _compare_legacy_and_canonical(legacy_builder, creature_id, recipe)
 
 

@@ -25,14 +25,20 @@ from uuid import uuid4
 import pytest
 
 from dnd.blocks.equipment import Weapon
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.equipment_types import WeaponSlot
-from dnd.entity import Entity, EntityConfig
+from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from server.objective_state import build_objective_world
 from server.player_replication.world_projection import (
@@ -444,33 +450,57 @@ def _equip(
     assert entity.equip_item(weapon.uuid, slot)
 
 
+def _materialize_test_actor(
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Build one exact actor while leaving each parity loadout test-owned."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=(
+                "tests.subjective_objective_parity.actor_"
+                f"{runtime_entity_uuid.hex}"
+            ),
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
+    )
+
+
 def test_subjective_seed_equals_objective_checkpoint_plus_censorship() -> None:
     """One non-trivial player seed matches the independently censored objective."""
     grid = reset_engine_runtime(grid_size=(7, 5))
-    observer_a = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer_a = _materialize_test_actor(
         name="West observer",
-        config=EntityConfig(position=(0, 2), faction="heroes"),
+        position=(0, 2),
+        faction="heroes",
     )
-    observer_b = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer_b = _materialize_test_actor(
         name="East observer",
-        config=EntityConfig(position=(6, 2), faction="heroes"),
+        position=(6, 2),
+        faction="heroes",
     )
-    west_contact = Entity.create(
-        source_entity_uuid=uuid4(),
+    west_contact = _materialize_test_actor(
         name="West contact",
-        config=EntityConfig(position=(1, 2), faction="monsters"),
+        position=(1, 2),
+        faction="monsters",
     )
-    east_contact = Entity.create(
-        source_entity_uuid=uuid4(),
+    east_contact = _materialize_test_actor(
         name="East contact",
-        config=EntityConfig(position=(5, 2), faction="monsters"),
+        position=(5, 2),
+        faction="monsters",
     )
-    hidden_contact = Entity.create(
-        source_entity_uuid=uuid4(),
+    hidden_contact = _materialize_test_actor(
         name="Unknown contact",
-        config=EntityConfig(position=(3, 4), faction="monsters"),
+        position=(3, 4),
+        faction="monsters",
     )
     entities = (
         observer_a,
@@ -658,10 +688,10 @@ def test_subjective_seed_equals_objective_checkpoint_plus_censorship() -> None:
 def test_parity_preserves_selected_ranged_stance_with_both_weapon_sets() -> None:
     """Parity reads the selected stance instead of guessing from occupied slots."""
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Dual-loadout observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     _equip(observer, slot=WeaponSlot.MELEE_MAIN)
     _equip(observer, slot=WeaponSlot.RANGED_MAIN)
@@ -736,10 +766,10 @@ def test_each_hidden_neighbor_door_edge_matches_objective_censorship(
 ) -> None:
     """All four reciprocal door edges survive independent objective censorship."""
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Boundary observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
@@ -807,10 +837,10 @@ def test_live_oracle_censors_an_imperceivable_structural_object() -> None:
     """The independent check does not mistake objective topology for player knowledge."""
 
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Private-edge observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}

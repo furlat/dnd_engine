@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-import gc
 import time
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Optional
@@ -19,9 +18,11 @@ from dnd.core.base_actions import (
     AvailableActionsResult,
     AvailableTarget,
     BaseAction,
+    BaseCost,
     TargetType,
 )
 from dnd.entity import Entity
+from dnd.ai.runtime_gc import AutomaticGcLease
 
 from dnd.ai.contracts.control import (
     ActionAffordance,
@@ -232,9 +233,7 @@ def _build_affordance_set_and_execution_authority_from_actions(
     record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> tuple[AffordanceSet, DecisionEpochExecutionAuthority]:
     """Build public affordances and private exact execution authority together."""
-    gc_was_enabled = gc.isenabled()
-    if gc_was_enabled:
-        gc.disable()
+    gc_lease = AutomaticGcLease.acquire()
     try:
         semantic_catalog: dict[str, ActionSemantics] = {}
         semantic_references: dict[str, list[tuple[ActionSemantics, str]]] = {}
@@ -318,8 +317,7 @@ def _build_affordance_set_and_execution_authority_from_actions(
             target_by_row_id=MappingProxyType(target_by_row_id),
         )
     finally:
-        if gc_was_enabled:
-            gc.enable()
+        gc_lease.release()
 
 
 def _affordance_set_from_buckets(
@@ -1126,7 +1124,7 @@ def _action_cost_profile_from_values(
 
 
 def _action_cost_profile_from_cost_rows(
-    costs: list[Any],
+    costs: list[BaseCost],
     *,
     can_afford: bool,
 ) -> ActionCostProfile:
@@ -1145,16 +1143,10 @@ def _action_cost_profile_from_cost_rows(
         "affordability_reasons": [] if affordability == "affordable" else ["engine reported the row as unaffordable"],
     }
     for cost in costs:
-        if isinstance(cost, dict):
-            cost_type = cost.get("cost_type")
-            amount = int(cost.get("cost") or 0)
-            resource_name = cost.get("resource_name")
-            resource_cost = int(cost.get("resource_cost") or 0)
-        else:
-            cost_type = _enum_value(getattr(cost, "cost_type", None))
-            amount = int(getattr(cost, "cost", 0) or 0)
-            resource_name = getattr(cost, "resource_name", None)
-            resource_cost = int(getattr(cost, "resource_cost", 0) or 0)
+        cost_type = _enum_value(cost.cost_type)
+        amount = cost.cost
+        resource_name = cost.resource_name
+        resource_cost = cost.resource_cost
         _merge_cost_profile_kwargs(kwargs, cost_type, amount, resource_name, resource_cost)
     return ActionCostProfile.model_construct(**kwargs)
 

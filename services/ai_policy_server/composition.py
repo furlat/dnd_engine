@@ -10,7 +10,9 @@ from dnd.ai.instrumentation import (
 )
 from dnd.ai.policies.basic import CanonicalPolicyRegistry
 from dnd.ai.registry import PolicyRegistry
-from server.external_ai_registry import ExternalAIProviderRegistry
+from services.ai_policy_server.external_ai_registry import (
+    ExternalAIProviderRegistry,
+)
 from services.ai_policy_server.policies import (
     register_external_basic_policy,
     register_external_tactical_policy,

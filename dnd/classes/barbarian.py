@@ -104,6 +104,7 @@ __all__ = [
     "relentless_rage_processor",
     "RelentlessRage",
     "retaliation_processor",
+    "RetaliationReactionHandler",
     "create_retaliation_handler",
     "Retaliation",
     "PersistentRage",
@@ -707,7 +708,12 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     current_dc = 10 + (uses_consumed * 5)
 
     con_save = entity.saving_throws.get_saving_throw("constitution")
-    dice_roll = entity.roll_d20(con_save.bonus, RollType.SAVE, parent_event=event.uuid)
+    dice_roll = entity.roll_d20(
+        con_save.bonus,
+        RollType.SAVE,
+        ability_name="constitution",
+        parent_event=event.uuid,
+    )
     total = dice_roll.total
 
     if total >= current_dc:
@@ -716,15 +722,20 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         damage_cap = max(0, current_hp - 1)
         if event.normal_hit_point_damage_cap is not None:
             damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
-        return event.model_copy(update={
-            "modified": True,
-            "normal_hit_point_damage_cap": damage_cap,
-            "status_message": f"Relentless Rage! (CON save {total} vs DC {current_dc}) - survives with 1 HP"
-        })
+        return event.with_updates(
+            normal_hit_point_damage_cap=damage_cap,
+            status_message=(
+                f"Relentless Rage! (CON save {total} vs DC {current_dc}) "
+                "- survives with 1 HP"
+            ),
+        )
     else:
-        return event.model_copy(update={
-            "status_message": f"Relentless Rage failed (CON save {total} vs DC {current_dc})"
-        })
+        return event.with_updates(
+            status_message=(
+                f"Relentless Rage failed "
+                f"(CON save {total} vs DC {current_dc})"
+            ),
+        )
 
 
 class RelentlessRage(BaseCondition):
@@ -853,11 +864,13 @@ def indomitable_might_processor(event: Event, source_entity_uuid: UUID) -> Optio
 
     if total < str_score:
         new_dice_roll = event.dice_roll.model_copy(update={"total": str_score})
-        return event.model_copy(update={
-            "dice_roll": new_dice_roll,
-            "modified": True,
-            "status_message": f"Indomitable Might: using STR score {str_score} instead of {total}"
-        })
+        return event.with_updates(
+            dice_roll=new_dice_roll,
+            status_message=(
+                f"Indomitable Might: using STR score {str_score} "
+                f"instead of {total}"
+            ),
+        )
 
     return None
 
@@ -1027,9 +1040,15 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     return None
 
 
-def create_retaliation_handler(source_entity_uuid: UUID) -> EventHandler:
+class RetaliationReactionHandler(EventHandler):
+    """Independently authored reaction installed by Retaliation."""
+
+
+def create_retaliation_handler(
+    source_entity_uuid: UUID,
+) -> RetaliationReactionHandler:
     """Create handler for Retaliation."""
-    return EventHandler(
+    return RetaliationReactionHandler(
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
         content_kind=RuntimeBehaviorKind.REACTION,
@@ -1155,10 +1174,12 @@ def intimidating_presence_end_check_processor(
     if should_end:
         creature.remove_condition("Frightened", parent_event=event)
         reason = "out of range" if distance > 60 else "out of line of sight"
-        return event.model_copy(update={
-            "modified": True,
-            "status_message": f"{creature.name} is no longer frightened ({reason} from {barbarian.name})"
-        })
+        return event.with_updates(
+            status_message=(
+                f"{creature.name} is no longer frightened "
+                f"({reason} from {barbarian.name})"
+            ),
+        )
 
     return None
 

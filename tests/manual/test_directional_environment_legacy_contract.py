@@ -38,7 +38,7 @@ from server.mapeditor_support import (
     build_forgotten_crypt_arena_map,
     reset_editor_world,
 )
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 def _reset_directional_scene() -> None:
