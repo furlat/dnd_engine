@@ -59,8 +59,8 @@ class HostedWorkerAssignment(BaseModel):
         min_length=1,
         description="Public gateway runtime URL used by external controllers.",
     )
-    character_deployment: CharacterDeploymentSnapshot | None = Field(
-        default=None,
+    character_deployments: tuple[CharacterDeploymentSnapshot, ...] = Field(
+        default=(),
         description=(
             "Gateway-authenticated character revisions pinned before game "
             "creation; never accepted from a player runtime route."
@@ -143,7 +143,7 @@ class HostedWorkerManager:
         worker_cwd: Path | None = None,
         worker_application: HostedWorkerApplication = CORE_HOSTED_WORKER_APPLICATION,
         expected_content_set_digest: str | None = None,
-        startup_timeout_seconds: float = 20.0,
+        startup_timeout_seconds: float = 60.0,
         terminate_grace_seconds: float = 2.0,
         warm_pool_size: int = 0,
     ) -> None:
@@ -214,10 +214,7 @@ class HostedWorkerManager:
                 if missing <= 0:
                     return
                 reservation_id = uuid4()
-                handle = await self._spawn_worker(
-                    reservation_id,
-                    public_game_base_url="http://unassigned.invalid",
-                )
+                handle = await self._spawn_worker(reservation_id)
                 async with self._lock:
                     if self._closing:
                         keep_handle = False
@@ -233,7 +230,10 @@ class HostedWorkerManager:
         hosted_game_id: UUID,
         *,
         public_game_base_url: str,
-        character_deployment: CharacterDeploymentSnapshot | None = None,
+        character_deployments: tuple[
+            CharacterDeploymentSnapshot,
+            ...,
+        ] = (),
     ) -> HostedWorkerPlacement:
         """Start one event-server worker and wait for private readiness.
 
@@ -263,10 +263,7 @@ class HostedWorkerManager:
 
         try:
             if handle is None:
-                handle = await self._spawn_worker(
-                    hosted_game_id,
-                    public_game_base_url=public_game_base_url,
-                )
+                handle = await self._spawn_worker(hosted_game_id)
                 async with self._lock:
                     self._workers[hosted_game_id] = handle
             self.runtime_directory(hosted_game_id).mkdir(
@@ -278,7 +275,7 @@ class HostedWorkerManager:
                 HostedWorkerAssignment(
                     hosted_game_id=hosted_game_id,
                     public_game_base_url=public_game_base_url.rstrip("/"),
-                    character_deployment=character_deployment,
+                    character_deployments=character_deployments,
                     worker_instance_id=handle.placement.worker_instance_id,
                     worker_generation=1,
                     terminal_runtime_directory=str(
@@ -369,8 +366,6 @@ class HostedWorkerManager:
     async def _spawn_worker(
         self,
         hosted_game_id: UUID,
-        *,
-        public_game_base_url: str,
     ) -> _HostedWorkerHandle:
         """Spawn one worker process and wait until its private API is ready."""
         game_dir = self._runtime_root / str(hosted_game_id)
@@ -389,11 +384,6 @@ class HostedWorkerManager:
         environment.update({
             "PYTHONUNBUFFERED": "1",
             "DND_GAME_WORKER": "1",
-            "DND_HOSTED_GAME_ID": str(hosted_game_id),
-            "DND_WORKER_INSTANCE_ID": str(worker_instance_id),
-            "DND_WORKER_GENERATION": "1",
-            "DND_WORKER_RUNTIME_DIR": str(game_dir),
-            "DND_PUBLIC_GAME_BASE_URL": public_game_base_url.rstrip("/"),
             "DND_WORKER_UNIX_SOCKET": str(socket_path),
             "DND_EXPECTED_CONTENT_SET_DIGEST": (
                 self._expected_content_set_digest

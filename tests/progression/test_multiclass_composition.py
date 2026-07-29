@@ -24,6 +24,11 @@ from dnd.content_system.character_build_validation import (
     CharacterBuildValidator,
     CharacterGrantSourceKind,
 )
+from dnd.content_system.character_appearance import (
+    BARBARIAN_HUMAN_APPEARANCE,
+    FIGHTER_HUMAN_APPEARANCE,
+    SORCERER_HUMAN_APPEARANCE,
+)
 from dnd.content_system.character_materialization import (
     MaterializedCharacter,
     apply_character_composition,
@@ -174,10 +179,16 @@ def runtime() -> ContentSystemRuntime:
 
 
 def _single_class_build(class_id: ClassId, level: int) -> BuiltinSingleClassBuild:
+    appearances = {
+        "barbarian": BARBARIAN_HUMAN_APPEARANCE,
+        "fighter": FIGHTER_HUMAN_APPEARANCE,
+        "sorcerer": SORCERER_HUMAN_APPEARANCE,
+    }
     return BuiltinSingleClassBuild(
         class_id=class_id,
         level=level,
         equipment_preset=_EQUIPMENT_PRESETS[class_id],
+        appearance=appearances[class_id],
         asi_by_level=_ASI_BY_CLASS[class_id],
     )
 
@@ -247,7 +258,11 @@ def _revisions(
         definition_revision=definition_revision,
         body_recipe=seed.definition.body_recipe,
         species_ref=seed.definition.species_ref,
+        species_variant_ref=seed.definition.species_variant_ref,
         background_ref=seed.definition.background_ref,
+        immutable_origin_choices=(
+            seed.definition.immutable_origin_choices
+        ),
         appearance=seed.definition.appearance,
         base_ability_scores=_BASE_ABILITIES,
         flexible_ability_bonuses=_FLEXIBLE_BONUSES,
@@ -299,7 +314,11 @@ def _materialize(
     )
 
 
-def _assert_composition_removed(result: MaterializedCharacter) -> None:
+def _assert_composition_removed(
+    result: MaterializedCharacter,
+    *,
+    expected_noncomposition_scores: dict[AbilityScoreName, int] | None = None,
+) -> None:
     receipt = result.composition_receipt
     assert receipt is not None
     entity = result.entity
@@ -308,10 +327,16 @@ def _assert_composition_removed(result: MaterializedCharacter) -> None:
     remove_character_composition(entity, receipt)
 
     assert entity.uuid == runtime_uuid
-    assert all(
-        entity.ability_scores.get_ability(ability.value).ability_score.score == 0
+    expected_scores = expected_noncomposition_scores or {}
+    assert {
+        ability: (
+            entity.ability_scores.get_ability(ability.value).ability_score.score
+        )
         for ability in AbilityScoreName
-    )
+    } == {
+        ability: expected_scores.get(ability, 0)
+        for ability in AbilityScoreName
+    }
     assert entity.proficiency_bonus.normalized_score == 0
     assert entity.health.total_hit_dices_number == 0
     assert entity.health.max_hit_points_bonus.normalized_score == 0
@@ -567,7 +592,10 @@ def test_fighter_two_sorcerer_three_premade_uses_canonical_composition(
     assert entity.action_economy.spell_slot_2.normalized_score == 2
     assert revisions.holdings.items
 
-    _assert_composition_removed(result)
+    _assert_composition_removed(
+        result,
+        expected_noncomposition_scores={AbilityScoreName.CHARISMA: 3},
+    )
 
 
 @pytest.mark.parametrize(

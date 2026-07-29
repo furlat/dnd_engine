@@ -14,7 +14,7 @@ from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, SensoryUpdateReason, MovementTrajectory
+from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, SensoryUpdateReason, MovementTrajectory
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import RestrictedActionKind
@@ -43,13 +43,14 @@ from dnd.core.spell_execution import (
     current_spell_execution,
     spell_execution_scope,
 )
+from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.action_execution import (
     MovementContinuationDecision,
     MovementStepBoundary,
     MovementTerminationReason,
     revalidate_after_committed_movement_step,
 )
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.base_tiles import Tile
 from dnd.core.aoe import (
@@ -225,8 +226,7 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
 
     if target_entity.uuid not in source_entity.senses.entities.keys():
         return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
-    return declaration_event.phase_to(
-        new_phase=EventPhase.DECLARATION,
+    return declaration_event.with_updates(
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
 
@@ -242,7 +242,11 @@ def _consume_entity_action_economy_costs(
         return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
     for cost in completion_event.costs:
         if cost.cost_type not in excluded_cost_types and cost.cost > 0:
-            entity.action_economy.consume(cost.cost_type, cost.cost)
+            entity.action_economy.consume_prevalidated(
+                cost.cost_type,
+                cost.cost,
+                cost.name,
+            )
         if cost.resource_cost > 0 and cost.resource_name:
             if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
                 return completion_event.cancel(
@@ -1191,6 +1195,8 @@ def create_weapon_attack_declaration_event(
     )
     weapon_name: Optional[str] = None
     damage_types: List[DamageType] = []
+    source_item_uuid: Optional[UUID] = None
+    source_item_presentation = None
     if source_entity is not None:
         weapon_name, immutable_damage_types = (
             source_entity.equipment.snapshot_attack_event_metadata(
@@ -1198,6 +1204,10 @@ def create_weapon_attack_declaration_event(
             )
         )
         damage_types = list(immutable_damage_types)
+        weapon = source_entity.equipment.get_weapon(weapon_slot)
+        if weapon is not None:
+            source_item_uuid = weapon.uuid
+            source_item_presentation = weapon.to_item_presentation_state()
 
     event_name = (
         f"{action_name} ({weapon_name})"
@@ -1226,6 +1236,8 @@ def create_weapon_attack_declaration_event(
         weapon_name=weapon_name,
         override_ability=override_ability,
         damage_types=damage_types,
+        source_item_uuid=source_item_uuid,
+        source_item_presentation=source_item_presentation,
     )
 
 
@@ -1371,8 +1383,7 @@ class Attack(BaseAction):
             if distance_feet > weapon_range.normal:
                 return declaration_event.cancel(status_message=f"Target entity not in reach for {declaration_event.name}")
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.DECLARATION,
+        return declaration_event.with_updates(
             status_message=f"Validated range for {declaration_event.name}",
             range=weapon_range,
             is_long_range=is_long_range
@@ -1401,8 +1412,7 @@ class Attack(BaseAction):
         if declaration_event.range and declaration_event.range.type == RangeType.RANGE:
             is_threatened = source_entity.is_threatened()
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.DECLARATION,
+        return declaration_event.with_updates(
             status_message=f"Checked ranged conditions for {declaration_event.name}",
             is_threatened=is_threatened
         )
@@ -1437,23 +1447,30 @@ class Attack(BaseAction):
             record_action_timing("attack.resolve_entities_ms", started)
 
             started = time.perf_counter()
-            should_clear_source_target = False
-            should_clear_target_target = False
-            if source_entity.target_entity_uuid != target_entity_uuid:
-                should_clear_source_target = True
-                source_entity.set_target_entity(target_entity_uuid)
-            if target_entity.target_entity_uuid != source_entity_uuid:
-                should_clear_target_target = True
-                target_entity.set_target_entity(source_entity_uuid)
+            with (
+                source_entity._temporary_target(target_entity_uuid),
+                target_entity._temporary_target(source_entity_uuid),
+            ):
+                record_action_timing("attack.set_target_context_ms", started)
+                return Attack._resolve_attack_with_target_context(
+                    execution_event=execution_event,
+                    source_entity=source_entity,
+                    target_entity=target_entity,
+                    target_entity_uuid=target_entity_uuid,
+                    weapon_slot=weapon_slot,
+                )
 
-            def clear_temporary_targets() -> None:
-                if should_clear_source_target:
-                    source_entity.clear_target_entity()
-                if should_clear_target_target:
-                    target_entity.clear_target_entity()
-
-            record_action_timing("attack.set_target_context_ms", started)
-
+    @staticmethod
+    def _resolve_attack_with_target_context(
+        *,
+        execution_event: AttackEvent,
+        source_entity: Entity,
+        target_entity: Entity,
+        target_entity_uuid: UUID,
+        weapon_slot: WeaponSlot,
+    ) -> AttackEvent:
+            """Resolve one attack while both contextual targets are bound."""
+            source_entity_uuid = source_entity.uuid
             started = time.perf_counter()
             override_ability = execution_event.override_ability
             attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability)
@@ -1511,7 +1528,6 @@ class Attack(BaseAction):
             if attack_event.canceled:
                 started = time.perf_counter()
                 attack_bonus.clear_context()
-                clear_temporary_targets()
                 record_action_timing("attack.cleanup_canceled_roll_ms", started)
                 return attack_event
 
@@ -1544,9 +1560,6 @@ class Attack(BaseAction):
             record_action_timing("attack.cleanup_roll_modifiers_ms", started)
 
             if attack_event.canceled:
-                started = time.perf_counter()
-                clear_temporary_targets()
-                record_action_timing("attack.clear_targets_after_canceled_roll_ms", started)
                 return attack_event
 
             if attack_event.attack_outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
@@ -1562,9 +1575,6 @@ class Attack(BaseAction):
                     status_message=f"Attack missed"
                 )
                 record_action_timing("attack.miss_completion_ms", started)
-                started = time.perf_counter()
-                clear_temporary_targets()
-                record_action_timing("attack.clear_targets_after_miss_ms", started)
                 return completion_event
 
             started = time.perf_counter()
@@ -1580,31 +1590,34 @@ class Attack(BaseAction):
             record_action_timing("attack.phase_to_damage_effect_ms", started)
 
             if attack_event.canceled:
-                started = time.perf_counter()
-                clear_temporary_targets()
-                record_action_timing("attack.clear_targets_after_canceled_damage_ms", started)
                 return attack_event
             source_entity.equipment.activate_weapon_slot(weapon_slot)
 
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 started = time.perf_counter()
                 crit_extra_dice = source_entity.get_crit_extra_dice(weapon_slot)
-                original_rolls = []
+                damage_packets = []
                 for damage in damages:
                     dice = damage.get_dice(attack_outcome=attack_event.attack_outcome, crit_extra_dice=crit_extra_dice)
                     roll = dice.roll
-                    original_rolls.append(roll)
+                    damage_packets.append(
+                        DamageRollPacket(
+                            damage=damage,
+                            original_roll=roll,
+                            final_roll=roll,
+                        )
+                    )
                 record_action_timing("attack.roll_damage_dice_ms", started)
 
                 started = time.perf_counter()
                 damage_roll_event = DamageRollResultEvent(
                     source_entity_uuid=source_entity.uuid,
                     target_entity_uuid=target_entity.uuid,
+                    source_entity_name=source_entity.name,
+                    target_entity_name=target_entity.name,
                     weapon_slot=weapon_slot,
                     attack_outcome=attack_event.attack_outcome,
-                    damages=damages,
-                    original_rolls=original_rolls,
-                    final_rolls=list(original_rolls),
+                    damage_packets=damage_packets,
                     parent_event=attack_event.uuid,
                     phase=EventPhase.DECLARATION
                 )
@@ -1617,12 +1630,18 @@ class Attack(BaseAction):
                 )
                 record_action_timing("attack.damage_roll_effect_ms", started)
 
-                damage_rolls = damage_roll_event.final_rolls
+                damage_rolls = [
+                    packet.final_roll
+                    for packet in damage_roll_event.damage_packets
+                ]
 
                 started = time.perf_counter()
                 damage_roll_event.phase_to(EventPhase.COMPLETION)
                 record_action_timing("attack.damage_roll_completion_ms", started)
-                damages = damage_roll_event.damages
+                damages = [
+                    packet.damage
+                    for packet in damage_roll_event.damage_packets
+                ]
                 started = time.perf_counter()
                 total_damage = sum(roll.total for roll in damage_rolls)
                 record_action_timing("attack.sum_damage_ms", started)
@@ -1650,10 +1669,6 @@ class Attack(BaseAction):
                 record_action_timing("attack.phase_to_post_damage_effect_ms", started)
             else:
                 damage_rolls = None
-
-            started = time.perf_counter()
-            clear_temporary_targets()
-            record_action_timing("attack.clear_targets_after_hit_ms", started)
 
             started = time.perf_counter()
             completion_event = attack_event.phase_to(
@@ -2194,7 +2209,10 @@ class Hide(BaseAction):
                 continue
             sub = Entity.get(sub_uuid)
             if sub and isinstance(sub, Entity) and entity.is_enemy(sub):
-                if entity.uuid in sub.senses.entities:
+                if (
+                    entity.uuid in sub.senses.entities
+                    and not entity.is_obscured_by_larger_creature_from(sub)
+                ):
                     return declaration_event.cancel(
                         status_message="Cannot hide - visible to enemies"
                     )
@@ -2232,7 +2250,7 @@ class Hide(BaseAction):
         hidden = Hidden(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
-            stealth_result=stealth_result  # type: ignore[call-arg]
+            stealth_result=stealth_result
         )
         entity.add_condition(hidden, parent_event=execution_event)
 
@@ -3121,7 +3139,12 @@ class Shove(BaseAction):
                 target_passive = passive_acrobatics
                 target_skill = "acrobatics"
 
-            dice_roll = source.roll_d20(athletics_bonus, RollType.CHECK, parent_event=execution_event.uuid)
+            dice_roll = source.roll_d20(
+                athletics_bonus,
+                RollType.CHECK,
+                skill_name="athletics",
+                parent_event=execution_event.uuid,
+            )
             contest_success = dice_roll.total >= target_passive
 
         execution_event = execution_event.phase_to(
@@ -3701,6 +3724,17 @@ class SpellAction(BaseAction):
 
     projectile_type: Optional[str] = Field(default=None, description="VFX projectile delivery type")
     spell_damage_type: Optional[DamageType] = Field(default=None, description="Primary damage type for VFX")
+    saving_throw_effect_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Stable authored effect identity for saves requested by this "
+            "spell; defaults to the exact spell content identity."
+        ),
+    )
+    saving_throw_effect_tags: Tuple[SavingThrowEffectTag, ...] = Field(
+        default=(),
+        description="Closed origin-rule tags carried by this spell's saves.",
+    )
 
     costs: List[Cost] = Field(
         default_factory=lambda: [Cost(name="Cast Spell", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
@@ -3710,9 +3744,19 @@ class SpellAction(BaseAction):
     def spell_execution_scope(self):
         """Open the cast-local context used by low-level damage contributors."""
 
+        binding = self.behavior_binding
+        cause_ref = binding.definition_ref if binding is not None else None
+        saving_throw_effect_id = self.saving_throw_effect_id
+        if saving_throw_effect_id is None and cause_ref is not None:
+            saving_throw_effect_id = (
+                f"{cause_ref.content_id}.saving_throw"
+            )
         return spell_execution_scope(
             source_entity_uuid=self.source_entity_uuid,
             damage_type=self.spell_damage_type,
+            cause_ref=cause_ref,
+            saving_throw_effect_id=saving_throw_effect_id,
+            saving_throw_effect_tags=self.saving_throw_effect_tags,
         )
 
     def bind_spell_execution_lineage(self, lineage_uuid: UUID) -> None:

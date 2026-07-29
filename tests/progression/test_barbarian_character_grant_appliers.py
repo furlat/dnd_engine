@@ -48,7 +48,8 @@ from dnd.classes.structural_feature_definitions import (
 from dnd.core.content.identities import ContentRef
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventType
-from dnd.core.modifiers import AdvantageStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.conditions import Charmed, Frightened
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
@@ -145,10 +146,6 @@ def _remove(
         CharacterCompositionReceipt(
             runtime_entity_uuid=context.entity.uuid,
             character_id=context.character_id,
-            definition_revision=1,
-            definition_digest="a" * 64,
-            loadout_revision=1,
-            loadout_digest="b" * 64,
             grants=receipts,
             automatic_grant_refs=(),
         ),

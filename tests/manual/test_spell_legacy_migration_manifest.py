@@ -164,33 +164,33 @@ MAGIC_MISSILE_DISTRIBUTION = (
 
 DEFAULT_REPLACEMENTS = {
     "examples/test_aoe_convolution.py": (
-        "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+        "tests/engine/test_action_discovery.py::"
         "test_eb_09_010_registered_position_aoe_spell_previews_and_executes"
     ),
     "examples/test_aoe_integration.py": (
-        "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+        "tests/engine/test_action_discovery.py::"
         "test_eb_09_010_registered_position_aoe_spell_previews_and_executes"
     ),
     "examples/test_aoe_shapes.py": AOE_SHAPES,
     "examples/test_bless_bane.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_015_bless_and_bane_rewrite_save_d20_results"
     ),
     "examples/test_burning_hands.py": CLOSE_AREA,
     "examples/test_cloudkill.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges"
     ),
     "examples/test_concentration.py": (
-        "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+        "tests/engine/test_spellcasting.py::"
         "test_eb_14_010_concentration_links_cleanup_and_empty_casts"
     ),
     "examples/test_concentration_spells.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup"
     ),
     "examples/test_difficult_terrain.py": (
-        "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+        "tests/engine/test_grid_pathfinding.py::"
         "test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrain"
     ),
     "examples/test_directional_arena_hotswap.py": (
@@ -206,7 +206,7 @@ DEFAULT_REPLACEMENTS = {
         "test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle"
     ),
     "examples/test_entity_blocking.py": (
-        "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+        "tests/engine/test_grid_pathfinding.py::"
         "test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically"
     ),
     "examples/test_expeditious_retreat.py": (
@@ -215,12 +215,12 @@ DEFAULT_REPLACEMENTS = {
     ),
     "examples/test_fireball.py": FIREBALL_MATRIX,
     "examples/test_grease.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges"
     ),
     "examples/test_gust_of_wind.py": ZONE_GUST,
     "examples/test_hazard_pathfinding.py": (
-        "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+        "tests/engine/test_grid_pathfinding.py::"
         "test_eb_11_008_hazards_can_be_excluded_from_safe_paths"
     ),
     "examples/test_ice_storm.py": (
@@ -234,11 +234,11 @@ DEFAULT_REPLACEMENTS = {
         "test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery"
     ),
     "examples/test_magic_missile_multi.py": (
-        "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+        "tests/engine/test_spellcasting.py::"
         "test_eb_14_008_magic_missile_convolution_aggregates_child_casts"
     ),
     "examples/test_mirror_image.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_019_mirror_image_duplicates_absorb_missed_attacks"
     ),
     "examples/test_multi_target_allies.py": (
@@ -258,20 +258,20 @@ DEFAULT_REPLACEMENTS = {
         "test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn"
     ),
     "examples/test_self_range_aoe_availability.py": (
-        "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+        "tests/engine/test_action_discovery.py::"
         "test_eb_09_010_registered_position_aoe_spell_previews_and_executes"
     ),
     "examples/test_shield_spell.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_009_shield_reaction_converts_marginal_attack_hit_to_miss"
     ),
     "examples/test_sleep_color_spray.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_013_sleep_hp_pool_selection_immunity_and_wake_on_damage"
     ),
     "examples/test_spatial_handler_registry.py": AOE_REGISTRY,
     "examples/test_spell_catalog_api.py": (
-        "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+        "tests/engine/test_spellcasting.py::"
         "test_eb_14_017_spell_catalog_identity_matches_spell_events"
     ),
     "examples/test_spell_crit_dice.py": (
@@ -279,7 +279,7 @@ DEFAULT_REPLACEMENTS = {
         "test_spell_attack_critical_rolls_double_once"
     ),
     "examples/test_spell_system.py": (
-        "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+        "tests/engine/test_spellcasting.py::"
         "test_eb_14_004_spell_actions_create_spell_events_and_slot_costs"
     ),
     "examples/test_spike_growth.py": (
@@ -291,7 +291,7 @@ DEFAULT_REPLACEMENTS = {
         "test_spike_zone_applies_damage_for_each_committed_step"
     ),
     "examples/test_spirit_guardians.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges"
     ),
     "examples/test_sunbeam.py": (
@@ -299,7 +299,7 @@ DEFAULT_REPLACEMENTS = {
         "test_sunbeam_initial_and_repeat_line_share_concentration_owned_action"
     ),
     "examples/test_terrain_movement_system.py": (
-        "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+        "tests/engine/test_grid_pathfinding.py::"
         "test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrain"
     ),
     "examples/test_thunderwave.py": CLOSE_AREA,
@@ -312,7 +312,7 @@ DEFAULT_REPLACEMENTS = {
         "test_directional_wall_blocks_only_declared_sides_and_stays_structural"
     ),
     "examples/test_web.py": (
-        "tests/engine_book/test_chapter_15_spell_families.py::"
+        "tests/engine/test_spell_families.py::"
         "test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup"
     ),
 }
@@ -329,7 +329,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
     if path == "examples/spatial_events_test.py":
         selectors = {
             "test_gridmap_basics": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup"
             ),
             "test_entity_registration": (
@@ -341,19 +341,19 @@ def _special(old_selector: str) -> LegacyCoverage | None:
                 "test_entity_position_index_and_spatial_events_follow_grid_moves"
             ),
             "test_cell_subscriptions": (
-                "tests/engine_book/test_chapter_12_senses_light_stealth.py::"
+                "tests/engine/test_senses_light_stealth.py::"
                 "test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively"
             ),
             "test_fov_integration": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change"
             ),
             "test_pathfinding_integration": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrain"
             ),
             "test_entity_senses_with_gridmap": (
-                "tests/engine_book/test_chapter_12_senses_light_stealth.py::"
+                "tests/engine/test_senses_light_stealth.py::"
                 "test_eb_12_001_geometric_fov_is_filtered_by_effective_light"
             ),
             "test_no_duplicate_events": (
@@ -375,7 +375,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         "examples/test_aoe_integration.py::test_dead_entity_filtering"
     ):
         return _kept(
-            "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+            "tests/engine/test_action_discovery.py::"
             "test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions",
             deterministic,
         )
@@ -411,7 +411,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             "test_multi_target_counts",
         }:
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_005_multi_target_concentration_links_each_effect",
                 deterministic,
             )
@@ -428,7 +428,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             "test_3_concentration_check_fail_high_damage",
         }:
             return _kept(
-                "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+                "tests/engine/test_spellcasting.py::"
                 "test_eb_14_015_damage_and_death_break_concentration_deterministically",
                 deterministic,
             )
@@ -437,13 +437,13 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             "test_10_multi_slot_zero_children_cleanup",
         }:
             return _kept(
-                "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+                "tests/engine/test_spellcasting.py::"
                 "test_eb_14_014_drop_concentration_can_target_one_multi_slot_spell",
                 deterministic,
             )
         if name == "test_8_twinned_spell_single_concentrating":
             return _kept(
-                "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+                "tests/engine/test_spellcasting.py::"
                 "test_eb_14_016_multi_target_concentration_reuses_one_slot",
                 deterministic,
             )
@@ -457,7 +457,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         if name == "test_6_concentration_broken_by_damage":
             return _kept(
-                "tests/engine_book/test_chapter_14_spellcasting_core.py::"
+                "tests/engine/test_spellcasting.py::"
                 "test_eb_14_015_damage_and_death_break_concentration_deterministically",
                 deterministic,
             )
@@ -465,19 +465,19 @@ def _special(old_selector: str) -> LegacyCoverage | None:
     if path == "examples/test_difficult_terrain.py":
         selectors = {
             "test_tile_movement_costs": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_002_tile_movement_modes_define_walkability"
             ),
             "test_tile_borders": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_006_directional_borders_block_transitions_and_emit_metadata"
             ),
             "test_tile_uuid_lookup": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup"
             ),
             "test_move_action_uses_terrain_costs": (
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_004_move_action_converts_tile_cost_units_to_feet"
             ),
         }
@@ -499,7 +499,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         if "hidden" in name:
             return _kept(
-                "tests/engine_book/test_chapter_12_senses_light_stealth.py::"
+                "tests/engine/test_senses_light_stealth.py::"
                 "test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision",
                 deterministic,
             )
@@ -535,7 +535,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         "dead" in name or "dead_body" in name
     ):
         return _kept(
-            "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+            "tests/engine/test_grid_pathfinding.py::"
             "test_eb_11_015_dead_entities_become_non_blocking_for_paths",
             deterministic,
         )
@@ -567,7 +567,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         if "hidden" in name or "stealth_dc" in name:
             return _kept(
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths",
                 deterministic,
             )
@@ -595,7 +595,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             return _kept(HAZARD_CLASSIFICATION, deterministic)
         if "auto_safe_movement" in name:
             return _kept(
-                "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+                "tests/engine/test_action_discovery.py::"
                 "test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths",
                 (
                     "The maintained action-discovery regression exposes both "
@@ -608,7 +608,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         "duration" in name or "applies" in name
     ):
         return _kept(
-            "tests/engine_book/test_chapter_15_spell_families.py::"
+            "tests/engine/test_spell_families.py::"
             "test_eb_15_035_mirror_image_recast_replaces_and_duration_expires",
             deterministic,
         )
@@ -651,7 +651,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
                 )
         if "misty_step" in name:
             return _kept(
-                "tests/engine_book/test_manual_17_spell_families.py::"
+                "tests/engine/test_manual_17_spell_families.py::"
                 "test_movement_family_misty_step_teleports_and_uses_bonus_action",
                 deterministic,
             )
@@ -666,13 +666,13 @@ def _special(old_selector: str) -> LegacyCoverage | None:
     if path == "examples/test_shield_spell.py":
         if "disabled" in name:
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_022_shield_handler_toggle_gates_attack_and_missile_reactions",
                 deterministic,
             )
         if "mm" in name or "darts" in name:
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_010_shield_blocks_magic_missile_darts_against_its_target_only",
                 deterministic,
             )
@@ -689,7 +689,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         ):
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_020_shield_non_firing_persistence_and_turn_cleanup",
                 deterministic,
             )
@@ -697,13 +697,13 @@ def _special(old_selector: str) -> LegacyCoverage | None:
     if path == "examples/test_sleep_color_spray.py":
         if "color_spray" in name:
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_014_color_spray_hp_pool_skips_and_blinded_cleanup",
                 deterministic,
             )
         if "upcast" in name or "empty" in name or "skip_high" in name:
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_030_hp_pool_spells_cover_upcast_and_immunity_edges",
                 deterministic,
             )
@@ -712,7 +712,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         "examples/test_spell_catalog_api.py::test_catalog_endpoint"
     ):
         return _kept(
-            "tests/engine_book/test_chapter_18_encounters_apis.py::"
+            "tests/engine/test_encounter_apis.py::"
             "test_eb_18_006_serialization_and_spell_catalog_api_do_not_mutate_registry",
             deterministic,
         )
@@ -736,30 +736,30 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         }
         if name in groups:
             file_name = (
-                "tests/engine_book/test_chapter_15_spell_families.py"
+                "tests/engine/test_spell_families.py"
                 if groups[name].startswith("test_eb_15")
                 else (
-                    "tests/engine_book/test_manual_16_spellcasting_core.py"
+                    "tests/engine/test_manual_16_spellcasting_core.py"
                     if groups[name].startswith("test_magic_missile_auto")
-                    else "tests/engine_book/test_chapter_14_spellcasting_core.py"
+                    else "tests/engine/test_spellcasting.py"
                 )
             )
             return _kept(f"{file_name}::{groups[name]}", deterministic)
         if name in {"test_include_self_targeting", "test_mage_armor_self_cast"}:
             return _kept(
-                "tests/engine_book/test_chapter_09_action_templates_discovery.py::"
+                "tests/engine/test_action_discovery.py::"
                 "test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions",
                 deterministic,
             )
         if name == "test_mage_armor_ends_on_armor_equip":
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_004_abjuration_buffs_and_restoration_remove_conditions",
                 deterministic,
             )
         if name == "test_sacred_flame_combat":
             return _kept(
-                "tests/engine_book/test_chapter_15_spell_families.py::"
+                "tests/engine/test_spell_families.py::"
                 "test_eb_15_002_evocation_attack_save_and_area_damage_patterns",
                 deterministic,
             )
@@ -813,7 +813,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         if name == "test_paths_updated_after_move":
             return _kept(
-                "tests/engine_book/test_chapter_12_senses_light_stealth.py::"
+                "tests/engine/test_senses_light_stealth.py::"
                 "test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty",
                 deterministic,
             )
@@ -858,7 +858,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             )
         if "border" in name or "diagonal" in name:
             return _kept(
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route",
                 deterministic,
             )
@@ -892,7 +892,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
             "test_zone_move_updates_affected_tiles",
         }:
             return _kept(
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers",
                 (
                     "The maintained generic zone regression asserts the exact "
@@ -926,19 +926,19 @@ def _special(old_selector: str) -> LegacyCoverage | None:
     if path == "examples/test_tile_directional_blocking.py":
         if "event_metadata" in name or "serialization" in name:
             return _kept(
-                "tests/engine_book/test_chapter_18_encounters_apis.py::"
+                "tests/engine/test_encounter_apis.py::"
                 "test_eb_18_007_objective_event_frames_preserve_directional_spatial_fields",
                 deterministic,
             )
         if "hidden" in name:
             return _kept(
-                "tests/engine_book/test_chapter_12_senses_light_stealth.py::"
+                "tests/engine/test_senses_light_stealth.py::"
                 "test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision",
                 deterministic,
             )
         if "forced_movement" in name:
             return _kept(
-                "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py::"
+                "tests/engine/test_grid_pathfinding.py::"
                 "test_eb_11_017_forced_movement_and_jump_respect_directional_blockers",
                 deterministic,
             )
@@ -953,7 +953,7 @@ def _special(old_selector: str) -> LegacyCoverage | None:
         "concentration" in name or "zone_creation" in name
     ):
         return _kept(
-            "tests/engine_book/test_chapter_15_spell_families.py::"
+            "tests/engine/test_spell_families.py::"
             "test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges",
             deterministic,
         )

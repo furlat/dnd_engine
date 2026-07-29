@@ -33,7 +33,8 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import AbilityName
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     CONCENTRATION_FIRE_WEAPON_COAT_RECIPE,
@@ -58,10 +59,10 @@ from dnd.items.spell_items import (
     wand_of_fire_recipe,
     wand_of_magic_missiles_recipe,
 )
-from dnd.items.test_items import ArcaneDevice
+from dnd.items.environment_interactables import ArcaneDevice
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.spells.evocation import Fireball
-from dnd.utils import (
+from tests.engine.support import (
     force_attack_hit,
     force_spell_attack_hit,
     get_hp,
@@ -73,7 +74,7 @@ from dnd.utils import (
 
 
 THIS_FILE = "tests/manual/test_131_inventory_use_actions_legacy_contract.py"
-BOOK_ITEMS_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
+BOOK_ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
 
 SCROLL_DISCOVERY_SELECTOR = (
     f"{THIS_FILE}::test_scroll_targeting_matrix_is_item_bound"
@@ -430,7 +431,7 @@ def test_scroll_execute_by_index_consumes_item_not_spell_slots() -> None:
     put_in_inventory(caster, scroll)
     Entity.update_all_entities_senses()
     slots_before = {
-        level: caster.action_economy._get_spell_slot_value(level).normalized_score
+        level: caster.action_economy.spell_slot_value(level).normalized_score
         for level in range(1, 5)
     }
     info = item_action(caster, scroll.uuid, "Magic Missile")
@@ -452,7 +453,7 @@ def test_scroll_execute_by_index_consumes_item_not_spell_slots() -> None:
     assert scroll.uuid not in caster.inventory.items
     assert BaseBlock.get(scroll.uuid) is None
     assert {
-        level: caster.action_economy._get_spell_slot_value(level).normalized_score
+        level: caster.action_economy.spell_slot_value(level).normalized_score
         for level in range(1, 5)
     } == slots_before
 
@@ -504,11 +505,24 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     )
     put_in_inventory(caster, coat)
     Entity.update_all_entities_senses()
-    assert [
+    unavailable_coat_actions = [
         info
         for info in get_available_actions(caster).self_actions
         if info.source_item_uuid == coat.uuid
-    ] == []
+    ]
+    assert {
+        info.template_name.split("__item_")[0]
+        for info in unavailable_coat_actions
+    } == {
+        "Coat Main Hand",
+        "Coat Off Hand",
+    }
+    assert all(
+        info.availability_status == "requirements_unmet"
+        and info.can_afford
+        and info.valid_targets == []
+        for info in unavailable_coat_actions
+    )
 
     main = materialize_item(
         SHORTSWORD_RECIPE,
@@ -706,7 +720,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
         put_in_inventory(caster, wand)
         Entity.update_all_entities_senses()
         slots_before = {
-            level: caster.action_economy._get_spell_slot_value(
+            level: caster.action_economy.spell_slot_value(
                 level
             ).normalized_score
             for level in range(1, 5)
@@ -750,7 +764,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
         assert hp_before - get_hp(target) == dice_count * 4
         assert wand.charges == 7 - charge_cost
         assert {
-            level: caster.action_economy._get_spell_slot_value(
+            level: caster.action_economy.spell_slot_value(
                 level
             ).normalized_score
             for level in range(1, 5)
@@ -768,7 +782,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
         assert source_fireballs[4].get_damage_dice_count() == 9
 
         remaining_rows = {
-            info.item_charge_cost: info.cast_at_level
+            info.item_charge_cost: info
             for info in get_available_actions(caster).position_actions
             if (
                 info.source_item_uuid == wand.uuid
@@ -776,9 +790,19 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
             )
         }
         if charge_cost == 3:
-            assert remaining_rows == {3: 3, 4: 4}
+            assert set(remaining_rows) == {3, 4}
         else:
-            assert remaining_rows == {3: 3}
+            assert set(remaining_rows) == {3}
+        assert all(
+            info.cast_at_level == remaining_charge_cost
+            for remaining_charge_cost, info in remaining_rows.items()
+        )
+        assert all(
+            info.availability_status == "source_unaffordable"
+            and not info.can_afford
+            and info.valid_targets == []
+            for info in remaining_rows.values()
+        )
 
 
 def test_arcane_machine_gun_is_repeatable_environment_spell_source() -> None:

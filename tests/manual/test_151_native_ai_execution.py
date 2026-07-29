@@ -20,7 +20,7 @@ from dnd.ai.instrumentation import (
 from dnd.ai.feedback import NativeAIDecisionFeedback, NativeAIDecisionOutcome
 from dnd.ai.policy import PolicyDescriptor
 from dnd.ai.registry import PolicyRegistry
-from dnd.ai.runtime.assignment import NativeAIAssignmentState
+from dnd.ai.runtime.assignment_lifecycle import AIAssignmentState
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import (
     _build_affordance_set_and_execution_authority_from_actions,
@@ -285,10 +285,10 @@ def test_native_controller_shares_one_side_assignment_but_not_opponent_memory() 
         enemy.assignment.policy_binding.memory,
     ).projected_states == 1
     assert side.assignment.world is not enemy.assignment.world
-    assert side.assignment.state is NativeAIAssignmentState.STARTED
+    assert side.assignment.state is AIAssignmentState.STARTED
     side.close()
     side.close()
-    assert side.assignment.state is NativeAIAssignmentState.CLOSED
+    assert side.assignment.state is AIAssignmentState.CLOSED
 
 
 def test_native_policy_cannot_execute_a_forged_epoch_row() -> None:

@@ -1,6 +1,5 @@
 """Tile primitives for terrain, lighting, and directional borders."""
 
-import math
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr
@@ -8,16 +7,12 @@ from dnd.core.base_block import BaseBlock, MovementMode, LightLevel, SensesType
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import SpatialChangeEvent, EventQueue, EventPhase
+from dnd.core.geometry import grid_distance_feet
 
 _DARKVISION_SHIFT: Dict[LightLevel, LightLevel] = {
     LightLevel.DARKNESS: LightLevel.DIM_LIGHT,
     LightLevel.DIM_LIGHT: LightLevel.BRIGHT_LIGHT,
 }
-
-
-def _tile_distance_feet(a: Tuple[int, int], b: Tuple[int, int]) -> int:
-    """Euclidean distance between two tile positions, in feet (1 tile = 5ft)."""
-    return int(math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)) * 5
 
 
 class Tile(BaseBlock):
@@ -199,7 +194,7 @@ class Tile(BaseBlock):
             if sm.sense_type in (SensesType.TRUESIGHT, SensesType.BLINDSIGHT):
                 in_range = (sm.range_feet == 0)
                 if not in_range and observer_position is not None and self.position is not None:
-                    in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                    in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
                 if in_range:
                     return max(base, LightLevel.BRIGHT_LIGHT)
 
@@ -208,7 +203,7 @@ class Tile(BaseBlock):
                 if sm.sense_type == SensesType.DEVILS_SIGHT:
                     in_range = (sm.range_feet == 0)
                     if not in_range and observer_position is not None and self.position is not None:
-                        in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                        in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
                     if in_range:
                         base = LightLevel.BRIGHT_LIGHT
                     break
@@ -218,7 +213,7 @@ class Tile(BaseBlock):
                 if sm.sense_type == SensesType.DARKVISION:
                     in_range = (sm.range_feet == 0)
                     if not in_range and observer_position is not None and self.position is not None:
-                        in_range = _tile_distance_feet(self.position, observer_position) <= sm.range_feet
+                        in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
                     if in_range:
                         base = _DARKVISION_SHIFT[base]
                     break
@@ -472,54 +467,6 @@ class Tile(BaseBlock):
         if not directions:
             return True
         return all(self.allows_direction(direction, channel, include_derived) for direction in directions)
-
-    def can_exit_to(self, to_position: Tuple[int, int], channel: str = "movement",
-                    requesting_entity_uuid: Optional['UUID'] = None,
-                    subjective: bool = False,
-                    include_derived: bool = True) -> bool:
-        """Check if a transition may leave this tile toward an adjacent position."""
-        return self.allows_directions(
-            self.directions_toward(to_position),
-            channel,
-            include_derived,
-        )
-
-    def can_enter_from(self, from_position: Tuple[int, int], channel: str = "movement",
-                       requesting_entity_uuid: Optional['UUID'] = None,
-                       subjective: bool = False,
-                       include_derived: bool = True) -> bool:
-        """
-        Check if an entity can enter this tile from an adjacent position.
-
-        Args:
-            from_position: The position the entity is coming FROM
-
-        Returns:
-            True if the border allows passage
-        """
-        return self.allows_directions(
-            self.directions_toward(from_position),
-            channel,
-            include_derived,
-        )
-
-    def can_see_from(self, from_position: Tuple[int, int],
-                     observer_uuid: Optional['UUID'] = None,
-                     subjective: bool = False,
-                     include_derived: bool = True) -> bool:
-        return self.can_enter_from(from_position, "vision", observer_uuid, subjective, include_derived)
-
-    def can_light_from(self, from_position: Tuple[int, int],
-                       observer_uuid: Optional['UUID'] = None,
-                       subjective: bool = False,
-                       include_derived: bool = True) -> bool:
-        return self.can_enter_from(from_position, "light", observer_uuid, subjective, include_derived)
-
-    def can_propagate_from(self, from_position: Tuple[int, int],
-                           requesting_entity_uuid: Optional['UUID'] = None,
-                           subjective: bool = False,
-                           include_derived: bool = True) -> bool:
-        return self.can_enter_from(from_position, "propagation", requesting_entity_uuid, subjective, include_derived)
 
     @classmethod
     def create(cls, position: Tuple[int, int],

@@ -10,6 +10,7 @@ from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
+from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.world_contracts import (
@@ -524,7 +525,7 @@ def _project_encounter(
                 name=entity.name,
                 initiative=encounter.combatants[entity_uuid].initiative_total,
                 life_state=life_state,
-                is_dead=life_state.value == "dead",
+                is_dead=life_state is LifeState.DEAD,
             )
         )
     current_entity_uuid: str | None = None

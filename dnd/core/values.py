@@ -2,6 +2,7 @@ from pydantic import Field, computed_field, model_validator
 from typing import List, Optional, Dict, Any, Callable, ClassVar, Union, Self
 from uuid import UUID, uuid4
 from dnd.core.base_object import BaseObject
+from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     naming_callable,
     NumericalModifier,
@@ -11,8 +12,6 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     CriticalStatus,
     AutoHitStatus,
-    Size,
-    DamageType,
     SizeModifier,
     DamageTypeModifier,
     ContextualNumericalModifier,
@@ -23,7 +22,7 @@ from dnd.core.modifiers import (
     ContextualDamageTypeModifier,
     ResistanceModifier,
     ContextualResistanceModifier,
-    ResistanceStatus
+    ResistanceStatus,
 )
 import random
 
@@ -119,30 +118,6 @@ class BaseValue(BaseObject):
             modifier: Modifier candidate.
         """
         pass
-
-    def get_generation_chain(self) -> List['BaseValue']:
-        """Return values that contributed to this value.
-
-        The traversal follows `generated_from` UUIDs depth-first and skips
-        cycles by UUID.
-
-        Returns:
-            Contributing values in traversal order.
-        """
-        chain = []
-        visited = set()
-        def dfs(value):
-            if value.uuid in visited:
-                return
-            visited.add(value.uuid)
-            for uuid in value.generated_from:
-                generated_value = self.get(uuid)
-                if generated_value and generated_value.uuid not in visited:
-                    chain.append(generated_value)
-                    dfs(generated_value)
-        dfs(self)
-        return chain
-
 
 class StaticValue(BaseValue):
     """Non-contextual modifier bucket for one value channel.
@@ -1963,11 +1938,6 @@ class ModifiableValue(BaseValue):
             new_value.set_target_entity(self.target_entity_uuid, self.target_entity_name)
         return new_value
 
-    def get_generated_from(self) -> List['ModifiableValue']:
-        """Return registered modifiable values that generated this value."""
-        generated_from = [ModifiableValue.get(uuid) for uuid in self.generated_from if uuid is not None]
-        return [x for x in generated_from if x is not None]
-
     def get_breakdown(self) -> List[Dict[str, Any]]:
         """Return static numerical modifier entries for display.
 
@@ -2186,15 +2156,6 @@ class ModifiableValue(BaseValue):
         if self.from_target_contextual:
             uuids.extend(self.from_target_contextual.get_all_modifier_uuids())
         return uuids
-
-    def remove_modifiers(self, uuids: List[UUID]) -> None:
-        """Remove multiple modifiers by UUID.
-
-        Args:
-            uuids: Modifier UUIDs to remove.
-        """
-        for uuid in uuids:
-            self.remove_modifier(uuid)
 
     def update_normalizers(self, new_normalizer: Optional[Callable[[int], int]] = None) -> None:
         """Propagate the active normalizer into every channel.

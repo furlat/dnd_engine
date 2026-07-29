@@ -8,10 +8,18 @@ import {
 import type {
   AdminCharacterAdvancementAwardRequest,
   CharacterBuildValidationRequest,
+  CharacterCreationValidationRequest,
   CharacterLevelUpRequest,
   CharacterLoadoutMutationRequest,
   CharacterRespecRequest,
   CreateCharacterRequest,
+  EncounterRecipe,
+  EncounterRosterRecipe,
+  ReplaceSavedEncounterRequest,
+  ReplaceSavedEncounterRosterRequest,
+  SaveEncounterRequest,
+  SaveEncounterRosterRequest,
+  UpdateCharacterPresentationPreferencesRequest,
   UpdateCharacterProfileSettingsRequest,
 } from "../generated/contracts.generated.js";
 import { ContractValidationError } from "../validation.js";
@@ -96,8 +104,13 @@ const buildValidationRequest = {
   expected_content_set_digest: digest,
   expected_ruleset_digest: digest,
 } satisfies CharacterBuildValidationRequest;
-const createCharacterRequest = {
+const creationValidationRequest = {
   ...buildValidationRequest,
+  creation_plan_id: "creation_plan.blank_custom",
+  creation_plan_digest: digest,
+} satisfies CharacterCreationValidationRequest;
+const createCharacterRequest = {
+  ...creationValidationRequest,
   display_name: "Canonical Hero",
   idempotency_key: "00000000-0000-0000-0000-000000000010",
 } satisfies CreateCharacterRequest;
@@ -141,6 +154,47 @@ const adminAwardRequest = {
   expected_earned_character_level: 1,
   level_delta: 1,
 } satisfies AdminCharacterAdvancementAwardRequest;
+const presentationPreferencesRequest = {
+  expected_revision: 0,
+  preferences: {
+    neuroclient: {
+      portrait_identity: "gallery.hero.ember.v2",
+      experimental: {
+        layer_opacity: 0.75,
+      },
+    },
+  },
+} satisfies UpdateCharacterPresentationPreferencesRequest;
+const savedRosterRecipe = {
+  roster_id: "roster.saved/party",
+  recipe_digest: digest,
+} as unknown as EncounterRosterRecipe;
+const savedEncounterRecipe = {
+  encounter_id: "encounter.saved/duel",
+  recipe_digest: digest,
+} as unknown as EncounterRecipe;
+const savedRosterId = "saved.roster/party";
+const savedEncounterId = "saved.encounter/duel";
+const saveRosterRequest = {
+  title: "Saved Party",
+  recipe: savedRosterRecipe,
+} satisfies SaveEncounterRosterRequest;
+const replaceRosterRequest = {
+  title: "Renamed Party",
+  recipe: savedRosterRecipe,
+  expected_revision: 1,
+  expected_recipe_digest: digest,
+} satisfies ReplaceSavedEncounterRosterRequest;
+const saveEncounterRequest = {
+  title: "Saved Duel",
+  recipe: savedEncounterRecipe,
+} satisfies SaveEncounterRequest;
+const replaceEncounterRequest = {
+  title: "Renamed Duel",
+  recipe: savedEncounterRecipe,
+  expected_revision: 1,
+  expected_recipe_digest: digest,
+} satisfies ReplaceSavedEncounterRequest;
 
 test("character directory client uses the one exact unversioned route family", async () => {
   const requests: CapturedRequest[] = [];
@@ -170,14 +224,58 @@ test("character directory client uses the one exact unversioned route family", a
     () => client.getStandaloneLocalProfile(),
     () => client.getCharacterProfile(credential),
     () => client.updateCharacterProfileSettings(credential, settingsRequest),
-    () => client.validateCharacterBuild(credential, buildValidationRequest),
+    () => client.validateCharacterBuild(credential, creationValidationRequest),
+    () => client.previewCharacterBuild(credential, creationValidationRequest),
     () => client.createCharacter(credential, createCharacterRequest),
     () => client.listCharacters(credential),
+    () => client.createSavedEncounterRoster(credential, saveRosterRequest),
+    () => client.listSavedEncounterRosters(credential),
+    () => client.getSavedEncounterRoster(
+      credential,
+      savedRosterId,
+    ),
+    () => client.replaceSavedEncounterRoster(
+      credential,
+      savedRosterId,
+      replaceRosterRequest,
+    ),
+    () => client.deleteSavedEncounterRoster(
+      credential,
+      savedRosterId,
+      1,
+      digest,
+    ),
+    () => client.createSavedEncounter(credential, saveEncounterRequest),
+    () => client.listSavedEncounters(credential),
+    () => client.getSavedEncounter(
+      credential,
+      savedEncounterId,
+    ),
+    () => client.replaceSavedEncounter(
+      credential,
+      savedEncounterId,
+      replaceEncounterRequest,
+    ),
+    () => client.deleteSavedEncounter(
+      credential,
+      savedEncounterId,
+      1,
+      digest,
+    ),
     () => client.getCharacter(credential, characterId),
     () => client.getCharacterDefinition(credential, characterId),
     () => client.getCharacterDefinitionHistory(credential, characterId),
     () => client.getCharacterHoldings(credential, characterId),
     () => client.getCharacterLoadout(credential, characterId),
+    () => client.getCharacterPresentationPreferences(
+      credential,
+      characterId,
+    ),
+    () => client.updateCharacterPresentationPreferences(
+      credential,
+      characterId,
+      presentationPreferencesRequest,
+    ),
     () => client.getCharacterAdvancement(credential, characterId),
     () => client.grantAdminCharacterAdvancementAward(
       credential,
@@ -195,6 +293,7 @@ test("character directory client uses the one exact unversioned route family", a
       characterId,
       respecRequest,
     ),
+    () => client.getCharacterRespecSeed(credential, characterId),
     () => client.respecCharacter(credential, characterId, respecRequest),
     () => client.validateCharacterLoadout(
       credential,
@@ -212,6 +311,8 @@ test("character directory client uses the one exact unversioned route family", a
   }
 
   const encodedId = "character%2Fid%20with%20space";
+  const encodedRosterId = "saved.roster%2Fparty";
+  const encodedEncounterId = "saved.encounter%2Fduel";
   const privateRequest = (
     url: string,
     method = "GET",
@@ -253,7 +354,12 @@ test("character directory client uses the one exact unversioned route family", a
     privateRequest(
       "/api/character-builds/validate",
       "POST",
-      buildValidationRequest,
+      creationValidationRequest,
+    ),
+    privateRequest(
+      "/api/character-builds/visual-preview",
+      "POST",
+      creationValidationRequest,
     ),
     privateRequest(
       "/api/directory/characters",
@@ -261,11 +367,53 @@ test("character directory client uses the one exact unversioned route family", a
       createCharacterRequest,
     ),
     privateRequest("/api/directory/characters"),
+    privateRequest(
+      "/api/directory/encounter-rosters",
+      "POST",
+      saveRosterRequest,
+    ),
+    privateRequest("/api/directory/encounter-rosters"),
+    privateRequest(
+      `/api/directory/encounter-rosters/${encodedRosterId}`,
+    ),
+    privateRequest(
+      `/api/directory/encounter-rosters/${encodedRosterId}`,
+      "PUT",
+      replaceRosterRequest,
+    ),
+    privateRequest(
+      `/api/directory/encounter-rosters/${encodedRosterId}?expected_revision=1&expected_recipe_digest=${digest}`,
+      "DELETE",
+    ),
+    privateRequest(
+      "/api/directory/encounters",
+      "POST",
+      saveEncounterRequest,
+    ),
+    privateRequest("/api/directory/encounters"),
+    privateRequest(`/api/directory/encounters/${encodedEncounterId}`),
+    privateRequest(
+      `/api/directory/encounters/${encodedEncounterId}`,
+      "PUT",
+      replaceEncounterRequest,
+    ),
+    privateRequest(
+      `/api/directory/encounters/${encodedEncounterId}?expected_revision=1&expected_recipe_digest=${digest}`,
+      "DELETE",
+    ),
     privateRequest(`/api/directory/characters/${encodedId}`),
     privateRequest(`/api/directory/characters/${encodedId}/definition`),
     privateRequest(`/api/directory/characters/${encodedId}/definitions`),
     privateRequest(`/api/directory/characters/${encodedId}/holdings`),
     privateRequest(`/api/directory/characters/${encodedId}/loadout`),
+    privateRequest(
+      `/api/directory/characters/${encodedId}/presentation-preferences`,
+    ),
+    privateRequest(
+      `/api/directory/characters/${encodedId}/presentation-preferences`,
+      "PUT",
+      presentationPreferencesRequest,
+    ),
     privateRequest(`/api/directory/characters/${encodedId}/advancement`),
     privateRequest(
       `/api/admin/characters/${encodedId}/advancement-awards`,
@@ -286,6 +434,9 @@ test("character directory client uses the one exact unversioned route family", a
       `/api/directory/characters/${encodedId}/respec/validate`,
       "POST",
       respecRequest,
+    ),
+    privateRequest(
+      `/api/directory/characters/${encodedId}/respec/seed`,
     ),
     privateRequest(
       `/api/directory/characters/${encodedId}/respec`,
@@ -328,7 +479,44 @@ test("character directory response decoding is strict", async () => {
   );
 });
 
-test("creator catalog decodes exact schema-2 premade build rows", async () => {
+test("character presentation preferences preserve flexible JSON inside a strict envelope", async () => {
+  const payload = {
+    schema_version: 1,
+    character_id: "00000000-0000-0000-0000-000000000020",
+    owner_principal_id: credential.principalId,
+    revision: 3,
+    preferences: {
+      neuroclient: {
+        portrait_identity: "gallery.hero.ember.v2",
+        experimental: {
+          palette: ["#112233", "#aabbcc"],
+          layer_opacity: 0.75,
+          enabled_layers: ["dragon_wings", "aura"],
+        },
+      },
+    },
+    preferences_digest: digest,
+    updated_at: "2026-07-28T20:00:00.000000Z",
+  } as const;
+  const fetchImplementation: typeof fetch = async () => new Response(
+    JSON.stringify(payload),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  const client = new GameDirectoryClient("/api", { fetchImplementation });
+
+  assert.deepEqual(
+    await client.getCharacterPresentationPreferences(
+      credential,
+      payload.character_id,
+    ),
+    payload,
+  );
+});
+
+test("creator catalog decodes only editable schema-7 creation plans", async () => {
   const expectedPremades = [
     ["hero.barbarian_l5_berserker_torch", "Berserker"],
     ["hero.fighter_2_sorcerer_3_spellblade", "Draconic Spellblade"],
@@ -336,11 +524,12 @@ test("creator catalog decodes exact schema-2 premade build rows", async () => {
     ["hero.sorcerer_l5_standard_torch", "Draconic Sorcerer"],
   ] as const;
   const payload = {
-    schema_version: 1,
+    schema_version: 7,
     content_set_digest: digest,
     rules: {
-      schema_version: 1,
+      schema_version: 2,
       rules_baseline: "srd_5_1_with_selected_bg3_creation_rules",
+      initial_custom_character_level: 1,
       character_level_cap: 20,
       point_buy_budget: 27,
       minimum_ability_score: 8,
@@ -357,6 +546,188 @@ test("creator catalog decodes exact schema-2 premade build rows", async () => {
       default_multiclass_slot_rounding_policy: "srd_5_2_round_up",
       default_permissive_multiclass_prerequisites: true,
     },
+    appearance_catalog: {
+      schema_version: 4,
+      default_selection: {
+        options: [
+          {
+            option_id: "appearance.beard",
+            value_id: "appearance.beard.absent",
+          },
+          {
+            option_id: "appearance.beard_tint",
+            value_id: "appearance.beard_tint.follow_hair",
+          },
+          {
+            option_id: "appearance.body",
+            value_id: "appearance.body.humanoid",
+          },
+          {
+            option_id: "appearance.build",
+            value_id: "appearance.build.average",
+          },
+          {
+            option_id: "appearance.hair_tint",
+            value_id: "appearance.color.auburn",
+          },
+          {
+            option_id: "appearance.head",
+            value_id: "appearance.head.hair_09",
+          },
+          {
+            option_id: "appearance.skin_tint",
+            value_id: "appearance.color.light_tan",
+          },
+          {
+            option_id: "appearance.stature",
+            value_id: "appearance.stature.average",
+          },
+        ],
+      },
+      options: [
+        {
+          option_id: "appearance.beard",
+          display_name: "Beard",
+          control_kind: "choice",
+          default_value_id: "appearance.beard.absent",
+          values: [
+            {
+              value_id: "appearance.beard.absent",
+              display_name: "No Beard",
+              tint_rgb: null,
+              tint_source_option_id: null,
+              body_category: null,
+              head_category: null,
+              visual_scale_multiplier: null,
+              visual_scale_x_multiplier: null,
+            },
+            {
+              value_id: "appearance.beard.present",
+              display_name: "Beard",
+              tint_rgb: null,
+              tint_source_option_id: null,
+              body_category: null,
+              head_category: null,
+              visual_scale_multiplier: null,
+              visual_scale_x_multiplier: null,
+            },
+          ],
+        },
+        {
+          option_id: "appearance.beard_tint",
+          display_name: "Beard Color",
+          control_kind: "color",
+          default_value_id: "appearance.beard_tint.follow_hair",
+          values: [{
+            value_id: "appearance.beard_tint.follow_hair",
+            display_name: "Match Hair",
+            tint_rgb: null,
+            tint_source_option_id: "appearance.hair_tint",
+            body_category: null,
+            head_category: null,
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+        {
+          option_id: "appearance.body",
+          display_name: "Body",
+          control_kind: "choice",
+          default_value_id: "appearance.body.humanoid",
+          values: [{
+            value_id: "appearance.body.humanoid",
+            display_name: "Humanoid",
+            tint_rgb: null,
+            tint_source_option_id: null,
+            body_category: "NakedBody",
+            head_category: null,
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+        {
+          option_id: "appearance.build",
+          display_name: "Build",
+          control_kind: "choice",
+          default_value_id: "appearance.build.average",
+          values: [{
+            value_id: "appearance.build.average",
+            display_name: "Average",
+            tint_rgb: null,
+            tint_source_option_id: null,
+            body_category: null,
+            head_category: null,
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: 1,
+          }],
+        },
+        {
+          option_id: "appearance.hair_tint",
+          display_name: "Hair Color",
+          control_kind: "color",
+          default_value_id: "appearance.color.auburn",
+          values: [{
+            value_id: "appearance.color.auburn",
+            display_name: "Auburn",
+            tint_rgb: 0x993F00,
+            tint_source_option_id: null,
+            body_category: null,
+            head_category: null,
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+        {
+          option_id: "appearance.head",
+          display_name: "Hair",
+          control_kind: "choice",
+          default_value_id: "appearance.head.hair_09",
+          values: [{
+            value_id: "appearance.head.hair_09",
+            display_name: "Hair 09",
+            tint_rgb: null,
+            tint_source_option_id: null,
+            body_category: null,
+            head_category: "Head9",
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+        {
+          option_id: "appearance.skin_tint",
+          display_name: "Skin Color",
+          control_kind: "color",
+          default_value_id: "appearance.color.light_tan",
+          values: [{
+            value_id: "appearance.color.light_tan",
+            display_name: "Light Tan",
+            tint_rgb: 0xE6BC98,
+            tint_source_option_id: null,
+            body_category: null,
+            head_category: null,
+            visual_scale_multiplier: null,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+        {
+          option_id: "appearance.stature",
+          display_name: "Stature",
+          control_kind: "choice",
+          default_value_id: "appearance.stature.average",
+          values: [{
+            value_id: "appearance.stature.average",
+            display_name: "Average",
+            tint_rgb: null,
+            tint_source_option_id: null,
+            body_category: null,
+            head_category: null,
+            visual_scale_multiplier: 1,
+            visual_scale_x_multiplier: null,
+          }],
+        },
+      ],
+      constraints: [],
+    },
     body_recipes: [],
     body_recipe_presets: [],
     species: [],
@@ -364,18 +735,45 @@ test("creator catalog decodes exact schema-2 premade build rows", async () => {
     backgrounds: [],
     classes: [],
     subclasses: [],
-    premades: expectedPremades.map(([premadeId, displayName]) => ({
-      schema_version: 2,
-      premade_id: premadeId,
-      display_name: displayName,
-      build: {
-        ...buildValidationRequest.build,
-        premade_id: premadeId,
+    creation_plans: [
+      {
+        schema_version: 1,
+        plan_id: "creation_plan.blank_custom",
+        plan_kind: "blank_custom",
+        display_name: "Blank Custom",
+        build: buildValidationRequest.build,
+        loadout: buildValidationRequest.loadout,
+        character_level_entitlement: 1,
+        supplemental_holdings: [],
+        source_premade_id: null,
+        plan_digest: digest,
       },
-      loadout: buildValidationRequest.loadout,
-      premade_digest: digest,
-    })),
+      ...expectedPremades.map(([premadeId, displayName]) => ({
+        schema_version: 1,
+        plan_id: `creation_plan.premade.${premadeId}`,
+        plan_kind: "premade_template",
+        display_name: displayName,
+        build: {
+          ...buildValidationRequest.build,
+          premade_id: premadeId,
+        },
+        loadout: buildValidationRequest.loadout,
+        character_level_entitlement: 1,
+        supplemental_holdings: [],
+        source_premade_id: premadeId,
+        plan_digest: digest,
+      })),
+    ],
     starting_equipment_packages: [],
+    starting_apparel_requirement: {
+      choice_id: "character.creation.starting_apparel",
+      choice_kind: "starting_apparel_package",
+      minimum_selections: 1,
+      maximum_selections: 1,
+      allowed_refs: [],
+      allowed_proficiency_subjects: [],
+    },
+    starting_apparel_packages: [],
   };
   const client = new GameDirectoryClient("/api", {
     fetchImplementation: async () => new Response(JSON.stringify(payload), {
@@ -385,23 +783,42 @@ test("creator catalog decodes exact schema-2 premade build rows", async () => {
   });
 
   const catalog = await client.getCharacterCreationCatalog();
+  const premadePlans = catalog.creation_plans.filter(
+    (row) => row.plan_kind === "premade_template",
+  );
 
   assert.deepEqual(
-    catalog.premades.map((row) => [row.premade_id, row.display_name]),
+    premadePlans.map((row) => [row.source_premade_id, row.display_name]),
     expectedPremades,
   );
   assert.equal(
-    catalog.premades.find(
+    premadePlans.find(
       (row) => (
-        row.premade_id === "hero.fighter_2_sorcerer_3_spellblade"
+        row.source_premade_id
+        === "hero.fighter_2_sorcerer_3_spellblade"
       ),
     )?.build.premade_id,
     "hero.fighter_2_sorcerer_3_spellblade",
   );
   assert.ok(
-    catalog.premades.every(
+    premadePlans.every(
       (row) => row.loadout.prepared_spells.length === 0,
     ),
+  );
+  assert.equal(catalog.creation_plans[0]?.plan_id, "creation_plan.blank_custom");
+  assert.equal(catalog.rules.initial_custom_character_level, 1);
+  assert.deepEqual(
+    catalog.appearance_catalog.options.map((option) => option.option_id),
+    catalog.appearance_catalog.default_selection.options.map(
+      (selection) => selection.option_id,
+    ),
+  );
+  assert.deepEqual(catalog.appearance_catalog.constraints, []);
+  assert.equal(
+    catalog.appearance_catalog.options.find(
+      (option) => option.option_id === "appearance.beard_tint",
+    )?.values[0]?.tint_source_option_id,
+    "appearance.hair_tint",
   );
 });
 

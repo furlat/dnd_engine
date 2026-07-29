@@ -13,17 +13,22 @@ from uuid import UUID
 
 from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
+from dnd.core.content.battlefields import BattlefieldDefinition
 from dnd.core.content.descriptors import ContentOrdering, ContentPresentation
 from dnd.core.content.identities import ContentRef, validate_sha256
+from dnd.core.content.encounters import (
+    EncounterCompatibilityReport,
+    EncounterDeploymentSpec,
+    EncounterOpeningPolicy,
+    EncounterRecipe,
+    EncounterRosterRecipe,
+    RosterControllerDefaults,
+)
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.events import AbilityName
-from dnd.scenarios.evaluation.compatibility import CompatibilityReport
-from dnd.scenarios.evaluation.models import (
-    BattlefieldSpec,
-    DeploymentSpec,
-    LegacyScenarioRecipe,
-    SideConfigurationSpec,
+from server.game_creation_preview_contracts import (
+    GameCreationEncounterVisualPreviewResponse,
 )
 from server import world_contracts
 
@@ -898,7 +903,6 @@ class JoinGameResponse(BaseModel):
 
 
 GameCreationControllerKind = Literal["human", "ai", "codex"]
-GameCreationOpeningSide = Literal["initiative", "side_a", "side_b"]
 AIExecutionKind = Literal["in_process", "registered_provider"]
 
 
@@ -959,30 +963,12 @@ class GameCreationAIPolicyOption(BaseModel):
         return self
 
 
-class GameCreationPreset(BaseModel):
-    """Historical scenario recipe exposed as a quick game-creation preset.
-
-    Attributes:
-        arena_id: Stable historical scenario identifier.
-        title: Human-readable scenario title.
-        tags: Searchable mechanics and content labels.
-        expected_pressure: Tactical behaviors the scenario exercises.
-        map_notes: Important terrain and object facts.
-        recipe: Canonical composition recipe used to reconstruct the scenario.
-    """
-
-    arena_id: str = Field(description="Stable historical scenario identifier.")
-    title: str = Field(description="Human-readable scenario title.")
-    tags: List[str] = Field(description="Searchable mechanics and content labels.")
-    expected_pressure: List[str] = Field(description="Tactical behaviors exercised by the scenario.")
-    map_notes: List[str] = Field(description="Important terrain and object facts.")
-    recipe: LegacyScenarioRecipe = Field(description="Canonical composition recipe for the scenario.")
-
-
 class GameCreationCatalogResponse(BaseModel):
-    """Canonical content and controller choices for the game-creation UI."""
+    """Canonical roster, encounter, formation, and controller catalog."""
 
-    schema_version: int = Field(default=1, description="Game-creation contract schema version.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[3] = 3
     controllers: List[GameCreationControllerKind] = Field(description="Supported side controller kinds.")
     ai_policies: List[GameCreationAIPolicyOption] = Field(
         description=(
@@ -990,147 +976,327 @@ class GameCreationCatalogResponse(BaseModel):
             "including in-process and registered-provider implementations."
         ),
     )
-    opening_sides: List[GameCreationOpeningSide] = Field(description="Supported initiative-opening policies.")
-    hero_configurations: List[SideConfigurationSpec] = Field(description="Canonical hero-side configurations.")
-    monster_configurations: List[SideConfigurationSpec] = Field(description="Canonical monster-party configurations.")
-    battlefields: List[BattlefieldSpec] = Field(description="Canonical battlefield definitions.")
-    deployments: List[DeploymentSpec] = Field(description="Canonical spawn formations.")
-    presets: List[GameCreationPreset] = Field(description="Historical scenario quick presets.")
+    roster_recipes: tuple[EncounterRosterRecipe, ...] = Field(
+        description="Reusable authored creature or champion rosters.",
+    )
+    encounter_recipes: tuple[EncounterRecipe, ...] = Field(
+        description="Complete authored encounter recipes.",
+    )
+    battlefields: List[BattlefieldDefinition] = Field(
+        description="Canonical battlefield definitions.",
+    )
+    deployments: tuple[EncounterDeploymentSpec, ...] = Field(
+        description="Neutral ordered multi-roster spawn formations.",
+    )
 
 
-class GameCreationPreflightRequest(BaseModel):
-    """Four-part composed scenario selection checked without mutating game state."""
+class GameCreationAuthoredRosterSelection(BaseModel):
+    """Select one complete authored roster without copying its recipe."""
 
-    hero_configuration_id: str = Field(description="Hero configuration catalog identifier.")
-    monster_configuration_id: str = Field(description="Monster-party configuration catalog identifier.")
-    battlefield_id: str = Field(description="Battlefield catalog identifier.")
-    deployment_id: str = Field(description="Deployment catalog identifier.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-
-class GameCreationPresetScenario(BaseModel):
-    """Historical scenario selected by stable preset identifier."""
-
-    kind: Literal["preset"] = Field(default="preset", description="Scenario-selection discriminator.")
-    arena_id: str = Field(description="Historical scenario preset identifier.")
+    kind: Literal["authored_roster"] = "authored_roster"
+    roster_id: str = Field(min_length=1)
 
 
-class GameCreationComposedScenario(GameCreationPreflightRequest):
-    """Custom scenario assembled from four canonical component identifiers."""
+class GameCreationSavedRosterSelection(BaseModel):
+    """Select one owner-scoped saved roster at exact persisted identity."""
 
-    kind: Literal["composed"] = Field(default="composed", description="Scenario-selection discriminator.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["saved_roster"] = "saved_roster"
+    saved_roster_id: str = Field(min_length=1)
+    expected_revision: int = Field(ge=1)
+    expected_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-GameCreationScenario = Annotated[
-    Union[GameCreationPresetScenario, GameCreationComposedScenario],
+class GameCreationOwnedCharacterControllerOverride(BaseModel):
+    """Controller override addressed by durable character identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    character_id: UUID
+    controller: GameCreationControllerKind
+    policy_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def _validate_policy(
+        self,
+    ) -> "GameCreationOwnedCharacterControllerOverride":
+        if self.controller == "ai" and self.policy_id is None:
+            raise ValueError("AI character controller requires policy_id")
+        if self.controller != "ai" and self.policy_id is not None:
+            raise ValueError(
+                "non-AI character controller forbids policy_id",
+            )
+        return self
+
+
+class GameCreationOwnedCharacterRosterSelection(BaseModel):
+    """Select an ordered owned-character roster for server normalization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["owned_characters"] = "owned_characters"
+    title: str = Field(min_length=1, max_length=120)
+    character_ids: tuple[UUID, ...] = Field(min_length=1)
+    member_controller_overrides: tuple[
+        GameCreationOwnedCharacterControllerOverride,
+        ...,
+    ] = ()
+
+    @model_validator(mode="after")
+    def _validate_character_ids(
+        self,
+    ) -> "GameCreationOwnedCharacterRosterSelection":
+        if len(self.character_ids) != len(set(self.character_ids)):
+            raise ValueError("owned-character roster cannot repeat a character")
+        override_ids = [
+            override.character_id
+            for override in self.member_controller_overrides
+        ]
+        if len(override_ids) != len(set(override_ids)):
+            raise ValueError("character controller overrides must be unique")
+        if not set(override_ids) <= set(self.character_ids):
+            raise ValueError(
+                "character controller override must reference this roster",
+            )
+        return self
+
+
+GameCreationRosterSelection = Annotated[
+    Union[
+        GameCreationAuthoredRosterSelection,
+        GameCreationSavedRosterSelection,
+        GameCreationOwnedCharacterRosterSelection,
+    ],
     Field(discriminator="kind"),
 ]
 
 
-class GameCreationSideRequest(BaseModel):
-    """Requested controller assignment for one complete combat side."""
+class GameCreationRosterSlotSelection(BaseModel):
+    """One requested roster, faction, formation zone, and controller policy."""
 
-    controller: GameCreationControllerKind = Field(description="Controller kind assigned to every entity on the side.")
-    name: str = Field(min_length=1, max_length=80, description="Participant display name.")
-    policy_id: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        max_length=160,
-        description=(
-            "Globally unique policy used by an AI side or retained behind a "
-            "Codex claim. Omit for the bundled in-process basic policy."
-        ),
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    roster_slot_id: str = Field(min_length=1)
+    roster: GameCreationRosterSelection
+    faction_id: str = Field(min_length=1)
+    deployment_zone_id: str = Field(min_length=1)
+    controller_defaults: RosterControllerDefaults
+
+
+class GameCreationComposeRequest(BaseModel):
+    """Normalize catalog selections and owned heads into one exact recipe."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    roster_slots: tuple[GameCreationRosterSlotSelection, ...] = Field(
+        min_length=2,
     )
+    battlefield_id: str = Field(min_length=1)
+    deployment_id: str = Field(min_length=1)
+    opening_policy: EncounterOpeningPolicy
+
+    @model_validator(mode="after")
+    def _validate_roster_slot_ids(self) -> "GameCreationComposeRequest":
+        slot_ids = [slot.roster_slot_id for slot in self.roster_slots]
+        if len(slot_ids) != len(set(slot_ids)):
+            raise ValueError("roster slot ids must be unique")
+        return self
 
 
-class GameCreationStartRequest(BaseModel):
-    """Atomic scenario and controller assignment request."""
+class GameCreationComposeResponse(BaseModel):
+    """The sole normalized recipe accepted by preview and start."""
 
-    character_id: Optional[UUID] = Field(
-        default=None,
-        description=(
-            "Persistent character selected for the composed hero seat. "
-            "Standalone resolves it from the active local profile; hosted "
-            "gateway deployment authenticates and pins the same identity."
-        ),
-    )
-    scenario: GameCreationScenario = Field(description="Preset or composed scenario selection.")
-    side_a: GameCreationSideRequest = Field(description="Controller assignment for the hero side.")
-    side_b: GameCreationSideRequest = Field(description="Controller assignment for the opposition side.")
-    opening_side: GameCreationOpeningSide = Field(
-        default="initiative",
-        description="Whether rolled initiative, Side A, or Side B opens combat.",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    content_set_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ruleset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    recipe: EncounterRecipe
+    compatibility: EncounterCompatibilityReport
+    preview: GameCreationEncounterVisualPreviewResponse
+
+    @model_validator(mode="after")
+    def _validate_exact_identity(self) -> "GameCreationComposeResponse":
+        if (
+            self.compatibility.encounter_recipe_digest
+            != self.recipe.recipe_digest
+            or self.preview.encounter_recipe_digest
+            != self.recipe.recipe_digest
+            or self.preview.content_set_digest != self.content_set_digest
+            or self.preview.ruleset_digest != self.ruleset_digest
+        ):
+            raise ValueError(
+                "Composition recipe, compatibility, and preview identities differ",
+            )
+        return self
+
+
+class GameCreationPreviewRequest(BaseModel):
+    """Request production projection of one already-normalized recipe."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    expected_content_set_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_ruleset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    recipe: EncounterRecipe
+
+
+class GameCreationStartRequest(GameCreationPreviewRequest):
+    """Start the exact recipe returned by composition without renormalizing."""
+
     codex_lease_seconds: float = Field(
         default=600.0,
         gt=0,
         le=86400,
-        description="Takeover lease duration for configured Codex sides.",
+        description="Takeover lease duration for configured Codex members.",
     )
 
 
 class GameCreationEntityAssignment(BaseModel):
-    """Control-plane identity for one entity assigned to a created side."""
+    """One recipe member bound to its exact runtime entity and controller."""
 
-    entity_uuid: str = Field(description="Entity UUID assigned to the side.")
-    entity_name: str = Field(description="Entity display label retained by the game directory.")
-    faction: Optional[str] = Field(
-        default=None,
-        description="Faction identifier retained for directory assignment metadata.",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    member_id: str
+    entity_uuid: str
+    entity_name: str
+    faction: Optional[str] = None
+    character_id: UUID | None = None
+    controller: GameCreationControllerKind
+    participant_name: str
+    policy_id: Optional[str] = None
+    policy_execution: Optional[AIExecutionKind] = None
+    provider_id: Optional[str] = None
+    codex_session_id: Optional[str] = None
+    takeover_claim_id: Optional[str] = None
+    takeover_expires_at: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _validate_controller_metadata(
+        self,
+    ) -> "GameCreationEntityAssignment":
+        policy_values = (
+            self.policy_id,
+            self.policy_execution,
+            self.provider_id,
+        )
+        codex_values = (
+            self.codex_session_id,
+            self.takeover_claim_id,
+            self.takeover_expires_at,
+        )
+        if self.controller == "human":
+            if any(value is not None for value in policy_values + codex_values):
+                raise ValueError(
+                    "Human assignments forbid AI and Codex metadata",
+                )
+        elif self.controller == "ai":
+            if self.policy_id is None or self.policy_execution is None:
+                raise ValueError("AI assignments require exact policy metadata")
+            if any(value is not None for value in codex_values):
+                raise ValueError("AI assignments forbid Codex claims")
+            if (
+                self.policy_execution == "registered_provider"
+                and self.provider_id is None
+            ):
+                raise ValueError(
+                    "Registered-provider AI requires provider_id",
+                )
+            if (
+                self.policy_execution == "in_process"
+                and self.provider_id is not None
+            ):
+                raise ValueError(
+                    "In-process AI forbids provider_id",
+                )
+        elif (
+            any(value is not None for value in policy_values)
+            or any(value is None for value in codex_values)
+        ):
+            raise ValueError(
+                "Codex assignments require one claim and forbid AI policy metadata",
+            )
+        return self
 
 
-class GameCreationSideResult(BaseModel):
-    """Resolved control-plane assignments and attach data for one side."""
+class GameCreationRosterResult(BaseModel):
+    """Resolved member assignments for one recipe roster slot."""
 
-    side_id: Literal["side_a", "side_b"] = Field(description="Stable side identifier.")
-    title: str = Field(description="Resolved side configuration title.")
-    controller: GameCreationControllerKind = Field(description="Configured controller kind.")
-    participant_name: str = Field(description="Configured participant display name.")
-    entity_assignments: List[GameCreationEntityAssignment] = Field(
-        description="Stable identity rows assigned to the side; gameplay facts arrive through replication.",
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    roster_slot_id: str
+    roster_id: str
+    roster_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    title: str
+    entity_assignments: tuple[GameCreationEntityAssignment, ...] = Field(
+        min_length=1,
     )
-    policy_id: Optional[str] = Field(
-        default=None,
-        description=(
-            "Resolved policy assigned to this side, including the policy retained "
-            "behind a Codex claim. Human sides have no policy."
-        ),
-    )
-    policy_execution: Optional[AIExecutionKind] = Field(
-        default=None,
-        description="Resolved policy execution boundary; absent for human sides.",
-    )
-    provider_id: Optional[str] = Field(
-        default=None,
-        description="Registered provider owning the resolved policy, when external.",
-    )
-    codex_session_id: Optional[str] = Field(default=None, description="Configured Codex session UUID.")
-    takeover_claim_id: Optional[str] = Field(default=None, description="Configured Codex takeover claim UUID.")
-    takeover_expires_at: Optional[float] = Field(default=None, description="Codex claim expiry timestamp.")
+
+    @model_validator(mode="after")
+    def _validate_member_identities(self) -> "GameCreationRosterResult":
+        member_ids = tuple(
+            assignment.member_id for assignment in self.entity_assignments
+        )
+        if len(member_ids) != len(set(member_ids)):
+            raise ValueError("Roster result repeats a member id")
+        return self
 
 
 class GameCreationStartResponse(BaseModel):
-    """Resolved prepared game and side assignments.
+    """Resolved prepared game and ordered roster assignments.
 
     Creation never starts an encounter. A joined client first opens its
     canonical replication bootstrap, then explicitly activates this prepared
     game with the exact bootstrap identity.
     """
 
-    schema_version: int = Field(default=1, description="Game-creation contract schema version.")
-    scenario_kind: Literal["preset", "composed"] = Field(description="Scenario-selection kind used for the match.")
-    preset_arena_id: Optional[str] = Field(default=None, description="Historical preset identifier when selected.")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[2] = 2
+    recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     encounter_uuid: str = Field(description="Created encounter UUID.")
     game_id: str = Field(description="Created active game UUID.")
     encounter_name: str = Field(description="Created encounter display name.")
-    opening_side: GameCreationOpeningSide = Field(description="Applied initiative-opening policy.")
-    compatibility: CompatibilityReport = Field(description="Compatibility report used to admit the scenario.")
-    side_a: GameCreationSideResult = Field(description="Resolved Side A assignment.")
-    side_b: GameCreationSideResult = Field(description="Resolved Side B assignment.")
+    compatibility: EncounterCompatibilityReport
+    rosters: tuple[GameCreationRosterResult, ...] = Field(min_length=2)
     status: Literal["prepared"] = Field(
         default="prepared",
         description="Prepared lifecycle boundary; no encounter event has run.",
     )
+
+    @model_validator(mode="after")
+    def _validate_result_identity(self) -> "GameCreationStartResponse":
+        if self.compatibility.encounter_recipe_digest != self.recipe_digest:
+            raise ValueError(
+                "Start compatibility belongs to another recipe",
+            )
+        roster_slot_ids = tuple(
+            roster.roster_slot_id for roster in self.rosters
+        )
+        if len(roster_slot_ids) != len(set(roster_slot_ids)):
+            raise ValueError("Start result repeats a roster slot")
+        assignments = tuple(
+            assignment
+            for roster in self.rosters
+            for assignment in roster.entity_assignments
+        )
+        entity_uuids = tuple(
+            assignment.entity_uuid for assignment in assignments
+        )
+        character_ids = tuple(
+            assignment.character_id
+            for assignment in assignments
+            if assignment.character_id is not None
+        )
+        if len(entity_uuids) != len(set(entity_uuids)):
+            raise ValueError("Start result repeats a runtime entity")
+        if len(character_ids) != len(set(character_ids)):
+            raise ValueError("Start result repeats a durable character")
+        return self
 
 
 class GameCreationActivateRequest(BaseModel):

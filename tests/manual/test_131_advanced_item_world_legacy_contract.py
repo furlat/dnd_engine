@@ -21,15 +21,15 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemRarity
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import LONGSWORD_RECIPE
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 THIS_FILE = "tests/manual/test_131_advanced_item_world_legacy_contract.py"
-BOOK_ITEMS_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
-BOOK_CONDITIONS_FILE = "tests/engine_book/test_chapter_07_condition_lifecycle.py"
+BOOK_ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
+BOOK_CONDITIONS_FILE = "tests/engine/test_condition_lifecycle.py"
 
 VISION_DESTROY_SELECTOR = (
     f"{THIS_FILE}::test_vision_blocker_hides_then_destroy_reveals_floor_item_and_entity"

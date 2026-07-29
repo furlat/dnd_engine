@@ -20,8 +20,12 @@ from dnd.content_system.runtime import (
 from dnd.core.content.durable_characters import (
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
+    CharacterItemV1,
 )
 from dnd.core.content.materialization import CreatureDeploymentRole
+from dnd.core.equipment_types import BodyPart
+from dnd.core.gridmap import get_map
+from dnd.items.torches import Torch
 from dnd.runtime_reset import reset_engine_runtime
 from server.character_directory_contracts import CreateCharacterRequest
 from server.character_directory_service import CharacterDirectoryService
@@ -30,6 +34,49 @@ from server.game_directory.repository import GameDirectoryRepository
 
 
 PEPPER = b"character-runtime-materialization-pepper"
+
+_RUNTIME_APPEARANCE_BY_PREMADE = {
+    "hero.barbarian_l5_berserker_torch": (
+        1.1,
+        1.1,
+        "NakedBody",
+        0xD4AA78,
+        "Head17",
+        0xD0BFA1,
+        False,
+        0,
+    ),
+    "hero.fighter_l5_shield_torch": (
+        1.0,
+        1.0,
+        "NakedBody",
+        0xE6BC98,
+        "Head10",
+        0x993F00,
+        True,
+        0x993F00,
+    ),
+    "hero.sorcerer_l5_standard_torch": (
+        0.9,
+        0.9,
+        "NakedBody",
+        0xE6BC98,
+        "Head22",
+        0x993F00,
+        False,
+        0,
+    ),
+    "hero.fighter_2_sorcerer_3_spellblade": (
+        1.0,
+        1.0,
+        "NakedBody",
+        0xE6BC98,
+        "Head10",
+        0x993F00,
+        True,
+        0x993F00,
+    ),
+}
 
 
 def _persisted_premade(
@@ -52,18 +99,20 @@ def _persisted_premade(
         repository,
         SERVER_CONTENT_SYSTEM_RUNTIME.require(),
     )
-    premade = next(
+    plan = next(
         row
-        for row in service.build_creation_catalog().premades
-        if row.premade_id == premade_id
+        for row in service.build_creation_catalog().creation_plans
+        if row.source_premade_id == premade_id
     )
     settings = service.ensure_profile_settings(owner.principal_id)
     snapshot = service.create_character(
         owner.principal_id,
         CreateCharacterRequest(
             display_name=display_name,
-            build=premade.build,
-            loadout=premade.loadout,
+            build=plan.build,
+            loadout=plan.loadout,
+            creation_plan_id=plan.plan_id,
+            creation_plan_digest=plan.plan_digest,
             expected_content_set_digest=(
                 service.content_system.content_set_digest
             ),
@@ -113,6 +162,17 @@ def test_premade_deployment_uses_only_persisted_holdings(
         == snapshot.definition.definition.body_recipe.ref
     )
     assert result.entity.name == "Durable Hero"
+    appearance = result.entity.appearance
+    assert (
+        appearance.visual_scale,
+        appearance.visual_scale_x,
+        appearance.body_category,
+        appearance.skin_tint,
+        appearance.head_category,
+        appearance.hair_tint,
+        appearance.has_beard,
+        appearance.beard_tint,
+    ) == _RUNTIME_APPEARANCE_BY_PREMADE[premade_id]
     assert len(result.item_lineage) == len(snapshot.holdings.holdings.items)
     assert {character_item_id for character_item_id, _ in result.item_lineage} == {
         item.character_item_id for item in snapshot.holdings.holdings.items
@@ -127,6 +187,89 @@ def test_premade_deployment_uses_only_persisted_holdings(
     assert all(
         binding.origin.value == "persisted"
         for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
+    )
+    torches = tuple(
+        item
+        for item in result.entity.inventory.items.values()
+        if isinstance(item, Torch)
+    )
+    assert len(torches) == 1
+    assert torches[0].is_lit
+    assert torches[0]._light_source_uuid in get_map()._light_sources
+    expected_head_name = {
+        "hero.barbarian_l5_berserker_torch": None,
+        "hero.fighter_l5_shield_torch": "Steel Helmet",
+        "hero.sorcerer_l5_standard_torch": "Red Wizard Hat",
+        "hero.fighter_2_sorcerer_3_spellblade": "Spellblade Crown",
+    }[premade_id]
+    helmet = result.entity.equipment.helmet
+    assert (helmet.name if helmet is not None else None) == expected_head_name
+    if premade_id == "hero.fighter_2_sorcerer_3_spellblade":
+        assert helmet is not None
+        charisma = result.entity.ability_scores.charisma.ability_score
+        assert charisma.score == 18
+        removed = result.entity.equipment.unequip(BodyPart.HEAD)
+        assert removed is helmet
+        assert charisma.score == 15
+        assert result.entity.equipment.equip(helmet, BodyPart.HEAD)
+        assert charisma.score == 18
+    repository.close()
+
+
+def test_every_persisted_starting_torch_is_lit(tmp_path: Path) -> None:
+    """Every torch in the authoritative starting holdings emits light."""
+
+    repository, snapshot = _persisted_premade(
+        tmp_path / "multiple-starting-torches.sqlite3",
+        display_name="Two Torch Hero",
+        premade_id="hero.fighter_l5_shield_torch",
+    )
+    existing_torch = next(
+        item
+        for item in snapshot.holdings.holdings.items
+        if item.recipe.ref.content_id == "equipment.portable_torch"
+    )
+    holdings = CharacterHoldingsRevision.create(
+        character_id=snapshot.character.character_id,
+        holdings_revision=snapshot.holdings.holdings.holdings_revision,
+        items=tuple(
+            sorted(
+                (
+                    *snapshot.holdings.holdings.items,
+                    CharacterItemV1.create(
+                        character_item_id=uuid4(),
+                        recipe=existing_torch.recipe,
+                    ),
+                ),
+                key=lambda item: item.character_item_id.hex,
+            ),
+        ),
+    )
+
+    result = materialize_character(
+        definition=snapshot.definition.definition,
+        holdings=holdings,
+        loadout=snapshot.loadout.loadout,
+        runtime_entity_uuid=uuid4(),
+        display_name=snapshot.character.display_name,
+        faction="heroes",
+        position=(2, 3),
+        deployment_role=CreatureDeploymentRole(
+            role_id="hosted.side_a.character",
+        ),
+        expected_ruleset_digest=snapshot.definition.definition.ruleset_digest,
+    )
+
+    torches = tuple(
+        item
+        for item in result.entity.inventory.items.values()
+        if isinstance(item, Torch)
+    )
+    assert len(torches) == 2
+    assert all(torch.is_lit for torch in torches)
+    assert all(
+        torch._light_source_uuid in get_map()._light_sources
+        for torch in torches
     )
     repository.close()
 

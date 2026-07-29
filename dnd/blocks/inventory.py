@@ -65,6 +65,10 @@ class Inventory(BaseBlock):
             return item.stack_count
         return max(0, item.stack_count - (existing.max_stack - existing.stack_count))
 
+    def would_merge(self, item: BaseItem) -> bool:
+        """Return whether adding this item would mutate an existing stack."""
+        return self._find_compatible_stack(item) is not None
+
     @staticmethod
     def _clear_consumed_item_location(item: BaseItem) -> None:
         """Clear location fields from an item stack consumed by merging.

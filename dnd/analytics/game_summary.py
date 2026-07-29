@@ -38,7 +38,11 @@ from dnd.analytics.models import (
 )
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
 from dnd.core.base_actions import ActionEvent
-from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    ConditionRemovalEvent,
+)
 from dnd.core.combat_log import AttackLogData, CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import AttackOutcome, DiceRoll, RollType
 from dnd.core.events import (
@@ -865,13 +869,17 @@ def _reduce_roll_evidence(
                 seen_roll_uuids.add(event.final_roll.roll_uuid)
         elif isinstance(event, DamageRollResultEvent):
             modified = bool(event.roll_modifications)
-            for roll in event.original_rolls:
+            for packet in event.damage_packets:
+                roll = packet.original_roll
                 statistics_for(roll.source_entity_uuid).dice.damage.record_polyhedral(
                     roll,
                     modified=modified,
                 )
                 seen_roll_uuids.add(roll.roll_uuid)
-            seen_roll_uuids.update(roll.roll_uuid for roll in event.final_rolls)
+            seen_roll_uuids.update(
+                packet.final_roll.roll_uuid
+                for packet in event.damage_packets
+            )
         elif isinstance(event, HealRollResultEvent):
             roll = event.original_roll
             statistics_for(roll.source_entity_uuid).dice.healing.record_polyhedral(
@@ -942,7 +950,10 @@ def _count_rolls_missing_metadata(terminal_events: Sequence[Event]) -> int:
     for event in terminal_events:
         rolls: Sequence[DiceRoll] = ()
         if isinstance(event, DamageRollResultEvent):
-            rolls = event.original_rolls
+            rolls = tuple(
+                packet.original_roll
+                for packet in event.damage_packets
+            )
         elif isinstance(event, HealRollResultEvent):
             rolls = (event.original_roll,)
         elif isinstance(event, (AttackEvent, SpellEvent)) and event.damage_rolls:
@@ -1210,28 +1221,9 @@ def _record_completed_costs(statistics: _MutableStatistics, event: ActionEvent) 
             _increment(statistics.resources_spent, cost.resource_name, cost.resource_cost)
 
 
-def _condition_key(condition: object) -> str:
-    """Return the strongest stable condition identity currently retained.
-
-    Args:
-        condition: Typed BaseCondition carried by a condition event.
-
-    Returns:
-        Semantic key, condition name, or concrete Python type identity.
-    """
-    semantic_key_getter = getattr(condition, "get_semantic_key", None)
-    if callable(semantic_key_getter):
-        resolved_key = semantic_key_getter()
-        if isinstance(resolved_key, str) and resolved_key:
-            return resolved_key
-    semantic_key = getattr(condition, "semantic_key", None)
-    if isinstance(semantic_key, str) and semantic_key:
-        return semantic_key
-    name = getattr(condition, "name", None)
-    if isinstance(name, str) and name:
-        return name
-    condition_type = condition.__class__
-    return f"{condition_type.__module__}.{condition_type.__qualname__}"
+def _condition_key(condition: BaseCondition) -> str:
+    """Return the condition's canonical registered semantic identity."""
+    return condition.get_semantic_key()
 
 
 def _flatten_combat_logs(logs: Sequence[CombatLogEntry]) -> Iterable[CombatLogEntry]:

@@ -1,10 +1,9 @@
 """Canonical armor, apparel, headgear, and shield content declarations."""
 
-from types import MappingProxyType
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from dnd.blocks.equipment import Armor, BodyArmor, Boots, Gauntlets, Helmet, Shield
 from dnd.core.content.descriptors import (
@@ -119,6 +118,38 @@ class StealthDisadvantageBodyArmor(BodyArmor):
                 entity.action_economy.movement.self_contextual.remove_value_modifier(self._movement_mod_uuid)
             self._movement_mod_uuid = None
             self._movement_mod_value_uuid = None
+
+
+class SpellbladeCrown(Helmet):
+    """Authored crown that grants +3 Charisma while equipped."""
+
+    _charisma_modifier_uuid: Optional[UUID] = PrivateAttr(default=None)
+
+    def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        entity = Entity.get(entity_uuid)
+        if entity is None or self._charisma_modifier_uuid is not None:
+            return
+        self._charisma_modifier_uuid = (
+            entity.ability_scores.charisma.ability_score.self_static
+            .add_value_modifier(
+                NumericalModifier(
+                    name="Spellblade Crown Charisma",
+                    value=3,
+                    source_entity_uuid=self.uuid,
+                    target_entity_uuid=entity_uuid,
+                ),
+            )
+        )
+
+    def _on_unequip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
+        if self._charisma_modifier_uuid is None:
+            return
+        entity = Entity.get(entity_uuid)
+        if entity is not None:
+            entity.ability_scores.charisma.ability_score.self_static.remove_modifier(
+                self._charisma_modifier_uuid,
+            )
+        self._charisma_modifier_uuid = None
 
 
 class SrdArmorParameters(ItemVisualVariantParameters):
@@ -1562,25 +1593,6 @@ SRD_ARMOR_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     SHIELD_DECLARATION,
 )
 
-SRD_ARMOR_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "breastplate": BREASTPLATE_RECIPE,
-        "chain_mail": CHAIN_MAIL_RECIPE,
-        "chain_shirt": CHAIN_SHIRT_RECIPE,
-        "half_plate": HALF_PLATE_RECIPE,
-        "hide": HIDE_ARMOR_RECIPE,
-        "leather": LEATHER_ARMOR_RECIPE,
-        "padded": PADDED_ARMOR_RECIPE,
-        "plate": PLATE_ARMOR_RECIPE,
-        "ring_mail": RING_MAIL_RECIPE,
-        "scale_mail": SCALE_MAIL_RECIPE,
-        "shield": SHIELD_RECIPE,
-        "splint": SPLINT_ARMOR_RECIPE,
-        "studded_leather": STUDDED_LEATHER_RECIPE,
-    },
-)
-
-
 def _default_recipe(
     definition: object,
 ) -> tuple[ContentDeclaration, ContentRecipe]:
@@ -1640,6 +1652,65 @@ WIZARD_HAT_DECLARATION, WIZARD_HAT_RECIPE = _default_recipe(
 WIZARD_HAT_REF = WIZARD_HAT_DECLARATION.ref
 CROWN_DECLARATION, CROWN_RECIPE = _default_recipe(_build_crown)
 CROWN_REF = CROWN_DECLARATION.ref
+
+
+@item_factory(
+    pack_id="content.neurodragon",
+    content_id="apparel.spellblade_crown",
+    version=1,
+    parameters=NeurodragonStaticItemParameters,
+    descriptor=ContentDescriptorSpec(
+        display_name="Spellblade Crown",
+        description=(
+            "An arcane crown granting +3 Charisma score while equipped."
+        ),
+        tags=("apparel", "headgear", "magic", "neurodragon"),
+        visibility=ContentVisibility.PUBLIC,
+        presentation=CROWN_DECLARATION.descriptor.presentation,
+        ordering=ContentOrdering(
+            sort_group="apparel.headgear",
+            sort_order=31,
+        ),
+    ),
+    provenance=_neurodragon_apparel_provenance("Spellblade Crown"),
+    item_definition=_POSSESSION_ITEM_DEFINITION,
+)
+def _build_spellblade_crown(
+    context: object,
+    parameters: NeurodragonStaticItemParameters,
+) -> SpellbladeCrown:
+    """Construct the exact reversible spellblade premade head item."""
+    _ = parameters
+    item_context = ItemBuildContext.model_validate(context)
+    return SpellbladeCrown(
+        source_entity_uuid=item_context.source_entity_uuid,
+        content_ref=item_context.requested_ref,
+        name="Spellblade Crown",
+        visual_item_name="Crown",
+        description=(
+            "An arcane crown granting +3 Charisma score while equipped."
+        ),
+        type=ArmorType.CLOTH,
+        body_part=BodyPart.HEAD,
+        ac=ModifiableValue.create(
+            source_entity_uuid=item_context.source_entity_uuid,
+            base_value=0,
+            value_name="Armor Class",
+        ),
+        max_dex_bonus=ModifiableValue.create(
+            source_entity_uuid=item_context.source_entity_uuid,
+            base_value=10,
+            value_name="Max Dex Bonus",
+        ),
+    )
+
+
+(
+    SPELLBLADE_CROWN_DECLARATION,
+    SPELLBLADE_CROWN_RECIPE,
+) = _default_recipe(_build_spellblade_crown)
+SPELLBLADE_CROWN_REF = SPELLBLADE_CROWN_DECLARATION.ref
+
 CLOTH_HOOD_DECLARATION, CLOTH_HOOD_RECIPE = _default_recipe(
     _build_cloth_hood,
 )
@@ -1696,6 +1767,7 @@ NEURODRAGON_ARMOR_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     IRON_HELMET_DECLARATION,
     WIZARD_HAT_DECLARATION,
     CROWN_DECLARATION,
+    SPELLBLADE_CROWN_DECLARATION,
     CLOTH_HOOD_DECLARATION,
     LEATHER_HOOD_DECLARATION,
     CHAIN_COIF_DECLARATION,
@@ -1707,23 +1779,4 @@ NEURODRAGON_ARMOR_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     GAUNTLETS_DECLARATION,
     MONSTER_HANDS_DECLARATION,
     WOODEN_SHIELD_DECLARATION,
-)
-
-NEURODRAGON_ARMOR_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "armored_boots": ARMORED_BOOTS_RECIPE,
-        "cloth_armor": CLOTH_ARMOR_RECIPE,
-        "cloth_shoes": CLOTH_SHOES_RECIPE,
-        "common_clothes": COMMON_CLOTHES_RECIPE,
-        "costume": COSTUME_RECIPE,
-        "crown": CROWN_RECIPE,
-        "iron_helmet": IRON_HELMET_RECIPE,
-        "leather_boots": LEATHER_BOOTS_RECIPE,
-        "leather_shoes": LEATHER_SHOES_RECIPE,
-        "robes": ROBES_RECIPE,
-        "sandals": SANDALS_RECIPE,
-        "travelers_clothes": TRAVELERS_CLOTHES_RECIPE,
-        "wizard_hat": WIZARD_HAT_RECIPE,
-        "wooden_shield": WOODEN_SHIELD_RECIPE,
-    },
 )

@@ -187,7 +187,6 @@ class PolicySpec(BaseModel):
 
     descriptor: PolicyDescriptor
     rules: tuple[PolicyRuleSpec, ...]
-    maximum_decisions_per_turn: int = Field(default=32, ge=1, le=256)
 
     @model_validator(mode="after")
     def validate_rules(self) -> "PolicySpec":
@@ -266,4 +265,3 @@ class DataDrivenPolicy(Generic[StateT, MemoryT, DecisionT]):
             )
             return best.decision
         return self._end_turn_factory(state)
-

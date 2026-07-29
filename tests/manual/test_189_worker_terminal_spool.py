@@ -17,11 +17,12 @@ from server.character_settlement import WorkerCharacterHoldingsEvidence
 from server.event_stream import event_stream
 from server.game_directory.contracts import CharacterRevisionHeads
 from server.game_summary_store import WorkerGameSummaryStore, WorkerSummaryEvidence
-from server.live_replication import create_stream_scene, execute_stream_attack
+from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
 from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import SubjectivePlayerReplayArchive
 from server.worker_replay import build_worker_objective_replay
 from server.worker_terminal_spool import (
+    WorkerCharacterHoldingsEvidenceSet,
     WorkerTerminalComponentKind,
     WorkerTerminalSpool,
     WorkerTerminalSpoolIntegrityError,
@@ -53,9 +54,9 @@ def _terminal_components(
     """Build one small, internally consistent terminal component set."""
 
     game_id = uuid4()
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(game_id))
     scene = create_stream_scene()
     summary_store = WorkerGameSummaryStore()
+    summary_store.bind_directory_game_id(scene.encounter.uuid, game_id)
     summary_store.capture_active_encounter(scene.encounter)
     execute_stream_attack(scene.hero, scene.monster, scene.encounter)
     scene.encounter.end_encounter("worker terminal spool fixture")
@@ -149,11 +150,10 @@ def test_publish_writes_components_before_atomic_ready_manifest_and_roundtrips(
         summary=summary,
         objective_replay=objective,
         subjective_replay=subjective,
-        holdings=holdings,
+        holdings=(holdings,),
     )
 
     assert published_paths[-1] == spool.ready_manifest_path
-    assert manifest.holdings is not None
     assert {
         descriptor.component_kind
         for descriptor in (
@@ -176,7 +176,7 @@ def test_publish_writes_components_before_atomic_ready_manifest_and_roundtrips(
     assert canonical_json_bytes(decoded.subjective_replay) == canonical_json_bytes(
         subjective,
     )
-    assert decoded.holdings == holdings
+    assert decoded.holdings == (holdings,)
 
     ready_stat = spool.ready_manifest_path.stat()
     repeated = spool.publish(
@@ -186,7 +186,7 @@ def test_publish_writes_components_before_atomic_ready_manifest_and_roundtrips(
         summary=summary,
         objective_replay=objective,
         subjective_replay=subjective,
-        holdings=holdings,
+        holdings=(holdings,),
     )
     assert repeated == manifest
     assert spool.ready_manifest_path.stat().st_ino == ready_stat.st_ino
@@ -223,7 +223,7 @@ def test_read_rejects_wrong_worker_generation_and_component_corruption(
         summary=summary,
         objective_replay=objective,
         subjective_replay=subjective,
-        holdings=holdings,
+        holdings=(holdings,),
     )
 
     with pytest.raises(
@@ -273,7 +273,7 @@ def test_read_rejects_manifest_tampering_and_holdings_presence_conflict(
         summary=summary,
         objective_replay=objective,
         subjective_replay=subjective,
-        holdings=holdings,
+        holdings=(holdings,),
     )
     raw_manifest = json.loads(spool.ready_manifest_path.read_bytes())
     raw_manifest["holdings"] = None
@@ -313,5 +313,19 @@ def test_publish_rejects_holdings_from_another_terminal_boundary(
             summary=summary,
             objective_replay=objective,
             subjective_replay=subjective,
-            holdings=wrong_generation,
+            holdings=(wrong_generation,),
+        )
+
+
+def test_holdings_set_rejects_duplicate_characters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One character can contribute at most one terminal holdings row."""
+
+    _game, _summary, _objective, _subjective, holdings = (
+        _terminal_components(monkeypatch)
+    )
+    with pytest.raises(ValueError, match="repeats a character"):
+        WorkerCharacterHoldingsEvidenceSet(
+            evidence=(holdings, holdings),
         )

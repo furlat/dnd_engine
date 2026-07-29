@@ -9,7 +9,7 @@ from dnd.core.events import EventQueue
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
 from server.game_summary_store import WorkerGameSummaryStore
-from server.live_replication import create_stream_scene, execute_stream_attack
+from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
 from server.worker_replay import build_worker_objective_replay
 
 
@@ -23,13 +23,12 @@ def clean_runtime() -> Iterator[None]:
 
 
 def test_terminal_capture_materializes_exact_minimal_replay(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The passive store exposes no replay until exact terminal journals close."""
     hosted_game_id = uuid4()
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", str(hosted_game_id))
     scene = create_stream_scene()
     store = WorkerGameSummaryStore()
+    store.bind_directory_game_id(scene.encounter.uuid, hosted_game_id)
     store.capture_active_encounter(scene.encounter)
     assert store.get_replay_capture(hosted_game_id) is None
 

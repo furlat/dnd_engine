@@ -1,7 +1,7 @@
 """Zone and tile condition models for terrain, hazards, and spell areas."""
 
 import re
-from typing import Callable, List, Optional, Tuple, Type, Set, Dict
+from typing import Callable, List, Optional, Tuple, Set, Dict
 
 from dnd.core.base_block import LightLevel
 from dnd.core.base_tiles import Tile
@@ -717,31 +717,3 @@ class ZoneControlCondition(BaseCondition):
         self._apply_tile_markers(positions=added_positions)
 
         return True
-
-    def get_tile_effect_class(self) -> Type[TileEffectCondition]:
-        """Get the TileEffectCondition class to use for this zone.
-
-        DEPRECATED: Use _has_entry_effect() and _create_zone_entry_handler() instead.
-        This method is kept for backward compatibility with zones that use
-        the per-tile TileEffectCondition pattern.
-        """
-        return TileEffectCondition
-
-    def _apply_to_tiles(self, _declaration_event: Event) -> None:
-        """Apply tile effect conditions to all affected tiles.
-
-        DEPRECATED: Use position-indexed spatial handlers instead.
-        This method is kept for backward compatibility.
-        """
-        tile_effect_class = self.get_tile_effect_class()
-        grid = get_map()
-
-        for pos in self.affected_positions:
-            tile = grid.get_tile(*pos)
-            if tile:
-                effect = tile_effect_class(
-                    source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=tile.uuid
-                )
-                tile.add_condition(effect)
-                self.add_linked_condition(tile.uuid, effect.uuid)

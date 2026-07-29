@@ -68,7 +68,7 @@ from dnd.core.content.runtime import (
 )
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.transmutation import HasteEffect
@@ -1454,20 +1454,4 @@ NEURODRAGON_CONSUMABLE_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     TIMED_FIRE_WEAPON_COAT_DECLARATION,
     GREATER_INVISIBILITY_POTION_DECLARATION,
     HASTE_POTION_DECLARATION,
-)
-
-NEURODRAGON_CONSUMABLE_RECIPES_BY_LEGACY_ID = MappingProxyType(
-    {
-        "healing_potion": HEALING_POTION_RECIPE,
-        "weapon_coat": FIRE_WEAPON_COAT_RECIPE,
-        "lightning_weapon_coat": LIGHTNING_WEAPON_COAT_RECIPE,
-        "flaming_weapon_spell_coat": (
-            CONCENTRATION_FIRE_WEAPON_COAT_RECIPE
-        ),
-        "timed_weapon_coat": TIMED_FIRE_WEAPON_COAT_RECIPE,
-        "potion_of_greater_invisibility": (
-            GREATER_INVISIBILITY_POTION_RECIPE
-        ),
-        "potion_of_haste": HASTE_POTION_RECIPE,
-    },
 )

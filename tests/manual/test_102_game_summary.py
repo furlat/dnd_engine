@@ -44,11 +44,11 @@ from dnd.core.events import (
     TurnStartEvent,
 )
 from dnd.core.life_types import LifeState
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageStatus,
     AutoHitStatus,
     CriticalStatus,
-    DamageType,
     ResistanceStatus,
 )
 
@@ -581,7 +581,6 @@ def test_d20_luck_uses_advantage_conditioned_expectation() -> None:
     )
     events.append(
         AttackD20RollResultEvent(
-            roll=roll,
             original_roll=roll,
             dc=14,
             result=True,

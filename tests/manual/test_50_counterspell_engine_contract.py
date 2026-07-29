@@ -4,7 +4,7 @@ import json
 from unittest.mock import patch
 from uuid import uuid4
 
-from server.agent_runtime.observation_projector import (
+from server.agent_runtime.observation_journal import (
     build_observation_snapshot,
     iter_observation_frames,
 )
@@ -25,13 +25,13 @@ from dnd.classes.sorcerer import QuickenedSpell, SorceryPointsFeature
 from dnd.controller import PassController
 from dnd.entity import Entity, EntityConfig
 from dnd.encounter import Encounter
-from dnd.spells import Fireball, FireBolt, MagicMissile
+from tests.spell_test_exports import Fireball, FireBolt, MagicMissile
 from dnd.spells.abjuration import (
     CounterspellReactionEvent,
     register_counterspell_reaction,
 )
 from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 from server.event_server import sim
 from server.session import PlayerType
 from tests.manual.test_28_subjective_observation_stream import reset_observation_state

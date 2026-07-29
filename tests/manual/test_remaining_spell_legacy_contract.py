@@ -21,12 +21,11 @@ from dnd.core.base_actions import TargetType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
+from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
     AdvantageStatus,
     AutoHitModifier,
     AutoHitStatus,
-    CreatureType,
-    DamageType,
     NumericalModifier,
 )
 from dnd.entity import Entity
@@ -54,7 +53,7 @@ from dnd.spells.evocation import (
 from dnd.spells.illusion import Blur, Fear, HypnoticPattern, Invisibility
 from dnd.spells.necromancy import BlindnessDeafness, NecroticBless
 from dnd.spells.transmutation import ExpeditiousRetreat, JumpSpell
-from dnd.utils import get_hp, has_condition, set_hp
+from tests.engine.support import get_hp, has_condition, set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,

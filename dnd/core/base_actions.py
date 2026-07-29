@@ -1609,6 +1609,17 @@ class BaseAction(BaseObject):
             return False
         return True
 
+    def validate_source_requirements_for_discovery(self) -> bool:
+        """Validate non-cost requirements that do not depend on a target.
+
+        Entity-target discovery calls this before enumerating targets so the
+        transport can distinguish an unavailable actor state from an actor
+        that is ready but currently has no legal target. Concrete actions with
+        source-owned prerequisites override this narrow hook; authoritative
+        execution still repeats every requirement in ``_validate``.
+        """
+        return True
+
     def pre_validate(self) -> bool:
         """Validate affordability and non-cost requirements without execution."""
         return (
@@ -1722,12 +1733,24 @@ class BaseAction(BaseObject):
         record_phase("check_costs", started)
 
         started = start_phase()
-        declaration_event = self._create_declaration_event(parent_event)
+        declaration_event = self._create_declaration_event(
+            parent_event,
+            use_register=False,
+        )
         record_phase("create_declaration_event", started)
         if declaration_event is None:
             record_total()
             return None
-        elif declaration_event.canceled:
+        published_declaration = EventQueue.register(
+            declaration_event.model_copy(update={"use_register": True}),
+        )
+        if not isinstance(published_declaration, ActionEvent):
+            raise TypeError(
+                "Action declaration dispatch returned "
+                f"{type(published_declaration).__name__}, expected ActionEvent"
+            )
+        declaration_event = published_declaration
+        if declaration_event.canceled:
             record_total()
             return declaration_event
 

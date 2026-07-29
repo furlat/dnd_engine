@@ -20,7 +20,7 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.utils import (
+from tests.engine.support import (
     force_attack_hit,
     get_hp,
     remove_attack_modifier,

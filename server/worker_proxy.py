@@ -48,16 +48,8 @@ _HOP_BY_HOP_HEADERS = {
 
 _DENIED_PREFIXES = (
     "game-creation/",
-    "simulation/start",
-    "simulation/reset",
-    "simulation/start-human",
-    "simulation/start-ai-validation",
-    "simulation/start-codex-monsters",
-    "simulation/start-aoe-test",
-    "simulation/start-pvp",
     "session/create",
     "game/join",
-    "ai/gauntlets/events",
     "mapeditor/",
     "game/evidence/",
 )
@@ -84,20 +76,6 @@ _OBJECTIVE_DIAGNOSTICS_ROUTES = frozenset({
     "diagnostics/subjective-parity",
 })
 
-_RAW_OBJECTIVE_READ_ROUTES = frozenset({
-    "state",
-    "visibility",
-    "entities",
-    "grid",
-    "encounter",
-})
-_RAW_OBJECTIVE_READ_PREFIXES = ("entity/", "tile/")
-
-_HOSTED_DENIED_READ_ROUTES = frozenset({
-    "game/status",
-    "simulation/status",
-})
-
 _CONTROLLED_ENTITY_READ_SUFFIXES = frozenset({
     "available-actions",
     "equippable-items",
@@ -110,6 +88,8 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
     normalized = path.strip("/")
     upper_method = method.upper()
     if any(normalized == prefix.rstrip("/") or normalized.startswith(prefix) for prefix in _DENIED_PREFIXES):
+        return ProxyRouteKind.DENIED
+    if normalized == "simulation" or normalized.startswith("simulation/"):
         return ProxyRouteKind.DENIED
     if upper_method == "DELETE" and normalized.startswith("session/"):
         return ProxyRouteKind.DENIED
@@ -133,8 +113,6 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
         "diagnostics/objective/"
     ):
         return ProxyRouteKind.DENIED
-    if upper_method in {"GET", "HEAD"} and normalized in _HOSTED_DENIED_READ_ROUTES:
-        return ProxyRouteKind.DENIED
     path_parts = [part for part in normalized.split("/") if part]
     if (
         upper_method in {"GET", "HEAD"}
@@ -143,14 +121,11 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
         and path_parts[2] in _CONTROLLED_ENTITY_READ_SUFFIXES
     ):
         return ProxyRouteKind.COMMAND
-    if upper_method in {"GET", "HEAD"} and (
-        normalized in _RAW_OBJECTIVE_READ_ROUTES
-        or normalized.startswith(_RAW_OBJECTIVE_READ_PREFIXES)
-    ):
-        return ProxyRouteKind.DENIED
     if normalized == "ai/sessions":
         return ProxyRouteKind.DENIED
     if normalized.startswith("ai/sessions/"):
+        return ProxyRouteKind.AGENT
+    if normalized == "ai/policy/source" and upper_method in {"GET", "HEAD"}:
         return ProxyRouteKind.AGENT
     if (
         upper_method == "POST"
@@ -161,18 +136,18 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
         return ProxyRouteKind.AGENT
     if normalized.startswith("ai/takeover"):
         return ProxyRouteKind.DENIED
-    if upper_method not in {"GET", "HEAD"} and normalized.startswith("simulation/"):
-        return ProxyRouteKind.DENIED
     if normalized.startswith("action/"):
         return ProxyRouteKind.COMMAND
     if upper_method in {"POST", "PUT", "PATCH", "DELETE"} and (
         normalized.startswith("entity/")
-        or normalized.startswith("simulation/")
     ):
         return ProxyRouteKind.COMMAND
-    if upper_method in {"GET", "HEAD"} or normalized == "session/{session_id}/ping":
-        return ProxyRouteKind.OBSERVE
-    if upper_method == "POST" and normalized.startswith("session/") and normalized.endswith("/ping"):
+    if (
+        upper_method == "POST"
+        and len(path_parts) == 3
+        and path_parts[0] == "session"
+        and path_parts[2] == "ping"
+    ):
         return ProxyRouteKind.OBSERVE
     return ProxyRouteKind.DENIED
 

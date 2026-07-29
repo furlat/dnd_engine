@@ -7,12 +7,13 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from dnd.classes.barbarian import Retaliation
+from dnd.classes.barbarian import Retaliation, create_retaliation_handler
 from dnd.classes.feats import LuckyFeature
 from dnd.classes.fighter import (
     FightingStyleProtection,
     GreatWeaponFighting,
     Indomitable,
+    create_protection_handler,
 )
 from dnd.classes.paladin import create_divine_smite_handler
 from dnd.content_system.bootstrap import bootstrap_content_system
@@ -29,7 +30,9 @@ from dnd.core.base_actions import (
     BaseAction,
     TargetType,
 )
+from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -43,8 +46,9 @@ from dnd.core.content.runtime import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.entity import Entity
-from dnd.items.test_reactions import DodgeRollFeature, Intercepting
+from tests.manual.reactive_fixture_support import DodgeRollFeature, Intercepting
 from dnd.monsters.bestiary import create_goblin
+from dnd.monsters.traits import ParryFeature
 from dnd.premade_characters import (
     BARBARIAN_L5_BERSERKER_TORCH_RECIPE,
     FIGHTER_L5_SHIELD_TORCH_RECIPE,
@@ -257,6 +261,8 @@ def test_every_direct_toggleable_reaction_binds_and_resolves_in_catalog() -> Non
         create_counterspell_reaction_handler(owner.uuid),
         create_divine_smite_handler(owner.uuid, 1),
         create_divine_smite_handler(owner.uuid, 5),
+        create_protection_handler(owner.uuid),
+        create_retaliation_handler(owner.uuid),
     )
 
     for handler in handlers:
@@ -286,7 +292,38 @@ def test_every_direct_toggleable_reaction_binds_and_resolves_in_catalog() -> Non
     ) == (
         "reaction.opportunity_attack",
         "reaction.class_feature.paladin.divine_smite",
+        "reaction.monster.parry",
+        "reaction.class_feature.fighter.protection",
+        "reaction.class_feature.barbarian.retaliation",
     )
+
+
+def test_provider_owned_public_reactions_have_exact_install_edges() -> None:
+    """Persistent features explicitly install their public reaction behavior."""
+
+    expected = {
+        get_content_declaration(ParryFeature).ref: "reaction.monster.parry",
+        get_content_declaration(FightingStyleProtection).ref: (
+            "reaction.class_feature.fighter.protection"
+        ),
+        get_content_declaration(Retaliation).ref: (
+            "reaction.class_feature.barbarian.retaliation"
+        ),
+    }
+    registry = bootstrap_content_system().registry
+    for provider_ref, reaction_content_id in expected.items():
+        provider_declaration = registry.resolve_definition(provider_ref)
+        install_edges = tuple(
+            dependency
+            for dependency in provider_declaration.dependencies
+            if dependency.relation is ContentDependencyRelation.INSTALLS_HANDLER
+        )
+        assert len(install_edges) == 1
+        assert (
+            install_edges[0].target_ref.definition_kind
+            is ContentDefinitionKind.REACTION
+        )
+        assert install_edges[0].target_ref.content_id == reaction_content_id
 
 
 def test_effective_reaction_retains_exact_internal_presentation_evidence() -> None:
@@ -413,8 +450,8 @@ def test_unchanged_already_modified_event_is_not_a_reaction_effect() -> None:
     assert result.effective_handler_presentations == ()
 
 
-def test_condition_owned_toggleable_handlers_inherit_provider_identity() -> None:
-    """Private handler implementations expose their exact owning rule."""
+def test_condition_owned_toggleable_handlers_preserve_public_reactions() -> None:
+    """Private handlers inherit providers; public reactions retain invocation identity."""
     owner = Entity.create(source_entity_uuid=uuid4(), name="Feature Probe")
     conditions = (
         LuckyFeature(
@@ -463,20 +500,39 @@ def test_condition_owned_toggleable_handlers_inherit_provider_identity() -> None
         "Protection",
         "Retaliation",
     }
-    expected_provider_refs = {
-        condition.behavior_binding.definition_ref.identity_key
-        for condition in conditions
-        if condition.behavior_binding is not None
+    provider_refs_by_name = {
+        "Lucky": get_content_declaration(LuckyFeature).ref,
+        "Retaliation": get_content_declaration(Retaliation).ref,
+        "Great Weapon Fighting": get_content_declaration(
+            GreatWeaponFighting
+        ).ref,
+        "Protection": get_content_declaration(FightingStyleProtection).ref,
+        "Indomitable": get_content_declaration(Indomitable).ref,
+        "Intercept": get_content_declaration(Intercepting).ref,
+        "Dodge Roll": get_content_declaration(DodgeRollFeature).ref,
     }
-    assert {
-        info.behavior_attribution.definition_ref.identity_key
-        for info in infos
-    } == expected_provider_refs
-    assert all(
-        info.behavior_attribution.provided_by_ref
-        == info.behavior_attribution.definition_ref
-        for info in infos
-    )
+    public_reaction_refs = {
+        declaration.ref.content_id: declaration.ref
+        for declaration in REACTION_BEHAVIOR_DECLARATIONS
+    }
+    definition_refs_by_name = {
+        **provider_refs_by_name,
+        "Protection": public_reaction_refs[
+            "reaction.class_feature.fighter.protection"
+        ],
+        "Retaliation": public_reaction_refs[
+            "reaction.class_feature.barbarian.retaliation"
+        ],
+    }
+    for info in infos:
+        assert (
+            info.behavior_attribution.definition_ref
+            == definition_refs_by_name[info.name]
+        )
+        assert (
+            info.behavior_attribution.provided_by_ref
+            == provider_refs_by_name[info.name]
+        )
 
 
 def test_unbound_toggleable_handler_fails_closed_on_both_discovery_paths() -> None:

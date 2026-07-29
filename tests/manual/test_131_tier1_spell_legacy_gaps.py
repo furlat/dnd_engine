@@ -32,16 +32,13 @@ from dnd.core.events import (
     EventType,
     SavingThrowEvent,
 )
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    CreatureType,
-    DamageType,
-)
+from dnd.core.creature_types import CreatureType, DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
 from dnd.spells.conjuration import PoisonSpray
 from dnd.spells.enchantment import HoldMonster, HoldPerson
 from dnd.spells.evocation import Sunburst
-from dnd.utils import has_condition
+from tests.engine.support import has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,

@@ -94,7 +94,7 @@ def test_dynamic_cost_hooks_have_one_explicit_source_or_target_ownership() -> No
         "get_target_dynamic_costs": [
             (Path("actions.py"), "Jump"),
             (Path("core/base_actions.py"), "BaseAction"),
-            (Path("items/test_reactions.py"), "PrepareIntercept"),
+            (Path("manual/reactive_fixture_support.py"), "PrepareIntercept"),
         ],
     }
 

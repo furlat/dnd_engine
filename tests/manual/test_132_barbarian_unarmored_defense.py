@@ -21,7 +21,7 @@ from dnd.items.armors import (
     LEATHER_ARMOR_RECIPE,
     SHIELD_RECIPE,
 )
-from dnd.utils import reset_combat_state
+from tests.engine.support import reset_combat_state
 
 
 def _create_test_barbarian(

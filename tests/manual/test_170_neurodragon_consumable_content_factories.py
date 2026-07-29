@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 import dnd.items as item_exports
 import dnd.items.consumables as consumable_definitions
-import dnd.items.test_items as fixture_items
+import dnd.items.environment_interactables as fixture_items
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.equipment import Weapon
@@ -34,7 +34,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.runtime_reset import reset_engine_runtime

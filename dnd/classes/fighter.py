@@ -337,10 +337,11 @@ def great_weapon_fighting_processor(
     if not is_melee or not (has_two_handed or versatile_wielded_two_handed):
         return None
 
-    any_modified = False
-    for i, original_roll in enumerate(event.final_rolls):
-        if i != 0:
+    modified_event = event
+    for packet_index, packet in enumerate(modified_event.damage_packets):
+        if packet_index != 0:
             continue
+        original_roll = packet.final_roll
         results = original_roll.results if isinstance(original_roll.results, list) else [original_roll.results]
 
         needs_reroll = any(r <= 2 for r in results)
@@ -358,17 +359,14 @@ def great_weapon_fighting_processor(
                 new_results.append(r)
 
         new_roll = create_modified_dice_roll(original_roll, new_results)
-        event.replace_roll(
-            i,
+        modified_event = modified_event.replace_roll(
+            packet_index,
             new_roll,
             "Great Weapon Fighting",
             f"Rerolled: {', '.join(rerolled_dice)}"
         )
-        any_modified = True
 
-    if any_modified:
-        return event.model_copy(update={"modified": True})
-    return None
+    return modified_event if modified_event is not event else None
 
 
 class GreatWeaponFighting(BaseCondition):
@@ -490,15 +488,20 @@ def protection_processor(
 
     protector.action_economy.consume("reactions", 1)
 
-    return event.model_copy(update={
-        "modified": True,
-        "status_message": f"{protector.name} uses Protection to impose disadvantage"
-    })
+    return event.with_updates(
+        status_message=(
+            f"{protector.name} uses Protection to impose disadvantage"
+        ),
+    )
 
 
-def create_protection_handler(source_entity_uuid: UUID) -> EventHandler:
+class ProtectionReactionHandler(EventHandler):
+    """Independently authored reaction installed by the Protection style."""
+
+
+def create_protection_handler(source_entity_uuid: UUID) -> ProtectionReactionHandler:
     """Create an EventHandler for Protection fighting style."""
-    return EventHandler(
+    return ProtectionReactionHandler(
         name="Protection",
         semantic_key="feature.fighter.protection",
         content_kind=RuntimeBehaviorKind.REACTION,
@@ -1250,6 +1253,8 @@ class ExtraAttack(BaseAction):
         weapon_slot: Weapon slot used to resolve the additional attack.
         action_category: Marks Extra Attack as an attack action for discovery and reactions.
         costs: Extra-attack resource cost rebuilt after model initialization.
+        discover_equipped_weapon_slots: Whether the structural template expands
+            into one discovery row per equipped weapon.
     """
     name: str = Field(default="Extra Attack", description="Action name displayed for Fighter extra attacks.")
     description: str = Field(
@@ -1328,6 +1333,14 @@ class ExtraAttack(BaseAction):
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
         """Return the same actor-baseline weapon profile as a normal attack."""
         return build_weapon_attack_outcome_profile(actor, self.weapon_slot)
+
+    def validate_source_requirements_for_discovery(self) -> bool:
+        """Require the attack-earned batch before exposing target legality."""
+        entity = Entity.get(self.source_entity_uuid)
+        return (
+            isinstance(entity, Entity)
+            and "ExtraAttacksGranted" in entity.active_conditions
+        )
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the extra attack action."""
@@ -1503,7 +1516,12 @@ def indomitable_processor(
 
     ability_name = event.ability_name
     save_bonus = entity.saving_throw_bonus(event.source_entity_uuid, ability_name)
-    new_roll = entity.roll_d20(save_bonus, RollType.SAVE, parent_event=event.uuid)
+    new_roll = entity.roll_d20(
+        save_bonus,
+        RollType.SAVE,
+        ability_name=ability_name,
+        parent_event=event.uuid,
+    )
 
     if not entity.action_economy.consume_resource("indomitable", 1):
         return None
@@ -1511,12 +1529,14 @@ def indomitable_processor(
     new_outcome = determine_attack_outcome(new_roll, dc)
     new_success = new_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
 
-    return event.model_copy(update={
-        "dice_roll": new_roll,
-        "result": new_success,
-        "modified": True,
-        "status_message": f"{entity.name} uses Indomitable! Reroll: {new_roll.total} vs DC {dc} - {'Success' if new_success else 'Failure'}"
-    })
+    return event.with_updates(
+        dice_roll=new_roll,
+        result=new_success,
+        status_message=(
+            f"{entity.name} uses Indomitable! Reroll: {new_roll.total} "
+            f"vs DC {dc} - {'Success' if new_success else 'Failure'}"
+        ),
+    )
 
 
 def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
@@ -1686,10 +1706,9 @@ def survivor_processor(
         parent_event=event.uuid
     )
 
-    return event.model_copy(update={
-        "modified": True,
-        "status_message": f"Survivor heals {actual_healed} HP (5+{con_mod})"
-    })
+    return event.with_updates(
+        status_message=f"Survivor heals {actual_healed} HP (5+{con_mod})",
+    )
 
 
 def create_survivor_handler(source_entity_uuid: UUID) -> EventHandler:

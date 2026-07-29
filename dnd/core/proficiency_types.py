@@ -42,9 +42,26 @@ class ProficiencySourceSet(BaseModel):
         """Remove exactly one source and report whether it existed."""
         return self.sources.pop(source_id, None) is not None
 
+    def has_mode(self, mode: ProficiencyMode) -> bool:
+        """Return whether an exact source owns the requested mode."""
+        return mode in self.sources.values()
+
+    @property
+    def is_proficient(self) -> bool:
+        """Return whether at least one source grants full proficiency."""
+        return self.has_mode(ProficiencyMode.FULL)
+
+    @property
+    def has_expertise(self) -> bool:
+        """Return whether full proficiency and expertise are both owned."""
+        return (
+            self.is_proficient
+            and self.has_mode(ProficiencyMode.EXPERTISE)
+        )
+
     def apply(self, proficiency_bonus: int) -> int:
         """Return the strongest contribution for a proficiency bonus."""
-        has_full = ProficiencyMode.FULL in self.sources.values()
+        has_full = self.is_proficient
         candidates = [0]
         for mode in self.sources.values():
             if mode == ProficiencyMode.HALF_ROUND_DOWN:

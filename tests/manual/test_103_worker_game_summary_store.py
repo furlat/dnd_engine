@@ -11,25 +11,29 @@ import pytest
 import server.game_summary_store as game_summary_store_module
 from dnd.analytics import GameOutcomeResolution, summary_digest_is_valid
 from dnd.blocks.action_economy import RechargeType
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.controller import Controller, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton, create_skeleton_warlock
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from server.game_summary_store import WorkerGameSummaryStore
 
 
 @pytest.fixture(autouse=True)
-def isolated_engine_state(monkeypatch: pytest.MonkeyPatch):
+def isolated_engine_state():
     """Reset global engine registries around every focused store test."""
-    monkeypatch.delenv("DND_HOSTED_GAME_ID", raising=False)
     _reset_engine_state()
     yield
     _reset_engine_state()
@@ -66,14 +70,43 @@ def _start_encounter(
     return encounter
 
 
+def _materialize_bestiary_creature(
+    creature_id: str,
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Materialize one exact authored creature for objective replay projection."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID[creature_id],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=(
+                "tests.worker_summary."
+                f"creature_{runtime_entity_uuid.hex}"
+            ),
+        ),
+        possession_mode=(
+            CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+        ),
+    )
+
+
 def _run_empty_encounter(name: str, offset: int) -> Encounter:
     """Run one terminal encounter for bounded-capacity checks."""
-    hero = create_goblin(
+    hero = _materialize_bestiary_creature(
+        "goblin",
         name=f"{name} Hero",
         position=(1, offset),
         faction=f"{name}-heroes",
     )
-    monster = create_skeleton(
+    monster = _materialize_bestiary_creature(
+        "skeleton",
         name=f"{name} Monster",
         position=(4, offset),
         faction=f"{name}-monsters",
@@ -90,8 +123,18 @@ def test_reset_reattaches_after_event_queue_reset() -> None:
     store.reset()
     store.ensure_attached()
 
-    hero = create_goblin(name="Reset Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Reset Skeleton", position=(4, 1), faction="monsters")
+    hero = _materialize_bestiary_creature(
+        "goblin",
+        name="Reset Hero",
+        position=(1, 1),
+        faction="heroes",
+    )
+    monster = _materialize_bestiary_creature(
+        "skeleton",
+        name="Reset Skeleton",
+        position=(4, 1),
+        faction="monsters",
+    )
     encounter = _start_encounter(hero=hero, monster=monster, name="Reset Encounter")
     encounter.end_encounter("attachment restored")
 
@@ -103,25 +146,31 @@ def test_reset_reattaches_after_event_queue_reset() -> None:
 
 
 def test_terminal_encounter_captures_typed_boundaries_and_summary(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A real terminal match yields complete typed evidence and a valid digest."""
-    monkeypatch.setenv("DND_HOSTED_GAME_ID", "hosted-summary-game")
+    hosted_game_id = uuid4()
     store = WorkerGameSummaryStore(max_summaries=2)
 
-    hero = create_goblin(name="Summary Hero", position=(2, 3), faction="heroes")
+    hero = _materialize_bestiary_creature(
+        "goblin",
+        name="Summary Hero",
+        position=(2, 3),
+        faction="heroes",
+    )
     hero.action_economy.add_resource(
         "heroic_focus",
         maximum=2,
         recharge_type=RechargeType.LONG_REST,
     )
-    monster = create_skeleton_warlock(
+    monster = _materialize_bestiary_creature(
+        "skeleton_warlock",
         name="Summary Warlock",
         position=(7, 3),
         faction="monsters",
     )
     monster.health.add_temporary_hit_points(3, monster.uuid)
     encounter = _start_encounter(hero=hero, monster=monster, name="Terminal Summary")
+    store.bind_directory_game_id(encounter.uuid, hosted_game_id)
     store.capture_active_encounter(encounter)
 
     initial_event_cursor = EventQueue.event_cursor()
@@ -129,13 +178,13 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     monster.receive_damage(damage, DamageType.FORCE, hero.uuid)
     encounter.end_encounter("one faction remains")
 
-    summary = store.get("hosted-summary-game")
+    summary = store.get(hosted_game_id)
     assert summary is not None
-    replay_capture = store.get_replay_capture("hosted-summary-game")
+    replay_capture = store.get_replay_capture(hosted_game_id)
     assert replay_capture is not None
     assert store.get(encounter.uuid) == summary
     assert store.get_replay_capture(encounter.uuid) == replay_capture
-    assert summary.game_id == "hosted-summary-game"
+    assert summary.game_id == str(hosted_game_id)
     assert summary.encounter_uuid == encounter.uuid
     assert summary.terminal_cursor.event_cursor > initial_event_cursor
     assert summary.terminal_cursor.combat_log_cursor == len(encounter.combat_log)
@@ -181,7 +230,7 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     caller_view_final = summary.entities[0].final
     assert caller_view_final is not None
     caller_view_final.resources["caller_mutation"] = 999
-    retained = store.get("hosted-summary-game")
+    retained = store.get(hosted_game_id)
     assert retained is not None
     assert all(
         "caller_mutation" not in entity.final.resources

@@ -50,10 +50,14 @@ def fire_heal_roll_result(
     Returns the final_roll (possibly modified by handlers).
     """
     original_roll = healing.get_dice().roll
+    caster = Entity.get(caster_uuid)
+    target = Entity.get(target_uuid)
 
     heal_roll_event = HealRollResultEvent(
         source_entity_uuid=caster_uuid,
         target_entity_uuid=target_uuid,
+        source_entity_name=caster.name if isinstance(caster, Entity) else None,
+        target_entity_name=target.name if isinstance(target, Entity) else None,
         spell_name=spell_name,
         original_roll=original_roll,
         final_roll=original_roll.model_copy(deep=True),

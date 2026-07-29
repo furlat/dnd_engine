@@ -21,12 +21,17 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import (
+    EventPhase,
+    EventQueue,
+    EventType,
+    TakeDamageEvent,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageStatus,
-    DamageType,
     NumericalModifier,
 )
 from dnd.entity import Entity
@@ -53,7 +58,7 @@ from dnd.spells.necromancy import (
     InactionCurseEffect,
     InflictWounds,
 )
-from dnd.utils import (
+from tests.engine.support import (
     deal_damage_to,
     force_attack_hit,
     get_hp,
@@ -705,7 +710,8 @@ def test_bestow_curse_damage_option_adds_necrotic_damage_child() -> None:
         event
         for event in EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
         if (
-            event.source_entity_uuid == caster.uuid
+            isinstance(event, TakeDamageEvent)
+            and event.source_entity_uuid == caster.uuid
             and event.target_entity_uuid == target.uuid
             and event.phase is EventPhase.COMPLETION
         )

@@ -11,9 +11,16 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import (
+    DamageRollResultEvent,
+    EventPhase,
+    EventQueue,
+    EventType,
+    RollModificationOperation,
+)
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.modifiers import AdvantageStatus, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import AdvantageStatus
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -49,6 +56,20 @@ def assert_conditions(entity: Entity, names: Iterable[str]) -> None:
     """Assert that feature-marker conditions are active on an entity."""
     for name in names:
         assert name in entity.active_conditions
+
+
+def latest_damage_roll_result() -> DamageRollResultEvent:
+    """Return the latest completed damage-roll event."""
+    return next(
+        event
+        for event in reversed(
+            EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
+        )
+        if (
+            isinstance(event, DamageRollResultEvent)
+            and event.phase is EventPhase.COMPLETION
+        )
+    )
 
 
 def _materialize_srd_fixture(
@@ -393,6 +414,12 @@ def test_brute_surprise_attack_and_martial_advantage_add_damage_dice() -> None:
     assert event.damage_rolls is not None
     assert len(event.damage_rolls) == 3
     assert all(damage.damage_bonus is not None for damage in event.damages or [])
+    bugbear_damage = latest_damage_roll_result()
+    assert len(bugbear_damage.damage_packets) == 3
+    assert all(
+        modification.operation is RollModificationOperation.APPEND
+        for modification in bugbear_damage.roll_modifications
+    )
 
     reset_srd_trait_state()
     hobgoblin = _materialize_srd_fixture("hobgoblin", position=(1, 1), faction="monsters")
@@ -408,6 +435,11 @@ def test_brute_surprise_attack_and_martial_advantage_add_damage_dice() -> None:
     assert event.damage_rolls is not None
     assert len(event.damage_rolls) == 2
     assert all(damage.damage_bonus is not None for damage in event.damages or [])
+    hobgoblin_damage = latest_damage_roll_result()
+    assert len(hobgoblin_damage.damage_packets) == 2
+    assert hobgoblin_damage.roll_modifications[-1].operation is (
+        RollModificationOperation.APPEND
+    )
 
 
 def test_active_monster_actions_apply_their_marker_conditions() -> None:

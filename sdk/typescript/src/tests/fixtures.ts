@@ -16,6 +16,7 @@ const appearance: APIAppearance = {
   portrait_key: null,
   presentation_kind: "layered",
   visual_scale: 1,
+  visual_scale_x: 1,
   placeholder_tint: 0x00ff00,
   body_category: "NakedBody",
   skin_tint: 0xffccaa,
@@ -32,6 +33,16 @@ export function entity(
 ): APIEntitySummary {
   return {
     uuid,
+    content_ref: {
+      pack_id: "fixture.typescript_sdk",
+      definition_kind: "creature",
+      content_id: uuid === "hero" ? "creature.hero" : "creature.monster",
+      content_version: 1,
+      definition_contract_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+    species_ref: null,
+    species_variant_ref: null,
+    background_ref: null,
     name,
     position,
     hp: 20,

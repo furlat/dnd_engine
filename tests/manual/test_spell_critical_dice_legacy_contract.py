@@ -17,7 +17,7 @@ from dnd.spells.evocation import (
     ShockingGrasp,
 )
 from dnd.spells.necromancy import ChillTouch
-from dnd.utils import (
+from tests.engine.support import (
     force_spell_attack_crit,
     force_spell_attack_hit,
     remove_spell_attack_modifier,

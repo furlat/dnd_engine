@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from typing import Iterator
 from uuid import UUID
 
-from dnd.core.modifiers import DamageType
+from dnd.core.content.identities import ContentRef
+from dnd.core.creature_types import DamageType
+from dnd.core.saving_throw_types import SavingThrowEffectTag
 
 
 @dataclass(slots=True)
@@ -23,6 +25,9 @@ class SpellExecutionState:
 
     source_entity_uuid: UUID
     damage_type: DamageType | None
+    cause_ref: ContentRef | None = None
+    saving_throw_effect_id: str | None = None
+    saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = ()
     lineage_uuid: UUID | None = None
 
 
@@ -37,12 +42,18 @@ def spell_execution_scope(
     *,
     source_entity_uuid: UUID,
     damage_type: DamageType | None,
+    cause_ref: ContentRef | None = None,
+    saving_throw_effect_id: str | None = None,
+    saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = (),
 ) -> Iterator[SpellExecutionState]:
     """Open one isolated spell-execution context."""
 
     state = SpellExecutionState(
         source_entity_uuid=source_entity_uuid,
         damage_type=damage_type,
+        cause_ref=cause_ref,
+        saving_throw_effect_id=saving_throw_effect_id,
+        saving_throw_effect_tags=saving_throw_effect_tags,
     )
     token = _CURRENT_SPELL_EXECUTION.set(state)
     try:

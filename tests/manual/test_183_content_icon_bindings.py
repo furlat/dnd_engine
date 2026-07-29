@@ -6,6 +6,8 @@ import hashlib
 import inspect
 import json
 from pathlib import Path
+import subprocess
+import sys
 from uuid import uuid4
 
 import pytest
@@ -67,6 +69,25 @@ def _canonical_digest(value: object) -> str:
             sort_keys=True,
         ).encode("utf-8"),
     ).hexdigest()
+
+
+def test_icon_binding_importer_runs_directly_from_the_repository_root() -> None:
+    """The documented offline CLI must own its repository import boundary."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "devtools/import_neuroclient_content_icon_bindings.py",
+            "--help",
+        ],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=15.0,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "manifest" in completed.stdout
 
 
 def _validated_tampered_ledger(

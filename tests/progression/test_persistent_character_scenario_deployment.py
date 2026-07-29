@@ -9,16 +9,37 @@ from dnd.content_system.builtin_character_builds import (
     BuiltinSingleClassBuild,
     compose_builtin_character_revisions,
 )
+from dnd.content_system.character_appearance import (
+    BARBARIAN_HUMAN_APPEARANCE,
+    FIGHTER_HUMAN_APPEARANCE,
+)
 from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
+from dnd.core.content.encounters import (
+    FixedRosterOpeningPolicy,
+    RosterControllerDefaults,
+    RosterControllerKind,
+)
 from dnd.core.progression import MulticlassSlotRoundingPolicy
 from dnd.entity import Entity
-from dnd.scenarios.evaluation.assembler import prepare_composed_scenario
+from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from server import event_server
+from server.api_models import (
+    GameCreationAuthoredRosterSelection,
+    GameCreationComposeRequest,
+    GameCreationOwnedCharacterRosterSelection,
+    GameCreationRosterSlotSelection,
+)
+from server.game_creation_composition import normalize_encounter_recipe
 from server.game_directory.contracts import (
     CharacterAdvancementAwardCreate,
     CharacterAdvancementSourceKind,
     CharacterBootstrapCreate,
+)
+from tests.manual.game_creation_test_support import (
+    authored_compose_request,
+    compose_and_preview,
+    roster_result,
 )
 
 
@@ -30,6 +51,7 @@ def test_composed_scenario_materializes_the_pinned_character_not_the_catalog_her
             class_id="barbarian",
             level=5,
             equipment_preset="greataxe",
+            appearance=BARBARIAN_HUMAN_APPEARANCE,
             asi_by_level=(
                 (4, ((AbilityScoreName.STRENGTH, 2),)),
             ),
@@ -50,17 +72,53 @@ def test_composed_scenario_materializes_the_pinned_character_not_the_catalog_her
         permissive_multiclass_prerequisites=True,
     )
 
-    assembled = prepare_composed_scenario(
-        # Deliberately select the Sorcerer catalog row. The catalog row owns
-        # spatial compatibility only when an exact persistent hero is supplied.
-        "hero.sorcerer_l5_standard_torch",
-        "monsters.skeleton_trio",
-        "battlefield.open_floor_bright",
-        "neutral.battlefield.open_floor_bright",
-        hero_deployment=deployment,
+    request = GameCreationComposeRequest(
+        title="Persistent Character Deployment",
+        roster_slots=(
+            GameCreationRosterSlotSelection(
+                roster_slot_id="players",
+                roster=GameCreationOwnedCharacterRosterSelection(
+                    title="Owned Party",
+                    character_ids=(character_id,),
+                ),
+                faction_id="heroes",
+                deployment_zone_id="zone_1",
+                controller_defaults=RosterControllerDefaults(
+                    controller=RosterControllerKind.HUMAN,
+                    participant_name="Local Player",
+                ),
+            ),
+            GameCreationRosterSlotSelection(
+                roster_slot_id="opposition",
+                roster=GameCreationAuthoredRosterSelection(
+                    roster_id="monsters.skeleton_trio",
+                ),
+                faction_id="monsters",
+                deployment_zone_id="zone_2",
+                controller_defaults=RosterControllerDefaults(
+                    controller=RosterControllerKind.AI,
+                    participant_name="Opposition",
+                    policy_id="builtin.basic",
+                ),
+            ),
+        ),
+        battlefield_id="battlefield.open_floor_bright",
+        deployment_id="neutral.battlefield.open_floor_bright",
+        opening_policy=FixedRosterOpeningPolicy(
+            roster_slot_id="players",
+        ),
+    )
+    recipe, compatibility = normalize_encounter_recipe(
+        request,
+        character_deployments={character_id: deployment},
+    )
+    assert compatibility.admitted
+    assembled = prepare_encounter_recipe(
+        recipe,
+        character_deployments={character_id: deployment},
     )
 
-    hero = assembled.arena.hero
+    hero = assembled.entities_by_roster_slot["players"][0]
     assert hero.name == "Persistent Barbarian"
     assert hero.uuid != character_id
     assert hero.get_action_template("Frenzy") is not None
@@ -100,6 +158,7 @@ def test_standalone_game_creation_resolves_character_from_local_profile_sql(
                 class_id="fighter",
                 level=1,
                 equipment_preset="sword_shield",
+                appearance=FIGHTER_HUMAN_APPEARANCE,
                 fighting_style="dueling",
             ),
             content_system=content_system,
@@ -121,34 +180,51 @@ def test_standalone_game_creation_resolves_character_from_local_profile_sql(
             ),
         )
 
+        compose_request = authored_compose_request()
+        roster_slots = compose_request["roster_slots"]
+        assert isinstance(roster_slots, list)
+        player_roster = roster_slots[0]
+        opposition_roster = roster_slots[1]
+        assert isinstance(player_roster, dict)
+        assert isinstance(opposition_roster, dict)
+        player_roster.update({
+            "roster_slot_id": "players",
+            "roster": {
+                "kind": "owned_characters",
+                "title": "Owned Party",
+                "character_ids": [str(character_id)],
+                "member_controller_overrides": [],
+            },
+            "faction_id": "heroes",
+        })
+        opposition_roster.update({
+            "roster_slot_id": "opposition",
+            "faction_id": "monsters",
+        })
+        compose_request["battlefield_id"] = (
+            "battlefield.open_floor_bright"
+        )
+        compose_request["deployment_id"] = (
+            "neutral.battlefield.open_floor_bright"
+        )
+        opening_policy = compose_request["opening_policy"]
+        assert isinstance(opening_policy, dict)
+        opening_policy["roster_slot_id"] = "players"
+        composition = compose_and_preview(
+            client,
+            compose_request=compose_request,
+        )
         response = client.post(
             "/game-creation/start",
-            json={
-                "character_id": str(character_id),
-                "scenario": {
-                    "kind": "composed",
-                    "hero_configuration_id": (
-                        "hero.sorcerer_l5_standard_torch"
-                    ),
-                    "monster_configuration_id": "monsters.skeleton_trio",
-                    "battlefield_id": "battlefield.open_floor_bright",
-                    "deployment_id": (
-                        "neutral.battlefield.open_floor_bright"
-                    ),
-                },
-                "side_a": {
-                    "controller": "human",
-                    "name": "Local Player",
-                },
-                "side_b": {
-                    "controller": "ai",
-                    "name": "Opposition",
-                },
-                "opening_side": "side_a",
-            },
+            json=composition["exact_start_request"],
         )
 
         assert response.status_code == 200, response.text
+        assignment = roster_result(
+            response.json(),
+            "players",
+        )["entity_assignments"][0]
+        assert assignment["character_id"] == str(character_id)
         assert event_server.sim.encounter is not None
         heroes = tuple(
             entity

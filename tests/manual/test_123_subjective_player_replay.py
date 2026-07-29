@@ -15,7 +15,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
-from server.live_replication import create_stream_scene, execute_stream_attack
+from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
 from server.player_replay import (
     PLAYER_REPLAY_CONTRACT_HASH,
     PLAYER_REPLAY_CONTRACT_VERSION,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable, Optional
@@ -38,13 +37,6 @@ PolicyEvaluator = Callable[
 ]
 
 
-class PolicyGenerationRole(str, Enum):
-    """Lifecycle role of an executable policy generation."""
-
-    BASELINE = "baseline"
-    CANDIDATE = "candidate"
-
-
 class PolicyGenerationIdentity(BaseModel):
     """Serializable identity of one executable policy implementation."""
 
@@ -53,7 +45,6 @@ class PolicyGenerationIdentity(BaseModel):
     generation_id: str = Field(description="Stable generation identifier used in schedules and traces.")
     policy_name: str = Field(description="Stable policy-family identifier.")
     policy_version: str = Field(description="Human-readable behavior version.")
-    role: PolicyGenerationRole = Field(description="Baseline or candidate role in a promotion experiment.")
     implementation_path: str = Field(description="Repository-relative executable generation module.")
     implementation_paths: tuple[str, ...] = Field(
         description="Complete ordered source manifest that defines this generation's behavior."
@@ -90,7 +81,6 @@ def build_generation_identity(
     generation_id: str,
     policy_name: str,
     policy_version: str,
-    role: PolicyGenerationRole,
     implementation_path: Path,
     implementation_paths: tuple[Path, ...] | None = None,
     repository_root: Path,
@@ -115,7 +105,6 @@ def build_generation_identity(
         generation_id=generation_id,
         policy_name=policy_name,
         policy_version=policy_version,
-        role=role,
         implementation_path=relative_path,
         implementation_paths=relative_paths,
         implementation_sha256=implementation_sha256,

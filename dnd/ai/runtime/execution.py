@@ -191,7 +191,7 @@ def _feedback_from_dispatch(
         row_id=row_id,
         outcome=outcome,
         event_uuid=str(event.uuid) if event is not None else None,
-        outcome_code=getattr(event, "outcome_code", None),
+        outcome_code=event.outcome_code if event is not None else None,
         revalidation_reason=dispatch.movement_revalidation_reason,
     )
 

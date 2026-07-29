@@ -25,7 +25,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.events import AbilityName, Range, RangeType
 from dnd.core.feature_grants import AttackMultiplicityGrant
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.core.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
@@ -92,7 +92,7 @@ def test_expertise_requires_an_applicable_full_proficiency_source() -> None:
     assert skill._get_proficiency_converter()(3) == 0
 
 
-def test_legacy_skill_and_save_proficiency_remain_compatible() -> None:
+def test_imperative_skill_and_save_setters_write_owned_sources() -> None:
     skill = Skill.create(source_entity_uuid=uuid4(), name="arcana")
     skill.set_expertise(True)
     assert skill._get_proficiency_converter()(3) == 6
@@ -103,7 +103,7 @@ def test_legacy_skill_and_save_proficiency_remain_compatible() -> None:
     )
     legacy_source = uuid4()
     source = uuid4()
-    saving_throw.proficiency = True
+    saving_throw.set_proficiency(True)
     saving_throw.add_proficiency_source(legacy_source, ProficiencyMode.FULL)
     saving_throw.add_proficiency_source(source, ProficiencyMode.EXPERTISE)
     assert saving_throw._get_proficiency_converter()(3) == 6

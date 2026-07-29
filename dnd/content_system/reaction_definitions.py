@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from dnd.classes.barbarian import RetaliationReactionHandler
+from dnd.classes.fighter import ProtectionReactionHandler
 from dnd.classes.paladin import DivineSmiteHandler
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -26,6 +28,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import EventHandler
+from dnd.monsters.traits import ParryReactionHandler
 from dnd.reactions import OpportunityAttackHandler
 
 
@@ -79,6 +82,51 @@ REACTION_BEHAVIOR_IDENTITY_SPECS: tuple[
         ),
         sort_group="reactions.class_features",
         sort_order=10,
+    ),
+    ReactionBehaviorIdentitySpec(
+        handler_type=ParryReactionHandler,
+        pack_id="content.srd_5_1_cc",
+        content_id="reaction.monster.parry",
+        display_name="Parry",
+        description=(
+            "Use a reaction to add 2 Armor Class against one melee attack."
+        ),
+        icon_key="condition.dnd-monsters-traits-parryfeature",
+        source_anchor="SRD 5.1 (CC-BY-4.0), Monsters: Parry",
+        sort_group="reactions.monster_traits",
+        sort_order=10,
+    ),
+    ReactionBehaviorIdentitySpec(
+        handler_type=ProtectionReactionHandler,
+        pack_id="content.srd_5_1_cc",
+        content_id="reaction.class_feature.fighter.protection",
+        display_name="Protection",
+        description=(
+            "Use a reaction while wielding a shield to impose disadvantage "
+            "on an attack against a nearby ally."
+        ),
+        icon_key="condition.dnd-classes-fighter-fightingstyleprotection",
+        source_anchor=(
+            "SRD 5.1 (CC-BY-4.0), Classes: Fighter, Protection"
+        ),
+        sort_group="reactions.class_features",
+        sort_order=20,
+    ),
+    ReactionBehaviorIdentitySpec(
+        handler_type=RetaliationReactionHandler,
+        pack_id="content.srd_5_1_cc",
+        content_id="reaction.class_feature.barbarian.retaliation",
+        display_name="Retaliation",
+        description=(
+            "Use a reaction to make a melee weapon attack against an adjacent "
+            "creature that damaged the actor."
+        ),
+        icon_key="condition.dnd-classes-barbarian-retaliation",
+        source_anchor=(
+            "SRD 5.1 (CC-BY-4.0), Classes: Barbarian, Retaliation"
+        ),
+        sort_group="reactions.class_features",
+        sort_order=30,
     ),
 )
 
@@ -156,6 +204,30 @@ REACTION_BEHAVIOR_DECLARATIONS: tuple[ContentDeclaration, ...] = tuple(
     _declare_reaction_behavior(spec)
     for spec in REACTION_BEHAVIOR_IDENTITY_SPECS
 )
+PARRY_REACTION_DECLARATION = next(
+    declaration
+    for spec, declaration in zip(
+        REACTION_BEHAVIOR_IDENTITY_SPECS,
+        REACTION_BEHAVIOR_DECLARATIONS,
+    )
+    if spec.handler_type is ParryReactionHandler
+)
+PROTECTION_REACTION_DECLARATION = next(
+    declaration
+    for spec, declaration in zip(
+        REACTION_BEHAVIOR_IDENTITY_SPECS,
+        REACTION_BEHAVIOR_DECLARATIONS,
+    )
+    if spec.handler_type is ProtectionReactionHandler
+)
+RETALIATION_REACTION_DECLARATION = next(
+    declaration
+    for spec, declaration in zip(
+        REACTION_BEHAVIOR_IDENTITY_SPECS,
+        REACTION_BEHAVIOR_DECLARATIONS,
+    )
+    if spec.handler_type is RetaliationReactionHandler
+)
 
 if len({
     declaration.ref.identity_key
@@ -167,5 +239,8 @@ if len({
 __all__ = [
     "REACTION_BEHAVIOR_DECLARATIONS",
     "REACTION_BEHAVIOR_IDENTITY_SPECS",
+    "PARRY_REACTION_DECLARATION",
+    "PROTECTION_REACTION_DECLARATION",
     "ReactionBehaviorIdentitySpec",
+    "RETALIATION_REACTION_DECLARATION",
 ]

@@ -22,7 +22,7 @@ from dnd.core.content.provenance import (
 from dnd.core.content.registration import behavior_identity
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import AbilityName
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 
 
 _DefinitionT = TypeVar("_DefinitionT")

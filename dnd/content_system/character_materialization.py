@@ -6,12 +6,15 @@ from dataclasses import dataclass
 from typing import cast
 from uuid import UUID, uuid4, uuid5
 
-from dnd.blocks.base_item import EquippableItem, UsableItem
+from dnd.blocks.base_item import BaseItem, EquippableItem, UsableItem
 from dnd.blocks.health import HitDice, HitDiceConfig
 from dnd.content_system.character_build_validation import (
     CharacterBuildPreview,
     CharacterBuildValidator,
     CharacterGrantScheduleKind,
+)
+from dnd.content_system.character_appearance import (
+    apply_player_character_appearance,
 )
 from dnd.content_system.builtin_character_grant_appliers import (
     apply_builtin_character_grant,
@@ -37,9 +40,19 @@ from dnd.content_system.creature_bindings import (
 from dnd.content_system.extra_attack_character_grant_appliers import (
     install_extra_attack_family,
 )
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_bindings import (
+    ITEM_RUNTIME_BINDINGS,
+    ItemRuntimeBindingRegistry,
+    ItemRuntimeOrigin,
+)
 from dnd.content_system.item_runtime_materialization import (
     materialize_item_from_installed_runtime,
+)
+from dnd.content_system.origin_character_grant_appliers import (
+    install_origin_structural_feature,
+)
+from dnd.content_system.origin_innate_spellcasting import (
+    install_origin_innate_spellcasting,
 )
 from dnd.content_system.runtime import (
     SERVER_CONTENT_SYSTEM_RUNTIME,
@@ -59,6 +72,7 @@ from dnd.core.content.durable_characters import (
     ProficiencySubjectKind,
 )
 from dnd.core.content.identities import ContentRef
+from dnd.core.content.origin_features import OriginStructuralFeatureDefinition
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
@@ -74,6 +88,7 @@ from dnd.core.progression import (
 )
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.items.torches import Torch
 
 
 _SPELL_RUNTIME_ROW_BY_REF_KEY = {
@@ -88,12 +103,9 @@ class CharacterCompositionReceipt:
 
     runtime_entity_uuid: UUID
     character_id: UUID
-    definition_revision: int
-    definition_digest: str
-    loadout_revision: int
-    loadout_digest: str
     grants: tuple[CharacterGrantReceipt, ...]
     automatic_grant_refs: tuple[ContentRef, ...]
+    owns_character_origin_identity: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +250,20 @@ def _install_proficiency(
         if subject_id != "shield.shield":
             raise ValueError("shield proficiency requires shield.shield")
         entity.creature_proficiencies.add_shield_source(resolved_source_id)
+    elif subject.subject_kind == ProficiencySubjectKind.TOOL:
+        if subject_id is None or not subject_id.startswith("tool."):
+            raise ValueError("tool proficiency requires tool.<identity>")
+        entity.creature_proficiencies.add_tool_source(
+            resolved_source_id,
+            subject_id,
+        )
+    elif subject.subject_kind == ProficiencySubjectKind.LANGUAGE:
+        if subject_id is None or not subject_id.startswith("language."):
+            raise ValueError("language knowledge requires language.<identity>")
+        entity.creature_proficiencies.add_language_source(
+            resolved_source_id,
+            subject_id,
+        )
     else:
         raise ValueError(
             f"runtime proficiency subject {subject.subject_kind.value} is not "
@@ -263,34 +289,35 @@ def _remove_proficiency_handle(
     subject = handle.subject
     subject_id = subject.subject_id
     if subject.subject_kind == ProficiencySubjectKind.ABILITY_CHECK:
-        if (
-            subject_id is not None
-            and subject_id.startswith("ability_check.")
-        ):
-            entity.ability_scores.get_ability(
-                cast(
-                    AbilityName,
-                    subject_id.removeprefix("ability_check."),
-                ),
-            ).remove_check_proficiency_source(handle.source_id)
+        if subject_id is None or not subject_id.startswith("ability_check."):
+            raise RuntimeError(
+                "ability-check receipt has an invalid subject identity",
+            )
+        entity.ability_scores.get_ability(
+            cast(
+                AbilityName,
+                subject_id.removeprefix("ability_check."),
+            ),
+        ).remove_check_proficiency_source(handle.source_id)
         return
     if subject.subject_kind == ProficiencySubjectKind.SKILL:
-        if subject_id is not None and subject_id.startswith("skill."):
-            entity.skill_set.get_skill(
-                cast(SkillName, subject_id.removeprefix("skill.")),
-            ).remove_proficiency_source(handle.source_id)
+        if subject_id is None or not subject_id.startswith("skill."):
+            raise RuntimeError("skill receipt has an invalid subject identity")
+        entity.skill_set.get_skill(
+            cast(SkillName, subject_id.removeprefix("skill.")),
+        ).remove_proficiency_source(handle.source_id)
         return
     if subject.subject_kind == ProficiencySubjectKind.SAVING_THROW:
-        if (
-            subject_id is not None
-            and subject_id.startswith("saving_throw.")
-        ):
-            entity.saving_throws.get_saving_throw(
-                cast(
-                    AbilityName,
-                    subject_id.removeprefix("saving_throw."),
-                ),
-            ).remove_proficiency_source(handle.source_id)
+        if subject_id is None or not subject_id.startswith("saving_throw."):
+            raise RuntimeError(
+                "saving-throw receipt has an invalid subject identity",
+            )
+        entity.saving_throws.get_saving_throw(
+            cast(
+                AbilityName,
+                subject_id.removeprefix("saving_throw."),
+            ),
+        ).remove_proficiency_source(handle.source_id)
         return
     entity.creature_proficiencies.remove_source(handle.source_id)
 
@@ -327,13 +354,6 @@ def remove_character_composition(
                         )
         for action_uuid in reversed(grant.action_uuids):
             entity.unregister_action_by_uuid(action_uuid)
-        for block_uuid, condition_uuid in reversed(grant.condition_handles):
-            block = entity.get_block_from_uuid(block_uuid)
-            if block is None:
-                raise RuntimeError(
-                    f"composition condition block {block_uuid} is missing",
-                )
-            block.remove_condition_by_uuid(condition_uuid)
         for handler_uuid in reversed(grant.handler_uuids):
             handler = entity.event_handlers.get(handler_uuid)
             if handler is not None:
@@ -365,6 +385,14 @@ def remove_character_composition(
                 handle.condition_name,
                 handle.source_id,
             )
+        for source_id in reversed(grant.sense_mode_source_ids):
+            entity.senses.remove_sense_mode_source(source_id)
+        for source_id in reversed(grant.structural_size_source_ids):
+            entity.remove_structural_size_source(source_id)
+        for capability, source_id in reversed(
+            grant.origin_capability_source_ids,
+        ):
+            entity.remove_origin_capability_source(capability, source_id)
         for resource_name, source_id in reversed(
             grant.resource_recovery_contribution_ids,
         ):
@@ -424,11 +452,15 @@ def remove_character_composition(
                 channel.remove_critical_modifier(handle.modifier_uuid)
             elif handle.kind == ModifierHandleKind.AUTO_HIT:
                 channel.remove_auto_hit_modifier(handle.modifier_uuid)
+            elif handle.kind == ModifierHandleKind.RESISTANCE:
+                channel.remove_resistance_modifier(handle.modifier_uuid)
             else:
                 raise RuntimeError(
                     f"unsupported composition modifier kind "
                     f"{handle.kind.value}",
                 )
+    if receipt.owns_character_origin_identity:
+        entity.clear_character_origin_identity()
 
 
 def apply_character_composition(
@@ -444,6 +476,11 @@ def apply_character_composition(
     receipts: list[CharacterGrantReceipt] = []
     character_id = definition.character_id
     initial_dexterity_modifier = entity.ability_scores.dexterity.modifier
+    entity.set_character_origin_identity(
+        species_ref=definition.species_ref,
+        species_variant_ref=definition.species_variant_ref,
+        background_ref=definition.background_ref,
+    )
     try:
         for ability in AbilityScoreName:
             ability_name = cast(AbilityName, ability.value)
@@ -516,7 +553,8 @@ def apply_character_composition(
                         token=scheduled_grant.grant_token,
                         subject=subject,
                         definition_ref=(
-                            scheduled_grant.provenance.source_ref
+                            scheduled_grant.content_ref
+                            or scheduled_grant.provenance.source_ref
                         ),
                         source_id=grant_id,
                         grant_token=scheduled_grant.grant_token,
@@ -557,6 +595,26 @@ def apply_character_composition(
             runtime=runtime,
         )
         for scheduled_grant in preview.grant_schedule:
+            content_ref = scheduled_grant.content_ref
+            if (
+                scheduled_grant.kind
+                is CharacterGrantScheduleKind.AUTOMATIC_CONTENT
+                and content_ref is not None
+            ):
+                declaration = registry.resolve_definition(content_ref)
+                feature = declaration.definition_payload
+                if isinstance(feature, OriginStructuralFeatureDefinition):
+                    receipts.append(
+                        install_origin_structural_feature(
+                            entity=entity,
+                            character_id=character_id,
+                            grant_token=scheduled_grant.grant_token,
+                            definition_ref=content_ref,
+                            character_level=definition.earned_character_level,
+                            definition=feature,
+                        ),
+                    )
+                    continue
             receipt = apply_builtin_character_grant(
                 context=grant_context,
                 entry=scheduled_grant,
@@ -665,6 +723,9 @@ def apply_character_composition(
                 >= contribution.spellcasting_feature_class_level
             )
         }
+        receipts.extend(
+            install_origin_innate_spellcasting(grant_context),
+        )
         provider_levels = {
             contribution.class_ref.identity_key: contribution.class_level
             for contribution in preview.caster_contributions
@@ -799,12 +860,9 @@ def apply_character_composition(
         partial = CharacterCompositionReceipt(
             runtime_entity_uuid=entity.uuid,
             character_id=character_id,
-            definition_revision=definition.definition_revision,
-            definition_digest=definition.definition_digest,
-            loadout_revision=loadout.loadout_revision,
-            loadout_digest=loadout.loadout_digest,
             grants=tuple(receipts),
             automatic_grant_refs=preview.automatic_grant_refs,
+            owns_character_origin_identity=True,
         )
         remove_character_composition(entity, partial)
         raise
@@ -812,16 +870,13 @@ def apply_character_composition(
     return CharacterCompositionReceipt(
         runtime_entity_uuid=entity.uuid,
         character_id=character_id,
-        definition_revision=definition.definition_revision,
-        definition_digest=definition.definition_digest,
-        loadout_revision=loadout.loadout_revision,
-        loadout_digest=loadout.loadout_digest,
         grants=tuple(receipts),
         automatic_grant_refs=preview.automatic_grant_refs,
+        owns_character_origin_identity=True,
     )
 
 
-def _restore_item_state(item: object, durable_item: CharacterItemV1) -> None:
+def _restore_item_state(item: BaseItem, durable_item: CharacterItemV1) -> None:
     """Restore authored durable state before the item enters owner containers."""
 
     if durable_item.durable_augmentations:
@@ -829,18 +884,14 @@ def _restore_item_state(item: object, durable_item: CharacterItemV1) -> None:
             "Durable item augmentations require an installed augmentation "
             "materializer",
         )
-    if not hasattr(item, "stack_count") or not hasattr(item, "max_stack"):
-        raise TypeError("Character item factory returned no stackable item surface")
-    stack_id = getattr(item, "stack_id", None)
-    max_stack = getattr(item, "max_stack")
-    if stack_id is None and durable_item.quantity != 1:
+    if item.stack_id is None and durable_item.quantity != 1:
         raise ValueError("Non-stackable durable items must have quantity one")
-    if durable_item.quantity > max_stack:
+    if durable_item.quantity > item.max_stack:
         raise ValueError(
             f"Durable quantity {durable_item.quantity} exceeds max stack "
-            f"{max_stack}",
+            f"{item.max_stack}",
         )
-    setattr(item, "stack_count", durable_item.quantity)
+    item.stack_count = durable_item.quantity
 
     if durable_item.remaining_charges is not None:
         if not isinstance(item, UsableItem):
@@ -855,7 +906,7 @@ def _restore_item_state(item: object, durable_item: CharacterItemV1) -> None:
         item.charges = durable_item.remaining_charges
 
     if durable_item.durability_damage is not None:
-        health = getattr(item, "health", None)
+        health = item.health
         if health is None:
             raise TypeError("durability_damage requires a breakable item")
         maximum = health.get_max_hit_dices_points(0)
@@ -864,6 +915,52 @@ def _restore_item_state(item: object, durable_item: CharacterItemV1) -> None:
                 "Destroyed items cannot enter durable character holdings",
             )
         health.damage_taken = durable_item.durability_damage
+
+
+def _validate_character_item_placement(
+    entity: Entity,
+    item: BaseItem,
+    durable_item: CharacterItemV1,
+) -> None:
+    """Reject lossy stack merges and equipment displacement before mutation."""
+    if entity.inventory.would_merge(item):
+        raise ValueError(
+            "Durable character items cannot merge across character_item_id "
+            f"boundaries: {durable_item.recipe.ref.identity_key}",
+        )
+    if not entity.inventory.can_add(item):
+        raise ValueError(
+            f"Character inventory rejected "
+            f"{durable_item.recipe.ref.identity_key}",
+        )
+    slot = durable_item.equipped_slot
+    if slot is None:
+        return
+    if not isinstance(item, EquippableItem):
+        raise TypeError("equipped_slot requires an equippable item definition")
+    if slot not in item.compatible_equipment_slots():
+        raise ValueError(
+            f"Character equipment rejected "
+            f"{durable_item.recipe.ref.identity_key} in {slot.value}",
+        )
+    for occupied_slot in item.occupied_equipment_slots(slot):
+        occupied = entity.equipment.get_item_by_slot(occupied_slot)
+        if occupied is not None and occupied is not item:
+            raise ValueError(
+                f"Character equipment would displace {occupied.name!r} from "
+                f"{occupied_slot.value}",
+            )
+
+
+def _discard_character_items(
+    items: list[BaseItem],
+    *,
+    binding_registry: ItemRuntimeBindingRegistry,
+) -> None:
+    """Destroy every provisional holding and its exact runtime binding."""
+    for item in reversed(items):
+        binding_registry.discard(item.uuid)
+        item.destroy()
 
 
 def materialize_character(
@@ -885,6 +982,7 @@ def materialize_character(
     creature_binding_registry: CreatureRuntimeBindingRegistry = (
         CREATURE_RUNTIME_BINDINGS
     ),
+    item_binding_registry: ItemRuntimeBindingRegistry = ITEM_RUNTIME_BINDINGS,
     runtime_content_ref: ContentRef | None = None,
 ) -> MaterializedCharacter:
     """Build structural creature state, then hydrate exact persisted possessions."""
@@ -944,6 +1042,12 @@ def materialize_character(
         entity_content_ref=runtime_content_ref,
         runtime=runtime,
     )
+    apply_player_character_appearance(
+        entity.appearance,
+        body_ref=definition.body_recipe.ref,
+        species_ref=definition.species_ref,
+        selection=definition.appearance,
+    )
 
     composition_receipt = apply_character_composition(
         entity=entity,
@@ -954,6 +1058,8 @@ def materialize_character(
     )
 
     lineage: list[tuple[UUID, UUID]] = []
+    starting_torches: list[Torch] = []
+    provisional_items: list[BaseItem] = []
     try:
         for durable_item in holdings.items:
             item = materialize_item_from_installed_runtime(
@@ -961,9 +1067,12 @@ def materialize_character(
                 entity.uuid,
                 origin=ItemRuntimeOrigin.PERSISTED,
                 character_item_id=durable_item.character_item_id,
+                binding_registry=item_binding_registry,
                 runtime=runtime,
             )
+            provisional_items.append(item)
             _restore_item_state(item, durable_item)
+            _validate_character_item_placement(entity, item, durable_item)
             if not entity.loot_item(item):
                 raise ValueError(
                     f"Character inventory rejected "
@@ -980,8 +1089,16 @@ def materialize_character(
                         f"{durable_item.recipe.ref.identity_key} in "
                         f"{durable_item.equipped_slot.value}",
                     )
+            if isinstance(item, Torch):
+                starting_torches.append(item)
             lineage.append((durable_item.character_item_id, item.uuid))
+        for torch in starting_torches:
+            torch.ignite(entity.uuid)
     except Exception:
+        _discard_character_items(
+            provisional_items,
+            binding_registry=item_binding_registry,
+        )
         if composition_receipt is not None:
             remove_character_composition(entity, composition_receipt)
         raise

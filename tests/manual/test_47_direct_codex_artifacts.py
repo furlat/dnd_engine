@@ -10,17 +10,21 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from ai.evaluation.direct_codex_artifacts import (
+from ai.codex_tools.artifacts import (
     DirectCodexArtifactCollector,
     DirectCodexFrictionCategory,
     DirectCodexFrictionAnnotation,
     DirectCodexPerspective,
     DirectCodexRotationSlot,
     DirectCodexRunArtifact,
-    start_direct_codex_validation_run,
+    start_direct_codex_run,
     write_direct_codex_run_artifact,
 )
+from ai.codex_tools.direct_game import DirectCodexGameStart
 from dnd.ai.contracts.semantics import EffectCertainty, WorldEffectAnchor, WorldEffectScope
+from dnd.scenarios.encounter_catalog import (
+    encounter_recipe,
+)
 
 
 def test_direct_codex_artifact_round_trip_preserves_raw_subjective_evidence(
@@ -40,8 +44,8 @@ def test_direct_codex_artifact_round_trip_preserves_raw_subjective_evidence(
         rotation=DirectCodexRotationSlot(
             sequence=12,
             focus="barbarian_hero",
-            mode="codex_hero",
-            arena_id="double_door_dark_hunt",
+            mode="codex_roster",
+            encounter_id="encounter.double_door_dark_hunt",
         ),
         perspective=DirectCodexPerspective(
             session_id="session-1",
@@ -87,6 +91,22 @@ def test_direct_codex_artifact_writer_refuses_overwrite(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         write_direct_codex_run_artifact(artifact, tmp_path)
+
+
+def test_v1_arena_identity_migrates_to_exact_encounter_identity() -> None:
+    artifact = _collect_artifact(run_id="legacy-arena-identity")
+    payload = artifact.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["rotation"]["arena_id"] = "double_door_dark_hunt"
+    del payload["rotation"]["encounter_id"]
+
+    migrated = DirectCodexRunArtifact.model_validate(payload)
+
+    assert migrated.schema_version == 2
+    assert (
+        migrated.rotation.encounter_id
+        == "encounter.double_door_dark_hunt"
+    )
 
 
 def test_empty_agent_telemetry_remains_empty_evidence() -> None:
@@ -154,26 +174,34 @@ def test_collector_uses_only_subjective_evidence_endpoints() -> None:
     )
 
 
-def test_direct_validation_starter_captures_snapshot_before_returning() -> None:
-    """Direct validation startup returns only after the bootstrap evidence exists."""
+def test_direct_codex_starter_captures_snapshot_before_returning() -> None:
+    """Direct Codex startup returns only after bootstrap evidence exists."""
     client, requests = _direct_start_client(
         snapshot=_snapshot_payload(observation_cursor=12),
     )
-
-    started = start_direct_codex_validation_run(
-        "http://testserver",
-        arena_id="double_door_dark_hunt",
+    rotation = DirectCodexRotationSlot(
         sequence=13,
         focus="skeleton_side",
+        mode="codex_roster",
+        encounter_id="encounter.double_door_dark_hunt",
+    )
+
+    started = start_direct_codex_run(
+        "http://testserver",
+        rotation=rotation,
         client=client,
     )
 
-    assert started.rotation == DirectCodexRotationSlot(
-        sequence=13,
-        focus="skeleton_side",
-        mode="codex_monsters",
-        arena_id="double_door_dark_hunt",
+    assert started.start_result == DirectCodexGameStart(
+        activation_status="activated",
+        encounter_id="encounter.double_door_dark_hunt",
+        encounter_uuid="encounter-1",
+        game_id="game-1",
+        session_id="session-1",
+        takeover_claim_id="claim-1",
+        controlled_entity_uuids=("hero-1",),
     )
+    assert started.rotation == rotation
     assert started.perspective == DirectCodexPerspective(
         session_id="session-1",
         takeover_claim_id="claim-1",
@@ -183,6 +211,7 @@ def test_direct_validation_starter_captures_snapshot_before_returning() -> None:
     assert started.initial_snapshot.observation_cursor == 12
     assert requests == [
         ("GET", "/game-creation/catalog", {}),
+        ("POST", "/game-creation/compose", {}),
         (
             "POST",
             "/game-creation/start",
@@ -195,30 +224,22 @@ def test_direct_validation_starter_captures_snapshot_before_returning() -> None:
     ]
 
 
-def test_direct_validation_starter_rejects_modes_without_codex_session() -> None:
-    """A direct run context cannot be created without a Codex session id."""
+def test_direct_codex_starter_requires_complete_codex_assignment() -> None:
+    """A direct run cannot begin without exact Codex authority."""
     client, _requests = _direct_start_client(
         snapshot=_snapshot_payload(observation_cursor=12),
-        start_payload={
-            "status": "prepared",
-            "preset_arena_id": "double_door_dark_hunt",
-            "encounter_uuid": "encounter-1",
-            "side_a": {
-                "entity_assignments": [{"entity_uuid": "hero-1"}],
-            },
-            "side_b": {
-                "entity_assignments": [{"entity_uuid": "monster-1"}],
-            },
-        },
+        start_payload=_prepared_direct_payload(codex=False),
     )
 
-    with pytest.raises(ValueError, match="did not create a Codex session"):
-        start_direct_codex_validation_run(
+    with pytest.raises(ValueError, match="complete Codex assignment"):
+        start_direct_codex_run(
             "http://testserver",
-            arena_id="double_door_dark_hunt",
-            sequence=13,
-            focus="skeleton_side",
-            mode="human_hero",
+            rotation=DirectCodexRotationSlot(
+                sequence=13,
+                focus="skeleton_side",
+                mode="codex_roster",
+                encounter_id="encounter.double_door_dark_hunt",
+            ),
             client=client,
         )
 
@@ -400,55 +421,56 @@ def _direct_start_client(
     snapshot: dict[str, Any],
     start_payload: dict[str, Any] | None = None,
 ) -> tuple[httpx.Client, list[tuple[str, str, dict[str, str]]]]:
-    """Create a recording HTTP client for direct validation startup."""
+    """Create a recording HTTP client for direct Codex startup."""
     requests: list[tuple[str, str, dict[str, str]]] = []
-    payload = start_payload or {
-        "status": "prepared",
-        "preset_arena_id": "double_door_dark_hunt",
-        "encounter_uuid": "encounter-1",
-        "side_a": {
-            "entity_assignments": [{"entity_uuid": "hero-1"}],
-        },
-        "side_b": {
-            "entity_assignments": [{"entity_uuid": "hero-1"}],
-            "codex_session_id": "session-1",
-            "takeover_claim_id": "claim-1",
-        },
-    }
+    payload = start_payload or _prepared_direct_payload(codex=True)
+    recipe = encounter_recipe(
+        "encounter.double_door_dark_hunt",
+    )
+    content_digest = "3" * 64
+    ruleset_digest = "4" * 64
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         requests.append((request.method, path, dict(request.url.params)))
         if path == "/game-creation/catalog":
             return httpx.Response(200, json={
-                "hero_configurations": [
-                    {
-                        "configuration_id": "hero.barbarian",
-                        "title": "level 5 barbarian",
-                    }
+                "schema_version": 3,
+                "encounter_recipes": [
+                    recipe.model_dump(mode="json"),
                 ],
-                "presets": [
-                    {
-                        "arena_id": "double_door_dark_hunt",
-                        "title": "Double Door Dark Hunt",
-                        "tags": ["doors", "skeletons"],
-                        "expected_pressure": [],
-                        "map_notes": [],
-                        "recipe": {
-                            "hero_configuration_id": "hero.barbarian",
-                        },
-                    }
-                ]
+            })
+        if path == "/game-creation/compose":
+            body = json.loads(request.content)
+            assert [
+                slot["controller_defaults"]["controller"]
+                for slot in body["roster_slots"]
+            ] == ["ai", "codex"]
+            return httpx.Response(200, json={
+                "schema_version": 1,
+                "content_set_digest": content_digest,
+                "ruleset_digest": ruleset_digest,
+                "recipe": recipe.model_dump(mode="json"),
             })
         if path == "/game-creation/start":
+            body = json.loads(request.content)
+            assert body == {
+                "expected_content_set_digest": content_digest,
+                "expected_ruleset_digest": ruleset_digest,
+                "recipe": recipe.model_dump(mode="json"),
+            }
             return httpx.Response(200, json=payload)
-        if path == "/session/create":
-            return httpx.Response(200, json={"session_id": "human-session"})
         if path == "/game/join":
             body = json.loads(request.content)
+            assert body == {
+                "session_id": "session-1",
+                "entity_uuids": ["hero-1"],
+            }
             return httpx.Response(
                 200,
                 json={
+                    "success": True,
+                    "game_id": "game-1",
                     "session_id": body["session_id"],
                     "controlled_entities": body["entity_uuids"],
                 },
@@ -467,7 +489,18 @@ def _direct_start_client(
                 },
             )
         if path == "/game-creation/activate":
-            return httpx.Response(200, json={"status": "activated"})
+            body = json.loads(request.content)
+            assert body == {
+                "session_id": "session-1",
+                "expected_source_stream_id": "source-stream",
+                "expected_generation_id": "generation",
+                "expected_perspective_epoch_id": "perspective-epoch",
+            }
+            return httpx.Response(200, json={
+                "status": "activated",
+                "game_id": "game-1",
+                "encounter_uuid": "encounter-1",
+            })
         if path == "/ai/sessions/session-1/observation/snapshot":
             return httpx.Response(200, json=snapshot)
         return httpx.Response(500, json={"detail": f"unexpected endpoint: {path}"})
@@ -479,6 +512,58 @@ def _direct_start_client(
         ),
         requests,
     )
+
+
+def _prepared_direct_payload(*, codex: bool) -> dict[str, Any]:
+    """Return exact roster results for one direct-start transport fixture."""
+    recipe = encounter_recipe(
+        "encounter.double_door_dark_hunt",
+    )
+    rosters = []
+    for roster_index, roster_slot in enumerate(recipe.roster_slots):
+        controller = (
+            "codex"
+            if codex and roster_index == 1
+            else "ai"
+        )
+        assignments = []
+        for member_index, _member in enumerate(
+            roster_slot.roster.members,
+        ):
+            assignment: dict[str, Any] = {
+                "entity_uuid": (
+                    "hero-1"
+                    if controller == "codex" and member_index == 0
+                    else f"entity-{roster_index}-{member_index}"
+                ),
+                "controller": controller,
+            }
+            if controller == "codex":
+                assignment.update({
+                    "codex_session_id": (
+                        "session-1"
+                        if member_index == 0
+                        else f"session-{member_index + 1}"
+                    ),
+                    "takeover_claim_id": (
+                        "claim-1"
+                        if member_index == 0
+                        else f"claim-{member_index + 1}"
+                    ),
+                })
+            assignments.append(assignment)
+        rosters.append({
+            "roster_slot_id": roster_slot.roster_slot_id,
+            "entity_assignments": assignments,
+        })
+    return {
+        "schema_version": 2,
+        "status": "prepared",
+        "recipe_digest": recipe.recipe_digest,
+        "encounter_uuid": "encounter-1",
+        "game_id": "game-1",
+        "rosters": rosters,
+    }
 
 
 def _snapshot_payload(*, observation_cursor: int) -> dict[str, Any]:
@@ -586,8 +671,8 @@ def _rotation() -> DirectCodexRotationSlot:
     return DirectCodexRotationSlot(
         sequence=1,
         focus="barbarian_hero",
-        mode="codex_hero",
-        arena_id="double_door_dark_hunt",
+        mode="codex_roster",
+        encounter_id="encounter.double_door_dark_hunt",
     )
 
 

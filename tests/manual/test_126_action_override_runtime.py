@@ -52,7 +52,8 @@ from dnd.core.base_actions import (
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import AbilityName, EventPhase, EventQueue
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import CreatureType, NumericalModifier
+from dnd.core.creature_types import CreatureType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.spells.conjuration import Web
 from dnd.spells.enchantment import HoldPerson
@@ -64,7 +65,7 @@ from dnd.spells.evocation import (
     IceStorm,
     MagicMissile,
 )
-from dnd.utils import (
+from tests.engine.support import (
     deal_damage_to,
     force_spell_attack_hit,
     remove_spell_attack_modifier,

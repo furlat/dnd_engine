@@ -30,7 +30,16 @@ class AppearanceConfig(BaseModel):
         default=1.0,
         gt=0,
         le=4.0,
-        description="Presentation-only actor scale independent of the creature's rules size.",
+        description="Presentation-only uniform actor scale independent of the creature's rules size.",
+    )
+    visual_scale_x: float = Field(
+        default=1.0,
+        gt=0,
+        le=4.0,
+        description=(
+            "Presentation-only horizontal actor multiplier independent of "
+            "the creature's rules size."
+        ),
     )
     placeholder_tint: int = Field(
         default=0x36FF62,
@@ -84,7 +93,16 @@ class Appearance(BaseBlock):
         default=1.0,
         gt=0,
         le=4.0,
-        description="Presentation-only actor scale independent of the creature's rules size.",
+        description="Presentation-only uniform actor scale independent of the creature's rules size.",
+    )
+    visual_scale_x: float = Field(
+        default=1.0,
+        gt=0,
+        le=4.0,
+        description=(
+            "Presentation-only horizontal actor multiplier independent of "
+            "the creature's rules size."
+        ),
     )
     placeholder_tint: int = Field(
         default=0x36FF62,

@@ -1,5 +1,5 @@
 {
-  "asset_index_digest": "440314e68181847a1a29fcdffe5a8a5444449d478781afb5a24a3233546a3201",
+  "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
   "assets": [
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.action-surge.webp",
@@ -105,6 +105,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.dodge.webp",
       "asset_sha256": "acc528d86b7f1a13e940d9b6b6584ebda73c92e174c417be5fe4df958fe06ed9",
       "icon_key": "action.dodge"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.dragonborn-breath-weapon.webp",
+      "asset_sha256": "4b0d895864345b85586ef78234c864f38f3bc61c75b13ecc10b4166b4e7965fd",
+      "icon_key": "action.dragonborn-breath-weapon"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.drop.webp",
@@ -1362,9 +1367,19 @@
       "icon_key": "item.hide-armor"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.holy-symbol.webp",
+      "asset_sha256": "f8a6549499a84e5a8c76c9c79c06cacd3c894d765360d34502707b7856e35eb9",
+      "icon_key": "item.holy-symbol"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.horned-helmet.webp",
       "asset_sha256": "c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87",
       "icon_key": "item.horned-helmet"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.incense.webp",
+      "asset_sha256": "6ce4a10c00b0cd9d49a04f017a95a224726fb99b69d67eac98896a4cd8dd4497",
+      "icon_key": "item.incense"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.iron-helmet.webp",
@@ -1410,6 +1425,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.light-crossbow.webp",
       "asset_sha256": "3c8684fe1f48c90e4765a245c76957d39e2a6fdceeef0c3b6b34d3c8fd543d45",
       "icon_key": "item.light-crossbow"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.light-hammer.webp",
+      "asset_sha256": "143962f97858a6c9b1643cd43bd5c984bd524b3b4d3547ce43df8a23b2d9e07a",
+      "icon_key": "item.light-hammer"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.longbow.webp",
@@ -1475,6 +1495,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.potion-of-healing.webp",
       "asset_sha256": "68a638040386125009a4353504e49c7d3a13b8a792cb099ab9cdb93de569d4a6",
       "icon_key": "item.potion-of-healing"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.prayer-book.webp",
+      "asset_sha256": "4aa4a7eaec08bfd51384f69f52bfc6d52cf93936a87c0e17d8d0ef3942f4caae",
+      "icon_key": "item.prayer-book"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.quarterstaff.webp",
@@ -1615,6 +1640,11 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.trident.webp",
       "asset_sha256": "5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef",
       "icon_key": "item.trident"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/item.vestments.webp",
+      "asset_sha256": "465e8ff12b78d071ca4af9f1aecad2a5ab1d1f4a707ff68e12dd2b51b51609f9",
+      "icon_key": "item.vestments"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/item.wand-of-fire.webp",
@@ -2037,6 +2067,11 @@
       "icon_key": "spell.healing-word"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.hellish-rebuke.webp",
+      "asset_sha256": "746362f840c24afffbade5fe722583b7ad2fe735093fd2a1d752459d075406c9",
+      "icon_key": "spell.hellish-rebuke"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.heroes-feast.webp",
       "asset_sha256": "f9582cd3cd96c3340c59c4b2f12ba04ee91cbe91342a202bd6470cc6b0a8f5ba",
       "icon_key": "spell.heroes-feast"
@@ -2287,6 +2322,11 @@
       "icon_key": "spell.telekinesis"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.thaumaturgy.webp",
+      "asset_sha256": "4c892a0ae0b2b95e27d7c7757d4600fddd068918d950d3d9d02a04488e72305e",
+      "icon_key": "spell.thaumaturgy"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.thunderwave.webp",
       "asset_sha256": "4e031214e33668e0a96e35207bfce06a4bdfc1749db73fd422d5d575d0a08468",
       "icon_key": "spell.thunderwave"
@@ -2305,6 +2345,156 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.web.webp",
       "asset_sha256": "1648e98e9c045136637e4748a69d34d187a41d41328c85b9df3ed2375e6f8a61",
       "icon_key": "spell.web"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.acolyte-proficiencies.webp",
+      "asset_sha256": "1d9935ff3aa8a91c7c06b386b2bce58eb003707d0ff998bc9cbccc4ae114e7e8",
+      "icon_key": "trait.acolyte-proficiencies"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.artificers-lore.webp",
+      "asset_sha256": "ecaa4cf5567186e81cff38b8f5fc2642b67ead9d6ae11de0101516021e1a0dc8",
+      "icon_key": "trait.artificers-lore"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.darkvision.webp",
+      "asset_sha256": "f9b292c41292ca586a88144105e090455e281e5bc6e0a3b1457264102477d1eb",
+      "icon_key": "trait.darkvision"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-acid-line.webp",
+      "asset_sha256": "d698787a0a9f37433914edf797945f2c54ef8ebabb11f7ce48e6bdadd339a8b0",
+      "icon_key": "trait.draconic-ancestry-acid-line"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-cold-cone.webp",
+      "asset_sha256": "662db8d0c2f1b31083088b8ec6fdbff2f0288248b16cb5f0f748b8cb0df645c5",
+      "icon_key": "trait.draconic-ancestry-cold-cone"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-fire-cone.webp",
+      "asset_sha256": "49b6322ce9720da606f935ae8adbfa1bea56aeb14fa6ee06fc022bc3ddddf16d",
+      "icon_key": "trait.draconic-ancestry-fire-cone"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-fire-line.webp",
+      "asset_sha256": "fd669b69fec2a886e6194141cc9a4ca81cfb5b3513469728a2e3dd6e4aefa165",
+      "icon_key": "trait.draconic-ancestry-fire-line"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-lightning-line.webp",
+      "asset_sha256": "cd05d397d2889c933e580e00f0076f412bf8cc2ebbdca244c5251a9cb72e3388",
+      "icon_key": "trait.draconic-ancestry-lightning-line"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.draconic-ancestry-poison-cone.webp",
+      "asset_sha256": "55b35896b02306607a8f0fda06cd53aa8c8d3ff27a9c9588dda138d8ba9c3d4d",
+      "icon_key": "trait.draconic-ancestry-poison-cone"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.dwarven-combat-training.webp",
+      "asset_sha256": "b7a1ecdd013455079f1af0990218fb607c1fd506d3fe5830a480add6a80753fb",
+      "icon_key": "trait.dwarven-combat-training"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.dwarven-resilience.webp",
+      "asset_sha256": "f4ccdcea09643e891671bd8ef5b645d00e5bef766d090f8ad63e035811b22e21",
+      "icon_key": "trait.dwarven-resilience"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.dwarven-toughness.webp",
+      "asset_sha256": "5b2f4cc2a0d78128dceb751aebb40ccc58f5123a4836992a2746b668dca3b7f1",
+      "icon_key": "trait.dwarven-toughness"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.elf-weapon-training.webp",
+      "asset_sha256": "fa0be3b3742270442f25aee32dfaa8e2ab8d6f05f5b9b7dd9deb97e117908a34",
+      "icon_key": "trait.elf-weapon-training"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.fey-ancestry.webp",
+      "asset_sha256": "e12b76662e36b4f9e11d49981925fd104415252a519abeffd043cbb764a6a321",
+      "icon_key": "trait.fey-ancestry"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.gnome-cunning.webp",
+      "asset_sha256": "4d3badc33ffada69b47ed3650e6fc04374740c572d3d552fb45cd88383b374fc",
+      "icon_key": "trait.gnome-cunning"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.half-orc-menacing.webp",
+      "asset_sha256": "03234891e5b9cf17b0ab3ff6851314038fc83e745fbd7e7ea85c95af1e421778",
+      "icon_key": "trait.half-orc-menacing"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.half-orc-relentless-endurance.webp",
+      "asset_sha256": "99192caf281cf625dfcfbcb8bdf37a5a90060a287b4fcabbdd329d30a7fe4f61",
+      "icon_key": "trait.half-orc-relentless-endurance"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.half-orc-savage-attacks.webp",
+      "asset_sha256": "6e793aae67ac7d2e05d552a8a235ed69b62058ac34c1d33dd5f01b24660aa61b",
+      "icon_key": "trait.half-orc-savage-attacks"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.halfling-brave.webp",
+      "asset_sha256": "0751831b421482f222d1b19c6aacb55fcb345d3b5c9ccfb172feed02a4c74a9b",
+      "icon_key": "trait.halfling-brave"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.halfling-lucky.webp",
+      "asset_sha256": "81f1127e17126e3cfe57b84b65fd18c6e8478ee67fd38ed1696e91c11c5698a3",
+      "icon_key": "trait.halfling-lucky"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.halfling-nimbleness.webp",
+      "asset_sha256": "34a609794ff515169a0c9c837836ce367c54263e48159eca68e2703d49e397db",
+      "icon_key": "trait.halfling-nimbleness"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.hellish-resistance.webp",
+      "asset_sha256": "ff5a8bc3e9997e8c5467c97b18e0bef3ff9789dbe593a59343e893b4100f9321",
+      "icon_key": "trait.hellish-resistance"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.keen-senses.webp",
+      "asset_sha256": "fd452caea00144c5c9db5484470a9baabde676d927e8218014513e8c54703ee6",
+      "icon_key": "trait.keen-senses"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.naturally-stealthy.webp",
+      "asset_sha256": "45291636d0497a71152af9d769d2b4a95488a91ef353fbba6bce17eb36d8cf05",
+      "icon_key": "trait.naturally-stealthy"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.origin-languages.webp",
+      "asset_sha256": "41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386",
+      "icon_key": "trait.origin-languages"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.origin-size-and-speed.webp",
+      "asset_sha256": "d6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75",
+      "icon_key": "trait.origin-size-and-speed"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.rock-gnome-tinker.webp",
+      "asset_sha256": "0ee53cb257ff42cc27470d8214692cf3acc59d107e5b8e691e4ca091957cca30",
+      "icon_key": "trait.rock-gnome-tinker"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.shelter-of-the-faithful.webp",
+      "asset_sha256": "50df9fb5865694f53cf714e0018cf6444444a54fca8dafc39c85d6a2f257c124",
+      "icon_key": "trait.shelter-of-the-faithful"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.stonecunning.webp",
+      "asset_sha256": "34ff247f71476d06a7121d252156158f4d21369e4a7294a68993d9033b4cf0a3",
+      "icon_key": "trait.stonecunning"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/trait.trance.webp",
+      "asset_sha256": "ff8fef2d2f42336cfe6c0369b916f1b5ba5a973cc9585b223d22fb268634a26a",
+      "icon_key": "trait.trance"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/ui.end-turn-medallion.webp",
@@ -2389,9 +2579,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 477,
+    "asset_count": 515,
     "schema_version": 3,
-    "sha256": "dfcecb24af9b225dd8867eba9ee1801a6d986f440169744e7d3098ab2bd3dafc",
+    "sha256": "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c",
     "style_id": "fantasy-classic-v1"
   }
 }

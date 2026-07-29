@@ -6,14 +6,12 @@ import pytest
 
 from ai.planning.composition import compose_option
 from ai.planning.contracts import LogicalStep, RequirementKind
-from ai.planning.explain import explain_option
 from ai.planning.registry import (
     PolicyMethodContract,
     contract_for_policy_method,
     logical_policy_method,
     registered_policy_method_contracts,
 )
-from ai.planning.regression import regress_options
 from dnd.ai.contracts.semantics import (
     ComparisonOperator,
     EffectCertainty,
@@ -215,35 +213,6 @@ def test_information_effect_stops_prediction_at_observation_barrier() -> None:
     assert "enemy.damaged" not in option.final_known_facts
 
 
-def test_backward_regression_finds_move_then_attack_chain() -> None:
-    """Bounded regression should discover an enabling step and verify forward."""
-    move = LogicalStep(
-        step_id="move",
-        preconditions=_fact("actor.can_act"),
-        guaranteed_effects=(_set("target.in_range", True),),
-    )
-    attack = LogicalStep(
-        step_id="attack",
-        preconditions=_all(
-            _fact("actor.can_act"),
-            _fact("target.in_range"),
-        ),
-        guaranteed_effects=(_set("target.damaged", True),),
-    )
-
-    candidates = regress_options(
-        _fact("target.damaged"),
-        (attack, move),
-        initial_facts={"actor.can_act": True},
-        max_depth=3,
-    )
-
-    assert candidates
-    assert candidates[0].step_ids == ("move", "attack")
-    assert candidates[0].option.consistent
-    assert not candidates[0].remaining_preconditions
-
-
 def test_policy_method_annotations_are_executable_metadata_not_wrappers() -> None:
     """Logical annotations should preserve call identity and expose contracts."""
     contract = PolicyMethodContract(
@@ -266,8 +235,8 @@ def test_policy_method_annotations_are_executable_metadata_not_wrappers() -> Non
     assert contract in registered_policy_method_contracts()
 
 
-def test_composition_proof_is_stable_and_final_facts_are_immutable() -> None:
-    """Proof explanations and derived fact maps must be deterministic."""
+def test_composition_final_facts_are_stable_and_immutable() -> None:
+    """Derived fact maps retain deterministic insertion order and immutability."""
     option = compose_option(
         "stable",
         (LogicalStep(
@@ -277,12 +246,6 @@ def test_composition_proof_is_stable_and_final_facts_are_immutable() -> None:
         ),),
     )
 
-    assert explain_option(option)[:3] == (
-        "option:stable",
-        "consistent:true",
-        "requires_observation:false",
-    )
     assert tuple(option.final_known_facts) == ("fact.b", "fact.a")
     with pytest.raises(TypeError):
         option.final_known_facts["fact.c"] = True
-

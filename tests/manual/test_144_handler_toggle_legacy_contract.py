@@ -17,8 +17,8 @@ from dnd.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.utils import force_attack_miss, get_hp, remove_attack_modifier
-from tests.engine_book.test_chapter_10_core_actions_combat import (
+from tests.engine.support import force_attack_miss, get_hp, remove_attack_modifier
+from tests.engine.test_combat_actions import (
     reset_core_action_state,
 )
 
@@ -44,11 +44,11 @@ PROTECTION_SELECTOR = (
     f"{THIS_FILE}::test_protection_reaction_respects_disable_and_reenable"
 )
 ENABLED_OA_SELECTOR = (
-    "tests/engine_book/test_chapter_10_core_actions_combat.py::"
+    "tests/engine/test_combat_actions.py::"
     "test_eb_10_005_opportunity_attack_uses_reaction_on_step_movement"
 )
 LOW_LEVEL_SELECTOR = (
-    "tests/engine_book/test_chapter_05_blocks_context.py::"
+    "tests/engine/test_block_context.py::"
     "test_eb_05_011_handler_toggles_only_affect_player_toggleable_handlers"
 )
 

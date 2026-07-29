@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from server.character_settlement import (
     build_terminal_settlement_bundle,
@@ -24,7 +24,7 @@ from server.game_artifact_store import GameArtifactStore
 from server.game_directory.contracts import (
     ArtifactCreate,
     CharacterDeploymentLeaseCreate,
-    CharacterDeploymentLeaseRecord,
+    CharacterRevisionHeads,
     CharacterRevisionBundleCommit,
     ExecutionKind,
     GameCreate,
@@ -61,8 +61,26 @@ class LocalTerminalCommitEnvelope(BaseModel):
     evidence: WorkerSummaryEvidence
     objective_replay_artifact: ArtifactCreate
     subjective_replay_artifact: ArtifactCreate
-    settlement_bundle: CharacterRevisionBundleCommit | None = None
-    lease_id: UUID | None = None
+    settlement_bundles: tuple[CharacterRevisionBundleCommit, ...] = ()
+    lease_ids: tuple[UUID, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_settlement_leases(self) -> "LocalTerminalCommitEnvelope":
+        if len(self.settlement_bundles) != len(self.lease_ids):
+            raise ValueError(
+                "terminal settlement bundles and leases must be one-to-one",
+            )
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedLocalCharacter:
+    """One leased durable character awaiting or owning a runtime entity."""
+
+    snapshot: CharacterDeploymentSnapshot
+    lease_id: UUID
+    deployment_id: UUID
+    runtime_entity_uuid: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,10 +89,7 @@ class PreparedLocalGame:
 
     game: GameRecord
     membership: MembershipRecord
-    character_snapshot: CharacterDeploymentSnapshot | None
-    lease_id: UUID | None
-    deployment_id: UUID | None
-    runtime_entity_uuid: UUID | None = None
+    characters: tuple[PreparedLocalCharacter, ...] = ()
 
 
 class StandaloneLocalGameCoordinator:
@@ -128,7 +143,8 @@ class StandaloneLocalGameCoordinator:
         scenario_kind: str,
         scenario_id: str,
         display_name: str,
-        character_id: UUID | None,
+        character_ids: tuple[UUID, ...],
+        membership_roster_slot_id: str,
         seed: int | None = None,
     ) -> PreparedLocalGame:
         """Reserve STARTING game authority and lease the selected character."""
@@ -157,14 +173,13 @@ class StandaloneLocalGameCoordinator:
             ),
         )
         membership: MembershipRecord | None = None
-        lease: CharacterDeploymentLeaseRecord | None = None
         try:
             membership = self.repository.create_membership(
                 MembershipCreate(
                     game_id=game.game_id,
                     principal_id=self.owner_principal_id,
                     role=MembershipRole.OWNER,
-                    side_id="side_a",
+                    side_id=membership_roster_slot_id,
                     controller_kind="local_profile",
                     capabilities=MembershipCapabilities(
                         may_connect=True,
@@ -177,28 +192,41 @@ class StandaloneLocalGameCoordinator:
                     ),
                 ),
             )
-            character_snapshot: CharacterDeploymentSnapshot | None = None
-            deployment_id: UUID | None = None
-            if character_id is not None:
-                lease = self.repository.acquire_character_deployment_lease(
-                    CharacterDeploymentLeaseCreate(
-                        character_id=character_id,
-                        game_id=game.game_id,
-                        membership_id=membership.membership_id,
-                    ),
-                )
-                character_snapshot = build_character_deployment_snapshot(
+            snapshots = tuple(
+                build_character_deployment_snapshot(
                     self.character_directory,
                     self.owner_principal_id,
                     character_id,
                 )
-                deployment_id = uuid4()
+                for character_id in character_ids
+            )
+            lease_requests = tuple(
+                CharacterDeploymentLeaseCreate(
+                    character_id=snapshot.character_id,
+                    game_id=game.game_id,
+                    membership_id=membership.membership_id,
+                )
+                for snapshot in snapshots
+            )
+            leases = self.repository.acquire_character_deployment_leases(
+                lease_requests,
+            )
+            characters = tuple(
+                PreparedLocalCharacter(
+                    snapshot=snapshot,
+                    lease_id=lease.lease_id,
+                    deployment_id=uuid4(),
+                )
+                for snapshot, lease in zip(
+                    snapshots,
+                    leases,
+                    strict=True,
+                )
+            )
             prepared = PreparedLocalGame(
                 game=game,
                 membership=membership,
-                character_snapshot=character_snapshot,
-                lease_id=None if lease is None else lease.lease_id,
-                deployment_id=deployment_id,
+                characters=characters,
             )
             self._current = prepared
             self._publish_mutation()
@@ -215,37 +243,75 @@ class StandaloneLocalGameCoordinator:
                 self._publish_mutation()
             raise
 
-    def pin_character(
+    def pin_characters(
         self,
-        entity_uuid: UUID,
-    ) -> PinnedCharacterDeploymentRecord | None:
-        """Bind the leased character heads to its concrete runtime entity."""
+        entity_uuids: dict[UUID, UUID],
+    ) -> tuple[PinnedCharacterDeploymentRecord, ...]:
+        """Bind every leased character head-set to its runtime entity."""
 
         current = self._require_current()
-        snapshot = current.character_snapshot
-        if snapshot is None:
-            return None
-        if current.lease_id is None or current.deployment_id is None:
-            raise RuntimeError("character-bearing local game has incomplete pins")
-        deployment = self.repository.deploy_character_pinned(
-            PinnedCharacterDeploymentCreate(
-                deployment_id=current.deployment_id,
-                game_id=current.game.game_id,
-                membership_id=current.membership.membership_id,
-                character_id=snapshot.character_id,
-                entity_uuid=entity_uuid,
-                lease_id=current.lease_id,
+        expected_ids = {
+            row.snapshot.character_id for row in current.characters
+        }
+        if set(entity_uuids) != expected_ids:
+            raise RuntimeError(
+                "runtime character entities do not match prepared leases",
+            )
+        deployments = self.repository.deploy_characters_pinned(
+            tuple(
+                PinnedCharacterDeploymentCreate(
+                    deployment_id=row.deployment_id,
+                    game_id=current.game.game_id,
+                    membership_id=current.membership.membership_id,
+                    character_id=row.snapshot.character_id,
+                    entity_uuid=entity_uuids[row.snapshot.character_id],
+                    lease_id=row.lease_id,
+                )
+                for row in current.characters
             ),
+            expected_character_heads={
+                row.snapshot.character_id: (
+                    row.snapshot.character_row_version,
+                    CharacterRevisionHeads(
+                        definition_revision=(
+                            row.snapshot.definition.definition_revision
+                        ),
+                        definition_digest=(
+                            row.snapshot.definition.definition_digest
+                        ),
+                        holdings_revision=(
+                            row.snapshot.holdings.holdings_revision
+                        ),
+                        holdings_digest=(
+                            row.snapshot.holdings.holdings_digest
+                        ),
+                        loadout_revision=(
+                            row.snapshot.loadout.loadout_revision
+                        ),
+                        loadout_digest=(
+                            row.snapshot.loadout.loadout_digest
+                        ),
+                    ),
+                )
+                for row in current.characters
+            },
         )
         self._current = PreparedLocalGame(
             game=current.game,
             membership=current.membership,
-            character_snapshot=current.character_snapshot,
-            lease_id=current.lease_id,
-            deployment_id=current.deployment_id,
-            runtime_entity_uuid=entity_uuid,
+            characters=tuple(
+                PreparedLocalCharacter(
+                    snapshot=row.snapshot,
+                    lease_id=row.lease_id,
+                    deployment_id=row.deployment_id,
+                    runtime_entity_uuid=entity_uuids[
+                        row.snapshot.character_id
+                    ],
+                )
+                for row in current.characters
+            ),
         )
-        return deployment
+        return deployments
 
     def activate(self) -> GameRecord:
         """Cross the durable STARTING-to-ACTIVE boundary exactly once."""
@@ -291,10 +357,9 @@ class StandaloneLocalGameCoordinator:
             self._current = None
             self._publish_mutation()
             return ended
-        settlement_bundle = (
-            self._build_character_settlement(current, evidence)
-            if current.character_snapshot is not None
-            else None
+        settlement_bundles = self._build_character_settlements(
+            current,
+            evidence,
         )
         known_memberships = frozenset(
             membership.membership_id
@@ -317,13 +382,15 @@ class StandaloneLocalGameCoordinator:
             evidence=evidence,
             objective_replay_artifact=replay_artifact,
             subjective_replay_artifact=subjective_artifact,
-            settlement_bundle=settlement_bundle,
-            lease_id=current.lease_id,
+            settlement_bundles=settlement_bundles,
+            lease_ids=tuple(
+                row.lease_id for row in current.characters
+            ),
         )
         payload = envelope.model_dump(mode="json")
         payload_digest = self.repository.stage_local_terminal_commit(
             current.game.game_id,
-            lease_id=current.lease_id,
+            lease_ids=envelope.lease_ids,
             payload=payload,
         )
         self._pending_terminal = (envelope, payload_digest)
@@ -356,12 +423,15 @@ class StandaloneLocalGameCoordinator:
         recovered: list[UUID] = []
         for (
             game_id,
-            lease_id,
+            lease_ids,
             payload,
             payload_digest,
         ) in self.repository.list_pending_local_terminal_commits():
             envelope = LocalTerminalCommitEnvelope.model_validate(payload)
-            if envelope.game_id != game_id or envelope.lease_id != lease_id:
+            if (
+                envelope.game_id != game_id
+                or envelope.lease_ids != lease_ids
+            ):
                 raise RuntimeError(
                     "staged local terminal identity does not match its row",
                 )
@@ -403,11 +473,11 @@ class StandaloneLocalGameCoordinator:
             current.game.game_id,
         )
         if pending is not None:
-            lease_id, payload, payload_digest = pending
+            lease_ids, payload, payload_digest = pending
             envelope = LocalTerminalCommitEnvelope.model_validate(payload)
             if (
                 envelope.game_id != current.game.game_id
-                or envelope.lease_id != lease_id
+                or envelope.lease_ids != lease_ids
             ):
                 raise RuntimeError(
                     "staged local terminal identity does not match its game",
@@ -469,58 +539,56 @@ class StandaloneLocalGameCoordinator:
                 envelope.evidence.source_combat_log_digest
             ),
             payload_digest=payload_digest,
-            settlement_bundle=envelope.settlement_bundle,
-            lease_id=envelope.lease_id,
+            settlement_bundles=envelope.settlement_bundles,
+            lease_ids=envelope.lease_ids,
         )
 
-    def _build_character_settlement(
+    def _build_character_settlements(
         self,
         current: PreparedLocalGame,
         evidence: WorkerSummaryEvidence,
-    ) -> CharacterRevisionBundleCommit:
-        snapshot = current.character_snapshot
-        if (
-            snapshot is None
-            or current.deployment_id is None
-            or current.runtime_entity_uuid is None
-        ):
-            raise RuntimeError(
-                "terminal character settlement requires a pinned runtime",
+    ) -> tuple[CharacterRevisionBundleCommit, ...]:
+        settlements: list[CharacterRevisionBundleCommit] = []
+        for prepared in current.characters:
+            runtime_entity_uuid = prepared.runtime_entity_uuid
+            if runtime_entity_uuid is None:
+                raise RuntimeError(
+                    "terminal character settlement requires a pinned runtime",
+                )
+            holdings_evidence = project_terminal_character_holdings(
+                prepared.snapshot,
+                game_id=current.game.game_id,
+                generation_id=evidence.generation_id,
+                terminal_event_cursor=(
+                    evidence.summary.terminal_cursor.event_cursor
+                ),
+                terminal_combat_log_cursor=(
+                    evidence.summary.terminal_cursor.combat_log_cursor
+                ),
+                runtime_entity_uuid=runtime_entity_uuid,
             )
-        holdings_evidence = project_terminal_character_holdings(
-            snapshot,
-            game_id=current.game.game_id,
-            generation_id=evidence.generation_id,
-            terminal_event_cursor=(
-                evidence.summary.terminal_cursor.event_cursor
-            ),
-            terminal_combat_log_cursor=(
-                evidence.summary.terminal_cursor.combat_log_cursor
-            ),
-            runtime_entity_uuid=current.runtime_entity_uuid,
-        )
-        deployment = next(
-            row
-            for row in self.repository.list_character_deployments(
-                snapshot.character_id,
+            deployment = next(
+                row
+                for row in self.repository.list_character_deployments(
+                    prepared.snapshot.character_id,
+                )
+                if row.deployment_id == prepared.deployment_id
             )
-            if row.deployment_id == current.deployment_id
-        )
-        return build_terminal_settlement_bundle(
-            holdings_evidence,
-            deployment,
-            settlement_namespace="dnd-engine:local-character-settlement:v1",
-        )
+            settlements.append(build_terminal_settlement_bundle(
+                holdings_evidence,
+                deployment,
+                settlement_namespace=(
+                    "dnd-engine:local-character-settlement:v1"
+                ),
+            ))
+        return tuple(settlements)
 
     def _replace_current_game(self, game: GameRecord) -> None:
         current = self._require_current()
         self._current = PreparedLocalGame(
             game=game,
             membership=current.membership,
-            character_snapshot=current.character_snapshot,
-            lease_id=current.lease_id,
-            deployment_id=current.deployment_id,
-            runtime_entity_uuid=current.runtime_entity_uuid,
+            characters=current.characters,
         )
 
     def _require_current(self) -> PreparedLocalGame:

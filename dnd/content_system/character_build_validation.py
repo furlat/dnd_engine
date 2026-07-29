@@ -16,6 +16,13 @@ from typing import TypeVar, cast
 from pydantic import BaseModel, ValidationError
 
 from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.character_appearance import (
+    resolve_player_character_appearance,
+)
+from dnd.content_system.starting_apparel_definitions import (
+    STARTING_APPAREL_CHOICE_ID,
+)
+from dnd.core.content.descriptors import ContentVisibility
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
     AbilityScorePrerequisite,
@@ -40,6 +47,7 @@ from dnd.core.content.durable_characters import (
     KnowsSpellPrerequisite,
     MetamagicChoice,
     NotPrerequisite,
+    OriginTraitChoice,
     PrerequisiteExpression,
     ProficiencySubjectKind,
     ProficiencySubject,
@@ -48,6 +56,7 @@ from dnd.core.content.durable_characters import (
     SpeciesVariantDefinition,
     SpellKnownChoice,
     SpellReplacementChoice,
+    StartingApparelPackageChoice,
     StartingEquipmentPackageChoice,
     StartingProficiencyChoice,
     SpellcastingSourceId,
@@ -56,8 +65,12 @@ from dnd.core.content.durable_characters import (
     TotalCharacterLevelPrerequisite,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.provenance import ContentFidelity
+from dnd.core.content.origin_features import OriginStructuralFeatureDefinition
+from dnd.core.content.origin_support import OriginRuntimeSupportStatus
 from dnd.core.content.registration import ContentDeclarationMode
+from dnd.core.content.starting_equipment import (
+    StartingEquipmentPackageDefinition,
+)
 from dnd.core.progression import (
     CasterProgression,
     MulticlassSlotRoundingPolicy,
@@ -84,6 +97,7 @@ class CharacterBuildIssueCode(str, Enum):
     BODY_FACTORY_REQUIRED = "body_factory_required"
     BODY_NOT_CHARACTER_BODY = "body_not_character_body"
     BODY_PARAMETERS_INVALID = "body_parameters_invalid"
+    APPEARANCE_SELECTION_INVALID = "appearance_selection_invalid"
     SPECIES_VARIANT_PARENT_MISMATCH = "species_variant_parent_mismatch"
     ORIGIN_IMPLEMENTATION_BLOCKED = "origin_implementation_blocked"
     SUBCLASS_PARENT_MISMATCH = "subclass_parent_mismatch"
@@ -206,6 +220,21 @@ class KnownSpellGrantPreview:
 
 
 @dataclass(frozen=True, slots=True)
+class OriginInnateSpellGrantPreview:
+    """One validated origin spell with exact source and usage semantics."""
+
+    grant_id: str
+    spell_ref: ContentRef
+    provider_ref: ContentRef
+    spellcasting_source_id: SpellcastingSourceId
+    spellcasting_ability: AbilityScoreName
+    provider_level: int
+    fixed_cast_rank: int
+    uses_per_long_rest: int | None
+    grant_token: str
+
+
+@dataclass(frozen=True, slots=True)
 class CharacterBuildPreview:
     """Deterministic derived facts safe to show before materialization."""
 
@@ -217,6 +246,10 @@ class CharacterBuildPreview:
     effective_spellcaster_level: int
     normal_spell_slots: tuple[tuple[int, int], ...]
     final_known_spells: tuple[KnownSpellGrantPreview, ...] = ()
+    origin_innate_spells: tuple[
+        OriginInnateSpellGrantPreview,
+        ...,
+    ] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +306,21 @@ class CharacterBuildValidator:
             ("species_ref",),
             issues,
         )
+        if species is not None:
+            try:
+                resolve_player_character_appearance(
+                    body_ref=definition.body_recipe.ref,
+                    species_ref=definition.species_ref,
+                    selection=definition.appearance,
+                )
+            except ValueError as exc:
+                self._issue(
+                    issues,
+                    CharacterBuildIssueCode.APPEARANCE_SELECTION_INVALID,
+                    ("appearance",),
+                    (definition.body_recipe.ref, definition.species_ref),
+                    detail=str(exc),
+                )
         variant = None
         if definition.species_variant_ref is not None:
             variant = self._resolve_origin_definition(
@@ -317,6 +365,11 @@ class CharacterBuildValidator:
                 automatic_grants,
                 issues,
             )
+            self._validate_origin_innate_spell_refs(
+                species,
+                ("species_ref", "innate_spellcasting"),
+                issues,
+            )
             origin_requirements.extend(species.choice_requirements)
         if variant is not None:
             self._validate_requirement_proficiency_refs(
@@ -329,6 +382,11 @@ class CharacterBuildValidator:
                 definition.earned_character_level,
                 ("species_variant_ref",),
                 automatic_grants,
+                issues,
+            )
+            self._validate_origin_innate_spell_refs(
+                variant,
+                ("species_variant_ref", "innate_spellcasting"),
                 issues,
             )
             origin_requirements.extend(variant.choice_requirements)
@@ -345,9 +403,25 @@ class CharacterBuildValidator:
                 issues,
             )
             origin_requirements.extend(background.choice_requirements)
+        origin_selections = tuple(
+            choice
+            for choice in definition.immutable_origin_choices
+            if not isinstance(choice, StartingApparelPackageChoice)
+        )
+        apparel_selections = tuple(
+            choice
+            for choice in definition.immutable_origin_choices
+            if isinstance(choice, StartingApparelPackageChoice)
+        )
         self._validate_choices(
             requirements=tuple(origin_requirements),
-            selections=definition.immutable_origin_choices,
+            selections=origin_selections,
+            path=("immutable_origin_choices",),
+            issues=issues,
+        )
+        self._validate_choices(
+            requirements=(self._starting_apparel_requirement(),),
+            selections=apparel_selections,
             path=("immutable_origin_choices",),
             issues=issues,
         )
@@ -668,6 +742,12 @@ class CharacterBuildValidator:
             grant_schedule,
             source_by_provenance_ref,
         )
+        origin_innate_spells = _origin_innate_spell_grants(
+            definition=definition,
+            species=species,
+            variant=variant,
+            schedule=grant_schedule,
+        )
         return CharacterBuildValidationResult(
             issues=(),
             preview=CharacterBuildPreview(
@@ -680,6 +760,7 @@ class CharacterBuildValidator:
                     final_known_spells,
                 ),
                 final_known_spells=final_known_spells,
+                origin_innate_spells=origin_innate_spells,
                 caster_contributions=tuple(caster_previews),
                 effective_spellcaster_level=effective_level,
                 normal_spell_slots=normal_slots,
@@ -738,6 +819,40 @@ class CharacterBuildValidator:
                             content_ref=grant_ref,
                         ),
                     )
+            for source_index, source in enumerate(
+                origin.innate_spellcasting,
+            ):
+                for grant_index, grant in enumerate(source.grants):
+                    if (
+                        grant.unlock_character_level
+                        > definition.earned_character_level
+                        or grant.spell_ref is None
+                    ):
+                        continue
+                    schedule.append(
+                        _grant_schedule_entry(
+                            kind=(
+                                CharacterGrantScheduleKind
+                                .AUTOMATIC_CONTENT
+                            ),
+                            provenance=CharacterGrantProvenance(
+                                source_kind=source_kind,
+                                source_ref=source_ref,
+                                character_level=(
+                                    grant.unlock_character_level
+                                ),
+                                class_level_id=None,
+                                class_level=None,
+                                choice_id=None,
+                                ordinal_path=(
+                                    len(origin.level_grants),
+                                    source_index,
+                                    grant_index,
+                                ),
+                            ),
+                            content_ref=grant.spell_ref,
+                        ),
+                    )
             for requirement in origin.choice_requirements:
                 origin_choice_sources[requirement.choice_id] = (
                     source_kind,
@@ -774,6 +889,8 @@ class CharacterBuildValidator:
         for choice_index, choice in enumerate(
             definition.immutable_origin_choices,
         ):
+            if isinstance(choice, StartingApparelPackageChoice):
+                continue
             source_kind, source_ref = origin_choice_sources[choice.choice_id]
             _append_choice_schedule(
                 schedule,
@@ -961,7 +1078,82 @@ class CharacterBuildValidator:
                     class_level=level.resulting_class_level,
                     ordinal_prefix=(level_index, choice_index),
                 )
-        return tuple(schedule)
+        expanded_schedule: list[CharacterGrantScheduleEntry] = []
+        origin_source_kinds = {
+            CharacterGrantSourceKind.SPECIES,
+            CharacterGrantSourceKind.SPECIES_VARIANT,
+            CharacterGrantSourceKind.BACKGROUND,
+        }
+        for entry in schedule:
+            expanded_schedule.append(entry)
+            if (
+                entry.kind is not CharacterGrantScheduleKind.AUTOMATIC_CONTENT
+                or entry.content_ref is None
+                or entry.provenance.source_kind not in origin_source_kinds
+            ):
+                continue
+            declaration = self._registry.resolve_definition(entry.content_ref)
+            feature = declaration.definition_payload
+            if not isinstance(feature, OriginStructuralFeatureDefinition):
+                continue
+            for subject_index, subject in enumerate(
+                feature.automatic_proficiencies,
+            ):
+                expanded_schedule.append(
+                    _grant_schedule_entry(
+                        kind=CharacterGrantScheduleKind.PROFICIENCY,
+                        provenance=CharacterGrantProvenance(
+                            source_kind=entry.provenance.source_kind,
+                            source_ref=entry.provenance.source_ref,
+                            character_level=entry.provenance.character_level,
+                            class_level_id=entry.provenance.class_level_id,
+                            class_level=entry.provenance.class_level,
+                            choice_id=entry.provenance.choice_id,
+                            ordinal_path=(
+                                *entry.provenance.ordinal_path,
+                                subject_index,
+                            ),
+                        ),
+                        content_ref=entry.content_ref,
+                        proficiency=subject,
+                    ),
+                )
+        return tuple(expanded_schedule)
+
+    def _starting_apparel_requirement(self) -> BuildChoiceRequirement:
+        """Return the installed exact apparel vocabulary without requiring it.
+
+        Generic durable revisions predate this creator choice. New-character
+        policy requires the row at the directory boundary; the structural
+        validator accepts a missing row so old premades and stored definitions
+        remain valid, while validating any supplied row fail-closed.
+        """
+
+        allowed_refs = tuple(sorted(
+            (
+                declaration.ref
+                for declaration in self._registry.declarations.values()
+                if (
+                    declaration.mode
+                    is ContentDeclarationMode.TYPED_DEFINITION
+                    and isinstance(
+                        declaration.definition_payload,
+                        StartingEquipmentPackageDefinition,
+                    )
+                    and declaration.descriptor.visibility
+                    is ContentVisibility.PUBLIC
+                    and "starting_apparel" in declaration.descriptor.tags
+                )
+            ),
+            key=lambda ref: ref.identity_key,
+        ))
+        return BuildChoiceRequirement(
+            choice_id=STARTING_APPAREL_CHOICE_ID,
+            choice_kind=ChoiceRequirementKind.STARTING_APPAREL_PACKAGE,
+            minimum_selections=0,
+            maximum_selections=1,
+            allowed_refs=allowed_refs,
+        )
 
     def _validate_revision_heads(
         self,
@@ -1133,16 +1325,23 @@ class CharacterBuildValidator:
                 detail=expected_type.__name__,
             )
             return None
-        if declaration.provenance.fidelity is not ContentFidelity.COMPLETE:
+        payload = cast(
+            SpeciesDefinition | SpeciesVariantDefinition | BackgroundDefinition,
+            declaration.definition_payload,
+        )
+        if (
+            payload.runtime_support.status
+            is OriginRuntimeSupportStatus.BLOCKED
+        ):
             self._issue(
                 issues,
                 CharacterBuildIssueCode.ORIGIN_IMPLEMENTATION_BLOCKED,
                 path,
                 (ref,),
-                detail=declaration.provenance.notes,
+                detail=payload.runtime_support.blocked_reason or "",
             )
             return None
-        return cast(_TypedDefinition, declaration.definition_payload)
+        return cast(_TypedDefinition, payload)
 
     def _append_origin_grants(
         self,
@@ -1175,6 +1374,36 @@ class CharacterBuildValidator:
                 issues,
             ) is not None:
                 automatic_grants.append(ref)
+
+    def _validate_origin_innate_spell_refs(
+        self,
+        definition: SpeciesDefinition | SpeciesVariantDefinition,
+        path: tuple[str, ...],
+        issues: list[CharacterBuildValidationIssue],
+    ) -> None:
+        """Authenticate every fixed and selectable innate spell ref."""
+        for source_index, source in enumerate(
+            definition.innate_spellcasting,
+        ):
+            for grant_index, grant in enumerate(source.grants):
+                refs = (
+                    (grant.spell_ref,)
+                    if grant.spell_ref is not None
+                    else grant.allowed_spell_refs
+                )
+                for ref_index, ref in enumerate(refs):
+                    self._resolve_declaration(
+                        ref,
+                        (
+                            *path,
+                            str(source_index),
+                            "grants",
+                            str(grant_index),
+                            "spell_refs",
+                            str(ref_index),
+                        ),
+                        issues,
+                    )
 
     def _validate_class_definition_refs(
         self,
@@ -2090,7 +2319,9 @@ def _choice_allowed_refs(
             FightingStyleChoice,
             SubclassChoice,
             ElementalAncestryChoice,
+            OriginTraitChoice,
             FeatChoice,
+            StartingApparelPackageChoice,
             StartingEquipmentPackageChoice,
         ),
     ):
@@ -2115,7 +2346,11 @@ def _choice_all_refs(
         )
     if isinstance(
         selection,
-        (AbilityScoreImprovementChoice, ClassSkillChoice),
+        (
+            AbilityScoreImprovementChoice,
+            ClassSkillChoice,
+            StartingApparelPackageChoice,
+        ),
     ):
         return ()
     if isinstance(selection, StartingProficiencyChoice):
@@ -2359,6 +2594,91 @@ def _final_known_spell_grants(
     )
 
 
+def _origin_innate_spell_grants(
+    *,
+    definition: CharacterDefinitionRevisionV2,
+    species: SpeciesDefinition | None,
+    variant: SpeciesVariantDefinition | None,
+    schedule: tuple[CharacterGrantScheduleEntry, ...],
+) -> tuple[OriginInnateSpellGrantPreview, ...]:
+    """Resolve fixed and selected origin spells without class-source inference."""
+    previews: list[OriginInnateSpellGrantPreview] = []
+    schedule_by_source = {
+        source_ref.identity_key: tuple(
+            row
+            for row in schedule
+            if row.provenance.source_ref == source_ref
+        )
+        for source_ref in (
+            definition.species_ref,
+            definition.species_variant_ref,
+        )
+        if source_ref is not None
+    }
+    for provider_ref, origin in (
+        (definition.species_ref, species),
+        (definition.species_variant_ref, variant),
+    ):
+        if provider_ref is None or origin is None:
+            continue
+        provider_rows = schedule_by_source.get(
+            provider_ref.identity_key,
+            (),
+        )
+        for source in origin.innate_spellcasting:
+            for grant in source.grants:
+                if (
+                    grant.unlock_character_level
+                    > definition.earned_character_level
+                ):
+                    continue
+                matching = tuple(
+                    row
+                    for row in provider_rows
+                    if (
+                        row.content_ref is not None
+                        and row.content_ref.definition_kind
+                        is ContentDefinitionKind.SPELL
+                        and (
+                            (
+                                grant.spell_ref is not None
+                                and row.content_ref == grant.spell_ref
+                                and row.provenance.character_level
+                                == grant.unlock_character_level
+                            )
+                            or (
+                                grant.choice_id is not None
+                                and row.provenance.choice_id
+                                == grant.choice_id
+                                and row.content_ref
+                                in grant.allowed_spell_refs
+                            )
+                        )
+                    )
+                )
+                if len(matching) != 1:
+                    raise RuntimeError(
+                        "validated innate spell grant has no unique schedule "
+                        f"row: {provider_ref.identity_key} {grant.grant_id}",
+                    )
+                row = matching[0]
+                assert row.content_ref is not None
+                previews.append(
+                    OriginInnateSpellGrantPreview(
+                        grant_id=grant.grant_id,
+                        spell_ref=row.content_ref,
+                        provider_ref=provider_ref,
+                        spellcasting_source_id=source.source_id,
+                        spellcasting_ability=source.ability,
+                        provider_level=definition.earned_character_level,
+                        fixed_cast_rank=grant.fixed_cast_rank,
+                        uses_per_long_rest=grant.uses_per_long_rest,
+                        grant_token=row.grant_token,
+                    ),
+                )
+    return tuple(previews)
+
+
 def _final_known_spell_refs(
     schedule: tuple[CharacterGrantScheduleEntry, ...],
     source_by_provenance_ref: dict[
@@ -2425,4 +2745,5 @@ __all__ = [
     "CharacterGrantScheduleKind",
     "CharacterGrantSourceKind",
     "KnownSpellGrantPreview",
+    "OriginInnateSpellGrantPreview",
 ]

@@ -1,4 +1,4 @@
-"""Measured migration and source-coverage ledger contracts."""
+"""Measured official-source coverage ledger contracts."""
 
 from __future__ import annotations
 
@@ -7,10 +7,6 @@ from pydantic import ValidationError
 
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.inventory import (
-    LegacyContentClassification,
-    LegacyContentMigrationLedger,
-    LegacyContentMigrationRow,
-    LegacyMigrationStatus,
     SourceCoverageLedger,
     SourceCoverageRow,
     SourceCoverageSection,
@@ -25,68 +21,6 @@ _ITEM_REF = ContentRef(
     content_version=1,
     definition_contract_hash="a" * 64,
 )
-
-
-def test_legacy_ledger_requires_one_measured_destination_for_every_root() -> None:
-    """An existing factory cannot disappear behind a count-only golden."""
-    row = LegacyContentMigrationRow(
-        legacy_id="legacy.item.weapon.club",
-        legacy_locators=("dnd/items/weapons.py:create_club",),
-        definition_kind=ContentDefinitionKind.ITEM,
-        classification=LegacyContentClassification.INDEPENDENT_DEFINITION,
-        provisional_ref=_ITEM_REF,
-        measuring_test_nodeids=(
-            "tests/manual/test_155_content_inventory_contracts.py"
-            "::test_legacy_ledger_requires_one_measured_destination_for_every_root",
-        ),
-        migration_status=LegacyMigrationStatus.INVENTORIED,
-    )
-    ledger = LegacyContentMigrationLedger(rows=(row,))
-
-    assert ledger.rows_by_id[row.legacy_id] == row
-    assert ledger.unmigrated_ids == (row.legacy_id,)
-
-    invalid = row.model_dump(mode="json")
-    invalid["measuring_test_nodeids"] = []
-    with pytest.raises(ValidationError, match="measuring_test_nodeids"):
-        LegacyContentMigrationRow.model_validate(invalid)
-
-
-def test_root_owned_behavior_names_provider_instead_of_fake_factory() -> None:
-    """Private item/creature helpers stay attributable without becoming roots."""
-    row = LegacyContentMigrationRow(
-        legacy_id="legacy.action.club.attack",
-        legacy_locators=("dnd/actions.py:Attack",),
-        definition_kind=ContentDefinitionKind.ACTION,
-        classification=LegacyContentClassification.ROOT_OWNED_BEHAVIOR,
-        provided_by_ref=_ITEM_REF,
-        measuring_test_nodeids=(
-            "tests/manual/test_155_content_inventory_contracts.py"
-            "::test_root_owned_behavior_names_provider_instead_of_fake_factory",
-        ),
-        migration_status=LegacyMigrationStatus.INVENTORIED,
-    )
-    assert row.provisional_ref is None
-
-    invalid = row.model_dump(mode="json")
-    invalid["provided_by_ref"] = None
-    with pytest.raises(ValidationError, match="provided_by_ref"):
-        LegacyContentMigrationRow.model_validate(invalid)
-
-
-def test_approved_deletion_requires_rationale_and_a_measuring_test() -> None:
-    """The migration cannot silently turn an unrecognized definition into deletion."""
-    with pytest.raises(ValidationError, match="deletion_rationale"):
-        LegacyContentMigrationRow(
-            legacy_id="legacy.fixture.retired",
-            legacy_locators=("dnd/fixtures.py:RetiredFixture",),
-            classification=LegacyContentClassification.APPROVED_DELETION,
-            measuring_test_nodeids=(
-                "tests/manual/test_155_content_inventory_contracts.py"
-                "::test_approved_deletion_requires_rationale_and_a_measuring_test",
-            ),
-            migration_status=LegacyMigrationStatus.DELETION_APPROVED,
-        )
 
 
 def test_source_coverage_rows_keep_missing_work_visible_and_measured() -> None:

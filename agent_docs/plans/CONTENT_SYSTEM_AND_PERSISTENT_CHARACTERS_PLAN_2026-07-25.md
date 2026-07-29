@@ -1,8 +1,8 @@
 # Unified Content System and Persistent Characters
 
-**Status:** Public content identity/transport hard cut implemented; the
-evaluation-blueprint adapter, measured SRD expansion, and terminal character
-settlement remain
+**Status:** Public content identity/transport, persistent-character deployment,
+and atomic terminal settlement implemented; measured SRD expansion and neutral
+ownership of the remaining cold evaluation metadata remain
 
 **Date:** 2026-07-25
 
@@ -25,11 +25,11 @@ the full SRD/content program is complete:
 - The supported item, creature, and environment roots have canonical
   factory-backed recipes and migration ledgers. Item/environment map-editor
   and scenario construction, premades, persistent-character composition, and
-  canonical creature materialization use exact recipes. The evaluation
-  subsystem's closed `ActorBlueprint` adapter still calls several legacy class
-  and bestiary factory surfaces; replacing that adapter with generic creature
-  recipes remains an explicit deletion gate and is not being reported as
-  complete.
+  canonical creature materialization use exact recipes. The former evaluation
+  runtime assembler has been deleted: rating and promotion workers now consume
+  exact roster recipes through the canonical encounter assembler. Historical
+  `ActorBlueprint` rows remain cold catalog/rating inputs only until that
+  metadata receives a neutral owner.
 - The player-facing manifest/catalog, runtime behavior attribution,
   presentation-cue `ContentRef` attribution, exact spell catalog references,
   and generated TypeScript models are implemented. Spell catalog rows come
@@ -53,10 +53,10 @@ the full SRD/content program is complete:
   presets. The former 43-row gap was closed with 16 mechanical roots; recolors
   remain recipes rather than duplicate item definitions.
 - Persistent character definition/holdings revisions, leases, deterministic
-  reconstruction, deployment linkage, and exact character-definition reads
-  are implemented as a foundation. Terminal settlement, profile history, and
-  promotion of session loot into a new holdings revision are not yet
-  implemented.
+  reconstruction, deployment linkage, exact reads, game history, and atomic
+  terminal holdings settlement are implemented. Broader post-game reward and
+  economy design remains future content/product work rather than a missing
+  persistence boundary.
 - The currently public spell set has one authored identity and metadata
   inventory. Full
   SRD 5.1 item, creature, and spell expansion remains ledger-driven content
@@ -809,7 +809,7 @@ Initial manifest:
 schema_version = 1
 pack_id = "example.goblin_expansion"
 pack_version = "1.0.0"
-engine_content_api = 1
+engine_content_api = 2
 python_root = "src"
 python_package = "example_pack"
 assets_root = "assets"

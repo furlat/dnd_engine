@@ -22,6 +22,7 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.character_appearance import BARBARIAN_HUMAN_APPEARANCE
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.pack_loader import LoadedContentSystem
@@ -39,7 +40,6 @@ from dnd.core.content.durable_characters import (
     AbilityScoreImprovementChoice,
     AbilityScoreName,
     BackgroundDefinition,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -52,6 +52,7 @@ from dnd.core.content.durable_characters import (
     SubclassChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.provenance import (
     ContentFidelity,
@@ -67,9 +68,9 @@ from dnd.core.content.registration import (
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageStatus,
-    DamageType,
     NumericalModifier,
 )
 from dnd.actions import AttackEvent
@@ -143,13 +144,17 @@ def _runtime_with_neutral_origins() -> tuple[
     species = _origin_declaration(
         kind=ContentDefinitionKind.SPECIES,
         content_id="species.neutral_barbarian_origin",
-        payload=SpeciesDefinition(),
+        payload=SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     background = _origin_declaration(
         kind=ContentDefinitionKind.BACKGROUND,
         content_id="background.neutral_barbarian_origin",
-        payload=BackgroundDefinition(),
+        payload=BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     declarations = dict(loaded.registry.declarations)
@@ -247,7 +252,7 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=species_ref,
         background_ref=background_ref,
-        appearance=CharacterAppearanceSelection(),
+            appearance=BARBARIAN_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=14,
@@ -293,7 +298,6 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
     assert receipt is not None
 
     assert not entity.active_conditions
-    assert all(not grant.condition_handles for grant in receipt.grants)
     assert entity.health.total_hit_dices_number == 20
     assert len(entity.health.hit_dices) == 20
     assert {

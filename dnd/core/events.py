@@ -12,7 +12,8 @@ __all__ = [
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
-    "DiceRollResultEvent",
+    "RollModificationOperation", "RollModification", "DiceRollResultEvent",
+    "DamageRollPacket",
     "D20RollResultEvent",
     "AttackD20RollResultEvent",
     "SavingThrowD20RollResultEvent",
@@ -20,7 +21,7 @@ __all__ = [
     "DamageRollResultEvent",
     "SensesUpdateHint", "SpatialChangeEvent", "FireExposureEvent", "ExposedFlameEvent",
     "WindExposureEvent", "ForcedMovementEvent",
-    "DamageRolledEvent", "TakeDamageEvent", "DamageAppliedEvent",
+    "TakeDamageEvent", "DamageAppliedEvent",
     "Range", "Damage",
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
@@ -32,7 +33,7 @@ __all__ = [
 from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, field_serializer, model_validator
 from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 
@@ -40,6 +41,7 @@ from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     SavingThrowLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
+    RollModificationLogData, RollModificationLogFact,
     md_color, md_d20_roll, md_breakdown, position_evidence_key
 )
 from dnd.core.content.runtime import (
@@ -54,7 +56,8 @@ from dnd.core.content.runtime import (
 from dnd.core.damage import DamageResolution
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.core.senses import SenseMode
 from dnd.core.equipment_types import WeaponSlot
 from uuid import UUID, uuid4
@@ -62,11 +65,14 @@ from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
 from collections import defaultdict
 from typing import Callable, Tuple
+import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_object import BaseObject
-T = TypeVar('T', bound='Event')
+
+logger = logging.getLogger(__name__)
+
 EventT = TypeVar('EventT', bound='Event')
 E = TypeVar('E', bound='Event')
 
@@ -79,18 +85,6 @@ def _preserve_nullable_unique_array_schema(schema: Dict[str, Any]) -> None:
     for option in schema.get("anyOf", []):
         if isinstance(option, dict) and option.get("type") == "array":
             option["uniqueItems"] = True
-
-
-class TypedEventListener(Protocol[T]):
-    """Callable contract for handlers that consume one event subtype."""
-
-    def __call__(self, event: T, source_entity_uuid: UUID) -> Optional[T]: ...
-
-
-class GenericEventModifier(Protocol):
-    """Callable contract for handlers that may consume any event subtype."""
-
-    def __call__(self, event: 'Event', source_entity_uuid: UUID) -> Optional['Event']: ...
 
 
 class PreCompletionSystem(Protocol):
@@ -167,14 +161,12 @@ class EventType(str, Enum):
     TRIGGER_EVENT = "trigger_event"
 
     DICE_ROLL = "dice_roll"
-    DICE_ROLL_RESULT = "dice_roll_result"
     D20_ROLL_RESULT = "d20_roll_result"
     ATTACK_D20_ROLL_RESULT = "attack_d20_roll"
     SAVE_D20_ROLL_RESULT = "save_d20_roll"
     CHECK_D20_ROLL_RESULT = "check_d20_roll"
     DAMAGE_ROLL_RESULT = "damage_roll_result"
     HEAL_ROLL_RESULT = "heal_roll_result"
-    DAMAGE_ROLLED = "damage_rolled"
     ENEMY_SPOTTED = "enemy_spotted"
     ENEMY_KILLED = "enemy_killed"
     ENEMY_ENGAGED = "enemy_engaged"
@@ -431,15 +423,6 @@ class Event(BaseObject):
             for key, observer_uuids in self.located_position_observer_uuids.items()
         }
 
-    def get_trigger(self) -> 'Trigger':
-        """Return the exact trigger that would match this event version."""
-        return Trigger(
-            event_type=self.event_type,
-            event_phase=self.phase,
-            event_source_entity_uuid=self.source_entity_uuid,
-            event_target_entity_uuid=self.target_entity_uuid,
-        )
-
     def model_post_init(self, __context: Any) -> None:
         if self.turn_execution_id is None:
             parent = (
@@ -576,7 +559,12 @@ class Event(BaseObject):
                         final_event = self.model_copy(update=phase_updates)
                         EventQueue._combat_log_callback(final_event)
             except Exception:
-                pass
+                logger.exception(
+                    "Combat-log projection failed for %s event %s at phase %s",
+                    type(self).__name__,
+                    self.uuid,
+                    new_phase,
+                )
 
         return self.post(**phase_updates)
 
@@ -599,18 +587,6 @@ class Event(BaseObject):
 
         cancel_updates.update(updates)
         return self.post(**cancel_updates)
-
-    def set_parent_event(self, parent_event: 'Event'):
-        """Attach this event to the event version that caused it.
-
-        Parent events are causal parents, not prior phase versions. Phase
-        history is tracked by `lineage_uuid`.
-
-        Args:
-            parent_event: Event version that caused this child event.
-        """
-
-        self.parent_event = parent_event.uuid
 
     def add_child_event(self, child_event: 'Event'):
         """Add a child event to current-phase and lineage-level child lists.
@@ -695,20 +671,6 @@ class Event(BaseObject):
                     child_logs.extend(lineage_events[-1]._collect_child_combat_logs())
         return child_logs
 
-    def get_history(self) -> List['Event']:
-        """Return prior versions in this event lineage.
-
-        Returns:
-            Earlier event versions ordered by their stored timestamps.
-        """
-        history = EventQueue.get_event_history(self.uuid)
-
-        outs= []
-        for event in history:
-            if event.timestamp < self.timestamp:
-                outs.append(event)
-        return outs
-
     @property
     def effective_handler_presentations(
         self,
@@ -745,6 +707,24 @@ class Event(BaseObject):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
 
         return result
+
+    def with_updates(
+        self,
+        *,
+        status_message: Optional[str] = None,
+        **updates: Any,
+    ) -> Self:
+        """Return an unposted modified event value.
+
+        Validation pipelines use this method to carry accepted facts to the
+        next validator without re-dispatching handlers for the current phase.
+        Publishing and lifecycle advancement remain explicit through
+        :meth:`post` and :meth:`phase_to`.
+        """
+        updates["modified"] = True
+        if status_message is not None:
+            updates["status_message"] = status_message
+        return self.model_copy(update=updates)
 
 
 def _enrich_multi_entity_log_from_children(
@@ -987,25 +967,6 @@ class BaseHandler(BaseObject):
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
         return self.event_processor(event, source_entity_uuid)
-
-    def get_declaration_event(self, parent_event: Optional[Event] = None) -> Event:
-        """Build a declaration event representing this handler firing.
-
-        Args:
-            parent_event: Optional causal parent event.
-
-        Returns:
-            A trigger-event declaration with this handler as the source.
-        """
-        return Event(
-            name=self.name,
-            event_type=EventType.TRIGGER_EVENT,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            status_message=f"Triggering handler {self.name}",
-            parent_event=parent_event.uuid if parent_event else None
-        )
-
 
 class EventHandler(BaseHandler):
     """Trigger-indexed handler for non-position-specific event reactions.
@@ -1381,7 +1342,10 @@ class EventQueue:
             try:
                 callback(evidence)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive handler-dispatch observer %s failed",
+                    cls._timing_callback_name(callback),
+                )
         return result
 
     @classmethod
@@ -1447,7 +1411,10 @@ class EventQueue:
             try:
                 callback(events)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive event-sequence observer %s failed",
+                    cls._timing_callback_name(callback),
+                )
             finally:
                 if timing:
                     callback_name = cls._timing_callback_name(callback)
@@ -1533,7 +1500,10 @@ class EventQueue:
             try:
                 callback(events)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive event-batch observer %s failed",
+                    cls._timing_callback_name(callback),
+                )
             finally:
                 if timing:
                     callback_name = cls._timing_callback_name(callback)
@@ -1584,12 +1554,6 @@ class EventQueue:
         """
         if callback not in cls._pre_completion_callbacks:
             cls._pre_completion_callbacks.append(callback)
-
-    @classmethod
-    def remove_pre_completion_callback(cls, callback: Callable[['Event'], None]) -> None:
-        """Remove a pre-completion lifecycle callback."""
-        if callback in cls._pre_completion_callbacks:
-            cls._pre_completion_callbacks.remove(callback)
 
     @classmethod
     def add_pre_completion_system(
@@ -1938,7 +1902,12 @@ class EventQueue:
             try:
                 callback(event)
             except Exception:
-                pass
+                logger.exception(
+                    "Passive event observer %s failed for %s event %s",
+                    cls._timing_callback_name(callback),
+                    type(event).__name__,
+                    event.uuid,
+                )
             finally:
                 if timing:
                     callback_name = cls._timing_callback_name(callback)
@@ -2075,11 +2044,35 @@ class EventQueue:
         cls._remove_from_spatial_indices(event_handler.uuid)
 
     @classmethod
-    def remove_event_handlers_by_uuid(cls, uuid: UUID) -> None:
-        """Remove an event handler by UUID if present."""
-        event_handler = cls._event_handlers.get(uuid)
-        if event_handler:
-            cls.remove_event_handler(event_handler)
+    def get_handlers_by_source_entity(
+        cls,
+        source_entity_uuid: UUID,
+    ) -> tuple["EventHandler", ...]:
+        """Return source-owned non-spatial event handlers."""
+        return tuple(
+            handler
+            for handler in cls._event_handlers_by_source_entity_uuid.get(
+                source_entity_uuid,
+                (),
+            )
+            if isinstance(handler, EventHandler)
+        )
+
+    @classmethod
+    def get_spatial_handler_registration(
+        cls,
+        handler_uuid: UUID,
+    ) -> Optional[tuple["BaseHandler", frozenset[Tuple[int, int]]]]:
+        """Return one handler and its exact indexed spatial positions."""
+        registration = cls._handler_positions.get(handler_uuid)
+        handler = (
+            cls._spatial_handlers.get(handler_uuid)
+            or cls._event_handlers.get(handler_uuid)
+        )
+        if registration is None or handler is None:
+            return None
+        _event_key, positions = registration
+        return handler, frozenset(positions)
 
     @classmethod
     def add_spatial_handler(
@@ -2350,18 +2343,6 @@ class EventQueue:
         return filtered_events
 
     @classmethod
-    def get_latest_events(cls, count: int) -> List[Event]:
-        """Return the last stored event versions.
-
-        Args:
-            count: Maximum number of events to return.
-
-        Returns:
-            At most `count` events from the end of the stream.
-        """
-        return cls._all_events[-count:] if len(cls._all_events) >= count else cls._all_events
-
-    @classmethod
     def get_event_history(cls, event_uuid: UUID) -> List[Event]:
         """Return all stored versions in the lineage containing `event_uuid`.
 
@@ -2397,11 +2378,6 @@ class EventQueue:
     def get_events_by_target(cls, target_entity_uuid: UUID) -> List[Event]:
         """Return all events indexed under a target entity UUID."""
         return cls._events_by_target.get(target_entity_uuid, [])
-
-    @classmethod
-    def get_events_by_timestamp(cls, timestamp: datetime) -> List[Event]:
-        """Return all events indexed at an exact timestamp."""
-        return cls._events_by_timestamp.get(timestamp, [])
 
     @classmethod
     def is_first_at_phase(cls, event: Event) -> bool:
@@ -2452,6 +2428,13 @@ class SavingThrowEvent(D20Event):
 
     name: str = Field(default="Saving Throw", description="Human-readable saving throw label.")
     ability_name: AbilityName = Field(description="Ability used for the saving throw.")
+    saving_throw_context: Optional[SavingThrowContext] = Field(
+        default=None,
+        description=(
+            "Exact authored cause, effect identity, magical fact, and closed "
+            "rule semantics for this saving throw."
+        ),
+    )
     condition_context: Optional[str] = Field(
         default=None,
         description="Optional condition name this save is made against, such as Poisoned.",
@@ -3573,6 +3556,30 @@ class ForcedMovementEvent(Event):
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         return {self.start_position, self.end_position}
 
+    def completion_position_observer_evidence(
+        self,
+        completion_locations: Dict[str, Set[str]],
+    ) -> Dict[str, Set[str]]:
+        """Freeze independent pre-displacement and post-displacement grants."""
+        if (
+            self.target_entity_uuid is None
+            or self.phase is not EventPhase.EFFECT
+        ):
+            return super().completion_position_observer_evidence(
+                completion_locations
+            )
+        entity_key = str(self.target_entity_uuid)
+        evidence = super().completion_position_observer_evidence(
+            completion_locations
+        )
+        evidence[position_evidence_key(self.start_position)] = set(
+            self.located_entity_observer_uuids.get(entity_key, set())
+        )
+        evidence[position_evidence_key(self.end_position)] = set(
+            completion_locations.get(entity_key, set())
+        )
+        return evidence
+
 
 class StepMovementEvent(Event):
     """Single cell transition within a movement path.
@@ -3731,18 +3738,72 @@ class Healing(BaseObject):
         )
 
 
+class RollModificationOperation(str, Enum):
+    """Closed operation applied to an effective dice result."""
+
+    REPLACE = "replace"
+    APPEND = "append"
+
+
+class RollModification(BaseModel):
+    """Typed audit fact for one handler-owned dice-result change.
+
+    Replacement facts carry the effective total that was replaced. Append
+    facts identify the newly appended damage-packet index and have no previous
+    total.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    operation: RollModificationOperation = Field(
+        description="Whether the handler replaced a roll or appended a damage packet.",
+    )
+    handler_name: str = Field(
+        min_length=1,
+        description="Human-readable handler that owned the change.",
+    )
+    packet_index: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Damage-packet index; absent for single-roll replacements.",
+    )
+    previous_total: Optional[int] = Field(
+        default=None,
+        description="Effective total replaced by this change; absent for append operations.",
+    )
+    final_total: int = Field(
+        description="Effective total after replacement or the appended packet total.",
+    )
+    reason: str = Field(
+        min_length=1,
+        description="Rules-facing reason for the change.",
+    )
+
+    @model_validator(mode="after")
+    def validate_operation_shape(self) -> "RollModification":
+        """Reject ambiguous replacement and append audit facts."""
+        if (
+            self.operation is RollModificationOperation.REPLACE
+            and self.previous_total is None
+        ):
+            raise ValueError("roll replacement requires previous_total")
+        if self.operation is RollModificationOperation.APPEND:
+            if self.packet_index is None:
+                raise ValueError("roll append requires packet_index")
+            if self.previous_total is not None:
+                raise ValueError("roll append cannot carry previous_total")
+        return self
+
+
 class DiceRollResultEvent(Event):
-    """Base event for post-roll, pre-application dice interception.
+    """Abstract base for post-roll, pre-application dice interception.
 
     Result processors such as Lucky, Great Weapon Fighting, or healing dice
     maximizers modify these events after dice have been rolled but before the
-    consuming action applies the result.
+    consuming action applies the result. Concrete result events own distinct
+    dispatch categories; the base itself is never published.
     """
 
-    event_type: EventType = Field(
-        default=EventType.DICE_ROLL_RESULT,
-        description="Base event category for dice result interception.",
-    )
     roll_type: RollType = Field(
         ...,
         description="Roll category used by handlers to decide eligibility.",
@@ -3751,29 +3812,98 @@ class DiceRollResultEvent(Event):
         default_factory=dict,
         description="Arbitrary handler context carried with the roll result.",
     )
-    roll_modifications: List[Tuple[str, str]] = Field(
+    roll_modifications: List[RollModification] = Field(
         default_factory=list,
-        description="Audit entries describing handlers that modified this roll.",
+        description="Typed ordered audit facts describing handler-owned roll changes.",
     )
 
-    def add_modification(self, handler_name: str, reason: str) -> None:
-        """Track that a handler modified this roll."""
-        self.roll_modifications.append((handler_name, reason))
-        self.modified = True
+    def _combat_log_packet_details(
+        self,
+        modification: RollModification,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Return optional damage-packet display facts for one modification."""
+        return None, None
+
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
+        """Project actual result changes into one causal combat-log child."""
+        if not self.roll_modifications:
+            return None
+
+        facts: List[RollModificationLogFact] = []
+        detail_lines: List[str] = []
+        for modification in self.roll_modifications:
+            damage_type, dice_expression = self._combat_log_packet_details(
+                modification,
+            )
+            fact = RollModificationLogFact(
+                operation=modification.operation.value,
+                handler_name=modification.handler_name,
+                packet_index=modification.packet_index,
+                previous_total=modification.previous_total,
+                final_total=modification.final_total,
+                reason=modification.reason,
+                packet_damage_type=damage_type,
+                packet_dice=dice_expression,
+            )
+            facts.append(fact)
+            if modification.operation is RollModificationOperation.REPLACE:
+                locus = (
+                    f"damage packet {modification.packet_index}"
+                    if modification.packet_index is not None
+                    else f"{self.roll_type.value.lower()} roll"
+                )
+                detail_lines.append(
+                    f"{modification.handler_name}: {locus} "
+                    f"{modification.previous_total} → {modification.final_total} "
+                    f"({modification.reason})"
+                )
+            else:
+                packet_description = "damage packet"
+                if dice_expression and damage_type:
+                    packet_description = f"{dice_expression} {damage_type} damage"
+                detail_lines.append(
+                    f"{modification.handler_name}: added {packet_description} "
+                    f"for {modification.final_total} "
+                    f"({modification.reason})"
+                )
+
+        handler_names = list(dict.fromkeys(
+            modification.handler_name
+            for modification in self.roll_modifications
+        ))
+        source_name = self.source_entity_name or "Roll"
+        compact = (
+            f"{md_color(source_name, 'cyan')}'s roll changed: "
+            f"{', '.join(handler_names)}"
+        )
+        verbose = f"{compact}\n  " + "\n  ".join(detail_lines)
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ROLL_MODIFICATION,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            target_name=self.target_entity_name,
+            target_uuid=(
+                str(self.target_entity_uuid)
+                if self.target_entity_uuid is not None
+                else None
+            ),
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            data=RollModificationLogData(
+                roll_type=self.roll_type.value.lower(),
+                modifications=facts,
+            ).model_dump(mode="json"),
+        )
 
 
 class D20RollResultEvent(DiceRollResultEvent):
-    """Base event for d20 result interception.
-
-    Broad handlers may listen to this base d20 result type; attack, save, and
-    check-specific handlers listen to the subclasses below.
-    """
+    """Generic d20 result event when no attack/save/check subtype applies."""
 
     event_type: EventType = Field(
         default=EventType.D20_ROLL_RESULT,
         description="Base event category for d20 result interception.",
     )
-    roll: DiceRoll = Field(..., description="Initial d20 roll result.")
     original_roll: DiceRoll = Field(..., description="Immutable d20 roll kept for audit.")
     final_roll: Optional[DiceRoll] = Field(
         default=None,
@@ -3783,22 +3913,56 @@ class D20RollResultEvent(DiceRollResultEvent):
     bonus: Optional[ModifiableValue] = Field(default=None, description="Modifiers used for the d20 roll.")
     result: Optional[bool] = Field(default=None, description="Success flag set after the outcome is evaluated.")
 
-    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
-        """Replace the effective d20 roll and append an audit entry.
+    @model_validator(mode="after")
+    def validate_roll_categories(self) -> "D20RollResultEvent":
+        """Keep original and replacement rolls in this event's d20 category."""
+        if self.original_roll.roll_type is not self.roll_type:
+            raise ValueError("d20 original_roll must match event roll_type")
+        if (
+            self.final_roll is not None
+            and self.final_roll.roll_type is not self.roll_type
+        ):
+            raise ValueError("d20 final_roll must match event roll_type")
+        return self
+
+    def replace_roll(
+        self,
+        new_roll: DiceRoll,
+        handler_name: str,
+        reason: str,
+    ) -> Self:
+        """Return a new event value with the effective d20 roll replaced.
 
         Args:
             new_roll: Replacement roll result.
             handler_name: Name of the handler making the replacement.
             reason: Human-readable reason for the replacement.
+
+        Returns:
+            Modified event value for the queue to store as handler evidence.
         """
+        if new_roll.roll_type is not self.roll_type:
+            raise ValueError("d20 replacement roll must match event roll_type")
         old_total = self.get_effective_roll().total
-        new_total = new_roll.total
-        self.final_roll = new_roll
-        self.add_modification(handler_name, f"{reason} ({old_total} → {new_total})")
+        modification = RollModification(
+            operation=RollModificationOperation.REPLACE,
+            handler_name=handler_name,
+            previous_total=old_total,
+            final_total=new_roll.total,
+            reason=reason,
+        )
+        return self.with_updates(
+            final_roll=new_roll,
+            roll_modifications=[*self.roll_modifications, modification],
+        )
 
     def get_effective_roll(self) -> DiceRoll:
         """Return final_roll if modified, otherwise original roll."""
-        return self.final_roll if self.final_roll is not None else self.roll
+        return (
+            self.final_roll
+            if self.final_roll is not None
+            else self.original_roll
+        )
 
 
 class AttackD20RollResultEvent(D20RollResultEvent):
@@ -3820,7 +3984,10 @@ class SavingThrowD20RollResultEvent(D20RollResultEvent):
         description="Event category for saving throw d20 result interception.",
     )
     roll_type: RollType = Field(default=RollType.SAVE, description="Roll category for saving throw d20 results.")
-    ability_name: AbilityName = Field(..., description="Ability used for the saving throw.")
+    ability_name: Optional[AbilityName] = Field(
+        default=None,
+        description="Ability used for the saving throw; absent for ability-neutral death saves.",
+    )
 
 
 class SkillCheckD20RollResultEvent(D20RollResultEvent):
@@ -3831,14 +3998,43 @@ class SkillCheckD20RollResultEvent(D20RollResultEvent):
         description="Event category for skill check d20 result interception.",
     )
     roll_type: RollType = Field(default=RollType.CHECK, description="Roll category for skill check d20 results.")
-    skill_name: SkillName = Field(..., description="Skill used for the check.")
+    skill_name: Optional[SkillName] = Field(
+        default=None,
+        description="Skill used for the check; absent for a generic ability check.",
+    )
+
+
+class DamageRollPacket(BaseModel):
+    """One typed damage definition and its original/effective roll result."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    damage: Damage = Field(
+        description="Damage definition that produced this packet.",
+    )
+    original_roll: DiceRoll = Field(
+        description="Immutable damage roll captured before result handlers.",
+    )
+    final_roll: DiceRoll = Field(
+        description="Effective damage roll consumed after result handlers.",
+    )
+
+    @model_validator(mode="after")
+    def validate_roll_types(self) -> "DamageRollPacket":
+        """Require both packet rolls to remain damage-category results."""
+        if self.original_roll.roll_type is not RollType.DAMAGE:
+            raise ValueError("damage packet original_roll must be a damage roll")
+        if self.final_roll.roll_type is not RollType.DAMAGE:
+            raise ValueError("damage packet final_roll must be a damage roll")
+        return self
+
 
 class DamageRollResultEvent(DiceRollResultEvent):
     """Damage-roll result event fired before damage is applied.
 
-    Handlers replace entries in `final_rolls` while `original_rolls` remains
-    available for audit. This supports reroll, keep-best, and partial-reroll
-    mechanics.
+    Handlers replace a packet's effective roll while its original roll remains
+    available for audit. They may also append complete packets for effects such
+    as Divine Smite or monster bonus damage.
     """
 
     name: str = Field(default="Damage Roll Result", description="Human-readable damage-roll result label.")
@@ -3849,26 +4045,100 @@ class DamageRollResultEvent(DiceRollResultEvent):
     roll_type: RollType = Field(default=RollType.DAMAGE, description="Roll category for damage results.")
     weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
     attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
-    damages: List[Damage] = Field(description="Damage packets that produced the rolls.")
-    original_rolls: List[DiceRoll] = Field(description="Original immutable damage rolls.")
-    final_rolls: List[DiceRoll] = Field(description="Damage rolls to apply after handler modifications.")
-    roll_modifications: List[Tuple[str, int, int, int, str]] = Field(  # type: ignore[assignment]
-        default_factory=list,
-        description="Audit trail of damage roll replacements: handler, roll index, old total, new total, reason."
+    damage_packets: List[DamageRollPacket] = Field(
+        min_length=1,
+        description=(
+            "Ordered damage definitions with their original and effective "
+            "rolls; one record is the indivisible rules packet."
+        ),
     )
 
-    def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
-        """Replace one final damage roll and append an audit entry.
+    @model_validator(mode="after")
+    def validate_roll_category(self) -> "DamageRollResultEvent":
+        """Require the event discriminator to remain damage-category."""
+        if self.roll_type is not RollType.DAMAGE:
+            raise ValueError("damage result event roll_type must be damage")
+        return self
+
+    def _combat_log_packet_details(
+        self,
+        modification: RollModification,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Project the affected damage packet's type and dice expression."""
+        packet_index = modification.packet_index
+        if packet_index is None or packet_index >= len(self.damage_packets):
+            return None, None
+        damage = self.damage_packets[packet_index].damage
+        return (
+            damage.damage_type.value.lower(),
+            f"{damage.dice_numbers}d{damage.damage_dice}",
+        )
+
+    def replace_roll(
+        self,
+        packet_index: int,
+        new_roll: DiceRoll,
+        handler_name: str,
+        reason: str,
+    ) -> Self:
+        """Return a new event value with one effective damage roll replaced.
 
         Args:
-            index: Index in `final_rolls` to replace.
+            packet_index: Index of the damage packet to replace.
             new_roll: Replacement damage roll.
             handler_name: Name of the handler making the replacement.
             reason: Human-readable reason for the replacement.
+
+        Returns:
+            Modified event value for the queue to store as handler evidence.
         """
-        old_roll = self.final_rolls[index]
-        self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
-        self.final_rolls[index] = new_roll
+        old_packet = self.damage_packets[packet_index]
+        damage_packets = list(self.damage_packets)
+        damage_packets[packet_index] = DamageRollPacket(
+            damage=old_packet.damage,
+            original_roll=old_packet.original_roll,
+            final_roll=new_roll,
+        )
+        modification = RollModification(
+            operation=RollModificationOperation.REPLACE,
+            handler_name=handler_name,
+            packet_index=packet_index,
+            previous_total=old_packet.final_roll.total,
+            final_total=new_roll.total,
+            reason=reason,
+        )
+        return self.with_updates(
+            damage_packets=damage_packets,
+            roll_modifications=[*self.roll_modifications, modification],
+        )
+
+    def append_damage_roll(
+        self,
+        damage: Damage,
+        roll: DiceRoll,
+        handler_name: str,
+        reason: str,
+    ) -> Self:
+        """Return a new event value with one typed damage packet appended."""
+        packet_index = len(self.damage_packets)
+        modification = RollModification(
+            operation=RollModificationOperation.APPEND,
+            handler_name=handler_name,
+            packet_index=packet_index,
+            final_total=roll.total,
+            reason=reason,
+        )
+        return self.with_updates(
+            damage_packets=[
+                *self.damage_packets,
+                DamageRollPacket(
+                    damage=damage,
+                    original_roll=roll,
+                    final_roll=roll,
+                ),
+            ],
+            roll_modifications=[*self.roll_modifications, modification],
+        )
 
 
 class HealRollResultEvent(DiceRollResultEvent):
@@ -3888,53 +4158,46 @@ class HealRollResultEvent(DiceRollResultEvent):
     original_roll: DiceRoll = Field(description="Original immutable healing roll.")
     final_roll: DiceRoll = Field(description="Healing roll to apply after handler modifications.")
 
-    def replace_roll(self, new_roll: DiceRoll, handler_name: str, reason: str) -> None:  # type: ignore[override]
-        """Replace the final healing roll and append an audit entry.
+    @model_validator(mode="after")
+    def validate_roll_categories(self) -> "HealRollResultEvent":
+        """Require healing events to contain only healing-category rolls."""
+        if self.roll_type is not RollType.HEAL:
+            raise ValueError("heal result event roll_type must be heal")
+        if self.original_roll.roll_type is not RollType.HEAL:
+            raise ValueError("heal original_roll must be a healing roll")
+        if self.final_roll.roll_type is not RollType.HEAL:
+            raise ValueError("heal final_roll must be a healing roll")
+        return self
+
+    def replace_roll(
+        self,
+        new_roll: DiceRoll,
+        handler_name: str,
+        reason: str,
+    ) -> Self:
+        """Return a new event value with the effective healing roll replaced.
 
         Args:
             new_roll: Replacement healing roll.
             handler_name: Name of the handler making the replacement.
             reason: Human-readable reason for the replacement.
+
+        Returns:
+            Modified event value for the queue to store as handler evidence.
         """
-        self.roll_modifications.append((handler_name, reason))
-        self.final_roll = new_roll
-        self.modified = True
-
-
-class DamageRolledEvent(Event):
-    """Legacy damage-roll interception event.
-
-    Use `DamageRollResultEvent` for new handlers. This class remains for
-    compatibility with older callers.
-    """
-
-    name: str = Field(default="Damage Rolled", description="Human-readable legacy damage-roll label.")
-    event_type: EventType = Field(
-        default=EventType.DAMAGE_ROLLED,
-        description="Legacy event category for damage-roll interception.",
-    )
-    weapon_slot: WeaponSlot = Field(description="Weapon slot used for the attack.")
-    attack_outcome: AttackOutcome = Field(description="Attack outcome associated with this damage roll.")
-    damages: List[Damage] = Field(description="Damage packets that produced the rolls.")
-    original_rolls: List[DiceRoll] = Field(description="Original immutable damage rolls.")
-    final_rolls: List[DiceRoll] = Field(description="Damage rolls to apply after handler modifications.")
-    roll_modifications: List[Tuple[str, int, int, int, str]] = Field(
-        default_factory=list,
-        description="Audit trail of damage roll replacements: handler, roll index, old total, new total, reason."
-    )
-
-    def replace_roll(self, index: int, new_roll: DiceRoll, handler_name: str, reason: str) -> None:
-        """Replace one final damage roll and append an audit entry.
-
-        Args:
-            index: Index in `final_rolls` to replace.
-            new_roll: Replacement damage roll.
-            handler_name: Name of the handler making the replacement.
-            reason: Human-readable reason for the replacement.
-        """
-        old_roll = self.final_rolls[index]
-        self.roll_modifications.append((handler_name, index, old_roll.total, new_roll.total, reason))
-        self.final_rolls[index] = new_roll
+        if new_roll.roll_type is not RollType.HEAL:
+            raise ValueError("heal replacement roll must be a healing roll")
+        modification = RollModification(
+            operation=RollModificationOperation.REPLACE,
+            handler_name=handler_name,
+            previous_total=self.final_roll.total,
+            final_total=new_roll.total,
+            reason=reason,
+        )
+        return self.with_updates(
+            final_roll=new_roll,
+            roll_modifications=[*self.roll_modifications, modification],
+        )
 
 
 class TakeDamageEvent(Event):

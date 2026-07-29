@@ -36,7 +36,7 @@ def lucky_processor(
     if not entity.action_economy.can_afford_resource("luck_points", 1):
         return None
 
-    original_total = event.roll.total
+    original_total = event.get_effective_roll().total
     if original_total >= 10:
         return None
 
@@ -47,10 +47,17 @@ def lucky_processor(
     new_roll = dice.roll
 
     if new_roll.total > original_total:
-        event.replace_roll(new_roll, "Lucky", f"Rerolled {original_total} -> {new_roll.total}")
-        return event.model_copy(update={"modified": True})
+        return event.replace_roll(
+            new_roll,
+            "Lucky",
+            f"Rerolled {original_total} -> {new_roll.total}",
+        )
 
-    return None
+    return event.with_updates(
+        status_message=(
+            f"Lucky kept {original_total} after rerolling {new_roll.total}"
+        ),
+    )
 
 
 class LuckyFeature(BaseCondition):

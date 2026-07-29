@@ -7,12 +7,13 @@ import time
 
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
 from dnd.core.values import ModifiableValue, AdvantageStatus
-from dnd.core.modifiers import NumericalModifier, CreatureType, DamageType, Size
+from dnd.core.creature_types import CreatureType, DamageType, Size
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag
 from dnd.core.action_types import RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import (
     AuthoredBehaviorAttribution,
     BehaviorBinding,
@@ -20,6 +21,10 @@ from dnd.core.content.runtime import (
     bind_runtime_root_owned_behavior,
 )
 from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.saving_throw_types import (
+    SAVING_THROW_CONTEXT_KEY,
+    SavingThrowContext,
+)
 from dnd.core.spell_execution import current_spell_execution
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
@@ -61,6 +66,7 @@ from dnd.core.item_types import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.geometry import supercover_line
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
 from dnd.creature_transforms import (
     ModifierOwnership,
@@ -243,6 +249,21 @@ class Entity(BaseBlock):
         exclude=True,
         description="Exact authored creature definition used for this runtime entity.",
     )
+    character_species_ref: Optional[ContentRef] = Field(
+        default=None,
+        exclude=True,
+        description="Exact installed species identity for a player character.",
+    )
+    character_species_variant_ref: Optional[ContentRef] = Field(
+        default=None,
+        exclude=True,
+        description="Exact optional installed species-variant identity.",
+    )
+    character_background_ref: Optional[ContentRef] = Field(
+        default=None,
+        exclude=True,
+        description="Exact installed background identity for a player character.",
+    )
     ability_scores: AbilityScores = Field(
         default_factory=lambda: AbilityScores.create(source_entity_uuid=uuid4()),
         description="Ability score block owned by this entity."
@@ -302,6 +323,18 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    structural_base_size: Size = Field(
+        default=Size.MEDIUM,
+        description="Body-authored size restored after structural grants leave.",
+    )
+    structural_size_sources: Dict[UUID, Size] = Field(
+        default_factory=dict,
+        description="Source-owned durable size contributions.",
+    )
+    origin_capability_sources: Dict[OriginCapability, Set[UUID]] = Field(
+        default_factory=dict,
+        description="Source-owned durable non-numerical origin capabilities.",
+    )
     has_ordinary_sight: bool = Field(
         default=True,
         description="Whether the entity can see visual phenomena without special senses."
@@ -408,6 +441,44 @@ class Entity(BaseBlock):
         ):
             raise ValueError("Entity content_ref must identify a creature")
         return value
+
+    def set_character_origin_identity(
+        self,
+        *,
+        species_ref: ContentRef,
+        species_variant_ref: ContentRef | None,
+        background_ref: ContentRef,
+    ) -> None:
+        """Install one exact composition-owned character origin identity."""
+        if (
+            species_ref.definition_kind is not ContentDefinitionKind.SPECIES
+            or background_ref.definition_kind
+            is not ContentDefinitionKind.BACKGROUND
+            or (
+                species_variant_ref is not None
+                and species_variant_ref.definition_kind
+                is not ContentDefinitionKind.SPECIES_VARIANT
+            )
+        ):
+            raise ValueError(
+                "character origin refs must identify species, optional "
+                "species variant, and background definitions",
+            )
+        if any((
+            self.character_species_ref is not None,
+            self.character_species_variant_ref is not None,
+            self.character_background_ref is not None,
+        )):
+            raise RuntimeError("character origin identity is already installed")
+        self.character_species_ref = species_ref
+        self.character_species_variant_ref = species_variant_ref
+        self.character_background_ref = background_ref
+
+    def clear_character_origin_identity(self) -> None:
+        """Remove the composition-owned character origin identity."""
+        self.character_species_ref = None
+        self.character_species_variant_ref = None
+        self.character_background_ref = None
 
     def model_post_init(self, __context: Any) -> None:
         """Register entity identity, position, grid, and senses callbacks."""
@@ -569,6 +640,7 @@ class Entity(BaseBlock):
             weight=config.weight,
             creature_type=config.creature_type,
             size=config.size,
+            structural_base_size=config.size,
             has_ordinary_sight=config.has_ordinary_sight,
             requires_breathing=config.requires_breathing,
             swimming_speed=config.swimming_speed,
@@ -576,6 +648,159 @@ class Entity(BaseBlock):
             death_save_successes=config.death_save_successes,
             death_save_failures=config.death_save_failures,
         )
+
+    def add_structural_size_source(
+        self,
+        source_id: UUID,
+        size: Size,
+    ) -> None:
+        """Install one durable size contribution and reject contradictions."""
+        existing = self.structural_size_sources.get(source_id)
+        if existing is not None and existing is not size:
+            raise ValueError(
+                f"size source {source_id} already owns {existing.value}",
+            )
+        other_sizes = {
+            row
+            for row_source, row in self.structural_size_sources.items()
+            if row_source != source_id
+        }
+        if other_sizes and other_sizes != {size}:
+            values = ", ".join(
+                sorted(row.value for row in other_sizes | {size}),
+            )
+            raise ValueError(
+                f"structural size contributions disagree: {values}",
+            )
+        self.structural_size_sources[source_id] = size
+        self.size = size
+
+    def remove_structural_size_source(self, source_id: UUID) -> bool:
+        """Remove exactly one durable size source and restore its predecessor."""
+        if self.structural_size_sources.pop(source_id, None) is None:
+            return False
+        remaining = set(self.structural_size_sources.values())
+        self.size = (
+            next(iter(remaining))
+            if remaining
+            else self.structural_base_size
+        )
+        return True
+
+    def add_origin_capability_source(
+        self,
+        capability: OriginCapability,
+        source_id: UUID,
+    ) -> None:
+        """Grant one durable origin capability from one exact source."""
+        self.origin_capability_sources.setdefault(capability, set()).add(
+            source_id,
+        )
+        if capability is OriginCapability.HALFLING_NIMBLENESS:
+            get_map().invalidate_occupancy_paths()
+            self.senses._paths_dirty = True
+
+    def remove_origin_capability_source(
+        self,
+        capability: OriginCapability,
+        source_id: UUID,
+    ) -> bool:
+        """Remove one exact capability source without affecting other owners."""
+        sources = self.origin_capability_sources.get(capability)
+        if sources is None or source_id not in sources:
+            return False
+        sources.remove(source_id)
+        if not sources:
+            del self.origin_capability_sources[capability]
+        if capability is OriginCapability.HALFLING_NIMBLENESS:
+            get_map().invalidate_occupancy_paths()
+            self.senses._paths_dirty = True
+        return True
+
+    def has_origin_capability(
+        self,
+        capability: OriginCapability,
+    ) -> bool:
+        """Return whether any durable source grants this origin capability."""
+        return bool(self.origin_capability_sources.get(capability))
+
+    def can_traverse_creature_space(self, occupant: "Entity") -> bool:
+        """Return whether an origin rule permits crossing an occupied cell.
+
+        This is deliberately an Entity-owned rule: it needs both creatures'
+        exact sizes and must not make GridMap or Senses import upward into the
+        entity layer. Traversal does not make the occupied cell a legal
+        movement destination.
+        """
+        if not self.has_origin_capability(
+            OriginCapability.HALFLING_NIMBLENESS,
+        ):
+            return False
+        size_order = (
+            Size.TINY,
+            Size.SMALL,
+            Size.MEDIUM,
+            Size.LARGE,
+            Size.HUGE,
+            Size.GARGANTUAN,
+        )
+        return size_order.index(occupant.size) > size_order.index(self.size)
+
+    def can_end_movement_at(
+        self,
+        position: Tuple[int, int],
+        *,
+        subjective: bool = False,
+    ) -> bool:
+        """Return whether known creature occupancy permits ending at a cell.
+
+        Subjective discovery cannot omit an endpoint solely because an
+        imperceivable creature occupies it; doing so would disclose the hidden
+        blocker. Objective movement execution still rejects that destination
+        and records the collision when the attempted route reaches it.
+        """
+        for occupant in self.get_all_entities_at_position(position):
+            if occupant.uuid == self.uuid:
+                continue
+            if not occupant._blocks_walking_without_origin_traversal(
+                self.uuid,
+                MovementMode.WALKING,
+            ):
+                continue
+            if subjective and not occupant.is_perceivable_by(self.uuid):
+                continue
+            return False
+        return True
+
+    def is_obscured_by_larger_creature_from(
+        self,
+        observer: "Entity",
+    ) -> bool:
+        """Return whether Naturally Stealthy has exact intervening cover."""
+        if not self.has_origin_capability(
+            OriginCapability.NATURALLY_STEALTHY,
+        ):
+            return False
+        size_order = (
+            Size.TINY,
+            Size.SMALL,
+            Size.MEDIUM,
+            Size.LARGE,
+            Size.HUGE,
+            Size.GARGANTUAN,
+        )
+        own_size_index = size_order.index(self.size)
+        for position in supercover_line(
+            observer.position,
+            self.position,
+        )[1:-1]:
+            if any(
+                candidate.health.life_state is not LifeState.DEAD
+                and size_order.index(candidate.size) > own_size_index
+                for candidate in self.get_all_entities_at_position(position)
+            ):
+                return True
+        return False
 
     def _set_position(self, new_position: Tuple[int, int]) -> None:
         """Set entity and senses position without updating registry indexes.
@@ -785,27 +1010,6 @@ class Entity(BaseBlock):
         if replacement is not None:
             self.add_condition(replacement, check_save_throw=False, parent_event=parent_event)
         return True
-
-    def reduce_condition_by_tag(
-        self,
-        condition_tag: ConditionTag,
-        amount: int = 1,
-        parent_event: Optional[Event] = None,
-    ) -> bool:
-        """Reduce the first active levelled condition carrying a tag.
-
-        Args:
-            condition_tag: Tag identifying the condition family to reduce.
-            amount: Number of levels to remove.
-            parent_event: Optional parent event for removal/application lineage.
-
-        Returns:
-            True if a matching supported condition was reduced or removed.
-        """
-        for condition_name, condition in list(self.active_conditions.items()):
-            if condition_tag in condition.tags and condition.supports_level_reduction():
-                return self.reduce_condition_level(condition_name, amount, parent_event)
-        return False
 
     def _expire_long_rest_conditions_on_block(self, block: BaseBlock) -> None:
         """Mark long-rest durations on a block and remove expired conditions."""
@@ -1650,26 +1854,6 @@ class Entity(BaseBlock):
         """Entity relays to its Senses block for sense modes."""
         return self.senses.get_sense_modes()
 
-    def skill_bonus_cross(self, target_entity_uuid: UUID, skill_name: SkillName) -> Tuple[ModifiableValue, ModifiableValue]:
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
-            raise ValueError(f"Target entity {target_entity_uuid} not found")
-
-        with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
-            source_bonuses = self._get_bonuses_for_skill(skill_name)
-            target_bonuses = target_entity._get_bonuses_for_skill(skill_name)
-            for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                target_bonus.set_from_target(source_bonus)
-                source_bonus.set_from_target(target_bonus)
-            try:
-                source_total = source_bonuses[0].combine_values(list(source_bonuses)[1:]).model_copy(deep=True)
-                target_total = target_bonuses[0].combine_values(list(target_bonuses)[1:]).model_copy(deep=True)
-                return source_total, target_total
-            finally:
-                for source_bonus, target_bonus in zip(source_bonuses, target_bonuses):
-                    source_bonus.reset_from_target()
-                    target_bonus.reset_from_target()
-
     def ac_bonus(self, target_entity_uuid: Optional[UUID]=None) -> ModifiableValue:
         """Build the entity's armor class value.
 
@@ -2293,8 +2477,8 @@ class Entity(BaseBlock):
 
     @property
     def is_active(self) -> bool:
-        """Entity is active if it has HP."""
-        return self.has_hp
+        """Whether rules may still treat this entity as a living participant."""
+        return self.health.life_state is not LifeState.DEAD
 
     def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
         """Dead entities leave creature-senses facts until revived."""
@@ -2597,10 +2781,7 @@ class Entity(BaseBlock):
         """
         if level < 1 or level > 9:
             return False
-        slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
-        if slot_attr is None:
-            return False
-        return slot_attr.normalized_score >= 1
+        return self.action_economy.spell_slot_value(level).normalized_score >= 1
 
     def has_spell_slot_capacity(self, level: int) -> bool:
         """Return whether the actor owns a slot pool at the requested level.
@@ -2611,9 +2792,7 @@ class Entity(BaseBlock):
         """
         if level < 1 or level > 9:
             return False
-        slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
-        if slot_attr is None:
-            return False
+        slot_attr = self.action_economy.spell_slot_value(level)
         base_modifier = slot_attr.get_base_modifier()
         return bool(
             base_modifier is not None
@@ -2644,11 +2823,11 @@ class Entity(BaseBlock):
             spell.
         """
         for level in range(1, 10):
-            slot_attr = getattr(self.action_economy, f"spell_slot_{level}", None)
-            if slot_attr is not None:
-                base_mod = slot_attr.get_base_modifier()
-                if base_mod and base_mod.value > 0:
-                    return True
+            base_mod = self.action_economy.spell_slot_value(
+                level,
+            ).get_base_modifier()
+            if base_mod and base_mod.value > 0:
+                return True
         if any(action.is_spell for action in self.registered_actions):
             return True
         return False
@@ -2770,8 +2949,8 @@ class Entity(BaseBlock):
         """Roll a d20 and complete the matching result event.
 
         The event subclass is chosen from `roll_type`. Attack, save, and check
-        rolls include their specific context when supplied; missing required
-        context falls back to the base `D20RollResultEvent`.
+        rolls always retain their exact dispatch category; optional weapon,
+        ability, or skill metadata is attached when the rule supplies it.
 
         Args:
             bonus: Modifiable value used as the d20 bonus.
@@ -2787,11 +2966,21 @@ class Entity(BaseBlock):
         """
         dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
         initial_roll = dice.roll
+        target_entity = (
+            Entity.get(bonus.target_entity_uuid)
+            if bonus.target_entity_uuid is not None
+            else None
+        )
 
         common_fields = {
             "source_entity_uuid": self.uuid,
             "target_entity_uuid": bonus.target_entity_uuid,
-            "roll": initial_roll,
+            "source_entity_name": self.name,
+            "target_entity_name": (
+                target_entity.name
+                if isinstance(target_entity, Entity)
+                else None
+            ),
             "original_roll": initial_roll,
             "bonus": bonus,
             "context": context or {},
@@ -2806,21 +2995,15 @@ class Entity(BaseBlock):
                 weapon_slot=weapon_slot
         )
         elif roll_type == RollType.SAVE:
-            if ability_name is None:
-                event = D20RollResultEvent(**common_fields)
-            else:
-                event = SavingThrowD20RollResultEvent(
-                    **common_fields,
-                    ability_name=ability_name
-        )
+            event = SavingThrowD20RollResultEvent(
+                **common_fields,
+                ability_name=ability_name,
+            )
         elif roll_type == RollType.CHECK:
-            if skill_name is None:
-                event = D20RollResultEvent(**common_fields)
-            else:
-                event = SkillCheckD20RollResultEvent(
-                    **common_fields,
-                    skill_name=skill_name
-                )
+            event = SkillCheckD20RollResultEvent(
+                **common_fields,
+                skill_name=skill_name,
+            )
         else:
             event = D20RollResultEvent(**common_fields)
 
@@ -2858,11 +3041,21 @@ class Entity(BaseBlock):
         """
         dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
         initial_roll = dice.roll
+        target_entity = (
+            Entity.get(bonus.target_entity_uuid)
+            if bonus.target_entity_uuid is not None
+            else None
+        )
 
         common_fields = {
             "source_entity_uuid": self.uuid,
             "target_entity_uuid": bonus.target_entity_uuid,
-            "roll": initial_roll,
+            "source_entity_name": self.name,
+            "target_entity_name": (
+                target_entity.name
+                if isinstance(target_entity, Entity)
+                else None
+            ),
             "original_roll": initial_roll,
             "bonus": bonus,
             "context": context or {},
@@ -2877,21 +3070,15 @@ class Entity(BaseBlock):
                 weapon_slot=weapon_slot
             )
         elif roll_type == RollType.SAVE:
-            if ability_name is None:
-                event = D20RollResultEvent(**common_fields)
-            else:
-                event = SavingThrowD20RollResultEvent(
-                    **common_fields,
-                    ability_name=ability_name
-                )
+            event = SavingThrowD20RollResultEvent(
+                **common_fields,
+                ability_name=ability_name,
+            )
         elif roll_type == RollType.CHECK:
-            if skill_name is None:
-                event = D20RollResultEvent(**common_fields)
-            else:
-                event = SkillCheckD20RollResultEvent(
-                    **common_fields,
-                    skill_name=skill_name
-                )
+            event = SkillCheckD20RollResultEvent(
+                **common_fields,
+                skill_name=skill_name,
+            )
         else:
             event = D20RollResultEvent(**common_fields)
 
@@ -2905,6 +3092,7 @@ class Entity(BaseBlock):
         dc: Union[int, UUID],
         parent_event: Optional[UUID] = None,
         condition_context: Optional[str] = None,
+        saving_throw_context: Optional[SavingThrowContext] = None,
     ) -> SavingThrowEvent:
         """Create a saving throw request event for another entity.
 
@@ -2914,6 +3102,7 @@ class Entity(BaseBlock):
             dc: Fixed DC or UUID of this entity's modifiable DC value.
             parent_event: Optional parent event UUID for event-tree nesting.
             condition_context: Optional condition name this save is made against.
+            saving_throw_context: Exact authored cause and typed rules facts.
 
         Returns:
             Declaration-phase saving throw event.
@@ -2932,6 +3121,19 @@ class Entity(BaseBlock):
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
+        if saving_throw_context is None:
+            spell_execution = current_spell_execution()
+            if (
+                spell_execution is not None
+                and spell_execution.cause_ref is not None
+                and spell_execution.saving_throw_effect_id is not None
+            ):
+                saving_throw_context = SavingThrowContext(
+                    cause_ref=spell_execution.cause_ref,
+                    effect_id=spell_execution.saving_throw_effect_id,
+                    is_magical=True,
+                    effect_tags=spell_execution.saving_throw_effect_tags,
+                )
 
         return SavingThrowEvent(
             source_entity_uuid=self.uuid,
@@ -2942,6 +3144,7 @@ class Entity(BaseBlock):
             target_entity_name=target_entity_name,
             parent_event=parent_event,
             condition_context=condition_context,
+            saving_throw_context=saving_throw_context,
         )
 
     def create_skill_check_request(
@@ -3008,6 +3211,10 @@ class Entity(BaseBlock):
         save_context: Dict[str, Any] = {}
         if request.condition_context is not None:
             save_context["condition_context"] = request.condition_context
+        if request.saving_throw_context is not None:
+            save_context[SAVING_THROW_CONTEXT_KEY] = (
+                request.saving_throw_context
+            )
         save_bonus.set_context(save_context)
         save_bonus.set_event_lineage(request.lineage_uuid)
         dc = request.get_dc()
@@ -3105,13 +3312,36 @@ class Entity(BaseBlock):
         self.clear_target_entity()
         return final_outcome, final_roll, final_success
 
-    def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
-                       mode: MovementMode = MovementMode.WALKING) -> bool:
-        """An entity blocks walking unless it is non-blocking or the requester is itself."""
+    def _blocks_walking_without_origin_traversal(
+        self,
+        requesting_entity_uuid: Optional[UUID] = None,
+        mode: MovementMode = MovementMode.WALKING,
+    ) -> bool:
+        """Return physical occupancy without requester-specific origin rules."""
         if requesting_entity_uuid == self.uuid:
             return False
         if self.non_blocking or self.health.life_state is LifeState.DEAD:
             return False
+        return True
+
+    def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
+                       mode: MovementMode = MovementMode.WALKING) -> bool:
+        """Return whether this creature blocks the requester's traversal."""
+        if not self._blocks_walking_without_origin_traversal(
+            requesting_entity_uuid,
+            mode,
+        ):
+            return False
+        if (
+            mode is MovementMode.WALKING
+            and requesting_entity_uuid is not None
+        ):
+            requester = Entity.get(requesting_entity_uuid)
+            if (
+                isinstance(requester, Entity)
+                and requester.can_traverse_creature_space(self)
+            ):
+                return False
         return True
 
     def _publish_owned_item_location(
@@ -3439,12 +3669,15 @@ class Entity(BaseBlock):
         collision: Set[Tuple[int, int]] = set()
         directional_collision: Set[Tuple[Tuple[int, int], str]] = set()
         ign_terrain = False
+        requesting_entity: Optional[Entity] = None
         if entity_uuid:
-            ent = Entity._entity_registry.get(entity_uuid)
-            if ent is not None:
-                collision = ent.senses.collision_blocked
-                directional_collision = ent.senses.directional_collision_blocked
-                ign_terrain = ent.ignore_difficult_terrain
+            requesting_entity = Entity._entity_registry.get(entity_uuid)
+            if requesting_entity is not None:
+                collision = requesting_entity.senses.collision_blocked
+                directional_collision = (
+                    requesting_entity.senses.directional_collision_blocked
+                )
+                ign_terrain = requesting_entity.ignore_difficult_terrain
         if timing:
             record_action_timing("senses.prepare_path_context_ms", started)
         effective_path_max_distance = path_max_distance if path_max_distance is not None else max_distance
@@ -3460,7 +3693,20 @@ class Entity(BaseBlock):
         filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         path_costs: Dict[Tuple[int, int], int] = {}
         for pos, path in paths.items():
-            if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
+            if (
+                pos in visible_dict
+                and all(
+                    step in seen or step in visible_dict
+                    for step in path
+                )
+                and (
+                    requesting_entity is None
+                    or requesting_entity.can_end_movement_at(
+                        pos,
+                        subjective=True,
+                    )
+                )
+            ):
                 filtered_paths[pos] = path
                 path_costs[pos] = int(distances[pos] * 5)
         if timing:
@@ -3493,7 +3739,20 @@ class Entity(BaseBlock):
                 record_action_timing("senses.compute_safe_paths_ms", started)
             started = time.perf_counter() if timing else 0.0
             for pos, path in safe_raw.items():
-                if pos in visible_dict and all(step in seen or step in visible_dict for step in path):
+                if (
+                    pos in visible_dict
+                    and all(
+                        step in seen or step in visible_dict
+                        for step in path
+                    )
+                    and (
+                        requesting_entity is None
+                        or requesting_entity.can_end_movement_at(
+                            pos,
+                            subjective=True,
+                        )
+                    )
+                ):
                     safe_paths[pos] = path
                     safe_path_costs[pos] = int(safe_distances[pos] * 5)
             if timing:
@@ -3598,37 +3857,6 @@ class Entity(BaseBlock):
                 continue
             visible_dict[pos] = True
         return visible_dict
-
-    def create_senses_copy_at_position(self, position: Tuple[int, int], max_distance: int = 10) -> 'Senses':
-        """Create a copy of senses as if entity were at a different position."""
-        senses = self.senses.model_copy(deep=True)
-        senses.position = position
-        (
-            visible_dict,
-            filtered_paths,
-            path_costs,
-            walkable,
-            visible_entities,
-            visible_objects,
-            _fov,
-            safe_paths,
-            safe_path_costs,
-        ) = Entity.compute_senses_from_position(
-            position, self.senses.seen, max_distance, entity_uuid=self.uuid
-        )
-
-        senses.update_senses(
-            entities=visible_entities,
-            visible=visible_dict,
-            walkable=walkable,
-            paths=filtered_paths,
-            path_costs=path_costs,
-            objects=visible_objects,
-            safe_paths=safe_paths,
-            safe_path_costs=safe_path_costs,
-            path_max_distance=max_distance,
-        )
-        return senses
 
     def update_entity_senses(
         self,
@@ -4588,8 +4816,15 @@ class Entity(BaseBlock):
                     continue
 
                 started = time.perf_counter() if timing else 0.0
+                source_requirements_met = (
+                    can_afford
+                    and template.validate_source_requirements_for_discovery()
+                )
+                if legal_only and not source_requirements_met:
+                    continue
+
                 target_pool: Dict[UUID, Tuple[int, int]] = {}
-                if can_afford:
+                if source_requirements_met:
                     target_pool = self._compute_target_pool(
                         template.valid_target_filter, include_dead,
                         template.include_self, potential_targets, target_pool_cache
@@ -4604,7 +4839,7 @@ class Entity(BaseBlock):
                 started = time.perf_counter() if timing else 0.0
                 valid_targets, rules_valid_count = (
                     self._validate_entity_targets(template, target_pool)
-                    if can_afford
+                    if source_requirements_met
                     else ([], 0)
                 )
                 if timing:
@@ -4665,12 +4900,16 @@ class Entity(BaseBlock):
                         ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
                         if not can_afford
                         else (
-                            ActionAvailabilityStatus.AVAILABLE
-                            if valid_targets
+                            ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                            if not source_requirements_met
                             else (
-                                ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
-                                if rules_valid_count > 0
-                                else ActionAvailabilityStatus.NO_VALID_TARGETS
+                                ActionAvailabilityStatus.AVAILABLE
+                                if valid_targets
+                                else (
+                                    ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                                    if rules_valid_count > 0
+                                    else ActionAvailabilityStatus.NO_VALID_TARGETS
+                                )
                             )
                         )
                     ),
@@ -5708,6 +5947,46 @@ class Entity(BaseBlock):
                 ))
         return actions
 
+    def _append_unavailable_item_use_action(
+        self,
+        result: AvailableActionsResult,
+        *,
+        template: BaseAction,
+        template_name: str,
+        display_name: str,
+        source_item_uuid: Optional[UUID],
+        item_stack_count: Optional[int],
+        availability_status: ActionAvailabilityStatus,
+        can_afford: bool,
+    ) -> None:
+        """Append one stable unavailable row for an inventory-provided action."""
+        action_info = self._make_action_info(
+            template_name=template_name,
+            target_type=template.effective_target_type,
+            valid_targets=[],
+            can_afford=can_afford,
+            availability_status=availability_status,
+            template=template,
+            display_name=display_name,
+            is_item_use=True,
+            source_item_uuid=source_item_uuid,
+            item_stack_count=item_stack_count,
+        )
+        if template.target_type == TargetType.SELF:
+            result.self_actions.append(action_info)
+        elif template.target_type in (
+            TargetType.ENTITY,
+            TargetType.MULTI_ENTITY,
+        ):
+            result.entity_actions.append(action_info)
+        elif template.target_type in (
+            TargetType.POSITION,
+            TargetType.POSITION_PATH,
+            TargetType.POSITION_LOS,
+            TargetType.POSITION_AOE,
+        ):
+            result.position_actions.append(action_info)
+
     def _collect_use_actions(
         self,
         result: AvailableActionsResult,
@@ -5731,7 +6010,9 @@ class Entity(BaseBlock):
         visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
 
-        use_sources: List[Tuple[BaseAction, Optional[UUID], str, Optional[int]]] = []
+        use_sources: List[
+            Tuple[BaseAction, Optional[UUID], str, Optional[int], bool]
+        ] = []
 
         inventory_use_actions = self.inventory.get_all_use_actions(self.uuid)
         result.set_inventory_use_action_sources(inventory_use_actions)
@@ -5740,7 +6021,9 @@ class Entity(BaseBlock):
             item = BaseBlock.get(item_uuid) if item_uuid else None
             item_name = item.name if item else "Item"
             item_stack = getattr(item, 'stack_count', None) if item else None
-            use_sources.append((use_template, item_uuid, item_name, item_stack))
+            use_sources.append(
+                (use_template, item_uuid, item_name, item_stack, True),
+            )
 
         for obj_uuid, obj_pos in self.senses.objects.items():
             obj = BaseBlock.get(obj_uuid)
@@ -5751,9 +6034,17 @@ class Entity(BaseBlock):
             if self.senses.get_feet_distance(obj_pos) > 5:
                 continue
             for use_template in obj.get_use_actions(self.uuid):
-                use_sources.append((use_template, obj_uuid, obj.name, None))
+                use_sources.append(
+                    (use_template, obj_uuid, obj.name, None, False),
+                )
 
-        for use_template, item_uuid, item_name, item_stack in use_sources:
+        for (
+            use_template,
+            item_uuid,
+            item_name,
+            item_stack,
+            is_inventory_source,
+        ) in use_sources:
             source_item = BaseBlock.get(item_uuid) if item_uuid is not None else None
             if isinstance(source_item, UsableItem):
                 current_uses = source_item.remaining_finite_uses()
@@ -5772,10 +6063,36 @@ class Entity(BaseBlock):
             stack_count_field = item_stack if item_stack and item_stack > 1 else None
             can_afford = use_template.check_target_independent_costs()
             if not can_afford:
+                if is_inventory_source and not legal_only:
+                    self._append_unavailable_item_use_action(
+                        result,
+                        template=use_template,
+                        template_name=template_name,
+                        display_name=display_name,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                        availability_status=(
+                            ActionAvailabilityStatus.SOURCE_UNAFFORDABLE
+                        ),
+                        can_afford=False,
+                    )
                 continue
 
             if use_template.target_type == TargetType.SELF:
                 if not use_template.validate_requirements_for_discovery():
+                    if is_inventory_source and not legal_only:
+                        self._append_unavailable_item_use_action(
+                            result,
+                            template=use_template,
+                            template_name=template_name,
+                            display_name=display_name,
+                            source_item_uuid=item_uuid,
+                            item_stack_count=stack_count_field,
+                            availability_status=(
+                                ActionAvailabilityStatus.REQUIREMENTS_UNMET
+                            ),
+                            can_afford=True,
+                        )
                     continue
                 result.self_actions.append(self._make_action_info(
                     template_name=template_name,
@@ -5795,7 +6112,7 @@ class Entity(BaseBlock):
                     use_template.valid_target_filter, include_dead,
                     use_template.include_self, potential_targets, target_pool_cache
                 )
-                valid_targets, _ = self._validate_entity_targets(
+                valid_targets, rules_valid_count = self._validate_entity_targets(
                     use_template,
                     target_pool,
                 )
@@ -5812,6 +6129,21 @@ class Entity(BaseBlock):
                         source_item_uuid=item_uuid,
                         item_stack_count=stack_count_field,
                     ))
+                elif is_inventory_source and not legal_only:
+                    self._append_unavailable_item_use_action(
+                        result,
+                        template=use_template,
+                        template_name=template_name,
+                        display_name=display_name,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                        availability_status=(
+                            ActionAvailabilityStatus.TARGET_COST_UNAFFORDABLE
+                            if rules_valid_count > 0
+                            else ActionAvailabilityStatus.NO_VALID_TARGETS
+                        ),
+                        can_afford=True,
+                    )
 
             elif use_template.target_type == TargetType.POSITION_AOE:
                 use_shape_template = use_template.aoe_shape
@@ -5839,6 +6171,19 @@ class Entity(BaseBlock):
                             self._aoe_nearby_candidates_cache[nearby_key] = candidates
                         valid_pos_list = [pos for pos in valid_pos_list if pos in candidates]
                     else:
+                        if is_inventory_source and not legal_only:
+                            self._append_unavailable_item_use_action(
+                                result,
+                                template=use_template,
+                                template_name=template_name,
+                                display_name=display_name,
+                                source_item_uuid=item_uuid,
+                                item_stack_count=stack_count_field,
+                                availability_status=(
+                                    ActionAvailabilityStatus.NO_VALID_TARGETS
+                                ),
+                                can_afford=True,
+                            )
                         continue
 
                 valid_pos_list = self._compact_aoe_candidate_positions(
@@ -5871,6 +6216,19 @@ class Entity(BaseBlock):
                             source_item_uuid=item_uuid,
                             item_stack_count=stack_count_field,
                         ))
+                    elif is_inventory_source and not legal_only:
+                        self._append_unavailable_item_use_action(
+                            result,
+                            template=use_template,
+                            template_name=template_name,
+                            display_name=display_name,
+                            source_item_uuid=item_uuid,
+                            item_stack_count=stack_count_field,
+                            availability_status=(
+                                ActionAvailabilityStatus.NO_VALID_TARGETS
+                            ),
+                            can_afford=True,
+                        )
                     continue
 
                 use_valid_positions: List[AvailableTarget] = []
@@ -5903,6 +6261,19 @@ class Entity(BaseBlock):
                         source_item_uuid=item_uuid,
                         item_stack_count=stack_count_field,
                     ))
+                elif is_inventory_source and not legal_only:
+                    self._append_unavailable_item_use_action(
+                        result,
+                        template=use_template,
+                        template_name=template_name,
+                        display_name=display_name,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                        availability_status=(
+                            ActionAvailabilityStatus.NO_VALID_TARGETS
+                        ),
+                        can_afford=True,
+                    )
 
             elif use_template.target_type == TargetType.POSITION_LOS:
                 use_valid_pos_list = use_template.get_valid_positions()
@@ -5936,6 +6307,19 @@ class Entity(BaseBlock):
                         source_item_uuid=item_uuid,
                         item_stack_count=stack_count_field,
                     ))
+                elif is_inventory_source and not legal_only:
+                    self._append_unavailable_item_use_action(
+                        result,
+                        template=use_template,
+                        template_name=template_name,
+                        display_name=display_name,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                        availability_status=(
+                            ActionAvailabilityStatus.NO_VALID_TARGETS
+                        ),
+                        can_afford=True,
+                    )
 
             elif use_template.target_type in (TargetType.POSITION, TargetType.POSITION_PATH):
                 use_valid_positions_pos: List[AvailableTarget] = []
@@ -5977,6 +6361,19 @@ class Entity(BaseBlock):
                         source_item_uuid=item_uuid,
                         item_stack_count=stack_count_field,
                     ))
+                elif is_inventory_source and not legal_only:
+                    self._append_unavailable_item_use_action(
+                        result,
+                        template=use_template,
+                        template_name=template_name,
+                        display_name=display_name,
+                        source_item_uuid=item_uuid,
+                        item_stack_count=stack_count_field,
+                        availability_status=(
+                            ActionAvailabilityStatus.NO_VALID_TARGETS
+                        ),
+                        can_afford=True,
+                    )
 
     def get_available_actions(
         self,

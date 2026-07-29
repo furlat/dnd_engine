@@ -56,7 +56,7 @@ from dnd.items.environment import (
     OpenDirectionalDoorAction,
 )
 from dnd.items.spell_items import SpellGrantingItem
-from dnd.items.test_items import (
+from dnd.items.environment_interactables import (
     ActivateDeviceAction,
     ArcaneDevice,
     CloseDoorAction,
@@ -66,7 +66,7 @@ from dnd.items.test_items import (
     PullLeverAction,
     RestAction,
     StorageChest,
-    TestDoorA,
+    DoorObject,
     TrapLever,
 )
 from dnd.items.torches import (
@@ -312,9 +312,9 @@ def _build_directional_door(
 def _build_door(
     raw_context: object,
     parameters: DoorParameters,
-) -> TestDoorA:
+) -> DoorObject:
     context = ItemBuildContext.model_validate(raw_context)
-    return TestDoorA(
+    return DoorObject(
         source_entity_uuid=context.source_entity_uuid,
         content_ref=context.requested_ref,
         is_open=parameters.is_open,
@@ -916,27 +916,6 @@ NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS: tuple[
     FIREBALL_CANNON_DECLARATION,
 )
 
-NEURODRAGON_ENVIRONMENT_RECIPES_BY_LEGACY_ID = MappingProxyType({
-    "legacy.environment.directional_wall": DIRECTIONAL_WALL_RECIPE,
-    "legacy.environment.directional_door": DIRECTIONAL_DOOR_RECIPE,
-    "legacy.environment.test_door_a": DOOR_RECIPE,
-    "legacy.environment.trap_lever": TRAP_LEVER_RECIPE,
-    "legacy.environment.storage_chest": STORAGE_CHEST_RECIPE,
-    "legacy.environment.campfire": CAMPFIRE_RECIPE,
-    "legacy.environment.blocker.crate": CRATE_RECIPE,
-    "legacy.environment.blocker.boulder": BOULDER_RECIPE,
-    "legacy.environment.blocker.barricade": BARRICADE_RECIPE,
-    "legacy.environment.blocker.oil_barrel": OIL_BARREL_RECIPE,
-    "legacy.item.factory.test_items.wall_torch": WALL_TORCH_RECIPE,
-    "legacy.item.factory.test_items.arcane_device": ARCANE_DEVICE_RECIPE,
-    (
-        "legacy.item.factory.test_items.arcane_machine_gun"
-    ): ARCANE_MACHINE_GUN_RECIPE,
-    (
-        "legacy.item.factory.test_items.fireball_cannon"
-    ): FIREBALL_CANNON_RECIPE,
-})
-
 MAPEDITOR_ENVIRONMENT_CATALOG_ID_BY_REF = MappingProxyType({
     DIRECTIONAL_WALL_REF.identity_key: "directional_wall",
     DIRECTIONAL_DOOR_REF.identity_key: "directional_door",
@@ -978,7 +957,6 @@ __all__ = [
     "FIREBALL_CANNON_REF",
     "MAPEDITOR_ENVIRONMENT_CATALOG_ID_BY_REF",
     "NEURODRAGON_ENVIRONMENT_OBJECT_DECLARATIONS",
-    "NEURODRAGON_ENVIRONMENT_RECIPES_BY_LEGACY_ID",
     "OIL_BARREL_RECIPE",
     "OIL_BARREL_REF",
     "STORAGE_CHEST_RECIPE",

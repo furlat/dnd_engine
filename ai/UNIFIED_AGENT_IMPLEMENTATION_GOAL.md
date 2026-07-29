@@ -5,13 +5,17 @@ Status: active governing goal
 Architecture reference:
 [UNIFIED_AGENT_ARCHITECTURE.md](UNIFIED_AGENT_ARCHITECTURE.md)
 
-Iteration evidence:
+Validation evidence:
 
-- [AGENT_UX_ITERATION_LOG.md](AGENT_UX_ITERATION_LOG.md)
-- [AGENT_UX_ITERATION_STATS.json](AGENT_UX_ITERATION_STATS.json)
-- [AGENT_UX_ITERATION_DASHBOARD.html](AGENT_UX_ITERATION_DASHBOARD.html)
-- [AI_TOURNAMENT_MONITOR.html](AI_TOURNAMENT_MONITOR.html)
-- `ai/evidence/tournaments/latest.json`
+- focused maintained behavior and performance regressions under `tests/ai/`
+  and `tests/manual/`;
+- exact retained Direct Codex artifacts under `ai/evidence/direct_codex/` and
+  `ai/evidence/direct_codex_runs/`;
+- the live read-only observer in [AI_AGENT_OBSERVER.html](AI_AGENT_OBSERVER.html).
+
+The retired iteration dashboard, append-only stats/log ledgers, tournaments,
+Elo reports, gauntlets, and promotion artifacts are not part of the active
+architecture.
 
 ## 1. Objective
 

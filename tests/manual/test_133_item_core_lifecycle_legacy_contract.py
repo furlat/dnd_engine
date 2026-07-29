@@ -22,16 +22,17 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import DurationType
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemRarity
-from dnd.core.modifiers import DamageType, NumericalModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.utils import get_hp, get_max_hp, reset_combat_state, set_hp
+from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp
 
 
 THIS_FILE = "tests/manual/test_133_item_core_lifecycle_legacy_contract.py"
-BOOK_ACTIONS_FILE = "tests/engine_book/test_chapter_09_action_templates_discovery.py"
-BOOK_GRID_FILE = "tests/engine_book/test_chapter_11_grid_tiles_pathfinding.py"
-BOOK_ITEMS_FILE = "tests/engine_book/test_chapter_13_items_inventory_equipment.py"
-BOOK_CONDITIONS_FILE = "tests/engine_book/test_chapter_07_condition_lifecycle.py"
+BOOK_ACTIONS_FILE = "tests/engine/test_action_discovery.py"
+BOOK_GRID_FILE = "tests/engine/test_grid_pathfinding.py"
+BOOK_ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
+BOOK_CONDITIONS_FILE = "tests/engine/test_condition_lifecycle.py"
 ADVANCED_ITEMS_FILE = "tests/manual/test_131_advanced_item_world_legacy_contract.py"
 DEPENDENCY_FILE = "tests/architecture/test_dependency_boundaries.py"
 

@@ -22,7 +22,7 @@ from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
 from dnd.monsters.circus_fighter_items import LONGSWORD_PLUS_ONE_REF
-from dnd.spells import ALL_SPELLS, SPELL_CONTENT_DECLARATIONS_BY_NAME
+from tests.spell_test_exports import ALL_SPELLS, SPELL_CONTENT_DECLARATIONS_BY_NAME
 from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_SPECS,
 )
@@ -69,6 +69,7 @@ _WEAPON_SOURCE_NAMES = {
     "dagger": "Dagger",
     "handaxe": "Handaxe",
     "javelin": "Javelin",
+    "light_hammer": "Light hammer",
     "mace": "Mace",
     "quarterstaff": "Quarterstaff",
     "sickle": "Sickle",
@@ -329,8 +330,8 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
         for row in ledger.rows
         if row.section == SourceCoverageSection.WEAPONS
     ) == {
-        SourceImplementationStatus.PLAYABLE: 24,
-        SourceImplementationStatus.MISSING: 13,
+        SourceImplementationStatus.PLAYABLE: 25,
+        SourceImplementationStatus.MISSING: 12,
     }
     assert Counter(
         row.implementation_status

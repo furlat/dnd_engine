@@ -8,7 +8,7 @@ from queue import Empty, Queue
 import socket
 from threading import Event as ThreadEvent, Thread
 import time
-from typing import Any, Sequence, cast
+from typing import Any, Protocol, Sequence, cast
 from uuid import UUID
 from uuid import uuid4
 
@@ -16,12 +16,14 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
+from starlette.requests import Request
 import uvicorn
 
-import server.agent_runtime.observation_projector as observation_projector
+import server.agent_runtime.observation_journal as observation_projector
 from ai.ordered_delivery import OrderedDeliveryTimeoutError
+import dnd.action_dispatch as action_dispatch
 from dnd.ai.contracts.observation import ObservationFrame, ObservationFrameType, ObservationSourceKind
-from server.agent_runtime.observation_projector import (
+from server.agent_runtime.observation_journal import (
     append_observation_control_frame,
     observation_wakeup_stream,
 )
@@ -55,7 +57,9 @@ from dnd.core.events import (
     SensoryUpdateEvent,
     SensoryUpdateReason,
 )
-from dnd.scenarios.ai_validation_arenas import create_ai_validation_arena
+from tests.manual.authored_encounter_support import (
+    assemble_authored_encounter,
+)
 from server.session import PlayerType
 from server import event_server
 from server.api_models import ActionResult
@@ -374,14 +378,16 @@ def test_runtime_shutdown_drains_telemetry_before_closing_its_transport(
     queued_sink = cast(QueuedAgentEventSink, runtime.event_sink)
     composite = cast(Any, queued_sink.destination)
     telemetry_client = composite.sinks[1].client
+    command_client = cast(_LifecycleClient, runtime.client)
+    stream_client = cast(_LifecycleClient, runtime.stream_client)
 
     runtime.emit_event("runtime.test", "accepted before shutdown")
     assert telemetry_client.post_started.wait(timeout=1.0)
     try:
         runtime.request_close()
 
-        assert runtime.client.closed is True
-        assert runtime.stream_client.closed is True
+        assert command_client.closed is True
+        assert stream_client.closed is True
         assert telemetry_client.closed is False
     finally:
         telemetry_client.release_post.set()
@@ -652,12 +658,41 @@ def test_runtime_close_reports_uncooperative_observation_worker_and_retries(
     assert runtime._stream_thread.is_alive() is False
 
 
-class _ConnectedRequest:
-    """Minimal request stub for direct SSE generator contract tests."""
+def _connected_request() -> Request:
+    """Build a real Starlette request whose receive channel never disconnects."""
 
-    async def is_disconnected(self) -> bool:
-        """Keep the test subscriber connected until its generator is closed."""
-        return False
+    async def receive() -> dict[str, object]:
+        return {
+            "type": "http.request",
+            "body": b"",
+            "more_body": False,
+        }
+
+    return Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.4"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/",
+            "raw_path": b"/",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [],
+            "client": ("127.0.0.1", 1),
+            "server": ("testserver", 80),
+        },
+        receive,
+    )
+
+
+class _ClosableAsyncBody(Protocol):
+    """StreamingResponse body iterator close surface used by direct tests."""
+
+    async def aclose(self) -> None:
+        """Close the response body iterator."""
+        ...
 
 
 def _decode_sse_chunk(chunk: str | bytes) -> tuple[str, dict]:
@@ -676,9 +711,20 @@ def _decode_sse_chunk(chunk: str | bytes) -> tuple[str, dict]:
     return event_name, json.loads(data)
 
 
-async def _next_sse_event(response) -> tuple[str, dict]:
+async def _next_sse_event(
+    response: StreamingResponse,
+) -> tuple[str, dict]:
     """Read one event from a direct StreamingResponse body iterator."""
-    return _decode_sse_chunk(await anext(response.body_iterator))
+    body = cast(
+        AsyncGenerator[str | bytes, None],
+        response.body_iterator,
+    )
+    return _decode_sse_chunk(await anext(body))
+
+
+async def _close_sse_response(response: StreamingResponse) -> None:
+    """Close one directly-consumed streaming response."""
+    await cast(_ClosableAsyncBody, response.body_iterator).aclose()
 
 
 def test_observation_subscription_race_cancels_losing_wait_task() -> None:
@@ -725,7 +771,7 @@ def test_observation_subscription_replays_more_than_one_page_without_skipping() 
 
     async def collect() -> list[tuple[str, dict]]:
         response = await event_server.subscribe_ai_observation(
-            _ConnectedRequest(),
+            _connected_request(),
             session_id,
             since=start_cursor,
         )
@@ -735,7 +781,7 @@ def test_observation_subscription_replays_more_than_one_page_without_skipping() 
                 for _ in range(502)
             ]
         finally:
-            await response.body_iterator.aclose()
+            await _close_sse_response(response)
 
     events = asyncio.run(collect())
 
@@ -755,14 +801,14 @@ def test_observation_subscription_rejects_cursor_ahead_of_server() -> None:
 
     async def read_error() -> tuple[str, dict]:
         response = await event_server.subscribe_ai_observation(
-            _ConnectedRequest(),
+            _connected_request(),
             session_id,
             since=cursor + 1,
         )
         try:
             return await _next_sse_event(response)
         finally:
-            await response.body_iterator.aclose()
+            await _close_sse_response(response)
 
     event_name, payload = asyncio.run(read_error())
 
@@ -789,9 +835,13 @@ def test_observation_subscription_emits_heartbeat_and_no_buffer_headers(
         immediate_timeout,
     )
 
-    async def read_events() -> tuple[object, tuple[str, dict], tuple[str, dict]]:
+    async def read_events() -> tuple[
+        StreamingResponse,
+        tuple[str, dict],
+        tuple[str, dict],
+    ]:
         response = await event_server.subscribe_ai_observation(
-            _ConnectedRequest(),
+            _connected_request(),
             session_id,
             since=snapshot["observation_cursor"],
         )
@@ -802,7 +852,7 @@ def test_observation_subscription_emits_heartbeat_and_no_buffer_headers(
                 await _next_sse_event(response),
             )
         finally:
-            await response.body_iterator.aclose()
+            await _close_sse_response(response)
 
     response, sync, heartbeat = asyncio.run(read_events())
 
@@ -1294,7 +1344,7 @@ def test_published_epoch_timing_breaks_down_available_action_discovery() -> None
 
 def test_position_aoe_action_lifecycle_timing_records_convolution_phases() -> None:
     """A real area spell exposes the action lifecycle inside execute-by-index."""
-    arena = create_ai_validation_arena("line_aoe_corridor")
+    arena = assemble_authored_encounter("line_aoe_corridor")
     hero = arena.hero
     hero.update_entity_senses(max_distance=20)
     actions = hero.get_available_actions()
@@ -2185,7 +2235,11 @@ def test_action_adapter_reports_missing_engine_event_as_failure(monkeypatch) -> 
     snapshot = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     row = _first_affordable_position_row(snapshot["current_epoch"])
 
-    monkeypatch.setattr(event_server, "execute_available_action", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        action_dispatch,
+        "execute_available_action",
+        lambda *_args, **_kwargs: None,
+    )
 
     response = client.post(
         "/action/execute",

@@ -1,5 +1,5 @@
 from typing import Dict, Optional,  List, Callable, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
@@ -96,12 +96,17 @@ class SavingThrow(BaseBlock):
         default="strength_saving_throw",
         description="The name of the saving throw in D&D 5e"
     )
-    proficiency: bool = Field(default=False, description="If true, the character is proficient in this saving throw, adding their proficiency bonus")
     bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"), description="Any additional bonus applied to the saving throw, beyond ability modifier and proficiency")
     proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
         description="Exact source-owned proficiency contributions.",
     )
+
+    @computed_field
+    @property
+    def proficiency(self) -> bool:
+        """Return the proficiency fact derived from owned sources."""
+        return self.proficiency_sources.is_proficient
 
     @property
     def ability(self) -> AbilityName:
@@ -139,6 +144,14 @@ class SavingThrow(BaseBlock):
         """Remove one exact proficiency grant."""
         return self.proficiency_sources.remove(source_id)
 
+    def set_proficiency(self, proficiency: bool) -> None:
+        """Set or remove the imperative proficiency source."""
+        source_id = uuid5(self.uuid, "saving-throw:manual:proficiency")
+        if proficiency:
+            self.add_proficiency_source(source_id, ProficiencyMode.FULL)
+        else:
+            self.remove_proficiency_source(source_id)
+
     def _get_proficiency_converter(self) -> Callable[[int], int]:
         """
         Returns a lambda function that converts the proficiency bonus based on proficiency status.
@@ -152,11 +165,7 @@ class SavingThrow(BaseBlock):
                                  to the proficiency bonus.
         """
         def convert(proficiency_bonus: int) -> int:
-            legacy = proficiency_bonus if self.proficiency else 0
-            return max(
-                legacy,
-                self.proficiency_sources.apply(proficiency_bonus),
-            )
+            return self.proficiency_sources.apply(proficiency_bonus)
 
         return convert
 
@@ -185,9 +194,17 @@ class SavingThrow(BaseBlock):
             bonus = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=config.bonus, value_name=name+" Saving Throw Bonus")
             for modifier in config.bonus_modifiers:
                 bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                       proficiency=config.proficiency, bonus=bonus)
+            saving_throw = cls(
+                source_entity_uuid=source_entity_uuid,
+                name=name,
+                source_entity_name=source_entity_name,
+                target_entity_uuid=target_entity_uuid,
+                target_entity_name=target_entity_name,
+                bonus=bonus,
+            )
+            if config.proficiency:
+                saving_throw.set_proficiency(True)
+            return saving_throw
 
 class SavingThrowSetConfig(BaseModel):
     """

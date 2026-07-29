@@ -6,16 +6,21 @@ from uuid import uuid4
 import pytest
 
 from dnd.blocks.equipment import Weapon
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.base_block import LightLevel
 from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import EquippedVisualPolicy
 from dnd.encounter import CombatantState, Encounter, EncounterState
-from dnd.entity import Entity, EntityConfig
-from dnd.items.test_items import StorageChest
+from dnd.entity import Entity
+from dnd.items.environment_interactables import StorageChest
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.environment_content import (
@@ -24,6 +29,7 @@ from dnd.items.environment_content import (
     storage_chest_recipe,
 )
 from dnd.items.weapons import DAGGER_RECIPE
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
@@ -53,24 +59,48 @@ from server.world_contracts import StructuralEdgeKind
 from server.world_projection import project_observed_tile
 
 
+def _materialize_test_actor(
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Build one exact authored actor without unrelated default possessions."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=(
+                "tests.subjective_world_projection.actor_"
+                f"{runtime_entity_uuid.hex}"
+            ),
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
+    )
+
+
 @pytest.fixture
 def subjective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Entity, Torch, Encounter]]:
     """Create three actors where one is outside the first observer's knowledge."""
     grid = reset_engine_runtime(grid_size=(4, 2))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
-    visible = Entity.create(
-        source_entity_uuid=uuid4(),
+    visible = _materialize_test_actor(
         name="Visible target",
-        config=EntityConfig(position=(1, 0), faction="monsters"),
+        position=(1, 0),
+        faction="monsters",
     )
-    hidden = Entity.create(
-        source_entity_uuid=uuid4(),
+    hidden = _materialize_test_actor(
         name="Hidden target",
-        config=EntityConfig(position=(3, 1), faction="monsters"),
+        position=(3, 1),
+        faction="monsters",
     )
     torch = materialize_item(
         TORCH_RECIPE,
@@ -452,17 +482,21 @@ def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
 ) -> None:
     """The visible side owns knowledge of the wall edge that stops its sight."""
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Boundary observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
-    wall = DirectionalWall(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=(wall_direction,),
-        blocked_channels=("vision",),
+    wall = materialize_item(
+        directional_wall_recipe(
+            blocked_directions=(wall_direction,),
+            blocked_channels=("vision",),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalWall,
     )
     grid.place_object(wall.uuid, wall_position)
     perspective = _participant(observer)
@@ -511,22 +545,26 @@ def test_distant_closed_door_projects_only_privacy_safe_edge_identity(
     """Every visible boundary direction distinguishes a door without object facts."""
 
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Boundary observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
     secret_name = f"Private Door {uuid4()}"
     secret_visual = f"PrivateVisual{uuid4()}"
-    door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        name=secret_name,
-        blocked_directions=(door_direction,),
-        blocked_channels=("movement", "vision"),
-        visual_item_name=secret_visual,
+    door = materialize_item(
+        directional_door_recipe(
+            display_name=secret_name,
+            blocked_directions=(door_direction,),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
+    door.visual_item_name = secret_visual
     grid.place_object(door.uuid, door_position)
     perspective = _participant(observer)
 
@@ -565,10 +603,10 @@ def test_visible_door_edge_tracks_authorized_open_and_closed_state() -> None:
     """A known door keeps one typed edge while its blocking channels toggle."""
 
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Door observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
@@ -625,19 +663,23 @@ def test_imperceivable_hidden_door_does_not_cross_the_edge_contract() -> None:
     """Private object identity and its derived blocker both fail closed."""
 
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Door observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
-    door = DirectionalDoor(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("west",),
-        blocked_channels=("movement", "vision"),
-        is_invisible=True,
+    door = materialize_item(
+        directional_door_recipe(
+            blocked_directions=("west",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
+    door.is_invisible = True
     grid.place_object(door.uuid, (2, 1))
     perspective = _participant(observer)
 
@@ -661,17 +703,21 @@ def test_imperceivable_hidden_door_does_not_cross_the_edge_contract() -> None:
 def test_hidden_neighbor_movement_only_boundary_does_not_invent_vision_wall() -> None:
     """A hidden movement-only edge is not promoted into visible wall knowledge."""
     grid = reset_engine_runtime(grid_size=(3, 3))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Boundary observer",
-        config=EntityConfig(position=(1, 1), faction="heroes"),
+        position=(1, 1),
+        faction="heroes",
     )
     observer.senses.visible = {(1, 1): True}
     observer.senses.seen = {(1, 1)}
-    wall = DirectionalWall(
-        source_entity_uuid=observer.uuid,
-        blocked_directions=("west",),
-        blocked_channels=("movement",),
+    wall = materialize_item(
+        directional_wall_recipe(
+            blocked_directions=("west",),
+            blocked_channels=("movement",),
+        ),
+        observer.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalWall,
     )
     grid.place_object(wall.uuid, (2, 1))
     perspective = _participant(observer)
@@ -773,28 +819,38 @@ def test_conflicting_door_appearances_are_conservative_and_observer_order_stable
     """Defensive overlap handling can never depend on observer-union order."""
 
     grid = reset_engine_runtime(grid_size=(1, 1))
-    observer_a = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer_a = _materialize_test_actor(
         name="Observer A",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
-    observer_b = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer_b = _materialize_test_actor(
         name="Observer B",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
-    closed = DirectionalDoor(
-        source_entity_uuid=observer_a.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="ClosedOverlap",
+    closed = materialize_item(
+        directional_door_recipe(
+            display_name="ClosedOverlap",
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer_a.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
-    opened = DirectionalDoor(
-        source_entity_uuid=observer_b.uuid,
-        blocked_directions=("east",),
-        blocked_channels=("movement", "vision"),
-        visual_item_name="OpenOverlap",
+    opened = materialize_item(
+        directional_door_recipe(
+            display_name="OpenOverlap",
+            blocked_directions=("east",),
+            blocked_channels=("movement", "vision"),
+        ),
+        observer_b.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=DirectionalDoor,
     )
+    closed.visual_item_name = "ClosedOverlap"
+    opened.visual_item_name = "OpenOverlap"
     opened.open()
     grid.place_object(closed.uuid, (0, 0))
     grid.place_object(opened.uuid, (0, 0))

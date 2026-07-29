@@ -8,6 +8,7 @@ from dnd.ai.policies.basic import (
 from dnd.ai.registry import PolicyRegistry
 
 from custom_ai.tactical import register_tactical_policy
+from server.api_models import GameCreationAIPolicyOption
 
 
 DEFAULT_NATIVE_POLICY_ID = BASIC_POLICY_ID
@@ -23,3 +24,14 @@ def create_server_native_policy_registry() -> CanonicalPolicyRegistry:
 
 SERVER_NATIVE_POLICY_REGISTRY = create_server_native_policy_registry()
 SERVER_NATIVE_POLICY_DESCRIPTORS = SERVER_NATIVE_POLICY_REGISTRY.descriptors()
+
+
+def server_native_ai_policy_options() -> tuple[GameCreationAIPolicyOption, ...]:
+    """Describe exactly the policies executable inside a shipped server."""
+    return tuple(
+        GameCreationAIPolicyOption(
+            descriptor=descriptor,
+            execution="in_process",
+        )
+        for descriptor in SERVER_NATIVE_POLICY_DESCRIPTORS
+    )

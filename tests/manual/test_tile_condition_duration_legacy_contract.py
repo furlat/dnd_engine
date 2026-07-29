@@ -6,7 +6,7 @@ from dnd.core.base_conditions import BaseCondition, Duration, DurationType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
-from dnd.utils import reset_combat_state, setup_combat_arena
+from tests.engine.support import reset_combat_state, setup_combat_arena
 
 
 class TileDurationProbe(BaseCondition):

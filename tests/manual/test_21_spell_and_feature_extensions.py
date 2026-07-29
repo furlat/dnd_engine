@@ -14,6 +14,8 @@ from dnd.extensions.aegis_spark import (
     AegisSpark,
     AegisSparkEffect,
     AegisTrainingFeature,
+)
+from tests.manual.extension_scenario_support import (
     create_aegis_scene,
     create_spell_feature_actor,
     find_action_info,

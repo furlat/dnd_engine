@@ -13,13 +13,13 @@ from dnd.core.aoe import Cone, Sphere
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.life_types import LifeState
-from dnd.core.modifiers import CreatureType, DamageType
+from dnd.core.creature_types import CreatureType, DamageType
 from dnd.entity import Entity
 from dnd.spells.abjuration import ProtectionFromEnergy, Stoneskin
 from dnd.spells.enchantment import PowerWordKill
 from dnd.spells.evocation import CircleOfDeath, ConeOfCold
 from dnd.spells.necromancy import Blight
-from dnd.utils import has_condition, set_hp
+from tests.engine.support import has_condition, set_hp
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,

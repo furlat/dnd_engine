@@ -117,11 +117,17 @@ class BehaviorBinder:
 
         Declared action and condition children retain their own authored
         definition while naming the item, action, or condition that granted
-        them. Handlers deliberately preserve the existing provider-derived
-        identity contract because many condition-owned handlers are private
-        runtime implementation details rather than standalone declarations.
+        them. Private handlers inherit their provider identity. Independently
+        declared handlers retain their public reaction identity through an
+        exact provider dependency.
         """
         if isinstance(behavior, BaseHandler):
+            if has_direct_behavior_declaration(behavior):
+                return self._bind_declared_handler_child(
+                    behavior,
+                    provider=provider,
+                    runtime_owner_uuid=runtime_owner_uuid,
+                )
             return self._bind_handler_child(
                 behavior,
                 provider=provider,
@@ -237,6 +243,35 @@ class BehaviorBinder:
                 origin_root_ref=None,
                 runtime_owner_uuid=runtime_owner_uuid,
             ),
+        )
+
+    def _bind_declared_handler_child(
+        self,
+        behavior: BaseHandler,
+        *,
+        provider: object,
+        runtime_owner_uuid: UUID,
+    ) -> BehaviorBinding:
+        """Bind one public reaction through the definition that installs it."""
+
+        provider_ref, origin_root_ref = self._resolve_behavior_provider(
+            provider,
+            runtime_owner_uuid=runtime_owner_uuid,
+        )
+        declaration = self._resolve_decorated_source(type(behavior))
+        expected_kind = declaration.runtime_behavior_kind
+        if expected_kind is not RuntimeBehaviorKind.REACTION:
+            raise ValueError(
+                "Provider-installed public handler must declare reaction "
+                f"runtime behavior: {declaration.ref.identity_key}",
+            )
+        return self.bind(
+            behavior,
+            declaration_source=type(behavior),
+            expected_kind=expected_kind,
+            provided_by_ref=provider_ref,
+            origin_root_ref=origin_root_ref,
+            runtime_owner_uuid=runtime_owner_uuid,
         )
 
     def _bind_handler_child(

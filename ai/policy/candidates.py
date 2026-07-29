@@ -39,6 +39,7 @@ from ai.policy.contracts import (
 )
 from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
+from dnd.core.geometry import grid_distance_cells
 from ai.policy.economy import (
     action_economy_opportunity_cost,
     capability_is_turn_refreshable,
@@ -2649,13 +2650,22 @@ def _prune_dominated_control_seeds(
     for comparable in comparable_by_scope.values():
         if len(comparable) < 2:
             continue
+        frontier: list[_ControlCandidateSeed] = []
         for seed in comparable:
             if any(
-                candidate is not seed
-                and _control_seed_dominates(candidate, seed)
-                for candidate in comparable
+                _control_seed_dominates(candidate, seed)
+                for candidate in frontier
             ):
                 dominated_ids.add(id(seed))
+                continue
+            retained: list[_ControlCandidateSeed] = []
+            for candidate in frontier:
+                if _control_seed_dominates(seed, candidate):
+                    dominated_ids.add(id(candidate))
+                else:
+                    retained.append(candidate)
+            retained.append(seed)
+            frontier = retained
     return tuple(seed for seed in seeds if id(seed) not in dominated_ids)
 
 
@@ -3012,17 +3022,30 @@ def _prune_dominated_area_damage_seeds(
 
     dominated_row_ids: set[str] = set()
     for family in families.values():
+        frontier: list[_DamageCandidateSeed] = []
         for candidate in family:
             if any(
-                other is not candidate
-                and _area_damage_seed_dominates(
+                _area_damage_seed_dominates(
                     other,
                     candidate,
                     damage_ending_control_uuids=damage_ending_control_uuids,
                 )
-                for other in family
+                for other in frontier
             ):
                 dominated_row_ids.add(candidate.row.row_id)
+                continue
+            retained: list[_DamageCandidateSeed] = []
+            for other in frontier:
+                if _area_damage_seed_dominates(
+                    candidate,
+                    other,
+                    damage_ending_control_uuids=damage_ending_control_uuids,
+                ):
+                    dominated_row_ids.add(other.row.row_id)
+                else:
+                    retained.append(other)
+            retained.append(candidate)
+            frontier = retained
     return tuple(seed for seed in seeds if seed.row.row_id not in dominated_row_ids)
 
 
@@ -4634,7 +4657,7 @@ def _nearest_controlled_ally_distance(
     """Return nearest known living controlled ally distance from a position."""
     actor_uuid = context.facts.actor.actor_uuid
     distances = [
-        _grid_distance(position, entity.position)
+        grid_distance_cells(position, entity.position)
         for entity_uuid in context.facts.contacts.controlled_entity_uuids
         if entity_uuid != actor_uuid
         for entity in [context.world.known_entities.get(entity_uuid)]
@@ -4643,18 +4666,15 @@ def _nearest_controlled_ally_distance(
     return min(distances) if distances else None
 
 
-def _grid_distance(left: tuple[int, int], right: tuple[int, int]) -> int:
-    """Return the engine's floored Euclidean distance in grid cells."""
-    return grid_distance_feet(left, right) // 5
-
-
 def _spacing_reference_key(
     origin: tuple[int, int],
     entity: ObservationEntityFact,
 ) -> tuple[int, str]:
     """Return deterministic nearest-reference ordering for a known contact."""
     return (
-        _grid_distance(origin, entity.position) if entity.position is not None else 2**31 - 1,
+        grid_distance_cells(origin, entity.position)
+        if entity.position is not None
+        else 2**31 - 1,
         entity_fact_replay_token(entity),
     )
 

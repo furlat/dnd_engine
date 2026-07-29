@@ -449,6 +449,95 @@ def test_sorcerer_level_rows_match_known_spell_and_cantrip_schedule() -> None:
     )
 
 
+def test_sorcerer_spell_choices_are_bounded_by_resulting_class_level() -> None:
+    """Known and replacement choices expose only class-level-legal spells."""
+
+    maximum_rank_by_level = (
+        1,
+        1,
+        2,
+        2,
+        3,
+        3,
+        4,
+        4,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        8,
+        8,
+        9,
+        9,
+        9,
+        9,
+    )
+    entitlement_rank_by_ref = {
+        row.spell_ref: row.spell_rank
+        for row in SORCERER_CLASS_DEFINITION.spell_entitlements
+        if row.spell_rank > 0
+    }
+    for level, maximum_rank in enumerate(
+        maximum_rank_by_level,
+        start=1,
+    ):
+        requirements = _level(
+            SORCERER_CLASS_DEFINITION,
+            level,
+        ).choice_requirements
+        expected_refs = tuple(sorted(
+            (
+                ref
+                for ref, rank in entitlement_rank_by_ref.items()
+                if rank <= maximum_rank
+            ),
+            key=lambda ref: ref.identity_key,
+        ))
+        known = tuple(
+            row
+            for row in requirements
+            if row.choice_kind is ChoiceRequirementKind.SPELL_KNOWN
+        )
+        for requirement in known:
+            assert requirement.allowed_refs == expected_refs
+        replacements = tuple(
+            row
+            for row in requirements
+            if row.choice_kind
+            is ChoiceRequirementKind.SPELL_REPLACEMENT
+        )
+        if level == 1:
+            assert replacements == ()
+        else:
+            assert len(replacements) == 1
+            assert replacements[0].allowed_refs == expected_refs
+
+    level_one = _requirement(
+        SORCERER_CLASS_DEFINITION,
+        1,
+        ChoiceRequirementKind.SPELL_KNOWN,
+    )
+    assert {
+        entitlement_rank_by_ref[ref] for ref in level_one.allowed_refs
+    } == {1}
+    level_two_replacement = _requirement(
+        SORCERER_CLASS_DEFINITION,
+        2,
+        ChoiceRequirementKind.SPELL_REPLACEMENT,
+    )
+    assert {
+        entitlement_rank_by_ref[ref]
+        for ref in level_two_replacement.allowed_refs
+    } == {1}
+    assert {
+        "spell.banishment",
+        "spell.chain_lightning",
+        "spell.power_word_kill",
+    }.isdisjoint(ref.content_id for ref in level_one.allowed_refs)
+
+
 def test_sorcerer_feature_resource_metamagic_and_asi_rows_are_exact() -> None:
     sorcery_points_ref = _feature_ref(sorcerer.SorceryPointsFeature)
     for level in range(2, 21):

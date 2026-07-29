@@ -15,13 +15,13 @@ from dnd.core.events import (
     SensoryUpdateEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import Invisibility
 from dnd.spells.transmutation import DarkvisionSpell
-from dnd.utils import (
+from tests.engine.support import (
     deal_damage_to,
     force_attack_hit,
     get_hp,

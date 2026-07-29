@@ -22,19 +22,24 @@ from dnd.controller import CodexController
 from dnd.core.events import EventPhase, SensoryUpdateEvent, SensoryUpdateReason
 from dnd.entity import Entity
 from server import event_server
-from server.arena_mode import reset_standard_arena_runtime
+from tests.manual.server_test_client import reset_server_test_runtime
 from server.session import PlayerType
+from tests.manual.game_creation_test_support import (
+    authored_compose_request,
+    compose_and_preview,
+    roster_result,
+)
 from tests.manual.test_28_subjective_observation_stream import complete_event, create_observation_game
 
 
 @pytest.fixture(autouse=True)
 def isolate_takeover_runtime() -> Iterator[None]:
     """Keep claims, native assignments, sessions, and diagnostics isolated."""
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
     event_server.configure_policy_source_manifest(None)
     yield
     event_server.configure_policy_source_manifest(None)
-    reset_standard_arena_runtime()
+    reset_server_test_runtime()
 
 
 def _start_canonical_human_game(
@@ -48,28 +53,33 @@ def _start_canonical_human_game(
         "sorcerer": "hero.sorcerer_l5_standard_torch",
         "barbarian": "hero.barbarian_l5_berserker_torch",
     }
+    compose_request = authored_compose_request()
+    roster_slots = compose_request["roster_slots"]
+    assert isinstance(roster_slots, list)
+    player_roster = roster_slots[0]
+    opposition_roster = roster_slots[1]
+    assert isinstance(player_roster, dict)
+    assert isinstance(opposition_roster, dict)
+    player_roster["roster"] = {
+        "kind": "authored_roster",
+        "roster_id": hero_configurations[character_class],
+    }
+    player_roster["faction_id"] = "heroes"
+    opposition_roster["faction_id"] = "monsters"
+    composition = compose_and_preview(
+        client,
+        compose_request=compose_request,
+    )
     started = client.post(
         "/game-creation/start",
-        json={
-            "scenario": {
-                "kind": "composed",
-                "hero_configuration_id": hero_configurations[character_class],
-                "monster_configuration_id": "monsters.skeleton_trio",
-                "battlefield_id": "battlefield.standard_hazards_closed",
-                "deployment_id": "neutral.battlefield.standard_hazards_closed",
-            },
-            "side_a": {"controller": "human", "name": "Arena Player"},
-            "side_b": {
-                "controller": "ai",
-                "name": "Basic AI",
-                "policy_id": "builtin.basic",
-            },
-            "opening_side": "side_a",
-        },
+        json=composition["exact_start_request"],
     )
     assert started.status_code == 200, started.text
     payload = started.json()
-    hero_uuid = payload["side_a"]["entity_assignments"][0]["entity_uuid"]
+    hero_uuid = roster_result(
+        payload,
+        "roster_1",
+    )["entity_assignments"][0]["entity_uuid"]
     session = client.post(
         "/session/create",
         json={"player_type": "human", "name": "Arena Player"},
@@ -338,10 +348,11 @@ def test_expired_takeover_restores_before_advancement() -> None:
     encounter = event_server.sim.encounter
     assert encounter is not None
     assert {
-        encounter.get_controller_for(entity.uuid).controller_type
+        controller.controller_type
         for entity in Entity.get_all_entities()
         if entity.faction == "monsters"
-        and encounter.get_controller_for(entity.uuid) is not None
+        and (controller := encounter.get_controller_for(entity.uuid))
+        is not None
     } == {"native_ai"}
 
 

@@ -39,7 +39,7 @@ from dnd.core.content.inventory import (
     SourceImplementationStatus,
 )
 from dnd.core.content.provenance import ContentSource
-from dnd.items.armors import SRD_ARMOR_RECIPES_BY_LEGACY_ID
+from dnd.items.armors import SRD_ARMOR_DECLARATIONS
 from dnd.items.consumables import (
     HASTE_POTION_DECLARATION,
     HASTE_POTION_REF,
@@ -50,7 +50,7 @@ from dnd.items.spell_items import (
     SpellGrantingItem,
     WAND_OF_MAGIC_MISSILES_REF,
 )
-from dnd.items.weapons import SRD_WEAPON_RECIPES_BY_CONTENT_ID
+from dnd.items.weapons import SRD_WEAPON_DECLARATIONS
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
@@ -62,11 +62,26 @@ from dnd.monsters.circus_fighter_items import (
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS,
 )
-from dnd.spells import ALL_SPELLS, SPELL_CONTENT_DECLARATIONS_BY_NAME
+from dnd.spells.catalog_content import (
+    SPELL_CONTENT_DECLARATIONS_BY_NAME,
+    SPELL_CONTENT_IDENTITY_SPECS,
+)
 from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_SPECS,
 )
 
+ALL_SPELLS = {
+    spec.display_name: spec.spell_type
+    for spec in SPELL_CONTENT_IDENTITY_SPECS
+}
+_SRD_WEAPON_REFS_BY_CONTENT_ID = {
+    declaration.ref.content_id.removeprefix("weapon."): declaration.ref
+    for declaration in SRD_WEAPON_DECLARATIONS
+}
+_SRD_ARMOR_REFS_BY_CONTENT_ID = {
+    declaration.ref.content_id.removeprefix("armor."): declaration.ref
+    for declaration in SRD_ARMOR_DECLARATIONS
+}
 
 _DEFAULT_OUTPUT = (
     _REPOSITORY_ROOT
@@ -174,6 +189,7 @@ _WEAPON_RECIPE_KEYS = {
     "Dagger": "dagger",
     "Handaxe": "handaxe",
     "Javelin": "javelin",
+    "Light hammer": "light_hammer",
     "Mace": "mace",
     "Quarterstaff": "quarterstaff",
     "Sickle": "sickle",
@@ -556,12 +572,11 @@ def _weapon_rows() -> list[dict[str, Any]]:
     rows = []
     for source_name in _WEAPON_NAMES:
         recipe_key = _WEAPON_RECIPE_KEYS.get(source_name)
-        recipe = (
-            SRD_WEAPON_RECIPES_BY_CONTENT_ID.get(recipe_key)
+        content_ref = (
+            _SRD_WEAPON_REFS_BY_CONTENT_ID.get(recipe_key)
             if recipe_key is not None
             else None
         )
-        content_ref = recipe.ref if recipe is not None else None
         status = (
             SourceImplementationStatus.PLAYABLE
             if content_ref is not None
@@ -604,7 +619,7 @@ def _armor_rows() -> list[dict[str, Any]]:
     """Build the 12 armor-suit rows and shield row."""
     rows = []
     for source_name in _ARMOR_NAMES:
-        recipe = SRD_ARMOR_RECIPES_BY_LEGACY_ID[
+        content_ref = _SRD_ARMOR_REFS_BY_CONTENT_ID[
             _ARMOR_REGISTRY_KEYS[source_name]
         ]
         rows.append(
@@ -622,7 +637,7 @@ def _armor_rows() -> list[dict[str, Any]]:
                     "dnd/items/armors.py:"
                     f"{_ARMOR_LEGACY_FACTORY_NAMES[source_name]}",
                 ),
-                content_ref=recipe.ref,
+                content_ref=content_ref,
                 mechanical_notes=(
                     "The migrated definition supports equip and Armor Class "
                     "behavior; playable does not claim complete "
@@ -804,14 +819,14 @@ def _current_migrated_content_refs(
         (
             SourceCoverageSection.WEAPONS,
             source_name,
-        ): SRD_WEAPON_RECIPES_BY_CONTENT_ID[recipe_key].ref
+        ): _SRD_WEAPON_REFS_BY_CONTENT_ID[recipe_key]
         for source_name, recipe_key in _WEAPON_RECIPE_KEYS.items()
     })
     refs.update({
         (
             SourceCoverageSection.ARMOR_AND_SHIELDS,
             source_name,
-        ): SRD_ARMOR_RECIPES_BY_LEGACY_ID[registry_key].ref
+        ): _SRD_ARMOR_REFS_BY_CONTENT_ID[registry_key]
         for source_name, registry_key in _ARMOR_REGISTRY_KEYS.items()
     })
     refs.update({
@@ -859,6 +874,23 @@ def _refresh_content_refs(
             if ref is not None
             else None
         )
+        weapon_recipe_key = (
+            _WEAPON_RECIPE_KEYS.get(row["source_name"])
+            if row["section"] == SourceCoverageSection.WEAPONS.value
+            else None
+        )
+        if weapon_recipe_key is not None:
+            row["implementation_status"] = (
+                SourceImplementationStatus.PLAYABLE.value
+            )
+            row["legacy_locators"] = [
+                f"dnd/items/weapons.py:_build_{weapon_recipe_key}",
+            ]
+            row["mechanical_notes"] = (
+                "The migrated content definition is usable for attacks; "
+                "playable does not claim complete cost, weight, or property "
+                "parity."
+            )
         reaction_spell = (
             _LEARNED_REACTION_SPELLS_BY_NAME.get(row["source_name"])
             if row["section"] == SourceCoverageSection.SPELLS.value

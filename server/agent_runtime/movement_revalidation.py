@@ -5,12 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import time
 
-from dnd.ai.contracts.observation import ObservationSnapshot, SubjectiveWorldState
-from dnd.ai.contracts.observation_replay import (
-    apply_observation_frame,
-    materialize_snapshot,
-)
-from server.agent_runtime.observation_projector import iter_observation_frames
+from dnd.ai.contracts.observation import SubjectiveWorldState
+from dnd.ai.contracts.observation_replay import apply_observation_frame
+from server.agent_runtime.observation_journal import iter_observation_frames
 from dnd.ai.runtime.movement_revalidation import (
     MovementRevalidationCause,
     movement_revalidation_cause,
@@ -34,20 +31,6 @@ class SessionMovementContinuationGuard:
         default_factory=list
     )
     processing_samples_ms: list[float] = field(default_factory=list)
-
-    @classmethod
-    def from_snapshot(
-        cls,
-        snapshot: ObservationSnapshot,
-        actor_uuid: str,
-    ) -> "SessionMovementContinuationGuard":
-        """Create a guard from the server's current subjective baseline."""
-        return cls(
-            session_id=snapshot.session.session_id,
-            actor_uuid=actor_uuid,
-            world=materialize_snapshot(snapshot),
-            observation_cursor=snapshot.observation_cursor,
-        )
 
     @classmethod
     def from_world(

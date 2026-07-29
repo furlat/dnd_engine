@@ -33,6 +33,16 @@ from dnd.content_system.character_origin_definitions import (
     ADVENTURER_BACKGROUND_REF,
     HUMAN_SPECIES_REF,
 )
+from dnd.content_system.character_appearance import (
+    BARBARIAN_HUMAN_APPEARANCE,
+    FIGHTER_HUMAN_APPEARANCE,
+    SORCERER_HUMAN_APPEARANCE,
+    default_player_character_appearance,
+)
+from dnd.content_system.starting_apparel_definitions import (
+    STARTING_APPAREL_CHOICE_ID,
+    STARTING_APPAREL_PACKAGE_DECLARATIONS_BY_ID,
+)
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_NAME,
@@ -51,6 +61,7 @@ from dnd.core.content.durable_characters import (
     CharacterHoldingsRevision,
     CharacterItemV1,
     CharacterLoadoutRevisionV1,
+    ClassDefinition,
     ClassLevelEntry,
     ClassLevelId,
     ClassSkillChoice,
@@ -58,21 +69,28 @@ from dnd.core.content.durable_characters import (
     FightingStyleChoice,
     FlexibleAbilityBonusSelection,
     MetamagicChoice,
+    ProficiencySubject,
+    ProficiencySubjectKind,
     SpellKnownChoice,
+    StartingApparelPackageChoice,
+    StartingProficiencyChoice,
     StartingEquipmentPackageChoice,
     SubclassChoice,
+    SubclassDefinition,
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.premade_characters import (
+    CharacterCreationPlan,
+    CharacterCreationPlanKind,
     CharacterBuildDraft,
     CharacterLoadoutDraft,
-    PremadeCharacterBuild,
     StarterHoldingTemplate,
 )
 from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageDefinition,
 )
 from dnd.core.equipment_types import BodyPart, WeaponSlot
+from dnd.core.language_types import SrdLanguageId
 from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
@@ -82,6 +100,7 @@ from dnd.items.armors import (
     LEATHER_ARMOR_RECIPE,
     LEATHER_BOOTS_RECIPE,
     SHIELD_RECIPE,
+    SPELLBLADE_CROWN_RECIPE,
 )
 from dnd.items.apparel_presets import (
     BLUE_CLOTH_SHOES_PRESET,
@@ -125,6 +144,7 @@ class BuiltinSingleClassBuild:
     class_id: BuiltinClassId
     level: int
     equipment_preset: str
+    appearance: CharacterAppearanceSelection | None = None
     asi_by_level: LevelAbilityIncreases = ()
     fighting_style: str | None = None
     metamagic_choices: tuple[str, ...] = ()
@@ -148,6 +168,7 @@ class BuiltinMulticlassBuild:
     class_builds: tuple[BuiltinSingleClassBuild, ...]
     base_ability_scores: AbilityScoreAllocation
     flexible_ability_bonuses: FlexibleAbilityBonusSelection
+    appearance: CharacterAppearanceSelection
     premade_id: str | None = None
     display_name: str | None = None
     additional_holdings: tuple[StarterHoldingTemplate, ...] = ()
@@ -199,13 +220,12 @@ class BuiltinCharacterRevisions:
 
 def _require_choice_ref(
     *,
-    class_definition: object,
+    class_definition: ClassDefinition | SubclassDefinition,
     class_level: int,
     choice_id: str,
     content_id_suffix: str,
 ) -> ContentRef:
-    level_definitions = getattr(class_definition, "level_definitions")
-    level_definition = level_definitions[class_level - 1]
+    level_definition = class_definition.level_definitions[class_level - 1]
     requirement = next(
         (
             row
@@ -735,7 +755,10 @@ _FIGHTER_CURATED_SUPPLEMENT = (
     ),
     *_COMMON_CURATED_SUPPLEMENT,
     StarterHoldingTemplate(recipe=CLOTH_SHOES_RECIPE),
-    StarterHoldingTemplate(recipe=STEEL_HELMET_PRESET.recipe),
+    StarterHoldingTemplate(
+        recipe=STEEL_HELMET_PRESET.recipe,
+        equipped_slot=BodyPart.HEAD,
+    ),
     StarterHoldingTemplate(recipe=HANDAXE_RECIPE),
     StarterHoldingTemplate(recipe=JAVELIN_RECIPE),
     StarterHoldingTemplate(recipe=DAGGER_RECIPE),
@@ -783,7 +806,10 @@ def _curated_supplement_for_build(
         *_COMMON_CURATED_SUPPLEMENT,
         StarterHoldingTemplate(recipe=WIZARD_ROBE_PRESET.recipe),
         StarterHoldingTemplate(recipe=BLUE_CLOTH_SHOES_PRESET.recipe),
-        StarterHoldingTemplate(recipe=RED_WIZARD_HAT_PRESET.recipe),
+        StarterHoldingTemplate(
+            recipe=RED_WIZARD_HAT_PRESET.recipe,
+            equipped_slot=BodyPart.HEAD,
+        ),
         StarterHoldingTemplate(recipe=spare_recipe),
     )
 
@@ -793,12 +819,109 @@ def starter_holdings_for_build(
 ) -> tuple[StarterHoldingTemplate, ...]:
     """Return exact durable starter possessions for one built-in build."""
     first_class_build = _first_class_build(build)
-    holdings = (
+    inherited = (
         *_package_holdings(first_class_build),
         *_curated_supplement_for_build(first_class_build),
+    )
+    explicit_slots = {
+        holding.equipped_slot
+        for holding in build.additional_holdings
+        if holding.equipped_slot is not None
+    }
+    holdings = (
+        *(
+            holding.model_copy(update={"equipped_slot": None})
+            if holding.equipped_slot in explicit_slots
+            else holding
+            for holding in inherited
+        ),
         *build.additional_holdings,
     )
     return holdings
+
+
+def supplemental_holdings_for_build(
+    build: BuiltinCharacterBuild,
+) -> tuple[StarterHoldingTemplate, ...]:
+    """Return plan-owned holdings beyond selected class/background packages."""
+
+    first_class_build = _first_class_build(build)
+    inherited = _curated_supplement_for_build(first_class_build)
+    explicit_slots = {
+        holding.equipped_slot
+        for holding in build.additional_holdings
+        if holding.equipped_slot is not None
+    }
+    return (
+        *(
+            holding.model_copy(update={"equipped_slot": None})
+            if holding.equipped_slot in explicit_slots
+            else holding
+            for holding in inherited
+        ),
+        *build.additional_holdings,
+    )
+
+
+def compose_character_creation_plans() -> tuple[
+    CharacterCreationPlan,
+    ...,
+]:
+    """Build the one editable Blank + premade creator roster."""
+
+    blank_template = BuiltinSingleClassBuild(
+        class_id="fighter",
+        level=1,
+        equipment_preset="sword_shield",
+        appearance=default_player_character_appearance(),
+        fighting_style="defense",
+    )
+    blank_build, blank_loadout = compose_builtin_character_drafts(
+        blank_template,
+    )
+    blank_build = blank_build.model_copy(update={
+        "immutable_origin_choices": tuple(sorted(
+            (
+                *blank_build.immutable_origin_choices,
+                StartingApparelPackageChoice(
+                    choice_id=STARTING_APPAREL_CHOICE_ID,
+                    selected_ref=(
+                        STARTING_APPAREL_PACKAGE_DECLARATIONS_BY_ID[
+                            "common_clothes"
+                        ].ref
+                    ),
+                ),
+            ),
+            key=lambda choice: choice.choice_id,
+        )),
+    })
+    plans = [
+        CharacterCreationPlan.create(
+            plan_id="creation_plan.blank_custom",
+            plan_kind=CharacterCreationPlanKind.BLANK_CUSTOM,
+            display_name="Blank Custom",
+            build=blank_build,
+            loadout=blank_loadout,
+            character_level_entitlement=1,
+            supplemental_holdings=(
+                StarterHoldingTemplate(recipe=TORCH_RECIPE),
+            ),
+        ),
+    ]
+    plans.extend(
+        CharacterCreationPlan.create(
+            plan_id=f"creation_plan.premade.{premade_id}",
+            plan_kind=CharacterCreationPlanKind.PREMADE_TEMPLATE,
+            display_name=build.display_name or premade_id,
+            build=compose_builtin_character_drafts(build)[0],
+            loadout=compose_builtin_character_drafts(build)[1],
+            character_level_entitlement=build.level,
+            supplemental_holdings=supplemental_holdings_for_build(build),
+            source_premade_id=premade_id,
+        )
+        for premade_id, build in sorted(BUILTIN_PREMADE_BUILDS.items())
+    )
+    return tuple(plans)
 
 
 def compose_builtin_character_revisions(
@@ -875,12 +998,28 @@ def compose_builtin_character_drafts(
     """Compose the exact UUID/revision-free drafts used by every built-in."""
 
     base_scores, bonuses, levels = _build_shape(build)
+    appearance = build.appearance
+    if appearance is None:
+        raise ValueError(
+            "built-in character fixtures require an explicit appearance",
+        )
     return (
         CharacterBuildDraft(
             body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
             species_ref=HUMAN_SPECIES_REF,
             background_ref=ADVENTURER_BACKGROUND_REF,
-            appearance=CharacterAppearanceSelection(),
+            immutable_origin_choices=(
+                StartingProficiencyChoice(
+                    choice_id="species.human.additional_language",
+                    proficiencies=(
+                        ProficiencySubject(
+                            subject_kind=ProficiencySubjectKind.LANGUAGE,
+                            subject_id=SrdLanguageId.DRACONIC.value,
+                        ),
+                    ),
+                ),
+            ),
+            appearance=appearance,
             base_ability_scores=base_scores,
             flexible_ability_bonuses=bonuses,
             class_levels=levels,
@@ -890,29 +1029,12 @@ def compose_builtin_character_drafts(
     )
 
 
-def compose_builtin_premade_build(
-    build: BuiltinCharacterBuild,
-) -> PremadeCharacterBuild:
-    """Project one approved built-in into the public schema-2 selector row."""
-
-    if build.premade_id is None:
-        raise ValueError("premade catalog rows require an exact premade_id")
-    if build.display_name is None:
-        raise ValueError("premade catalog rows require an authored display_name")
-    build_draft, loadout_draft = compose_builtin_character_drafts(build)
-    return PremadeCharacterBuild.create(
-        premade_id=build.premade_id,
-        display_name=build.display_name,
-        build=build_draft,
-        loadout=loadout_draft,
-    )
-
-
 BUILTIN_PREMADE_BUILDS = MappingProxyType({
     "hero.barbarian_l5_berserker_torch": BuiltinSingleClassBuild(
         class_id="barbarian",
         level=5,
         equipment_preset="greataxe",
+        appearance=BARBARIAN_HUMAN_APPEARANCE,
         asi_by_level=((4, ((AbilityScoreName.STRENGTH, 2),)),),
         premade_id="hero.barbarian_l5_berserker_torch",
         display_name="Berserker",
@@ -932,6 +1054,7 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         class_id="fighter",
         level=5,
         equipment_preset="sword_shield",
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         fighting_style="dueling",
         asi_by_level=((4, ((AbilityScoreName.STRENGTH, 2),)),),
         premade_id="hero.fighter_l5_shield_torch",
@@ -948,6 +1071,7 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         class_id="sorcerer",
         level=5,
         equipment_preset="dagger",
+        appearance=SORCERER_HUMAN_APPEARANCE,
         asi_by_level=((4, ((AbilityScoreName.CHARISMA, 2),)),),
         metamagic_choices=("quickened", "twinned"),
         spell_names=(
@@ -1003,9 +1127,14 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
             plus_two=AbilityScoreName.STRENGTH,
             plus_one=AbilityScoreName.CHARISMA,
         ),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         premade_id="hero.fighter_2_sorcerer_3_spellblade",
         display_name="Draconic Spellblade",
         additional_holdings=(
+            StarterHoldingTemplate(
+                recipe=SPELLBLADE_CROWN_RECIPE,
+                equipped_slot=BodyPart.HEAD,
+            ),
             StarterHoldingTemplate(recipe=TORCH_RECIPE),
         ),
     ),
@@ -1020,7 +1149,8 @@ __all__ = [
     "BuiltinMulticlassBuild",
     "BuiltinSingleClassBuild",
     "compose_builtin_character_drafts",
-    "compose_builtin_premade_build",
+    "compose_character_creation_plans",
     "compose_builtin_character_revisions",
     "starter_holdings_for_build",
+    "supplemental_holdings_for_build",
 ]

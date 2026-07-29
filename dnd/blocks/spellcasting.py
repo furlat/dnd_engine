@@ -8,7 +8,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import NumericalModifier, DamageType
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import AbilityName, Damage
 from dnd.core.progression import (
     CasterProgression,
@@ -72,17 +73,19 @@ class SpellcastingConfig(BaseModel):
 
 
 class SpellcastingSource(BaseModel):
-    """One exact class-owned source for spellcasting ability."""
+    """One exact class-owned or origin-owned spellcasting source."""
 
     model_config = ConfigDict(frozen=True)
 
+    source_kind: Literal["class", "innate"] = "class"
     source_id: UUID = Field(description="Owning progression grant UUID.")
     ability: AbilityName = Field(description="Ability used by this source.")
     provider_ref: ContentRef = Field(
-        description="Exact authored class definition providing this source.",
+        description="Exact authored class or origin providing this source.",
     )
-    caster_progression: CasterProgression = Field(
-        description="Shared-slot progression owned by this provider.",
+    caster_progression: CasterProgression | None = Field(
+        default=None,
+        description="Shared-slot progression for class sources only.",
     )
     provider_level: int = Field(
         ge=1,
@@ -94,15 +97,36 @@ class SpellcastingSource(BaseModel):
         le=9,
         description="Highest spell rank this source can learn or prepare.",
     )
-    ritual_policy: RitualPreparationPolicy = Field(
-        description="Exact ritual entitlement policy of this source.",
+    ritual_policy: RitualPreparationPolicy | None = Field(
+        default=None,
+        description="Exact ritual entitlement for class sources only.",
     )
 
     @model_validator(mode="after")
     def _validate_provider(self) -> Self:
+        if self.source_kind == "innate":
+            if self.provider_ref.definition_kind not in {
+                ContentDefinitionKind.SPECIES,
+                ContentDefinitionKind.SPECIES_VARIANT,
+            }:
+                raise ValueError(
+                    "innate spellcasting provider_ref must identify a "
+                    "species or species variant",
+                )
+            if (
+                self.caster_progression is not None
+                or self.ritual_policy is not None
+            ):
+                raise ValueError(
+                    "innate spellcasting cannot contribute shared slots or "
+                    "class ritual entitlement",
+                )
+            return self
         if self.provider_ref.definition_kind != ContentDefinitionKind.CLASS:
+            raise ValueError("class spellcasting provider_ref must identify a class")
+        if self.caster_progression is None or self.ritual_policy is None:
             raise ValueError(
-                "spellcasting source provider_ref must identify a class",
+                "class spellcasting requires progression and ritual policy",
             )
         if self.caster_progression == CasterProgression.NON_CASTER:
             raise ValueError("non-caster cannot own a spellcasting source")
@@ -291,6 +315,32 @@ class SpellcastingBlock(BaseBlock):
             provider_level=provider_level,
             maximum_spell_rank=maximum_spell_rank,
             ritual_policy=ritual_policy,
+        )
+        existing = self.sources.get(source_id)
+        if existing is not None and existing != incoming:
+            raise ValueError(
+                f"spellcasting source {source_id} already has different "
+                "provider facts"
+            )
+        self.sources[source_id] = incoming
+
+    def add_innate_source(
+        self,
+        source_id: UUID,
+        ability: AbilityName,
+        *,
+        provider_ref: ContentRef,
+        provider_level: int,
+        maximum_spell_rank: int,
+    ) -> None:
+        """Add one origin source that never contributes normal spell slots."""
+        incoming = SpellcastingSource(
+            source_kind="innate",
+            source_id=source_id,
+            ability=ability,
+            provider_ref=provider_ref,
+            provider_level=provider_level,
+            maximum_spell_rank=maximum_spell_rank,
         )
         existing = self.sources.get(source_id)
         if existing is not None and existing != incoming:

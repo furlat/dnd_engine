@@ -16,7 +16,7 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.utils import force_attack_miss, reset_combat_state, set_hp
+from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 
 def _reset_state() -> None:

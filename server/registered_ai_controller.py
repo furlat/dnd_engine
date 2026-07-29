@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from enum import Enum
 from typing import ClassVar
 from uuid import UUID
 
@@ -21,6 +20,15 @@ from dnd.ai.instrumentation import (
 from dnd.ai.runtime.execution import (
     AIDecisionValidationError,
     resolve_policy_intent,
+)
+from dnd.ai.runtime.assignment_lifecycle import (
+    AIAssignmentState,
+    AIDecisionBudget,
+    DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS,
+    DEFAULT_MAXIMUM_DECISIONS_PER_TURN,
+    assignment_turn_key,
+    require_controlled_entities,
+    validate_assignment_ownership,
 )
 from dnd.ai.runtime.state_projection import (
     AIDecisionState,
@@ -40,17 +48,7 @@ from server.registered_ai_provider import (
 )
 
 
-DEFAULT_REGISTERED_AI_MAXIMUM_DECISIONS_PER_TURN = 32
-DEFAULT_REGISTERED_AI_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS = 3
 DEFAULT_REGISTERED_AI_FEEDBACK_RETENTION = 128
-
-
-class RegisteredAIControllerState(str, Enum):
-    """Explicit local lifecycle around one remote policy assignment fence."""
-
-    CREATED = "created"
-    STARTED = "started"
-    CLOSED = "closed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,11 +92,11 @@ class RegisteredAIController(Controller):
     policy_id: str = Field(min_length=1)
     controlled_entity_uuids: tuple[UUID, ...] = Field(min_length=1)
     maximum_decisions_per_turn: int = Field(
-        default=DEFAULT_REGISTERED_AI_MAXIMUM_DECISIONS_PER_TURN,
+        default=DEFAULT_MAXIMUM_DECISIONS_PER_TURN,
         ge=1,
     )
     maximum_consecutive_canceled_actions: int = Field(
-        default=DEFAULT_REGISTERED_AI_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS,
+        default=DEFAULT_MAXIMUM_CONSECUTIVE_CANCELED_ACTIONS,
         ge=1,
     )
 
@@ -107,13 +105,10 @@ class RegisteredAIController(Controller):
     )
     _instrumentation: AIInstrumentation | None = PrivateAttr(default=None)
     _projector: SubjectiveAIStateProjector | None = PrivateAttr(default=None)
-    _state: RegisteredAIControllerState = PrivateAttr(
-        default=RegisteredAIControllerState.CREATED
+    _state: AIAssignmentState = PrivateAttr(
+        default=AIAssignmentState.CREATED
     )
-    _decision_sequence: int = PrivateAttr(default=0)
-    _turn_key: tuple[str, int, int] | None = PrivateAttr(default=None)
-    _turn_decisions: int = PrivateAttr(default=0)
-    _consecutive_canceled_actions: int = PrivateAttr(default=0)
+    _budget: AIDecisionBudget = PrivateAttr()
     _feedback: deque[NativeAIDecisionFeedback] = PrivateAttr()
     _pending_feedback: deque[ExternalAIDecisionFeedback] = PrivateAttr()
     _pending_decision: _PendingProviderDecision | None = PrivateAttr(
@@ -129,6 +124,12 @@ class RegisteredAIController(Controller):
             maxlen=DEFAULT_REGISTERED_AI_FEEDBACK_RETENTION
         )
         self._pending_feedback = deque()
+        self._budget = AIDecisionBudget(
+            maximum_decisions_per_turn=self.maximum_decisions_per_turn,
+            maximum_consecutive_canceled_actions=(
+                self.maximum_consecutive_canceled_actions
+            ),
+        )
 
     @classmethod
     async def create(
@@ -142,7 +143,7 @@ class RegisteredAIController(Controller):
         provider_catalog: RegisteredAIProviderCatalog,
         instrumentation: AIInstrumentation,
         maximum_decisions_per_turn: int = (
-            DEFAULT_REGISTERED_AI_MAXIMUM_DECISIONS_PER_TURN
+            DEFAULT_MAXIMUM_DECISIONS_PER_TURN
         ),
     ) -> "RegisteredAIController":
         """Open the provider fence before publishing a controller."""
@@ -184,7 +185,7 @@ class RegisteredAIController(Controller):
             raise
 
     @property
-    def state(self) -> RegisteredAIControllerState:
+    def state(self) -> AIAssignmentState:
         return self._state
 
     @property
@@ -197,15 +198,10 @@ class RegisteredAIController(Controller):
         return projector.world
 
     def start(self, entities: list[Entity]) -> None:
-        if self._state is RegisteredAIControllerState.CLOSED:
+        if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("registered AI controller is closed")
-        actual = {entity.uuid for entity in entities}
-        expected = set(self.controlled_entity_uuids)
-        if actual != expected:
-            raise ValueError(
-                "encounter ownership does not match registered AI assignment"
-            )
-        self._state = RegisteredAIControllerState.STARTED
+        validate_assignment_ownership(self.controlled_entity_uuids, entities)
+        self._state = AIAssignmentState.STARTED
 
     def on_encounter_start(self, entities: list[Entity]) -> None:
         self.start(entities)
@@ -216,7 +212,7 @@ class RegisteredAIController(Controller):
         context: TurnContext,
     ) -> bool:
         del entity, context
-        return self._state is not RegisteredAIControllerState.CLOSED
+        return self._state is not AIAssignmentState.CLOSED
 
     async def request_intent(
         self,
@@ -224,9 +220,9 @@ class RegisteredAIController(Controller):
         context: TurnContext,
     ) -> RegisteredAIPendingIntent | ControllerStepResult:
         """Await one provider intent without executing authoritative game code."""
-        if self._state is RegisteredAIControllerState.CREATED:
-            self.start(self._live_controlled_entities())
-        if self._state is RegisteredAIControllerState.CLOSED:
+        if self._state is AIAssignmentState.CREATED:
+            self.start(require_controlled_entities(self.controlled_entity_uuids))
+        if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("registered AI controller is closed")
         if entity.uuid not in self.controlled_entity_uuids:
             raise ValueError("actor is outside registered AI assignment")
@@ -237,20 +233,19 @@ class RegisteredAIController(Controller):
             if (
                 prepared.entity_uuid != entity.uuid
                 or prepared.turn_key
-                != self._current_turn_key(entity, context)
+                != assignment_turn_key(entity, context)
             ):
                 raise RuntimeError(
                     "pending provider intent crossed the authoritative "
                     "turn fence"
                 )
             return prepared
-        if self._turn_decisions >= self.maximum_decisions_per_turn:
+        if self._budget.limit_reached:
             return self._record_limit_feedback(entity)
 
         pending = self._pending_decision
         if pending is None:
-            self._turn_decisions += 1
-            self._decision_sequence += 1
+            decision_sequence = self._budget.begin_decision()
             provider_decision_id = (
                 self._require_remote_assignment().next_decision_id
             )
@@ -258,9 +253,7 @@ class RegisteredAIController(Controller):
                 game_id=self.game_id,
                 assignment_id=self.assignment_id,
                 actor_uuid=str(entity.uuid),
-                decision_id=(
-                    f"{self.assignment_id}:{self._decision_sequence}"
-                ),
+                decision_id=f"{self.assignment_id}:{decision_sequence}",
                 policy=self._require_remote_assignment().policy,
             )
             with self._require_instrumentation().measure(
@@ -272,13 +265,13 @@ class RegisteredAIController(Controller):
                     context,
                     reason=(
                         DecisionEpochReason.TURN_START
-                        if self._turn_decisions == 1
+                        if self._budget.turn_decisions == 1
                         else DecisionEpochReason.ACTION_COMPLETED
                     ),
                 )
             pending = _PendingProviderDecision(
                 entity_uuid=entity.uuid,
-                turn_key=self._current_turn_key(entity, context),
+                turn_key=assignment_turn_key(entity, context),
                 sequence=provider_decision_id,
                 state=state,
                 instrumentation_context=instrumentation_context,
@@ -287,7 +280,7 @@ class RegisteredAIController(Controller):
             self._pending_decision = pending
         elif (
             pending.entity_uuid != entity.uuid
-            or pending.turn_key != self._current_turn_key(entity, context)
+            or pending.turn_key != assignment_turn_key(entity, context)
         ):
             raise RuntimeError(
                 "provider retry crossed the authoritative turn fence"
@@ -319,7 +312,7 @@ class RegisteredAIController(Controller):
         pending: RegisteredAIPendingIntent,
     ) -> ControllerStepResult:
         """Synchronously recheck fences and commit one awaited provider intent."""
-        if self._state is RegisteredAIControllerState.CLOSED:
+        if self._state is AIAssignmentState.CLOSED:
             raise RuntimeError("registered AI controller is closed")
         if pending is not self._pending_intent:
             raise RuntimeError(
@@ -328,7 +321,7 @@ class RegisteredAIController(Controller):
         if (
             pending.controller_uuid != self.uuid
             or pending.entity_uuid != entity.uuid
-            or pending.turn_key != self._current_turn_key(entity, context)
+            or pending.turn_key != assignment_turn_key(entity, context)
         ):
             raise RuntimeError(
                 "pending provider intent crossed the authoritative turn fence"
@@ -381,13 +374,8 @@ class RegisteredAIController(Controller):
             pending.provider_decision_id,
             resolution.feedback,
         )
-        if resolution.action_canceled:
-            self._consecutive_canceled_actions += 1
-        else:
-            self._consecutive_canceled_actions = 0
-        if (
-            self._consecutive_canceled_actions
-            >= self.maximum_consecutive_canceled_actions
+        if self._budget.record_resolution(
+            action_canceled=resolution.action_canceled,
         ):
             return ControllerStepResult(
                 event=resolution.step.event,
@@ -397,17 +385,15 @@ class RegisteredAIController(Controller):
 
     async def close(self) -> None:
         """Close the exact provider fence and local retained state once."""
-        if self._state is RegisteredAIControllerState.CLOSED:
+        if self._state is AIAssignmentState.CLOSED:
             return
         remote = self._require_remote_assignment()
         await remote.close()
-        self._state = RegisteredAIControllerState.CLOSED
+        self._state = AIAssignmentState.CLOSED
         self._pending_decision = None
         self._pending_intent = None
         self._pending_feedback.clear()
-        self._turn_key = None
-        self._turn_decisions = 0
-        self._consecutive_canceled_actions = 0
+        self._budget.close_turn()
 
     def _record_feedback(
         self,
@@ -455,9 +441,9 @@ class RegisteredAIController(Controller):
         self,
         entity: Entity,
     ) -> ControllerStepResult:
-        self._decision_sequence += 1
+        decision_sequence = self._budget.next_sequence()
         feedback = NativeAIDecisionFeedback(
-            decision_id=f"{self.assignment_id}:{self._decision_sequence}",
+            decision_id=f"{self.assignment_id}:{decision_sequence}",
             actor_uuid=str(entity.uuid),
             epoch_id=(
                 self.world.current_epoch.epoch_id
@@ -487,8 +473,8 @@ class RegisteredAIController(Controller):
         entity: Entity,
         context: TurnContext,
     ) -> None:
-        turn_key = self._current_turn_key(entity, context)
-        if self._turn_key == turn_key:
+        turn_key = assignment_turn_key(entity, context)
+        if self._budget.turn_key == turn_key:
             return
         if (
             self._pending_decision is not None
@@ -498,29 +484,7 @@ class RegisteredAIController(Controller):
                 "authoritative turn changed with a provider decision or "
                 "intent pending"
             )
-        self._turn_key = turn_key
-        self._turn_decisions = 0
-        self._consecutive_canceled_actions = 0
-
-    @staticmethod
-    def _current_turn_key(
-        entity: Entity,
-        context: TurnContext,
-    ) -> tuple[str, int, int]:
-        return (str(entity.uuid), context.round_number, context.turn_index)
-
-    def _live_controlled_entities(self) -> list[Entity]:
-        entities = [
-            entity
-            for entity_uuid in self.controlled_entity_uuids
-            for entity in [Entity.get(entity_uuid)]
-            if entity is not None
-        ]
-        if len(entities) != len(self.controlled_entity_uuids):
-            raise ValueError(
-                "registered AI assignment has missing controlled entities"
-            )
-        return entities
+        self._budget.reset_for_turn(turn_key)
 
     def _require_remote_assignment(self) -> RegisteredAIAssignment:
         if self._remote_assignment is None:
@@ -541,5 +505,4 @@ class RegisteredAIController(Controller):
 __all__ = [
     "RegisteredAIController",
     "RegisteredAIPendingIntent",
-    "RegisteredAIControllerState",
 ]

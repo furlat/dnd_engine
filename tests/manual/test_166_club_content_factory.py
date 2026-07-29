@@ -34,7 +34,7 @@ from dnd.core.content.provenance import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.equipment_types import WeaponProperty, WeaponSlot
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.items.weapons import (
     CLUB_DECLARATION,
     CLUB_RECIPE,

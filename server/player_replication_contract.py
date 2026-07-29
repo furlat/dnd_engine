@@ -79,6 +79,7 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
     ],
     "presentation": [
         "movement",
+        "action",
         "forced_movement",
         "shove",
         "counterspell",
@@ -98,6 +99,16 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
     "presentation_graph": (
         "closed per observation frame; partition-wide unique presentation IDs; ordered, "
         "bidirectionally validated child edges; no source-lineage references"
+    ),
+    "generic_action_roots": (
+        "exact public action-or-reaction behavior identity only; persistent "
+        "trait, condition, feat, and class-feature providers remain attribution "
+        "providers rather than invocation identities"
+    ),
+    "reactive_action_trigger": (
+        "non-owning same-frame causal edge; the reactive action presentation "
+        "preamble resolves before playback of the referenced trigger cue while "
+        "the trigger remains in its owning root subtree"
     ),
     "movement_perception_commit": (
         "visibility, explored cells, entity/object perception, and effective light "
@@ -241,6 +252,15 @@ class SubjectiveCombatant(PlayerReplicationModel):
     initiative: int
     life_state: Optional[LifeState] = None
     is_dead: bool
+
+    @model_validator(mode="after")
+    def validate_life_state_projection(self) -> "SubjectiveCombatant":
+        if (
+            self.life_state is not None
+            and self.is_dead is not (self.life_state is LifeState.DEAD)
+        ):
+            raise ValueError("is_dead must derive from life_state")
+        return self
 
 
 class SubjectiveEncounter(PlayerReplicationModel):
@@ -769,7 +789,10 @@ class ActionPresentationCue(PresentationCueBase):
         min_length=1,
         description=(
             "Exact delivered action-like cue that caused this reactive action, "
-            "when that trigger survived subjective projection."
+            "when that trigger survived subjective projection. This is a "
+            "non-owning scheduling edge: present the reactive-action preamble "
+            "before playing the referenced trigger, without reparenting or "
+            "duplicating that trigger."
         ),
     )
     effect_presentation_ids: Tuple[str, ...] = Field(default_factory=tuple)
@@ -786,19 +809,31 @@ class ActionPresentationCue(PresentationCueBase):
             raise ValueError("action cannot cite itself as its trigger")
         if self.trigger_presentation_id in self.child_presentation_ids:
             raise ValueError("action trigger cannot also be one of its effects")
-        if not any(
-            isinstance(
-                attribution,
-                (
-                    UnrootedBehaviorPresentationAttribution,
-                    RootedBehaviorPresentationAttribution,
-                ),
-            )
-            and attribution.role is BehaviorPresentationRole.BEHAVIOR
-            for attribution in self.content_attributions
-        ):
+        behavior_attribution = next(
+            (
+                attribution
+                for attribution in self.content_attributions
+                if isinstance(
+                    attribution,
+                    (
+                        UnrootedBehaviorPresentationAttribution,
+                        RootedBehaviorPresentationAttribution,
+                    ),
+                )
+                and attribution.role is BehaviorPresentationRole.BEHAVIOR
+            ),
+            None,
+        )
+        if behavior_attribution is None:
             raise ValueError(
                 "action presentation requires exact behavior attribution"
+            )
+        if behavior_attribution.definition_ref.definition_kind not in {
+            ContentDefinitionKind.ACTION,
+            ContentDefinitionKind.REACTION,
+        }:
+            raise ValueError(
+                "action presentation behavior must identify an action or reaction"
             )
         return self
 
@@ -902,14 +937,6 @@ class SpellDelivery(str, Enum):
     PROJECTILE = "projectile"
     MISSILE_VOLLEY = "missile_volley"
     AOE = "aoe"
-
-
-class AreaShape(str, Enum):
-    SPHERE = "sphere"
-    CONE = "cone"
-    LINE = "line"
-    CUBE = "cube"
-    CYLINDER = "cylinder"
 
 
 class SphereAreaGeometry(PlayerReplicationModel):
@@ -1995,7 +2022,6 @@ __all__ = [
     "ActionPresentationCue",
     "ActorVisualSlot",
     "AreaGeometry",
-    "AreaShape",
     "AttackDelivery",
     "AttackOutcome",
     "AttackPresentationCue",

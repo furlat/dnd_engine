@@ -53,6 +53,7 @@ def _wire_event_payload(*, event_uuid: str = "event-1") -> dict[str, object]:
         "target_entity_name": None,
         "target_entity_uuid": None,
         "timestamp": "2026-07-22T12:00:00+00:00",
+        "turn_execution_id": "00000000-0000-0000-0000-000000000001",
         "use_register": True,
         "uuid": event_uuid,
     }

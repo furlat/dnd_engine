@@ -26,12 +26,9 @@ from ai.policy.generations.current_commitments import (
     create_generation_policy_host,
 )
 from ai.policy.generations.registry import (
-    BASELINE_GENERATION_ID,
-    CANDIDATE_GENERATION_ID,
-    EXPECTED_V31_BEHAVIOR_SHA256,
-    get_policy_implementation,
+    ACTIVE_GENERATION_ID,
+    get_active_policy_implementation,
 )
-from ai.policy.host import PolicyHost
 from dnd.ai.contracts.control import (
     ActionResolutionStatus,
     CommandResult,
@@ -356,24 +353,18 @@ def test_candidate_stores_are_isolated_and_contain_no_epoch_rows_or_worlds() -> 
     assert "current_epoch" not in serialized
 
 
-def test_generation_factory_keeps_frozen_baseline_plain() -> None:
-    """Only the candidate receives commitment behavior and the baseline stays pinned."""
-    baseline = get_policy_implementation(BASELINE_GENERATION_ID)
-    candidate = get_policy_implementation(CANDIDATE_GENERATION_ID)
+def test_active_policy_host_owns_commitment_behavior() -> None:
+    """The sole advanced policy uses the commitment-aware host."""
+    implementation = get_active_policy_implementation()
+    host = create_generation_policy_host(implementation)
 
-    baseline_host = create_generation_policy_host(baseline)
-    candidate_host = create_generation_policy_host(candidate)
-
-    assert type(baseline_host) is PolicyHost
-    assert isinstance(candidate_host, CurrentCandidatePolicyHost)
-    assert baseline.identity.implementation_sha256 == EXPECTED_V31_BEHAVIOR_SHA256
-    assert "ai/policy/generations/current_commitments.py" not in baseline.identity.implementation_paths
-    assert "ai/policy/generations/current_commitments.py" in candidate.identity.implementation_paths
+    assert isinstance(host, CurrentCandidatePolicyHost)
+    assert "ai/policy/generations/current_commitments.py" in implementation.identity.implementation_paths
 
 
 def test_authoritative_result_gate_advances_only_completed_acceptance() -> None:
     """Rejected or stale commands cannot advance candidate progress."""
-    implementation = get_policy_implementation(CANDIDATE_GENERATION_ID)
+    implementation = get_active_policy_implementation()
     host = create_generation_policy_host(implementation)
     assert isinstance(host, CurrentCandidatePolicyHost)
     world = _world()
@@ -403,7 +394,7 @@ def test_authoritative_result_gate_advances_only_completed_acceptance() -> None:
 
     commitment = host.commitment_store.session(
         "session",
-        CANDIDATE_GENERATION_ID,
+        ACTIVE_GENERATION_ID,
     )
     assert commitment is not None
     assert commitment.accepted_steps == 1

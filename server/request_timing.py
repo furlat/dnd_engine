@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import cast
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -42,7 +43,12 @@ class RequestTimingMiddleware:
             if message["type"] == "http.response.start":
                 status_code = message["status"]
                 elapsed_to_headers_ms = (time.perf_counter() - started) * 1000
-                headers = list(message.get("headers", ()))
+                headers = list(
+                    cast(
+                        list[tuple[bytes, bytes]],
+                        message.get("headers", []),
+                    )
+                )
                 if not any(name.lower() == b"server-timing" for name, _value in headers):
                     headers.append(
                         (

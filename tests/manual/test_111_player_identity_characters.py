@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 import pytest
 
-from server.game_directory.contracts import CharacterDeploymentLeaseCreate
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_gateway import create_gateway_app
 from server.hosted_worker import HostedWorkerManager
@@ -29,32 +28,76 @@ def _headers(identity: dict[str, object]) -> dict[str, str]:
     }
 
 
-def _game_request(identity: dict[str, object], character_id: str) -> dict[str, object]:
-    """Return one composed game that deploys the persistent Sorcerer."""
+def _game_request(
+    client: TestClient,
+    identity: dict[str, object],
+    character_id: str,
+) -> dict[str, object]:
+    """Compose once and return the exact hosted start request."""
 
     principal = identity["principal"]
     assert isinstance(principal, dict)
+    composed = client.post(
+        "/game-creation/compose",
+        headers=_headers(identity),
+        json={
+            "title": "Persistent Hero Test",
+            "roster_slots": [
+                {
+                    "roster_slot_id": "players",
+                    "roster": {
+                        "kind": "owned_characters",
+                        "title": "Owned Character",
+                        "character_ids": [character_id],
+                        "member_controller_overrides": [],
+                    },
+                    "faction_id": "players",
+                    "deployment_zone_id": "zone_1",
+                    "controller_defaults": {
+                        "controller": "human",
+                        "participant_name": "Hero",
+                        "policy_id": None,
+                        "member_overrides": [],
+                    },
+                },
+                {
+                    "roster_slot_id": "opposition",
+                    "roster": {
+                        "kind": "authored_roster",
+                        "roster_id": "monsters.skeleton_trio",
+                    },
+                    "faction_id": "opposition",
+                    "deployment_zone_id": "zone_2",
+                    "controller_defaults": {
+                        "controller": "ai",
+                        "participant_name": "Skeletons",
+                        "policy_id": "builtin.basic",
+                        "member_overrides": [],
+                    },
+                },
+            ],
+            "battlefield_id": "battlefield.open_floor_bright",
+            "deployment_id": "neutral.battlefield.open_floor_bright",
+            "opening_policy": {
+                "kind": "fixed_roster",
+                "roster_slot_id": "players",
+            },
+        },
+    )
+    assert composed.status_code == 200, composed.text
+    normalized = composed.json()
     return {
         "principal_id": principal["principal_id"],
         "principal_capability": identity["principal_capability"],
         "display_name": "Persistent Hero Test",
         "creation": {
-            "character_id": character_id,
-            "scenario": {
-                "kind": "composed",
-                # Deliberately differs from the persisted Sorcerer. This row
-                # supplies only the one-hero spatial seat when character_id is
-                # present; it is not a second character authority.
-                "hero_configuration_id": "hero.fighter_l5_archer_torch",
-                "monster_configuration_id": "monsters.skeleton_trio",
-                "battlefield_id": "battlefield.standard_hazards_closed",
-                "deployment_id": "neutral.battlefield.standard_hazards_closed",
-            },
-            "side_a": {"controller": "human", "name": "Hero"},
-            "side_b": {"controller": "ai", "name": "Skeletons"},
-            "opening_side": "side_a",
+            "expected_content_set_digest": normalized[
+                "content_set_digest"
+            ],
+            "expected_ruleset_digest": normalized["ruleset_digest"],
+            "recipe": normalized["recipe"],
         },
-        "owner_side": "side_a",
+        "owner_roster_slot_id": "players",
         "visibility_policy": "public",
         "observer_policy": "public",
         "client_kind": "neuroclient",
@@ -73,10 +116,10 @@ def _create_premade_character(
 
     catalog_response = client.get("/character-creation/catalog")
     assert catalog_response.status_code == 200, catalog_response.text
-    premade = next(
+    plan = next(
         row
-        for row in catalog_response.json()["premades"]
-        if row["premade_id"] == premade_id
+        for row in catalog_response.json()["creation_plans"]
+        if row["source_premade_id"] == premade_id
     )
     profile_response = client.get(
         "/directory/players/me",
@@ -89,8 +132,10 @@ def _create_premade_character(
         headers=_headers(identity),
         json={
             "display_name": display_name,
-            "build": premade["build"],
-            "loadout": premade["loadout"],
+            "build": plan["build"],
+            "loadout": plan["loadout"],
+            "creation_plan_id": plan["plan_id"],
+            "creation_plan_digest": plan["plan_digest"],
             "expected_content_set_digest": (
                 catalog_response.json()["content_set_digest"]
             ),
@@ -179,10 +224,7 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
         capability_pepper=PEPPER,
     )
     authority_cache = RuntimeAuthorityCache()
-    workers = HostedWorkerManager(
-        tmp_path / "runtime",
-        startup_timeout_seconds=20.0,
-    )
+    workers = HostedWorkerManager(tmp_path / "runtime")
     app = create_gateway_app(
         repository=repository,
         worker_manager=workers,
@@ -239,7 +281,11 @@ def test_character_deployment_and_parallel_or_replacing_reconnect(
 
         created_response = client.post(
             "/games",
-            json=_game_request(browser_a, character["character_id"]),
+            json=_game_request(
+                client,
+                browser_a,
+                character["character_id"],
+            ),
         )
         assert created_response.status_code == 200, created_response.text
         created = created_response.json()
@@ -389,10 +435,7 @@ def test_character_head_change_during_worker_start_fails_and_releases_lease(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
     )
-    workers = HostedWorkerManager(
-        tmp_path / "runtime",
-        startup_timeout_seconds=20.0,
-    )
+    workers = HostedWorkerManager(tmp_path / "runtime")
     app = create_gateway_app(
         repository=repository,
         worker_manager=workers,
@@ -414,11 +457,12 @@ def test_character_head_change_during_worker_start_fails_and_releases_lease(
             premade_id="hero.sorcerer_l5_standard_torch",
         )
         character_id = UUID(character["character"]["character_id"])
-        acquire = repository.acquire_character_deployment_lease
+        acquire = repository.acquire_character_deployment_leases
 
         def acquire_after_concurrent_mutation(
-            request: CharacterDeploymentLeaseCreate,
+            requests,
         ):
+            assert requests
             with repository._database.transaction(
                 "test_concurrent_character_mutation",
             ) as connection:
@@ -428,19 +472,19 @@ def test_character_head_change_during_worker_start_fails_and_releases_lease(
                     SET row_version = row_version + 1
                     WHERE character_id = ?
                     """,
-                    (str(request.character_id),),
+                    (str(requests[0].character_id),),
                 )
-            return acquire(request)
+            return acquire(requests)
 
         monkeypatch.setattr(
             repository,
-            "acquire_character_deployment_lease",
+            "acquire_character_deployment_leases",
             acquire_after_concurrent_mutation,
         )
 
         response = client.post(
             "/games",
-            json=_game_request(identity, str(character_id)),
+            json=_game_request(client, identity, str(character_id)),
         )
 
         assert response.status_code == 409, response.text

@@ -35,6 +35,7 @@ from dnd.core.content.provenance import (
 )
 from dnd.core.content.registration import (
     ContentDeclaration,
+    behavior_content_ref,
     behavior_identity,
     get_content_declaration,
 )
@@ -62,6 +63,26 @@ def _grants_action(content_id: str) -> tuple[ContentDependency, ...]:
             target_ref=action_ref,
             phase=ContentDependencyPhase.RUNTIME_REFERENCE,
             notes="Installed while this selected Metamagic feature is owned.",
+        ),
+    )
+
+
+def _applies_condition(content_id: str) -> tuple[ContentDependency, ...]:
+    return (
+        ContentDependency(
+            relation=ContentDependencyRelation.APPLIES_CONDITION,
+            target_ref=behavior_content_ref(
+                definition_kind=ContentDefinitionKind.CLASS_FEATURE,
+                runtime_behavior_kind=RuntimeBehaviorKind.CONDITION,
+                pack_id=_PACK_ID,
+                content_id=content_id,
+                version=_VERSION,
+            ),
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes=(
+                "The selected structural feature applies this independently "
+                "authored active-state condition."
+            ),
         ),
     )
 
@@ -596,6 +617,9 @@ class ElementalAffinityStructuralFeature:
     dependencies=(
         *_grants_action(
             "action.class.sorcerer.dragon_wings.toggle",
+        ),
+        *_applies_condition(
+            "class_feature.sorcerer.dragon_wings.active",
         ),
     ),
 )

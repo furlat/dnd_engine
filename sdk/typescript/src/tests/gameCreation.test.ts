@@ -2,153 +2,172 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ContractValidationError,
+  type CreateHostedGameRequest,
   DndEngineClient,
+  GameDirectoryClient,
+  type EncounterRecipe,
   type GameCreationActivateRequest,
   type GameCreationCatalogResponse,
+  type GameCreationComposeRequest,
+  type GameCreationPreviewRequest,
   type GameCreationStartRequest,
 } from "../index.js";
+import type { DirectoryPrincipalCredential } from "../directoryClient.js";
 
-const compatibility = {
-  hero_configuration_id: "hero.barbarian_l5_berserker_torch",
-  monster_configuration_id: "monsters.goblin_water_cell",
-  battlefield_id: "battlefield.standard_hazards_closed",
-  deployment_id: "neutral.battlefield.standard_hazards_closed",
-  phase: "static" as const,
-  issues: [],
-  admitted: true,
+const digest = "a".repeat(64);
+const firstCharacterId = "00000000-0000-0000-0000-000000000001";
+const secondCharacterId = "00000000-0000-0000-0000-000000000002";
+const credential: DirectoryPrincipalCredential = {
+  principalId: "00000000-0000-0000-0000-000000000003",
+  principalCapability: "directory-secret",
 };
 
 const catalog: GameCreationCatalogResponse = {
-  schema_version: 1,
+  schema_version: 3,
   controllers: ["human", "ai", "codex"],
-  ai_policies: [{
-    descriptor: {
-      policy_id: "builtin.basic",
-      version: "1",
-      display_name: "Basic",
-      description: "Bundled deterministic native policy.",
-      deterministic: true,
-    },
-    execution: "in_process",
-    provider_id: null,
-    capacity: null,
-    active_assignments: null,
-    available_capacity: null,
-  }],
-  opening_sides: ["initiative", "side_a", "side_b"],
-  hero_configurations: [{
-    configuration_id: "hero.barbarian_l5_berserker_torch",
-    title: "Berserker",
-    side_kind: "hero",
-    members: [{
-      actor_id: "hero",
-      deployment_role: "hero",
-      augmentations: [{
-        kind: "apparel_grant",
-        recipe: {
-          ref: {
-            pack_id: "content.neurodragon",
-            definition_kind: "item",
-            content_id: "apparel.costume",
-            content_version: 1,
-            definition_contract_hash: "a".repeat(64),
-          },
-          parameters: {
-            visual_variant_id: "85000004",
-            display_name: "Pit Fighter's Wrap",
-          },
-          recipe_digest: "b".repeat(64),
-        },
-      }],
-      kind: "barbarian",
-      level: 5,
-      primal_path: "berserker",
-      equipment_preset: "greataxe",
-      asi_4: [["strength", 2]],
-      asi_8: [],
-    }],
-    tags: [],
-    rating_eligible: true,
-    portable: true,
-    exclusion_reason: null,
-    diagnostic_warnings: [],
-    source_arena_ids: [],
-    required_battlefield_capabilities: [],
-    forbidden_battlefield_capabilities: [],
-    mechanical_hash: "hero-hash",
-  }],
-  monster_configurations: [],
+  ai_policies: [],
+  roster_recipes: [],
+  encounter_recipes: [],
   battlefields: [],
   deployments: [],
-  presets: [],
 };
 
-const startRequest: GameCreationStartRequest = {
-  character_id: null,
-  scenario: {
-    kind: "composed",
-    hero_configuration_id: compatibility.hero_configuration_id,
-    monster_configuration_id: compatibility.monster_configuration_id,
-    battlefield_id: compatibility.battlefield_id,
-    deployment_id: compatibility.deployment_id,
-  },
-  side_a: { controller: "human", name: "Player", policy_id: null },
-  side_b: { controller: "ai", name: "Opposition", policy_id: "builtin.basic" },
-  opening_side: "side_a",
+const composeRequest = {
+  title: "Two heroes versus goblins",
+  roster_slots: [
+    {
+      roster_slot_id: "party",
+      roster: {
+        kind: "owned_characters",
+        title: "Adventuring Party",
+        character_ids: [firstCharacterId, secondCharacterId],
+        member_controller_overrides: [
+          {
+            character_id: secondCharacterId,
+            controller: "codex",
+            policy_id: null,
+          },
+        ],
+      },
+      faction_id: "heroes",
+      deployment_zone_id: "west",
+      controller_defaults: {
+        controller: "human",
+        participant_name: "Player",
+        policy_id: null,
+        member_overrides: [],
+      },
+    },
+    {
+      roster_slot_id: "opposition",
+      roster: {
+        kind: "authored_roster",
+        roster_id: "roster.monsters.goblin_water_cell",
+      },
+      faction_id: "monsters",
+      deployment_zone_id: "east",
+      controller_defaults: {
+        controller: "ai",
+        participant_name: "Opposition",
+        policy_id: "builtin.basic",
+        member_overrides: [],
+      },
+    },
+  ],
+  battlefield_id: "battlefield.standard_hazards_closed",
+  deployment_id: "deployment.standard.opposed",
+  opening_policy: { kind: "initiative" },
+} satisfies GameCreationComposeRequest;
+
+const savedRosterComposeRequest = {
+  ...composeRequest,
+  roster_slots: [
+    {
+      ...composeRequest.roster_slots[0]!,
+      roster: {
+        kind: "saved_roster",
+        saved_roster_id: "saved.roster.adventuring-party",
+        expected_revision: 4,
+        expected_recipe_digest: digest,
+      },
+    },
+    composeRequest.roster_slots[1]!,
+  ],
+} satisfies GameCreationComposeRequest;
+
+// Preview and start accept the exact opaque recipe returned by composition.
+// The handwritten client must neither reconstruct nor normalize it.
+const normalizedRecipe = {
+  encounter_id: "encounter.normalized",
+  recipe_digest: digest,
+} as unknown as EncounterRecipe;
+const previewRequest = {
+  expected_content_set_digest: digest,
+  expected_ruleset_digest: digest,
+  recipe: normalizedRecipe,
+} satisfies GameCreationPreviewRequest;
+const startRequest = {
+  ...previewRequest,
   codex_lease_seconds: 600,
-};
+} satisfies GameCreationStartRequest;
 
-test("game creation client uses the typed catalog and preflight routes", async () => {
-  const calls: Array<{ path: string; init?: RequestInit }> = [];
+test("game creation client exposes only catalog, compose, preview, and exact start", async () => {
+  const calls: Array<{ path: string; method: string; body: unknown }> = [];
   const client = new DndEngineClient("http://engine.test", {
     fetchImplementation: async (input, init) => {
       const url = new URL(String(input));
-      calls.push({ path: url.pathname, ...(init === undefined ? {} : { init }) });
-      const payload = url.pathname.endsWith("/catalog") ? catalog : compatibility;
-      return jsonResponse(payload);
+      calls.push({
+        path: url.pathname,
+        method: init?.method ?? "GET",
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      });
+      return jsonResponse(
+        url.pathname === "/game-creation/catalog" ? catalog : {},
+      );
     },
   });
 
   assert.deepEqual(await client.getGameCreationCatalog(), catalog);
-  assert.deepEqual(await client.preflightGameCreation(compatibility), compatibility);
-  assert.deepEqual(calls.map((call) => call.path), [
-    "/game-creation/catalog",
-    "/game-creation/preflight",
-  ]);
-  assert.equal(calls[1]?.init?.method, "POST");
-  assert.deepEqual(JSON.parse(String(calls[1]?.init?.body)), compatibility);
-});
+  await assert.rejects(
+    () => client.composeGameCreation(composeRequest),
+    ContractValidationError,
+  );
+  await assert.rejects(
+    () => client.previewGameCreation(previewRequest),
+    ContractValidationError,
+  );
+  await assert.rejects(
+    () => client.startGameCreation(startRequest),
+    ContractValidationError,
+  );
 
-test("game creation client sends the exact atomic start request", async () => {
-  let captured: { path: string; body: unknown } | null = null;
-  const response = {
-    schema_version: 1,
-    scenario_kind: "composed" as const,
-    preset_arena_id: null,
-    encounter_uuid: "encounter",
-    game_id: "game",
-    encounter_name: "Composed Encounter",
-    opening_side: "side_a" as const,
-    compatibility,
-    side_a: sideResult("side_a", "human"),
-    side_b: sideResult("side_b", "ai"),
-    status: "prepared",
-  };
-  const client = new DndEngineClient("http://engine.test", {
-    fetchImplementation: async (input, init) => {
-      captured = {
-        path: new URL(String(input)).pathname,
-        body: JSON.parse(String(init?.body)),
-      };
-      return jsonResponse(response);
+  assert.deepEqual(calls, [
+    {
+      path: "/game-creation/catalog",
+      method: "GET",
+      body: null,
     },
-  });
+    {
+      path: "/game-creation/compose",
+      method: "POST",
+      body: composeRequest,
+    },
+    {
+      path: "/game-creation/preview",
+      method: "POST",
+      body: previewRequest,
+    },
+    {
+      path: "/game-creation/start",
+      method: "POST",
+      body: startRequest,
+    },
+  ]);
 
-  assert.deepEqual(await client.startGameCreation(startRequest), response);
-  assert.deepEqual(captured, {
-    path: "/game-creation/start",
-    body: startRequest,
-  });
+  const retired = client as unknown as Record<string, unknown>;
+  assert.equal(retired.preflightGameCreation, undefined);
+  assert.equal(retired.getGameCreationConfigurationVisualPreview, undefined);
 });
 
 test("game creation activation sends the exact bootstrap identity", async () => {
@@ -181,25 +200,106 @@ test("game creation activation sends the exact bootstrap identity", async () => 
   });
 });
 
-function sideResult(sideId: "side_a" | "side_b", controller: "human" | "ai") {
-  return {
-    side_id: sideId,
-    title: sideId === "side_a" ? "Berserker" : "Goblins",
-    controller,
-    participant_name: sideId === "side_a" ? "Player" : "Opposition",
-    entity_assignments: [{
-      entity_uuid: sideId === "side_a" ? "hero" : "goblin",
-      entity_name: sideId === "side_a" ? "Hero" : "Goblin",
-      faction: sideId === "side_a" ? "heroes" : "monsters",
-    }],
-    policy_id: sideId === "side_b" ? "builtin.basic" : null,
-    policy_execution: sideId === "side_b" ? "in_process" : null,
-    provider_id: null,
-    codex_session_id: null,
-    takeover_claim_id: null,
-    takeover_expires_at: null,
-  };
-}
+test("hosted composition and preview carry exact directory ownership", async () => {
+  const calls: Array<{
+    path: string;
+    principalId: string | null;
+    principalCapability: string | null;
+    body: unknown;
+  }> = [];
+  const client = new GameDirectoryClient("http://gateway.test", {
+    fetchImplementation: async (input, init) => {
+      const headers = new Headers(init?.headers);
+      calls.push({
+        path: new URL(String(input)).pathname,
+        principalId: headers.get("x-dnd-principal-id"),
+        principalCapability: headers.get("x-dnd-principal-capability"),
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      });
+      return jsonResponse({});
+    },
+  });
+
+  await assert.rejects(
+    () => client.composeGameCreation(credential, composeRequest),
+    ContractValidationError,
+  );
+  await assert.rejects(
+    () => client.previewGameCreation(credential, previewRequest),
+    ContractValidationError,
+  );
+
+  assert.deepEqual(calls, [
+    {
+      path: "/game-creation/compose",
+      principalId: credential.principalId,
+      principalCapability: credential.principalCapability,
+      body: composeRequest,
+    },
+    {
+      path: "/game-creation/preview",
+      principalId: credential.principalId,
+      principalCapability: credential.principalCapability,
+      body: previewRequest,
+    },
+  ]);
+});
+
+test("saved roster selection preserves the exact CAS identity in composition", async () => {
+  let captured: { path: string; body: unknown } | null = null;
+  const client = new GameDirectoryClient("http://gateway.test", {
+    fetchImplementation: async (input, init) => {
+      captured = {
+        path: new URL(String(input)).pathname,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      };
+      return jsonResponse({});
+    },
+  });
+
+  await assert.rejects(
+    () => client.composeGameCreation(credential, savedRosterComposeRequest),
+    ContractValidationError,
+  );
+  assert.deepEqual(captured, {
+    path: "/game-creation/compose",
+    body: savedRosterComposeRequest,
+  });
+});
+
+test("hosted start embeds the same normalized recipe without another request", async () => {
+  const request = {
+    principal_id: credential.principalId,
+    principal_capability: "directory-secret-capability-000000",
+    display_name: "Exact hosted encounter",
+    creation: startRequest,
+    owner_roster_slot_id: "party",
+    visibility_policy: "private",
+    observer_policy: "disabled",
+    client_kind: "neuroclient",
+    client_instance_id: "browser-1",
+  } satisfies CreateHostedGameRequest;
+  const calls: Array<{ path: string; body: unknown }> = [];
+  const client = new GameDirectoryClient("http://gateway.test", {
+    fetchImplementation: async (input, init) => {
+      calls.push({
+        path: new URL(String(input)).pathname,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      });
+      return jsonResponse({});
+    },
+  });
+
+  await assert.rejects(
+    () => client.createGame(request),
+    ContractValidationError,
+  );
+  assert.deepEqual(calls, [{
+    path: "/games",
+    body: request,
+  }]);
+  assert.strictEqual(request.creation.recipe, normalizedRecipe);
+});
 
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), {

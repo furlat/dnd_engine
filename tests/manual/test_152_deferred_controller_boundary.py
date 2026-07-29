@@ -19,7 +19,7 @@ from dnd.controller import (
 from dnd.core.events import Event, EventQueue, EventType
 from dnd.encounter import TurnState
 from dnd.entity import Entity
-from dnd.scenarios.controller_catalogue import (
+from tests.manual.controller_test_support import (
     create_controller_pair,
     reset_controller_catalogue_state,
     start_ordered_controller_encounter,

@@ -27,7 +27,7 @@ from dnd.core.content.provenance import (
 from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.equipment_types import WeaponProperty, WeaponSlot
 from dnd.core.events import EventHandler, EventQueue, RangeType
-from dnd.core.modifiers import DamageType
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 

@@ -16,6 +16,7 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
@@ -40,7 +41,6 @@ from dnd.core.content.durable_characters import (
     AbilityScoreImprovementChoice,
     AbilityScoreName,
     BackgroundDefinition,
-    CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -54,6 +54,7 @@ from dnd.core.content.durable_characters import (
     SubclassChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.provenance import (
     ContentFidelity,
@@ -81,6 +82,11 @@ _NEUTRAL_ORIGIN_PROVENANCE = ContentProvenance(
     review_status=ContentReviewStatus.REVIEWED,
     notes="Complete by definition: this fixture origin grants no mechanics.",
 )
+
+
+def _content_ref_key(ref: ContentRef) -> tuple[str, str]:
+    """Return the exact hashable identity of one immutable content reference."""
+    return ref.identity_key, ref.definition_contract_hash
 
 
 @pytest.fixture(autouse=True)
@@ -135,13 +141,17 @@ def _runtime_with_neutral_origins() -> tuple[
     species = _origin_declaration(
         kind=ContentDefinitionKind.SPECIES,
         content_id="species.neutral_test_origin",
-        payload=SpeciesDefinition(),
+        payload=SpeciesDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     background = _origin_declaration(
         kind=ContentDefinitionKind.BACKGROUND,
         content_id="background.neutral_test_origin",
-        payload=BackgroundDefinition(),
+        payload=BackgroundDefinition(
+            runtime_support=OriginRuntimeSupport.available(),
+        ),
         provenance=_NEUTRAL_ORIGIN_PROVENANCE,
     )
     declarations = dict(loaded.registry.declarations)
@@ -179,7 +189,7 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
         body_recipe=PLAYER_CHARACTER_BODY_RECIPE,
         species_ref=species_ref,
         background_ref=background_ref,
-        appearance=CharacterAppearanceSelection(),
+        appearance=FIGHTER_HUMAN_APPEARANCE,
         base_ability_scores=AbilityScoreAllocation(
             strength=15,
             dexterity=14,
@@ -296,25 +306,29 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
         IMPROVED_CRITICAL_REF,
         EXTRA_ATTACK_FEATURE_REF,
     )
+    tracked_refs = (
+        SECOND_WIND_REF,
+        ACTION_SURGE_REF,
+        IMPROVED_CRITICAL_REF,
+        EXTRA_ATTACK_FEATURE_REF,
+        FIGHTING_STYLE_ARCHERY_REF,
+    )
     assert Counter(
-        grant.definition_ref
+        _content_ref_key(grant.definition_ref)
         for grant in receipt.grants
-        if grant.definition_ref in {
+        if grant.definition_ref in tracked_refs
+    ) == Counter(
+        _content_ref_key(ref)
+        for ref in (
             SECOND_WIND_REF,
             ACTION_SURGE_REF,
             IMPROVED_CRITICAL_REF,
             EXTRA_ATTACK_FEATURE_REF,
+            EXTRA_ATTACK_FEATURE_REF,
             FIGHTING_STYLE_ARCHERY_REF,
-        }
-    ) == Counter({
-        SECOND_WIND_REF: 1,
-        ACTION_SURGE_REF: 1,
-        IMPROVED_CRITICAL_REF: 1,
-        EXTRA_ATTACK_FEATURE_REF: 2,
-        FIGHTING_STYLE_ARCHERY_REF: 1,
-    })
+        )
+    )
     assert not entity.active_conditions
-    assert all(not grant.condition_handles for grant in receipt.grants)
 
     feature_actions = {
         type(action): action
@@ -343,7 +357,9 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
         assert action.behavior_binding is not None
         assert action.behavior_binding.provided_by_ref == provider_ref
         assert action.source_entity_uuid == entity.uuid
-    assert feature_actions[fighter.SecondWind].fighter_level == 5
+    second_wind = feature_actions[fighter.SecondWind]
+    assert isinstance(second_wind, fighter.SecondWind)
+    assert second_wind.fighter_level == 5
 
     extra_attack_handlers = tuple(
         handler

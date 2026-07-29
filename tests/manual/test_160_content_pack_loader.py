@@ -15,6 +15,7 @@ from dnd.content_system.pack_loader import (
     load_content_system,
 )
 from dnd.core.base_object import BaseObject
+from dnd.core.content.durable_characters import SpeciesDefinition
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
@@ -36,6 +37,7 @@ def _write_fixture_pack(
     import_failure: bool = False,
     dependencies: tuple[tuple[str, str], ...] = (),
     extra_imports: tuple[str, ...] = (),
+    engine_content_api: int = 2,
 ) -> tuple[Path, Path]:
     pack_directory = root / directory_name
     package_directory = (
@@ -49,7 +51,7 @@ def _write_fixture_pack(
         "schema_version = 1",
         f'pack_id = "{pack_id}"',
         'pack_version = "1.0.0"',
-        "engine_content_api = 1",
+        f"engine_content_api = {engine_content_api}",
         'python_root = "src"',
         f'python_package = "{python_package}"',
         "",
@@ -244,6 +246,146 @@ def test_discovery_is_cold_and_loading_publishes_one_frozen_registry(
     )
     context = object()
     assert loaded.registry.materialize(recipe, context) == (context, 4)
+
+
+def test_content_api_v1_pack_is_rejected_before_import(
+    tmp_path: Path,
+) -> None:
+    """Origin-capable API v2 is the only installed-pack authoring contract."""
+
+    root = tmp_path / "packs"
+    root.mkdir()
+    _, marker = _write_fixture_pack(
+        root,
+        directory_name="legacy",
+        pack_id="fixture.legacy",
+        python_package="fixture_pack_legacy",
+        content_id="item.legacy",
+        engine_content_api=1,
+    )
+    with pytest.raises(
+        ValueError,
+        match="requires engine content API 1; supported API is 2",
+    ):
+        discover_content_packs((root,))
+    assert not marker.exists()
+
+
+def test_content_api_v2_pack_can_author_exact_origin_definitions(
+    tmp_path: Path,
+) -> None:
+    """The installed-pack API admits the same typed origin model as built-ins."""
+
+    root = tmp_path / "packs"
+    root.mkdir()
+    pack_directory, _ = _write_fixture_pack(
+        root,
+        directory_name="origin_capable",
+        pack_id="fixture.origin_capable",
+        python_package="fixture_origin_capable",
+        content_id="item.origin_token",
+    )
+    origins_path = (
+        pack_directory
+        / "src"
+        / "fixture_origin_capable"
+        / "origins.py"
+    )
+    origins_path.write_text(
+        "\n".join((
+            "from dnd.core.content.dependencies import ContentDependency, ContentDependencyPhase, ContentDependencyRelation",
+            "from dnd.core.content.descriptors import ContentDescriptorSpec, ContentVisibility",
+            "from dnd.core.content.durable_characters import OriginLevelGrant, SpeciesDefinition",
+            "from dnd.core.content.identities import ContentDefinitionKind",
+            "from dnd.core.content.origin_features import OriginCapability, OriginStructuralFeatureDefinition",
+            "from dnd.core.content.origin_support import OriginRuntimeSupport",
+            "from dnd.core.content.provenance import ContentFidelity, ContentProvenance, ContentProvenanceRelation, ContentReviewStatus",
+            "from dnd.core.content.registration import get_content_declaration, typed_definition",
+            "",
+            "PROVENANCE = ContentProvenance(",
+            "    primary_source_id='fixture.origin_capable.source',",
+            "    source_anchor='Fixture origin',",
+            "    relation=ContentProvenanceRelation.ORIGINAL_CONTENT,",
+            "    fidelity=ContentFidelity.COMPLETE,",
+            "    review_status=ContentReviewStatus.REVIEWED,",
+            ")",
+            "",
+            "@typed_definition(",
+            "    definition_kind=ContentDefinitionKind.TRAIT,",
+            "    pack_id='fixture.origin_capable',",
+            "    content_id='trait.origin.fixture_trance',",
+            "    version=1,",
+            "    descriptor=ContentDescriptorSpec(",
+            "        display_name='Fixture Trance',",
+            "        description='An exact external origin capability.',",
+            "        visibility=ContentVisibility.PUBLIC,",
+            "    ),",
+            "    provenance=PROVENANCE,",
+            "    definition=OriginStructuralFeatureDefinition(",
+            "        capabilities=(OriginCapability.TRANCE,),",
+            "    ),",
+            ")",
+            "class FixtureTrance:",
+            "    pass",
+            "",
+            "FIXTURE_TRANCE_REF = get_content_declaration(FixtureTrance).ref",
+            "",
+            "@typed_definition(",
+            "    definition_kind=ContentDefinitionKind.SPECIES,",
+            "    pack_id='fixture.origin_capable',",
+            "    content_id='species.fixture',",
+            "    version=1,",
+            "    descriptor=ContentDescriptorSpec(",
+            "        display_name='Fixture Species',",
+            "        description='An exact external playable origin.',",
+            "        visibility=ContentVisibility.PUBLIC,",
+            "    ),",
+            "    provenance=PROVENANCE,",
+            "    definition=SpeciesDefinition(",
+            "        runtime_support=OriginRuntimeSupport.available(),",
+            "        level_grants=(",
+            "            OriginLevelGrant(",
+            "                character_level=1,",
+            "                grant_refs=(FIXTURE_TRANCE_REF,),",
+            "            ),",
+            "        ),",
+            "    ),",
+            "    dependencies=(",
+            "        ContentDependency(",
+            "            relation=ContentDependencyRelation.GRANTS_FEATURE,",
+            "            target_ref=FIXTURE_TRANCE_REF,",
+            "            phase=ContentDependencyPhase.RUNTIME_REFERENCE,",
+            "            notes='Fixture species grants its exact trait.',",
+            "        ),",
+            "    ),",
+            ")",
+            "class FixtureSpecies:",
+            "    pass",
+            "",
+        )),
+        encoding="utf-8",
+    )
+
+    loaded = load_content_system(
+        pack_roots=(root,),
+        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
+    )
+    species = loaded.registry.declarations[
+        "fixture.origin_capable:species:species.fixture@1"
+    ]
+    trait = loaded.registry.declarations[
+        "fixture.origin_capable:trait:trait.origin.fixture_trance@1"
+    ]
+
+    assert isinstance(species.definition_payload, SpeciesDefinition)
+    assert (
+        species.definition_payload.level_grants[0].grant_refs
+        == (trait.ref,)
+    )
+    assert (
+        species.definition_payload.runtime_support.status.value
+        == "available"
+    )
 
 
 def test_pack_root_order_does_not_change_content_set_digest(tmp_path: Path) -> None:

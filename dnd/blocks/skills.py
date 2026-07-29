@@ -1,5 +1,5 @@
 from typing import Dict, Optional, List, Callable, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
@@ -108,12 +108,30 @@ class Skill(BaseBlock):
 
     name: SkillName = Field(default="acrobatics", description="The name of the skill in D&D 5e")
     skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
-    expertise: bool = Field(default=False, description="If true, the character has expertise in this skill, doubling their proficiency bonus")
-    proficiency: bool = Field(default=False, description="If true, the character is proficient in this skill, adding their proficiency bonus to checks")
     proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
         description="Exact source-owned proficiency contributions.",
     )
+
+    @computed_field
+    @property
+    def proficiency(self) -> bool:
+        """Return the proficiency fact derived from owned sources."""
+        return self.proficiency_sources.is_proficient
+
+    @computed_field
+    @property
+    def expertise(self) -> bool:
+        """Return the expertise fact derived from owned sources."""
+        return self.proficiency_sources.has_expertise
+
+    def _legacy_proficiency_source_id(self) -> UUID:
+        """Return the stable source used by imperative compatibility setters."""
+        return uuid5(self.uuid, "skill:manual:proficiency")
+
+    def _legacy_expertise_source_id(self) -> UUID:
+        """Return the stable source used by imperative compatibility setters."""
+        return uuid5(self.uuid, "skill:manual:expertise")
 
     @property
     def ability(self) -> AbilityName:
@@ -126,23 +144,21 @@ class Skill(BaseBlock):
         return SKILL_TO_ABILITY[self.name]
 
     def set_proficiency(self, proficiency: bool) -> None:
-        """
-        Set the proficiency status for this skill.
+        """Set or remove the imperative proficiency source."""
+        source_id = self._legacy_proficiency_source_id()
+        if proficiency:
+            self.add_proficiency_source(source_id, ProficiencyMode.FULL)
+        else:
+            self.remove_proficiency_source(source_id)
 
-        Args:
-            proficiency (bool): Whether the character is proficient in this skill.
-        """
-        self.proficiency = proficiency
     def set_expertise(self, expertise: bool) -> None:
-        """
-        Set the expertise status for this skill.
-
-        Args:
-            expertise (bool): Whether the character has expertise in this skill.
-        """
-        self.expertise = expertise
-        if not self.proficiency:
-            self.proficiency = True
+        """Set or remove the imperative expertise source."""
+        source_id = self._legacy_expertise_source_id()
+        if expertise:
+            self.set_proficiency(True)
+            self.add_proficiency_source(source_id, ProficiencyMode.EXPERTISE)
+        else:
+            self.remove_proficiency_source(source_id)
 
     def add_proficiency_source(
         self,
@@ -164,17 +180,7 @@ class Skill(BaseBlock):
             Callable[[int], int]: A function that takes the proficiency bonus as an argument and returns the adjusted bonus.
         """
         def convert(proficiency_bonus: int) -> int:
-            legacy = 0
-            if self.proficiency:
-                legacy = (
-                    2 * proficiency_bonus
-                    if self.expertise
-                    else proficiency_bonus
-                )
-            return max(
-                legacy,
-                self.proficiency_sources.apply(proficiency_bonus),
-            )
+            return self.proficiency_sources.apply(proficiency_bonus)
 
         return convert
     def get_score(self,profiency_bonus:int) -> int:
@@ -217,9 +223,19 @@ class Skill(BaseBlock):
                 for modifier in config.skill_bonus_modifiers:
                     skill_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                       skill_bonus=skill_bonus, expertise=config.expertise, proficiency=config.proficiency)
+            skill = cls(
+                source_entity_uuid=source_entity_uuid,
+                name=name,
+                source_entity_name=source_entity_name,
+                target_entity_uuid=target_entity_uuid,
+                target_entity_name=target_entity_name,
+                skill_bonus=skill_bonus,
+            )
+            if config.proficiency:
+                skill.set_proficiency(True)
+            if config.expertise:
+                skill.set_expertise(True)
+            return skill
 
 class SkillSetConfig(BaseModel):
     """

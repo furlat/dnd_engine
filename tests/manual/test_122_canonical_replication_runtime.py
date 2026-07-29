@@ -9,6 +9,7 @@ import pytest
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_use_action
+from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import GreaterInvisibilityEffect
@@ -16,10 +17,16 @@ from dnd.controller import Controller
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
-from dnd.core.gridmap import GridMap
+from dnd.core.gridmap import GridMap, LightLevel
+from dnd.core.content.materialization import (
+    CreatureDeploymentRole,
+    CreaturePossessionMode,
+)
 from dnd.encounter import Encounter
-from dnd.entity import Entity, EntityConfig
+from dnd.entity import Entity
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
+from dnd.items.torches import TORCH_RECIPE, Torch
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import DndEventStream
 from server.player_replication.journal import (
@@ -34,6 +41,7 @@ from server.player_replication.runtime import (
     SubjectiveRuntimeIdentityError,
 )
 from server.player_replication_contract import (
+    ActionPresentationCue,
     ConditionOperation,
     ConditionPresentationCue,
     EncounterReplacePatch,
@@ -64,6 +72,30 @@ class RuntimeScene:
     context: CanonicalSubjectiveReplicationContext
 
 
+def _materialize_test_actor(
+    *,
+    name: str,
+    position: tuple[int, int],
+    faction: str,
+) -> Entity:
+    """Build one exact authored actor without unrelated default possessions."""
+    runtime_entity_uuid = uuid4()
+    return materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=runtime_entity_uuid,
+        display_name=name,
+        faction=faction,
+        position=position,
+        deployment_role=CreatureDeploymentRole(
+            role_id=(
+                "tests.canonical_replication_runtime.actor_"
+                f"{runtime_entity_uuid.hex}"
+            ),
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
+    )
+
+
 def _authority(
     observer: Entity,
     *,
@@ -88,10 +120,10 @@ def _authority(
 @pytest.fixture
 def runtime_scene() -> Iterator[RuntimeScene]:
     grid = reset_engine_runtime(grid_size=(3, 1))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
     observer.senses.visible = {(0, 0): True, (1, 0): True}
     observer.senses.seen = {(0, 0), (1, 0)}
@@ -201,10 +233,10 @@ def test_standalone_log_releases_immediately_behind_consumed_barrier(
 def test_bind_catches_up_exact_existing_logs_at_the_opening_event_cursor() -> None:
     """A mid-game perspective seed includes all exact reducer log inputs."""
     grid = reset_engine_runtime(grid_size=(2, 1))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Late observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
     observer.senses.visible = {(0, 0): True}
     observer.senses.seen = {(0, 0)}
@@ -268,18 +300,111 @@ def test_batch_world_diff_is_injected_as_typed_patches(
     assert upserts[0].entity.name == "Renamed observer"
 
 
+def test_real_torch_ignite_is_one_authoritative_subjective_light_frame() -> None:
+    """Igniting a carried torch must deliver its complete sensory replacement."""
+    grid = reset_engine_runtime(grid_size=(5, 1))
+    for tile in grid.get_all_tiles().values():
+        tile.default_light = LightLevel.DARKNESS
+    observer = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Torchbearer",
+        faction="heroes",
+        position=(2, 0),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.replication.torchbearer",
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
+    )
+    torch = materialize_item(
+        TORCH_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
+    assert observer.loot_item(torch)
+    stored_torch = next(
+        item
+        for item in observer.inventory.items.values()
+        if item.stack_id == torch.stack_id
+    )
+    Entity.update_all_entities_senses(max_distance=10)
+
+    encounter = Encounter(name="Torch encounter", source_entity_uuid=observer.uuid)
+    encounter.add_combatant(
+        observer,
+        Controller(source_entity_uuid=observer.uuid, name="Torch controller"),
+    )
+    source_stream = DndEventStream()
+    runtime = CanonicalSubjectiveReplicationRuntime(
+        store=SubjectiveJournalStore(),
+        source_journal=source_stream,
+        grid_provider=lambda: grid,
+        entities_provider=Entity.get_all_entities,
+        encounter_provider=lambda: encounter,
+    )
+    context = runtime.bind(_authority(observer), encounter=encounter)
+    subscription = context.subscribe()
+    try:
+        sync = asyncio.run(subscription.get())
+        assert isinstance(sync, SubjectiveSyncDelivery)
+
+        result = execute_use_action(
+            observer,
+            stored_torch.uuid,
+            "Ignite Torch",
+        )
+        assert result is not None and not result.canceled
+
+        delivery = asyncio.run(subscription.get())
+        assert isinstance(delivery, SubjectiveFrameDelivery)
+        frame = delivery.frame
+        assert tuple(type(cue) for cue in frame.presentation) == (
+            ActionPresentationCue,
+            LightPresentationCue,
+        )
+        action = frame.presentation[0]
+        assert isinstance(action, ActionPresentationCue)
+        assert action.content_attributions[0].definition_ref.content_id == (
+            "action.item.torch.ignite"
+        )
+        light = frame.presentation[1]
+        assert isinstance(light, LightPresentationCue)
+        assert light.observer_uuid == str(observer.uuid)
+        assert any(
+            cell.position == observer.position
+            and cell.light_level == LightLevel.VERY_BRIGHT.value
+            for cell in light.cells
+        )
+        visibility = next(
+            patch
+            for patch in frame.patches
+            if isinstance(patch, ObserverVisibilityReplacePatch)
+        )
+        assert visibility.observer_uuid == str(observer.uuid)
+        assert visibility.visibility.effective_light_levels == {
+            f"{cell.position[0]},{cell.position[1]}": cell.light_level
+            for cell in light.cells
+        }
+    finally:
+        runtime.clear_all()
+        runtime.stop()
+        source_stream.stop()
+        reset_engine_runtime()
+
+
 def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:
     """A revealing cast restores state and cues at the same censored boundary."""
     grid = reset_engine_runtime(grid_size=(5, 1))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = _materialize_test_actor(
         name="Invisible caster",
-        config=EntityConfig(position=(2, 0), faction="monsters"),
+        position=(2, 0),
+        faction="monsters",
     )
     potion = materialize_item(
         GREATER_INVISIBILITY_POTION_RECIPE,
@@ -542,10 +667,10 @@ def test_expected_identity_validation_never_falls_back(
 def test_transient_initial_projection_failure_can_rebind_without_reusing_bad_state() -> None:
     """A failed provisional open is discarded without tombstoning its identity."""
     grid = reset_engine_runtime(grid_size=(2, 1))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = _materialize_test_actor(
         name="Retry observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
+        position=(0, 0),
+        faction="heroes",
     )
     observer.senses.visible = {(0, 0): True}
     observer.senses.seen = {(0, 0)}

@@ -15,9 +15,12 @@ def build_character_deployment_snapshot(
     principal_id: UUID,
     character_id: UUID,
 ) -> CharacterDeploymentSnapshot:
-    """Bind the exact current revision triplet and profile rules once."""
+    """Bind one current-content revision triplet and profile rules once."""
 
-    snapshot = service.get_character_snapshot(principal_id, character_id)
+    snapshot = service.prepare_character_for_deployment(
+        principal_id,
+        character_id,
+    )
     definition = snapshot.definition.definition
     if not isinstance(definition, CharacterDefinitionRevisionV2):
         raise ConflictError(

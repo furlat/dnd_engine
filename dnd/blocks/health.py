@@ -4,7 +4,12 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import NumericalModifier, DamageType , ResistanceStatus, ResistanceModifier
+from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import (
+    NumericalModifier,
+    ResistanceStatus,
+    ResistanceModifier,
+)
 
 from random import randint
 from functools import cached_property
@@ -408,15 +413,6 @@ class Health(BaseBlock):
         """
         self.damage_taken += damage
 
-    def remove_damage(self, damage: int) -> None:
-        """
-        Remove damage from the entity's current damage taken.
-
-        Args:
-            damage (int): The amount of damage to remove.
-        """
-        self.damage_taken = max(0, self.damage_taken - damage)
-
     def damage_multiplier(self, damage_type: DamageType) -> float:
         """
         Calculate the damage multiplier based on vulnerabilities and resistances.
@@ -564,30 +560,6 @@ class Health(BaseBlock):
             normal_hit_point_damage_cap=normal_hit_point_damage_cap,
             normal_hit_points_available=normal_hit_points_available,
         )
-
-    def take_damage_components(
-        self,
-        components: List[Tuple[int, DamageType]],
-        source_entity_uuid: UUID,
-        normal_hit_point_damage_cap: Optional[int] = None,
-    ) -> int:
-        """Apply mixed typed damage components as one damage event.
-
-        Args:
-            components: Damage amounts paired with their damage types.
-            source_entity_uuid: UUID of the entity dealing damage.
-            normal_hit_point_damage_cap: Optional maximum normal hit points
-                this packet may remove after mitigation.
-
-        Returns:
-            Actual hit point damage after per-type multipliers, flat damage
-            reduction, and temporary hit points.
-
-        Raises:
-            ValueError: If a damage amount is negative or a type is invalid.
-        """
-        preview = self.preview_damage_components(components, normal_hit_point_damage_cap)
-        return self.apply_damage_preview(preview, source_entity_uuid)
 
     def preview_damage(
         self,

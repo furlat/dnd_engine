@@ -1,15 +1,13 @@
-"""Registered executable policy generations."""
+"""Active advanced policy implementation."""
 
 from ai.policy.generations.registry import (
-    BASELINE_GENERATION_ID,
-    CANDIDATE_GENERATION_ID,
-    get_policy_implementation,
-    list_policy_generations,
+    ACTIVE_GENERATION_ID,
+    ACTIVE_POLICY_IMPLEMENTATION,
+    get_active_policy_implementation,
 )
 
 __all__ = [
-    "BASELINE_GENERATION_ID",
-    "CANDIDATE_GENERATION_ID",
-    "get_policy_implementation",
-    "list_policy_generations",
+    "ACTIVE_GENERATION_ID",
+    "ACTIVE_POLICY_IMPLEMENTATION",
+    "get_active_policy_implementation",
 ]

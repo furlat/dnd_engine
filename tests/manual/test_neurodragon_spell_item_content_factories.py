@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 import dnd.items as item_exports
 import dnd.items.spell_items as spell_items
-import dnd.items.test_items as fixture_items
+import dnd.items.environment_interactables as fixture_items
 from dnd.actions import SpellAction
 from dnd.blocks.base_item import UsableItem
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -409,7 +409,7 @@ def test_legacy_spell_item_surface_is_absent_from_active_python() -> None:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
                     assert not (
-                        node.module == "dnd.items.test_items"
+                        node.module == "dnd.items.environment_interactables"
                         and any(
                             alias.name in _LEGACY_SYMBOLS
                             for alias in node.names

@@ -20,10 +20,14 @@ from dnd.core.events import (
     DeathEvent, RangeType,
 )
 from dnd.core.equipment_types import ArmorType, WeaponSlot
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
-    NumericalModifier, AdvantageModifier, AdvantageStatus,
+    NumericalModifier,
+    AdvantageModifier,
+    AdvantageStatus,
     ContextualNumericalModifier,
-    ResistanceModifier, ResistanceStatus, DamageType
+    ResistanceModifier,
+    ResistanceStatus,
 )
 from dnd.blocks.equipment import ArmorEquipEvent, Armor
 from dnd.blocks.action_economy import RechargeType
@@ -122,10 +126,9 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
 
     if not has_attacked and not has_taken_damage:
         entity.remove_condition("Raging", parent_event=event)
-        return event.model_copy(update={
-            "modified": True,
-            "status_message": f"{entity.name}'s rage ends (no attack or damage)"
-        })
+        return event.with_updates(
+            status_message=f"{entity.name}'s rage ends (no attack or damage)",
+        )
 
     return None
 
@@ -152,10 +155,11 @@ def rage_armor_equip_handler(event: Event, source_entity_uuid: UUID) -> Optional
         armor = cast(Armor, BaseBlock.get(armor_event.item_uuid))
         if armor is not None and armor.type == ArmorType.HEAVY:
             entity.remove_condition("Raging", parent_event=event)
-            return event.model_copy(update={
-                "modified": True,
-                "status_message": f"{entity.name}'s rage ends (equipped heavy armor)"
-            })
+            return event.with_updates(
+                status_message=(
+                    f"{entity.name}'s rage ends (equipped heavy armor)"
+                ),
+            )
 
     return None
 
@@ -219,10 +223,9 @@ def rage_death_processor(event: Event, source_entity_uuid: UUID) -> Optional[Eve
         # without its owning Raging condition.
         entity.remove_condition("Frenzied", parent_event=event)
 
-    return event.model_copy(update={
-        "modified": True,
-        "status_message": f"{entity.name}'s rage ends (died)"
-    })
+    return event.with_updates(
+        status_message=f"{entity.name}'s rage ends (died)",
+    )
 
 
 def create_rage_death_handler(source_entity_uuid: UUID) -> EventHandler:
@@ -247,6 +250,8 @@ class Raging(BaseCondition):
         name: Condition name used for active rage state lookup and cleanup.
         description: Short rules-facing summary of the active rage state.
         rage_damage: Damage bonus supplied by the active rage state to melee attacks.
+        mindless_rage: Whether this rage purges charm and fear.
+        persistent_rage: Whether inactivity can end this rage.
     """
     name: str = Field(
         default="Raging",
@@ -363,6 +368,8 @@ class Rage(BaseAction):
         description: Short rules-facing summary of the Rage action.
         target_type: Rage always targets the acting barbarian.
         rage_damage: Damage bonus copied into the applied Raging condition.
+        mindless_rage: Whether the resulting rage purges charm and fear.
+        persistent_rage: Whether inactivity can end the resulting rage.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
     name: str = Field(default="Rage", description="Action name displayed for entering rage.")
@@ -825,6 +832,8 @@ class Frenzy(BaseAction):
         description: Short rules-facing summary of the Frenzy action.
         target_type: Frenzy always targets the acting barbarian.
         rage_damage: Damage bonus copied into the applied Raging and Frenzied conditions.
+        mindless_rage: Whether the resulting frenzy purges charm and fear.
+        persistent_rage: Whether inactivity can end the resulting frenzy.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
     name: str = Field(default="Frenzy", description="Action name displayed for entering Berserker frenzy.")

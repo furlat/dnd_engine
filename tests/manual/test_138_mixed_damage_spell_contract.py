@@ -4,14 +4,14 @@ from dnd.actions import SpellEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
 from dnd.core.gridmap import get_map
+from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
-    DamageType,
     ResistanceModifier,
     ResistanceStatus,
 )
 from dnd.entity import Entity
 from dnd.spells.evocation import IceStorm
-from dnd.utils import get_hp, has_condition
+from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,
