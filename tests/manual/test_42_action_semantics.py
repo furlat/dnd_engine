@@ -51,10 +51,13 @@ from ai.subjective.semantic_pool import SemanticContractPool
 from dnd.ai.runtime.decision_epoch import (
     _affordance_set_from_buckets,
     _build_affordance_rows_from_actions,
+    _describe_action_row,
     _display_tags,
 )
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
+    ActionSelectionParameter,
+    ActionSelectionParameterKind,
     ActionOutcomeProfile as EngineActionOutcomeProfile,
     ActionInformationOperation,
     ActionSelfSetupProfile,
@@ -111,6 +114,7 @@ def _action(
     self_setup_profile: ActionSelfSetupProfile | None = None,
     target_effect_profile: ActionTargetEffectProfile | None = None,
     world_effect_profile: ActionWorldEffectProfile | None = None,
+    selection_parameter: ActionSelectionParameter | None = None,
 ) -> AvailableActionInfo:
     """Build one discovery row without constructing a live encounter."""
     normalized_costs = costs or []
@@ -155,6 +159,7 @@ def _action(
         self_setup_profile=self_setup_profile,
         target_effect_profile=target_effect_profile,
         world_effect_profile=world_effect_profile,
+        selection_parameter=selection_parameter,
     )
 
 
@@ -320,6 +325,10 @@ def test_font_of_magic_conversions_describe_both_resource_sides() -> None:
     slot_to_points = action_semantics_for_available_action(_action(
         "Slot to SP L3",
         semantic_key="dnd.classes.sorcerer.ConvertSlotToSP",
+        selection_parameter=ActionSelectionParameter(
+            kind=ActionSelectionParameterKind.LEVEL,
+            value=3,
+        ),
         costs=[
             BaseCost(name="Bonus Action", cost_type="bonus_actions", cost=1),
             BaseCost(name="Level 3 Slot", cost_type="spell_slot_3", cost=1),
@@ -328,6 +337,10 @@ def test_font_of_magic_conversions_describe_both_resource_sides() -> None:
     points_to_slot = action_semantics_for_available_action(_action(
         "5 SP to Slot L3",
         semantic_key="dnd.classes.sorcerer.ConvertSPToSlot",
+        selection_parameter=ActionSelectionParameter(
+            kind=ActionSelectionParameterKind.LEVEL,
+            value=3,
+        ),
         costs=[
             BaseCost(name="Bonus Action", cost_type="bonus_actions", cost=1),
             BaseCost(
@@ -783,6 +796,29 @@ def test_damage_effect_identity_survives_affordance_transport_and_display_rename
     assert restored.display_name == "Localized harmless-looking label"
     assert restored.outcome_profile is not None
     assert restored.outcome_profile.effect_id == effect_id
+
+
+def test_engine_and_policy_share_one_outcome_profile_instance() -> None:
+    """Decision-epoch derivation has no cloned engine-to-AI profile model."""
+    profile = EngineActionOutcomeProfile(
+        resolution=OutcomeResolution.ATTACK_ROLL,
+        damage_rolls=(
+            EngineDamageRollProfile(
+                dice_count=1,
+                die_size=8,
+                damage_type="slashing",
+            ),
+        ),
+    )
+    source = _action(
+        "Shared Outcome",
+        semantic_key="rules.actions.shared_outcome",
+        outcome_profile=profile,
+    )
+
+    descriptor = _describe_action_row(source, {}, {})
+
+    assert descriptor.outcome_profile is profile
 
 
 def test_multi_target_affordance_rejects_undisclosed_and_invalid_allocations() -> None:

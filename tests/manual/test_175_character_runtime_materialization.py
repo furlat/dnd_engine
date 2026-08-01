@@ -17,6 +17,7 @@ from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.runtime import (
     SERVER_CONTENT_SYSTEM_RUNTIME,
 )
+from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.durable_characters import (
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
@@ -25,8 +26,10 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.equipment_types import BodyPart
 from dnd.core.gridmap import get_map
+from dnd.core.progression import MulticlassSlotRoundingPolicy
 from dnd.items.torches import Torch
 from dnd.runtime_reset import reset_engine_runtime
+from server.character_settlement import project_terminal_character_holdings
 from server.character_directory_contracts import CreateCharacterRequest
 from server.character_directory_service import CharacterDirectoryService
 from server.game_directory.contracts import PrincipalCreate, PrincipalKind
@@ -272,6 +275,91 @@ def test_every_persisted_starting_torch_is_lit(tmp_path: Path) -> None:
         for torch in torches
     )
     repository.close()
+
+
+def test_terminal_settlement_scopes_persisted_bindings_per_character(
+    tmp_path: Path,
+) -> None:
+    """Multiple deployed characters settle only their own durable items."""
+
+    first_repository, first = _persisted_premade(
+        tmp_path / "first-settlement.sqlite3",
+        display_name="First Hero",
+        premade_id="hero.fighter_l5_shield_torch",
+    )
+    second_repository, second = _persisted_premade(
+        tmp_path / "second-settlement.sqlite3",
+        display_name="Second Hero",
+        premade_id="hero.sorcerer_l5_standard_torch",
+    )
+
+    materialized = []
+    deployments = []
+    for index, snapshot in enumerate((first, second), start=1):
+        runtime_entity_uuid = uuid4()
+        materialized.append(
+            materialize_character(
+                definition=snapshot.definition.definition,
+                holdings=snapshot.holdings.holdings,
+                loadout=snapshot.loadout.loadout,
+                runtime_entity_uuid=runtime_entity_uuid,
+                display_name=snapshot.character.display_name,
+                faction="heroes",
+                position=(index, 1),
+                deployment_role=CreatureDeploymentRole(
+                    role_id=f"hosted.side_a.character_{index}",
+                ),
+                expected_ruleset_digest=(
+                    snapshot.definition.definition.ruleset_digest
+                ),
+            ),
+        )
+        deployments.append(
+            CharacterDeploymentSnapshot(
+                character_id=snapshot.character.character_id,
+                character_row_version=snapshot.character.row_version,
+                display_name=snapshot.character.display_name,
+                definition=snapshot.definition.definition,
+                holdings=snapshot.holdings.holdings,
+                loadout=snapshot.loadout.loadout,
+                expected_ruleset_digest=(
+                    snapshot.definition.definition.ruleset_digest
+                ),
+                multiclass_slot_rounding_policy=(
+                    MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
+                ),
+                permissive_multiclass_prerequisites=True,
+            ),
+        )
+
+    game_id = uuid4()
+    generation_id = uuid4()
+    evidence = tuple(
+        project_terminal_character_holdings(
+            deployment,
+            game_id=game_id,
+            generation_id=generation_id,
+            terminal_event_cursor=10,
+            terminal_combat_log_cursor=2,
+            runtime_entity_uuid=result.entity.uuid,
+        )
+        for deployment, result in zip(
+            deployments,
+            materialized,
+            strict=True,
+        )
+    )
+
+    for snapshot, row in zip((first, second), evidence, strict=True):
+        assert {
+            item.character_item_id for item in row.resulting_holdings.items
+        } == {
+            item.character_item_id
+            for item in snapshot.holdings.holdings.items
+        }
+
+    first_repository.close()
+    second_repository.close()
 
 
 def test_worker_rejects_character_from_another_content_set(

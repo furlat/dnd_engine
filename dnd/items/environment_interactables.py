@@ -12,11 +12,13 @@ from dnd.core.base_actions import (
     Cost,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase, EventQueue, SkillName
+from dnd.core.events import Event, EventPhase, SkillName
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.inventory import Inventory
+from dnd.environmental_effects import SpikeTrapGroundEffect
 from dnd.entity import Entity
+from dnd.spatial_effects import SpatialEffect
 
 
 class OpenDoorAction(BaseAction):
@@ -149,7 +151,7 @@ class DoorObject(UsableItem):
             )
         ]
 class PullLeverAction(BaseAction):
-    """Deactivate a linked trap and remove trap marker conditions from tiles."""
+    """Deactivate one linked, independently owned spike-trap effect."""
 
     name: str = Field(default="Pull Lever", description="Action name for pulling a trap lever.")
     description: str = Field(default="Deactivates a trap", description="Action description shown for trap levers.")
@@ -165,27 +167,26 @@ class PullLeverAction(BaseAction):
         default=None,
         description="UUID of the lever item this action pulls.",
     )
-    trap_handler_uuid: Optional[UUID] = Field(
+    trap_effect_uuid: Optional[UUID] = Field(
         default=None,
-        description="Spatial handler UUID removed when this lever is pulled.",
-    )
-    trap_tile_uuids: List[UUID] = Field(
-        default_factory=list,
-        description="Tile UUIDs that should lose Spike Trap markers when deactivated.",
+        description="Exact spike-trap effect UUID retired when this lever is pulled.",
     )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if not self.trap_handler_uuid:
+        if self.trap_effect_uuid is None:
             return declaration_event.cancel(status_message="No trap linked")
+        effect = SpatialEffect.get_effect(self.trap_effect_uuid)
+        if not isinstance(effect, SpikeTrapGroundEffect):
+            return declaration_event.cancel(status_message="Linked trap is unavailable")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.trap_handler_uuid:
-            EventQueue.remove_spatial_handler(self.trap_handler_uuid)
-        for tile_uuid in self.trap_tile_uuids:
-            tile = BaseBlock.get(tile_uuid)
-            if tile is not None and "Spike Trap" in tile.active_conditions:
-                tile.remove_condition("Spike Trap", parent_event=execution_event)
+        if self.trap_effect_uuid is None:
+            return execution_event.cancel(status_message="No trap linked")
+        effect_owner = SpatialEffect.get_effect(self.trap_effect_uuid)
+        if not isinstance(effect_owner, SpikeTrapGroundEffect):
+            return execution_event.cancel(status_message="Linked trap is unavailable")
+        effect_owner.retire(parent_event=execution_event)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Trap deactivated")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Lever pulled")
 
@@ -261,8 +262,9 @@ class StorageChest(UsableItem):
         """Expose contained items through the canonical item-storage capability."""
         return self.chest_inventory
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Spill all contents onto the ground at chest's position."""
+        _ = parent_event
         pos = self.position
         if pos is None:
             return
@@ -322,9 +324,14 @@ class CookAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
-        entity.health.add_temporary_hit_points(3, self.source_entity_uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message="Gained 3 temp HP")
+        entity.grant_temporary_hit_points(
+            3,
+            self.source_entity_uuid,
+            source_description="Campfire Cooking",
+            parent_event=effect.uuid,
+        )
         return effect.phase_to(
             EventPhase.COMPLETION, status_message="Cooked at campfire")
 

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
+
 from custom_ai.tactical import (
     TACTICAL_POLICY_DESCRIPTOR,
     TACTICAL_POLICY_ID,
     TacticalPolicyMemory,
     register_tactical_policy,
 )
+from dnd.ai.policies import basic as basic_policy_module
 from dnd.ai.contracts.control import (
     ActionAffordance,
     ActionCostProfile,
@@ -243,6 +246,31 @@ def test_custom_tactical_focus_is_stateful_deterministic_and_decide_is_pure() ->
     fresh.reduce_state(second_world)
     assert fresh.decide(second_world) == ExecuteIntent(
         row_id="row:attack:enemy-b"
+    )
+
+
+def test_custom_tactical_candidates_do_not_depend_on_bundled_policy_rules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Custom policy admission is independent from builtin scoring rules."""
+
+    monkeypatch.setattr(
+        basic_policy_module,
+        "BASIC_POLICY_SPEC",
+        basic_policy_module.BASIC_POLICY_SPEC.model_copy(
+            update={"rules": ()},
+        ),
+    )
+    binding = _registry().create_binding(
+        TACTICAL_POLICY_ID,
+        instrumentation=AIInstrumentation(),
+        instrumentation_context=_context("initialize"),
+    )
+    world = _world(epoch_id="epoch", enemy_a_hp=4, enemy_b_hp=8)
+    binding.reduce_state(world)
+
+    assert binding.decide(world) == ExecuteIntent(
+        row_id="row:attack:enemy-a",
     )
 
 

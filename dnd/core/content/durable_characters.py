@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import Enum
 from typing import Annotated, Literal, Self, TypeAlias
 from uuid import UUID
@@ -17,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import (
     ContentDefinitionKind,
     ContentRef,
@@ -31,14 +30,7 @@ from dnd.core.progression import CasterProgression, point_buy_cost
 
 def _canonical_sha256(payload: object) -> str:
     """Return the SHA-256 of one exact canonical JSON payload."""
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)
 
 
 def compute_item_augmentation_digest(
@@ -395,6 +387,22 @@ class AbilityScoreAllocation(BaseModel):
     intelligence: int = Field(ge=8, le=15)
     wisdom: int = Field(ge=8, le=15)
     charisma: int = Field(ge=8, le=15)
+
+    def score(self, ability: AbilityScoreName) -> int:
+        """Return one explicitly selected ability score."""
+        match ability:
+            case AbilityScoreName.STRENGTH:
+                return self.strength
+            case AbilityScoreName.DEXTERITY:
+                return self.dexterity
+            case AbilityScoreName.CONSTITUTION:
+                return self.constitution
+            case AbilityScoreName.INTELLIGENCE:
+                return self.intelligence
+            case AbilityScoreName.WISDOM:
+                return self.wisdom
+            case AbilityScoreName.CHARISMA:
+                return self.charisma
 
     @property
     def points_spent(self) -> int:

@@ -136,6 +136,7 @@ BASIC_POLICY_SPEC = PolicySpec(
         PolicyRuleSpec(
             rule_id="self_setup",
             any_tags=(
+                ActionTag.CAPABILITY_TRANSFORM,
                 ActionTag.SETUP_SELF,
                 ActionTag.DEFENSE_SELF,
                 ActionTag.SUPPORT_BUFF,
@@ -188,25 +189,6 @@ BASIC_POLICY_SPEC = PolicySpec(
                     metric=PolicyMetric.INFORMATION_VALUE,
                     weight=1.0,
                 ),
-                PolicyScoreTerm(metric=PolicyMetric.RISK, weight=-1.0),
-            ),
-        ),
-        PolicyRuleSpec(
-            rule_id="affordable_fallback",
-            forbidden_tags=(
-                ActionTag.TURN_END,
-                ActionTag.SUPPORT_HEAL,
-                ActionTag.DAMAGE_SINGLE_TARGET,
-                ActionTag.DAMAGE_MULTI_TARGET,
-                ActionTag.DAMAGE_AREA,
-                ActionTag.ATTACK_WEAPON,
-                ActionTag.ATTACK_SPELL,
-                ActionTag.CONTROL_HARD,
-                ActionTag.CONTROL_SOFT,
-            ),
-            score_terms=(
-                PolicyScoreTerm(metric=PolicyMetric.PROGRESS, weight=1.0),
-                PolicyScoreTerm(metric=PolicyMetric.RESOURCE_COST, weight=-1.0),
                 PolicyScoreTerm(metric=PolicyMetric.RISK, weight=-1.0),
             ),
         ),
@@ -405,7 +387,24 @@ def build_basic_candidates(
     state: SubjectiveWorldState,
     memory: BasicPolicyMemory | StatelessPolicyMemory,
 ) -> tuple[PolicyCandidate[PolicyIntent], ...]:
-    """Derive bounded policy candidates from one canonical subjective epoch."""
+    """Derive candidates admitted by the bundled policy specification."""
+
+    return tuple(
+        candidate
+        for candidate in build_policy_candidates(state, memory)
+        if any(
+            rule.matches(candidate)
+            for rule in BASIC_POLICY_SPEC.rules
+        )
+    )
+
+
+def build_policy_candidates(
+    state: SubjectiveWorldState,
+    memory: BasicPolicyMemory | StatelessPolicyMemory,
+) -> tuple[PolicyCandidate[PolicyIntent], ...]:
+    """Derive neutral bounded candidates from one subjective epoch."""
+
     epoch = state.current_epoch
     if epoch is None or epoch.actor_uuid != state.session.active_entity_uuid:
         return ()
@@ -434,21 +433,18 @@ def build_basic_candidates(
             tags=tags,
         ):
             continue
-        if not _has_positive_policy_utility(tags, metrics):
-            continue
-        candidates.append(
-            PolicyCandidate(
-                candidate_id=row.row_id,
-                decision=ExecuteIntent(row_id=row.row_id, prefer_safe=True),
-                semantic_tags=tags,
-                metrics=metrics,
-                replay_key=(semantics.semantic_id, row.semantic_key, row.row_id),
-                affordable=(
-                    row.can_afford
-                    and row.cost.affordability != "unaffordable"
-                ),
-            )
+        candidate: PolicyCandidate[PolicyIntent] = PolicyCandidate(
+            candidate_id=row.row_id,
+            decision=ExecuteIntent(row_id=row.row_id, prefer_safe=True),
+            semantic_tags=tags,
+            metrics=metrics,
+            replay_key=(semantics.semantic_id, row.semantic_key, row.row_id),
+            affordable=(
+                row.can_afford
+                and row.cost.affordability != "unaffordable"
+            ),
         )
+        candidates.append(candidate)
     return tuple(candidates)
 
 
@@ -786,62 +782,6 @@ def _candidate_suppressed(
             for position in destinations
         ):
             return True
-    return False
-
-
-def _has_positive_policy_utility(
-    tags: frozenset[ActionTag],
-    metrics: tuple[PolicyMetricValue, ...],
-) -> bool:
-    """Require typed positive utility before the permissive fallback rule."""
-    values = {
-        metric.metric: metric.value
-        for metric in metrics
-    }
-
-    def positive(*metric_names: PolicyMetric) -> bool:
-        return any(values.get(metric_name, 0.0) > 0.0 for metric_name in metric_names)
-
-    if ActionTag.SUPPORT_HEAL in tags and positive(
-        PolicyMetric.URGENCY,
-        PolicyMetric.EXPECTED_HEALING,
-    ):
-        return True
-    if tags.intersection(
-        {
-            ActionTag.DAMAGE_AREA,
-            ActionTag.DAMAGE_MULTI_TARGET,
-            ActionTag.DAMAGE_SINGLE_TARGET,
-        }
-    ) and positive(PolicyMetric.EXPECTED_DAMAGE):
-        return True
-    if tags.intersection(
-        {ActionTag.CONTROL_HARD, ActionTag.CONTROL_SOFT}
-    ) and positive(PolicyMetric.CONTROL_VALUE):
-        return True
-    if tags.intersection(
-        {
-            ActionTag.CAPABILITY_TRANSFORM,
-            ActionTag.DEFENSE_SELF,
-            ActionTag.SETUP_SELF,
-            ActionTag.SUPPORT_BUFF,
-        }
-    ) and positive(PolicyMetric.DEFENSE_VALUE):
-        return True
-    if tags.intersection(
-        {
-            ActionTag.INFORMATION_EXPLORE,
-            ActionTag.INFORMATION_REVEAL,
-            ActionTag.INTERACTION_DOOR_OPEN,
-            ActionTag.INTERACTION_HAZARD_DEACTIVATE,
-            ActionTag.MOVEMENT_TELEPORT,
-            ActionTag.MOVEMENT_VOLUNTARY,
-        }
-    ) and positive(
-        PolicyMetric.INFORMATION_VALUE,
-        PolicyMetric.PROGRESS,
-    ):
-        return True
     return False
 
 

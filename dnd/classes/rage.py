@@ -5,14 +5,15 @@ Contains all rage/frenzy related code:
 - Rage maintenance handlers and processors
 - Raging condition
 - Rage and EndRage actions
-- RageFeature condition
 - Frenzy system (Berserker path)
+
+Permanent Rage/Frenzy ownership is installed by the character composer.
 """
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, ActionCategory
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -30,11 +31,9 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.blocks.equipment import ArmorEquipEvent, Armor
-from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
-    entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
     Attack, AttackEvent, build_weapon_attack_outcome_profile,
     create_weapon_attack_declaration_event,
@@ -413,21 +412,6 @@ class Rage(BaseAction):
             )
         ]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        """Create the declaration event for Rage."""
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def validate_requirements_for_discovery(self) -> bool:
         """Check non-cost prerequisites for exposing Rage as executable."""
         entity = Entity.get(self.source_entity_uuid)
@@ -477,11 +461,6 @@ class Rage(BaseAction):
             status_message=f"{entity.name} enters a rage!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply the costs (consume bonus action and rage resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class EndRage(BaseAction):
     """Action that voluntarily ends the actor's active rage.
 
@@ -517,21 +496,6 @@ class EndRage(BaseAction):
             )
         ]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        """Create the declaration event for End Rage."""
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         """Validate End Rage can be used."""
         entity = Entity.get(self.source_entity_uuid)
@@ -560,91 +524,6 @@ class EndRage(BaseAction):
             status_message=f"{entity.name}'s rage ends voluntarily"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply the costs (consume bonus action)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class RageFeature(BaseCondition):
-    """Barbarian feature that grants rage resources and actions.
-
-    Attributes:
-        name: Feature condition name for Barbarian rage.
-        description: Short rules-facing summary of the Rage feature.
-        rage_uses: Maximum rage resource uses granted by the feature.
-        rage_damage: Rage damage bonus wired into registered Rage actions.
-    """
-    name: str = Field(default="Rage Feature", description="Feature condition name for Barbarian rage.")
-    description: str = Field(
-        default="Can enter a primal rage as a bonus action",
-        description="Short rules-facing summary of the Rage feature.",
-    )
-    rage_uses: int = Field(
-        default=2,
-        description="Maximum rage resource uses granted by the feature.",
-    )
-    rage_damage: int = Field(
-        default=2,
-        description="Rage damage bonus wired into registered Rage actions.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        recharge = RechargeType.LONG_REST if self.rage_uses < 999 else RechargeType.NEVER
-        target.action_economy.add_resource(
-            name="rage",
-            maximum=self.rage_uses,
-            recharge_type=recharge
-        )
-
-        rage_action = Rage(
-            source_entity_uuid=target.uuid,
-            rage_damage=self.rage_damage,
-            template=True
-        )
-        target.register_action(rage_action)
-
-        end_rage_action = EndRage(
-            source_entity_uuid=target.uuid,
-            template=True
-        )
-        target.register_action(end_rage_action)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Rage ({self.rage_uses} uses, +{self.rage_damage} damage) to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up resource and action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("rage")
-            target.unregister_action("Rage")
-            target.unregister_action("End Rage")
-
-            if "Raging" in target.active_conditions:
-                target.remove_condition("Raging", parent_event=event)
-
-        return super()._remove(event)
 
 
 class Frenzied(BaseCondition):
@@ -690,7 +569,7 @@ class Frenzied(BaseCondition):
             source_entity_uuid=target.uuid,
             template=True
         )
-        target.register_action(frenzied_strike)
+        target.register_condition_action(self, frenzied_strike)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -698,15 +577,6 @@ class Frenzied(BaseCondition):
         )
 
         return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up FrenziedStrike action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.unregister_action("Frenzied Strike")
-
-        return super()._remove(event)
-
 
 class FrenziedStrike(BaseAction):
     """Bonus-action melee attack available during Berserker frenzy.
@@ -739,6 +609,10 @@ class FrenziedStrike(BaseAction):
         default=ActionCategory.ATTACK,
         description="Marks Frenzied Strike as an attack action for action discovery and reactions.",
     )
+
+    def get_discovery_weapon_slot(self) -> Optional[WeaponSlot]:
+        """Return the equipped slot used by this frenzied strike."""
+        return self.weapon_slot
 
     costs: List[Cost] = Field(
         default_factory=list,
@@ -819,11 +693,6 @@ class FrenziedStrike(BaseAction):
         attack_event = cast(AttackEvent, execution_event)
         return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply bonus action cost."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class Frenzy(BaseAction):
     """Action that enters a Berserker frenzy as a bonus action.
 
@@ -877,21 +746,6 @@ class Frenzy(BaseAction):
             )
         ]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        """Create the declaration event for Frenzy."""
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -934,68 +788,3 @@ class Frenzy(BaseAction):
             EventPhase.COMPLETION,
             status_message=f"{entity.name} enters a frenzy!"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class FrenzyFeature(BaseCondition):
-    """Berserker feature that grants the Frenzy action.
-
-    Attributes:
-        name: Feature condition name for Berserker Frenzy.
-        description: Short rules-facing summary of the Frenzy feature.
-        rage_damage: Rage damage bonus wired into registered Frenzy actions.
-    """
-    name: str = Field(default="Frenzy Feature", description="Feature condition name for Berserker Frenzy.")
-    description: str = Field(
-        default="Can enter a frenzied rage for bonus action attacks",
-        description="Short rules-facing summary of the Frenzy feature.",
-    )
-    rage_damage: int = Field(
-        default=2,
-        description="Rage damage bonus wired into registered Frenzy actions.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        frenzy_action = Frenzy(
-            source_entity_uuid=target.uuid,
-            rage_damage=self.rage_damage,
-            template=True
-        )
-        target.register_action(frenzy_action)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Frenzy to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up Frenzy action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.unregister_action("Frenzy")
-
-            if "Frenzied" in target.active_conditions:
-                target.remove_condition("Frenzied", parent_event=event)
-
-        return super()._remove(event)

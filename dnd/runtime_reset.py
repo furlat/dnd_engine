@@ -13,6 +13,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.spatial_effects import SpatialEffect
 
 
 def reset_engine_runtime(
@@ -49,6 +50,7 @@ def reset_engine_runtime(
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
+    SpatialEffect._effect_registry.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()

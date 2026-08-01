@@ -17,6 +17,9 @@ from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.dependencies import (
     ContentDependency,
@@ -47,6 +50,19 @@ from dnd.core.content.registration import (
     environment_object_factory,
     get_content_declaration,
 )
+from dnd.core.creature_types import DamageType
+from dnd.core.events import (
+    Event,
+    EventPhase,
+    EventQueue,
+    SpatialEffectInteractionEvent,
+    TakeDamageEvent,
+)
+from dnd.core.item_types import ItemBlockingChannel, ItemDirection
+from dnd.core.spatial_effect_types import (
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
+)
 from dnd.items.environment import (
     CloseDirectionalDoorAction,
     DIRECTIONAL_CHANNELS,
@@ -74,6 +90,7 @@ from dnd.items.torches import (
     IgniteWallTorchAction,
     WallTorch,
 )
+from dnd.spatial_effect_content import OIL_SURFACE_RECIPE
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_NAME
 from dnd.spells.evocation import Fireball, MagicMissile
 
@@ -99,10 +116,10 @@ class DirectionalWallParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     display_name: str = Field(default="Directional Wall", min_length=1)
-    blocked_directions: tuple[str, ...] = Field(
+    blocked_directions: tuple[ItemDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
     )
-    blocked_channels: tuple[str, ...] = Field(
+    blocked_channels: tuple[ItemBlockingChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
     )
 
@@ -460,6 +477,60 @@ def _build_blocker(
     )
 
 
+class OilBarrel(BaseItem):
+    """Destructible authored container that spills exact oil material."""
+
+    def _on_destroy(self, parent_event: Event | None) -> None:
+        """Spill oil, then let accepted fire damage ignite that material.
+
+        The barrel never creates fire directly.  It creates the oil material
+        it contains, and a typed child interaction lets the frozen material
+        transition table decide whether that oil becomes fire.
+        """
+        spill_position = self.get_position()
+        if spill_position is None:
+            return
+        if parent_event is None:
+            raise ValueError("Oil Barrel destruction requires a causal event")
+
+        oil = materialize_spatial_effect(
+            OIL_SURFACE_RECIPE,
+            parent_event.source_entity_uuid,
+            position=spill_position,
+            faction=None,
+        )
+        oil.install_default_controller(
+            positions={spill_position},
+            duration_rounds=None,
+            parent_event=parent_event,
+        )
+
+        if (
+            not isinstance(parent_event, TakeDamageEvent)
+            or not any(
+                damage.damage_type is DamageType.FIRE
+                for damage in parent_event.damages
+            )
+        ):
+            return
+
+        interaction = SpatialEffectInteractionEvent(
+            source_entity_uuid=parent_event.source_entity_uuid,
+            source_entity_name=parent_event.source_entity_name,
+            target_entity_uuid=oil.uuid,
+            operation=SpatialEffectInteractionOperation.IGNITE,
+            positions=(spill_position,),
+            intensity=SpatialEffectInteractionIntensity.STRONG,
+            damage_type=DamageType.FIRE,
+            source_object_uuid=self.uuid,
+            source_content_ref=self.content_ref,
+            parent_event=parent_event.uuid,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        EventQueue.publish_lifecycle(interaction)
+
+
 @environment_object_factory(
     pack_id="content.neurodragon",
     content_id="environment.blocker.crate",
@@ -572,19 +643,34 @@ def _build_barricade(
     ),
     provenance=_provenance("Oil Barrel"),
     item_definition=_ENVIRONMENT_DEFINITION,
+    dependencies=(
+        ContentDependency(
+            relation=ContentDependencyRelation.CREATES_SPATIAL_EFFECT,
+            target_ref=OIL_SURFACE_RECIPE.ref,
+            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
+            notes="Destruction spills the barrel's authenticated oil material.",
+        ),
+    ),
 )
 def _build_oil_barrel(
     raw_context: object,
     parameters: EmptyEnvironmentParameters,
-) -> BaseItem:
+) -> OilBarrel:
     _ = parameters
-    return _build_blocker(
-        raw_context,
+    context = ItemBuildContext.model_validate(raw_context)
+    return OilBarrel(
+        source_entity_uuid=context.source_entity_uuid,
+        content_ref=context.requested_ref,
         name="Oil Barrel",
-        hit_points=12,
+        is_pickable=False,
+        is_targetable=True,
+        health=BaseItem.create_item_health(
+            context.source_entity_uuid,
+            12,
+        ),
         map_char="O",
         blocks_movement=True,
-        blocks_vision=False,
+        blocks_vision_field=False,
     )
 
 
@@ -786,8 +872,8 @@ FIREBALL_CANNON_REF = FIREBALL_CANNON_DECLARATION.ref
 def directional_wall_recipe(
     *,
     display_name: str = "Directional Wall",
-    blocked_directions: tuple[str, ...] = DIRECTIONS,
-    blocked_channels: tuple[str, ...] = DIRECTIONAL_CHANNELS,
+    blocked_directions: tuple[ItemDirection, ...] = DIRECTIONS,
+    blocked_channels: tuple[ItemBlockingChannel, ...] = DIRECTIONAL_CHANNELS,
 ) -> ContentRecipe:
     parameters = DirectionalWallParameters(
         display_name=display_name,
@@ -803,8 +889,8 @@ def directional_wall_recipe(
 def directional_door_recipe(
     *,
     display_name: str = "Directional Door",
-    blocked_directions: tuple[str, ...] = DIRECTIONS,
-    blocked_channels: tuple[str, ...] = DIRECTIONAL_CHANNELS,
+    blocked_directions: tuple[ItemDirection, ...] = DIRECTIONS,
+    blocked_channels: tuple[ItemBlockingChannel, ...] = DIRECTIONAL_CHANNELS,
     is_open: bool = False,
 ) -> ContentRecipe:
     parameters = DirectionalDoorParameters(

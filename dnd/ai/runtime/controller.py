@@ -7,15 +7,11 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.ai.contracts.decision import PolicyIntent
-from dnd.ai.contracts.observation import SubjectiveWorldState
 from dnd.ai.instrumentation import AIInstrumentation
 from dnd.ai.policies.basic import (
     BASIC_POLICY_ID,
     CanonicalPolicyRegistry,
-    register_basic_policy,
 )
-from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.assignment import NativeAIAssignment
 from dnd.controller import (
     Controller,
@@ -46,10 +42,7 @@ class NativeAIController(Controller):
     policy_id: str = Field(default=BASIC_POLICY_ID)
     maximum_decisions_per_turn: int | None = Field(default=None, ge=1)
 
-    _policy_registry: PolicyRegistry[
-        SubjectiveWorldState,
-        PolicyIntent,
-    ] | None = PrivateAttr(default=None)
+    _policy_registry: CanonicalPolicyRegistry | None = PrivateAttr(default=None)
     _instrumentation: AIInstrumentation | None = PrivateAttr(default=None)
     _assignment: NativeAIAssignment | None = PrivateAttr(default=None)
 
@@ -61,8 +54,8 @@ class NativeAIController(Controller):
         game_id: str,
         assignment_id: str,
         controlled_entity_uuids: tuple[UUID, ...],
+        registry: CanonicalPolicyRegistry,
         policy_id: str = BASIC_POLICY_ID,
-        registry: CanonicalPolicyRegistry | None = None,
         instrumentation: AIInstrumentation | None = None,
         maximum_decisions_per_turn: int | None = None,
     ) -> "NativeAIController":
@@ -75,22 +68,24 @@ class NativeAIController(Controller):
             policy_id=policy_id,
             maximum_decisions_per_turn=maximum_decisions_per_turn,
         )
-        controller._policy_registry = registry or _default_policy_registry()
+        controller._policy_registry = registry
         controller._instrumentation = instrumentation or AIInstrumentation()
         controller._assignment = controller._new_assignment()
         return controller
 
     @property
     def assignment(self) -> NativeAIAssignment:
-        """Return the retained assignment, reconstructing only if necessary."""
+        """Return the retained assignment created by explicit composition."""
         return self._ensure_assignment()
 
     @property
     def instrumentation(self) -> AIInstrumentation:
         """Return core-owned instrumentation used by this assignment."""
         self._ensure_assignment()
-        assert self._instrumentation is not None
-        return self._instrumentation
+        instrumentation = self._instrumentation
+        if instrumentation is None:
+            raise RuntimeError("native AI instrumentation is not initialized")
+        return instrumentation
 
     def start(self, entities: list[Entity]) -> None:
         """Start assignment ownership explicitly and idempotently."""
@@ -125,13 +120,13 @@ class NativeAIController(Controller):
         return True
 
     def _ensure_assignment(self) -> NativeAIAssignment:
-        if self._assignment is None:
-            if self._policy_registry is None:
-                self._policy_registry = _default_policy_registry()
-            if self._instrumentation is None:
-                self._instrumentation = AIInstrumentation()
-            self._assignment = self._new_assignment()
-        return self._assignment
+        assignment = self._assignment
+        if assignment is None:
+            raise RuntimeError(
+                "native AI controller must be created through explicit "
+                "policy composition",
+            )
+        return assignment
 
     def _new_assignment(self) -> NativeAIAssignment:
         if self._policy_registry is None or self._instrumentation is None:
@@ -145,9 +140,3 @@ class NativeAIController(Controller):
             instrumentation=self._instrumentation,
             maximum_decisions_per_turn=self.maximum_decisions_per_turn,
         )
-
-
-def _default_policy_registry() -> CanonicalPolicyRegistry:
-    registry: CanonicalPolicyRegistry = PolicyRegistry()
-    register_basic_policy(registry)
-    return registry

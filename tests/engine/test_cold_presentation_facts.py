@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from dnd.actions import SpellEvent
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
+from dnd.blocks.base_item import UsableItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -259,6 +260,7 @@ def test_drink_event_carries_immutable_declaration_time_item_state() -> None:
         user_uuid,
         origin=ItemRuntimeOrigin.STARTER,
     )
+    assert isinstance(potion, UsableItem)
     action = potion.get_use_actions(user_uuid)[0]
 
     declaration = action._create_declaration_event(use_register=False)

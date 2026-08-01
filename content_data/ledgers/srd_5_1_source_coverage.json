@@ -10114,15 +10114,23 @@
       "source_name": "Bestow Curse"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "spell.evards_black_tentacles",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "spell",
       "dependency_refs": [],
-      "implementation_status": "missing",
-      "legacy_locators": [],
+      "implementation_status": "playable",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:EvardsBlackTentacles"
+      ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "Source declaration: 4th-level conjuration.",
+      "mechanical_notes": "Source declaration: 4th-level conjuration. The spell is in the live legacy spell catalog; playable does not claim every edge-case interpretation is complete.",
       "section": "spells",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), p. 121, Spell Descriptions: Black Tentacles",
       "source_entry_id": "srd_5_1.spell.black_tentacles",
@@ -11418,15 +11426,23 @@
       "source_name": "Enlarge/Reduce"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "spell.entangle",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "spell",
       "dependency_refs": [],
-      "implementation_status": "missing",
-      "legacy_locators": [],
+      "implementation_status": "playable",
+      "legacy_locators": [
+        "dnd/spells/conjuration.py:Entangle"
+      ],
       "measuring_test_nodeids": [
         "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
       ],
-      "mechanical_notes": "Source declaration: 1st-level conjuration.",
+      "mechanical_notes": "Source declaration: 1st-level conjuration. The spell is in the live legacy spell catalog; playable does not claim every edge-case interpretation is complete.",
       "section": "spells",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), p. 140, Spell Descriptions: Entangle",
       "source_entry_id": "srd_5_1.spell.entangle",

@@ -7,8 +7,6 @@ created merely to hold cold character structure.
 """
 
 from collections.abc import Callable
-from uuid import UUID
-
 from dnd.blocks.action_economy import (
     RechargeType,
     ResourceCapacityPolicy,
@@ -16,6 +14,22 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.equipment import ArmorClassFormulaCandidate
 from dnd.classes import barbarian, rage
 from dnd.classes.barbarian_progression_definitions import BARBARIAN_CLASS_REF
+from dnd.classes.permanent_feature_definitions import (
+    BARBARIAN_BRUTAL_CRITICAL_DECLARATION,
+    BARBARIAN_DANGER_SENSE_DECLARATION,
+    BARBARIAN_FAST_MOVEMENT_DECLARATION,
+    BARBARIAN_FERAL_INSTINCT_DECLARATION,
+    BARBARIAN_FRENZY_DECLARATION,
+    BARBARIAN_INDOMITABLE_MIGHT_DECLARATION,
+    BARBARIAN_INTIMIDATING_PRESENCE_DECLARATION,
+    BARBARIAN_MINDLESS_RAGE_DECLARATION,
+    BARBARIAN_PERSISTENT_RAGE_DECLARATION,
+    BARBARIAN_PRIMAL_CHAMPION_DECLARATION,
+    BARBARIAN_RAGE_DECLARATION,
+    BARBARIAN_RECKLESS_ATTACK_DECLARATION,
+    BARBARIAN_RELENTLESS_RAGE_DECLARATION,
+    BARBARIAN_RETALIATION_DECLARATION,
+)
 from dnd.classes.structural_feature_definitions import (
     UNARMORED_DEFENSE_DECLARATION,
 )
@@ -26,9 +40,12 @@ from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
 from dnd.content_system.character_grant_applier_runtime import (
+    CharacterGrantInstallation,
     character_grant_id,
     grant_receipt,
     install_bound_handler,
+    install_contextual_value_modifier,
+    install_static_value_modifier,
     is_first_grant_for_ref,
     register_bound_action,
     require_grant_ref,
@@ -51,52 +68,25 @@ from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
     ContextualAdvantageModifier,
-    ContextualNumericalModifier,
-    NumericalModifier,
 )
-from dnd.core.values import ModifiableValue
 
 
-RAGE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[rage.RageFeature].ref
-RECKLESS_ATTACK_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.RecklessAttackFeature
-].ref
-DANGER_SENSE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.DangerSense
-].ref
-FAST_MOVEMENT_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.FastMovement
-].ref
-MINDLESS_RAGE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.MindlessRage
-].ref
-FERAL_INSTINCT_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.FeralInstinct
-].ref
-BRUTAL_CRITICAL_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.BrutalCritical
-].ref
-RELENTLESS_RAGE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.RelentlessRage
-].ref
-PERSISTENT_RAGE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.PersistentRage
-].ref
-INDOMITABLE_MIGHT_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.IndomitableMight
-].ref
-PRIMAL_CHAMPION_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.PrimalChampion
-].ref
-FRENZY_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    rage.FrenzyFeature
-].ref
-INTIMIDATING_PRESENCE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.IntimidatingPresenceFeature
-].ref
-RETALIATION_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    barbarian.Retaliation
-].ref
+RAGE_REF = BARBARIAN_RAGE_DECLARATION.ref
+RECKLESS_ATTACK_REF = BARBARIAN_RECKLESS_ATTACK_DECLARATION.ref
+DANGER_SENSE_REF = BARBARIAN_DANGER_SENSE_DECLARATION.ref
+FAST_MOVEMENT_REF = BARBARIAN_FAST_MOVEMENT_DECLARATION.ref
+MINDLESS_RAGE_REF = BARBARIAN_MINDLESS_RAGE_DECLARATION.ref
+FERAL_INSTINCT_REF = BARBARIAN_FERAL_INSTINCT_DECLARATION.ref
+BRUTAL_CRITICAL_REF = BARBARIAN_BRUTAL_CRITICAL_DECLARATION.ref
+RELENTLESS_RAGE_REF = BARBARIAN_RELENTLESS_RAGE_DECLARATION.ref
+PERSISTENT_RAGE_REF = BARBARIAN_PERSISTENT_RAGE_DECLARATION.ref
+INDOMITABLE_MIGHT_REF = BARBARIAN_INDOMITABLE_MIGHT_DECLARATION.ref
+PRIMAL_CHAMPION_REF = BARBARIAN_PRIMAL_CHAMPION_DECLARATION.ref
+FRENZY_REF = BARBARIAN_FRENZY_DECLARATION.ref
+INTIMIDATING_PRESENCE_REF = (
+    BARBARIAN_INTIMIDATING_PRESENCE_DECLARATION.ref
+)
+RETALIATION_REF = BARBARIAN_RETALIATION_DECLARATION.ref
 
 RAGING_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[rage.Raging].ref
 FRENZIED_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[rage.Frenzied].ref
@@ -118,32 +108,6 @@ def _preview_has(
     return any(
         ref == content_ref
         for ref in context.preview.automatic_grant_refs
-    )
-
-
-def _install_static_value(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    value: ModifiableValue,
-    amount: int,
-    name: str,
-) -> CharacterGrantReceipt:
-    modifier = NumericalModifier.create(
-        source_entity_uuid=context.entity.uuid,
-        name=name,
-        value=amount,
-    )
-    value.self_static.add_value_modifier(modifier)
-    return grant_receipt(
-        context,
-        entry,
-        modifier_handles=(
-            ModifierHandle(
-                value_uuid=value.uuid,
-                modifier_uuid=modifier.uuid,
-            ),
-        ),
     )
 
 
@@ -192,16 +156,14 @@ def _apply_rage(
     rage_uses, _rage_damage = _RAGE_ADVANCEMENT[class_level]
     grant_id = character_grant_id(context, entry)
     entity = context.entity
-    entity.action_economy.add_resource_contribution(
-        "rage",
-        grant_id,
-        maximum=rage_uses,
-        recharge_type=RechargeType.LONG_REST,
-        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
-    )
-
-    action_uuids: tuple[UUID, ...] = ()
-    try:
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
+            "rage",
+            grant_id,
+            maximum=rage_uses,
+            recharge_type=RechargeType.LONG_REST,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+        )
         if is_first_grant_for_ref(context, entry):
             actions: list[BaseAction] = [
                 rage.EndRage(
@@ -240,29 +202,13 @@ def _apply_rage(
                         template=True,
                     ),
                 )
-            installed: list[UUID] = []
-            try:
-                for action in actions:
-                    register_bound_action(
-                        context,
-                        provider_ref=RAGE_REF,
-                        action=action,
-                    )
-                    installed.append(action.uuid)
-            except Exception:
-                for action_uuid in reversed(installed):
-                    entity.unregister_action_by_uuid(action_uuid)
-                raise
-            action_uuids = tuple(installed)
-    except Exception:
-        entity.action_economy.remove_resource_contribution("rage", grant_id)
-        raise
+            installation.add_bound_actions(actions)
 
     return grant_receipt(
         context,
         entry,
-        action_uuids=action_uuids,
-        resource_contribution_ids=(("rage", grant_id),),
+        action_uuids=installation.action_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
         transient_condition_refs_to_remove=(RAGING_REF, FRENZIED_REF),
     )
 
@@ -321,24 +267,12 @@ def _apply_fast_movement(
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, FAST_MOVEMENT_REF)
-    value = context.entity.action_economy.movement
-    modifier = ContextualNumericalModifier(
-        name="Fast Movement",
-        source_entity_uuid=context.entity.uuid,
-        target_entity_uuid=context.entity.uuid,
-        callable=barbarian.fast_movement_check,
-    )
-    value.self_contextual.add_value_modifier(modifier)
-    return grant_receipt(
+    return install_contextual_value_modifier(
         context,
         entry,
-        modifier_handles=(
-            ModifierHandle(
-                value_uuid=value.uuid,
-                modifier_uuid=modifier.uuid,
-                channel=ModifierHandleChannel.SELF_CONTEXTUAL,
-            ),
-        ),
+        value=context.entity.action_economy.movement,
+        callable_=barbarian.fast_movement_check,
+        name="Fast Movement",
     )
 
 
@@ -410,7 +344,7 @@ def _apply_brutal_critical(
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, BRUTAL_CRITICAL_REF)
-    return _install_static_value(
+    return install_static_value_modifier(
         context,
         entry,
         value=context.entity.equipment.crit_extra_dice_melee,
@@ -426,13 +360,6 @@ def _apply_relentless_rage(
     require_grant_ref(entry, RELENTLESS_RAGE_REF)
     entity = context.entity
     grant_id = character_grant_id(context, entry)
-    entity.action_economy.add_resource_contribution(
-        "relentless_rage",
-        grant_id,
-        maximum=999,
-        recharge_type=RechargeType.SHORT_REST,
-        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
-    )
     handler = EventHandler(
         name="Relentless Rage",
         source_entity_uuid=entity.uuid,
@@ -444,24 +371,20 @@ def _apply_relentless_rage(
         ],
         event_processor=barbarian.relentless_rage_processor,
     )
-    try:
-        context.runtime.bind_granted_behavior(
-            handler,
-            provider_ref=RELENTLESS_RAGE_REF,
-            runtime_owner_uuid=entity.uuid,
-        )
-        entity.add_event_handler(handler)
-    except Exception:
-        entity.action_economy.remove_resource_contribution(
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
             "relentless_rage",
             grant_id,
+            maximum=999,
+            recharge_type=RechargeType.SHORT_REST,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
         )
-        raise
+        installation.add_bound_handler(handler)
     return grant_receipt(
         context,
         entry,
-        handler_uuids=(handler.uuid,),
-        resource_contribution_ids=(("relentless_rage", grant_id),),
+        handler_uuids=installation.handler_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 
@@ -495,34 +418,20 @@ def _apply_primal_champion(
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, PRIMAL_CHAMPION_REF)
     entity = context.entity
-    installed: list[tuple[ModifiableValue, NumericalModifier]] = []
-    handles: list[ModifierHandle] = []
-    try:
+    with CharacterGrantInstallation(context, entry) as installation:
         for name, value in (
             ("Primal Champion (STR)", entity.ability_scores.strength.ability_score),
             ("Primal Champion (CON)", entity.ability_scores.constitution.ability_score),
         ):
-            modifier = NumericalModifier.create(
-                source_entity_uuid=entity.uuid,
+            installation.add_static_value_modifier(
+                value=value,
                 name=name,
-                value=4,
+                amount=4,
             )
-            value.self_static.add_value_modifier(modifier)
-            installed.append((value, modifier))
-            handles.append(
-                ModifierHandle(
-                    value_uuid=value.uuid,
-                    modifier_uuid=modifier.uuid,
-                ),
-            )
-    except Exception:
-        for value, modifier in reversed(installed):
-            value.self_static.remove_value_modifier(modifier.uuid)
-        raise
     return grant_receipt(
         context,
         entry,
-        modifier_handles=tuple(handles),
+        modifier_handles=installation.modifier_handles,
     )
 
 
@@ -570,23 +479,12 @@ def _apply_intimidating_presence(
             template=True,
         ),
     )
-    installed: list[UUID] = []
-    try:
-        for action in actions:
-            register_bound_action(
-                context,
-                provider_ref=INTIMIDATING_PRESENCE_REF,
-                action=action,
-            )
-            installed.append(action.uuid)
-    except Exception:
-        for action_uuid in reversed(installed):
-            context.entity.unregister_action_by_uuid(action_uuid)
-        raise
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_bound_actions(actions)
     return grant_receipt(
         context,
         entry,
-        action_uuids=tuple(installed),
+        action_uuids=installation.action_uuids,
     )
 
 

@@ -7,7 +7,7 @@ gameplay state, while character composition is removed through its receipt.
 
 from collections.abc import Callable
 from typing import cast
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
@@ -28,6 +28,11 @@ from dnd.content_system.character_build_validation import (
 )
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
+)
+from dnd.content_system.character_grant_applier_runtime import (
+    character_grant_id,
+    grant_receipt,
+    require_grant_ref,
 )
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
@@ -141,11 +146,8 @@ def _apply_remarkable_athlete(
 ) -> CharacterGrantReceipt:
     """Install Champion's structural check and jump contributions."""
     entity = context.entity
-    if entry.content_ref != REMARKABLE_ATHLETE_DECLARATION.ref:
-        raise ValueError(
-            "Remarkable Athlete applier received a different content ref",
-        )
-    source_id = uuid5(context.character_id, entry.grant_token)
+    require_grant_ref(entry, REMARKABLE_ATHLETE_DECLARATION.ref)
+    source_id = character_grant_id(context, entry)
     proficiency_handles: list[ProficiencyHandle] = []
     modifier_handles: list[ModifierHandle] = []
     try:
@@ -200,10 +202,9 @@ def _apply_remarkable_athlete(
             )
         raise
 
-    return CharacterGrantReceipt(
-        grant_id=source_id,
-        grant_token=entry.grant_token,
-        definition_ref=entry.content_ref,
+    return grant_receipt(
+        context,
+        entry,
         modifier_handles=tuple(modifier_handles),
         proficiency_handles=tuple(proficiency_handles),
     )

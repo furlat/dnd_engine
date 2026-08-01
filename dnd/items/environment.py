@@ -10,12 +10,22 @@ from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import EventPhase
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import (
+    ItemBlockingChannel,
+    ItemDirection,
+    ItemDirectionalStructureState,
+)
 
-DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
-DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
+DIRECTIONS: Tuple[ItemDirection, ...] = ("north", "south", "east", "west")
+DIRECTIONAL_CHANNELS: Tuple[ItemBlockingChannel, ...] = (
+    "movement",
+    "vision",
+    "light",
+    "propagation",
+)
 
 
-def _validate_directions(directions: Tuple[str, ...]) -> None:
+def _validate_directions(directions: Tuple[ItemDirection, ...]) -> None:
     """Validate directional blocker names.
 
     Args:
@@ -29,7 +39,7 @@ def _validate_directions(directions: Tuple[str, ...]) -> None:
             raise ValueError(f"Unsupported direction: {direction}")
 
 
-def _validate_channels(channels: Tuple[str, ...]) -> None:
+def _validate_channels(channels: Tuple[ItemBlockingChannel, ...]) -> None:
     """Validate directional blocking channel names.
 
     Args:
@@ -77,11 +87,11 @@ class DirectionalWall(BaseItem):
         description="Whether object action discovery includes the wall.",
     )
 
-    blocked_directions: Tuple[str, ...] = Field(
+    blocked_directions: Tuple[ItemDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
         description="Cardinal directions blocked from the wall tile.",
     )
-    blocked_channels: Tuple[str, ...] = Field(
+    blocked_channels: Tuple[ItemBlockingChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )
@@ -98,6 +108,15 @@ class DirectionalWall(BaseItem):
         for channel in self.blocked_channels:
             for direction in self.blocked_directions:
                 self._set_directional_blocking_field(channel, direction, True)
+
+    def get_directional_structure_state(
+        self,
+    ) -> ItemDirectionalStructureState:
+        """Return the wall's exact authored directional topology."""
+        return ItemDirectionalStructureState(
+            blocked_directions=self.blocked_directions,
+            blocked_channels=self.blocked_channels,
+        )
 
 
 class OpenDirectionalDoorAction(BaseAction):
@@ -246,11 +265,11 @@ class DirectionalDoor(UsableItem):
     )
 
     is_open: bool = Field(default=False, description="Current open or closed state of the door.")
-    blocked_directions: Tuple[str, ...] = Field(
+    blocked_directions: Tuple[ItemDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
         description="Cardinal directions blocked while the door is closed.",
     )
-    blocked_channels: Tuple[str, ...] = Field(
+    blocked_channels: Tuple[ItemBlockingChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )
@@ -274,6 +293,15 @@ class DirectionalDoor(UsableItem):
             True when open, False when closed.
         """
         return self.is_open
+
+    def get_directional_structure_state(
+        self,
+    ) -> ItemDirectionalStructureState:
+        """Return the door's exact authored directional topology."""
+        return ItemDirectionalStructureState(
+            blocked_directions=self.blocked_directions,
+            blocked_channels=self.blocked_channels,
+        )
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Build use-action templates available from the door's current state.

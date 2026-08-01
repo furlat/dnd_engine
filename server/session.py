@@ -1,7 +1,7 @@
 """Session-based player authority and active-game ownership."""
 
 from enum import Enum
-from typing import Any, Dict, Iterable, Set, Optional, List
+from typing import Any, Dict, Iterable, Optional, Set
 from uuid import UUID, uuid4
 from dataclasses import dataclass, field
 import time
@@ -103,10 +103,6 @@ class PlayerSession:
     def disconnect(self) -> None:
         """Mark session as disconnected."""
         self.connection_status = ConnectionStatus.DISCONNECTED
-
-    def is_timed_out(self, timeout_seconds: float = 30.0) -> bool:
-        """Check if session has timed out."""
-        return time.time() - self.last_activity > timeout_seconds
 
     def owns_entity(self, entity_uuid: UUID) -> bool:
         """Check if this session controls the given entity."""
@@ -216,13 +212,6 @@ class GameSession:
             self.players[old_owner].controlled_entities.discard(entity_uuid)
             self.players[old_owner].synchronize_controlled_observers()
 
-    def get_entity_owner(self, entity_uuid: UUID) -> Optional[PlayerSession]:
-        """Get the player who owns an entity."""
-        session_id = self.entity_to_player.get(entity_uuid)
-        if not session_id:
-            return None
-        return self.players.get(session_id)
-
     def is_entity_turn(self, entity_uuid: UUID) -> bool:
         """Check if it's the given entity's turn."""
         return self.active_entity_uuid == entity_uuid
@@ -237,10 +226,6 @@ class GameSession:
             return False
         active_uuid = self.active_entity_uuid
         return active_uuid in session.controlled_entities if active_uuid else False
-
-    def get_players_by_type(self, player_type: PlayerType) -> List[PlayerSession]:
-        """Get all players of a given type."""
-        return [p for p in self.players.values() if p.player_type == player_type]
 
     def to_dict(self) -> dict:
         """Serialize to dictionary for API responses."""
@@ -433,6 +418,48 @@ class SessionManager:
         Raises:
             HTTPException with appropriate status code if invalid
         """
+        session, game = self.validate_controlled_entity(
+            session_id,
+            entity_uuid,
+            game=game,
+        )
+
+        if not game.is_entity_turn(entity_uuid):
+            raise self._action_http_exception(
+                status_code=403,
+                code="not_entity_turn",
+                message="Not this entity's turn",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
+
+        if game.encounter and game.encounter.turn_state != TurnState.IN_PROGRESS:
+            raise self._action_http_exception(
+                status_code=400,
+                code="turn_not_in_progress",
+                message="Turn not in progress",
+                session_id=session_id,
+                entity_uuid=entity_uuid,
+                session=session,
+                game=game,
+            )
+
+        return session, game
+
+    def validate_controlled_entity(
+        self,
+        session_id: UUID,
+        entity_uuid: UUID,
+        game: Optional[GameSession] = None,
+    ) -> tuple[PlayerSession, GameSession]:
+        """Authorize inspection of an entity controlled by a live session.
+
+        This validates identity, connection, active-game membership, and
+        ownership only. Command routes must call ``validate_action`` so turn
+        authority remains mandatory for mutation.
+        """
         session = self.get_session(session_id)
         if not session:
             raise self._action_http_exception(
@@ -480,45 +507,7 @@ class SessionManager:
                 game=game,
             )
 
-        if not game.is_entity_turn(entity_uuid):
-            raise self._action_http_exception(
-                status_code=403,
-                code="not_entity_turn",
-                message="Not this entity's turn",
-                session_id=session_id,
-                entity_uuid=entity_uuid,
-                session=session,
-                game=game,
-            )
-
-        if game.encounter and game.encounter.turn_state != TurnState.IN_PROGRESS:
-            raise self._action_http_exception(
-                status_code=400,
-                code="turn_not_in_progress",
-                message="Turn not in progress",
-                session_id=session_id,
-                entity_uuid=entity_uuid,
-                session=session,
-                game=game,
-            )
-
         return session, game
-
-    def cleanup_timed_out_sessions(self, timeout_seconds: float = 30.0) -> List[UUID]:
-        """
-        Clean up sessions that have timed out.
-
-        Returns list of removed session IDs.
-        """
-        removed = []
-        for session_id, session in list(self.sessions.items()):
-            if session.player_type == PlayerType.AI:
-                continue
-            if session.is_timed_out(timeout_seconds):
-                self.remove_session(session_id)
-                removed.append(session_id)
-        return removed
-
 
 def get_session_manager() -> SessionManager:
     """Get the SessionManager singleton."""

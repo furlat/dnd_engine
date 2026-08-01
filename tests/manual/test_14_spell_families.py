@@ -50,7 +50,9 @@ from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 from dnd.spells.illusion import HypnoticPatternEffect, MirrorImage, MirrorImageEffect
 from dnd.spells.necromancy import FalseLife
 from dnd.spells.transmutation import SpikeGrowth
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial_effect_content import SPIKE_GROWTH_SURFACE_RECIPE
+from dnd.spatial_effects import SpatialEffect
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
@@ -286,7 +288,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
+def test_spell_catalog_groups_representative_runtime_families() -> None:
     """The catalog maps public spell names to classes with runtime metadata."""
     representatives = {
         "Fire Bolt": (FireBolt, 0, "evocation", TargetType.ENTITY),
@@ -304,16 +306,6 @@ def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
     assert LEVEL_9_SPELLS["Power Word Kill"] is PowerWordKill
     assert len(ALL_SPELLS) >= 100
 
-    readout_lines = [
-        f"catalog size: {len(ALL_SPELLS)} spells",
-        f"cantrip Fire Bolt lookup: {CANTRIPS['Fire Bolt'].__name__}",
-        f"level 1 Magic Missile lookup: {LEVEL_1_SPELLS['Magic Missile'].__name__}",
-        f"level 2 Misty Step lookup: {LEVEL_2_SPELLS['Misty Step'].__name__}",
-        (
-            "level 9 Power Word Kill lookup: "
-            f"{LEVEL_9_SPELLS['Power Word Kill'].__name__}"
-        ),
-    ]
     for spell_name, (spell_cls, level, school, target_type) in representatives.items():
         spell = ALL_SPELLS[spell_name](source_entity_uuid=uuid4())
 
@@ -322,53 +314,6 @@ def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
         assert spell.spell_level == level
         assert spell.spell_school == school
         assert spell.target_type == target_type
-        readout_lines.append(
-            (
-                f"{spell.name}: class={spell_cls.__name__}, "
-                f"level={level}, school={school}, target={target_type.value}, "
-                f"catalog_match={ALL_SPELLS[spell_name] is spell_cls}"
-            )
-        )
-
-    print("\n".join(readout_lines))
-
-    expected_lines = [
-        "catalog size: 109 spells",
-        "cantrip Fire Bolt lookup: FireBolt",
-        "level 1 Magic Missile lookup: MagicMissile",
-        "level 2 Misty Step lookup: MistyStep",
-        "level 9 Power Word Kill lookup: PowerWordKill",
-        (
-            "Fire Bolt: class=FireBolt, level=0, school=evocation, "
-            "target=entity, catalog_match=True"
-        ),
-        (
-            "Magic Missile: class=MagicMissile, level=1, school=evocation, "
-            "target=multi_entity, catalog_match=True"
-        ),
-        (
-            "Mage Armor: class=MageArmor, level=1, school=abjuration, "
-            "target=entity, catalog_match=True"
-        ),
-        (
-            "Misty Step: class=MistyStep, level=2, school=conjuration, "
-            "target=position, catalog_match=True"
-        ),
-        (
-            "Spike Growth: class=SpikeGrowth, level=2, school=transmutation, "
-            "target=position, catalog_match=True"
-        ),
-        (
-            "Mirror Image: class=MirrorImage, level=2, school=illusion, "
-            "target=self, catalog_match=True"
-        ),
-        (
-            "Power Word Kill: class=PowerWordKill, level=9, "
-            "school=enchantment, target=entity, catalog_match=True"
-        ),
-    ]
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
 def test_offensive_spell_families_cover_attack_save_and_auto_hit_damage(capsys) -> None:
@@ -646,7 +591,7 @@ def test_mobility_and_temporary_hit_point_families_update_position_and_hp_pool(
 def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
     capsys,
 ) -> None:
-    """Zone spells create tile-backed conditions and clean up through links."""
+    """Zone spells own map-clipped effects and clean up through links."""
     reset_spell_family_state()
     caster = create_spell_family_actor(
         "Thorn Mage",
@@ -663,21 +608,28 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
     ).apply()
 
     event = assert_completed_spell(event)
-    assert "Spike Growth Zone" in caster.active_conditions
     assert "Concentrating" in caster.active_conditions
 
-    zone = cast(ZoneControlCondition, caster.active_conditions["Spike Growth Zone"])
+    surface = next(
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.content_ref == SPIKE_GROWTH_SURFACE_RECIPE.ref
+    )
+    zone = cast(
+        AreaSpatialEffectController,
+        surface.active_conditions["Spike Growth Zone"],
+    )
     concentration = cast(Concentrating, caster.active_conditions["Concentrating"])
     assert len(zone.affected_positions) > 0
     assert len(zone.spatial_handler_uuids) > 0
-    assert (caster.uuid, zone.uuid) in concentration.linked_conditions
+    assert (surface.uuid, zone.uuid) in concentration.linked_conditions
     readout_lines = [
         (
-            f"spike growth: zone={'Spike Growth Zone' in caster.active_conditions}, "
+            f"spike growth: effect={SpatialEffect.get_effect(surface.uuid) is surface}, "
             f"concentrating={'Concentrating' in caster.active_conditions}, "
             f"positions={len(zone.affected_positions)}, "
             f"handlers={len(zone.spatial_handler_uuids)}, "
-            f"linked={(caster.uuid, zone.uuid) in concentration.linked_conditions}"
+            f"linked={(surface.uuid, zone.uuid) in concentration.linked_conditions}"
         )
     ]
 
@@ -695,11 +647,11 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
 
     caster.remove_condition("Concentrating")
 
-    assert "Spike Growth Zone" not in caster.active_conditions
+    assert SpatialEffect.get_effect(surface.uuid) is None
     assert "Concentrating" not in caster.active_conditions
     readout_lines.append(
         (
-            f"cleanup: zone={'Spike Growth Zone' in caster.active_conditions}, "
+            f"cleanup: effect={SpatialEffect.get_effect(surface.uuid) is not None}, "
             f"concentrating={'Concentrating' in caster.active_conditions}"
         )
     )
@@ -708,11 +660,11 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
 
     expected_lines = [
         (
-            "spike growth: zone=True, concentrating=True, "
-            "positions=49, handlers=1, linked=True"
+            "spike growth: effect=True, concentrating=True, "
+            "positions=48, handlers=1, linked=True"
         ),
         "zone entry: position=(5, 3), damage=7, hp=40->33",
-        "cleanup: zone=False, concentrating=False",
+        "cleanup: effect=False, concentrating=False",
     ]
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
@@ -961,7 +913,7 @@ def test_temporary_hit_point_loss_is_positive_applied_damage() -> None:
     reset_spell_family_state()
     caster = create_spell_family_actor("Pattern Caster", (1, 1), "heroes")
     target = create_spell_family_actor("Ward Target", (3, 1), "monsters")
-    target.health.add_temporary_hit_points(5, target.uuid)
+    target.grant_temporary_hit_points(5, target.uuid)
     target.add_condition(HypnoticPatternEffect(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Callable, Literal, Optional, Tuple, List
+from typing import Callable, Dict, Optional, Set, Tuple, List
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
-from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator, validate_line_of_sight
+from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, IntrinsicAttackSource, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_evaluator, validate_line_of_sight
 from dnd.blocks.equipment import Damage
 from dnd.conditions import Paralyzed, Prone
 from dnd.core.base_actions import (
@@ -25,9 +25,13 @@ from dnd.core.base_actions import (
     OutcomeResolution,
     TargetEffectDisposition,
     TargetType,
-    spell_slot_cost_type,
 )
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.action_types import spell_slot_cost_type
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    MostPotentCondition,
+)
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, Dice, RollType
@@ -37,14 +41,18 @@ from dnd.core.events import (
     Event,
     EventHandler,
     EventPhase,
+    EventQueue,
     EventType,
+    LifeStateChangeEvent,
     Range,
     RangeType,
+    SpatialChangeEvent,
     TakeDamageEvent,
     Trigger,
 )
+from dnd.core.gridmap import get_map
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.creature_types import DamageType
+from dnd.core.creature_types import DamageDieValue, DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
@@ -54,10 +62,21 @@ from dnd.core.modifiers import (
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
-from dnd.core.condition_types import ConditionCategory, DurationType
-
-
-DamageDieValue = Literal[4, 6, 8, 10, 12, 20]
+from dnd.core.condition_types import (
+    ConditionAgencyDenial,
+    ConditionCategory,
+    DurationType,
+)
+from dnd.core.life_types import LifeState
+from dnd.core.spatial_effect_types import (
+    SpatialEffectTriggerKind,
+)
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
+from dnd.spatial_effect_content import LEADERSHIP_FIELD_RECIPE
+from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
 
 
 def register_pack_tactics(entity: Entity) -> None:
@@ -574,10 +593,6 @@ class MultiattackAction(BaseAction):
                     attack.apply(parent_event=effect_event)
         return effect_event.phase_to(EventPhase.COMPLETION, status_message=f"{self.name} completed")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class NaturalAttack(Attack):
     """Attack template for natural weapons that are not equipment."""
 
@@ -592,28 +607,27 @@ class NaturalAttack(Attack):
         """Return natural-weapon damage instead of the proxy equipped slot."""
         if not isinstance(actor, Entity):
             return None
-        old_weapon = actor.equipment.weapon_melee_main
-        old_damage_dice = actor.equipment.unarmed_damage_dice
-        old_dice_numbers = actor.equipment.unarmed_dice_numbers
-        old_damage_type = actor.equipment.unarmed_damage_type
-        try:
-            actor.equipment.weapon_melee_main = None
-            actor.equipment.unarmed_damage_dice = self.natural_damage_dice
-            actor.equipment.unarmed_dice_numbers = self.natural_dice_numbers
-            actor.equipment.unarmed_damage_type = self.natural_damage_type
-            profile = build_weapon_attack_outcome_profile(
-                actor,
-                self.weapon_slot,
-                self.override_ability,
-            )
-            if profile is None:
-                return None
-            return profile.model_copy(update={"effect_id": f"natural_attack.{self.name.lower().replace(' ', '_')}"})
-        finally:
-            actor.equipment.weapon_melee_main = old_weapon
-            actor.equipment.unarmed_damage_dice = old_damage_dice
-            actor.equipment.unarmed_dice_numbers = old_dice_numbers
-            actor.equipment.unarmed_damage_type = old_damage_type
+        baseline = actor.intrinsic_attack_outcome_baseline(
+            self.natural_range.type,
+            self.weapon_slot,
+            self.override_ability,
+        )
+        damage_rolls = actor.intrinsic_damage_outcome_baseline(
+            damage_die=self.natural_damage_dice,
+            dice_count=self.natural_dice_numbers,
+            damage_type=self.natural_damage_type,
+            range_type=self.natural_range.type,
+            override_ability=self.override_ability,
+        )
+        return ActionOutcomeProfile(
+            effect_id=f"natural_attack.{self.name.lower().replace(' ', '_')}",
+            resolution=OutcomeResolution.ATTACK_ROLL,
+            damage_rolls=damage_rolls,
+            attack_bonus=baseline.attack_bonus,
+            advantage=baseline.advantage,
+            critical_threshold=baseline.critical_threshold,
+            critical_extra_dice=baseline.critical_extra_dice,
+        )
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[AttackEvent]:
         """Create an attack event using natural-weapon metadata."""
@@ -670,25 +684,17 @@ class NaturalAttack(Attack):
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
         """Resolve natural attack damage through the normal attack pipeline."""
-        source = Entity.get(self.source_entity_uuid)
-        if source is None:
+        if Entity.get(self.source_entity_uuid) is None:
             return execution_event.cancel(status_message=f"Source entity not found for {self.name}")
-
-        old_weapon = source.equipment.weapon_melee_main
-        old_damage_dice = source.equipment.unarmed_damage_dice
-        old_dice_numbers = source.equipment.unarmed_dice_numbers
-        old_damage_type = source.equipment.unarmed_damage_type
-        try:
-            source.equipment.weapon_melee_main = None
-            source.equipment.unarmed_damage_dice = self.natural_damage_dice
-            source.equipment.unarmed_dice_numbers = self.natural_dice_numbers
-            source.equipment.unarmed_damage_type = self.natural_damage_type
-            return Attack.attack_consequences(execution_event, self.source_entity_uuid)
-        finally:
-            source.equipment.weapon_melee_main = old_weapon
-            source.equipment.unarmed_damage_dice = old_damage_dice
-            source.equipment.unarmed_dice_numbers = old_dice_numbers
-            source.equipment.unarmed_damage_type = old_damage_type
+        return Attack.attack_consequences(
+            execution_event,
+            self.source_entity_uuid,
+            intrinsic_source=IntrinsicAttackSource(
+                damage_die=self.natural_damage_dice,
+                dice_count=self.natural_dice_numbers,
+                damage_type=self.natural_damage_type,
+            ),
+        )
 
 
 class BonusDamageFeature(BaseCondition):
@@ -1132,9 +1138,17 @@ class ParryFeature(BaseCondition):
         defender = Entity.get(source_entity_uuid)
         if not defender or not isinstance(event, AttackEvent) or event.range is None or event.range.type != RangeType.REACH:
             return event
+        if event.source_entity_uuid not in defender.senses.entities:
+            return event
         if not defender.action_economy.can_afford("reactions", 1):
             return event
-        if event.ac is None:
+        if (
+            event.ac is None
+            or event.dice_roll is None
+            or event.attack_outcome is not AttackOutcome.HIT
+        ):
+            return event
+        if event.dice_roll.total >= event.ac.normalized_score + self.ac_bonus:
             return event
         event.ac.self_static.add_value_modifier(
             NumericalModifier(
@@ -1146,6 +1160,7 @@ class ParryFeature(BaseCondition):
         )
         defender.action_economy.consume("reactions", 1)
         return event.with_updates(
+            attack_outcome=AttackOutcome.MISS,
             status_message=(
                 f"{defender.name} uses Parry for +{self.ac_bonus} AC"
             ),
@@ -1206,10 +1221,6 @@ class DivineEminenceAction(BaseAction):
         actor.add_condition(DivineEminenceActive(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, slot_level=slot), parent_event=effect_event)
         return effect_event.phase_to(EventPhase.COMPLETION, status_message="Divine Eminence active")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class DivineEminenceActive(BonusDamageFeature):
     """Temporary radiant melee damage condition."""
 
@@ -1259,7 +1270,9 @@ class LeadershipAction(BaseAction):
             duration=ActionSetupDuration.UNTIL_REMOVED,
             maximum_duration_rounds=10,
             condition_fact_ids=("actor.aura.leadership", "actor.condition.leadership_used"),
-            active_condition_semantic_keys=frozenset({"dnd.monsters.traits.LeadershipAura"}),
+            active_condition_semantic_keys=frozenset(
+                {"dnd.monsters.traits.LeadershipMembership"},
+            ),
         )
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -1267,56 +1280,386 @@ class LeadershipAction(BaseAction):
         if actor is None:
             return execution_event.cancel(status_message="Actor not found")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses Leadership")
-        actor.add_condition(LeadershipAura(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid), parent_event=effect_event)
+        field = materialize_spatial_effect(
+            LEADERSHIP_FIELD_RECIPE,
+            actor.uuid,
+            position=actor.position,
+            faction=actor.faction,
+            anchor_uuid=actor.uuid,
+            expected_type=FieldEffect,
+        )
+        aura_result = field.install_controller(
+            LeadershipAura(
+                source_entity_uuid=actor.uuid,
+                target_entity_uuid=field.uuid,
+                zone_center=actor.position,
+                effect_origin=effect_event.get_effect_origin(),
+            ),
+            parent_event=effect_event,
+        )
+        if aura_result is None or aura_result.canceled:
+            return execution_event.cancel(
+                status_message="Leadership field could not be installed",
+            )
         actor.add_condition(SimpleMarkerCondition(name="Leadership Used", source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid), parent_event=effect_event)
         return effect_event.phase_to(EventPhase.COMPLETION, status_message="Leadership active")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+
+class LeadershipMembership(MostPotentCondition):
+    """One exact Leadership source currently covering an allied creature."""
+
+    name: str = Field(default="Leadership", description="Condition name.")
+    description: str = Field(
+        default="A nearby leader adds 1d4 to this creature's attacks and saves.",
+        description="Rules summary.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.STATUS,
+        description="Visible aura membership affecting attacks and saves.",
+    )
+    potency_rank: Tuple[int, ...] = Field(
+        default=(1,),
+        frozen=True,
+        description="Leadership sources are equally potent d4 effects.",
+    )
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        target_uuid = self.target_entity_uuid
+        leader_uuid = self.source_entity_uuid
+        if target_uuid is None or leader_uuid is None:
+            return (
+                [],
+                [],
+                [],
+                [],
+                declaration_event.cancel(
+                    status_message="Leadership membership has no source or target",
+                ),
+            )
+        target = Entity.get(target_uuid)
+        leader = Entity.get(leader_uuid)
+        if target is None or leader is None or not leader.is_ally(target):
+            return (
+                [],
+                [],
+                [],
+                [],
+                declaration_event.cancel(
+                    status_message="Leadership membership is no longer valid",
+                ),
+            )
+
+        membership_target_uuid = target.uuid
+        membership_leader_uuid = leader.uuid
+
+        def processor(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            if not isinstance(event, D20RollResultEvent):
+                return None
+            current_target = Entity.get(membership_target_uuid)
+            current_leader = Entity.get(membership_leader_uuid)
+            if (
+                current_target is None
+                or current_leader is None
+                or event.source_entity_uuid != current_target.uuid
+            ):
+                return None
+            roll = event.get_effective_roll()
+            d4 = Dice(
+                count=1,
+                value=4,
+                bonus=ModifiableValue.create(
+                    source_entity_uuid=current_leader.uuid,
+                    base_value=0,
+                    value_name="Leadership",
+                ),
+                roll_type=roll.roll_type,
+            ).roll
+            return event.replace_roll(
+                roll.model_copy(update={"total": roll.total + d4.total}),
+                "Leadership",
+                f"+{d4.total} (1d4)",
+            )
+
+        handler = EventHandler(
+            name="Leadership Membership",
+            source_entity_uuid=target.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=target.uuid,
+                ),
+                Trigger(
+                    event_type=EventType.SAVE_D20_ROLL_RESULT,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=target.uuid,
+                ),
+            ],
+            event_processor=processor,
+        )
+        target.add_event_handler(handler)
+        return (
+            [],
+            [handler.uuid],
+            [],
+            [],
+            declaration_event.phase_to(
+                EventPhase.EFFECT,
+                status_message=f"{target.name} is inspired by Leadership",
+            ),
+        )
 
 
-class LeadershipAura(BaseCondition):
-    """Aura handler that adds 1d4 to nearby allies' attacks and saves."""
+class LeadershipAura(AreaSpatialEffectController):
+    """Entity-anchored Leadership field that owns exact ally membership."""
 
     name: str = Field(default="Leadership Aura", description="Condition name.")
     description: str = Field(default="Nearby allies add 1d4 to attacks and saves.", description="Rules summary.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        frozen=True,
+        description=(
+            "Internal spatial controller; LeadershipMembership is the "
+            "player-visible rules state."
+        ),
+    )
+    zone_shape: str = Field(default="sphere", description="Aura shape.")
+    zone_radius_feet: int = Field(default=30, description="Aura radius.")
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
+        SpatialEffectTriggerKind.ENTER,
+        SpatialEffectTriggerKind.LEAVE,
+    })
+    _membership_condition_uuids: Dict[UUID, UUID] = PrivateAttr(
+        default_factory=dict,
+    )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        leader = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not leader:
-            return [], [], [], [], declaration_event.cancel(status_message="Leadership owner not found")
+    def _leader(self) -> Optional[Entity]:
+        return Entity.get(self.source_entity_uuid)
+
+    def _apply_membership(
+        self,
+        entity_uuid: UUID,
+        *,
+        parent_event: Event,
+    ) -> None:
+        leader = self._leader()
+        entity = Entity.get(entity_uuid)
+        if (
+            leader is None
+            or entity is None
+            or entity.uuid == leader.uuid
+            or not leader.is_ally(entity)
+            or entity.position not in self.affected_positions
+            or entity.uuid in self._membership_condition_uuids
+        ):
+            return
+        membership = LeadershipMembership(
+            source_entity_uuid=leader.uuid,
+            target_entity_uuid=entity.uuid,
+        )
+        entity.add_condition(membership, parent_event=parent_event)
+        if BaseCondition.get(membership.uuid) is membership:
+            self._membership_condition_uuids[entity.uuid] = membership.uuid
+
+    def _remove_membership(
+        self,
+        entity_uuid: UUID,
+        *,
+        parent_event: Optional[Event],
+    ) -> None:
+        condition_uuid = self._membership_condition_uuids.pop(
+            entity_uuid,
+            None,
+        )
+        entity = Entity.get(entity_uuid)
+        if condition_uuid is not None and entity is not None:
+            entity.remove_condition_by_uuid(
+                condition_uuid,
+                parent_event=parent_event,
+            )
+
+    def _reconcile_membership(self, *, parent_event: Event) -> None:
+        for entity_uuid in tuple(self._membership_condition_uuids):
+            entity = Entity.get(entity_uuid)
+            if entity is None or entity.position not in self.affected_positions:
+                self._remove_membership(
+                    entity_uuid,
+                    parent_event=parent_event,
+                )
+        grid = get_map()
+        for position in self.affected_positions:
+            for entity_uuid in grid.get_entities_at(position):
+                self._apply_membership(
+                    entity_uuid,
+                    parent_event=parent_event,
+                )
+
+    def _create_zone_entry_handler(self) -> EventHandler:
+        aura = self
+
+        def processor(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            if isinstance(event, SpatialChangeEvent) and event.entity_uuid:
+                aura._apply_membership(
+                    event.entity_uuid,
+                    parent_event=event,
+                )
+            return None
+
+        return EventHandler(
+            name="Leadership Field Entry",
+            source_entity_uuid=self.source_entity_uuid,
+            event_processor=processor,
+        )
+
+    def _create_zone_exit_handler(self) -> EventHandler:
+        aura = self
+
+        def processor(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
+                return None
+            entity = Entity.get(event.entity_uuid)
+            if entity is None or entity.position not in aura.affected_positions:
+                aura._remove_membership(
+                    event.entity_uuid,
+                    parent_event=event,
+                )
+            return None
+
+        return EventHandler(
+            name="Leadership Field Exit",
+            source_entity_uuid=self.source_entity_uuid,
+            event_processor=processor,
+        )
+
+    def apply_appearance_trigger(self, *, parent_event: Event) -> None:
+        """Admit creatures already covered when Leadership begins."""
+        self._reconcile_membership(parent_event=parent_event)
+
+    def apply_effect_entry_trigger(
+        self,
+        positions: Set[Tuple[int, int]],
+        *,
+        parent_event: Event,
+    ) -> None:
+        """Admit allies newly covered when the leader moves."""
+        grid = get_map()
+        for position in positions:
+            for entity_uuid in grid.get_entities_at(position):
+                self._apply_membership(
+                    entity_uuid,
+                    parent_event=parent_event,
+                )
+
+    def relocate_anchor(
+        self,
+        position: Tuple[int, int],
+        *,
+        parent_event: Event,
+    ) -> None:
+        """Move the field and reconcile exact membership leases."""
+        super().relocate_anchor(position, parent_event=parent_event)
+        self._reconcile_membership(parent_event=parent_event)
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
         self.duration.duration_type = DurationType.ROUNDS
         self.duration.duration = 10
-        handler = EventHandler(
-            name="Leadership",
-            source_entity_uuid=leader.uuid,
-            trigger_conditions=[
-                Trigger(event_type=EventType.ATTACK_D20_ROLL_RESULT, event_phase=EventPhase.EFFECT),
-                Trigger(event_type=EventType.SAVE_D20_ROLL_RESULT, event_phase=EventPhase.EFFECT),
-            ],
-            event_processor=self._processor,
-        )
-        leader.add_event_handler(handler)
-        effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{leader.name} begins Leadership")
-        return [], [handler.uuid], [], [], effect_event
+        (
+            modifiers,
+            handler_uuids,
+            sub_condition_uuids,
+            spatial_handler_uuids,
+            effect_event,
+        ) = super()._apply(declaration_event)
+        leader_uuid = self.source_entity_uuid
+        effect_uuid = self.target_entity_uuid
 
-    def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
-        if not isinstance(event, D20RollResultEvent):
+        def retire_when_source_loses_agency(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            source_lost_agency = (
+                isinstance(event, ConditionApplicationEvent)
+                and event.target_entity_uuid == leader_uuid
+                and event.condition.agency_denial
+                is ConditionAgencyDenial.FULL_TURN
+            )
+            source_left_play = (
+                isinstance(event, LifeStateChangeEvent)
+                and event.entity_uuid == leader_uuid
+                and event.new_state is not LifeState.ALIVE
+            )
+            if not source_lost_agency and not source_left_play:
+                return None
+            field = (
+                SpatialEffect.get_effect(effect_uuid)
+                if effect_uuid is not None
+                else None
+            )
+            if field is not None:
+                field.retire(parent_event=event)
             return None
-        leader = Entity.get(source_entity_uuid)
-        roller = Entity.get(event.source_entity_uuid)
-        if leader is None or roller is None or leader.uuid == roller.uuid or not leader.is_ally(roller):
-            return None
-        if leader.senses.get_feet_distance(roller.position) > 30:
-            return None
-        roll = event.get_effective_roll()
-        d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
-        new_roll = roll.model_copy(update={"total": roll.total + d4.total})
-        return event.replace_roll(
-            new_roll,
-            "Leadership",
-            f"+{d4.total} (1d4)",
+
+        retirement_handler = EventHandler(
+            name="Leadership Source Agency",
+            source_entity_uuid=leader_uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.CONDITION_APPLICATION,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=leader_uuid,
+                ),
+                Trigger(
+                    event_type=EventType.LIFE_STATE_CHANGE,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=leader_uuid,
+                ),
+            ],
+            event_processor=retire_when_source_loses_agency,
         )
+        EventQueue.add_event_handler(retirement_handler)
+        handler_uuids.append(retirement_handler.uuid)
+        return (
+            modifiers,
+            handler_uuids,
+            sub_condition_uuids,
+            spatial_handler_uuids,
+            effect_event,
+        )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Remove only this field's exact leases, allowing weaker fallback."""
+        for entity_uuid in tuple(self._membership_condition_uuids):
+            self._remove_membership(entity_uuid, parent_event=event)
+        return super()._remove(event)
 
 
 class RampageFeature(BaseCondition):
@@ -1387,16 +1730,9 @@ class RampageAvailable(BaseCondition):
             natural_range=Range(type=RangeType.REACH, normal=5),
             costs=[Cost(name="Rampage Bite Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)],
         )
-        owner.register_action(action)
+        owner.register_condition_action(self, action)
         effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message="Rampage Bite available")
         return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if owner:
-            owner.unregister_action("Rampage Bite")
-        return super()._remove(event)
-
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
     """Return whether source has an active ally adjacent to target."""
@@ -1416,8 +1752,8 @@ def _has_sneak_attack_condition(source: Entity, target: Entity, event: DamageRol
     """Return whether a damage event satisfies SRD Sneak Attack conditions."""
     attack_roll = None
     parent = Event.get(event.parent_event) if event.parent_event else None
-    if parent is not None:
-        attack_roll = getattr(parent, "dice_roll", None)
+    if isinstance(parent, AttackEvent):
+        attack_roll = parent.dice_roll
     has_advantage = bool(attack_roll and attack_roll.advantage_status == AdvantageStatus.ADVANTAGE)
     has_disadvantage = bool(attack_roll and attack_roll.advantage_status == AdvantageStatus.DISADVANTAGE)
     return not has_disadvantage and (has_advantage or _has_adjacent_ally(source, target))

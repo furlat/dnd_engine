@@ -310,10 +310,7 @@ def _topology_digest(world: SubjectiveWorldState) -> str:
         item.model_dump(mode="json")
         for item in sorted(world.known_objects.values(), key=lambda item: item.uuid)
         if item.knowledge_state is KnowledgeState.VISIBLE
-        and (
-            item.state.get("blocks_vision") is True
-            or item.state.get("blocks_vision_field") is True
-        )
+        and item.state.blocks_vision
     ]
     return _digest({"tiles": payload, "visible_blockers": blockers})
 

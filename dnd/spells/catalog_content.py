@@ -192,6 +192,7 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Color Spray", illusion.ColorSpray, SRD_SPELL_PACK_ID, "spell.color_spray", "illusion", 1, 125, 200),
     SpellContentIdentitySpec("Guiding Bolt", evocation.GuidingBolt, SRD_SPELL_PACK_ID, "spell.guiding_bolt", "evocation", 1, 151, 210),
     SpellContentIdentitySpec("Grease", conjuration.Grease, SRD_SPELL_PACK_ID, "spell.grease", "conjuration", 1, 150, 220),
+    SpellContentIdentitySpec("Entangle", conjuration.Entangle, SRD_SPELL_PACK_ID, "spell.entangle", "conjuration", 1, 138, 225),
     SpellContentIdentitySpec("Fog Cloud", conjuration.FogCloud, SRD_SPELL_PACK_ID, "spell.fog_cloud", "conjuration", 1, 146, 230),
     SpellContentIdentitySpec("Bane", enchantment.Bane, SRD_SPELL_PACK_ID, "spell.bane", "enchantment", 1, 120, 240),
     SpellContentIdentitySpec("Bless", enchantment.Bless, SRD_SPELL_PACK_ID, "spell.bless", "enchantment", 1, 122, 250),
@@ -249,6 +250,7 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Dimension Door", conjuration.DimensionDoor, SRD_SPELL_PACK_ID, "spell.dimension_door", "conjuration", 4, 135, 770),
     SpellContentIdentitySpec("Banishment", abjuration.Banishment, SRD_SPELL_PACK_ID, "spell.banishment", "abjuration", 4, 120, 780),
     SpellContentIdentitySpec("Guardian of Faith", conjuration.GuardianOfFaith, SRD_SPELL_PACK_ID, "spell.guardian_of_faith", "conjuration", 4, 150, 790),
+    SpellContentIdentitySpec("Evard's Black Tentacles", conjuration.EvardsBlackTentacles, SRD_SPELL_PACK_ID, "spell.evards_black_tentacles", "conjuration", 4, 123, 795),
     SpellContentIdentitySpec("Death Ward", abjuration.DeathWard, SRD_SPELL_PACK_ID, "spell.death_ward", "abjuration", 4, 133, 800),
     SpellContentIdentitySpec("Freedom of Movement", abjuration.FreedomOfMovement, SRD_SPELL_PACK_ID, "spell.freedom_of_movement", "abjuration", 4, 147, 810),
     SpellContentIdentitySpec("Hold Monster", enchantment.HoldMonster, SRD_SPELL_PACK_ID, "spell.hold_monster", "enchantment", 5, 154, 820),
@@ -391,7 +393,11 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.Grease, _catalog(
         'grease', '10ft square difficult terrain, DEX save or prone', 'position', 'ranged', 60, 'aoe',
-        area=_area('cube', length_ft=10, width_ft=10, height_ft=10), saves=_saving_throws('dexterity'), concentration=True, tags=('cube', 'concentration'),
+        area=_area('cube', length_ft=10, width_ft=10, height_ft=10), saves=_saving_throws('dexterity'), tags=('cube',),
+    )),
+    (conjuration.Entangle, _catalog(
+        'entangle', '20ft square difficult terrain; STR save or restrained', 'position', 'ranged', 90, 'aoe',
+        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), saves=_saving_throws('strength'), concentration=True, tags=('cube', 'concentration'),
     )),
     (conjuration.FogCloud, _catalog(
         'fog_cloud', '20ft sphere heavily obscured fog (blocks darkvision)', 'position', 'ranged', 120, 'aoe',
@@ -407,7 +413,6 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (transmutation.JumpSpell, _catalog(
         'jump', "Triple a creature's jump distance", 'entity', 'touch', 5, 'touch',
-        concentration=True, tags=('concentration',),
     )),
     (transmutation.ExpeditiousRetreat, _catalog(
         'expeditious_retreat', 'Bonus action Dash each turn', 'self', 'self', 0, 'self',
@@ -485,7 +490,6 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (transmutation.DarkvisionSpell, _catalog(
         'darkvision', 'Grant 60ft darkvision to a willing creature', 'entity', 'touch', 5, 'touch',
-        concentration=True, tags=('concentration',),
     )),
     (divination.SeeInvisibility, _catalog(
         'see_invisibility', 'See invisible creatures and objects', 'self', 'self', 0, 'self',
@@ -553,7 +557,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.Daylight, _catalog(
         'daylight', '60ft sphere very bright light, reveals hidden, dispels darkness', 'position', 'ranged', 60, 'aoe',
-        area=_area('sphere', radius_ft=60), concentration=True, tags=('sphere', 'concentration'),
+        area=_area('sphere', radius_ft=60), tags=('sphere',),
     )),
     (transmutation.Slow, _catalog(
         'slow', '40ft cube, WIS save or Slowed', 'position_aoe', 'ranged', 120, 'aoe',
@@ -612,6 +616,10 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (conjuration.GuardianOfFaith, _catalog(
         'guardian_of_faith', 'Summon spectral guardian: 20 radiant (DEX half), 60 damage budget', 'position', 'ranged', 30, 'aoe',
         area=_area('sphere', radius_ft=10), damage=(DamageType.RADIANT,), saves=_saving_throws('dexterity'), tags=('radiant', 'sphere'),
+    )),
+    (conjuration.EvardsBlackTentacles, _catalog(
+        'evards_black_tentacles', '20ft square difficult terrain; DEX save or 3d6 bludgeoning and restrained', 'position', 'ranged', 90, 'aoe',
+        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), damage=(DamageType.BLUDGEONING,), saves=_saving_throws('dexterity'), concentration=True, tags=('bludgeoning', 'cube', 'concentration'),
     )),
     (abjuration.DeathWard, _catalog(
         'death_ward', 'Touch: once, survive lethal damage at 1 HP', 'entity', 'touch', 5, 'touch',
@@ -779,13 +787,6 @@ _SPELL_OBJECT_DEPENDENCIES_BY_CLASS: Mapping[
     type[SpellAction],
     tuple[ContentDependency, ...],
 ] = MappingProxyType({
-    conjuration.GuardianOfFaith: (
-        ContentDependency(
-            relation=ContentDependencyRelation.CREATES_OBJECT,
-            target_ref=conjuration.GUARDIAN_OF_FAITH_OBJECT_REF,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
     conjuration.HeroesFeast: (
         ContentDependency(
             relation=ContentDependencyRelation.CREATES_OBJECT,

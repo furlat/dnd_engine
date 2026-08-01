@@ -83,6 +83,18 @@ class PolicyCandidate(Generic[DecisionT]):
         )
 
 
+def policy_candidate_rank_key(
+    candidate: PolicyCandidate[DecisionT],
+    score: float,
+) -> tuple[float, tuple[str, ...], str]:
+    """Order policy candidates by utility and replay-stable identity."""
+    return (
+        -score,
+        candidate.replay_key or (candidate.candidate_id,),
+        candidate.candidate_id,
+    )
+
+
 class PolicyMetricThreshold(BaseModel):
     """Inclusive candidate filter over one derived metric."""
 
@@ -247,20 +259,11 @@ class DataDrivenPolicy(Generic[StateT, MemoryT, DecisionT]):
             )
             if not matching:
                 continue
-            scores = {
-                candidate.candidate_id: rule.score(candidate)
-                for candidate in matching
-            }
-            best_score = max(scores.values())
             best = min(
-                (
-                    candidate
-                    for candidate in matching
-                    if scores[candidate.candidate_id] == best_score
-                ),
-                key=lambda candidate: (
-                    candidate.replay_key or (candidate.candidate_id,),
-                    candidate.candidate_id,
+                matching,
+                key=lambda candidate: policy_candidate_rank_key(
+                    candidate,
+                    rule.score(candidate),
                 ),
             )
             return best.decision

@@ -30,6 +30,7 @@ from dnd.core.condition_types import (
     HazardFilter,
 )
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
+from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
@@ -39,7 +40,12 @@ from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
 from dnd.creature_transforms import apply_incapacitated_transform
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
+from dnd.spatial_effect_content import SILENCE_FIELD_RECIPE
+from dnd.spatial_effects import FieldEffect
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
 from dnd.core.gridmap import get_map
 from dnd.core.events import SpatialChangeEvent
 from dnd.spells.content_metadata import srd_spell_identity
@@ -125,15 +131,7 @@ class Blur(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate that the caster exists for this self spell."""
-
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Blur to the caster and link it to concentration."""
@@ -307,7 +305,7 @@ class Fear(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
+                target=self.end_position if self.end_position is not None else (1, 0),
                 length_feet=30
             )
 
@@ -335,15 +333,7 @@ class Fear(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No direction specified for cone")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_directional_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Fear to current target."""
@@ -533,7 +523,7 @@ class HypnoticPattern(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
+                target=self.end_position if self.end_position is not None else (0, 0),
                 size_feet=30,
                 centered=True
             )
@@ -562,23 +552,7 @@ class HypnoticPattern(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
-
-        distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_visible_position_in_range(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Hypnotic Pattern to current target."""
@@ -712,7 +686,7 @@ class ColorSpray(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape = Cone(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
+                target=self.end_position if self.end_position is not None else (1, 0),
                 length_feet=15
             )
 
@@ -779,15 +753,7 @@ class ColorSpray(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cone direction. Self-range means no LOS check to target position."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No direction specified for cone")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_directional_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Color Spray blindness to current target (called once per target by convolution)."""
@@ -869,25 +835,7 @@ class Invisibility(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft, max {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Invisibility to target."""
@@ -960,25 +908,7 @@ class GreaterInvisibility(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate touch range (5ft)."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft, max {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Greater Invisibility to target."""
@@ -1175,14 +1105,7 @@ class MirrorImage(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate that the caster exists for this self spell."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Mirror Image to self."""
@@ -1207,7 +1130,7 @@ class MirrorImage(SpellAction):
         )
 
 
-class SilenceZone(ZoneControlCondition):
+class SilenceZone(AreaSpatialEffectController):
     """Silence zone that blocks verbal spells and deafens creatures inside.
 
     20ft radius sphere, concentration, 10 rounds.
@@ -1219,20 +1142,16 @@ class SilenceZone(ZoneControlCondition):
     zone_shape: str = Field(default="sphere", description="Zone shape key.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
 
-    marker_name: Optional[str] = Field(default="Silence", description="Tile marker name.")
-    marker_hazard_filter: Optional[HazardFilter] = Field(default=None, description="Optional hazard visibility filter for the tile marker.")
+    hazard_filter: Optional[HazardFilter] = Field(default=None, description="Optional hazard visibility filter for the tile marker.")
 
     spell_dc: int = Field(default=0, description="Spell save DC placeholder for zone contracts.")
     _deafened_uuids: List[UUID] = []
     _spell_block_handler_uuid: Optional[UUID] = None
 
-    def _has_entry_effect(self) -> bool:
-        """Return whether entering the zone has an effect."""
-        return True
-
-    def _has_exit_effect(self) -> bool:
-        """Return whether leaving the zone has an effect."""
-        return True
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.ENTER,
+        SpatialEffectTriggerKind.LEAVE,
+    })
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Apply Deafened when entity enters the silence zone."""
@@ -1442,7 +1361,7 @@ class Silence(SpellAction):
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
-        if not self.end_position:
+        if self.end_position is None:
             return declaration_event.cancel(status_message="No target position")
 
         parent_result = super()._validate(declaration_event)
@@ -1462,7 +1381,7 @@ class Silence(SpellAction):
             return execution_event.cancel(status_message="Caster not found")
 
         position = self.end_position
-        if not position:
+        if position is None:
             return execution_event.cancel(status_message="No target position")
 
         effect_event = execution_event.phase_to(
@@ -1470,16 +1389,23 @@ class Silence(SpellAction):
             status_message=f"{caster.name} casts Silence"
         )
 
+        field = materialize_spatial_effect(
+            SILENCE_FIELD_RECIPE,
+            caster.uuid,
+            position=position,
+            faction=caster.faction,
+            expected_type=FieldEffect,
+        )
         zone = SilenceZone(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            target_entity_uuid=field.uuid,
             zone_center=position,
             effect_origin=execution_event.to_effect_origin(),
         )
-        caster.add_condition(zone, parent_event=effect_event)
+        field.install_controller(zone, parent_event=effect_event)
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(field.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

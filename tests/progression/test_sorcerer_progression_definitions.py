@@ -9,6 +9,10 @@ from dnd.classes.sorcerer_progression_definitions import (
     SORCERER_PROGRESSION_DECLARATIONS,
     SORCERER_REACTION_ONLY_SPELL_IDENTITY_GAPS,
 )
+from dnd.classes.permanent_feature_definitions import (
+    SORCERER_DRACONIC_RESILIENCE_DECLARATION,
+    SORCERER_SORCERY_POINTS_DECLARATION,
+)
 from dnd.classes.sorcerer_structural_feature_definitions import (
     DISTANT_SPELL_DECLARATION,
     DRACONIC_ANCESTRY_DECLARATIONS,
@@ -24,14 +28,13 @@ from dnd.classes.sorcerer_structural_feature_definitions import (
     SorcererStructuralFeatureDefinition,
     TWINNED_SPELL_DECLARATION,
 )
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
-)
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
+from dnd.content_system.condition_definitions import (
+    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+)
 from dnd.core.content.dependencies import ContentDependencyPhase
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
@@ -53,10 +56,6 @@ from dnd.items.weapons import (
     QUARTERSTAFF_REF,
     SLING_REF,
 )
-
-
-def _feature_ref(condition_type: type[BaseCondition]):
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
 
 
 def _level(
@@ -539,7 +538,7 @@ def test_sorcerer_spell_choices_are_bounded_by_resulting_class_level() -> None:
 
 
 def test_sorcerer_feature_resource_metamagic_and_asi_rows_are_exact() -> None:
-    sorcery_points_ref = _feature_ref(sorcerer.SorceryPointsFeature)
+    sorcery_points_ref = SORCERER_SORCERY_POINTS_DECLARATION.ref
     for level in range(2, 21):
         assert sorcery_points_ref in _level(
             SORCERER_CLASS_DEFINITION,
@@ -718,7 +717,7 @@ def test_sorcerer_declarations_close_exact_dependencies() -> None:
         for dependency in DRACONIC_BLOODLINE_SUBCLASS_DECLARATION.dependencies
     }
     for ref in (
-        _feature_ref(sorcerer.DraconicResilience),
+        SORCERER_DRACONIC_RESILIENCE_DECLARATION.ref,
         ELEMENTAL_AFFINITY_DECLARATION.ref,
         DRAGON_WINGS_DECLARATION.ref,
         DRACONIC_PRESENCE_DECLARATION.ref,

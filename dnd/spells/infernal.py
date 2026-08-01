@@ -8,11 +8,8 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.actions import SpellAction
-from dnd.core.base_actions import (
-    ActionEvent,
-    TargetType,
-    spell_slot_cost_type,
-)
+from dnd.core.action_types import spell_slot_cost_type
+from dnd.core.base_actions import ActionEvent, TargetType
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -26,6 +23,7 @@ from dnd.core.events import (
     Event,
     EventHandler,
     EventPhase,
+    EventQueue,
     EventType,
     Range,
     RangeType,
@@ -168,13 +166,6 @@ def _rebuke_processor(
             return None
     assert cast_rank is not None
 
-    caster.action_economy.consume("reactions", 1)
-    if resource_name is not None:
-        if not caster.action_economy.consume_resource(resource_name, 1):
-            raise RuntimeError("validated innate rebuke resource disappeared")
-    else:
-        caster.action_economy.consume(spell_slot_cost_type(cast_rank), 1)
-
     declaration = ActionEvent(
         name="Hellish Rebuke",
         source_entity_uuid=caster.uuid,
@@ -184,9 +175,24 @@ def _rebuke_processor(
         parent_event=event.uuid,
         phase=EventPhase.DECLARATION,
         costs=[],
+        use_register=False,
     )
+    declaration = EventQueue.publish_declaration(declaration)
+    if declaration.canceled:
+        return event
     execution = declaration.phase_to(EventPhase.EXECUTION)
+    if execution.canceled:
+        return event
     effect = execution.phase_to(EventPhase.EFFECT)
+    if effect.canceled:
+        return event
+
+    caster.action_economy.consume("reactions", 1)
+    if resource_name is not None:
+        if not caster.action_economy.consume_resource(resource_name, 1):
+            raise RuntimeError("validated innate rebuke resource disappeared")
+    else:
+        caster.action_economy.consume(spell_slot_cost_type(cast_rank), 1)
     save_request = caster.create_saving_throw_request(
         attacker.uuid,
         "dexterity",

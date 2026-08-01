@@ -19,6 +19,7 @@ from dnd.content_system.icon_bindings import (
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
+from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.events import RangeType
 from dnd.core.creature_types import DamageType
@@ -345,12 +346,19 @@ _EXPECTED = {
         400,
     ),
 }
+_RECIPES_BY_SOURCE_ID = MappingProxyType({
+    declaration.ref.content_id.rsplit(".", maxsplit=1)[-1]: ContentRecipe.create(
+        ref=declaration.ref,
+        parameters={},
+    )
+    for declaration in weapon_definitions.SRD_WEAPON_DECLARATIONS
+})
 
 
 def test_srd_weapon_declarations_are_exact_frozen_content() -> None:
     """All 25 playable weapons own stable refs, descriptors, and possession policy."""
     declarations = weapon_definitions.SRD_WEAPON_DECLARATIONS
-    recipes = weapon_definitions.SRD_WEAPON_RECIPES_BY_CONTENT_ID
+    recipes = _RECIPES_BY_SOURCE_ID
 
     assert isinstance(recipes, MappingProxyType)
     assert tuple(recipes) == tuple(_EXPECTED)
@@ -422,7 +430,7 @@ def test_srd_weapon_parameter_contract_allows_only_presentation_variants() -> No
 def test_srd_weapon_recipe_materializes_exact_mechanics(legacy_id: str) -> None:
     """Every stable recipe reconstructs the previous playable weapon mechanics."""
     expected = _EXPECTED[legacy_id]
-    recipe = weapon_definitions.SRD_WEAPON_RECIPES_BY_CONTENT_ID[legacy_id]
+    recipe = _RECIPES_BY_SOURCE_ID[legacy_id]
 
     weapon = materialize_item(
         recipe,

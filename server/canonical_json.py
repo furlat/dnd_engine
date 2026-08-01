@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
@@ -41,6 +42,15 @@ def _json_ready(value: Any) -> Any:
     raise TypeError(f"Unsupported canonical JSON value: {type(value).__name__}")
 
 
+def datetime_to_text(value: datetime) -> str:
+    """Serialize one timezone-aware datetime in canonical UTC form."""
+
+    if value.tzinfo is None:
+        raise ValueError("Canonical JSON timestamps must be timezone-aware")
+    normalized = value.astimezone(UTC)
+    return normalized.isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
 def canonical_json(value: Any) -> str:
     """Serialize a supported value into compact deterministic JSON text."""
 
@@ -57,3 +67,9 @@ def canonical_json_bytes(value: Any) -> bytes:
     """Serialize a supported value into deterministic UTF-8 JSON bytes."""
 
     return canonical_json(value).encode("utf-8")
+
+
+def canonical_json_sha256(value: Any) -> str:
+    """Return the SHA-256 digest of one canonical server JSON value."""
+
+    return sha256(canonical_json_bytes(value)).hexdigest()

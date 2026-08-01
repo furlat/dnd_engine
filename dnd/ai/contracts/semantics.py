@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import lru_cache
-from hashlib import sha256
 import json
 from typing import Hashable, Mapping, Optional, Tuple, Union, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 
 FactValue = Union[str, int, float, bool, None]
 
@@ -943,8 +943,7 @@ def action_semantics_payload_ref(payload: Mapping[str, object]) -> str:
     if not isinstance(tags, (list, tuple, set, frozenset)):
         raise ValueError("Action semantic tags must be a collection")
     canonical_payload["tags"] = sorted(str(tag) for tag in tags)
-    canonical = json.dumps(canonical_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    digest = sha256(canonical.encode("ascii")).hexdigest()[:16]
+    digest = canonical_content_sha256(canonical_payload)[:16]
     semantic_id = str(canonical_payload.get("semantic_id", "action.unknown"))
     semantic_version_value = canonical_payload.get("semantic_version", 1)
     if type(semantic_version_value) is not int:

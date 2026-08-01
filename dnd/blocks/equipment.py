@@ -490,12 +490,6 @@ class Weapon(EquippableItem):
             damages.append(Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.extra_damage_dices[i], dice_numbers=self.extra_damage_dices_numbers[i], damage_bonus=self.extra_damage_bonus[i], damage_type=self.extra_damage_type[i]))
         return damages
 
-    def get_all_weapon_damages(self, equipment_block: 'Equipment', ability_block: AbilityScores) -> List[Damage]:
-        """Return primary plus extra weapon damage payloads."""
-        damages = [self.get_base_damage(equipment_block, ability_block)]
-        damages.extend(self.get_extra_damages())
-        return damages
-
 _SLOT_ATTRIBUTE_BY_SLOT = {
     WeaponSlot.MELEE_MAIN: "weapon_melee_main",
     WeaponSlot.MELEE_OFF: "weapon_melee_off",

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from pathlib import PurePosixPath
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.content.provenance import ContentSource
 
@@ -153,11 +152,4 @@ class ContentPackManifest(BaseModel):
     @property
     def contract_digest(self) -> str:
         """Hash the complete normalized cold manifest contract."""
-        encoded = json.dumps(
-            self.model_dump(mode="json"),
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()
+        return canonical_content_sha256(self.model_dump(mode="json"))

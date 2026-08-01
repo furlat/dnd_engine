@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions import Move, SpellEvent
 from dnd.actions_functional import execute_use_action
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -24,6 +24,7 @@ from dnd.core.content.materialization import (
 )
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
@@ -44,11 +45,13 @@ from server.player_replication_contract import (
     ActionPresentationCue,
     ConditionOperation,
     ConditionPresentationCue,
+    DamagePresentationCue,
     EncounterReplacePatch,
     EntityRemovePatch,
     EntityUpsertPatch,
     ItemActionPresentationCue,
     LightPresentationCue,
+    MovementPresentationCue,
     ObserverVisibilityReplacePatch,
     SpellPresentationCue,
     SubjectiveCombatLogDelivery,
@@ -391,6 +394,176 @@ def test_real_torch_ignite_is_one_authoritative_subjective_light_frame() -> None
         runtime.stop()
         source_stream.stop()
         reset_engine_runtime()
+
+
+def test_each_committed_movement_step_has_authoritative_perception_frame() -> None:
+    """Moving light commits exact world/light replacements at every arrival."""
+    grid = reset_engine_runtime(grid_size=(5, 1))
+    for tile in grid.get_all_tiles().values():
+        tile.default_light = LightLevel.DARKNESS
+    observer = materialize_creature(
+        BESTIARY_CREATURE_RECIPES_BY_ID["goblin"],
+        runtime_entity_uuid=uuid4(),
+        display_name="Moving torchbearer",
+        faction="heroes",
+        position=(0, 0),
+        deployment_role=CreatureDeploymentRole(
+            role_id="tests.replication.moving_torchbearer",
+        ),
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
+    )
+    torch = materialize_item(
+        TORCH_RECIPE,
+        observer.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
+    assert observer.loot_item(torch)
+    stored_torch = next(
+        item
+        for item in observer.inventory.items.values()
+        if item.stack_id == torch.stack_id
+    )
+    assert isinstance(stored_torch, Torch)
+    stored_torch.ignite(observer.uuid)
+    Entity.update_all_entities_senses(max_distance=10)
+
+    encounter = Encounter(name="Moving light encounter", source_entity_uuid=observer.uuid)
+    encounter.add_combatant(
+        observer,
+        Controller(source_entity_uuid=observer.uuid, name="Torch controller"),
+    )
+    source_stream = DndEventStream()
+    runtime = CanonicalSubjectiveReplicationRuntime(
+        store=SubjectiveJournalStore(),
+        source_journal=source_stream,
+        grid_provider=lambda: grid,
+        entities_provider=Entity.get_all_entities,
+        encounter_provider=lambda: encounter,
+    )
+    context = runtime.bind(_authority(observer), encounter=encounter)
+    try:
+        result = Move(
+            source_entity_uuid=observer.uuid,
+            end_position=(3, 0),
+            path=[(0, 0), (1, 0), (2, 0), (3, 0)],
+            use_movement_cost=False,
+        ).apply()
+        assert result is not None and not result.canceled
+
+        frames = context.frames(from_observation_cursor=0).frames
+        movement_frames = tuple(
+            frame
+            for frame in frames
+            if any(
+                isinstance(cue, MovementPresentationCue)
+                for cue in frame.presentation
+            )
+        )
+        assert len(movement_frames) == 3
+        movement_sequence_ids: set[str] = set()
+        for path_index, frame in enumerate(movement_frames, start=1):
+            movement = next(
+                cue
+                for cue in frame.presentation
+                if isinstance(cue, MovementPresentationCue)
+            )
+            assert movement.trajectory == (
+                (path_index - 1, 0),
+                (path_index, 0),
+            )
+            assert movement.path_start_index == path_index - 1
+            assert movement.endpoint_outcome.value == "committed"
+            movement_sequence_ids.add(movement.movement_sequence_id)
+            upsert = next(
+                patch
+                for patch in frame.patches
+                if isinstance(patch, EntityUpsertPatch)
+                and patch.entity.uuid == str(observer.uuid)
+            )
+            assert upsert.entity.position == (path_index, 0)
+            visibility = next(
+                patch
+                for patch in frame.patches
+                if isinstance(patch, ObserverVisibilityReplacePatch)
+                and patch.observer_uuid == str(observer.uuid)
+            )
+            observer_light_cues = tuple(
+                cue
+                for cue in frame.presentation
+                if isinstance(cue, LightPresentationCue)
+                and cue.observer_uuid == str(observer.uuid)
+            )
+            assert len(observer_light_cues) == 1
+            light = observer_light_cues[0]
+            assert visibility.visibility.effective_light_levels == {
+                f"{cell.position[0]},{cell.position[1]}": cell.light_level
+                for cell in light.cells
+            }
+            assert visibility.visibility.position == (path_index, 0)
+        assert len(movement_sequence_ids) == 1
+    finally:
+        runtime.clear_all()
+        runtime.stop()
+        source_stream.stop()
+        reset_engine_runtime()
+
+
+def test_spike_damage_is_scheduled_after_its_destination_arrival(
+    runtime_scene: RuntimeScene,
+) -> None:
+    """Real entry damage follows its exact committed destination segment."""
+    scene = runtime_scene
+    starting_cursor = scene.context.journal.watermarks.observation_cursor
+    materialize_spike_trap_effect({(1, 0)})
+    Entity.update_all_entities_senses(max_distance=10)
+
+    with fixed_dice_faces(1, 1):
+        result = Move(
+            source_entity_uuid=scene.observer.uuid,
+            end_position=(1, 0),
+            path=[(0, 0), (1, 0)],
+            use_movement_cost=False,
+        ).apply()
+    assert result is not None and not result.canceled, (
+        (
+            result.status_message,
+            result.canceled_from_phase,
+            result.termination_reason,
+        )
+        if result is not None
+        else None
+    )
+
+    frames = scene.context.frames(
+        from_observation_cursor=starting_cursor,
+    ).frames
+    frame = next(
+        candidate
+        for candidate in frames
+        if any(
+            isinstance(cue, MovementPresentationCue)
+            for cue in candidate.presentation
+        )
+        and any(
+            isinstance(cue, DamagePresentationCue)
+            for cue in candidate.presentation
+        )
+    )
+    movement = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    damage = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, DamagePresentationCue)
+    )
+    assert movement.trajectory == ((0, 0), (1, 0))
+    assert movement.parent_presentation_id is None
+    assert damage.parent_presentation_id is None
+    assert frame.presentation.index(movement) < frame.presentation.index(damage)
+    assert damage.target_uuid == str(scene.observer.uuid)
+    assert damage.damage_types == ("Piercing",)
 
 
 def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:

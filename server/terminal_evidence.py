@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from uuid import UUID
 
 from server.game_artifact_store import GameArtifactStore
@@ -36,12 +35,13 @@ SUBJECTIVE_REPLAY_SCHEMA_VERSION = (
 )
 
 
-@dataclass(frozen=True, slots=True)
 class TerminalEvidenceError(ValueError):
     """Typed mismatch between immutable terminal evidence inputs."""
 
-    code: str
-    message: str
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code, message)
+        self.code = code
+        self.message = message
 
     def __str__(self) -> str:
         return self.message

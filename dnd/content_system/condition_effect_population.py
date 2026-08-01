@@ -21,7 +21,6 @@ import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
-import dnd.items.environment_interactables as environment_interactables
 import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
 import dnd.spells.abjuration as abjuration
@@ -32,7 +31,6 @@ import dnd.spells.evocation as evocation
 import dnd.spells.illusion as illusion
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
-import dnd.tile_conditions as tile_conditions
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_IDENTITY_SPECS,
 )
@@ -462,6 +460,20 @@ _SPELL_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             gates=_failed_save("dexterity"),
         ),
     ),
+    conjuration.Entangle: (
+        _branch(
+            "failed-save-restrained",
+            ConditionEffectDisposition.HARMFUL,
+            (
+                _apply(
+                    "condition.restrained",
+                    conditions.Restrained,
+                    ConditionEffectTarget.EACH_AFFECTED_ENTITY,
+                ),
+            ),
+            gates=_failed_save("strength"),
+        ),
+    ),
     conjuration.FogCloud: _single_apply(
         conjuration.FogCloudZone,
         target=ConditionEffectTarget.WORLD_POSITION,
@@ -469,23 +481,26 @@ _SPELL_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
     ),
     conjuration.Web: (
         _branch(
-            "zone",
-            ConditionEffectDisposition.NEUTRAL,
+            "failed-save-restrained",
+            ConditionEffectDisposition.HARMFUL,
             (
                 _apply(
-                    "condition.web_zone",
-                    conjuration.WebZone,
-                    ConditionEffectTarget.WORLD_POSITION,
+                    "condition.restrained",
+                    conditions.Restrained,
+                    ConditionEffectTarget.EACH_AFFECTED_ENTITY,
                 ),
             ),
+            gates=_failed_save("dexterity"),
         ),
+    ),
+    conjuration.EvardsBlackTentacles: (
         _branch(
             "failed-save-restrained",
             ConditionEffectDisposition.HARMFUL,
             (
                 _apply(
-                    "condition.web_restrained",
-                    conjuration.WebRestrained,
+                    "condition.restrained",
+                    conditions.Restrained,
                     ConditionEffectTarget.EACH_AFFECTED_ENTITY,
                 ),
             ),
@@ -1261,7 +1276,7 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
                 _apply(
                     "condition.draconic_presence_aura",
                     sorcerer.DraconicPresenceAura,
-                    ConditionEffectTarget.ACTOR,
+                    ConditionEffectTarget.CREATED_SPATIAL_EFFECT,
                 ),
             ),
         ),
@@ -1372,20 +1387,6 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             ),
         ),
     ),
-    environment_interactables.PullLeverAction: (
-        _branch(
-            "deactivate-trap",
-            ConditionEffectDisposition.BENEFICIAL,
-            (
-                _remove(
-                    "condition.spike_trap.remove",
-                    tile_conditions.SpikeTrapCondition,
-                    ConditionEffectTarget.WORLD_POSITION,
-                ),
-            ),
-        ),
-    ),
-
     # Spell-granted actions.
     transmutation.BonusDash: _single_apply(
         conditions.Dashing,
@@ -1416,8 +1417,50 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             ConditionEffectDisposition.BENEFICIAL,
             (
                 _remove(
-                    "condition.web_restrained.remove",
-                    conjuration.WebRestrained,
+                    "condition.restrained.remove",
+                    conditions.Restrained,
+                    ConditionEffectTarget.ACTOR,
+                ),
+            ),
+            gates=_ACTION_SUCCEEDED,
+        ),
+    ),
+    conjuration.EscapeEntangleAction: (
+        _branch(
+            "escape",
+            ConditionEffectDisposition.BENEFICIAL,
+            (
+                _remove(
+                    "condition.restrained.remove",
+                    conditions.Restrained,
+                    ConditionEffectTarget.ACTOR,
+                ),
+            ),
+            gates=_ACTION_SUCCEEDED,
+        ),
+    ),
+    conjuration.EscapeBlackTentaclesStrengthAction: (
+        _branch(
+            "escape",
+            ConditionEffectDisposition.BENEFICIAL,
+            (
+                _remove(
+                    "condition.restrained.remove",
+                    conditions.Restrained,
+                    ConditionEffectTarget.ACTOR,
+                ),
+            ),
+            gates=_ACTION_SUCCEEDED,
+        ),
+    ),
+    conjuration.EscapeBlackTentaclesDexterityAction: (
+        _branch(
+            "escape",
+            ConditionEffectDisposition.BENEFICIAL,
+            (
+                _remove(
+                    "condition.restrained.remove",
+                    conditions.Restrained,
                     ConditionEffectTarget.ACTOR,
                 ),
             ),
@@ -1501,7 +1544,7 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
         target=ConditionEffectTarget.ACTOR,
     ),
     monster_traits.LeadershipAction: _single_apply(
-        monster_traits.LeadershipAura,
+        monster_traits.LeadershipMembership,
         target=ConditionEffectTarget.EACH_AFFECTED_ENTITY,
     ),
     monster_traits.WolfBiteProneRiderFeature: (
@@ -1651,7 +1694,7 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
         disposition=ConditionEffectDisposition.HARMFUL,
     ),
     conjuration.WebZone: _single_apply(
-        conjuration.WebRestrained,
+        conditions.Restrained,
         target=ConditionEffectTarget.EACH_AFFECTED_ENTITY,
         disposition=ConditionEffectDisposition.HARMFUL,
         gates=_failed_save("dexterity"),
@@ -1865,6 +1908,7 @@ NO_CONDITION_EFFECT_SPELL_TYPES: tuple[_Definition, ...] = (
     evocation.MassHealingWord,
     necromancy.Blight,
     conjuration.DimensionDoor,
+    conjuration.GuardianOfFaith,
     evocation.ConeOfCold,
     evocation.FlameStrike,
     evocation.MassCureWounds,
@@ -1876,7 +1920,6 @@ NO_CONDITION_EFFECT_SPELL_TYPES: tuple[_Definition, ...] = (
     enchantment.PowerWordKill,
 )
 INDIRECT_CONDITION_EFFECT_SPELL_TYPES: tuple[_Definition, ...] = (
-    conjuration.GuardianOfFaith,
     conjuration.HeroesFeast,
 )
 INTERNAL_CONDITION_PRODUCER_TYPES: tuple[_Definition, ...] = (
@@ -1884,22 +1927,18 @@ INTERNAL_CONDITION_PRODUCER_TYPES: tuple[_Definition, ...] = (
     fighter.ExtraAttacksGranted,
     conditions.ConcentrationActionMarker,
     necromancy.EyebiteCastingState,
-    conjuration.SpiritGuardiansTriggered,
-    conjuration.GuardianWarded,
     abjuration.AntimagicSuppression,
     skeleton_abilities.MarkCooldown,
     monster_traits.SimpleMarkerCondition,
 )
 INTERNAL_ONLY_CONDITION_EFFECT_SOURCE_TYPES: tuple[_Definition, ...] = (
     fighter.ActionSurge,
-    fighter.ExtraAttackFeature,
     monster_traits.MartialAdvantageFeature,
     monster_traits.SneakAttackFeature,
     monster_traits.BruteFeature,
     monster_traits.SurpriseAttackFeature,
     monster_traits.DivineEminenceActive,
     abjuration.AntimagicFieldZone,
-    conjuration._build_guardian_of_faith_object,
 )
 
 

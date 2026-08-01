@@ -278,6 +278,20 @@ export function assertSubjectiveFrame(frame: SubjectiveReplicationFrame): void {
       previousChildCursor = child.presentation_cursor;
     }
     assertPresentationGraphSemantics(cue, byId, path);
+    if (
+      cue.kind === "movement"
+      && cue.endpoint_outcome === "not_committed"
+      && frame.patches.some((patch) => (
+        patch.kind === "entity_upsert"
+        && patch.entity.uuid === cue.entity_uuid
+        && samePosition(patch.entity.position, cue.trajectory[cue.trajectory.length - 1]!)
+      ))
+    ) {
+      throw new ContractValidationError(
+        path,
+        "not-committed movement cannot project destination occupancy",
+      );
+    }
   });
 }
 
@@ -293,6 +307,15 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
       const representedSteps = cue.trajectory.length - 1;
       if (cue.path_start_index + representedSteps > cue.path_total_steps) {
         throw new ContractValidationError(path, "movement trajectory exceeds declared path order");
+      }
+      if (
+        cue.endpoint_outcome === "not_committed"
+        && (representedSteps !== 1 || cue.child_presentation_ids.length === 0)
+      ) {
+        throw new ContractValidationError(
+          path,
+          "not-committed movement requires one intended edge and a pre-edge reaction",
+        );
       }
       return;
     }
@@ -492,6 +515,42 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
       const positions = cue.cells.map((cell) => positionKey(cell.position));
       if (new Set(positions).size !== positions.length) {
         throw new ContractValidationError(path, "light replacement positions must be unique");
+      }
+      return;
+    }
+    case "spatial_effect": {
+      if (cue.content_ref.definition_kind !== "spatial_effect") {
+        throw new ContractValidationError(path, "spatial effect requires exact spatial-effect content");
+      }
+      if (cue.child_presentation_ids.length !== 0) {
+        throw new ContractValidationError(path, "spatial-effect lifecycle cue must be a leaf");
+      }
+      assertSortedUniquePositions(
+        cue.affected_positions,
+        `${path}.affected_positions`,
+      );
+      assertSortedUniquePositions(
+        cue.previous_positions,
+        `${path}.previous_positions`,
+      );
+      const disclosed = [...cue.affected_positions, ...cue.previous_positions];
+      if (disclosed.length === 0) {
+        throw new ContractValidationError(path, "spatial effect requires disclosed geometry");
+      }
+      if (
+        cue.anchor_position !== null
+        && !disclosed.some((position) => samePosition(position, cue.anchor_position!))
+      ) {
+        throw new ContractValidationError(path, "spatial-effect anchor must belong to disclosed geometry");
+      }
+      if (
+        (cue.operation === "created" || cue.operation === "revealed")
+        && cue.affected_positions.length === 0
+      ) {
+        throw new ContractValidationError(path, "created or revealed effect requires current geometry");
+      }
+      if (cue.operation === "removed" && cue.previous_positions.length === 0) {
+        throw new ContractValidationError(path, "removed effect requires former geometry");
       }
       return;
     }
@@ -924,6 +983,7 @@ function assertPresentationGraphSemantics(
     case "condition":
     case "door":
     case "light":
+    case "spatial_effect":
     case "equipment":
     case "encounter":
       return;
@@ -948,6 +1008,22 @@ function sameOrderedValues(left: ReadonlyArray<string>, right: ReadonlyArray<str
 
 function samePosition(left: readonly [number, number], right: readonly [number, number]): boolean {
   return left[0] === right[0] && left[1] === right[1];
+}
+
+function assertSortedUniquePositions(
+  positions: ReadonlyArray<readonly [number, number]>,
+  path: string,
+): void {
+  for (let index = 1; index < positions.length; index += 1) {
+    const previous = positions[index - 1]!;
+    const current = positions[index]!;
+    if (
+      previous[0] > current[0]
+      || (previous[0] === current[0] && previous[1] >= current[1])
+    ) {
+      throw new ContractValidationError(path, "positions must be unique and sorted");
+    }
+  }
 }
 
 function positionKey(position: readonly [number, number]): string {

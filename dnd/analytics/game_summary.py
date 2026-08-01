@@ -127,17 +127,14 @@ class _AttackCounter:
         Args:
             other: Counter to add.
         """
-        for field_name in (
-            "attempted",
-            "resolved",
-            "hits",
-            "misses",
-            "critical_hits",
-            "critical_misses",
-            "canceled",
-            "opportunity_attacks",
-        ):
-            setattr(self, field_name, getattr(self, field_name) + getattr(other, field_name))
+        self.attempted += other.attempted
+        self.resolved += other.resolved
+        self.hits += other.hits
+        self.misses += other.misses
+        self.critical_hits += other.critical_hits
+        self.critical_misses += other.critical_misses
+        self.canceled += other.canceled
+        self.opportunity_attacks += other.opportunity_attacks
 
     def freeze(self, opportunity_attacks_available: bool) -> AttackStatisticsV1:
         """Return the immutable public contract.
@@ -416,20 +413,17 @@ class _RollLuckCounter:
 
     def merge(self, other: "_RollLuckCounter") -> None:
         """Add another roll-luck counter."""
-        for field_name in (
-            "roll_events",
-            "outcome_samples",
-            "random_faces_rolled",
-            "observed_total",
-            "expected_total",
-            "variance_total",
-            "natural_ones",
-            "natural_twenties",
-            "advantage_events",
-            "disadvantage_events",
-            "modified_events",
-        ):
-            setattr(self, field_name, getattr(self, field_name) + getattr(other, field_name))
+        self.roll_events += other.roll_events
+        self.outcome_samples += other.outcome_samples
+        self.random_faces_rolled += other.random_faces_rolled
+        self.observed_total += other.observed_total
+        self.expected_total += other.expected_total
+        self.variance_total += other.variance_total
+        self.natural_ones += other.natural_ones
+        self.natural_twenties += other.natural_twenties
+        self.advantage_events += other.advantage_events
+        self.disadvantage_events += other.disadvantage_events
+        self.modified_events += other.modified_events
 
     def freeze(self) -> RollLuckStatisticsV2:
         """Return the immutable public luck aggregate."""
@@ -799,9 +793,14 @@ def _build_effect_resolver(event_history: Sequence[Event]) -> Callable[[Event], 
     """Build a parent-chain resolver for stable damage-source attribution."""
     events_by_uuid = {event.uuid: event for event in event_history}
 
+    def event_effect_id(event: Event) -> str | None:
+        if isinstance(event, (TakeDamageEvent, DamageAppliedEvent)):
+            return event.effect_id
+        return None
+
     def resolve(event: Event) -> str:
-        effect_id = getattr(event, "effect_id", None)
-        if isinstance(effect_id, str) and effect_id:
+        effect_id = event_effect_id(event)
+        if effect_id:
             return f"effect:{effect_id}"
         current = event
         visited: set[UUID] = set()
@@ -814,8 +813,8 @@ def _build_effect_resolver(event_history: Sequence[Event]) -> Callable[[Event], 
                 return f"spell:{parent.spell_id or parent.name}"
             if isinstance(parent, ActionEvent):
                 return f"action:{parent.name}"
-            parent_effect_id = getattr(parent, "effect_id", None)
-            if isinstance(parent_effect_id, str) and parent_effect_id:
+            parent_effect_id = event_effect_id(parent)
+            if parent_effect_id:
                 return f"effect:{parent_effect_id}"
             current = parent
         return "unattributed"

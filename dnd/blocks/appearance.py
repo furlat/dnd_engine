@@ -141,6 +141,20 @@ class Appearance(BaseBlock):
         description="RGB tint applied to the beard overlay when present.",
     )
 
+    def apply_config(self, config: AppearanceConfig) -> None:
+        """Commit exact authored appearance facts without reflective copying."""
+        self.portrait_key = config.portrait_key
+        self.presentation_kind = config.presentation_kind
+        self.visual_scale = config.visual_scale
+        self.visual_scale_x = config.visual_scale_x
+        self.placeholder_tint = config.placeholder_tint
+        self.body_category = config.body_category
+        self.skin_tint = config.skin_tint
+        self.head_category = config.head_category
+        self.hair_tint = config.hair_tint
+        self.has_beard = config.has_beard
+        self.beard_tint = config.beard_tint
+
     @classmethod
     def create(
         cls,

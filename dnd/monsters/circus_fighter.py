@@ -10,9 +10,7 @@ from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.conditions import Blinded
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity, EntityConfig
@@ -115,19 +113,19 @@ def create_warrior(
         config=entity_config,
     )
 
-    dagger = materialize_item_from_installed_runtime(
+    dagger = materialize_item(
         RUSTY_DAGGER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    flaming_scimitar = materialize_item_from_installed_runtime(
+    flaming_scimitar = materialize_item(
         FLAMING_SCIMITAR_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    light_armor = materialize_item_from_installed_runtime(
+    light_armor = materialize_item(
         PERFORMER_LEATHER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,

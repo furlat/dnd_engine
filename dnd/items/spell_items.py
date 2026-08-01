@@ -251,7 +251,7 @@ class _AcidFlaskSpell(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape = Cube(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
+                target=self.end_position if self.end_position is not None else (0, 0),
                 size_feet=10,
                 centered=True,
             )
@@ -268,7 +268,7 @@ class _AcidFlaskSpell(SpellAction):
             return declaration_event.cancel(status_message="Caster not found")
 
         target_pos = self.end_position
-        if not target_pos:
+        if target_pos is None:
             return declaration_event.cancel(
                 status_message="No target position specified",
             )

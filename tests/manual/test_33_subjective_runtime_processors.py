@@ -4,6 +4,7 @@ from typing import Any
 
 from ai.knowledge.deriver import derive_agent_facts
 from dnd.ai.contracts.observation import KnowledgeState, ObservationObjectFact, ObservationTileFact
+from dnd.core.item_types import ItemObservationState
 from ai.subjective.hooks import DerivedVariableUpdate, HookContext, HookPoint, HookRegistry, ProcessorOutput
 from ai.subjective.processors import default_processors
 from ai.subjective.queries import SubjectiveQueries
@@ -138,7 +139,15 @@ def test_typed_facts_expose_doors_water_and_hazards() -> None:
         knowledge_state=KnowledgeState.VISIBLE,
         observer_uuids=[],
         position=(3, 1),
-        state={"is_open": False},
+        state=ItemObservationState(
+            blocks_movement=True,
+            blocks_vision=True,
+            is_pickable=False,
+            is_usable=True,
+            stack_count=1,
+            is_hazardous=False,
+            is_open=False,
+        ),
     )
     world.known_tiles["2,1"] = ObservationTileFact(
         key="2,1",

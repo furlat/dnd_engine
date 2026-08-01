@@ -15,6 +15,7 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.world_contracts import (
     APIEntityVisibility,
+    APIEntitySummary,
     APIGrid,
     APITile,
     APIVisibilityResponse,
@@ -95,6 +96,41 @@ class RememberedObjectFact:
         return SubjectiveFloorObject.model_validate_json(self.payload)
 
 
+@dataclass(frozen=True)
+class RememberedCorpseFact:
+    """Immutable dead-actor presentation captured under current perception."""
+
+    entity_uuid: str
+    position: tuple[int, int]
+    entity_payload: str
+    visual_loadout_payload: str
+
+    @classmethod
+    def capture(
+        cls,
+        entity: APIEntitySummary,
+        visual_loadout: EntityVisualLoadout,
+    ) -> "RememberedCorpseFact":
+        if entity.life_state is not LifeState.DEAD:
+            raise ValueError("only dead entities may enter corpse memory")
+        if visual_loadout.entity_uuid != entity.uuid:
+            raise ValueError("corpse loadout must match its projected entity")
+        return cls(
+            entity_uuid=entity.uuid,
+            position=entity.position,
+            entity_payload=entity.model_dump_json(),
+            visual_loadout_payload=visual_loadout.model_dump_json(),
+        )
+
+    def materialize_entity(self) -> APIEntitySummary:
+        return APIEntitySummary.model_validate_json(self.entity_payload)
+
+    def materialize_visual_loadout(self) -> EntityVisualLoadout:
+        return EntityVisualLoadout.model_validate_json(
+            self.visual_loadout_payload,
+        )
+
+
 class SubjectiveSpatialMemory:
     """Perspective-epoch-owned last-observed spatial facts."""
 
@@ -104,6 +140,8 @@ class SubjectiveSpatialMemory:
         self.perspective_epoch_id = perspective_epoch_id
         self._tiles: dict[tuple[int, int], RememberedTileFact] = {}
         self._objects: dict[str, RememberedObjectFact] = {}
+        self._corpses: dict[str, RememberedCorpseFact] = {}
+        self._identified_entity_uuids: set[str] = set()
 
     def _working_copy(
         self,
@@ -118,9 +156,19 @@ class SubjectiveSpatialMemory:
         *,
         tiles: dict[tuple[int, int], RememberedTileFact],
         objects: dict[str, RememberedObjectFact],
+        corpses: dict[str, RememberedCorpseFact],
+        identified_entity_uuids: set[str],
     ) -> None:
         self._tiles = tiles
         self._objects = objects
+        self._corpses = corpses
+        self._identified_entity_uuids = identified_entity_uuids
+
+    def _corpse_working_copy(self) -> dict[str, RememberedCorpseFact]:
+        return dict(self._corpses)
+
+    def _identified_entity_working_copy(self) -> set[str]:
+        return set(self._identified_entity_uuids)
 
 
 class CanonicalSubjectiveWorldProjector:
@@ -191,7 +239,7 @@ def build_subjective_world(
         grid=grid,
         observers=observers,
     )
-    identified_entity_uuids = (
+    currently_identified_entity_uuids = (
         set(perspective.controlled_entity_uuids)
         | set(perspective.observer_entity_uuids)
         | {
@@ -200,11 +248,26 @@ def build_subjective_world(
             for entity_uuid in observer.senses.entities
         }
     )
-    projected_entities = tuple(
-        project_entity_summary(entity)
-        for entity in entity_rows
-        if str(entity.uuid) in identified_entity_uuids
+    remembered_corpses = _capture_corpse_memory(
+        memory=memory,
+        entity_rows=entity_rows,
+        currently_identified_entity_uuids=currently_identified_entity_uuids,
+        previously_identified_entity_uuids=(
+            memory._identified_entity_working_copy()
+        ),
+        visible_cells=visible_cells,
     )
+    projected_entities_by_uuid = {
+        str(entity.uuid): project_entity_summary(entity)
+        for entity in entity_rows
+        if str(entity.uuid) in currently_identified_entity_uuids
+    }
+    for entity_uuid, fact in remembered_corpses.items():
+        projected_entities_by_uuid.setdefault(
+            entity_uuid,
+            fact.materialize_entity(),
+        )
+    projected_entities = tuple(projected_entities_by_uuid.values())
     projected_grid = _project_grid(
         grid=grid,
         remembered_tiles=remembered_tiles,
@@ -224,24 +287,78 @@ def build_subjective_world(
         entity_uuid: project_equipment_overview(entities_by_uuid[entity_uuid])
         for entity_uuid in perspective.controlled_entity_uuids
     }
-    visual_loadout_by_entity = {
-        entity.uuid: build_entity_visual_loadout(entities_by_uuid[entity.uuid])
-        for entity in projected_entities
-    }
+    visual_loadout_by_entity: dict[str, EntityVisualLoadout] = {}
+    for entity in projected_entities:
+        corpse = remembered_corpses.get(entity.uuid)
+        if entity.life_state is LifeState.DEAD and corpse is not None:
+            visual_loadout_by_entity[entity.uuid] = (
+                corpse.materialize_visual_loadout()
+            )
+        else:
+            visual_loadout_by_entity[entity.uuid] = build_entity_visual_loadout(
+                entities_by_uuid[entity.uuid],
+            )
 
     world = SubjectiveReplicatedWorld(
         state=SubjectiveGameState(
             grid=projected_grid,
             entities=projected_entities,
-            encounter=_project_encounter(encounter, identified_entity_uuids),
+            encounter=_project_encounter(
+                encounter,
+                projected_entities_by_uuid,
+                currently_identified_entity_uuids,
+            ),
             floor_objects=projected_objects,
         ),
         visibility=projected_visibility,
         equipment_by_entity=equipment_by_entity,
         visual_loadout_by_entity=visual_loadout_by_entity,
     )
-    memory._commit(tiles=remembered_tiles, objects=remembered_objects)
+    memory._commit(
+        tiles=remembered_tiles,
+        objects=remembered_objects,
+        corpses=remembered_corpses,
+        identified_entity_uuids=(
+            memory._identified_entity_working_copy()
+            | currently_identified_entity_uuids
+        ),
+    )
     return world
+
+
+def _capture_corpse_memory(
+    *,
+    memory: SubjectiveSpatialMemory,
+    entity_rows: tuple[Entity, ...],
+    currently_identified_entity_uuids: set[str],
+    previously_identified_entity_uuids: set[str],
+    visible_cells: set[tuple[int, int]],
+) -> dict[str, RememberedCorpseFact]:
+    """Refresh only dead actors whose exact cell is currently observable."""
+    remembered = memory._corpse_working_copy()
+    for entity_uuid, fact in tuple(remembered.items()):
+        if fact.position in visible_cells:
+            del remembered[entity_uuid]
+
+    for entity in entity_rows:
+        entity_uuid = str(entity.uuid)
+        currently_owned = entity_uuid in currently_identified_entity_uuids
+        previously_identified_here = (
+            entity_uuid in previously_identified_entity_uuids
+            and entity.position in visible_cells
+        )
+        if entity.health.life_state is not LifeState.DEAD:
+            if currently_owned:
+                remembered.pop(entity_uuid, None)
+            continue
+        if not (currently_owned or previously_identified_here):
+            continue
+        projected = project_entity_summary(entity)
+        remembered[entity_uuid] = RememberedCorpseFact.capture(
+            projected,
+            build_entity_visual_loadout(entity),
+        )
+    return remembered
 
 
 def build_entity_visual_loadout(entity: Entity) -> EntityVisualLoadout:
@@ -445,8 +562,13 @@ def _capture_spatial_memory(
             )
             if viewer_uuid is None:
                 continue
-            directions = _direction_values(getattr(block, "blocked_directions", ()))
-            channels = _channel_values(getattr(block, "blocked_channels", ()))
+            structure = block.get_directional_structure_state()
+            directions = _direction_values(
+                structure.blocked_directions if structure is not None else (),
+            )
+            channels = _channel_values(
+                structure.blocked_channels if structure is not None else (),
+            )
             if block.get_spatial_open_state() is None and not (directions and channels):
                 continue
             candidates[object_uuid] = (position, viewer_uuid)
@@ -506,26 +628,23 @@ def _project_observer_visibility(observer: Entity) -> APIEntityVisibility:
 
 def _project_encounter(
     encounter: Encounter | None,
-    identified_entity_uuids: set[str],
+    projected_entities_by_uuid: dict[str, APIEntitySummary],
+    currently_identified_entity_uuids: set[str],
 ) -> SubjectiveEncounter | None:
     if encounter is None:
         return None
     combatants: list[SubjectiveCombatant] = []
     for entity_uuid in encounter.initiative_order:
         entity_uuid_text = str(entity_uuid)
-        if entity_uuid_text not in identified_entity_uuids:
+        projected = projected_entities_by_uuid.get(entity_uuid_text)
+        if projected is None:
             continue
-        entity = Entity.get(entity_uuid)
-        if entity is None:
-            continue
-        life_state = entity.health.life_state
         combatants.append(
             SubjectiveCombatant(
                 uuid=entity_uuid_text,
-                name=entity.name,
+                name=projected.name,
                 initiative=encounter.combatants[entity_uuid].initiative_total,
-                life_state=life_state,
-                is_dead=life_state is LifeState.DEAD,
+                life_state=projected.life_state,
             )
         )
     current_entity_uuid: str | None = None
@@ -533,7 +652,10 @@ def _project_encounter(
     if encounter.initiative_order and encounter.current_turn_index < len(encounter.initiative_order):
         candidate = str(encounter.initiative_order[encounter.current_turn_index])
         projected_order = [combatant.uuid for combatant in combatants]
-        if candidate in projected_order:
+        if (
+            candidate in projected_order
+            and candidate in currently_identified_entity_uuids
+        ):
             current_entity_uuid = candidate
             current_turn_index = projected_order.index(candidate)
     return SubjectiveEncounter(
@@ -557,31 +679,29 @@ def _project_floor_object(
     if not isinstance(obj, BaseItem):
         return None
     item_presentation = obj.to_item_presentation_state()
-    is_open = obj.get_spatial_open_state()
-    directions = _direction_values(getattr(obj, "blocked_directions", ()))
-    channels = _channel_values(getattr(obj, "blocked_channels", ()))
-    has_light_state = all(
-        hasattr(obj, field_name)
-        for field_name in (
-            "is_lit",
-            "very_bright_radius_feet",
-            "bright_radius_feet",
-            "dim_radius_feet",
-        )
+    observation = obj.to_item_observation_state(requesting_entity_uuid)
+    is_open = observation.is_open
+    structure = observation.directional_structure
+    directions = _direction_values(
+        structure.blocked_directions if structure is not None else (),
     )
+    channels = _channel_values(
+        structure.blocked_channels if structure is not None else (),
+    )
+    light = observation.light_source
     if is_open is not None:
         object_kind = FloorObjectProjectionKind.DOOR
-    elif has_light_state:
+    elif light is not None:
         object_kind = FloorObjectProjectionKind.LIGHT_SOURCE
     elif directions and channels:
         object_kind = FloorObjectProjectionKind.DIRECTIONAL_STRUCTURE
     elif obj.get_storage_block() is not None:
         object_kind = FloorObjectProjectionKind.CONTAINER
-    elif "hazard" in obj.tags:
+    elif observation.is_hazardous:
         object_kind = FloorObjectProjectionKind.HAZARD
-    elif obj.is_usable and not obj.is_pickable:
+    elif observation.is_usable and not observation.is_pickable:
         object_kind = FloorObjectProjectionKind.INTERACTABLE
-    elif obj.is_pickable:
+    elif observation.is_pickable:
         object_kind = FloorObjectProjectionKind.ITEM
     else:
         object_kind = FloorObjectProjectionKind.GENERIC
@@ -595,8 +715,8 @@ def _project_floor_object(
         safe_presentation_ref=project_safe_item_presentation_ref(obj),
         visual_item_name=item_presentation.visual_item_name,
         visual_variant_id=item_presentation.visual_variant_id,
-        blocks_movement=obj.blocks_movement,
-        blocks_vision=obj.blocks_vision(requesting_entity_uuid),
+        blocks_movement=observation.blocks_movement,
+        blocks_vision=observation.blocks_vision,
         is_open=is_open,
         blocked_directions=directions if object_kind in {
             FloorObjectProjectionKind.DOOR,
@@ -606,15 +726,15 @@ def _project_floor_object(
             FloorObjectProjectionKind.DOOR,
             FloorObjectProjectionKind.DIRECTIONAL_STRUCTURE,
         } else (),
-        is_lit=(bool(getattr(obj, "is_lit")) if has_light_state else None),
+        is_lit=light.is_lit if light is not None else None,
         very_bright_radius_feet=(
-            int(getattr(obj, "very_bright_radius_feet")) if has_light_state else None
+            light.very_bright_radius_feet if light is not None else None
         ),
         bright_radius_feet=(
-            int(getattr(obj, "bright_radius_feet")) if has_light_state else None
+            light.bright_radius_feet if light is not None else None
         ),
         dim_radius_feet=(
-            int(getattr(obj, "dim_radius_feet")) if has_light_state else None
+            light.dim_radius_feet if light is not None else None
         ),
     )
 
@@ -634,6 +754,7 @@ def _channel_values(values: object) -> tuple[FloorObjectBlockingChannel, ...]:
 __all__ = [
     "CanonicalSubjectiveWorldProjector",
     "RememberedObjectFact",
+    "RememberedCorpseFact",
     "RememberedTileFact",
     "SubjectiveSpatialMemory",
     "SubjectiveWorldProjectionError",

@@ -1,7 +1,11 @@
 """Concrete engine conditions and condition-related event handlers."""
 
 from pydantic import Field, PrivateAttr
-from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    MostPotentCondition,
+)
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
@@ -45,7 +49,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.core.base_block import SensesType, LightLevel
+from dnd.core.base_block import SenseMode, SensesType, LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
@@ -63,10 +67,8 @@ from dnd.core.events import (
     EventQueue,
 )
 from dnd.core.base_actions import ActionEvent
-from dnd.core.dice import RollType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay, ModifierBreakdown
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
     apply_opportunity_attack_immunity_transform,
@@ -81,6 +83,78 @@ UNDERWATER_MELEE_EXCEPTION_WEAPONS: Tuple[str, ...] = ("dagger", "javelin", "sho
 UNDERWATER_RANGED_EXCEPTION_WEAPON_TOKENS: Tuple[str, ...] = ("crossbow", "net", "javelin", "spear", "trident", "dart")
 
 _CoreConditionDefinition = TypeVar("_CoreConditionDefinition")
+
+
+class GrantedSenseModeCondition(BaseCondition):
+    """Condition base for one exact, source-owned special-sense grant.
+
+    Innate creature senses remain in ``Senses.sense_modes``. Temporary rules
+    contributions are keyed by the condition UUID so cleanup can remove only
+    the contribution created by this condition.
+    """
+
+    name: str = Field(
+        default="Granted Sense Mode",
+        description="Abstract special-sense grant name.",
+    )
+    description: str = Field(
+        default="Grants one exact special sense while this effect remains active.",
+        description="Abstract special-sense grant description.",
+    )
+    granted_sense_type: SensesType = Field(
+        description="Special sense contributed while this condition is active.",
+    )
+    granted_sense_range_feet: int = Field(
+        ge=0,
+        description="Range of the contributed special sense; zero is unlimited.",
+    )
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        """Install this condition's exact sense contribution."""
+        if self.target_entity_uuid is None:
+            return [], [], [], [], None
+        target = Entity.get(self.target_entity_uuid)
+        if target is None:
+            return [], [], [], [], None
+
+        target.senses.add_sense_mode_source(
+            self.uuid,
+            SenseMode(
+                sense_type=self.granted_sense_type,
+                range_feet=self.granted_sense_range_feet,
+            ),
+        )
+        target._notify_perceivability_changed()
+        return (
+            [],
+            [],
+            [],
+            [],
+            declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+            ),
+        )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Remove only this condition's sense contribution."""
+        if self.target_entity_uuid is not None:
+            target = Entity.get(self.target_entity_uuid)
+            if (
+                target is not None
+                and target.senses.remove_sense_mode_source(self.uuid)
+            ):
+                target._notify_perceivability_changed()
+        return super()._remove(event)
 
 
 def _core_condition_identity(
@@ -122,6 +196,49 @@ def _core_condition_identity(
             notes=(
                 "Playable core condition identity; current implementation "
                 "coverage remains tracked independently."
+            ),
+        ),
+    )
+
+
+def _environmental_condition_identity(
+    *,
+    content_id: str,
+    display_name: str,
+    description: str,
+    sort_order: int,
+) -> Callable[[_CoreConditionDefinition], _CoreConditionDefinition]:
+    """Declare one public engine-owned environmental condition."""
+    return behavior_identity(
+        definition_kind=ContentDefinitionKind.CONDITION,
+        runtime_behavior_kind=RuntimeBehaviorKind.CONDITION,
+        pack_id="content.neurodragon",
+        content_id=content_id,
+        version=1,
+        descriptor=ContentDescriptorSpec(
+            display_name=display_name,
+            description=description,
+            tags=("condition", "environmental", "surface"),
+            visibility=ContentVisibility.PUBLIC,
+            presentation=ContentPresentation(
+                icon_key=content_id,
+                visual_variant_key=content_id.removeprefix("condition."),
+                ui_group="conditions.environmental",
+            ),
+            ordering=ContentOrdering(
+                sort_group="conditions.environmental",
+                sort_order=sort_order,
+            ),
+        ),
+        provenance=ContentProvenance(
+            primary_source_id="neurodragon.original_b2b3930",
+            source_anchor=f"Neurodragon environmental rule: {display_name}",
+            relation=ContentProvenanceRelation.ORIGINAL_CONTENT,
+            fidelity=ContentFidelity.COMPLETE,
+            review_status=ContentReviewStatus.REVIEWED,
+            notes=(
+                "Player-facing manifestation of one or more exact spatial "
+                "effect memberships."
             ),
         ),
     )
@@ -316,6 +433,92 @@ class Underwater(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+@_environmental_condition_identity(
+    content_id="condition.environment.wet",
+    display_name="Wet",
+    description=(
+        "Resists fire damage and is vulnerable to cold and lightning damage."
+    ),
+    sort_order=10,
+)
+class Wet(MostPotentCondition):
+    """Source-arbitrated BG3-style wetness from water-bearing effects."""
+
+    name: str = Field(default="Wet", description="Condition name.")
+    description: str = Field(
+        default=(
+            "Resists fire damage and is vulnerable to cold and lightning "
+            "damage."
+        ),
+        description="Condition description.",
+    )
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.STATUS,
+        frozen=True,
+        description="Wet is a player-facing environmental status.",
+    )
+    potency_rank: Tuple[int, ...] = Field(
+        default=(0,),
+        min_length=1,
+        description="All ordinary wetness sources manifest equal mechanics.",
+    )
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        """Install the exact fire/cold/lightning damage relationships."""
+        if self.target_entity_uuid is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Wet target UUID is not set",
+            )
+        target = Entity.get(self.target_entity_uuid)
+        if target is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Wet target is unavailable",
+            )
+
+        relationships = (
+            (DamageType.FIRE, ResistanceStatus.RESISTANCE),
+            (DamageType.COLD, ResistanceStatus.VULNERABILITY),
+            (DamageType.LIGHTNING, ResistanceStatus.VULNERABILITY),
+        )
+        modifiers: List[Tuple[UUID, UUID]] = []
+        for damage_type, resistance in relationships:
+            modifier_uuid = (
+                target.health.damage_reduction.self_static
+                .add_resistance_modifier(ResistanceModifier(
+                    name=f"Wet {damage_type.value}",
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=target.uuid,
+                    damage_type=damage_type,
+                    value=resistance,
+                ))
+            )
+            modifiers.append((
+                target.health.damage_reduction.uuid,
+                modifier_uuid,
+            ))
+
+        return (
+            modifiers,
+            [],
+            [],
+            [],
+            declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Wet to {target.name}",
+            ),
+        )
+
+
 def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """Apply HasAttacked when the source entity's attack reaches execution.
 
@@ -506,7 +709,9 @@ class Charmed(BaseCondition):
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 to_target_static_condition_uuid = skill_obj.skill_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Charmed",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=charmed_skill_check))
                 outs.append((skill_obj.skill_bonus.uuid,to_target_static_condition_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied contextual advantage modifers from Charmed to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied contextual advantage modifers from Charmed to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -744,9 +949,7 @@ class Exhaustion(BaseCondition):
                         )
                     )
                     outs.append((skill_obj.skill_bonus.uuid, modifier_uuid))
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
+                effect_event = effect_event.with_updates(
                     status_message=f"Applied Exhaustion ability-check disadvantage to {target_entity.name}",
                 )
 
@@ -762,9 +965,7 @@ class Exhaustion(BaseCondition):
                     )
                 )
                 outs.append((target_entity.action_economy.movement.uuid, modifier_uuid))
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
+                effect_event = effect_event.with_updates(
                     status_message=f"Applied Exhaustion halved speed to {target_entity.name}",
                 )
 
@@ -789,9 +990,7 @@ class Exhaustion(BaseCondition):
                         )
                     )
                     outs.append((saving_throw.bonus.uuid, save_uuid))
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
+                effect_event = effect_event.with_updates(
                     status_message=f"Applied Exhaustion attack and saving throw disadvantage to {target_entity.name}",
                 )
 
@@ -812,9 +1011,7 @@ class Exhaustion(BaseCondition):
                     )
                 )
                 outs.append((target_entity.health.max_hit_points_bonus.uuid, modifier_uuid))
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
+                effect_event = effect_event.with_updates(
                     status_message=f"Applied Exhaustion hit point maximum reduction to {target_entity.name}",
                 )
 
@@ -828,9 +1025,7 @@ class Exhaustion(BaseCondition):
                     )
                 )
                 outs.append((target_entity.action_economy.movement.uuid, modifier_uuid))
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
+                effect_event = effect_event.with_updates(
                     status_message=f"Applied Exhaustion zero speed to {target_entity.name}",
                 )
 
@@ -888,7 +1083,9 @@ class Dodging(BaseCondition):
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
             dex_save_modifier_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_modifier_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Dodging Dexterity saving throw advantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Dodging Dexterity saving throw advantage modifier to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -957,11 +1154,15 @@ class Frightened(BaseCondition):
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 skills_modifier_uuid = skill_obj.skill_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frightener_in_senses_disadvantage()))
                 outs.append((skill_obj.skill_bonus.uuid,skills_modifier_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened skill disadvantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Frightened skill disadvantage modifier to {target_entity.name}",
+            )
             movement_value = target_entity.action_economy.movement
             max_movement_constraint_uuid = movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
             outs.append((movement_value.uuid,max_movement_constraint_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened movement constraint to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Frightened movement constraint to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -1116,7 +1317,9 @@ class Invisible(BaseCondition):
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible self to others advantage modifier to {target_entity.name}")
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_target_disadvantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -1127,12 +1330,6 @@ class Invisible(BaseCondition):
         if target:
             target.set_invisible(False, parent_event=event.uuid if event else None)
         return super()._remove(event)
-
-    @staticmethod
-    def can_see_invisible(observer: Entity) -> bool:
-        """Return whether an observer has a sense that sees invisible entities."""
-        return observer.senses.has_sense(SensesType.TRUESIGHT) or observer.senses.has_sense(SensesType.TREMORSENSE)
-
 
 def unseen_attacker_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
     """Return advantage when an attacker is absent from the defender's senses.
@@ -1197,8 +1394,7 @@ class Paralyzed(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            execution_event = declaration_event.phase_to(
-                EventPhase.EXECUTION,
+            execution_event = declaration_event.with_updates(
                 update={"condition": self},
                 status_message=f"Applying Paralyzed transform to {target_entity.name}",
             )
@@ -1259,8 +1455,7 @@ class Petrified(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {target_uuid} not found")
         elif isinstance(target_entity, Entity):
-            execution_event = declaration_event.phase_to(
-                EventPhase.EXECUTION,
+            execution_event = declaration_event.with_updates(
                 update={"condition": self},
                 status_message=f"Applying Petrified transform to {target_entity.name}",
             )
@@ -1287,9 +1482,7 @@ class Petrified(BaseCondition):
                 resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(resistance_modifier)
                 outs.append((target_entity.health.damage_reduction.uuid, resistance_uuid))
             target_entity.add_condition_immunity("Poisoned", immunity_name="Petrified")
-            effect_event = effect_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
+            effect_event = effect_event.with_updates(
                 status_message=f"Applied Petrified all-damage resistance and poison immunity to {target_entity.name}",
             )
             return outs, [], [], [], effect_event
@@ -1339,7 +1532,9 @@ class Poisoned(BaseCondition):
                 skill_obj = target_entity.skill_set.get_skill(skill)
                 skill_static_modifier_uuid = skill_obj.skill_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Poisoned",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
                 outs.append((skill_obj.skill_bonus.uuid,skill_static_modifier_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Poisoned to all skills disadvantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Poisoned to all skills disadvantage modifier to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -1439,8 +1634,7 @@ class Stunned(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            execution_event = declaration_event.phase_to(
-                EventPhase.EXECUTION,
+            execution_event = declaration_event.with_updates(
                 update={"condition": self},
                 status_message=f"Applying Stunned transform to {target_entity.name}",
             )
@@ -1465,11 +1659,20 @@ class Stunned(BaseCondition):
     source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Restrained",
     sort_order=180,
 )
-class Restrained(BaseCondition):
+class Restrained(MostPotentCondition):
     """Movement-lock condition with attack and Dexterity-save penalties."""
 
     name: str = Field(default="Restrained", description="Condition name.")
     description: str = Field(default="A restrained creature can't move and has disadvantage on Dexterity saving throws. Attack rolls against the creature have advantage.", description="Condition description.")
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.CONDITION,
+        frozen=True,
+    )
+    potency_rank: Tuple[int, ...] = Field(
+        default=(0,),
+        min_length=1,
+        description="Strength rank of the currently manifested restraint source.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
@@ -1485,14 +1688,20 @@ class Restrained(BaseCondition):
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained max speed constraint to {target_entity.name}")
             self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained to self disadvantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Restrained to self disadvantage modifier to {target_entity.name}",
+            )
             dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
             dex_save_disadvantage_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_disadvantage_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained disadvantage to dex saves for {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Restrained disadvantage to dex saves for {target_entity.name}",
+            )
             to_target_static_uuid = target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained to target contextual advantage modifier to {target_entity.name}")
+            effect_event = effect_event.with_updates(
+                status_message=f"Applied Restrained to target contextual advantage modifier to {target_entity.name}",
+            )
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
@@ -1525,8 +1734,7 @@ class Unconscious(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            execution_event = declaration_event.phase_to(
-                EventPhase.EXECUTION,
+            execution_event = declaration_event.with_updates(
                 update={"condition": self},
                 status_message=f"Applying Unconscious transform to {target_entity.name}",
             )
@@ -1743,10 +1951,6 @@ class Concentrating(BaseCondition):
                 return None
 
             if isinstance(event, DeathEvent):
-                conc = entity.active_conditions.get("Concentrating")
-                spell_name = "spell"
-                if conc is not None and isinstance(conc, Concentrating):
-                    spell_name = conc.spell_name
                 entity.remove_condition("Concentrating", parent_event=event)
                 return None
 
@@ -1775,19 +1979,8 @@ class Concentrating(BaseCondition):
 
             if not success:
 
-                conc = entity.active_conditions.get("Concentrating")
-                spell_name = "spell"
-                if conc is not None and isinstance(conc, Concentrating):
-                    spell_name = conc.spell_name
-
                 entity.remove_condition("Concentrating", parent_event=event)
-                return event.with_updates(
-                    concentration_broken=True,
-                    status_message=(
-                        f"{entity.name} lost concentration on {spell_name} "
-                        f"(failed DC {dc} CON save)"
-                    ),
-                )
+                return None
 
             return None
 
@@ -1845,13 +2038,6 @@ class ConcentrationActionMarker(BaseCondition):
             status_message=f"Tracking concentration on {self.action_name}"
         )
         return [], [], [], [], effect_event
-
-    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if entity and self.action_name:
-            entity.unregister_action(self.action_name)
-        return super()._remove(removal_event)
-
 
 @_core_condition_identity(
     content_id="condition.no_reactions",
@@ -2282,90 +2468,29 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
         return None
 
     dc = condition.base_dc + condition.check_count
-    skill_bonus = entity.skill_bonus(target_entity_uuid=None, skill_name="stealth")
-    stealth_roll, check_event = entity.roll_d20_event(
-        skill_bonus,
-        RollType.CHECK,
-        skill_name="stealth",
+    check_request = entity.create_skill_check_request(
+        entity.uuid,
+        "stealth",
+        dc,
         parent_event=event.uuid,
     )
-    success = stealth_roll.total >= dc
+    _, stealth_roll, success, check_event = entity.skill_check_effect(check_request)
 
     if success:
         condition.check_count += 1
     else:
         entity.remove_condition("Invisible", parent_event=check_event)
 
-    entity_name = entity.name
-    roll_results = stealth_roll.results if isinstance(stealth_roll.results, list) else [stealth_roll.results]
-    d20_used = roll_results[0] if roll_results else 0
-    adv_status = None
-    if stealth_roll.advantage_status == AdvantageStatus.ADVANTAGE:
-        adv_status = "advantage"
-    elif stealth_roll.advantage_status == AdvantageStatus.DISADVANTAGE:
-        adv_status = "disadvantage"
-
-    roll_display = DiceRollDisplay(
-        dice_str="d20",
-        results=roll_results,
-        bonus=stealth_roll.bonus,
-        total=stealth_roll.total,
-        all_d20_rolls=roll_results if len(roll_results) > 1 else None,
-        d20_used=d20_used,
-        advantage_status=adv_status
+    check_event.phase_to(
+        EventPhase.COMPLETION,
+        dice_roll=stealth_roll,
+        result=success,
+        status_message=(
+            f"{entity.name} maintains invisibility"
+            if success
+            else f"{entity.name} loses invisibility"
+        ),
     )
-
-    if success:
-        compact = f"{{cyan:{entity_name}}} maintains invisibility (Stealth {stealth_roll.total} vs DC {dc})"
-    else:
-        compact = f"{{cyan:{entity_name}}} loses invisibility! (Stealth {stealth_roll.total} vs DC {dc})"
-
-    verbose = f"{{cyan:{entity_name}}} Stealth check: d20({d20_used}) +{stealth_roll.bonus} = {stealth_roll.total} vs DC {dc}"
-    if success:
-        verbose += " → maintains invisibility"
-    else:
-        verbose += " → {{red:loses invisibility!}}"
-
-    stealth_bonus_breakdown: List[ModifierBreakdown] = []
-    stealth_advantage_breakdown: List[ModifierBreakdown] = []
-    for mod in skill_bonus.get_breakdown():
-        stealth_bonus_breakdown.append(ModifierBreakdown(
-            name=mod.get('name', 'Unknown'),
-            value=mod.get('value', 0),
-            source=mod.get('source', 'self')
-        ))
-    for mod in skill_bonus.get_full_advantage_breakdown():
-        adv_val = mod.get('value', 'inactive')
-        if adv_val == 'advantage':
-            stealth_advantage_breakdown.append(ModifierBreakdown(
-                name=mod.get('name', 'Unknown'), value=1, source=mod.get('source', 'self')
-            ))
-        elif adv_val == 'disadvantage':
-            stealth_advantage_breakdown.append(ModifierBreakdown(
-                name=mod.get('name', 'Unknown'), value=-1, source=mod.get('source', 'self')
-            ))
-
-    check_event.combat_log = CombatLogEntry(
-        entry_type=CombatLogEntryType.SKILL_CHECK,
-        source_name=entity_name,
-        source_uuid=str(entity.uuid),
-        compact=compact,
-        verbose=verbose,
-        detailed=verbose,
-        success=success,
-        data=SkillCheckLogData(
-            entity_name=entity_name,
-            entity_uuid=str(entity.uuid),
-            skill="stealth",
-            dc=dc,
-            roll=roll_display,
-            bonus_breakdown=stealth_bonus_breakdown,
-            advantage_breakdown=stealth_advantage_breakdown,
-            success=success
-        ).model_dump()
-    )
-
-    check_event.phase_to(EventPhase.COMPLETION)
     return None
 
 

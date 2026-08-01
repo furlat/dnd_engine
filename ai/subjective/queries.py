@@ -310,7 +310,11 @@ class SubjectiveQueries:
                 for uuid in facts.objects.closed_door_uuids
                 if uuid in self.world.known_objects
             )
-        return tuple(obj for obj in self.world.known_objects.values() if obj.state.get("is_open") is False)
+        return tuple(
+            obj
+            for obj in self.world.known_objects.values()
+            if obj.state.is_open is False
+        )
 
     def safe_movement_rows(self) -> Tuple[ActionAffordance, ...]:
         """Return movement rows whose disclosed chosen route has no known hazard or reaction exposure."""

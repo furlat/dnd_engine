@@ -15,7 +15,7 @@ from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
 )
-from server.game_directory.canonical import utc_now
+from server.game_directory.security import utc_now
 from server.game_directory.contracts import (
     PrincipalCreate,
     PrincipalKind,

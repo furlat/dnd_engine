@@ -6,7 +6,10 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
-from server.game_directory.canonical import canonical_digest, datetime_to_text
+from server.canonical_json import (
+    canonical_json_sha256 as canonical_digest,
+    datetime_to_text,
+)
 from server.game_directory.errors import MigrationError
 
 

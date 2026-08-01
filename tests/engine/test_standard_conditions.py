@@ -1,7 +1,7 @@
 """Engine semantic tests for implemented standard D&D conditions."""
 
 from contextlib import contextmanager
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import dnd.core.dice as dice_module
 import dnd.conditions as conditions_module
@@ -11,10 +11,20 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue, SkillName
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    SkillCheckD20RollResultEvent,
+    SkillCheckEvent,
+    SkillName,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
@@ -119,6 +129,156 @@ def apply_to_target(condition_type, source: Entity, target: Entity):
     assert result is not None
     assert condition.name in target.active_conditions
     return condition
+
+
+def test_condition_application_dispatches_effect_handlers_once() -> None:
+    """A compound condition publishes one completed effect boundary."""
+    reset_condition_state()
+    source = configured_entity("Source", (1, 1), "heroes")
+    target = configured_entity("Target", (2, 1), "monsters")
+    effect_calls = 0
+
+    def count_effect(event: Event, _: UUID) -> Event:
+        nonlocal effect_calls
+        effect_calls += 1
+        return event
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Count condition effect dispatches",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.CONDITION_APPLICATION,
+                    event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target.uuid,
+                )
+            ],
+            event_processor=count_effect,
+        )
+    )
+
+    apply_to_target(Frightened, source, target)
+
+    assert effect_calls == 1
+
+
+def test_base_condition_respects_execution_cancellation() -> None:
+    """An execution interceptor can veto a condition before state is applied."""
+    reset_condition_state()
+    source = configured_entity("Source", (1, 1), "heroes")
+    target = configured_entity("Target", (2, 1), "monsters")
+
+    def cancel_execution(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Condition vetoed at execution")
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Veto condition execution",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.CONDITION_APPLICATION,
+                    event_phase=EventPhase.EXECUTION,
+                    event_target_entity_uuid=target.uuid,
+                )
+            ],
+            event_processor=cancel_execution,
+        )
+    )
+    condition = BaseCondition(
+        name="Lifecycle Probe",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    result = target.add_condition(condition)
+
+    assert result is not None and result.canceled
+    assert not condition.applied
+    assert condition.name not in target.active_conditions
+
+
+def test_base_condition_respects_declaration_cancellation() -> None:
+    """A declaration interceptor can veto a condition before execution."""
+    reset_condition_state()
+    source = configured_entity("Source", (1, 1), "heroes")
+    target = configured_entity("Target", (2, 1), "monsters")
+
+    def cancel_declaration(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Condition vetoed at declaration")
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Veto condition declaration",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.CONDITION_APPLICATION,
+                    event_phase=EventPhase.DECLARATION,
+                    event_target_entity_uuid=target.uuid,
+                )
+            ],
+            event_processor=cancel_declaration,
+        )
+    )
+    condition = BaseCondition(
+        name="Declaration Probe",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    result = target.add_condition(condition)
+
+    assert result is not None and result.canceled
+    assert not condition.applied
+    assert condition.name not in target.active_conditions
+
+
+def test_expired_condition_removal_dispatches_each_phase_once() -> None:
+    """Expiration is one removal lifecycle, not expire plus remove replays."""
+    reset_condition_state()
+    source = configured_entity("Source", (1, 1), "heroes")
+    target = configured_entity("Target", (2, 1), "monsters")
+    condition = BaseCondition(
+        name="Expiring Probe",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+    result = target.add_condition(condition)
+    assert result is not None and not result.canceled
+    dispatches = {
+        EventPhase.EXECUTION: 0,
+        EventPhase.EFFECT: 0,
+    }
+
+    def count_removal(event: Event, _: UUID) -> Event:
+        dispatches[event.phase] += 1
+        return event
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Count expiration removal dispatches",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.CONDITION_REMOVAL,
+                    event_phase=phase,
+                    event_target_entity_uuid=target.uuid,
+                )
+                for phase in dispatches
+            ],
+            event_processor=count_removal,
+        )
+    )
+
+    assert condition.name is not None
+    target.remove_condition(condition.name, expire=True)
+
+    assert dispatches == {
+        EventPhase.EXECUTION: 1,
+        EventPhase.EFFECT: 1,
+    }
 
 
 def test_eb_08_001_blinded_and_deafened_apply_sensory_failures() -> None:
@@ -398,10 +558,17 @@ def test_eb_08_009_prone_immediate_stand_on_own_turn_cancels_indexing() -> None:
     result = target.add_condition(condition)
 
     assert result is not None
-    assert result.phase == EventPhase.COMPLETION
+    assert result.phase == EventPhase.CANCEL
     assert result.canceled is True
-    assert condition.applied is True
+    assert not any(
+        event.lineage_uuid == result.lineage_uuid
+        and event.phase is EventPhase.COMPLETION
+        for _, event in EventQueue.iter_events_since(0)
+    )
+    assert condition.applied is False
     assert "Prone" not in target.active_conditions
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
     assert target.action_economy.movement.normalized_score == 15
 
 
@@ -651,6 +818,30 @@ def test_eb_08_013_greater_invisibility_uses_stealth_checks_instead_of_reveal() 
     assert target.is_invisible is False
     assert greater.applied is False
     assert target.get_event_handler_by_name("Greater Invisibility: Stealth Check") is None
+
+    completed_checks = [
+        row
+        for row in EventQueue._all_events
+        if isinstance(row, SkillCheckEvent)
+        and row.phase is EventPhase.COMPLETION
+    ]
+    assert len(completed_checks) == 2
+    failed_check = completed_checks[-1]
+    failed_children = [
+        EventQueue._events_by_lineage[lineage_uuid][-1]
+        for lineage_uuid in failed_check.children_lineages
+    ]
+    assert any(
+        isinstance(child, SkillCheckD20RollResultEvent)
+        for child in failed_children
+    )
+    assert any(
+        isinstance(child, ConditionRemovalEvent)
+        for child in failed_children
+    )
+    assert failed_check.combat_log is not None
+    assert failed_check.combat_log.data["skill"] == "stealth"
+    assert failed_check.combat_log.data["success"] is False
 
 
 def test_greater_invisibility_expires_after_ten_owner_turns() -> None:

@@ -29,7 +29,11 @@ from dnd.core.events import (
     SensesUpdateHint,
     SpatialChangeEvent,
     SpatialChangeType,
-    WindExposureEvent,
+    SpatialEffectInteractionEvent,
+)
+from dnd.core.spatial_effect_types import (
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
 )
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin
@@ -262,9 +266,11 @@ def test_event_serializer_canonicalizes_every_unordered_wire_field() -> None:
         ),
         phase=EventPhase.COMPLETION,
     )
-    wind_event = WindExposureEvent(
+    wind_event = SpatialEffectInteractionEvent(
         source_entity_uuid=source_uuid,
-        positions={(9, 1), (1, 9), (4, 4)},
+        operation=SpatialEffectInteractionOperation.DISPERSE,
+        positions=((1, 9), (4, 4), (9, 1)),
+        intensity=SpatialEffectInteractionIntensity.MODERATE,
         phase=EventPhase.COMPLETION,
     )
 

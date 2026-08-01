@@ -108,7 +108,7 @@ def test_dead_rejects_ordinary_healing_and_revive_restores_normal_hp_only() -> N
     reset_core_action_state()
     target = strong_entity("Revival Target", (4, 4), "heroes", setup_actions=False)
     target.receive_instant_death(target.uuid, source_description="test")
-    target.health.add_temporary_hit_points(7, target.uuid)
+    target.grant_temporary_hit_points(7, target.uuid)
 
     healed = target.receive_healing(5, target.uuid)
 

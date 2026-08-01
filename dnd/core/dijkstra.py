@@ -12,43 +12,6 @@ _DIAGONAL_DIRECTIONS = _CARDINAL_DIRECTIONS + (
 )
 
 
-def get_neighbors(
-    position: Tuple[int, int],
-    diagonal: bool,
-    width: int,
-    height: int,
-    min_x: int = 0,
-    min_y: int = 0,
-) -> List[Tuple[int, int]]:
-    """Return neighboring coordinates inside an origin-aware bound.
-
-    Args:
-        position: Position whose neighbors should be inspected.
-        diagonal: Whether diagonal neighbors are allowed.
-        width: Bound width in cells.
-        height: Bound height in cells.
-        min_x: Minimum x coordinate included in the bound.
-        min_y: Minimum y coordinate included in the bound.
-
-    Returns:
-        Neighbor coordinates that fall inside the bound.
-    """
-    if width <= 0 or height <= 0:
-        return []
-
-    x, y = position
-    directions = _DIAGONAL_DIRECTIONS if diagonal else _CARDINAL_DIRECTIONS
-
-    max_x = min_x + width - 1
-    max_y = min_y + height - 1
-    neighbors = []
-    for dx, dy in directions:
-        nx, ny = x + dx, y + dy
-        if min_x <= nx <= max_x and min_y <= ny <= max_y:
-            neighbors.append((nx, ny))
-    return neighbors
-
-
 def dijkstra(
     start: Tuple[int, int],
     is_walkable: Callable[[int, int], bool],

@@ -275,7 +275,7 @@ def set_hp(entity: Entity, hp: int):
     if hp < current:
 
         diff = current - hp
-        entity.health.take_damage(diff, DamageType.FORCE, entity.uuid)
+        entity.receive_damage(diff, DamageType.FORCE, entity.uuid)
     elif hp > current:
 
         diff = hp - current

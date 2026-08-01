@@ -20,7 +20,6 @@ from dnd.ai.runtime.subjective_projection import (
     resolve_controlled_observers,
 )
 from dnd.controller import TurnContext
-from dnd.core.events import EventQueue
 from dnd.core.life_types import LifeState
 from dnd.entity import Entity
 
@@ -191,7 +190,3 @@ class SubjectiveAIStateProjector:
             ),
             initiative_order=rows,
         )
-
-def current_source_event_cursor() -> int:
-    """Return the objective cursor only for diagnostics/replay correlation."""
-    return EventQueue.event_cursor()

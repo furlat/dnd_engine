@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, model_validator
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
+from server.canonical_json import canonical_json_sha256
 from server.character_settlement import (
     build_terminal_settlement_bundle,
     project_terminal_character_holdings,
@@ -42,6 +43,7 @@ from server.game_directory.contracts import (
     VisibilityPolicy,
 )
 from server.game_directory.repository import GameDirectoryRepository
+from server.game_directory.errors import ConflictError
 from server.game_runtime_identity import ENGINE_VERSION, RULESET_VERSION
 from server.game_summary_store import WorkerSummaryEvidence
 from server.objective_replay import ObjectiveReplayBundle
@@ -351,6 +353,18 @@ class StandaloneLocalGameCoordinator:
                 raise RuntimeError(
                     "pending local terminal commit belongs to another game",
                 )
+            if (
+                canonical_json_sha256(evidence)
+                != canonical_json_sha256(envelope.evidence)
+                or canonical_json_sha256(objective_replay)
+                != envelope.objective_replay_artifact.content_digest
+                or canonical_json_sha256(subjective_replay)
+                != envelope.subjective_replay_artifact.content_digest
+            ):
+                raise ConflictError(
+                    "Local terminal retry evidence differs from the staged "
+                    "terminal commit",
+                )
             self._finalize_terminal_envelope(envelope, payload_digest)
             ended = self.repository.get_game(current.game.game_id)
             self._pending_terminal = None
@@ -567,16 +581,24 @@ class StandaloneLocalGameCoordinator:
                 ),
                 runtime_entity_uuid=runtime_entity_uuid,
             )
-            deployment = next(
+            deployments = self.repository.list_character_deployments(
+                prepared.snapshot.character_id,
+                game_id=current.game.game_id,
+                lease_id=prepared.lease_id,
+            )
+            matching_deployments = tuple(
                 row
-                for row in self.repository.list_character_deployments(
-                    prepared.snapshot.character_id,
-                )
+                for row in deployments
                 if row.deployment_id == prepared.deployment_id
             )
+            if len(matching_deployments) != 1:
+                raise ConflictError(
+                    "Local terminal holdings evidence requires exactly one "
+                    "matching pinned deployment",
+                )
             settlements.append(build_terminal_settlement_bundle(
                 holdings_evidence,
-                deployment,
+                matching_deployments[0],
                 settlement_namespace=(
                     "dnd-engine:local-character-settlement:v1"
                 ),

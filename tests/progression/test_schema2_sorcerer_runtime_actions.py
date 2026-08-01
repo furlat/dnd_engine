@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import SpellAction
+from dnd.actions_functional import get_available_actions
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import (
     BuiltinSingleClassBuild,
@@ -19,7 +20,8 @@ from dnd.content_system.character_appearance import (
     SORCERER_HUMAN_APPEARANCE,
 )
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.core.base_actions import spell_slot_cost_type
+from dnd.core.action_types import spell_slot_cost_type
+from dnd.core.base_actions import ActionSelectionParameterKind
 from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
@@ -79,7 +81,7 @@ def test_quickened_cast_spends_its_source_resource_and_cleans_override() -> None
         config=EntityConfig(position=(2, 1), faction="enemies"),
     )
     Entity.update_all_entities_senses()
-    magic_missile = _spell(sorcerer, "Magic Missile")
+    authored_magic_missile = _spell(sorcerer, "Magic Missile")
 
     activated = _action(sorcerer, "Quickened Spell").instantiate().apply()
 
@@ -87,6 +89,9 @@ def test_quickened_cast_spends_its_source_resource_and_cleans_override() -> None
     assert sorcerer.action_economy.get_resource_current(
         "sorcery_points",
     ) == 3
+    magic_missile = _spell(sorcerer, "Magic Missile")
+    assert magic_missile is not authored_magic_missile
+    assert authored_magic_missile.alt_cost_type is None
     assert magic_missile.alt_cost_type == "bonus_actions"
     cast = magic_missile.instantiate(
         target_entity_uuid=target.uuid,
@@ -95,20 +100,26 @@ def test_quickened_cast_spends_its_source_resource_and_cleans_override() -> None
     assert sorcerer.action_economy.bonus_actions.normalized_score == 0
     assert sorcerer.action_economy.actions.normalized_score == 1
     assert "MetamagicActive" not in sorcerer.active_conditions
-    assert magic_missile.alt_cost_type is None
+    assert _spell(sorcerer, "Magic Missile") is authored_magic_missile
+    assert authored_magic_missile.alt_cost_type is None
 
 
 def test_twinned_targets_only_eligible_entity_spells() -> None:
     """A schema-2 metamagic grant never retargets a self spell."""
 
     sorcerer = _sorcerer("quickened", "twinned")
-    hold_person = _spell(sorcerer, "Hold Person")
-    false_life = _spell(sorcerer, "False Life")
+    authored_hold_person = _spell(sorcerer, "Hold Person")
+    authored_false_life = _spell(sorcerer, "False Life")
 
     activated = _action(sorcerer, "Twinned Spell").instantiate().apply()
 
     assert activated is not None and not activated.canceled
+    hold_person = _spell(sorcerer, "Hold Person")
+    false_life = _spell(sorcerer, "False Life")
+    assert hold_person is not authored_hold_person
+    assert authored_hold_person.alt_target_count is None
     assert hold_person.alt_target_count == 2
+    assert false_life is authored_false_life
     assert false_life.alt_target_type is None
     assert false_life.alt_target_count is None
     assert false_life.alt_extra_costs == []
@@ -118,13 +129,16 @@ def test_distant_doubles_only_spell_range() -> None:
     """Distant Spell remains a spell-only temporary override."""
 
     sorcerer = _sorcerer("distant", "twinned")
-    fire_bolt = _spell(sorcerer, "Fire Bolt")
+    authored_fire_bolt = _spell(sorcerer, "Fire Bolt")
     dash = _action(sorcerer, "Dash")
     dash_before = dash.model_dump()
 
     activated = _action(sorcerer, "Distant Spell").instantiate().apply()
 
     assert activated is not None and not activated.canceled
+    fire_bolt = _spell(sorcerer, "Fire Bolt")
+    assert fire_bolt is not authored_fire_bolt
+    assert authored_fire_bolt.alt_range is None
     assert fire_bolt.alt_range == 240
     assert dash.model_dump() == dash_before
 
@@ -167,3 +181,48 @@ def test_font_of_magic_conversions_preserve_slot_and_point_accounting() -> None:
     assert points_to_slot.action_economy.get_resource_current(
         "sorcery_points",
     ) == 3
+
+
+def test_font_of_magic_discovery_exposes_exact_level_selectors_both_directions() -> None:
+    """Conversion menus never reverse-engineer levels from names or costs."""
+    sorcerer = _sorcerer("quickened", "twinned")
+    rows = get_available_actions(sorcerer).self_actions
+    slot_to_points = tuple(
+        row
+        for row in rows
+        if row.behavior_attribution.definition_ref.content_id
+        == "action.class.sorcerer.convert_slot_to_sorcery_points"
+    )
+    points_to_slot = tuple(
+        row
+        for row in rows
+        if row.behavior_attribution.definition_ref.content_id
+        == "action.class.sorcerer.convert_sorcery_points_to_slot"
+    )
+
+    assert slot_to_points
+    assert points_to_slot
+    assert {
+        (
+            row.selection_parameter.kind,
+            row.selection_parameter.value,
+        )
+        for row in slot_to_points
+        if row.selection_parameter is not None
+    } == {
+        (ActionSelectionParameterKind.LEVEL, 1),
+        (ActionSelectionParameterKind.LEVEL, 2),
+        (ActionSelectionParameterKind.LEVEL, 3),
+    }
+    assert {
+        (
+            row.selection_parameter.kind,
+            row.selection_parameter.value,
+        )
+        for row in points_to_slot
+        if row.selection_parameter is not None
+    } == {
+        (ActionSelectionParameterKind.LEVEL, 1),
+        (ActionSelectionParameterKind.LEVEL, 2),
+        (ActionSelectionParameterKind.LEVEL, 3),
+    }

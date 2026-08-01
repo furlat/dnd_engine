@@ -10,6 +10,8 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.entity import Entity
+from dnd.spatial_effect_content import ICE_STORM_SURFACE_RECIPE
+from dnd.spatial_effects import GroundEffect, SpatialEffect
 from dnd.spells.evocation import IceStorm
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
@@ -113,13 +115,21 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     assert not result.canceled
     assert failed_hp - get_hp(failed) == 32
     assert behind_hp - get_hp(behind_wall) == 16
-    assert has_condition(caster, "Ice Storm Terrain")
     assert not has_condition(caster, "Concentrating")
+    effects = [
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.content_ref == ICE_STORM_SURFACE_RECIPE.ref
+    ]
+    assert len(effects) == 1
+    effect = effects[0]
+    assert isinstance(effect, GroundEffect)
+    assert "Ice Storm Terrain" in effect.active_conditions
     center_tile = grid.get_tile(*failed.position)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 2
 
-    assert caster.advance_duration("Ice Storm Terrain")
+    assert effect.advance_duration("Ice Storm Terrain")
 
-    assert not has_condition(caster, "Ice Storm Terrain")
+    assert SpatialEffect.get_effect(effect.uuid) is None
     assert center_tile.walking_cost.normalized_score == 1

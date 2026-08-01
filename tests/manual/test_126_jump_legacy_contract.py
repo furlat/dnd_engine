@@ -191,8 +191,9 @@ def test_jump_pays_named_resources_without_double_spending_movement() -> None:
     """The movement exception still uses the canonical named-resource payer."""
     _reset_state()
     jumper = _create_jumper(strength=16)
-    jumper.action_economy.add_resource(
+    jumper.action_economy.add_resource_contribution(
         "jump_tokens",
+        "fixture.jump_tokens",
         maximum=1,
         recharge_type=RechargeType.LONG_REST,
     )

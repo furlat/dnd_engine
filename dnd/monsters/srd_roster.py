@@ -68,9 +68,7 @@ from dnd.content_system.creature_possessions import (
     apply_creature_possessions,
     creature_possession_dependencies,
 )
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.entity import Entity, EntityConfig
 from dnd.items.armors import (
     CHAIN_MAIL_RECIPE,
@@ -1747,7 +1745,7 @@ def _default_possession(
         == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
     ):
         return None
-    return materialize_item_from_installed_runtime(
+    return materialize_item(
         recipe,
         source_entity_uuid,
         origin=origin,
@@ -1773,7 +1771,7 @@ def _equip(
         entity.equipment.equip(offhand, WeaponSlot.MELEE_OFF)
     if shield:
         entity.equipment.equip(
-            materialize_item_from_installed_runtime(
+            materialize_item(
                 SHIELD_RECIPE,
                 entity.uuid,
                 origin=ItemRuntimeOrigin.STARTER,

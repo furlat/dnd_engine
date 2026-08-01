@@ -536,12 +536,6 @@ class SubjectiveRuntime:
             with self._state_changed:
                 self._resources_closed = True
 
-    def flush_agent_events(self) -> None:
-        """Wait until queued runtime telemetry reaches its destination."""
-        flush_sink = getattr(self.event_sink, "flush", None)
-        if callable(flush_sink):
-            flush_sink()
-
     def heartbeat_takeover_claim(self, claim_id: str) -> None:
         """Keep one gateway-authorized controller lease alive."""
         response = self.client.post(f"/ai/takeover/{claim_id}/heartbeat")

@@ -66,7 +66,7 @@ def _has_sense(
     return any(
         mode.sense_type is sense_type
         and (range_feet is None or mode.range_feet == range_feet)
-        for mode in entity.senses.sense_modes
+        for mode in entity.senses.get_sense_modes()
     )
 
 
@@ -158,8 +158,8 @@ def _fire_bolt_target_index(
     return target_row.index, available
 
 
-def test_darkvision_self_lifecycle_and_concentration_cleanup() -> None:
-    """Old case 1: self grant and linked concentration cleanup are reactive."""
+def test_darkvision_self_lifecycle_is_non_concentration_and_timed() -> None:
+    """Darkvision is an independent eight-hour sense grant."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Darkvision Caster", (2, 3), spell_slots={2: 1})
     Entity.update_all_entities_senses(max_distance=60)
@@ -170,13 +170,13 @@ def test_darkvision_self_lifecycle_and_concentration_cleanup() -> None:
     assert not result.canceled
     assert _has_sense(caster, SensesType.DARKVISION, range_feet=60)
     assert has_condition(caster, "Darkvision")
-    concentration = caster.active_conditions.get("Concentrating")
-    assert isinstance(concentration, Concentrating)
-    assert concentration.spell_name == "Darkvision"
-
+    assert not has_condition(caster, "Concentrating")
+    effect = caster.active_conditions["Darkvision"]
+    assert effect.duration.duration_type is DurationType.ROUNDS
+    assert effect.duration.duration == 4_800
     _break_concentration(caster)
-    assert not _has_sense(caster, SensesType.DARKVISION)
-    assert not has_condition(caster, "Darkvision")
+    assert _has_sense(caster, SensesType.DARKVISION)
+    assert has_condition(caster, "Darkvision")
     assert not has_condition(caster, "Concentrating")
 
 
@@ -198,8 +198,8 @@ def test_darkvision_ally_touch_range_accepts_adjacent_and_rejects_far() -> None:
     assert not has_condition(far_ally, "Darkvision")
 
 
-def test_darkvision_concentration_replacement_removes_linked_ally_effect() -> None:
-    """Old case 3: a new concentration slot replaces the linked sense grant."""
+def test_darkvision_survives_unrelated_concentration_spell() -> None:
+    """A later concentration spell cannot remove independent Darkvision."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Replacing Caster", (2, 3), spell_slots={2: 2})
     ally = _caster("Darkvision Ally", (3, 3), spell_slots={})
@@ -215,8 +215,8 @@ def test_darkvision_concentration_replacement_removes_linked_ally_effect() -> No
 
     assert isinstance(replacement, SpellEvent)
     assert not replacement.canceled
-    assert not has_condition(ally, "Darkvision")
-    assert not _has_sense(ally, SensesType.DARKVISION)
+    assert has_condition(ally, "Darkvision")
+    assert _has_sense(ally, SensesType.DARKVISION)
     concentration = caster.active_conditions.get("Concentrating")
     assert isinstance(concentration, Concentrating)
     assert concentration.spell_name == "Invisibility"
@@ -352,8 +352,8 @@ def test_multiple_nonconcentration_sense_buffs_clean_up_independently() -> None:
     assert _has_sense(caster, SensesType.TRUESIGHT, range_feet=120)
 
 
-def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> None:
-    """Old case 11: dark-light resolution and entity visibility change in place."""
+def test_darkvision_reactively_reveals_dark_target_and_explicit_cleanup_hides_it() -> None:
+    """Old case 11: the independent grant survives damage until it is removed."""
     _reset_dark_arena()
     caster = _caster("Dark Reactive Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("Dark Reactive Enemy", (5, 3))
@@ -374,6 +374,9 @@ def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> Non
     )
 
     _break_concentration(caster)
+    assert enemy.uuid in caster.senses.entities
+
+    caster.remove_condition("Darkvision")
     assert enemy.uuid not in caster.senses.entities
 
 
@@ -426,8 +429,8 @@ def test_true_seeing_reactively_pierces_darkness_and_invisibility() -> None:
     assert enemy.uuid not in ally.senses.entities
 
 
-def test_darkvision_on_ally_reactively_tracks_caster_concentration() -> None:
-    """Old case 14: the linked ally, not only the caster, recomputes senses."""
+def test_darkvision_on_ally_reactively_tracks_its_independent_lifecycle() -> None:
+    """Old case 14: an ally grant survives caster damage and cleans up locally."""
     _reset_dark_arena()
     caster = _caster("Ally Reactive Caster", (2, 3), spell_slots={2: 1})
     ally = _caster("Ally Reactive Target", (3, 3), spell_slots={})
@@ -439,6 +442,10 @@ def test_darkvision_on_ally_reactively_tracks_caster_concentration() -> None:
     assert enemy.uuid in ally.senses.entities
 
     _break_concentration(caster)
+    assert has_condition(ally, "Darkvision")
+    assert enemy.uuid in ally.senses.entities
+
+    ally.remove_condition("Darkvision")
     assert not has_condition(ally, "Darkvision")
     assert enemy.uuid not in ally.senses.entities
 
@@ -476,6 +483,12 @@ def test_darkvision_controls_discovery_and_real_spell_execution_in_darkness() ->
 
     caster.action_economy.reset_all_costs()
     _break_concentration(caster)
+    assert any(
+        enemy.uuid in {target.target_uuid for target in row.valid_targets}
+        for row in caster.get_available_actions().entity_actions
+    )
+
+    caster.remove_condition("Darkvision")
     assert all(
         enemy.uuid not in {target.target_uuid for target in row.valid_targets}
         for row in caster.get_available_actions().entity_actions

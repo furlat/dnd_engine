@@ -14,6 +14,7 @@ from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     AttackD20RollResultEvent,
+    AbilityCheckD20RollResultEvent,
     D20RollResultEvent,
     Damage,
     DamageRollPacket,
@@ -33,13 +34,14 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.actions import Attack
+from dnd.blocks.action_economy import RechargeType
 from dnd.blocks.equipment import Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.runtime import HandlerDispatchOutcome
-from dnd.classes.feats import LuckyFeature
-from dnd.classes.fighter import GreatWeaponFighting
+from dnd.classes.feats import lucky_processor
+from dnd.classes.fighter import great_weapon_fighting_processor
 from dnd.core.gridmap import get_map, reset_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
@@ -89,6 +91,46 @@ def reset_dice_state() -> None:
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
+
+
+def _install_lucky_fixture(entity: Entity) -> None:
+    entity.action_economy.add_resource_contribution(
+        "luck_points",
+        "fixture.lucky",
+        maximum=3,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    entity.add_event_handler(EventHandler(
+        name="Lucky fixture",
+        source_entity_uuid=entity.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=event_type,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=entity.uuid,
+            )
+            for event_type in (
+                EventType.ATTACK_D20_ROLL_RESULT,
+                EventType.SAVE_D20_ROLL_RESULT,
+                EventType.CHECK_D20_ROLL_RESULT,
+            )
+        ],
+        event_processor=lucky_processor,
+    ))
+
+
+def _install_great_weapon_fighting_fixture(entity: Entity) -> None:
+    entity.add_event_handler(EventHandler(
+        name="Great Weapon Fighting fixture",
+        source_entity_uuid=entity.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.DAMAGE_ROLL_RESULT,
+                event_phase=EventPhase.EFFECT,
+            ),
+        ],
+        event_processor=great_weapon_fighting_processor,
+    ))
 
 
 def make_bonus(
@@ -604,6 +646,20 @@ def test_eb_03_008_entity_roll_d20_uses_specific_result_events() -> None:
     assert check_event.skill_name == "athletics"
     assert check_roll.total == 13
 
+    with fixed_randint(11):
+        ability_check_roll, ability_check_event = actor.roll_d20_event(
+            bonus,
+            RollType.CHECK,
+            ability_name="strength",
+        )
+    assert isinstance(
+        ability_check_event,
+        AbilityCheckD20RollResultEvent,
+    )
+    assert ability_check_event.event_type == EventType.CHECK_D20_ROLL_RESULT
+    assert ability_check_event.ability_name == "strength"
+    assert ability_check_roll.total == 11
+
     with fixed_randint(14):
         neutral_save_roll, neutral_save_event = actor.roll_d20_event(
             bonus,
@@ -963,12 +1019,7 @@ def test_eb_03_011_lucky_processor_spends_and_replaces_d20_deterministically() -
         name="Lucky Target",
         config=EntityConfig(position=(1, 0)),
     )
-    actor.add_condition(
-        LuckyFeature(
-            source_entity_uuid=actor.uuid,
-            target_entity_uuid=actor.uuid,
-        )
-    )
+    _install_lucky_fixture(actor)
     bonus = make_bonus(actor.uuid, target.uuid, base_value=0)
     resource = actor.action_economy.resources["luck_points"]
 
@@ -1135,12 +1186,7 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         ),
         WeaponSlot.RANGED_MAIN,
     )
-    fighter.add_condition(
-        GreatWeaponFighting(
-            source_entity_uuid=fighter.uuid,
-            target_entity_uuid=fighter.uuid,
-        )
-    )
+    _install_great_weapon_fighting_fixture(fighter)
 
     low_roll = make_damage_roll(fighter.uuid, target.uuid, [1, 2, 5], bonus=0)
     with fixed_randint(1, 6):
@@ -1195,12 +1241,7 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         ),
         WeaponSlot.MELEE_MAIN,
     )
-    one_handed_fighter.add_condition(
-        GreatWeaponFighting(
-            source_entity_uuid=one_handed_fighter.uuid,
-            target_entity_uuid=one_handed_fighter.uuid,
-        )
-    )
+    _install_great_weapon_fighting_fixture(one_handed_fighter)
     one_handed_low_roll = make_damage_roll(
         one_handed_fighter.uuid,
         target.uuid,
@@ -1239,12 +1280,7 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
         ),
         WeaponSlot.MELEE_MAIN,
     )
-    attacker.add_condition(
-        GreatWeaponFighting(
-            source_entity_uuid=attacker.uuid,
-            target_entity_uuid=attacker.uuid,
-        )
-    )
+    _install_great_weapon_fighting_fixture(attacker)
     Entity.update_all_entities_senses(max_distance=10)
     initial_hp = target.get_hp()
 
@@ -1470,12 +1506,7 @@ def test_eb_03_016_attack_d20_slot_and_gwf_extra_packet_boundaries() -> None:
         make_bonus(attacker.uuid, target.uuid, base_value=0)
     )
     attacker.equipment.extra_attack_damage_type.append(DamageType.RADIANT)
-    attacker.add_condition(
-        GreatWeaponFighting(
-            source_entity_uuid=attacker.uuid,
-            target_entity_uuid=attacker.uuid,
-        )
-    )
+    _install_great_weapon_fighting_fixture(attacker)
     Entity.update_all_entities_senses(max_distance=10)
 
     with fixed_randint(15, 1, 2, 1, 6, 5):
@@ -1556,12 +1587,7 @@ def test_eb_03_017_gwf_requires_versatile_weapon_to_be_two_handed() -> None:
         ),
         WeaponSlot.MELEE_OFF,
     )
-    attacker.add_condition(
-        GreatWeaponFighting(
-            source_entity_uuid=attacker.uuid,
-            target_entity_uuid=attacker.uuid,
-        )
-    )
+    _install_great_weapon_fighting_fixture(attacker)
 
     shielded_low_roll = make_damage_roll(attacker.uuid, target.uuid, [1], bonus=0)
     shielded_event = make_damage_result_event(

@@ -55,7 +55,7 @@ const manifest: ContentManifestResponse = {
 };
 
 const catalog: ContentCatalogResponse = {
-  schema_version: 6,
+  schema_version: 7,
   content_set_digest: digest,
   catalog_digest: digest,
   entries: [{
@@ -95,6 +95,7 @@ const catalog: ContentCatalogResponse = {
     condition_effect_profile: null,
     condition_lifecycle: null,
     item_definition: null,
+    spatial_effect_definition: null,
     dependencies: [],
     parameter_schema: null,
   }],
@@ -206,7 +207,7 @@ test("content catalog accepts the authored tint field and spell catalog exposes 
   const decodedContent = await client.getContentCatalog();
   const decodedSpells = await client.getSpellCatalog();
 
-  assert.equal(decodedContent.schema_version, 6);
+  assert.equal(decodedContent.schema_version, 7);
   assert.equal(decodedContent.entries[0]?.presentation.tint_rgb, 0xff6b21);
   assert.deepEqual(decodedContent.entries[0]?.ref, fireBoltRef);
   assert.deepEqual(

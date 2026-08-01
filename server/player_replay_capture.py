@@ -19,6 +19,7 @@ from server.player_replay import (
     SubjectiveReplayDelivery,
     SubjectiveReplaySegment,
     SubjectiveReplaySegmentEnd,
+    subjective_bootstrap_encounter_ended,
 )
 from server.player_replication_contract import (
     EncounterPresentationCue,
@@ -83,7 +84,9 @@ class SubjectiveReplayRecorder:
         self._deliveries: list[SubjectiveReplayDelivery] = []
         self._through = self.bootstrap.watermarks
         self._presentation_ids: set[str] = set()
-        self._encounter_ended = self._bootstrap_is_terminal()
+        self._encounter_ended = subjective_bootstrap_encounter_ended(
+            self.bootstrap,
+        )
         self._end_reason: Optional[SubjectiveReplaySegmentEnd] = None
         self._aborted = False
         self._lock = RLock()
@@ -272,11 +275,6 @@ class SubjectiveReplayRecorder:
             raise SubjectiveReplayCaptureError("replay segment was aborted")
         if self._end_reason is not None:
             raise SubjectiveReplayCaptureError("replay segment is already closed")
-
-    def _bootstrap_is_terminal(self) -> bool:
-        encounter = self.bootstrap.world.state.encounter
-        return encounter is not None and encounter.state == "ended"
-
 
 class SubjectiveReplayCaptureStore:
     """Process-local registry retaining exact segments until artifact publication."""

@@ -1,7 +1,7 @@
 """Divination spells that reveal information or grant special senses."""
 
 import random
-from typing import Any, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -18,57 +18,21 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag, DurationType
-from dnd.core.base_block import SensesType, SenseMode
+from dnd.core.base_block import SensesType
 from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
 from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent
+from dnd.conditions import GrantedSenseModeCondition
 
 
-class SeeInvisibilityEffect(BaseCondition):
+class SeeInvisibilityEffect(GrantedSenseModeCondition):
     """Grants the ability to see invisible creatures and objects."""
 
     name: str = Field(default="See Invisibility", description="Condition name.")
     description: str = Field(default="You can see invisible creatures and objects", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
-    _granted_sense_type: Optional[SensesType] = None
-
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Add see-invisible sensing to the target.
-
-        Args:
-            declaration_event: Condition application declaration event.
-
-        Returns:
-            Empty modifier and handler lists plus the effect event.
-        """
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
-
-        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=0))
-        self._granted_sense_type = SensesType.SEE_INVISIBLE
-        target._notify_perceivability_changed()
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the granted see-invisible sense mode."""
-        if self._granted_sense_type is not None and self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.senses.sense_modes = [
-                    sm for sm in target.senses.sense_modes
-                    if sm.sense_type != self._granted_sense_type
-                ]
-                target._notify_perceivability_changed()
-        return super()._remove(event)
+    granted_sense_type: SensesType = Field(default=SensesType.SEE_INVISIBLE)
+    granted_sense_range_feet: int = Field(default=0, ge=0)
 
 
 class SeeInvisibility(SpellAction):
@@ -146,53 +110,14 @@ class SeeInvisibility(SpellAction):
         )
 
 
-class TrueSeeingEffect(BaseCondition):
+class TrueSeeingEffect(GrantedSenseModeCondition):
     """Grants 120ft truesight."""
 
     name: str = Field(default="True Seeing", description="Condition name.")
     description: str = Field(default="You have truesight out to 120 feet", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
-    _granted_sense_type: Optional[SensesType] = None
-    _granted_range: int = 120
-
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Add truesight sensing to the target.
-
-        Args:
-            declaration_event: Condition application declaration event.
-
-        Returns:
-            Empty modifier and handler lists plus the effect event.
-        """
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
-
-        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=120))
-        self._granted_sense_type = SensesType.TRUESIGHT
-        target._notify_perceivability_changed()
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the granted truesight sense mode."""
-        if self._granted_sense_type is not None and self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.senses.sense_modes = [
-                    sm for sm in target.senses.sense_modes
-                    if not (sm.sense_type == self._granted_sense_type
-                            and sm.range_feet == self._granted_range)
-                ]
-                target._notify_perceivability_changed()
-        return super()._remove(event)
+    granted_sense_type: SensesType = Field(default=SensesType.TRUESIGHT)
+    granted_sense_range_feet: int = Field(default=120, ge=0)
 
 
 class TrueSeeing(SpellAction):
@@ -240,29 +165,8 @@ class TrueSeeing(SpellAction):
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate touch range and visibility for True Seeing.
-
-        Args:
-            declaration_event: Spell declaration event.
-
-        Returns:
-            Execution-ready, canceled, or parent-validated spell event.
-        """
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
-            return declaration_event.cancel(status_message="Target not visible")
-
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > 5:
-            return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        """Validate the shared entity-target spell geometry and lifecycle."""
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply the True Seeing condition to the target.

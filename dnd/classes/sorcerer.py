@@ -2,30 +2,39 @@
 Sorcerer Class Features & Metamagic
 
 Implements:
-- SorceryPointsFeature: Grants SP resource + registers metamagic & Font of Magic actions
 - MetamagicActive: Condition that modifies spell templates via alt-field overrides
 - Metamagic actions: QuickenedSpell, TwinnedSpell, DistantSpell
 - Font of Magic: ConvertSlotToSP, ConvertSPToSlot
-- Draconic Bloodline: DraconicResilience, ElementalAffinity
+- Draconic Bloodline transient behavior: Elemental Affinity
+
+Permanent Sorcery Point and Draconic Resilience structure is installed by the
+character composer.
 """
 
 from typing import Any, Optional, List, Tuple, Dict, Literal
 from uuid import UUID
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
-    BaseAction, ActionCategory, TargetType, Cost, CostType,
-    ActionEvent, spell_slot_cost_type,
+    ActionOverrideLease,
+    ActionSelectionParameter,
+    ActionSelectionParameterKind,
+    BaseAction,
+    ActionCategory,
+    TargetType,
+    Cost,
+    ActionEvent,
 )
+from dnd.core.action_types import CostType, spell_slot_cost_type
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
     RangeType,
 )
+from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
-    NumericalModifier,
     ResistanceModifier,
     ResistanceStatus,
 )
@@ -33,73 +42,21 @@ from dnd.entity import Entity
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
-    entity_action_economy_cost_applier,
     Move,
     MovementEvent,
     SpellAction,
 )
 from dnd.actions_functional import apply_action_overrides, clear_action_overrides
-from dnd.blocks.action_economy import RechargeType
 from dnd.core.base_block import MovementMode
 from dnd.conditions import Charmed, Concentrating, Frightened
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
+from dnd.spatial_effect_content import DRACONIC_PRESENCE_FIELD_RECIPE
+from dnd.spatial_effects import FieldEffect
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
 
 
-class DraconicResilience(BaseCondition):
-    """Apply Draconic Bloodline durability to a sorcerer.
-
-    Attributes:
-        name: Display name for the Draconic Bloodline resilience feature.
-        description: Rules summary for the resilience benefit.
-        hp_bonus: Maximum hit point bonus granted per sorcerer level.
-    """
-    name: str = Field(default="Draconic Resilience", description="Display name for the Draconic Bloodline resilience feature.")
-    description: str = Field(default="AC = 13 + DEX when unarmored, +1 HP per sorcerer level", description="Rules summary for the resilience benefit.")
-    hp_bonus: int = Field(default=1, description="Maximum hit point bonus granted per sorcerer level.")
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        hp_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Draconic Resilience HP",
-            value=self.hp_bonus,
-        )
-        mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(hp_mod)
-        outs.append((target.health.max_hit_points_bonus.uuid, mod_uuid))
-
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-        max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message="Draconic Resilience applied",
-            resulting_max_hp=max_hp
-        )
-        return outs, [], [], [], effect_event
-
-    def _post_removal_stats(self) -> Dict[str, Any]:
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-            max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
-            return {"resulting_max_hp": max_hp}
-        return {}
 
 
 class ElementalAffinityResistance(BaseCondition):
@@ -264,13 +221,6 @@ class ElementalAffinityResistanceAction(BaseAction):
             ),
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(
-            completion_event,
-            self.source_entity_uuid,
-        )
-
-
 class DragonWingsActive(BaseCondition):
     """Mark manifested draconic wings as an evented creature state."""
 
@@ -395,13 +345,6 @@ class DragonWings(BaseAction):
             status_message=status,
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(
-            completion_event,
-            self.source_entity_uuid,
-        )
-
-
 DraconicPresenceMode = Literal["awe", "fear"]
 
 
@@ -444,7 +387,7 @@ class DraconicPresenceImmunity(BaseCondition):
         )
 
 
-class DraconicPresenceAura(BaseCondition):
+class DraconicPresenceAura(AreaSpatialEffectController):
     """Concentration-owned 60-foot aura of awe or fear."""
 
     name: str = Field(
@@ -466,6 +409,11 @@ class DraconicPresenceAura(BaseCondition):
         default="awe",
         description="Whether the aura charms through awe or frightens.",
     )
+    zone_shape: str = Field(default="sphere", description="Aura shape.")
+    zone_radius_feet: int = Field(default=60, description="Aura radius.")
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.TURN_START,
+    })
 
     @staticmethod
     def _immunity_name(source_entity_uuid: UUID) -> str:
@@ -492,7 +440,7 @@ class DraconicPresenceAura(BaseCondition):
             caster is None
             or target is None
             or not caster.is_enemy(target)
-            or caster.senses.get_feet_distance(target.position) > 60
+            or target.position not in self.affected_positions
             or self._immunity_name(caster.uuid)
             in target.active_conditions
         ):
@@ -540,25 +488,11 @@ class DraconicPresenceAura(BaseCondition):
             self.add_linked_condition(target.uuid, effect.uuid)
         return None
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event],
-    ]:
-        if self.target_entity_uuid is None:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Draconic Presence target is missing",
-            )
-        caster = Entity.get(self.target_entity_uuid)
-        if caster is None:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Draconic Presence caster does not exist",
-            )
-        handler = EventHandler(
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        """Create the one exact hostile-turn handler for this field."""
+        return EventHandler(
             name=f"Draconic Presence ({self.mode})",
-            source_entity_uuid=caster.uuid,
+            source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
                 Trigger(
                     name="Hostile turn starts in Draconic Presence",
@@ -568,15 +502,20 @@ class DraconicPresenceAura(BaseCondition):
             ],
             event_processor=self._on_hostile_turn_start,
         )
-        caster.add_event_handler(handler)
-        return [], [handler.uuid], [], [], declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=(
-                f"{caster.name} projects a Draconic Presence aura of "
-                f"{self.mode}"
-            ),
-        )
+
+    def _apply(self, declaration_event: Event) -> Tuple[
+        List[Tuple[UUID, UUID]],
+        List[UUID],
+        List[UUID],
+        List[UUID],
+        Optional[Event],
+    ]:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Draconic Presence caster does not exist",
+            )
+        return super()._apply(declaration_event)
 
 
 class DraconicPresence(BaseAction):
@@ -649,37 +588,43 @@ class DraconicPresence(BaseAction):
                 status_message="Draconic Presence concentration failed",
             )
 
+        field = materialize_spatial_effect(
+            DRACONIC_PRESENCE_FIELD_RECIPE,
+            caster.uuid,
+            position=caster.position,
+            faction=caster.faction,
+            anchor_uuid=caster.uuid,
+            expected_type=FieldEffect,
+        )
         aura = DraconicPresenceAura(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            target_entity_uuid=field.uuid,
             mode=self.mode,
+            zone_center=caster.position,
             duration=Duration(
                 duration=10,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
+                target_entity_uuid=field.uuid,
             ),
+            effect_origin=execution_event.get_effect_origin(),
         )
-        caster.add_condition(aura, parent_event=execution_event)
-        if not aura.applied:
+        aura_result = field.install_controller(
+            aura,
+            parent_event=execution_event,
+        )
+        if aura_result is None or aura_result.canceled or not aura.applied:
             installed.cleanup_if_no_effects(parent_event=execution_event)
             return execution_event.cancel(
                 status_message="Draconic Presence aura failed",
             )
-        installed.add_linked_condition(caster.uuid, aura.uuid)
+        installed.add_linked_condition(field.uuid, aura.uuid)
         return execution_event.phase_to(
             EventPhase.COMPLETION,
             status_message=(
                 f"Draconic Presence ({self.mode}) is active"
             ),
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(
-            completion_event,
-            self.source_entity_uuid,
-        )
-
 
 class MetamagicActive(BaseCondition):
     """Track the temporary override from an activated metamagic option.
@@ -695,7 +640,7 @@ class MetamagicActive(BaseCondition):
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category used for lifecycle and cleanup.")
     metamagic_type: str = Field(default="quickened", description="Metamagic option currently modifying the caster's spell templates.")
 
-    _modified_uuids: List[UUID] = []
+    _override_lease: Optional[ActionOverrideLease] = PrivateAttr(default=None)
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -715,7 +660,7 @@ class MetamagicActive(BaseCondition):
             )
 
         if self.metamagic_type == "quickened":
-            self._modified_uuids = apply_action_overrides(
+            self._override_lease = apply_action_overrides(
                 target,
                 filter_fn=lambda a: isinstance(a, SpellAction) and any(
                     c.cost_type == "actions" for c in a.costs
@@ -723,17 +668,19 @@ class MetamagicActive(BaseCondition):
                 overrides={"alt_cost_type": "bonus_actions"},
             )
         elif self.metamagic_type == "twinned":
-            self._modified_uuids = []
-            for template in target.registered_actions:
+            overrides_by_template: Dict[UUID, Dict[str, Any]] = {}
+            for template in target.get_effective_action_templates():
                 if (
                     isinstance(template, SpellAction)
                     and template.target_type == TargetType.ENTITY
                 ):
-                    template.alt_target_type = TargetType.MULTI_ENTITY
-                    template.alt_target_count = 2
+                    overrides: Dict[str, Any] = {
+                        "alt_target_type": TargetType.MULTI_ENTITY,
+                        "alt_target_count": 2,
+                    }
                     extra_sp = max(0, template.spell_level - 1)
                     if extra_sp > 0:
-                        template.alt_extra_costs = [Cost(
+                        overrides["alt_extra_costs"] = [Cost(
                             name="Twinned Spell SP",
                             cost_type="actions",
                             cost=0,
@@ -742,17 +689,29 @@ class MetamagicActive(BaseCondition):
                             evaluator=entity_action_economy_cost_evaluator,
                             resource_evaluator=entity_resource_cost_evaluator,
                         )]
-                    self._modified_uuids.append(template.uuid)
+                    overrides_by_template[template.uuid] = overrides
+            self._override_lease = (
+                target.install_action_template_overrides(
+                    overrides_by_template,
+                )
+            )
         elif self.metamagic_type == "distant":
-            self._modified_uuids = []
-            for template in target.registered_actions:
+            overrides_by_template = {}
+            for template in target.get_effective_action_templates():
                 if isinstance(template, SpellAction):
                     if template.spell_range.type == RangeType.RANGE:
-                        template.alt_range = template.spell_range.normal * 2
-                        self._modified_uuids.append(template.uuid)
+                        overrides_by_template[template.uuid] = {
+                            "alt_range": template.spell_range.normal * 2,
+                        }
                     elif template.spell_range.type == RangeType.REACH:
-                        template.alt_range = 30
-                        self._modified_uuids.append(template.uuid)
+                        overrides_by_template[template.uuid] = {
+                            "alt_range": 30,
+                        }
+            self._override_lease = (
+                target.install_action_template_overrides(
+                    overrides_by_template,
+                )
+            )
 
         handler = EventHandler(
             name="MetamagicAutoRemove",
@@ -795,14 +754,18 @@ class MetamagicActive(BaseCondition):
             target.remove_condition(self.name, parent_event=event)
         return event
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Clear alt fields from modified templates."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release the exact override lease on removal or failed application."""
+        del parent_event
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
-            if target:
-                clear_action_overrides(target, self._modified_uuids)
-        self._modified_uuids = []
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
+            if target and self._override_lease is not None:
+                clear_action_overrides(target, self._override_lease)
+        self._override_lease = None
 
 
 class QuickenedSpell(BaseAction):
@@ -853,10 +816,6 @@ class QuickenedSpell(BaseAction):
             status_message="Quickened Spell activated",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class TwinnedSpell(BaseAction):
     """Activate Twinned Spell for the caster's next eligible spell.
 
@@ -904,10 +863,6 @@ class TwinnedSpell(BaseAction):
             EventPhase.COMPLETION,
             status_message="Twinned Spell activated",
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 
 class DistantSpell(BaseAction):
     """Activate Distant Spell for the caster's next eligible spell.
@@ -957,9 +912,6 @@ class DistantSpell(BaseAction):
             status_message="Distant Spell activated",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 METAMAGIC_ACTIONS: Dict[str, type] = {
     "quickened": QuickenedSpell,
     "twinned": TwinnedSpell,
@@ -989,6 +941,10 @@ class ConvertSlotToSP(BaseAction):
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
+        self.selection_parameter = ActionSelectionParameter(
+            kind=ActionSelectionParameterKind.LEVEL,
+            value=self.slot_level,
+        )
         slot_cost_type = spell_slot_cost_type(self.slot_level)
         self.name = f"Slot\u2192SP L{self.slot_level}"
         self.costs = [
@@ -1023,10 +979,6 @@ class ConvertSlotToSP(BaseAction):
             status_message=f"Slot\u2192SP L{self.slot_level}: gained {self.slot_level} SP",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class ConvertSPToSlot(BaseAction):
     """Convert sorcery points into one spell slot.
 
@@ -1047,6 +999,10 @@ class ConvertSPToSlot(BaseAction):
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
+        self.selection_parameter = ActionSelectionParameter(
+            kind=ActionSelectionParameterKind.LEVEL,
+            value=self.slot_level,
+        )
         sp_cost = SP_TO_SLOT_COST.get(self.slot_level, 2)
         self.name = f"{sp_cost}SP\u2192Slot L{self.slot_level}"
         self.costs = [
@@ -1089,92 +1045,3 @@ class ConvertSPToSlot(BaseAction):
             EventPhase.COMPLETION,
             status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level}: created slot",
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class SorceryPointsFeature(BaseCondition):
-    """Grant sorcery points and related class-feature actions.
-
-    Attributes:
-        name: Display name for the Sorcery Points class feature.
-        description: Rules summary for sorcery point resources and actions.
-        sorcery_points: Maximum sorcery points granted by this feature.
-        metamagic_choices: Metamagic option keys registered as actions.
-    """
-    name: str = Field(default="Sorcery Points Feature", description="Display name for the Sorcery Points class feature.")
-    description: str = Field(default="Sorcery points for metamagic and Font of Magic", description="Rules summary for sorcery point resources and granted actions.")
-    sorcery_points: int = Field(default=2, description="Maximum sorcery points granted by this feature.")
-    metamagic_choices: List[str] = Field(default_factory=list, description="Metamagic option keys registered as actions by this feature.")
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        target.action_economy.add_resource(
-            "sorcery_points", self.sorcery_points, RechargeType.LONG_REST
-        )
-
-        for choice in self.metamagic_choices:
-            action_cls = METAMAGIC_ACTIONS.get(choice)
-            if action_cls:
-                target.register_action(action_cls(
-                    source_entity_uuid=target.uuid, template=True
-                ))
-
-        for slot_level in range(1, 6):
-            slot_value = target.action_economy.spell_slot_value(slot_level)
-            base_mod = slot_value.get_base_modifier()
-            if base_mod and base_mod.normalized_value > 0:
-                target.register_action(ConvertSlotToSP(
-                    source_entity_uuid=target.uuid, slot_level=slot_level, template=True
-                ))
-                target.register_action(ConvertSPToSlot(
-                    source_entity_uuid=target.uuid, slot_level=slot_level, template=True
-                ))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message="Sorcery Points Feature applied",
-        )
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("sorcery_points")
-
-            metamagic_names = {
-                "quickened": "Quickened Spell",
-                "twinned": "Twinned Spell",
-                "distant": "Distant Spell",
-            }
-            for choice in self.metamagic_choices:
-                action_name = metamagic_names.get(choice)
-                if action_name:
-                    target.unregister_action(action_name)
-
-            for slot_level in range(1, 6):
-                target.unregister_action(f"Slot\u2192SP L{slot_level}")
-                sp_cost = SP_TO_SLOT_COST.get(slot_level, 2)
-                target.unregister_action(f"{sp_cost}SP\u2192Slot L{slot_level}")
-
-            if "MetamagicActive" in target.active_conditions:
-                target.remove_condition("MetamagicActive", parent_event=event)
-
-        return super()._remove(event)

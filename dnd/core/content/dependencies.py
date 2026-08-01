@@ -21,6 +21,8 @@ class ContentDependencyRelation(str, Enum):
     APPLIES_CONDITION = "applies_condition"
     INSTALLS_HANDLER = "installs_handler"
     CREATES_ZONE = "creates_zone"
+    CREATES_SPATIAL_EFFECT = "creates_spatial_effect"
+    TRANSFORMS_TO_SPATIAL_EFFECT = "transforms_to_spatial_effect"
     CREATES_OBJECT = "creates_object"
     CREATES_ITEM = "creates_item"
     EQUIPS_ITEM = "equips_item"

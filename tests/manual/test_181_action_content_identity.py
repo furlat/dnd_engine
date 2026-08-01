@@ -8,23 +8,31 @@ from uuid import uuid4
 from pydantic import JsonValue
 
 from dnd.actions import Move, SpellAction
-from dnd.classes.barbarian import RecklessAttack, RecklessAttackFeature
+from dnd.classes.barbarian import RecklessAttack
 from dnd.classes.content_factories import (
     PLAYER_CLASS_CREATURE_RECIPES_BY_ID,
 )
 from dnd.classes.fighter import (
     ActionSurge,
-    ActionSurgeFeature,
     ExtraAttack,
-    ExtraAttackFeature,
 )
-from dnd.classes.sorcerer import ConvertSPToSlot, SorceryPointsFeature
+from dnd.classes.permanent_feature_definitions import (
+    BARBARIAN_RECKLESS_ATTACK_DECLARATION,
+    FIGHTER_ACTION_SURGE_DECLARATION,
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
+    SORCERER_SORCERY_POINTS_DECLARATION,
+)
+from dnd.classes.sorcerer import ConvertSPToSlot
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.condition_definitions import (
+    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.core.base_actions import BaseAction, StructuredAction
+from dnd.core.base_actions import BaseAction
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.descriptors import ContentVisibility
+from dnd.core.content.identities import ContentRef
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -46,9 +54,11 @@ from dnd.monsters.multiattack_definitions import (
 from dnd.monsters.srd_roster import SRD_CREATURE_RECIPES_BY_ID
 from dnd.monsters.traits import MultiattackAction
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.spatial_restraints import EscapeSpatialRestraintAction
 from dnd.spells.abjuration import (
     FreedomOfMovement,
     FreedomOfMovementEscape,
+    FreedomOfMovementEffect,
 )
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_CLASS
 from dnd.spells.conjuration import CallLightning, CallLightningStrike
@@ -65,8 +75,8 @@ from server.content_catalog import build_public_content_catalog
 
 EXPECTED_ABSTRACT_ACTION_MECHANISMS = frozenset({
     SpellAction,
-    StructuredAction,
     _PotionDrinkAction,
+    EscapeSpatialRestraintAction,
 })
 
 
@@ -94,7 +104,7 @@ def _concrete_action_types(
 
 
 def test_active_action_inventory_is_exact_and_fully_declared() -> None:
-    """Only three composition bases remain non-authored runtime mechanisms."""
+    """Only the two live composition bases remain non-authored mechanisms."""
     descendants = _active_descendants(BaseAction)
     assert EXPECTED_ABSTRACT_ACTION_MECHANISMS <= descendants
 
@@ -147,28 +157,21 @@ def test_every_public_action_definition_resolves_in_public_catalog() -> None:
             assert declaration.ref.identity_key not in public_keys
 
 
-def test_condition_granted_action_binds_as_exact_provider_child() -> None:
-    """Action admission preserves the feature that causally granted it."""
+def test_structural_feature_action_binds_as_exact_provider_child() -> None:
+    """Character composition preserves the feature that granted its action."""
     loaded = bootstrap_content_system()
     SERVER_CONTENT_SYSTEM_RUNTIME.install(loaded)
-    reset_engine_runtime(grid_size=(4, 4))
-    owner = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Action identity owner",
-        config=EntityConfig(),
-    )
-    feature = RecklessAttackFeature(
-        source_entity_uuid=owner.uuid,
-        target_entity_uuid=owner.uuid,
+    reset_engine_runtime(grid_size=(6, 6))
+    owner = _materialize_test_creature(
+        PLAYER_CLASS_CREATURE_RECIPES_BY_ID["barbarian"],
+        parameters={"level": 5, "asi_4": [["strength", 2]]},
+        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
     )
 
-    result = owner.add_condition(feature, check_save_throw=False)
-
-    assert result is not None and not result.canceled
     granted = owner.get_action_template("Reckless Attack")
     assert isinstance(granted, RecklessAttack)
     action_declaration = get_content_declaration(RecklessAttack)
-    provider_declaration = get_content_declaration(RecklessAttackFeature)
+    provider_declaration = BARBARIAN_RECKLESS_ATTACK_DECLARATION
     assert granted.behavior_binding == BehaviorBinding(
         definition_ref=action_declaration.ref,
         provided_by_ref=provider_declaration.ref,
@@ -223,14 +226,13 @@ def _assert_feature_granted_action(
     entity: Entity,
     *,
     action_type: type[BaseAction],
-    feature_type: type[object],
+    provider_ref: ContentRef,
 ) -> None:
     action = _require_action(entity, action_type)
     action_declaration = get_content_declaration(action_type)
-    feature_declaration = get_content_declaration(feature_type)
     assert action.behavior_binding == BehaviorBinding(
         definition_ref=action_declaration.ref,
-        provided_by_ref=feature_declaration.ref,
+        provided_by_ref=provider_ref,
         origin_root_ref=None,
         runtime_owner_uuid=entity.uuid,
     )
@@ -248,13 +250,13 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
                 "asi_4": [["strength", 2]],
             },
             RecklessAttack,
-            RecklessAttackFeature,
+            BARBARIAN_RECKLESS_ATTACK_DECLARATION.ref,
         ),
         (
             PLAYER_CLASS_CREATURE_RECIPES_BY_ID["fighter"],
             {"level": 5, "asi_4": [["strength", 2]]},
             ActionSurge,
-            ActionSurgeFeature,
+            FIGHTER_ACTION_SURGE_DECLARATION.ref,
         ),
         (
             PLAYER_CLASS_CREATURE_RECIPES_BY_ID["sorcerer"],
@@ -264,10 +266,10 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
                 "asi_4": [["charisma", 2]],
             },
             ConvertSPToSlot,
-            SorceryPointsFeature,
+            SORCERER_SORCERY_POINTS_DECLARATION.ref,
         ),
     )
-    for recipe, parameters, action_type, feature_type in class_cases:
+    for recipe, parameters, action_type, provider_ref in class_cases:
         reset_engine_runtime(grid_size=(6, 6))
         entity = _materialize_test_creature(
             recipe,
@@ -285,7 +287,7 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
         _assert_feature_granted_action(
             entity,
             action_type=action_type,
-            feature_type=feature_type,
+            provider_ref=provider_ref,
         )
         move = _require_action(entity, Move)
         move_declaration = get_content_declaration(Move)
@@ -302,10 +304,10 @@ def test_class_and_monster_roots_preserve_exact_action_provider_chains() -> None
             _assert_feature_granted_action(
                 entity,
                 action_type=ExtraAttack,
-                feature_type=ExtraAttackFeature,
+                provider_ref=FIGHTER_EXTRA_ATTACK_DECLARATION.ref,
             )
             assert (
-                get_content_declaration(ExtraAttackFeature).ref.content_id
+                FIGHTER_EXTRA_ATTACK_DECLARATION.ref.content_id
                 == "class_feature.extra_attack"
             )
             assert (
@@ -470,6 +472,20 @@ def test_maintained_spell_action_closure_and_cross_owner_binding_are_exact() -> 
             for dependency in spell_declaration.dependencies
         )
 
+    freedom_effect_declaration = (
+        CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
+            FreedomOfMovementEffect
+        ]
+    )
+    freedom_escape_declaration = get_content_declaration(
+        FreedomOfMovementEscape,
+    )
+    assert any(
+        dependency.relation is ContentDependencyRelation.GRANTS_ACTION
+        and dependency.target_ref == freedom_escape_declaration.ref
+        for dependency in freedom_effect_declaration.dependencies
+    )
+
     grab_declaration = get_content_declaration(TelekinesisGrab)
     follow_up_identity_keys = {
         get_content_declaration(TelekinesisMove).ref.identity_key,
@@ -497,18 +513,18 @@ def test_maintained_spell_action_closure_and_cross_owner_binding_are_exact() -> 
         template=True,
     )
     caster.register_action(spell)
-    escape = FreedomOfMovementEscape(
-        source_entity_uuid=target.uuid,
-        template=True,
+    effect = FreedomOfMovementEffect(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=target.uuid,
     )
     with runtime_behavior_provider(spell):
-        target.register_action(escape)
+        target.add_condition(effect)
+    escape = target.get_action_template("Freedom of Movement Escape")
+    assert isinstance(escape, FreedomOfMovementEscape)
 
-    spell_declaration = get_content_declaration(FreedomOfMovement)
-    escape_declaration = get_content_declaration(FreedomOfMovementEscape)
     assert escape.behavior_binding == BehaviorBinding(
-        definition_ref=escape_declaration.ref,
-        provided_by_ref=spell_declaration.ref,
+        definition_ref=freedom_escape_declaration.ref,
+        provided_by_ref=freedom_effect_declaration.ref,
         origin_root_ref=None,
         runtime_owner_uuid=target.uuid,
     )

@@ -1455,11 +1455,8 @@ class HotCodexSession:
             )
 
     def flush_policy_telemetry(self) -> None:
-        """Wait until policy and runtime telemetry reach the server."""
+        """Wait until queued policy telemetry reaches the runtime sink."""
         self.policy_telemetry.flush()
-        flush_runtime = getattr(self.runtime, "flush_agent_events", None)
-        if callable(flush_runtime):
-            flush_runtime()
 
     def start_heartbeat(self) -> None:
         """Renew the takeover lease independently of operator think time."""

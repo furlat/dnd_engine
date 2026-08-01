@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+import copy
 from pathlib import Path
+import pickle
 import sqlite3
 from uuid import UUID, uuid4
 
@@ -17,7 +19,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from server.event_stream import event_stream
 from server.game_artifact_store import GameArtifactStore
-from server.game_directory.canonical import hash_capability
+from server.game_directory.security import hash_capability
 from server.game_directory.contracts import (
     ArtifactKind,
     GameCreate,
@@ -37,6 +39,7 @@ from server.game_gateway import (
     GatewayError,
     create_gateway_app,
 )
+from server.game_history import GameHistoryQueryError
 from server.game_summary_store import WorkerGameSummaryStore, WorkerSummaryEvidence
 from server.hosted_worker import HostedWorkerManager
 from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
@@ -67,6 +70,24 @@ def clean_runtime() -> Iterator[None]:
     yield
     event_stream.stop()
     reset_engine_runtime()
+
+
+@pytest.mark.parametrize(
+    "error",
+    (
+        TerminalEvidenceError("terminal_code", "terminal message"),
+        GameHistoryQueryError(409, "history_code", "history message"),
+    ),
+)
+def test_boundary_errors_preserve_exception_args_and_round_trip(
+    error: Exception,
+) -> None:
+    """Worker/gateway boundary errors retain ordinary exception semantics."""
+
+    assert error.args
+    assert error.args[-1] == str(error)
+    assert str(copy.copy(error)) == str(error)
+    assert str(pickle.loads(pickle.dumps(error))) == str(error)
 
 
 def _terminal_service(

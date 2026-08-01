@@ -1,5 +1,6 @@
 from pydantic import Field, computed_field, model_validator
-from typing import List, Optional, Dict, Any, Callable, ClassVar, Union, Self
+from collections import Counter
+from typing import List, Optional, Dict, Any, Callable, ClassVar, Iterable, Union, Self
 from uuid import UUID, uuid4
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType, Size
@@ -24,7 +25,21 @@ from dnd.core.modifiers import (
     ContextualResistanceModifier,
     ResistanceStatus,
 )
-import random
+
+
+def _dominant_damage_types(
+    damage_types: Iterable[DamageType],
+) -> List[DamageType]:
+    """Return the most frequent damage types in canonical enum order."""
+    counts = Counter(damage_types)
+    if not counts:
+        return []
+    maximum = max(counts.values())
+    return [
+        damage_type
+        for damage_type in DamageType
+        if counts[damage_type] == maximum
+    ]
 
 
 def identity(x: int) -> int:
@@ -110,14 +125,6 @@ class BaseValue(BaseObject):
             return value
         else:
             raise ValueError(f"Value with UUID {uuid} is not a BaseValue, but {type(value)}")
-
-    def validate_modifier_target(self, modifier: Union[NumericalModifier, AdvantageModifier, CriticalModifier, AutoHitModifier, SizeModifier, DamageTypeModifier, ResistanceModifier, ContextualNumericalModifier, ContextualAdvantageModifier, ContextualCriticalModifier, ContextualAutoHitModifier, ContextualSizeModifier, ContextualDamageTypeModifier, ContextualResistanceModifier]) -> None:
-        """Validate whether a modifier can be attached to this value.
-
-        Args:
-            modifier: Modifier candidate.
-        """
-        pass
 
 class StaticValue(BaseValue):
     """Non-contextual modifier bucket for one value channel.
@@ -568,19 +575,10 @@ class StaticValue(BaseValue):
         Returns:
             Damage types tied for highest occurrence.
         """
-        if not self.damage_type_modifiers:
-            return []
-
-        type_counts = {}
-        for modifier in self.damage_type_modifiers.values():
-            type_counts[modifier.value] = type_counts.get(modifier.value, 0) + 1
-
-        max_count = max(type_counts.values())
-        if max_count == 0:
-            return []
-        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
-
-        return most_common_types
+        return _dominant_damage_types(
+            modifier.value
+            for modifier in self.damage_type_modifiers.values()
+        )
 
     @computed_field
     @property
@@ -588,12 +586,12 @@ class StaticValue(BaseValue):
         """Return one representative damage type.
 
         Returns:
-            Randomly selected damage type from the most common types, or `None`.
+            First dominant type in canonical enum order, or `None`.
         """
         most_common_types = self.damage_types
         if not most_common_types:
             return None
-        return random.choice(most_common_types)
+        return most_common_types[0]
 
     @computed_field
     @property
@@ -966,23 +964,13 @@ class ContextualValue(BaseValue):
         Returns:
             Damage types tied for highest occurrence.
         """
-        if not self.damage_type_modifiers:
-            return []
-
-        type_counts = {}
+        evaluated_types: List[DamageType] = []
         for modifier in self.damage_type_modifiers.values():
             result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                                         event_lineage_uuid=self.event_lineage_uuid)
             if isinstance(result, DamageTypeModifier):
-                type_counts[result.value] = type_counts.get(result.value, 0) + 1
-
-        if not type_counts:
-            return []
-
-        max_count = max(type_counts.values())
-        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
-
-        return most_common_types
+                evaluated_types.append(result.value)
+        return _dominant_damage_types(evaluated_types)
 
     @computed_field
     @property
@@ -990,12 +978,12 @@ class ContextualValue(BaseValue):
         """Return one representative contextual damage type.
 
         Returns:
-            Randomly selected damage type from the most common types, or `None`.
+            First dominant type in canonical enum order, or `None`.
         """
         most_common_types = self.damage_types
         if not most_common_types:
             return None
-        return random.choice(most_common_types)
+        return most_common_types[0]
 
     @computed_field
     @property
@@ -1690,24 +1678,14 @@ class ModifiableValue(BaseValue):
         Returns:
             Damage types tied for highest occurrence.
         """
-        type_counts = {}
+        active_types: List[DamageType] = []
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
-            for dt in component.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
+            active_types.extend(component.damage_types)
         if self.from_target_static:
-            for dt in self.from_target_static.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
+            active_types.extend(self.from_target_static.damage_types)
         if self.from_target_contextual:
-            for dt in self.from_target_contextual.damage_types:
-                type_counts[dt] = type_counts.get(dt, 0) + 1
-
-        if not type_counts:
-            return []
-
-        max_count = max(type_counts.values())
-        most_common_types = [dt for dt, count in type_counts.items() if count == max_count]
-
-        return most_common_types
+            active_types.extend(self.from_target_contextual.damage_types)
+        return _dominant_damage_types(active_types)
 
     @computed_field
     @property
@@ -1715,12 +1693,12 @@ class ModifiableValue(BaseValue):
         """Return one representative damage type.
 
         Returns:
-            Randomly selected damage type from the most common types, or `None`.
+            First dominant type in canonical enum order, or `None`.
         """
         most_common_types = self.damage_types
         if not most_common_types:
             return None
-        return random.choice(most_common_types)
+        return most_common_types[0]
 
     @computed_field
     @property

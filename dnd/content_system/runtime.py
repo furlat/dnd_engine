@@ -6,13 +6,21 @@ from uuid import UUID
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.spatial_effect_transitions import (
+    FrozenSpatialEffectInteractionGateway,
+)
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.runtime import (
     BehaviorBinding,
+    RuntimeBehaviorOwner,
+    RuntimeBehaviorProvider,
     bind_runtime_behavior_child,
     install_runtime_behavior_binding_gateway,
     runtime_behavior_binding_gateway,
+)
+from dnd.core.spatial_effect_runtime import (
+    install_spatial_effect_interaction_gateway,
 )
 
 
@@ -49,6 +57,10 @@ class ContentSystemRuntime:
                     binder,
                     content_set_digest=loaded.content_set_digest,
                 )
+                install_spatial_effect_interaction_gateway(
+                    FrozenSpatialEffectInteractionGateway(loaded.registry),
+                    content_set_digest=loaded.content_set_digest,
+                )
             self._behavior_binder = binder
             self._loaded = loaded
             return loaded
@@ -75,11 +87,16 @@ class ContentSystemRuntime:
         self._materialization_count += 1
         return value
 
+    def record_external_materialization(self) -> None:
+        """Record one canonical materialization performed against our registry."""
+        self.require()
+        self._materialization_count += 1
+
     def bind_child(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one explicit provider-owned behavior in this runtime."""

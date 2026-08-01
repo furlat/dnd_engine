@@ -20,6 +20,7 @@ from pydantic import (
 
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
+    ConditionApplicationPolicy,
     ConditionRemovalTrigger,
     ConditionTag,
 )
@@ -55,12 +56,6 @@ class ConditionEffectCoverage(str, Enum):
     LIFECYCLE_ONLY = "lifecycle_only"
 
 
-class ConditionApplicationPolicy(str, Enum):
-    """How an application interacts with an existing matching condition."""
-
-    REPLACE_EXISTING = "replace_existing"
-
-
 class ConditionEffectTarget(str, Enum):
     """Stable target role used by authored condition effects."""
 
@@ -71,6 +66,7 @@ class ConditionEffectTarget(str, Enum):
     SOURCE_ITEM = "source_item"
     EQUIPPED_ITEM = "equipped_item"
     WORLD_POSITION = "world_position"
+    CREATED_SPATIAL_EFFECT = "created_spatial_effect"
 
 
 class ConditionEffectDisposition(str, Enum):

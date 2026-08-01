@@ -12,9 +12,9 @@ from ai.policy.contracts import EffectBlockHypothesisEvidence
 from dnd.ai.contracts.control import (
     ActionOutcomeProfile,
     DamageRollProfile,
-    OutcomeAdvantage,
     OutcomeResolution,
 )
+from dnd.core.roll_types import AdvantageStatus
 from dnd.ai.contracts.semantics import CapabilityOutcomeAdjustment
 
 
@@ -299,9 +299,9 @@ def project_outcome_profile(
     The projection grants no legality and exists only for routine comparison.
     """
     advantage_step = {
-        OutcomeAdvantage.DISADVANTAGE: -1,
-        OutcomeAdvantage.NONE: 0,
-        OutcomeAdvantage.ADVANTAGE: 1,
+        AdvantageStatus.DISADVANTAGE: -1,
+        AdvantageStatus.NONE: 0,
+        AdvantageStatus.ADVANTAGE: 1,
     }[profile.advantage]
     for adjustment in adjustments:
         advantage_step = max(
@@ -309,9 +309,9 @@ def project_outcome_profile(
             min(1, advantage_step + adjustment.advantage_step_delta),
         )
     advantage = {
-        -1: OutcomeAdvantage.DISADVANTAGE,
-        0: OutcomeAdvantage.NONE,
-        1: OutcomeAdvantage.ADVANTAGE,
+        -1: AdvantageStatus.DISADVANTAGE,
+        0: AdvantageStatus.NONE,
+        1: AdvantageStatus.ADVANTAGE,
     }[advantage_step]
     return profile.model_copy(update={"advantage": advantage})
 
@@ -409,23 +409,6 @@ def _distribution_is_guaranteed_zero(distribution: DamageDistribution) -> bool:
         damage == 0
         for damage, probability in distribution.items()
         if probability > 0
-    )
-
-
-def _summarize_distribution(
-    total: DamageDistribution,
-    target: ObservationEntityFact,
-    model_scope: str,
-    blocker_evidence: tuple[SubjectiveEffectBlocker, ...],
-    effect_block_hypothesis: Optional[EffectBlockHypothesisEvidence],
-) -> SubjectiveDamageEstimate:
-    """Summarize one exact total-damage distribution against known HP."""
-    return _cached_distribution_summary(
-        tuple(sorted(total.items())),
-        target.hp,
-        model_scope,
-        blocker_evidence,
-        _effect_block_hypothesis_key(effect_block_hypothesis),
     )
 
 

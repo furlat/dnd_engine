@@ -7,17 +7,24 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from dnd.classes.barbarian import Retaliation, create_retaliation_handler
-from dnd.classes.feats import LuckyFeature
+from dnd.classes.barbarian import create_retaliation_handler
+from dnd.classes.feats import lucky_processor
 from dnd.classes.fighter import (
-    FightingStyleProtection,
-    GreatWeaponFighting,
-    Indomitable,
+    create_indomitable_handler,
     create_protection_handler,
+    great_weapon_fighting_processor,
+)
+from dnd.classes.permanent_feature_definitions import (
+    BARBARIAN_RETALIATION_DECLARATION,
+    FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION,
+    FIGHTER_INDOMITABLE_DECLARATION,
+    FIGHTER_PROTECTION_DECLARATION,
+    LUCKY_FEAT_DECLARATION,
 )
 from dnd.classes.paladin import create_divine_smite_handler
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_materialization import materialize_creature
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.content_system.reaction_definitions import (
     REACTION_BEHAVIOR_DECLARATIONS,
 )
@@ -46,7 +53,6 @@ from dnd.core.content.runtime import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.entity import Entity
-from tests.manual.reactive_fixture_support import DodgeRollFeature, Intercepting
 from dnd.monsters.bestiary import create_goblin
 from dnd.monsters.traits import ParryFeature
 from dnd.premade_characters import (
@@ -303,10 +309,10 @@ def test_provider_owned_public_reactions_have_exact_install_edges() -> None:
 
     expected = {
         get_content_declaration(ParryFeature).ref: "reaction.monster.parry",
-        get_content_declaration(FightingStyleProtection).ref: (
+        FIGHTER_PROTECTION_DECLARATION.ref: (
             "reaction.class_feature.fighter.protection"
         ),
-        get_content_declaration(Retaliation).ref: (
+        BARBARIAN_RETALIATION_DECLARATION.ref: (
             "reaction.class_feature.barbarian.retaliation"
         ),
     }
@@ -450,66 +456,84 @@ def test_unchanged_already_modified_event_is_not_a_reaction_effect() -> None:
     assert result.effective_handler_presentations == ()
 
 
-def test_condition_owned_toggleable_handlers_preserve_public_reactions() -> None:
-    """Private handlers inherit providers; public reactions retain invocation identity."""
+def test_structural_toggleable_handlers_preserve_public_reactions() -> None:
+    """Structural handlers retain exact providers and public invocation identity."""
+    SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
     owner = Entity.create(source_entity_uuid=uuid4(), name="Feature Probe")
-    conditions = (
-        LuckyFeature(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
+    structural_handlers = (
+        (
+            EventHandler(
+                name="Lucky",
+                source_entity_uuid=owner.uuid,
+                trigger_conditions=[
+                    Trigger(
+                        event_type=event_type,
+                        event_phase=EventPhase.EFFECT,
+                        event_source_entity_uuid=owner.uuid,
+                    )
+                    for event_type in (
+                        EventType.ATTACK_D20_ROLL_RESULT,
+                        EventType.SAVE_D20_ROLL_RESULT,
+                        EventType.CHECK_D20_ROLL_RESULT,
+                    )
+                ],
+                event_processor=lucky_processor,
+                player_toggleable=True,
+            ),
+            LUCKY_FEAT_DECLARATION,
         ),
-        Retaliation(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
+        (
+            create_retaliation_handler(owner.uuid),
+            BARBARIAN_RETALIATION_DECLARATION,
         ),
-        GreatWeaponFighting(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
+        (
+            EventHandler(
+                name="Great Weapon Fighting",
+                source_entity_uuid=owner.uuid,
+                trigger_conditions=[
+                    Trigger(
+                        event_type=EventType.DAMAGE_ROLL_RESULT,
+                        event_phase=EventPhase.EFFECT,
+                    ),
+                ],
+                event_processor=great_weapon_fighting_processor,
+                player_toggleable=True,
+            ),
+            FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION,
         ),
-        FightingStyleProtection(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
+        (
+            create_protection_handler(owner.uuid),
+            FIGHTER_PROTECTION_DECLARATION,
         ),
-        Indomitable(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
-            num_uses=1,
-        ),
-        Intercepting(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
-            charge_destination=(2, 2),
-        ),
-        DodgeRollFeature(
-            source_entity_uuid=owner.uuid,
-            target_entity_uuid=owner.uuid,
+        (
+            create_indomitable_handler(owner.uuid),
+            FIGHTER_INDOMITABLE_DECLARATION,
         ),
     )
-
-    for condition in conditions:
-        owner.add_condition(condition)
-        assert condition.behavior_binding is not None
+    for handler, declaration in structural_handlers:
+        SERVER_CONTENT_SYSTEM_RUNTIME.bind_granted_behavior(
+            handler,
+            provider_ref=declaration.ref,
+            runtime_owner_uuid=owner.uuid,
+        )
+        owner.add_event_handler(handler)
 
     infos = owner.get_player_toggleable_handler_infos()
     assert {info.name for info in infos} == {
-        "Dodge Roll",
         "Great Weapon Fighting",
         "Indomitable",
-        "Intercept",
         "Lucky",
         "Protection",
         "Retaliation",
     }
     provider_refs_by_name = {
-        "Lucky": get_content_declaration(LuckyFeature).ref,
-        "Retaliation": get_content_declaration(Retaliation).ref,
-        "Great Weapon Fighting": get_content_declaration(
-            GreatWeaponFighting
-        ).ref,
-        "Protection": get_content_declaration(FightingStyleProtection).ref,
-        "Indomitable": get_content_declaration(Indomitable).ref,
-        "Intercept": get_content_declaration(Intercepting).ref,
-        "Dodge Roll": get_content_declaration(DodgeRollFeature).ref,
+        "Lucky": LUCKY_FEAT_DECLARATION.ref,
+        "Retaliation": BARBARIAN_RETALIATION_DECLARATION.ref,
+        "Great Weapon Fighting": (
+            FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION.ref
+        ),
+        "Protection": FIGHTER_PROTECTION_DECLARATION.ref,
+        "Indomitable": FIGHTER_INDOMITABLE_DECLARATION.ref,
     }
     public_reaction_refs = {
         declaration.ref.content_id: declaration.ref

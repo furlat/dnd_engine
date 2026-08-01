@@ -24,6 +24,8 @@ from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import AttackOutcome, RollType
 from dnd.core.events import (
+    AbilityCheckD20RollResultEvent,
+    AbilityCheckEvent,
     EventPhase,
     EventQueue,
     EventType,
@@ -31,7 +33,9 @@ from dnd.core.events import (
     SavingThrowEvent,
     SkillCheckD20RollResultEvent,
     SkillCheckEvent,
+    TemporaryHitPointsEvent,
 )
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
@@ -178,7 +182,22 @@ def test_eb_06_002_abilities_skills_saves_and_passives_compose() -> None:
     assert entity.ability_scores.get_modifier_from_name("dexterity") == 2
     assert entity.ability_scores.get_modifier_from_name("charisma") == 4
     assert entity.proficiency_bonus.normalized_score == 3
-    assert entity.initiative.normalized_score == 7
+    assert entity.initiative_bonus == 7
+
+    dexterity_modifier_uuid = (
+        entity.ability_scores.dexterity.ability_score.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=entity.uuid,
+                name="Temporary Dexterity",
+                value=2,
+            ),
+        )
+    )
+    assert entity.initiative_bonus == 8
+    entity.ability_scores.dexterity.ability_score.self_static.remove_value_modifier(
+        dexterity_modifier_uuid,
+    )
+    assert entity.initiative_bonus == 7
 
     athletics = entity.skill_bonus(None, "athletics")
     perception = entity.skill_bonus(None, "perception")
@@ -217,15 +236,50 @@ def test_eb_06_003_health_action_economy_and_spellcasting_compose() -> None:
     assert entity.get_spell_damage_bonus().normalized_score == 4
 
 
+def test_targeted_stat_builders_restore_preexisting_target_context() -> None:
+    """Read-only stat construction cannot destroy an outer target binding."""
+    reset_entity_state()
+    entity = configured_entity("Actor", (0, 0), "heroes")
+    requested_target = configured_entity("Requested", (1, 0), "monsters")
+    prior_target = configured_entity("Prior", (2, 0), "monsters")
+
+    for build_stat in (
+        lambda: entity.ac_bonus(requested_target.uuid),
+        lambda: entity.attack_bonus(
+            WeaponSlot.MELEE_MAIN,
+            requested_target.uuid,
+        ),
+        lambda: entity.spell_attack_bonus(requested_target.uuid),
+    ):
+        entity.set_target_entity(prior_target.uuid)
+        assert build_stat() is not None
+        assert entity.target_entity_uuid == prior_target.uuid
+
+
 def test_eb_06_004_action_economy_resources_recharge_by_type() -> None:
     """EB-06-004: entity action economy owns reusable named resources."""
     reset_entity_state()
     entity = configured_entity()
     economy = entity.action_economy
 
-    economy.add_resource("second_wind", maximum=1, recharge_type=RechargeType.SHORT_REST)
-    economy.add_resource("daily_power", maximum=1, recharge_type=RechargeType.LONG_REST)
-    economy.add_resource("turn_pulse", maximum=2, recharge_type=RechargeType.TURN_START)
+    economy.add_resource_contribution(
+        "second_wind",
+        "fixture.second_wind",
+        maximum=1,
+        recharge_type=RechargeType.SHORT_REST,
+    )
+    economy.add_resource_contribution(
+        "daily_power",
+        "fixture.daily_power",
+        maximum=1,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    economy.add_resource_contribution(
+        "turn_pulse",
+        "fixture.turn_pulse",
+        maximum=2,
+        recharge_type=RechargeType.TURN_START,
+    )
 
     assert economy.can_afford_resource("second_wind") is True
     assert economy.consume_resource("second_wind") is True
@@ -473,14 +527,28 @@ def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:
     reset_entity_state()
     source = configured_entity("Caller", (0, 0), "heroes")
     target = configured_entity("Target", (1, 0), "heroes")
+    prior_source_target = configured_entity(
+        "Prior caller target",
+        (2, 0),
+        "monsters",
+    )
+    prior_roll_target = configured_entity(
+        "Prior roller target",
+        (3, 0),
+        "monsters",
+    )
+    source.set_target_entity(prior_source_target.uuid)
+    target.set_target_entity(prior_roll_target.uuid)
 
     save_request = source.create_saving_throw_request(
         target_entity_uuid=target.uuid,
         ability_name="dexterity",
         dc=15,
     )
+    assert source.target_entity_uuid == prior_source_target.uuid
     with fixed_randint(9):
         save_outcome, save_roll, save_success = target.saving_throw(save_request)
+    assert target.target_entity_uuid == prior_roll_target.uuid
 
     save_history = EventQueue.get_event_history(save_request.uuid)
     save_roll_events = EventQueue.get_events_by_type(EventType.SAVE_D20_ROLL_RESULT)
@@ -522,8 +590,10 @@ def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:
         skill_name="athletics",
         dc=15,
     )
+    assert source.target_entity_uuid == prior_source_target.uuid
     with fixed_randint(4):
         skill_outcome, skill_roll, skill_success = target.skill_check(skill_request)
+    assert target.target_entity_uuid == prior_roll_target.uuid
 
     skill_history = EventQueue.get_event_history(skill_request.uuid)
     skill_roll_events = EventQueue.get_events_by_type(EventType.CHECK_D20_ROLL_RESULT)
@@ -560,6 +630,58 @@ def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:
     assert all(event.skill_name == "athletics" for event in typed_skill_roll_events)
     assert all(event.roll_type == RollType.CHECK for event in typed_skill_roll_events)
 
+    ability_request = source.create_ability_check_request(
+        target_entity_uuid=target.uuid,
+        ability_name="strength",
+        dc=15,
+    )
+    with fixed_randint(12):
+        ability_outcome, ability_roll, ability_success = target.ability_check(
+            ability_request,
+        )
+
+    ability_history = EventQueue.get_event_history(ability_request.uuid)
+    assert ability_outcome is AttackOutcome.HIT
+    assert ability_roll.results == [12]
+    assert ability_roll.total == 15
+    assert ability_success is True
+    assert [event.phase for event in ability_history] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    ability_execution = ability_history[1]
+    ability_completion = ability_history[-1]
+    assert isinstance(ability_execution, AbilityCheckEvent)
+    assert isinstance(ability_execution.bonus, ModifiableValue)
+    assert ability_execution.bonus.normalized_score == 3
+    assert isinstance(ability_completion, AbilityCheckEvent)
+    assert ability_completion.combat_log is not None
+    assert (
+        ability_completion.combat_log.entry_type
+        is CombatLogEntryType.ABILITY_CHECK
+    )
+    assert ability_completion.combat_log.data["ability"] == "strength"
+    assert ability_completion.combat_log.data["success"] is True
+    ability_roll_events = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.CHECK_D20_ROLL_RESULT,
+        )
+        if event.parent_event == ability_request.uuid
+    ]
+    typed_ability_roll_events = [
+        event
+        for event in ability_roll_events
+        if isinstance(event, AbilityCheckD20RollResultEvent)
+    ]
+    assert len(typed_ability_roll_events) == len(ability_roll_events)
+    assert all(
+        event.ability_name == "strength"
+        for event in typed_ability_roll_events
+    )
+
 
 def test_eb_06_014_repeated_standard_action_setup_replaces_handlers() -> None:
     """EB-06-014: setup_standard_actions is idempotent for standard handlers."""
@@ -581,12 +703,12 @@ def test_eb_06_014_repeated_standard_action_setup_replaces_handlers() -> None:
     second_global_handler_names = sorted(handler.name for handler in second_global_handlers)
 
     assert len(first_global_handlers) == 5
-    assert len(first_local_handler_names) == 3
+    assert len(first_local_handler_names) == 5
     assert first_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert first_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
 
     assert len(second_global_handlers) == 5
-    assert len(second_local_handler_names) == 3
+    assert len(second_local_handler_names) == 5
     assert second_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert second_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
     assert second_local_handler_names.count("HasAttacked Tracker") == 1
@@ -605,8 +727,9 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
     setup_standard_actions(entity)
     base_movement = entity.action_economy.movement.normalized_score
 
-    entity.action_economy.add_resource(
+    entity.action_economy.add_resource_contribution(
         "daily_power",
+        "fixture.daily_power",
         maximum=1,
         recharge_type=RechargeType.LONG_REST,
     )
@@ -660,6 +783,50 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
     assert entity.get_hp() == 1
 
 
+def test_temporary_hit_points_use_one_typed_non_stacking_event_lifecycle() -> None:
+    """Temporary HP is evented, nested, logged, and keeps the larger pool."""
+    reset_entity_state()
+    source = configured_entity("Temp HP Source", (0, 0), "heroes")
+    target = configured_entity("Temp HP Target", (1, 0), "heroes")
+    parent_uuid = uuid4()
+
+    assert target.health.temporary_hit_points.normalized_score == 5
+    assert target.grant_temporary_hit_points(
+        8,
+        source.uuid,
+        source_description="Rules Test",
+        parent_event=parent_uuid,
+    ) == 8
+
+    events = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.TEMPORARY_HIT_POINTS
+        )
+        if isinstance(event, TemporaryHitPointsEvent)
+    ]
+    lineage_uuid = events[-1].lineage_uuid
+    lifecycle = [event for event in events if event.lineage_uuid == lineage_uuid]
+    assert [event.phase for event in lifecycle] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    completion = lifecycle[-1]
+    assert completion.parent_event == parent_uuid
+    assert completion.previous_amount == 5
+    assert completion.resulting_amount == 8
+    assert completion.combat_log is not None
+    assert (
+        completion.combat_log.entry_type
+        is CombatLogEntryType.TEMPORARY_HIT_POINTS
+    )
+
+    assert target.grant_temporary_hit_points(3, source.uuid) == 8
+    assert target.health.temporary_hit_points.normalized_score == 8
+
+
 def test_eb_06_016_long_rest_restores_hp_and_expires_temporary_hp() -> None:
     """EB-06-016: long rest restores normal HP and expires temporary HP."""
     reset_entity_state()
@@ -676,7 +843,7 @@ def test_eb_06_016_long_rest_restores_hp_and_expires_temporary_hp() -> None:
     assert entity.health.damage_taken == 7
     assert entity.get_hp() == normal_max_hp - 7
 
-    entity.health.add_temporary_hit_points(4, source.uuid)
+    entity.grant_temporary_hit_points(4, source.uuid)
 
     assert entity.health.temporary_hit_points.normalized_score == 4
     assert entity.get_hp() == normal_max_hp - 3

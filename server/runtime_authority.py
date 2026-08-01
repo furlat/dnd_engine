@@ -244,20 +244,6 @@ class RuntimeAuthorityCache:
         if not self._digests_by_game.get(hosted_game_id):
             self._digests_by_game.pop(hosted_game_id, None)
 
-    def replace_epoch(
-        self,
-        hosted_game_id: UUID,
-        minimum_epoch: int,
-    ) -> None:
-        """Revoke cached authorities older than a control-plane epoch."""
-        digests = self._digests_by_game.get(hosted_game_id, set()).copy()
-        for digest in digests:
-            authority = self._by_digest.get(digest)
-            if authority is not None and authority.authority_epoch < minimum_epoch:
-                self._by_digest.pop(digest, None)
-                self._digests_by_game[hosted_game_id].discard(digest)
-
-
 def extract_bearer_token(authorization: str | None) -> str:
     """Extract a bearer token from one HTTP Authorization header."""
     if authorization is None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -73,8 +75,16 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.creature_types import DamageType
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventType,
+    Trigger,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.actions import SpellAction
+from dnd.core.base_actions import BaseAction
 from dnd.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -414,7 +424,6 @@ def test_tiefling_level_five_installs_fixed_rank_uses_and_recovers_them(
             runtime_entity_uuid=entity.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
     assert entity.get_action_template("Darkness") is None
@@ -424,9 +433,10 @@ def test_tiefling_level_five_installs_fixed_rank_uses_and_recovers_them(
     assert darkness_resource not in entity.action_economy.resources
 
 
-def test_origin_innate_install_failure_rolls_back_prior_source_and_grants(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _tiefling_innate_failure_context() -> tuple[
+    BuiltinCharacterGrantContext,
+    tuple[OriginInnateSpellGrantPreview, ...],
+]:
     loaded = _loaded_builtin()
     runtime = ContentSystemRuntime()
     runtime.install(loaded)
@@ -466,6 +476,14 @@ def test_origin_innate_install_failure_rolls_back_prior_source_and_grants(
         ),
         runtime=runtime,
     )
+    return context, preview_rows
+
+
+def test_origin_innate_install_failure_rolls_back_prior_source_and_grants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, preview_rows = _tiefling_innate_failure_context()
+    entity = context.entity
     thaumaturgy_key = next(
         row.spell_ref.identity_key
         for row in preview_rows
@@ -495,6 +513,77 @@ def test_origin_innate_install_failure_rolls_back_prior_source_and_grants(
     assert not any(
         name.startswith("origin_innate_spell:")
         for name in entity.action_economy.resources
+    )
+
+
+@pytest.mark.parametrize(
+    "failure_mode",
+    ("constructor", "wrong_action", "unsupported_reaction"),
+)
+def test_origin_innate_current_grant_failure_releases_its_resource(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_mode: str,
+) -> None:
+    context, preview_rows = _tiefling_innate_failure_context()
+    darkness = next(
+        row
+        for row in preview_rows
+        if row.spell_ref.content_id == "spell.darkness"
+    )
+    current_row = origin_innate_spellcasting._SPELL_ROW_BY_REF_KEY[
+        darkness.spell_ref.identity_key
+    ]
+
+    class ConstructorFailureSpell(SpellAction):
+        def __init__(self, **_: object) -> None:
+            raise RuntimeError("fixture spell constructor failure")
+
+    class WrongAction(BaseAction):
+        pass
+
+    if failure_mode == "constructor":
+        replacement = replace(
+            current_row,
+            spell_type=ConstructorFailureSpell,
+        )
+        expected_error = RuntimeError
+    elif failure_mode == "wrong_action":
+        replacement = replace(
+            current_row,
+            spell_type=cast(type[SpellAction], WrongAction),
+        )
+        expected_error = TypeError
+    else:
+        hellish = next(
+            row
+            for row in origin_innate_spellcasting._SPELL_ROW_BY_REF_KEY.values()
+            if row.declaration.ref.content_id == "spell.hellish_rebuke"
+        )
+        assert hellish.reaction_handler_factory is not None
+        replacement = replace(
+            current_row,
+            spell_type=None,
+            reaction_handler_factory=hellish.reaction_handler_factory,
+        )
+        expected_error = RuntimeError
+    monkeypatch.setattr(
+        origin_innate_spellcasting,
+        "_SPELL_ROW_BY_REF_KEY",
+        {
+            **origin_innate_spellcasting._SPELL_ROW_BY_REF_KEY,
+            darkness.spell_ref.identity_key: replacement,
+        },
+    )
+
+    with pytest.raises(expected_error):
+        install_origin_innate_spellcasting(context)
+
+    assert context.entity.spellcasting.sources == {}
+    assert context.entity.registered_actions == []
+    assert context.entity.event_handlers == {}
+    assert not any(
+        name.startswith("origin_innate_spell:")
+        for name in context.entity.action_economy.resources
     )
 
 
@@ -567,7 +656,6 @@ def test_high_elf_selected_wizard_cantrip_installs_with_intelligence_source(
             runtime_entity_uuid=entity.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
     assert entity.get_action_template("Fire Bolt") is None
@@ -677,8 +765,119 @@ def test_tiefling_hellish_rebuke_spends_fixed_use_and_deals_rank_two_damage(
             runtime_entity_uuid=tiefling.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
     assert not tiefling.event_handlers
     assert resource_name not in tiefling.action_economy.resources
+
+
+def test_hellish_rebuke_declaration_veto_preserves_reaction_and_resource(
+) -> None:
+    """A rejected reaction action cannot spend resources or damage its target."""
+    loaded = _loaded_builtin()
+    runtime = ContentSystemRuntime()
+    runtime.install(loaded)
+    tiefling = Entity.create(
+        source_entity_uuid=uuid4(),
+        config=EntityConfig(
+            position=(2, 2),
+            faction="heroes",
+            health=HealthConfig(
+                hit_dices=[
+                    HitDiceConfig(
+                        hit_dice_value=10,
+                        hit_dice_count=5,
+                        mode="maximums",
+                    ),
+                ],
+            ),
+        ),
+    )
+    attacker = Entity.create(
+        source_entity_uuid=uuid4(),
+        config=EntityConfig(
+            position=(3, 2),
+            faction="monsters",
+            health=HealthConfig(
+                hit_dices=[
+                    HitDiceConfig(
+                        hit_dice_value=10,
+                        hit_dice_count=5,
+                        mode="maximums",
+                    ),
+                ],
+            ),
+        ),
+    )
+    tiefling_definition = TIEFLING_SPECIES_DECLARATION.definition_payload
+    assert isinstance(tiefling_definition, SpeciesDefinition)
+    source_definition = tiefling_definition.innate_spellcasting[0]
+    grant = next(
+        row
+        for row in source_definition.grants
+        if row.grant_id == "tiefling.infernal_legacy.hellish_rebuke"
+    )
+    assert grant.spell_ref is not None
+    preview_row = OriginInnateSpellGrantPreview(
+        grant_id=grant.grant_id,
+        spell_ref=grant.spell_ref,
+        provider_ref=TIEFLING_SPECIES_DECLARATION.ref,
+        spellcasting_source_id=source_definition.source_id,
+        spellcasting_ability=source_definition.ability,
+        provider_level=5,
+        fixed_cast_rank=grant.fixed_cast_rank,
+        uses_per_long_rest=grant.uses_per_long_rest,
+        grant_token="tiefling:hellish_rebuke:veto",
+    )
+    receipts = install_origin_innate_spellcasting(
+        BuiltinCharacterGrantContext(
+            entity=tiefling,
+            character_id=uuid4(),
+            preview=CharacterBuildPreview(
+                class_level_counts=(),
+                automatic_grant_refs=(),
+                grant_schedule=(),
+                final_known_spell_refs=(grant.spell_ref,),
+                caster_contributions=(),
+                effective_spellcaster_level=0,
+                normal_spell_slots=(),
+                origin_innate_spells=(preview_row,),
+            ),
+            runtime=runtime,
+        )
+    )
+    resource_name = innate_spell_resource_name(preview_row)
+
+    def veto_reaction_action(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Reaction action vetoed")
+
+    tiefling.add_event_handler(
+        EventHandler(
+            source_entity_uuid=tiefling.uuid,
+            name="Veto Hellish Rebuke action",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.BASE_ACTION,
+                    event_phase=EventPhase.DECLARATION,
+                    event_source_entity_uuid=tiefling.uuid,
+                ),
+            ],
+            event_processor=veto_reaction_action,
+        )
+    )
+    tiefling.update_entity_senses(max_distance=60)
+    attacker_hp_before = attacker.get_normal_hp()
+    reaction_before = tiefling.action_economy.reactions.normalized_score
+    resource_before = tiefling.action_economy.get_resource_current(
+        resource_name
+    )
+
+    tiefling.receive_damage(1, DamageType.SLASHING, attacker.uuid)
+
+    assert attacker.get_normal_hp() == attacker_hp_before
+    assert tiefling.action_economy.reactions.normalized_score == reaction_before
+    assert (
+        tiefling.action_economy.get_resource_current(resource_name)
+        == resource_before
+    )
+    assert receipts

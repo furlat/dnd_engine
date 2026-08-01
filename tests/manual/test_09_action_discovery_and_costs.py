@@ -30,6 +30,8 @@ from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, get_map
@@ -93,6 +95,28 @@ def create_tutorial_actor(
     if standard_actions:
         setup_standard_actions(actor)
     return actor
+
+
+def register_prepare_intercept(actor: Entity) -> None:
+    """Register the synthetic action through the authenticated runtime seam."""
+    action_ref = ContentRef(
+        pack_id="tests.action_discovery",
+        definition_kind=ContentDefinitionKind.ACTION,
+        content_id="action.prepare_intercept",
+        content_version=1,
+        definition_contract_hash="f" * 64,
+    )
+    actor.register_action(
+        PrepareIntercept(
+            source_entity_uuid=actor.uuid,
+            template=True,
+            behavior_binding=BehaviorBinding(
+                definition_ref=action_ref,
+                provided_by_ref=action_ref,
+                runtime_owner_uuid=actor.uuid,
+            ),
+        )
+    )
 
 
 def find_action(actions, template_name: str):
@@ -519,12 +543,7 @@ def test_position_action_rows_report_no_rules_valid_targets(
     get_map().create_rectangle(2, 2, 1, 1)
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
-        actor.register_action(
-            PrepareIntercept(
-                source_entity_uuid=actor.uuid,
-                template=True,
-            )
-        )
+        register_prepare_intercept(actor)
     Entity.update_all_entities_senses()
 
     authored = get_available_actions(actor)
@@ -548,12 +567,7 @@ def test_position_action_rows_report_target_cost_unaffordable(
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
-        actor.register_action(
-            PrepareIntercept(
-                source_entity_uuid=actor.uuid,
-                template=True,
-            )
-        )
+        register_prepare_intercept(actor)
     Entity.update_all_entities_senses()
     template = actor.get_action_template(template_name)
     assert template is not None
@@ -1124,7 +1138,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
     enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
     dead_enemy = create_skeleton(name="Dead Enemy", position=(6, 6), faction="monsters")
-    dead_enemy.health.take_damage(999, DamageType.BLUDGEONING, hero.uuid)
+    dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
     Entity.update_all_entities_senses()
 
     default_attack = find_attack_action(hero.get_available_actions())
@@ -1144,9 +1158,9 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     )
     assert [target.target_uuid for target in all_targets_attack.valid_targets] == [
         enemy.uuid,
-        dead_enemy.uuid,
         ally.uuid,
     ]
+    assert dead_enemy.uuid not in hero.senses.entities
     all_names = [
         entity_target_name(target) for target in all_targets_attack.valid_targets
     ]
@@ -1154,7 +1168,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     target_lines = [
         f"default targets: {default_names}",
         f"ally targets: {ally_names}",
-        f"all targets with dead included: {all_names}",
+        f"all subjectively visible targets: {all_names}",
     ]
 
     print("\n".join(target_lines))
@@ -1162,7 +1176,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     expected_target_lines = [
         "default targets: ['Enemy']",
         "ally targets: ['Ally']",
-        "all targets with dead included: ['Enemy', 'Dead Enemy', 'Ally']",
+        "all subjectively visible targets: ['Enemy', 'Ally']",
     ]
     assert target_lines == expected_target_lines
     assert capsys.readouterr().out.splitlines() == expected_target_lines

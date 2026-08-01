@@ -585,6 +585,7 @@ def test_position_then_pressure_competes_with_immediate_weak_damage() -> None:
     )
     context = _context(
         [(weak_row, weak_semantics), (move_row, move_semantics)],
+        door_open=True,
         visible_hostile=True,
         capabilities=[strong_capability],
         extra_semantics=[strong_semantics],
@@ -1077,6 +1078,7 @@ def _short_range_pressure_context(
         }), weak_semantics))
     base = _context(
         rows,
+        door_open=True,
         visible_hostile=True,
         capabilities=[capability],
         extra_semantics=[strong_semantics],

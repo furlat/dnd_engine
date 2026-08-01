@@ -12,6 +12,21 @@ from dnd.blocks.action_economy import (
     ResourceCapacityPolicy,
 )
 from dnd.classes import feats, fighter
+from dnd.classes.permanent_feature_definitions import (
+    FIGHTER_ACTION_SURGE_DECLARATION,
+    FIGHTER_ARCHERY_DECLARATION,
+    FIGHTER_DEFENSE_DECLARATION,
+    FIGHTER_DUELING_DECLARATION,
+    FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION,
+    FIGHTER_IMPROVED_CRITICAL_DECLARATION,
+    FIGHTER_INDOMITABLE_DECLARATION,
+    FIGHTER_PROTECTION_DECLARATION,
+    FIGHTER_SECOND_WIND_DECLARATION,
+    FIGHTER_SUPERIOR_CRITICAL_DECLARATION,
+    FIGHTER_SURVIVOR_DECLARATION,
+    FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION,
+    LUCKY_FEAT_DECLARATION,
+)
 from dnd.classes.progression_definitions import FIGHTER_CLASS_REF
 from dnd.content_system.character_build_validation import (
     CharacterGrantScheduleEntry,
@@ -20,21 +35,18 @@ from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
 from dnd.content_system.character_grant_applier_runtime import (
+    CharacterGrantInstallation,
     character_grant_id,
     grant_receipt,
     install_bound_handler,
+    install_contextual_value_modifier,
+    install_static_value_modifier,
     is_first_grant_for_ref,
-    register_bound_action,
     require_grant_ref,
     validated_class_level,
 )
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
-    ModifierHandle,
-    ModifierHandleChannel,
-)
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.events import (
@@ -43,64 +55,25 @@ from dnd.core.events import (
     EventType,
     Trigger,
 )
-from dnd.core.modifiers import (
-    ContextualNumericalModifier,
-    NumericalModifier,
-)
-from dnd.core.values import ModifiableValue
 
 
-FIGHTING_STYLE_ARCHERY_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.FightingStyleArchery
-    ].ref
-)
-FIGHTING_STYLE_DEFENSE_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.FightingStyleDefense
-    ].ref
-)
-FIGHTING_STYLE_DUELING_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.FightingStyleDueling
-    ].ref
-)
+FIGHTING_STYLE_ARCHERY_REF = FIGHTER_ARCHERY_DECLARATION.ref
+FIGHTING_STYLE_DEFENSE_REF = FIGHTER_DEFENSE_DECLARATION.ref
+FIGHTING_STYLE_DUELING_REF = FIGHTER_DUELING_DECLARATION.ref
 FIGHTING_STYLE_GREAT_WEAPON_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.GreatWeaponFighting
-    ].ref
+    FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION.ref
 )
-FIGHTING_STYLE_PROTECTION_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.FightingStyleProtection
-    ].ref
-)
+FIGHTING_STYLE_PROTECTION_REF = FIGHTER_PROTECTION_DECLARATION.ref
 FIGHTING_STYLE_TWO_WEAPON_REF = (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-        fighter.FightingStyleTwoWeaponFighting
-    ].ref
+    FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION.ref
 )
-SECOND_WIND_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.SecondWindFeature
-].ref
-ACTION_SURGE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.ActionSurgeFeature
-].ref
-IMPROVED_CRITICAL_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.ImprovedCritical
-].ref
-SUPERIOR_CRITICAL_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.SuperiorCritical
-].ref
-INDOMITABLE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.Indomitable
-].ref
-SURVIVOR_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    fighter.Survivor
-].ref
-LUCKY_FEAT_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    feats.LuckyFeature
-].ref
+SECOND_WIND_REF = FIGHTER_SECOND_WIND_DECLARATION.ref
+ACTION_SURGE_REF = FIGHTER_ACTION_SURGE_DECLARATION.ref
+IMPROVED_CRITICAL_REF = FIGHTER_IMPROVED_CRITICAL_DECLARATION.ref
+SUPERIOR_CRITICAL_REF = FIGHTER_SUPERIOR_CRITICAL_DECLARATION.ref
+INDOMITABLE_REF = FIGHTER_INDOMITABLE_DECLARATION.ref
+SURVIVOR_REF = FIGHTER_SURVIVOR_DECLARATION.ref
+LUCKY_FEAT_REF = LUCKY_FEAT_DECLARATION.ref
 
 
 FighterCharacterGrantApplier = Callable[
@@ -109,66 +82,12 @@ FighterCharacterGrantApplier = Callable[
 ]
 
 
-def _install_static_modifier(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    value,
-    amount: int,
-    name: str,
-) -> CharacterGrantReceipt:
-    modifier = NumericalModifier.create(
-        source_entity_uuid=context.entity.uuid,
-        name=name,
-        value=amount,
-    )
-    value.self_static.add_value_modifier(modifier)
-    return grant_receipt(
-        context,
-        entry,
-        modifier_handles=(
-            ModifierHandle(
-                value_uuid=value.uuid,
-                modifier_uuid=modifier.uuid,
-            ),
-        ),
-    )
-
-
-def _install_contextual_modifier(
-    context: BuiltinCharacterGrantContext,
-    entry: CharacterGrantScheduleEntry,
-    *,
-    value,
-    callable_,
-    name: str,
-) -> CharacterGrantReceipt:
-    modifier = ContextualNumericalModifier(
-        name=name,
-        source_entity_uuid=context.entity.uuid,
-        target_entity_uuid=context.entity.uuid,
-        callable=callable_,
-    )
-    value.self_contextual.add_value_modifier(modifier)
-    return grant_receipt(
-        context,
-        entry,
-        modifier_handles=(
-            ModifierHandle(
-                value_uuid=value.uuid,
-                modifier_uuid=modifier.uuid,
-                channel=ModifierHandleChannel.SELF_CONTEXTUAL,
-            ),
-        ),
-    )
-
-
 def _apply_archery(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, FIGHTING_STYLE_ARCHERY_REF)
-    return _install_static_modifier(
+    return install_static_value_modifier(
         context,
         entry,
         value=context.entity.equipment.ranged_attack_bonus,
@@ -182,7 +101,7 @@ def _apply_defense(
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, FIGHTING_STYLE_DEFENSE_REF)
-    return _install_contextual_modifier(
+    return install_contextual_value_modifier(
         context,
         entry,
         value=context.entity.equipment.ac_bonus,
@@ -196,7 +115,7 @@ def _apply_dueling(
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, FIGHTING_STYLE_DUELING_REF)
-    return _install_contextual_modifier(
+    return install_contextual_value_modifier(
         context,
         entry,
         value=context.entity.equipment.melee_damage_bonus,
@@ -211,9 +130,7 @@ def _apply_two_weapon_fighting(
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, FIGHTING_STYLE_TWO_WEAPON_REF)
     entity = context.entity
-    installed: list[tuple[ModifiableValue, ContextualNumericalModifier]] = []
-    handles: list[ModifierHandle] = []
-    try:
+    with CharacterGrantInstallation(context, entry) as installation:
         for value, callable_ in (
             (
                 entity.equipment.off_hand_melee_ability_bonus,
@@ -224,29 +141,15 @@ def _apply_two_weapon_fighting(
                 fighter.twf_off_hand_ranged_ability_bonus,
             ),
         ):
-            modifier = ContextualNumericalModifier(
+            installation.add_contextual_value_modifier(
+                value=value,
+                callable_=callable_,
                 name="Two-Weapon Fighting",
-                source_entity_uuid=entity.uuid,
-                target_entity_uuid=entity.uuid,
-                callable=callable_,
             )
-            value.self_contextual.add_value_modifier(modifier)
-            installed.append((value, modifier))
-            handles.append(
-                ModifierHandle(
-                    value_uuid=value.uuid,
-                    modifier_uuid=modifier.uuid,
-                    channel=ModifierHandleChannel.SELF_CONTEXTUAL,
-                ),
-            )
-    except Exception:
-        for value, modifier in reversed(installed):
-            value.self_contextual.remove_value_modifier(modifier.uuid)
-        raise
     return grant_receipt(
         context,
         entry,
-        modifier_handles=tuple(handles),
+        modifier_handles=installation.modifier_handles,
     )
 
 
@@ -289,35 +192,25 @@ def _apply_second_wind(
     require_grant_ref(entry, SECOND_WIND_REF)
     entity = context.entity
     grant_id = character_grant_id(context, entry)
-    entity.action_economy.add_resource_contribution(
-        "second_wind",
-        grant_id,
-        maximum=1,
-        recharge_type=RechargeType.SHORT_REST,
-        capacity_policy=ResourceCapacityPolicy.SUM,
-    )
     action = fighter.SecondWind(
         source_entity_uuid=entity.uuid,
         fighter_level=validated_class_level(context, FIGHTER_CLASS_REF),
         template=True,
     )
-    try:
-        register_bound_action(
-            context,
-            provider_ref=SECOND_WIND_REF,
-            action=action,
-        )
-    except Exception:
-        entity.action_economy.remove_resource_contribution(
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
             "second_wind",
             grant_id,
+            maximum=1,
+            recharge_type=RechargeType.SHORT_REST,
+            capacity_policy=ResourceCapacityPolicy.SUM,
         )
-        raise
+        installation.add_bound_action(action)
     return grant_receipt(
         context,
         entry,
-        action_uuids=(action.uuid,),
-        resource_contribution_ids=(("second_wind", grant_id),),
+        action_uuids=installation.action_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 
@@ -328,37 +221,26 @@ def _apply_action_surge(
     require_grant_ref(entry, ACTION_SURGE_REF)
     entity = context.entity
     grant_id = character_grant_id(context, entry)
-    entity.action_economy.add_resource_contribution(
-        "action_surge",
-        grant_id,
-        maximum=1,
-        recharge_type=RechargeType.SHORT_REST,
-        capacity_policy=ResourceCapacityPolicy.SUM,
-    )
-    action_uuids = ()
-    if is_first_grant_for_ref(context, entry):
-        action = fighter.ActionSurge(
-            source_entity_uuid=entity.uuid,
-            template=True,
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
+            "action_surge",
+            grant_id,
+            maximum=1,
+            recharge_type=RechargeType.SHORT_REST,
+            capacity_policy=ResourceCapacityPolicy.SUM,
         )
-        try:
-            register_bound_action(
-                context,
-                provider_ref=ACTION_SURGE_REF,
-                action=action,
+        if is_first_grant_for_ref(context, entry):
+            installation.add_bound_action(
+                fighter.ActionSurge(
+                    source_entity_uuid=entity.uuid,
+                    template=True,
+                ),
             )
-        except Exception:
-            entity.action_economy.remove_resource_contribution(
-                "action_surge",
-                grant_id,
-            )
-            raise
-        action_uuids = (action.uuid,)
     return grant_receipt(
         context,
         entry,
-        action_uuids=action_uuids,
-        resource_contribution_ids=(("action_surge", grant_id),),
+        action_uuids=installation.action_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 
@@ -371,34 +253,20 @@ def _install_weapon_critical_upgrade(
 ) -> CharacterGrantReceipt:
     require_grant_ref(entry, expected_ref)
     entity = context.entity
-    handles: list[ModifierHandle] = []
-    installed: list[tuple[ModifiableValue, NumericalModifier]] = []
-    try:
+    with CharacterGrantInstallation(context, entry) as installation:
         for value in (
             entity.equipment.crit_threshold_melee,
             entity.equipment.crit_threshold_ranged,
         ):
-            modifier = NumericalModifier.create(
-                source_entity_uuid=entity.uuid,
+            installation.add_static_value_modifier(
+                value=value,
                 name=name,
-                value=1,
+                amount=1,
             )
-            value.self_static.add_value_modifier(modifier)
-            installed.append((value, modifier))
-            handles.append(
-                ModifierHandle(
-                    value_uuid=value.uuid,
-                    modifier_uuid=modifier.uuid,
-                ),
-            )
-    except Exception:
-        for value, modifier in reversed(installed):
-            value.self_static.remove_value_modifier(modifier.uuid)
-        raise
     return grant_receipt(
         context,
         entry,
-        modifier_handles=tuple(handles),
+        modifier_handles=installation.modifier_handles,
     )
 
 
@@ -434,35 +302,23 @@ def _apply_indomitable(
     require_grant_ref(entry, INDOMITABLE_REF)
     entity = context.entity
     grant_id = character_grant_id(context, entry)
-    entity.action_economy.add_resource_contribution(
-        "indomitable",
-        grant_id,
-        maximum=1,
-        recharge_type=RechargeType.LONG_REST,
-        capacity_policy=ResourceCapacityPolicy.SUM,
-    )
-    handler_uuids = ()
-    if is_first_grant_for_ref(context, entry):
-        handler = fighter.create_indomitable_handler(entity.uuid)
-        try:
-            context.runtime.bind_granted_behavior(
-                handler,
-                provider_ref=INDOMITABLE_REF,
-                runtime_owner_uuid=entity.uuid,
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
+            "indomitable",
+            grant_id,
+            maximum=1,
+            recharge_type=RechargeType.LONG_REST,
+            capacity_policy=ResourceCapacityPolicy.SUM,
+        )
+        if is_first_grant_for_ref(context, entry):
+            installation.add_bound_handler(
+                fighter.create_indomitable_handler(entity.uuid),
             )
-            entity.add_event_handler(handler)
-        except Exception:
-            entity.action_economy.remove_resource_contribution(
-                "indomitable",
-                grant_id,
-            )
-            raise
-        handler_uuids = (handler.uuid,)
     return grant_receipt(
         context,
         entry,
-        handler_uuids=handler_uuids,
-        resource_contribution_ids=(("indomitable", grant_id),),
+        handler_uuids=installation.handler_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 
@@ -485,13 +341,6 @@ def _apply_lucky(
     require_grant_ref(entry, LUCKY_FEAT_REF)
     entity = context.entity
     grant_id = character_grant_id(context, entry)
-    entity.action_economy.add_resource_contribution(
-        "luck_points",
-        grant_id,
-        maximum=3,
-        recharge_type=RechargeType.LONG_REST,
-        capacity_policy=ResourceCapacityPolicy.SUM,
-    )
     handler = EventHandler(
         name="Lucky",
         source_entity_uuid=entity.uuid,
@@ -510,24 +359,20 @@ def _apply_lucky(
         event_processor=feats.lucky_processor,
         player_toggleable=True,
     )
-    try:
-        context.runtime.bind_granted_behavior(
-            handler,
-            provider_ref=LUCKY_FEAT_REF,
-            runtime_owner_uuid=entity.uuid,
-        )
-        entity.add_event_handler(handler)
-    except Exception:
-        entity.action_economy.remove_resource_contribution(
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
             "luck_points",
             grant_id,
+            maximum=3,
+            recharge_type=RechargeType.LONG_REST,
+            capacity_policy=ResourceCapacityPolicy.SUM,
         )
-        raise
+        installation.add_bound_handler(handler)
     return grant_receipt(
         context,
         entry,
-        handler_uuids=(handler.uuid,),
-        resource_contribution_ids=(("luck_points", grant_id),),
+        handler_uuids=installation.handler_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 

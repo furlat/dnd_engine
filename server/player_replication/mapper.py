@@ -13,6 +13,7 @@ projection-native graph whose identities contain no engine lineage UUIDs.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass, field
 from enum import Enum
@@ -57,6 +58,8 @@ from dnd.core.events import (
     RoundStartEvent,
     SensoryUpdateEvent,
     SpatialChangeEvent,
+    SpatialChangeType,
+    SpatialEffectChangeEvent,
     StepMovementEvent,
     TurnEndEvent,
     TurnStartEvent,
@@ -69,6 +72,10 @@ from dnd.core.presentation_geometry import (
     CylinderPresentationGeometry,
     LinePresentationGeometry,
     SpherePresentationGeometry,
+)
+from dnd.core.spatial_effect_types import (
+    SpatialEffectChangeOperation,
+    SpatialEffectLayer,
 )
 from dnd.spells.abjuration import CounterspellReactionEvent
 from server.player_replication.journal import SubjectiveFrameProjectionContext
@@ -115,6 +122,7 @@ from server.player_replication_contract import (
     LightPresentationCue,
     LineAreaGeometry,
     MovementKind,
+    MovementEndpointOutcome,
     MovementPresentationCue,
     PlayerReplicationWatermarks,
     PresentationDamageType,
@@ -131,6 +139,7 @@ from server.player_replication_contract import (
     SpellDelivery,
     SpellPresentationCue,
     SpellTargetPresentation,
+    SpatialEffectPresentationCue,
     SubjectivePerspective,
     SubjectivePresentationCue,
     SubjectiveReplicationFrame,
@@ -213,6 +222,7 @@ class _NodeKind(str, Enum):
     CONDITION = "condition"
     DOOR = "door"
     LIGHT = "light"
+    SPATIAL_EFFECT = "spatial_effect"
     EQUIPMENT = "equipment"
     ENCOUNTER = "encounter"
 
@@ -221,9 +231,11 @@ class _NodeKind(str, Enum):
 class _MovementPayload:
     entity_uuid: str
     movement_kind: MovementKind
+    movement_sequence_id: str
     trajectory: tuple[tuple[int, int], ...]
     path_start_index: int
     path_total_steps: int
+    endpoint_outcome: MovementEndpointOutcome
 
 
 @dataclass(frozen=True)
@@ -359,6 +371,17 @@ class _LightPayload:
 
 
 @dataclass(frozen=True)
+class _SpatialEffectPayload:
+    effect_uuid: str
+    content_ref: ContentRef
+    operation: SpatialEffectChangeOperation
+    layer: SpatialEffectLayer
+    anchor_position: Optional[tuple[int, int]]
+    affected_positions: tuple[tuple[int, int], ...]
+    previous_positions: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
 class _EquipmentPayload:
     entity_uuid: str
     visual_loadout: EntityVisualLoadout
@@ -391,6 +414,7 @@ _Payload = (
     | _ConditionPayload
     | _DoorPayload
     | _LightPayload
+    | _SpatialEffectPayload
     | _EquipmentPayload
     | _EncounterPayload
 )
@@ -499,6 +523,8 @@ class CanonicalSubjectivePresentationMapper:
             source,
             index=index,
             perspective=context.perspective,
+            source_stream_id=context.protocol.source_stream_id,
+            generation_id=context.protocol.generation_id,
         )
         drafts = tuple(
             PresentationNodeDraft(
@@ -540,11 +566,18 @@ def _build_semantic_nodes(
     *,
     index: _BatchIndex,
     perspective: SubjectivePerspective,
+    source_stream_id: str,
+    generation_id: str,
 ) -> tuple[_NodeSpec, ...]:
     nodes: list[_NodeSpec] = []
     nodes_by_key: dict[str, _NodeSpec] = {}
     semantic_key_by_lineage: dict[str, str] = {}
     spell_application_by_lineage: dict[str, tuple[str, _SpellApplication]] = {}
+    latest_sensory_cursor_by_observer = {
+        str(slot.event.observer_uuid): slot.source_event_cursor
+        for slot in index.completions
+        if isinstance(slot.event, SensoryUpdateEvent)
+    }
 
     def add(node: _NodeSpec, *, map_lineage: bool = True) -> None:
         if node.key in nodes_by_key:
@@ -602,7 +635,17 @@ def _build_semantic_nodes(
         elif isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)):
             node = _condition_node(slot, index=index, perspective=perspective)
         elif isinstance(event, SensoryUpdateEvent):
-            node = _light_node(slot, index=index, perspective=perspective)
+            if (
+                latest_sensory_cursor_by_observer.get(str(event.observer_uuid))
+                == slot.source_event_cursor
+            ):
+                node = _light_node(slot, index=index, perspective=perspective)
+        elif isinstance(event, SpatialEffectChangeEvent):
+            node = _spatial_effect_node(
+                slot,
+                index=index,
+                perspective=perspective,
+            )
         elif isinstance(
             event,
             (
@@ -646,6 +689,10 @@ def _build_semantic_nodes(
         nodes,
         index=index,
     )
+    arrival_step_lineage_by_node_key = _post_arrival_damage_step_lineages(
+        nodes,
+        index=index,
+    )
     _add_movement_nodes(
         index=index,
         perspective=perspective,
@@ -654,12 +701,22 @@ def _build_semantic_nodes(
         reactive_step_lineages=frozenset(
             reactive_step_lineage_by_node_key.values()
         ),
+        post_arrival_step_lineages=frozenset(
+            arrival_step_lineage_by_node_key.values()
+        ),
+        source_stream_id=source_stream_id,
+        generation_id=generation_id,
     )
     _attach_movement_reactions(
         nodes=nodes,
         nodes_by_key=nodes_by_key,
         semantic_key_by_lineage=semantic_key_by_lineage,
         reactive_step_lineage_by_node_key=reactive_step_lineage_by_node_key,
+    )
+    _order_post_arrival_damage(
+        nodes_by_key=nodes_by_key,
+        semantic_key_by_lineage=semantic_key_by_lineage,
+        arrival_step_lineage_by_node_key=arrival_step_lineage_by_node_key,
     )
     return tuple(nodes)
 
@@ -687,7 +744,7 @@ def _pre_edge_reactive_step_lineages(
             or node.parent_key is not None
         ):
             continue
-        step_lineage = _nearest_committed_step_lineage(node, index=index)
+        step_lineage = _nearest_completed_step_lineage(node, index=index)
         step_slot = (
             index.completion_by_lineage.get(step_lineage)
             if step_lineage is not None
@@ -702,21 +759,59 @@ def _pre_edge_reactive_step_lineages(
     return step_lineage_by_node_key
 
 
-def _nearest_committed_step_lineage(
+def _nearest_completed_step_lineage(
     node: _NodeSpec,
     *,
     index: _BatchIndex,
 ) -> Optional[str]:
-    """Return the exact committed movement step that causally owns ``node``."""
+    """Return the exact completed movement step that causally owns ``node``."""
     for ancestor in index.ancestors(node.lineage):
         slot = index.completion_by_lineage.get(ancestor)
         if (
             slot is not None
             and isinstance(slot.event, StepMovementEvent)
-            and slot.event.committed
         ):
             return ancestor
     return None
+
+
+def _post_arrival_damage_step_lineages(
+    nodes: list[_NodeSpec],
+    *,
+    index: _BatchIndex,
+) -> dict[str, str]:
+    """Authenticate damage caused by entering one committed destination cell."""
+    step_lineage_by_node_key: dict[str, str] = {}
+    for node in nodes:
+        if node.kind is not _NodeKind.DAMAGE or node.parent_key is not None:
+            continue
+        payload = node.payload
+        if not isinstance(payload, _DamagePayload):
+            continue
+        ancestors = index.ancestors(node.lineage)
+        for ancestor_index, ancestor in enumerate(ancestors):
+            entered_slot = index.completion_by_lineage.get(ancestor)
+            entered = entered_slot.event if entered_slot is not None else None
+            if (
+                not isinstance(entered, SpatialChangeEvent)
+                or entered.change_type is not SpatialChangeType.ENTITY_ENTERED
+                or entered.entity_uuid is None
+                or str(entered.entity_uuid) != payload.target_uuid
+            ):
+                continue
+            for step_ancestor in ancestors[ancestor_index + 1:]:
+                step_slot = index.completion_by_lineage.get(step_ancestor)
+                step = step_slot.event if step_slot is not None else None
+                if (
+                    isinstance(step, StepMovementEvent)
+                    and step.committed
+                    and step.source_entity_uuid == entered.entity_uuid
+                    and step.to_position == entered.position
+                ):
+                    step_lineage_by_node_key[node.key] = step_ancestor
+                    break
+            break
+    return step_lineage_by_node_key
 
 
 def _add_movement_nodes(
@@ -726,8 +821,11 @@ def _add_movement_nodes(
     add: object,
     semantic_key_by_lineage: dict[str, str],
     reactive_step_lineages: frozenset[str],
+    post_arrival_step_lineages: frozenset[str],
+    source_stream_id: str,
+    generation_id: str,
 ) -> None:
-    """Coalesce committed steps, starting a segment at every visible reaction.
+    """Coalesce committed steps and retain authorized interrupted attempts.
 
     Movement-owned Attack, Spell, and Shove cues are pre-edge reactions. The
     owning segment therefore begins with the exact triggering step; later
@@ -736,9 +834,12 @@ def _add_movement_nodes(
     grouped: dict[str, list[ProjectedEventSlot]] = {}
     root_event_by_lineage: dict[str, MovementEvent] = {}
     for slot in index.completions:
-        if not isinstance(slot.event, StepMovementEvent) or not slot.event.committed:
+        if not isinstance(slot.event, StepMovementEvent):
             continue
         step = slot.event
+        step_lineage = str(step.lineage_uuid)
+        if not step.committed and step_lineage not in reactive_step_lineages:
+            continue
         if not _identity_allowed(step, step.source_entity_uuid, perspective):
             continue
         if not _step_geometry_allowed(step, perspective):
@@ -770,12 +871,15 @@ def _add_movement_nodes(
             step = slot.event
             if not isinstance(step, StepMovementEvent):
                 continue
+            if not step.committed:
+                segments.append([slot])
+                continue
             if not segments:
                 segments.append([slot])
                 continue
             previous_slot = segments[-1][-1]
             previous = previous_slot.event
-            if not isinstance(previous, StepMovementEvent):
+            if not isinstance(previous, StepMovementEvent) or not previous.committed:
                 segments.append([slot])
                 continue
             contiguous = (
@@ -785,6 +889,7 @@ def _add_movement_nodes(
                 and step.from_position == previous.to_position
                 and step.trajectory is previous.trajectory
                 and str(step.lineage_uuid) not in reactive_step_lineages
+                and str(previous.lineage_uuid) not in post_arrival_step_lineages
             )
             if contiguous:
                 segments[-1].append(slot)
@@ -816,11 +921,22 @@ def _add_movement_nodes(
                 payload=_MovementPayload(
                     entity_uuid=str(first.source_entity_uuid),
                     movement_kind=movement_kind,
+                    movement_sequence_id=_movement_sequence_id(
+                        source_stream_id=source_stream_id,
+                        generation_id=generation_id,
+                        perspective_epoch_id=perspective.perspective_epoch_id,
+                        root_lineage=root_lineage,
+                    ),
                     trajectory=trajectory,
                     path_start_index=max(0, first.path_index - 1),
                     path_total_steps=max(
                         first.path_index,
                         first.total_path_length - 1,
+                    ),
+                    endpoint_outcome=(
+                        MovementEndpointOutcome.COMMITTED
+                        if first.committed
+                        else MovementEndpointOutcome.NOT_COMMITTED
                     ),
                 ),
                 lineage=root_lineage,
@@ -845,6 +961,25 @@ def _add_movement_nodes(
             semantic_key_by_lineage.setdefault(root_lineage, key)
 
 
+def _movement_sequence_id(
+    *,
+    source_stream_id: str,
+    generation_id: str,
+    perspective_epoch_id: str,
+    root_lineage: str,
+) -> str:
+    """Derive one opaque partition-local identity without exposing lineage."""
+    material = "\x1f".join(
+        (
+            source_stream_id,
+            generation_id,
+            perspective_epoch_id,
+            root_lineage,
+        )
+    )
+    return f"movement_{hashlib.sha256(material.encode('utf-8')).hexdigest()}"
+
+
 def _attach_movement_reactions(
     *,
     nodes: list[_NodeSpec],
@@ -865,6 +1000,37 @@ def _attach_movement_reactions(
         parent = nodes_by_key.get(parent_key) if parent_key is not None else None
         if parent is not None and parent.kind is _NodeKind.MOVEMENT:
             node.parent_key = parent.key
+
+
+def _order_post_arrival_damage(
+    *,
+    nodes_by_key: dict[str, _NodeSpec],
+    semantic_key_by_lineage: dict[str, str],
+    arrival_step_lineage_by_node_key: dict[str, str],
+) -> None:
+    """Schedule authenticated entry damage after its exact visible arrival."""
+    for node_key, step_lineage in arrival_step_lineage_by_node_key.items():
+        damage = nodes_by_key.get(node_key)
+        movement_key = semantic_key_by_lineage.get(step_lineage)
+        movement = (
+            nodes_by_key.get(movement_key)
+            if movement_key is not None
+            else None
+        )
+        if (
+            damage is None
+            or damage.parent_key is not None
+            or not isinstance(damage.payload, _DamagePayload)
+            or movement is None
+            or not isinstance(movement.payload, _MovementPayload)
+            or damage.payload.target_uuid != movement.payload.entity_uuid
+        ):
+            continue
+        damage.order_key = (
+            *movement.order_key,
+            90,
+            damage.slot.source_event_cursor,
+        )
 
 
 def _attack_node(
@@ -1481,6 +1647,69 @@ def _light_node(
     )
 
 
+def _spatial_effect_node(
+    slot: ProjectedEventSlot,
+    *,
+    index: _BatchIndex,
+    perspective: SubjectivePerspective,
+) -> Optional[_NodeSpec]:
+    """Project only lifecycle geometry proved by exact event-time position grants."""
+    event = slot.event
+    if not isinstance(event, SpatialEffectChangeEvent):
+        return None
+    observers = set(perspective.observer_entity_uuids)
+
+    def disclosed(
+        positions: tuple[tuple[int, int], ...],
+    ) -> tuple[tuple[int, int], ...]:
+        return tuple(
+            position
+            for position in positions
+            if observers
+            & event.located_position_observer_uuids.get(
+                position_evidence_key(position),
+                set(),
+            )
+        )
+
+    affected_positions = disclosed(event.affected_positions)
+    previous_positions = disclosed(event.previous_positions)
+    if not affected_positions and not previous_positions:
+        return None
+    anchor_position = (
+        event.anchor_position
+        if event.anchor_position
+        in {*affected_positions, *previous_positions}
+        and observers
+        & event.located_position_observer_uuids.get(
+            position_evidence_key(event.anchor_position),
+            set(),
+        )
+        else None
+    )
+    lineage = str(event.lineage_uuid)
+    return _NodeSpec(
+        key=f"spatial-effect:{event.uuid}",
+        kind=_NodeKind.SPATIAL_EFFECT,
+        slot=slot,
+        payload=_SpatialEffectPayload(
+            effect_uuid=str(event.spatial_effect_uuid),
+            content_ref=event.spatial_effect_content_ref,
+            operation=event.operation,
+            layer=event.layer,
+            anchor_position=anchor_position,
+            affected_positions=affected_positions,
+            previous_positions=previous_positions,
+        ),
+        lineage=lineage,
+        order_key=(
+            index.root_order_cursor(lineage, slot.source_event_cursor),
+            65,
+            slot.source_event_cursor,
+        ),
+    )
+
+
 def _encounter_node(
     slot: ProjectedEventSlot,
     *,
@@ -1981,6 +2210,31 @@ def _attach_semantic_nodes(
                 application_match = match[1]
                 break
         parent_payload = parent.payload
+        if (
+            application_match is None
+            and isinstance(parent_payload, _SpellPayload)
+            and isinstance(node.payload, _SpatialEffectPayload)
+        ):
+            position = (
+                node.payload.anchor_position
+                or next(
+                    iter(
+                        (
+                            *node.payload.affected_positions,
+                            *node.payload.previous_positions,
+                        )
+                    ),
+                    None,
+                )
+            )
+            if position is not None:
+                application_match = _SpellApplication(
+                    source_lineage=node.lineage,
+                    outcome=SpellApplicationOutcome.AUTOMATIC,
+                    target_uuid=None,
+                    position=position,
+                )
+                parent_payload.applications.append(application_match)
         if application_match is None and isinstance(parent_payload, _SpellPayload):
             if len(parent_payload.applications) == 1:
                 application_match = parent_payload.applications[0]
@@ -2174,6 +2428,7 @@ def _can_parent(parent: _NodeSpec, child: _NodeSpec) -> bool:
         if child.kind in {
             _NodeKind.DOOR,
             _NodeKind.LIGHT,
+            _NodeKind.SPATIAL_EFFECT,
             _NodeKind.EQUIPMENT,
         }:
             return True
@@ -2202,6 +2457,7 @@ def _can_parent(parent: _NodeSpec, child: _NodeSpec) -> bool:
             _NodeKind.HEAL,
             _NodeKind.CONDITION,
             _NodeKind.FORCED,
+            _NodeKind.SPATIAL_EFFECT,
         }
     if parent_kind is _NodeKind.SHOVE:
         if child.kind is _NodeKind.FORCED:
@@ -2301,6 +2557,16 @@ def _spell_effect_matches(
             and effect.payload.entity_uuid == target_uuid
             and effect.payload.source_uuid == spell.actor_uuid
         )
+    if isinstance(effect.payload, _SpatialEffectPayload):
+        geometry = {
+            *effect.payload.affected_positions,
+            *effect.payload.previous_positions,
+        }
+        return (
+            application.target_uuid is None
+            and application.position is not None
+            and application.position in geometry
+        )
     return False
 
 
@@ -2323,9 +2589,11 @@ def _materialize_node(
             **common,
             entity_uuid=payload.entity_uuid,
             movement_kind=payload.movement_kind,
+            movement_sequence_id=payload.movement_sequence_id,
             trajectory=payload.trajectory,
             path_start_index=payload.path_start_index,
             path_total_steps=payload.path_total_steps,
+            endpoint_outcome=payload.endpoint_outcome,
             perception_commit="observation_frame",
         )
     if isinstance(payload, _ActionPayload):
@@ -2501,6 +2769,17 @@ def _materialize_node(
             **common,
             observer_uuid=payload.observer_uuid,
             cells=payload.cells,
+        )
+    if isinstance(payload, _SpatialEffectPayload):
+        return SpatialEffectPresentationCue(
+            **common,
+            effect_uuid=payload.effect_uuid,
+            content_ref=payload.content_ref,
+            operation=payload.operation,
+            layer=payload.layer,
+            anchor_position=payload.anchor_position,
+            affected_positions=payload.affected_positions,
+            previous_positions=payload.previous_positions,
         )
     if isinstance(payload, _EquipmentPayload):
         return EquipmentPresentationCue(

@@ -16,11 +16,14 @@ from dnd.content_system.item_bindings import (
     ItemRuntimeOrigin,
 )
 from dnd.content_system.item_materialization import materialize_item
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.item_definitions import ItemPersistencePolicy
-from dnd.core.gridmap import get_map
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.items.environment import (
     CloseDirectionalDoorAction,
     DirectionalDoor,
@@ -59,14 +62,13 @@ from dnd.items.torches import (
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_NAME
 from dnd.spells.conjuration import (
-    GUARDIAN_OF_FAITH_OBJECT_RECIPE,
     HEROES_FEAST_OBJECT_RECIPE,
     HEROES_FEAST_OBJECT_DECLARATION,
     EatFromFeast,
-    GuardianOfFaithObject,
     HeroesFeastObject,
 )
-from dnd.tiles import create_spike_zone
+from dnd.spatial_effect_content import GUARDIAN_OF_FAITH_FIELD_RECIPE
+from dnd.spatial_effects import FieldEffect
 from server.api_models import (
     MapEditorObjectPlaceRequest,
     MapEditorObjectRuntimeState,
@@ -95,10 +97,6 @@ _EXPECTED_IDENTITY_KEYS = frozenset({
     "content.neurodragon:environment_object:environment.blocker.boulder@1",
     "content.neurodragon:environment_object:environment.blocker.barricade@1",
     "content.neurodragon:environment_object:environment.blocker.oil_barrel@1",
-    (
-        "content.srd_5_1_cc:environment_object:"
-        "environment.spell_object.guardian_of_faith@1"
-    ),
     (
         "content.srd_5_1_cc:environment_object:"
         "environment.spell_object.heroes_feast@1"
@@ -132,7 +130,6 @@ _DIRECT_CONSTRUCTOR_NAMES = frozenset({
     "DoorObject",
     "TrapLever",
     "StorageChest",
-    "GuardianOfFaithObject",
     "HeroesFeastObject",
 })
 _CONSTRUCTION_ROOTS = (
@@ -142,7 +139,6 @@ _CONSTRUCTION_ROOTS = (
     _ROOT / "server",
 )
 _CANONICAL_FACTORY_FUNCTIONS = frozenset({
-    "_build_guardian_of_faith_object",
     "_build_heroes_feast_object",
 })
 
@@ -262,51 +258,63 @@ def test_mapeditor_save_identity_never_falls_back_to_runtime_name() -> None:
     assert placement.recipe == door.recipe
 
 
-def test_spell_created_objects_are_exact_encounter_only_dependency_roots() -> None:
-    """Owning spells name and materialize their exact encounter-only objects."""
+def test_spell_created_world_roots_use_their_exact_domain_owner() -> None:
+    """Spells create exact spatial effects or encounter-only physical objects."""
     reset_engine_runtime(grid_size=(4, 4))
     loaded = bootstrap_content_system()
-    cases = (
-        (
-            "Guardian of Faith",
-            GUARDIAN_OF_FAITH_OBJECT_RECIPE,
-            GuardianOfFaithObject,
-        ),
-        (
-            "Heroes' Feast",
-            HEROES_FEAST_OBJECT_RECIPE,
-            HeroesFeastObject,
-        ),
+    feast_declaration = loaded.registry.declarations[
+        HEROES_FEAST_OBJECT_RECIPE.ref.identity_key
+    ]
+    assert feast_declaration.item_definition is not None
+    assert feast_declaration.item_definition.persistence_policy is (
+        ItemPersistencePolicy.ENCOUNTER_ONLY
     )
+    feast_spell = SPELL_CONTENT_DECLARATIONS_BY_NAME["Heroes' Feast"]
+    feast_edges = tuple(
+        dependency
+        for dependency in feast_spell.dependencies
+        if dependency.relation is ContentDependencyRelation.CREATES_OBJECT
+    )
+    assert tuple(edge.target_ref for edge in feast_edges) == (
+        HEROES_FEAST_OBJECT_RECIPE.ref,
+    )
+    feast = materialize_item(
+        HEROES_FEAST_OBJECT_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.ENCOUNTER_ONLY,
+        expected_type=HeroesFeastObject,
+    )
+    feast_binding = ITEM_RUNTIME_BINDINGS.require(feast.uuid)
+    assert feast_binding.recipe == HEROES_FEAST_OBJECT_RECIPE
+    assert feast_binding.origin is ItemRuntimeOrigin.ENCOUNTER_ONLY
 
-    for spell_name, recipe, object_type in cases:
-        object_declaration = loaded.registry.declarations[
-            recipe.ref.identity_key
-        ]
-        assert object_declaration.item_definition is not None
-        assert object_declaration.item_definition.persistence_policy is (
-            ItemPersistencePolicy.ENCOUNTER_ONLY
-        )
-
-        spell_declaration = SPELL_CONTENT_DECLARATIONS_BY_NAME[spell_name]
-        creates_object_edges = tuple(
-            dependency
-            for dependency in spell_declaration.dependencies
-            if dependency.relation is ContentDependencyRelation.CREATES_OBJECT
-        )
-        assert len(creates_object_edges) == 1
-        assert creates_object_edges[0].target_ref == recipe.ref
-
-        floor_object = materialize_item(
-            recipe,
-            uuid4(),
-            origin=ItemRuntimeOrigin.ENCOUNTER_ONLY,
-            expected_type=object_type,
-        )
-        assert floor_object.content_ref == recipe.ref
-        binding = ITEM_RUNTIME_BINDINGS.require(floor_object.uuid)
-        assert binding.recipe == recipe
-        assert binding.origin is ItemRuntimeOrigin.ENCOUNTER_ONLY
+    guardian_declaration = loaded.registry.declarations[
+        GUARDIAN_OF_FAITH_FIELD_RECIPE.ref.identity_key
+    ]
+    assert guardian_declaration.spatial_effect_definition is not None
+    guardian_spell_ref = SPELL_CONTENT_DECLARATIONS_BY_NAME[
+        "Guardian of Faith"
+    ].ref
+    guardian_spell = loaded.registry.declarations[
+        guardian_spell_ref.identity_key
+    ]
+    guardian_edges = tuple(
+        dependency
+        for dependency in guardian_spell.dependencies
+        if dependency.relation
+        is ContentDependencyRelation.CREATES_SPATIAL_EFFECT
+    )
+    assert tuple(edge.target_ref for edge in guardian_edges) == (
+        GUARDIAN_OF_FAITH_FIELD_RECIPE.ref,
+    )
+    guardian = materialize_spatial_effect(
+        GUARDIAN_OF_FAITH_FIELD_RECIPE,
+        uuid4(),
+        position=(1, 1),
+        faction="heroes",
+        expected_type=FieldEffect,
+    )
+    assert guardian.content_ref == GUARDIAN_OF_FAITH_FIELD_RECIPE.ref
 
 
 def test_environment_actions_bind_through_exact_provider_dependencies() -> None:
@@ -425,18 +433,13 @@ def test_environment_actions_bind_through_exact_provider_dependencies() -> None:
         for row in catalog.objects
         if row.recipe.ref == TRAP_LEVER_DECLARATION.ref
     )
-    trap_tiles, trap_handler = create_spike_zone({(6, 0)})
-    for tile in trap_tiles:
-        get_map().set_tile(6, 0, tile=tile, fire_event=False)
+    trap_effect = materialize_spike_trap_effect({(6, 0)})
     linked_lever = place_catalog_object(
         MapEditorObjectPlaceRequest(
             recipe=lever_row.recipe,
             content_set_digest=lever_row.content_set_digest,
             position=(7, 0),
-            runtime_state=MapEditorObjectRuntimeState(
-                trap_handler_uuid=str(trap_handler.uuid),
-                trap_tile_uuids=tuple(str(tile.uuid) for tile in trap_tiles),
-            ),
+            runtime_state=MapEditorObjectRuntimeState(),
         ),
     )
     lever = BaseBlock.get(UUID(linked_lever.uuid))
@@ -450,6 +453,8 @@ def test_environment_actions_bind_through_exact_provider_dependencies() -> None:
         TRAP_LEVER_DECLARATION.ref
     )
     assert lever_action.behavior_binding.runtime_owner_uuid == lever.uuid
+    assert isinstance(lever_action, PullLeverAction)
+    assert lever_action.trap_effect_uuid == trap_effect.uuid
 
 
 def test_no_legacy_environment_constructor_surface_or_callsite_survives() -> None:

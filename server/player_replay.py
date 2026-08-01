@@ -53,6 +53,14 @@ _SUBJECTIVE_REPLAY_DELIVERY_ADAPTER: Final[TypeAdapter[SubjectiveReplayDelivery]
 )
 
 
+def subjective_bootstrap_encounter_ended(
+    bootstrap: SubjectiveReplicationBootstrap,
+) -> bool:
+    """Return whether one canonical replay seed is already terminal."""
+    encounter = bootstrap.world.state.encounter
+    return encounter is not None and encounter.state == "ended"
+
+
 class SubjectiveReplaySegment(PlayerReplayModel):
     """Exact reducer input stream for one generation-and-perspective epoch."""
 
@@ -89,7 +97,9 @@ class SubjectiveReplaySegment(PlayerReplayModel):
         perspective = self.bootstrap.perspective
         previous = self.bootstrap.watermarks
         presentation_ids: set[str] = set()
-        encounter_end_seen = self._bootstrap_is_terminal()
+        encounter_end_seen = subjective_bootstrap_encounter_ended(
+            self.bootstrap,
+        )
 
         for delivery in self.deliveries:
             if isinstance(delivery, SubjectiveFrameDelivery):
@@ -165,11 +175,6 @@ class SubjectiveReplaySegment(PlayerReplayModel):
                 "a segment containing encounter end cannot be labeled perspective-retired"
             )
         return self
-
-    def _bootstrap_is_terminal(self) -> bool:
-        encounter = self.bootstrap.world.state.encounter
-        return encounter is not None and encounter.state == "ended"
-
 
 class SubjectivePlayerReplayBundle(PlayerReplayModel):
     """All exact live reducer segments retained for one game membership."""

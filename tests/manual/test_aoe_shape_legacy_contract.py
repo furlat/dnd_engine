@@ -115,6 +115,19 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
         directional_cube.affected_positions
     )
 
+    even_centered_cube = Cube(
+        source_entity_uuid=source_uuid,
+        target=(14, 4),
+        size_feet=20,
+        centered=True,
+    )
+    even_centered_cube.compute_objective(caster_pos=(0, 0))
+    assert even_centered_cube.affected_positions == {
+        (x, y)
+        for x in range(12, 16)
+        for y in range(2, 6)
+    }
+
     grid.set_tile(5, 11, walkable=False, visible=False, name="Line Wall")
     blocked_line = Line(
         source_entity_uuid=source_uuid,

@@ -1,7 +1,7 @@
 """Focused regressions for reversible Sorcerer structural feature grants."""
 
 from collections.abc import Iterator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -56,6 +56,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.spatial_effects import FieldEffect, SpatialEffect
 
 
 @pytest.fixture(autouse=True)
@@ -101,6 +102,22 @@ def _entry(
         ),
         content_ref=content_ref,
     )
+
+
+def _draconic_presence_field(
+    caster_uuid: UUID,
+) -> tuple[FieldEffect, sorcerer.DraconicPresenceAura]:
+    """Resolve the one exact field/controller pair owned by a caster."""
+    matches = [
+        (effect, condition)
+        for effect in SpatialEffect.active_effects()
+        if isinstance(effect, FieldEffect)
+        and effect.anchor_uuid == caster_uuid
+        for condition in effect.active_conditions.values()
+        if isinstance(condition, sorcerer.DraconicPresenceAura)
+    ]
+    assert len(matches) == 1
+    return matches[0]
 
 
 def _context(
@@ -157,7 +174,6 @@ def _remove(
             runtime_entity_uuid=context.entity.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
 
@@ -542,8 +558,8 @@ def test_draconic_presence_materializes_a_reversible_aura_action(
         context.entity.action_economy.resources["sorcery_points"].current
         == 13
     )
-    aura = context.entity.active_conditions.get("Draconic Presence")
-    assert isinstance(aura, sorcerer.DraconicPresenceAura)
+    field, aura = _draconic_presence_field(context.entity.uuid)
+    assert field.anchor_uuid == context.entity.uuid
     assert aura.mode == mode
     assert aura.duration.duration == 10
     assert "Concentrating" in context.entity.active_conditions
@@ -591,7 +607,7 @@ def test_draconic_presence_materializes_a_reversible_aura_action(
 
     context.entity.remove_condition("Concentrating")
 
-    assert "Draconic Presence" not in context.entity.active_conditions
+    assert SpatialEffect.get_effect(field.uuid) is None
     assert effect_name not in failed_target.active_conditions
     assert immunity_name in successful_target.active_conditions
 
@@ -631,14 +647,15 @@ def test_draconic_presence_expires_with_its_concentration_after_ten_rounds(
     )
     assert isinstance(action, sorcerer.DraconicPresence)
     assert action.instantiate().apply() is not None
+    field, _aura = _draconic_presence_field(context.entity.uuid)
 
     for _ in range(9):
-        context.entity.on_turn_start()
-        assert "Draconic Presence" in context.entity.active_conditions
+        assert not field.advance_duration("Draconic Presence")
+        assert SpatialEffect.get_effect(field.uuid) is field
         assert "Concentrating" in context.entity.active_conditions
-    context.entity.on_turn_start()
+    assert field.advance_duration("Draconic Presence")
 
-    assert "Draconic Presence" not in context.entity.active_conditions
+    assert SpatialEffect.get_effect(field.uuid) is None
     assert "Concentrating" not in context.entity.active_conditions
 
     _remove(context, presence_receipt, points_receipt)

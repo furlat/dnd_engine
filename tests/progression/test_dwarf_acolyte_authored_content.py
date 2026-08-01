@@ -194,9 +194,6 @@ def test_dwarf_weapon_training_materializes_and_reverses_all_exact_refs(
             runtime_entity_uuid=entity.uuid,
             character_id=character_id,
             grants=receipts,
-            automatic_grant_refs=(
-                DWARF_COMBAT_TRAINING_DECLARATION.ref,
-            ),
         ),
     )
     assert all(

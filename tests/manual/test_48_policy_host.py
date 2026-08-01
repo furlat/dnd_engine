@@ -70,7 +70,6 @@ from dnd.ai.contracts.control import (
     DecisionEpoch,
     DecisionEpochReason,
     END_TURN_ROW_ID,
-    OutcomeAdvantage,
     OutcomeResolution,
     ResourcePool,
 )
@@ -93,6 +92,8 @@ from dnd.ai.contracts.semantics import (
     action_semantics_ref,
     unknown_action_semantics,
 )
+from dnd.core.roll_types import AdvantageStatus
+from dnd.core.item_types import ItemObservationState
 
 
 _UNKNOWN_ACTION_SEMANTICS_REF = action_semantics_ref(
@@ -1466,7 +1467,7 @@ def test_policy_host_skips_transient_augmentation_without_positive_marginal_valu
     assert attack.outcome_profile is not None
     attack = attack.model_copy(update={
         "outcome_profile": attack.outcome_profile.model_copy(update={
-            "advantage": OutcomeAdvantage.ADVANTAGE,
+            "advantage": AdvantageStatus.ADVANTAGE,
         }),
     })
     world = world.model_copy(update={
@@ -2154,7 +2155,15 @@ def _door_world() -> SubjectiveWorldState:
                 name="Boundary",
                 knowledge_state=KnowledgeState.VISIBLE,
                 position=(3, 0),
-                state={"is_open": False},
+                state=ItemObservationState(
+                    blocks_movement=True,
+                    blocks_vision=True,
+                    is_pickable=False,
+                    is_usable=True,
+                    stack_count=1,
+                    is_hazardous=False,
+                    is_open=False,
+                ),
             )
         },
         known_tiles={
@@ -2246,9 +2255,9 @@ def _transient_augmentation_world(*, augmented: bool = False) -> SubjectiveWorld
             resolution=OutcomeResolution.ATTACK_ROLL,
             attack_bonus=5,
             advantage=(
-                OutcomeAdvantage.ADVANTAGE
+                AdvantageStatus.ADVANTAGE
                 if augmented
-                else OutcomeAdvantage.NONE
+                else AdvantageStatus.NONE
             ),
             damage_rolls=(DamageRollProfile(
                 dice_count=1,

@@ -6,12 +6,14 @@ from contextlib import contextmanager
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
-from dnd.core.values import ModifiableValue, AdvantageStatus
-from dnd.core.creature_types import CreatureType, DamageType, Size
+from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus
+from dnd.core.creature_types import CreatureType, DamageDieValue, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.condition_types import ConditionApplicationPolicy
 from dnd.core.action_types import RestrictedActionGrant
+from dnd.core.action_types import CostType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import (
@@ -29,14 +31,16 @@ from dnd.core.spell_execution import current_spell_execution
 from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
 
 from dnd.core.events import (
-    Damage, Event, EventPhase, EventQueue, Range, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
+    AbilityCheckD20RollResultEvent, AbilityCheckEvent, Damage, Event, EventHandler, EventPhase, EventQueue, Range, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
+    TemporaryHitPointsEvent,
     LifeStateChangeEvent, ReviveEvent,
 )
-from dnd.core.equipment_types import EquipmentSlot, WeaponSlot
+from dnd.core.equipment_types import EquipmentSlot, WeaponProperty, WeaponSlot
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
+from dnd.core.base_object import BaseObject
+from dnd.blocks.abilities import Ability, AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
     DamageApplicationPreview,
@@ -74,7 +78,7 @@ from dnd.creature_transforms import (
     remove_modifier_ownership,
 )
 from dnd.core.base_actions import (
-    ActionAvailabilityStatus, AttackRollBaseline, BaseAction, BaseCost,
+    ActionAvailabilityStatus, ActionOverrideLease, AttackRollBaseline, BaseAction, BaseCost,
     DamageRollProfile, TargetType,
     AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo,
     OpportunityAttackExposure,
@@ -300,7 +304,7 @@ class Entity(BaseBlock):
     )
     initiative: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="initiative", base_value=0),
-        description="Initiative modifier value."
+        description="Initiative bonuses independent of the live Dexterity modifier."
     )
     senses: Senses = Field(
         default_factory=lambda: Senses.create(source_entity_uuid=uuid4()),
@@ -390,6 +394,13 @@ class Entity(BaseBlock):
     )
     registered_actions: List[BaseAction] = Field(default_factory=list, description="Registered action templates for this entity")
 
+    _action_template_override_leases: Dict[
+        UUID,
+        Dict[UUID, Dict[str, Any]],
+    ] = PrivateAttr(default_factory=dict)
+    _standard_action_handler_uuids: Set[UUID] = PrivateAttr(
+        default_factory=set,
+    )
     _aoe_footprint_cache_context: Optional[Tuple[Any, ...]] = PrivateAttr(default=None)
     _aoe_footprint_cache: Dict[
         Tuple[Any, ...],
@@ -424,6 +435,10 @@ class Entity(BaseBlock):
         frozenset[Tuple[int, int]],
     ] = PrivateAttr(default_factory=dict)
     _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
+    _mobility_protection_sources: Dict[
+        UUID,
+        Tuple[bool, bool, bool],
+    ] = PrivateAttr(default_factory=dict)
 
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
     _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
@@ -480,6 +495,45 @@ class Entity(BaseBlock):
         self.character_species_variant_ref = None
         self.character_background_ref = None
 
+    def add_mobility_protection_source(
+        self,
+        source_id: UUID,
+        *,
+        ignores_difficult_terrain: bool,
+        ignores_magical_speed_reduction: bool,
+        ignores_underwater_penalties: bool,
+    ) -> None:
+        """Install one exact source-owned movement-protection contribution."""
+        if source_id in self._mobility_protection_sources:
+            raise ValueError(
+                f"mobility protection source {source_id} is already installed",
+            )
+        self._mobility_protection_sources[source_id] = (
+            ignores_difficult_terrain,
+            ignores_magical_speed_reduction,
+            ignores_underwater_penalties,
+        )
+        self._refresh_mobility_protection_state()
+
+    def remove_mobility_protection_source(self, source_id: UUID) -> bool:
+        """Remove one movement-protection source without touching siblings."""
+        if self._mobility_protection_sources.pop(source_id, None) is None:
+            return False
+        self._refresh_mobility_protection_state()
+        return True
+
+    def _refresh_mobility_protection_state(self) -> None:
+        """Derive compatibility booleans from the exact live source ledger."""
+        contributions = tuple(self._mobility_protection_sources.values())
+        self.ignore_difficult_terrain = any(row[0] for row in contributions)
+        self.ignore_magical_speed_reduction = any(
+            row[1] for row in contributions
+        )
+        self.ignore_underwater_penalties = any(
+            row[2] for row in contributions
+        )
+        self.senses._paths_dirty = True
+
     def model_post_init(self, __context: Any) -> None:
         """Register entity identity, position, grid, and senses callbacks."""
         super().model_post_init(__context)
@@ -528,6 +582,44 @@ class Entity(BaseBlock):
             entity: Entity instance to register.
         """
         cls._entity_registry[entity.uuid] = entity
+
+    def discard_unpublished_runtime(self) -> None:
+        """Discard a provisional entity that never entered encounter authority.
+
+        Cold materializers call this only while rolling back a failed
+        construction. It intentionally publishes no death, removal, or
+        movement lifecycle.
+        """
+        for block in tuple(BaseBlock._registry.values()):
+            if block.source_entity_uuid != self.uuid:
+                continue
+            for condition in tuple(block.active_conditions_by_uuid.values()):
+                block._discard_condition_indexes(condition)
+                block._discard_uncommitted_condition_tree(condition)
+            for handler in tuple(block.event_handlers.values()):
+                block.remove_event_handler(handler)
+                handler.remove_from_register()
+        self.clear_registered_actions()
+        grid = get_map()
+        grid.cleanup_block_light_sources(self.uuid)
+        spatial_senses_system.unregister_observer(self.uuid)
+        grid.unregister_entity(self.uuid)
+        positioned = self.__class__._entity_by_position.get(self.position)
+        if positioned is not None:
+            if self in positioned:
+                positioned.remove(self)
+            if not positioned:
+                self.__class__._entity_by_position.pop(self.position, None)
+        self.__class__._entity_registry.pop(self.uuid, None)
+        for obj in tuple(BaseObject._registry.values()):
+            if obj.source_entity_uuid == self.uuid:
+                obj.remove_from_register()
+        for value in tuple(BaseValue._registry.values()):
+            if value.source_entity_uuid == self.uuid:
+                value.remove_from_register()
+        for block in tuple(BaseBlock._registry.values()):
+            if block.source_entity_uuid == self.uuid:
+                BaseBlock.unregister(block.uuid)
 
     @classmethod
     def get_all_entities(cls) -> List['Entity']:
@@ -603,8 +695,11 @@ class Entity(BaseBlock):
         for modifier in config.proficiency_bonus_modifiers:
             proficiency_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
-        dex_mod = ability_scores.get_ability("dexterity").modifier
-        initiative = ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=dex_mod, value_name="initiative")
+        initiative = ModifiableValue.create(
+            source_entity_uuid=source_entity_uuid,
+            base_value=0,
+            value_name="initiative",
+        )
         for modifier in config.initiative_modifiers:
             initiative.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
 
@@ -647,6 +742,25 @@ class Entity(BaseBlock):
             uses_death_saves=config.uses_death_saves,
             death_save_successes=config.death_save_successes,
             death_save_failures=config.death_save_failures,
+        )
+
+    @property
+    def initiative_bonus(self) -> int:
+        """Return live Dexterity plus independent initiative modifiers."""
+
+        return (
+            self.ability_scores.dexterity.modifier
+            + self.initiative.normalized_score
+        )
+
+    def initiative_roll_bonus(self) -> ModifiableValue:
+        """Build the unregistered live initiative value used by one roll."""
+
+        return self.initiative.model_copy(
+            update={
+                "base_value": self.ability_scores.dexterity.modifier,
+            },
+            deep=True,
         )
 
     def add_structural_size_source(
@@ -915,6 +1029,10 @@ class Entity(BaseBlock):
             condition.source_entity_name = source.name
 
         declaration_event = condition.declare_event(parent_event)
+        declaration_event = EventQueue.publish_declaration(declaration_event)
+        if declaration_event.canceled:
+            self._discard_uncommitted_condition_tree(condition)
+            return declaration_event
 
         if self.check_condition_immunity(condition.name, condition=condition):
             target_name = self.name
@@ -933,24 +1051,34 @@ class Entity(BaseBlock):
             EventQueue.push_combat_log(entry, self.uuid)
 
             if declaration_event is not None:
-                return declaration_event.cancel(status_message=f"Condition {condition.name} is immune")
+                canceled = declaration_event.cancel(
+                    status_message=f"Condition {condition.name} is immune",
+                )
+                self._discard_uncommitted_condition_tree(condition)
+                return canceled
             else:
+                self._discard_uncommitted_condition_tree(condition)
                 return None
         if check_save_throw and condition.application_saving_throw is not None:
             (_, _, success) = self.saving_throw(condition.application_saving_throw)
             if success:
                 if declaration_event is not None:
-                    return declaration_event.cancel(status_message=f"Target passed the {condition.application_saving_throw.ability_name} saving throw with")
+                    canceled = declaration_event.cancel(
+                        status_message=(
+                            "Target passed the "
+                            f"{condition.application_saving_throw.ability_name} "
+                            "saving throw with"
+                        ),
+                    )
+                    self._discard_uncommitted_condition_tree(condition)
+                    return canceled
                 else:
+                    self._discard_uncommitted_condition_tree(condition)
                     return None
-        condition_applied = condition.apply(declaration_event=declaration_event)
-        if condition_applied and not condition_applied.canceled:
-            if condition.name in self.active_conditions:
-                self.remove_condition(condition.name)
-            self.active_conditions[condition.name] = condition
-            self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
-        return condition_applied
+        return self._apply_condition_with_policy(
+            condition,
+            declaration_event=declaration_event,
+        )
 
     def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
         """Progress a condition's duration and remove if expired.
@@ -969,6 +1097,36 @@ class Entity(BaseBlock):
         if condition is None:
             return False
 
+        if condition.application_policy is (
+            ConditionApplicationPolicy.MOST_POTENT_ACTIVE
+        ):
+            removed_any = False
+            for lease in tuple(
+                self.get_condition_application_leases(condition_name),
+            ):
+                if (
+                    not skip_save_throw
+                    and lease.removal_saving_throw is not None
+                ):
+                    (_, _, success) = self.saving_throw(
+                        lease.removal_saving_throw,
+                    )
+                    if success:
+                        removed_any = (
+                            self.remove_condition_by_uuid(lease.uuid)
+                            or removed_any
+                        )
+                        continue
+                if lease.progress():
+                    removed_any = (
+                        self.remove_condition_by_uuid(
+                            lease.uuid,
+                            expire=True,
+                        )
+                        or removed_any
+                    )
+            return removed_any
+
         if not skip_save_throw and condition.removal_saving_throw is not None:
             (_, _, success) = self.saving_throw(condition.removal_saving_throw)
             if success:
@@ -977,8 +1135,8 @@ class Entity(BaseBlock):
 
         expired = condition.progress()
         if expired:
-            self.remove_condition(condition_name, expire=True)
-        return expired
+            return self.remove_condition(condition_name, expire=True)
+        return False
 
     def reduce_condition_level(
         self,
@@ -1014,6 +1172,16 @@ class Entity(BaseBlock):
     def _expire_long_rest_conditions_on_block(self, block: BaseBlock) -> None:
         """Mark long-rest durations on a block and remove expired conditions."""
         for condition_name, condition in list(block.active_conditions.items()):
+            leases = block.get_condition_application_leases(condition_name)
+            if leases:
+                for lease in tuple(leases):
+                    lease.long_rest()
+                    if lease.duration.is_expired:
+                        block.remove_condition_by_uuid(
+                            lease.uuid,
+                            expire=True,
+                        )
+                continue
             condition.long_rest()
             if condition.duration.is_expired:
                 block.remove_condition(condition_name, expire=True)
@@ -1288,8 +1456,12 @@ class Entity(BaseBlock):
             final_hp=self.get_normal_hp(),
             encounter_uuid=encounter_uuid,
             phase=EventPhase.DECLARATION,
-            parent_event=parent_event
+            parent_event=parent_event,
+            use_register=False,
         )
+        death_event = EventQueue.publish_declaration(death_event)
+        if death_event.canceled:
+            return death_event
         death_event = death_event.phase_to(EventPhase.EXECUTION)
         if death_event.canceled:
             if self.get_normal_hp() <= 0:
@@ -1377,12 +1549,16 @@ class Entity(BaseBlock):
             entity_name=self.name,
             phase=EventPhase.DECLARATION,
             parent_event=parent_event,
+            use_register=False,
             context={
                 "encounter_uuid": str(encounter_uuid) if encounter_uuid else None,
                 "round_number": round_number,
                 "turn_index": turn_index,
             },
         )
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return event
         event = event.phase_to(EventPhase.EXECUTION)
 
         bonus = ModifiableValue.create(
@@ -1471,7 +1647,11 @@ class Entity(BaseBlock):
             reduce_exhaustion=reduce_exhaustion,
             parent_event=parent_event.uuid if parent_event is not None else None,
             phase=EventPhase.DECLARATION,
+            use_register=False,
         )
+        revive_event = EventQueue.publish_declaration(revive_event)
+        if revive_event.canceled:
+            return False
         revive_event = revive_event.phase_to(EventPhase.EXECUTION)
         if revive_event.canceled:
             return False
@@ -1512,9 +1692,13 @@ class Entity(BaseBlock):
             encounter_uuid=encounter_uuid or self.uuid,
             round_number=round_number,
             turn_index=turn_index,
-            phase=EventPhase.DECLARATION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return event
         event = event.phase_to(EventPhase.EXECUTION)
 
         self.make_death_save(
@@ -1596,9 +1780,13 @@ class Entity(BaseBlock):
             actions_used=actions_used,
             bonus_actions_used=bonus_used,
             movement_used=movement_used,
-            phase=EventPhase.DECLARATION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return event
         event = event.phase_to(EventPhase.EXECUTION)
 
         event = event.phase_to(EventPhase.EFFECT)
@@ -1863,10 +2051,9 @@ class Entity(BaseBlock):
         Returns:
             Combined armor class value.
         """
-        should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
+            with self._temporary_target(target_entity_uuid):
+                return self.ac_bonus()
 
         formula = self.equipment.resolve_armor_class_formula_candidate(
             self.ability_scores
@@ -1899,8 +2086,6 @@ class Entity(BaseBlock):
             ):
                 ac_bonus = formula_ac
 
-        if should_clear_target:
-            self.clear_target_entity()
         return ac_bonus
 
     def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None) -> ModifiableValue:
@@ -1914,10 +2099,12 @@ class Entity(BaseBlock):
         Returns:
             Combined weapon attack bonus.
         """
-        should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
+            with self._temporary_target(target_entity_uuid):
+                return self.attack_bonus(
+                    weapon_slot,
+                    override_ability=override_ability,
+                )
 
         (
             proficiency_bonus,
@@ -1940,8 +2127,6 @@ class Entity(BaseBlock):
             "range_type": weapon_range.type.value,
         })
 
-        if should_clear_target:
-            self.clear_target_entity()
         return source_attack_bonus
 
     def weapon_attack_outcome_baseline(
@@ -2019,6 +2204,229 @@ class Entity(BaseBlock):
             ))
         return tuple(profiles)
 
+    def intrinsic_attack_outcome_baseline(
+        self,
+        range_type: RangeType,
+        weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+        override_ability: Optional[AbilityName] = None,
+    ) -> AttackRollBaseline:
+        """Read actor-side values for a creature-owned intrinsic attack."""
+        ability = self.ability_scores.get_ability(
+            override_ability if override_ability is not None else "strength"
+        )
+        typed_bonus = (
+            self.equipment.ranged_attack_bonus
+            if range_type == RangeType.RANGE
+            else self.equipment.melee_attack_bonus
+        )
+        components = (
+            self.equipment.unarmed_attack_bonus,
+            self.equipment.attack_bonus,
+            typed_bonus,
+        )
+        advantage_sum = (
+            ability.modifier_bonus.advantage_sum
+            + self.proficiency_bonus.advantage_sum
+            + sum(component.advantage_sum for component in components)
+        )
+        advantage = (
+            AdvantageStatus.ADVANTAGE
+            if advantage_sum > 0
+            else AdvantageStatus.DISADVANTAGE
+            if advantage_sum < 0
+            else AdvantageStatus.NONE
+        )
+        return AttackRollBaseline(
+            attack_bonus=(
+                ability.modifier
+                + self.proficiency_bonus.normalized_score
+                + sum(component.normalized_score for component in components)
+            ),
+            advantage=advantage,
+            critical_threshold=self.get_crit_threshold(weapon_slot),
+            critical_extra_dice=self.get_crit_extra_dice(weapon_slot),
+        )
+
+    def intrinsic_damage_outcome_baseline(
+        self,
+        *,
+        damage_die: DamageDieValue,
+        dice_count: int,
+        damage_type: DamageType,
+        range_type: RangeType,
+        override_ability: Optional[AbilityName] = None,
+    ) -> tuple[DamageRollProfile, ...]:
+        """Read immutable damage formulas for a creature-owned attack."""
+        ability = self._intrinsic_damage_ability(override_ability)
+        typed_bonus = (
+            self.equipment.ranged_damage_bonus
+            if range_type == RangeType.RANGE
+            else self.equipment.melee_damage_bonus
+        )
+        profiles = [
+            DamageRollProfile(
+                dice_count=dice_count,
+                die_size=damage_die,
+                flat_bonus=(
+                    ability.modifier
+                    + self.equipment.unarmed_damage_bonus.normalized_score
+                    + self.equipment.damage_bonus.normalized_score
+                    + typed_bonus.normalized_score
+                ),
+                damage_type=damage_type.value,
+            ),
+        ]
+        profiles.extend(
+            DamageRollProfile(
+                dice_count=count,
+                die_size=die,
+                flat_bonus=bonus.normalized_score,
+                damage_type=extra_type.value,
+            )
+            for die, count, bonus, extra_type in zip(
+                self.equipment.extra_attack_damage_dices,
+                self.equipment.extra_attack_damage_dices_numbers,
+                self.equipment.extra_attack_damage_bonus,
+                self.equipment.extra_attack_damage_type,
+            )
+        )
+        size_dice = self.get_size_damage_dice()
+        if size_dice > 0:
+            profiles.append(
+                DamageRollProfile(
+                    dice_count=size_dice,
+                    die_size=4,
+                    damage_type=damage_type.value,
+                )
+            )
+        return tuple(profiles)
+
+    def intrinsic_attack_bonus(
+        self,
+        *,
+        range_type: RangeType,
+        target_entity_uuid: Optional[UUID] = None,
+        override_ability: Optional[AbilityName] = None,
+    ) -> ModifiableValue:
+        """Build the live attack bonus for a creature-owned attack."""
+        if (
+            target_entity_uuid is not None
+            and target_entity_uuid != self.target_entity_uuid
+        ):
+            with self._temporary_target(target_entity_uuid):
+                return self.intrinsic_attack_bonus(
+                    range_type=range_type,
+                    override_ability=override_ability,
+                )
+        ability = self.ability_scores.get_ability(
+            override_ability if override_ability is not None else "strength"
+        )
+        typed_bonus = (
+            self.equipment.ranged_attack_bonus
+            if range_type == RangeType.RANGE
+            else self.equipment.melee_attack_bonus
+        )
+        result = self.proficiency_bonus.combine_values(
+            [
+                self.equipment.unarmed_attack_bonus,
+                self.equipment.attack_bonus,
+                typed_bonus,
+                ability.get_combined_values(),
+            ]
+        )
+        result.set_context(
+            {
+                "attack_ability": ability.name,
+                "range_type": range_type.value,
+            }
+        )
+        return result
+
+    def get_intrinsic_attack_damages(
+        self,
+        *,
+        damage_die: DamageDieValue,
+        dice_count: int,
+        damage_type: DamageType,
+        range_type: RangeType,
+        target_entity_uuid: Optional[UUID] = None,
+        override_ability: Optional[AbilityName] = None,
+    ) -> List[Damage]:
+        """Build live damage packets for a creature-owned attack."""
+        if target_entity_uuid is not None:
+            with self._temporary_target(target_entity_uuid):
+                return self.get_intrinsic_attack_damages(
+                    damage_die=damage_die,
+                    dice_count=dice_count,
+                    damage_type=damage_type,
+                    range_type=range_type,
+                    override_ability=override_ability,
+                )
+        ability = self._intrinsic_damage_ability(override_ability)
+        typed_bonus = (
+            self.equipment.ranged_damage_bonus
+            if range_type == RangeType.RANGE
+            else self.equipment.melee_damage_bonus
+        )
+        combined_bonus = self.equipment.unarmed_damage_bonus.combine_values(
+            [
+                self.equipment.damage_bonus,
+                typed_bonus,
+                ability.get_combined_values(),
+            ]
+        )
+        combined_bonus.set_context(
+            {
+                "attack_ability": ability.name,
+                "range_type": range_type.value,
+            }
+        )
+        damages = [
+            Damage(
+                source_entity_uuid=self.uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                damage_dice=damage_die,
+                dice_numbers=dice_count,
+                damage_bonus=combined_bonus,
+                damage_type=damage_type,
+            ),
+        ]
+        damages.extend(self.equipment.get_extra_attack_damage())
+        size_dice = self.get_size_damage_dice()
+        if size_dice > 0:
+            damages.append(
+                Damage(
+                    source_entity_uuid=self.uuid,
+                    target_entity_uuid=self.target_entity_uuid,
+                    damage_dice=4,
+                    dice_numbers=size_dice,
+                    damage_bonus=ModifiableValue.create(
+                        source_entity_uuid=self.uuid,
+                        base_value=0,
+                        value_name="Size Damage Bonus",
+                    ),
+                    damage_type=damage_type,
+                )
+            )
+        return damages
+
+    def _intrinsic_damage_ability(
+        self,
+        override_ability: Optional[AbilityName],
+    ) -> Ability:
+        """Select the damage ability used by an intrinsic attack."""
+        if override_ability is not None:
+            return self.ability_scores.get_ability(override_ability)
+        strength = self.ability_scores.strength
+        if WeaponProperty.FINESSE not in self.equipment.unarmed_properties:
+            return strength
+        dexterity = self.ability_scores.dexterity
+        return (
+            strength
+            if strength.modifier >= dexterity.modifier
+            else dexterity
+        )
+
     def get_crit_threshold(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> int:
         """Get the minimum natural roll needed for a critical hit.
 
@@ -2075,10 +2483,26 @@ class Entity(BaseBlock):
         Returns:
             Damage packets for the weapon attack.
         """
-        should_clear_target = False
-        if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
+        if target_entity_uuid is not None:
+            with self._temporary_target(target_entity_uuid):
+                return self._get_damages_for_current_target(
+                    weapon_slot,
+                    target_entity_uuid,
+                    override_ability,
+                )
+        return self._get_damages_for_current_target(
+            weapon_slot,
+            self.target_entity_uuid,
+            override_ability,
+        )
+
+    def _get_damages_for_current_target(
+        self,
+        weapon_slot: WeaponSlot,
+        target_entity_uuid: Optional[UUID],
+        override_ability: Optional[AbilityName],
+    ) -> List[Damage]:
+        """Build damage packets while the requested target context is active."""
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability)
         size_dice = self.get_size_damage_dice()
         if size_dice > 0 and damages:
@@ -2090,35 +2514,13 @@ class Entity(BaseBlock):
             )
             damages.append(Damage(
                 source_entity_uuid=self.uuid,
-                target_entity_uuid=target_entity_uuid or self.target_entity_uuid,
+                target_entity_uuid=target_entity_uuid,
                 damage_dice=4,
                 dice_numbers=size_dice,
                 damage_bonus=size_damage_bonus,
                 damage_type=primary_type,
             ))
-        if should_clear_target:
-            self.clear_target_entity()
         return damages
-
-    def take_damage(self, damages: List[Damage], attack_outcome: AttackOutcome) -> List[DiceRoll]:
-        """Roll and apply direct damage packets without TakeDamageEvent wrapping.
-
-        Args:
-            damages: Damage packet specifications.
-            attack_outcome: Attack outcome used to choose normal or critical dice.
-
-        Returns:
-            Rolls produced by each damage packet.
-        """
-
-        rolls = []
-        for damage in damages:
-            dice = damage.get_dice(attack_outcome=attack_outcome)
-            roll = dice.roll
-            rolls.append(roll)
-            self.health.take_damage(roll.total, damage.damage_type, source_entity_uuid=damage.source_entity_uuid)
-
-        return rolls
 
     def _complete_damage_applied_event(
         self,
@@ -2264,9 +2666,13 @@ class Entity(BaseBlock):
             damages=event_damages,
             effect_id=effect_id,
             parent_event=parent_event,
-            phase=EventPhase.DECLARATION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
+        take_damage_event = EventQueue.publish_declaration(take_damage_event)
+        if take_damage_event.canceled:
+            return 0
         take_damage_event = take_damage_event.phase_to(EventPhase.EXECUTION)
         if not take_damage_event.canceled:
             take_damage_event = take_damage_event.phase_to(EventPhase.EFFECT)
@@ -2380,9 +2786,15 @@ class Entity(BaseBlock):
             killer_name=source_name,
             source_description=source_description,
             parent_event=parent_event,
-            phase=EventPhase.DECLARATION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
+        instant_death_event = EventQueue.publish_declaration(
+            instant_death_event
+        )
+        if instant_death_event.canceled:
+            return instant_death_event
         instant_death_event = instant_death_event.phase_to(EventPhase.EXECUTION)
         instant_death_event = instant_death_event.phase_to(EventPhase.EFFECT)
         if instant_death_event.canceled:
@@ -2435,9 +2847,13 @@ class Entity(BaseBlock):
             source_description=source_description,
             parent_event=parent_event,
             spell_level=spell_level,
-            phase=EventPhase.DECLARATION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
 
+        heal_event = EventQueue.publish_declaration(heal_event)
+        if heal_event.canceled:
+            return 0
         heal_event = heal_event.phase_to(EventPhase.EXECUTION)
         heal_event = heal_event.phase_to(EventPhase.EFFECT)
 
@@ -2465,6 +2881,63 @@ class Entity(BaseBlock):
         heal_event.phase_to(EventPhase.COMPLETION)
 
         return actual_healing
+
+    def grant_temporary_hit_points(
+        self,
+        amount: int,
+        source_entity_uuid: UUID,
+        *,
+        source_description: str = "",
+        parent_event: Optional[UUID] = None,
+    ) -> int:
+        """Offer temporary HP through one interruptible event lifecycle.
+
+        Temporary hit points do not stack and are not healing. A larger grant
+        replaces the current pool; a smaller grant leaves the current pool
+        unchanged.
+        """
+        event = TemporaryHitPointsEvent(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=self.uuid,
+            source_entity_name=(
+                source.name
+                if isinstance((source := Entity.get(source_entity_uuid)), Entity)
+                else None
+            ),
+            target_entity_name=self.name,
+            requested_amount=max(0, amount),
+            source_description=source_description,
+            parent_event=parent_event,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return self.health.temporary_hit_points.normalized_score
+        event = event.phase_to(EventPhase.EXECUTION)
+        event = event.phase_to(EventPhase.EFFECT)
+        if event.canceled:
+            return self.health.temporary_hit_points.normalized_score
+
+        previous_amount = max(
+            0,
+            self.health.temporary_hit_points.normalized_score,
+        )
+        self.health._grant_temporary_hit_points(
+            event.requested_amount,
+            source_entity_uuid,
+        )
+        resulting_amount = max(
+            0,
+            self.health.temporary_hit_points.normalized_score,
+        )
+        event.model_copy(
+            update={
+                "previous_amount": previous_amount,
+                "resulting_amount": resulting_amount,
+            },
+        ).phase_to(EventPhase.COMPLETION)
+        return resulting_amount
 
     def get_senses(self) -> Senses:
         """Override BaseBlock virtual — returns Senses block for subjective perception."""
@@ -2497,6 +2970,20 @@ class Entity(BaseBlock):
     ) -> bool:
         """Delegate named action-resource affordability to ActionEconomy."""
         return self.action_economy.can_afford_resource(resource_name, amount)
+
+    def consume_prevalidated_action_cost(
+        self,
+        cost_type: CostType,
+        amount: int,
+        cost_name: str,
+    ) -> bool:
+        """Commit an admitted turn-resource cost through ActionEconomy."""
+        self.action_economy.consume_prevalidated(cost_type, amount, cost_name)
+        return True
+
+    def consume_action_resource(self, resource_name: str, amount: int) -> bool:
+        """Consume a named action resource through ActionEconomy."""
+        return self.action_economy.consume_resource(resource_name, amount)
 
     def get_restricted_action_grants(
         self,
@@ -2603,10 +3090,11 @@ class Entity(BaseBlock):
         Returns:
             Combined spell attack bonus.
         """
-        should_clear_target = False
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
-            self.set_target_entity(target_entity_uuid)
-            should_clear_target = True
+            with self._temporary_target(target_entity_uuid):
+                return self.spell_attack_bonus(
+                    spellcasting_source_id=spellcasting_source_id,
+                )
 
         ability = self.ability_scores.get_ability(
             self.spellcasting.resolve_spellcasting_ability(
@@ -2620,9 +3108,6 @@ class Entity(BaseBlock):
             self.equipment.attack_bonus,
             self.spellcasting.spell_attack_bonus,
         ])
-
-        if should_clear_target:
-            self.clear_target_entity()
 
         return combined
 
@@ -2964,50 +3449,15 @@ class Entity(BaseBlock):
         Returns:
             Effective d20 roll after result handlers have run.
         """
-        dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
-        initial_roll = dice.roll
-        target_entity = (
-            Entity.get(bonus.target_entity_uuid)
-            if bonus.target_entity_uuid is not None
-            else None
+        event = self._roll_d20_effect_event(
+            bonus,
+            roll_type=roll_type,
+            context=context,
+            ability_name=ability_name,
+            skill_name=skill_name,
+            weapon_slot=weapon_slot,
+            parent_event=parent_event,
         )
-
-        common_fields = {
-            "source_entity_uuid": self.uuid,
-            "target_entity_uuid": bonus.target_entity_uuid,
-            "source_entity_name": self.name,
-            "target_entity_name": (
-                target_entity.name
-                if isinstance(target_entity, Entity)
-                else None
-            ),
-            "original_roll": initial_roll,
-            "bonus": bonus,
-            "context": context or {},
-            "phase": EventPhase.DECLARATION,
-            "roll_type": roll_type,
-            "parent_event": parent_event
-        }
-
-        if roll_type == RollType.ATTACK:
-            event: D20RollResultEvent = AttackD20RollResultEvent(
-                **common_fields,
-                weapon_slot=weapon_slot
-        )
-        elif roll_type == RollType.SAVE:
-            event = SavingThrowD20RollResultEvent(
-                **common_fields,
-                ability_name=ability_name,
-            )
-        elif roll_type == RollType.CHECK:
-            event = SkillCheckD20RollResultEvent(
-                **common_fields,
-                skill_name=skill_name,
-            )
-        else:
-            event = D20RollResultEvent(**common_fields)
-
-        event = event.phase_to(EventPhase.EFFECT, status_message="D20 rolled, handlers may modify")
         event = event.phase_to(EventPhase.COMPLETION)
         return event.get_effective_roll()
 
@@ -3039,6 +3489,29 @@ class Entity(BaseBlock):
         Returns:
             Effective d20 roll and the uncompleted EFFECT-phase result event.
         """
+        event = self._roll_d20_effect_event(
+            bonus,
+            roll_type=roll_type,
+            context=context,
+            ability_name=ability_name,
+            skill_name=skill_name,
+            weapon_slot=weapon_slot,
+            parent_event=parent_event,
+        )
+        return event.get_effective_roll(), event
+
+    def _roll_d20_effect_event(
+        self,
+        bonus: ModifiableValue,
+        *,
+        roll_type: RollType,
+        context: Optional[Dict[str, Any]],
+        ability_name: Optional[AbilityName],
+        skill_name: Optional[SkillName],
+        weapon_slot: Optional[WeaponSlot],
+        parent_event: Optional[UUID],
+    ) -> D20RollResultEvent:
+        """Roll once and publish the sole typed d20-result interception seam."""
         dice = Dice(count=1, value=20, bonus=bonus, roll_type=roll_type)
         initial_roll = dice.roll
         target_entity = (
@@ -3075,15 +3548,27 @@ class Entity(BaseBlock):
                 ability_name=ability_name,
             )
         elif roll_type == RollType.CHECK:
-            event = SkillCheckD20RollResultEvent(
-                **common_fields,
-                skill_name=skill_name,
-            )
+            if ability_name is not None and skill_name is not None:
+                raise ValueError(
+                    "A d20 check cannot be both a raw ability check and a skill check",
+                )
+            if ability_name is not None:
+                event = AbilityCheckD20RollResultEvent(
+                    **common_fields,
+                    ability_name=ability_name,
+                )
+            else:
+                event = SkillCheckD20RollResultEvent(
+                    **common_fields,
+                    skill_name=skill_name,
+                )
         else:
             event = D20RollResultEvent(**common_fields)
 
-        event = event.phase_to(EventPhase.EFFECT, status_message="D20 rolled, handlers may modify")
-        return event.get_effective_roll(), event
+        return event.phase_to(
+            EventPhase.EFFECT,
+            status_message="D20 rolled, handlers may modify",
+        )
 
     def create_saving_throw_request(
         self,
@@ -3108,7 +3593,6 @@ class Entity(BaseBlock):
             Declaration-phase saving throw event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
             new_dc = ModifiableValue.get(dc)
             if new_dc is None or new_dc.source_entity_uuid != self.uuid:
                 raise ValueError("DC is not coming from self oir not present")
@@ -3117,7 +3601,6 @@ class Entity(BaseBlock):
             int_dc = new_dc.normalized_score
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -3166,7 +3649,6 @@ class Entity(BaseBlock):
             Declaration-phase skill check event.
         """
         if isinstance(dc, UUID):
-            self.set_target_entity(dc)
             dc_modifier = ModifiableValue.get(dc)
             if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
                 raise ValueError(f"not present {dc_modifier is None} or not coming from self")
@@ -3178,7 +3660,6 @@ class Entity(BaseBlock):
             int_dc = new_dc.normalized_score
         else:
             int_dc = dc
-        self.clear_target_entity()
 
         target_entity = Entity.get(target_entity_uuid)
         target_entity_name = target_entity.name if target_entity else None
@@ -3193,6 +3674,111 @@ class Entity(BaseBlock):
             parent_event=parent_event
         )
 
+    def create_ability_check_request(
+        self,
+        target_entity_uuid: UUID,
+        ability_name: AbilityName,
+        dc: Union[int, UUID],
+        parent_event: Optional[UUID] = None,
+    ) -> AbilityCheckEvent:
+        """Create a raw ability-check request for another entity."""
+        if isinstance(dc, UUID):
+            dc_modifier = ModifiableValue.get(dc)
+            if dc_modifier is None or dc_modifier.source_entity_uuid != self.uuid:
+                raise ValueError(
+                    "Ability-check DC is absent or does not belong to the source",
+                )
+            if target_entity_uuid != dc_modifier.target_entity_uuid:
+                resolved_dc = dc_modifier.model_copy(deep=True)
+                resolved_dc.set_target_entity(target_entity_uuid)
+            else:
+                resolved_dc = dc_modifier
+            numeric_dc = resolved_dc.normalized_score
+        else:
+            numeric_dc = dc
+
+        target_entity = Entity.get(target_entity_uuid)
+        return AbilityCheckEvent(
+            source_entity_uuid=self.uuid,
+            target_entity_uuid=target_entity_uuid,
+            ability_name=ability_name,
+            dc=numeric_dc,
+            source_entity_name=self.name,
+            target_entity_name=target_entity.name if target_entity else None,
+            parent_event=parent_event,
+        )
+
+    def ability_check(
+        self,
+        request: AbilityCheckEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool]:
+        """Make one raw ability check through the complete event lifecycle."""
+        if request.target_entity_uuid != self.uuid:
+            raise ValueError("Target entity uuid does not match")
+        outcome, roll, success, effect_event = self.ability_check_effect(
+            request,
+        )
+        effect_event.phase_to(
+            EventPhase.COMPLETION,
+            dice_roll=roll,
+            result=success,
+            status_message=f"{request.ability_name} check complete",
+        )
+        return outcome, roll, success
+
+    def ability_check_effect(
+        self,
+        request: AbilityCheckEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool, AbilityCheckEvent]:
+        """Resolve a raw ability check through Effect for causal children."""
+        if request.target_entity_uuid != self.uuid:
+            raise ValueError("Target entity uuid does not match")
+        with self._temporary_target(request.source_entity_uuid):
+            bonus = self.ability_check_bonus(
+                request.source_entity_uuid,
+                request.ability_name,
+            )
+            dc = request.get_dc()
+            if dc is None:
+                raise ValueError(
+                    f"DC is not set for {request.ability_name} ability check "
+                    f"with event id {request.uuid}",
+                )
+            execution_event = request.phase_to(
+                EventPhase.EXECUTION,
+                bonus=bonus,
+                status_message=(
+                    f"Rolling {request.ability_name} check vs DC {dc}"
+                ),
+            )
+            roll = self.roll_d20(
+                bonus,
+                RollType.CHECK,
+                ability_name=request.ability_name,
+                parent_event=request.uuid,
+            )
+            outcome = determine_attack_outcome(roll, dc)
+            success = outcome not in {
+                AttackOutcome.MISS,
+                AttackOutcome.CRIT_MISS,
+            }
+            effect_event = execution_event.phase_to(
+                EventPhase.EFFECT,
+                dice_roll=roll,
+                result=success,
+                status_message=(
+                    f"Rolled {roll.total} vs DC {dc}: "
+                    f"{'Success' if success else 'Failure'}"
+                ),
+            )
+            final_roll = effect_event.dice_roll or roll
+            final_outcome = determine_attack_outcome(final_roll, dc)
+            final_success = final_outcome not in {
+                AttackOutcome.MISS,
+                AttackOutcome.CRIT_MISS,
+            }
+            return final_outcome, final_roll, final_success, effect_event
+
     def saving_throw(self, request: SavingThrowEvent) -> Tuple[AttackOutcome, DiceRoll, bool]:
         """Make a saving throw with full event phase transitions.
 
@@ -3205,8 +3791,14 @@ class Entity(BaseBlock):
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
 
-        self.set_target_entity(request.source_entity_uuid)
+        with self._temporary_target(request.source_entity_uuid):
+            return self._saving_throw_with_current_target(request)
 
+    def _saving_throw_with_current_target(
+        self,
+        request: SavingThrowEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool]:
+        """Resolve a saving throw while the causal source is the active target."""
         save_bonus = self.saving_throw_bonus(request.source_entity_uuid, request.ability_name)
         save_context: Dict[str, Any] = {}
         if request.condition_context is not None:
@@ -3251,7 +3843,6 @@ class Entity(BaseBlock):
 
         save_bonus.clear_event_lineage()
         save_bonus.clear_context()
-        self.clear_target_entity()
 
         final_roll = completion_event.dice_roll or roll
         final_success = completion_event.result if completion_event.result is not None else success
@@ -3264,7 +3855,10 @@ class Entity(BaseBlock):
 
         return final_outcome, final_roll, final_success
 
-    def skill_check(self, request: SkillCheckEvent) -> Tuple[AttackOutcome,DiceRoll,bool]:
+    def skill_check(
+        self,
+        request: SkillCheckEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool]:
         """Make a skill check with full event phase transitions.
 
         Args:
@@ -3275,7 +3869,37 @@ class Entity(BaseBlock):
         """
         if request.target_entity_uuid != self.uuid:
             raise ValueError("Target entity uuid does not match")
-        self.set_target_entity(request.source_entity_uuid)
+
+        outcome, roll, success, effect_event = self.skill_check_effect(request)
+        effect_event.phase_to(
+            EventPhase.COMPLETION,
+            dice_roll=roll,
+            result=success,
+            status_message=f"{request.skill_name} check complete",
+        )
+        return outcome, roll, success
+
+    def skill_check_effect(
+        self,
+        request: SkillCheckEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool, SkillCheckEvent]:
+        """Resolve a skill check through Effect so a rule may attach children.
+
+        The caller owns completion of the returned event. This is the typed
+        equivalent of :meth:`roll_d20_event` for rules whose consequences must
+        remain nested below the resolved check in combat logs and presentation.
+        """
+        if request.target_entity_uuid != self.uuid:
+            raise ValueError("Target entity uuid does not match")
+
+        with self._temporary_target(request.source_entity_uuid):
+            return self._skill_check_effect_with_current_target(request)
+
+    def _skill_check_effect_with_current_target(
+        self,
+        request: SkillCheckEvent,
+    ) -> Tuple[AttackOutcome, DiceRoll, bool, SkillCheckEvent]:
+        """Resolve through Effect while the causal source is the active target."""
         skill_check_bonus = self.skill_bonus(request.source_entity_uuid, request.skill_name)
         dc = request.get_dc()
         if dc is None:
@@ -3302,15 +3926,7 @@ class Entity(BaseBlock):
         final_outcome = determine_attack_outcome(final_roll, dc)
         final_success = final_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
 
-        effect_event.phase_to(
-            EventPhase.COMPLETION,
-            dice_roll=final_roll,
-            result=final_success,
-            status_message=f"{request.skill_name} check complete"
-        )
-
-        self.clear_target_entity()
-        return final_outcome, final_roll, final_success
+        return final_outcome, final_roll, final_success, effect_event
 
     def _blocks_walking_without_origin_traversal(
         self,
@@ -4083,13 +4699,165 @@ class Entity(BaseBlock):
         )
         self.registered_actions.append(action)
 
-    def unregister_action(self, name: str) -> None:
-        """Remove an action template by name.
+    def register_condition_action(
+        self,
+        condition: BaseCondition,
+        action: BaseAction,
+    ) -> None:
+        """Register one exact action template owned by a condition lifecycle."""
+        if (
+            condition.target_entity_uuid is not None
+            and condition.target_entity_uuid != self.uuid
+        ):
+            raise ValueError(
+                "Condition-owned action must be registered on its target entity",
+            )
+        self.register_action(action)
+        condition.own_granted_action(action.uuid)
 
-        Args:
-            name: Template name to remove.
+    def replace_standard_action_handlers(
+        self,
+        handlers: Sequence[EventHandler],
+    ) -> None:
+        """Replace only the exact handler instances from standard-action setup."""
+        for handler_uuid in tuple(self._standard_action_handler_uuids):
+            handler = self.event_handlers.get(handler_uuid)
+            if handler is not None:
+                self.remove_event_handler(handler)
+        self._standard_action_handler_uuids.clear()
+
+        for handler in handlers:
+            self.add_event_handler(handler)
+            self._standard_action_handler_uuids.add(handler.uuid)
+
+    def _remove_condition_owned_actions(
+        self,
+        condition: BaseCondition,
+    ) -> None:
+        """Remove only the exact action templates granted by a condition."""
+        for action_uuid in condition.release_granted_actions():
+            self.unregister_action_by_uuid(action_uuid)
+
+    @staticmethod
+    def _copy_action_override_value(value: Any) -> Any:
+        """Copy mutable override containers without cloning engine objects."""
+        if isinstance(value, list):
+            return list(value)
+        if isinstance(value, dict):
+            return dict(value)
+        if isinstance(value, set):
+            return set(value)
+        if isinstance(value, tuple):
+            return tuple(value)
+        return value
+
+    def install_action_template_overrides(
+        self,
+        overrides_by_template: Mapping[UUID, Mapping[str, Any]],
+    ) -> ActionOverrideLease:
+        """Install one independently removable immutable action overlay.
+
+        Registered templates remain authored facts. Temporary mechanics such
+        as metamagic are stored on the owning entity and materialized only as
+        shallow execution/discovery copies.
         """
-        self.registered_actions = [a for a in self.registered_actions if a.name != name]
+        templates_by_uuid = {
+            template.uuid: template
+            for template in self.registered_actions
+        }
+        normalized: Dict[UUID, Dict[str, Any]] = {}
+        for template_uuid, field_overrides in overrides_by_template.items():
+            template = templates_by_uuid.get(template_uuid)
+            if template is None:
+                raise ValueError(
+                    f"Cannot override unregistered action template {template_uuid}",
+                )
+            unknown_fields = (
+                set(field_overrides)
+                - set(type(template).model_fields)
+            )
+            if unknown_fields:
+                raise ValueError(
+                    "Unknown action override fields: "
+                    + ", ".join(sorted(unknown_fields)),
+                )
+            normalized[template_uuid] = {
+                field_name: self._copy_action_override_value(value)
+                for field_name, value in field_overrides.items()
+            }
+
+        lease = ActionOverrideLease(
+            lease_uuid=uuid4(),
+            template_uuids=tuple(
+                template.uuid
+                for template in self.registered_actions
+                if template.uuid in normalized
+            ),
+        )
+        if normalized:
+            self._action_template_override_leases[lease.lease_uuid] = normalized
+        return lease
+
+    def remove_action_template_overrides(
+        self,
+        lease: ActionOverrideLease,
+    ) -> bool:
+        """Remove exactly one action overlay without disturbing other leases."""
+        return (
+            self._action_template_override_leases.pop(
+                lease.lease_uuid,
+                None,
+            )
+            is not None
+        )
+
+    def clear_action_template_overrides(self) -> None:
+        """Remove every temporary action overlay owned by this entity."""
+        self._action_template_override_leases.clear()
+
+    def _drop_action_template_overrides(self, template_uuid: UUID) -> None:
+        """Remove one unregistered template from every retained overlay."""
+        empty_lease_uuids: List[UUID] = []
+        for lease_uuid, overrides_by_template in (
+            self._action_template_override_leases.items()
+        ):
+            overrides_by_template.pop(template_uuid, None)
+            if not overrides_by_template:
+                empty_lease_uuids.append(lease_uuid)
+        for lease_uuid in empty_lease_uuids:
+            self._action_template_override_leases.pop(lease_uuid, None)
+
+    def _effective_action_template(self, template: BaseAction) -> BaseAction:
+        """Return the effective overlay copy for one registered template."""
+        merged_overrides: Dict[str, Any] = {}
+        for overrides_by_template in (
+            self._action_template_override_leases.values()
+        ):
+            field_overrides = overrides_by_template.get(template.uuid)
+            if field_overrides is None:
+                continue
+            merged_overrides.update({
+                field_name: self._copy_action_override_value(value)
+                for field_name, value in field_overrides.items()
+            })
+        if not merged_overrides:
+            return template
+        return template.model_copy(update=merged_overrides)
+
+    def get_effective_action_templates(self) -> List[BaseAction]:
+        """Return registered templates with entity-owned overlays applied."""
+        return [
+            self._effective_action_template(template)
+            for template in self.registered_actions
+        ]
+
+    def clear_registered_actions(self) -> None:
+        """Remove every registered action and its global registry identity."""
+        actions = list(self.registered_actions)
+        self.registered_actions.clear()
+        self.clear_action_template_overrides()
+        for action in actions:
+            action.remove_from_register()
 
     def unregister_action_by_uuid(self, action_uuid: UUID) -> bool:
         """Remove exactly one action template by runtime identity."""
@@ -4097,6 +4865,7 @@ class Entity(BaseBlock):
             if action.uuid != action_uuid:
                 continue
             del self.registered_actions[index]
+            self._drop_action_template_overrides(action.uuid)
             action.remove_from_register()
             return True
         return False
@@ -4110,12 +4879,16 @@ class Entity(BaseBlock):
         Returns:
             Matching action template, or `None`.
         """
-        return next((a for a in self.registered_actions if a.name == name), None)
+        return next((
+            template
+            for template in self.get_effective_action_templates()
+            if template.name == name
+        ), None)
 
     @property
     def entity_actions(self) -> List[BaseAction]:
         """Actions that target other entities (Attack, multi-target spells)."""
-        return [a for a in self.registered_actions
+        return [a for a in self.get_effective_action_templates()
                 if a.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY)]
 
     @property
@@ -4124,18 +4897,26 @@ class Entity(BaseBlock):
 
         Includes path-based movement, line-of-sight positions, and AoE previews.
         """
-        return [a for a in self.registered_actions
+        return [a for a in self.get_effective_action_templates()
                 if a.effective_target_type in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS, TargetType.POSITION_AOE)]
 
     @property
     def self_actions(self) -> List[BaseAction]:
         """Actions that target self (Dash, Dodge, etc.)."""
-        return [a for a in self.registered_actions if a.effective_target_type == TargetType.SELF]
+        return [
+            action
+            for action in self.get_effective_action_templates()
+            if action.effective_target_type == TargetType.SELF
+        ]
 
     @property
     def object_actions(self) -> List[BaseAction]:
         """Actions that target objects on the grid (Pick Up, Attack Object)."""
-        return [a for a in self.registered_actions if a.effective_target_type == TargetType.OBJECT]
+        return [
+            action
+            for action in self.get_effective_action_templates()
+            if action.effective_target_type == TargetType.OBJECT
+        ]
 
     def _make_action_info(
         self,
@@ -4190,11 +4971,14 @@ class Entity(BaseBlock):
         cost_amount = eff_costs[0].cost if eff_costs else 0
         discovery_template_name = template.get_discovery_template_name()
         base_template_name = template.name if template.name != discovery_template_name else None
+        spell_metadata = template.get_spell_discovery_metadata()
         row_damage_types = list(damage_types or [])
-        if not row_damage_types and template.is_spell:
-            spell_damage_type = getattr(template, "spell_damage_type", None)
-            if spell_damage_type is not None:
-                row_damage_types.append(getattr(spell_damage_type, "value", str(spell_damage_type)))
+        if (
+            not row_damage_types
+            and spell_metadata is not None
+            and spell_metadata.damage_type is not None
+        ):
+            row_damage_types.append(spell_metadata.damage_type)
         source_item = BaseBlock.get(source_item_uuid) if source_item_uuid is not None else None
         item_charge_cost = (
             template.charge_cost
@@ -4210,6 +4994,7 @@ class Entity(BaseBlock):
                 behavior_binding,
             ),
             configured_action_ref=template.configured_action_ref,
+            selection_parameter=template.selection_parameter,
             target_type=target_type,
             availability_status=availability_status,
             valid_targets=valid_targets,
@@ -4228,9 +5013,21 @@ class Entity(BaseBlock):
             world_effect_profile=template.get_world_effect_profile(self),
             action_category=template.action_category,
             base_template_name=base_template_name,
-            spell_level=getattr(template, "spell_level", None) if template.is_spell else None,
-            cast_at_level=getattr(template, "cast_at_level", None) if template.is_spell else None,
-            is_spell_variant=bool(getattr(template, "is_variant", False)) if template.is_spell else False,
+            spell_level=(
+                spell_metadata.spell_level
+                if spell_metadata is not None
+                else None
+            ),
+            cast_at_level=(
+                spell_metadata.cast_at_level
+                if spell_metadata is not None
+                else None
+            ),
+            is_spell_variant=(
+                spell_metadata.is_variant
+                if spell_metadata is not None
+                else False
+            ),
             requires_concentration=template.requires_concentration,
             num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
             allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
@@ -4575,15 +5372,13 @@ class Entity(BaseBlock):
         if len(valid_positions) < 2:
             return list(valid_positions)
 
-        original_target = shape_template.target
         positions_by_footprint: Dict[Tuple[object, ...], Tuple[int, int]] = {}
-        try:
-            for position in sorted(valid_positions):
-                shape_template.target = position
-                footprint_key = shape_template.footprint_target_key(self.position)
-                positions_by_footprint.setdefault(footprint_key, position)
-        finally:
-            shape_template.target = original_target
+        for position in sorted(valid_positions):
+            footprint_key = shape_template.footprint_target_key(
+                self.position,
+                target_override=position,
+            )
+            positions_by_footprint.setdefault(footprint_key, position)
         return list(positions_by_footprint.values())
 
     def _prepare_aoe_caches(
@@ -4858,7 +5653,7 @@ class Entity(BaseBlock):
                 damage_types: List[str] = []
                 attack_source_item_uuid: Optional[UUID] = None
 
-                weapon_slot_attr = getattr(template, 'weapon_slot', None)
+                weapon_slot_attr = template.get_discovery_weapon_slot()
                 if weapon_slot_attr is not None:
                     weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
                     weapon_metadata = self.equipment.get_weapon_metadata(weapon_slot_attr)
@@ -5263,7 +6058,7 @@ class Entity(BaseBlock):
                     ))
                     continue
                 else:
-                    movement_mode = getattr(template, "movement_mode", MovementMode.WALKING)
+                    movement_mode = template.get_discovery_movement_mode()
                     rules_route_exists = self._has_subjective_path_destination(
                         movement_mode,
                     )
@@ -6018,9 +6813,14 @@ class Entity(BaseBlock):
         result.set_inventory_use_action_sources(inventory_use_actions)
         for use_template in inventory_use_actions:
             item_uuid = use_template.source_item_uuid
-            item = BaseBlock.get(item_uuid) if item_uuid else None
-            item_name = item.name if item else "Item"
-            item_stack = getattr(item, 'stack_count', None) if item else None
+            item = BaseBlock.get(item_uuid) if item_uuid is not None else None
+            if not isinstance(item, BaseItem):
+                raise ValueError(
+                    "inventory use action has no registered item source "
+                    f"{item_uuid}",
+                )
+            item_name = item.name
+            item_stack = item.stack_count
             use_sources.append(
                 (use_template, item_uuid, item_name, item_stack, True),
             )
@@ -6417,13 +7217,14 @@ class Entity(BaseBlock):
             record_action_timing("available_actions.result_model_ms", started)
 
         started = time.perf_counter() if timing else 0.0
+        effective_templates = self.get_effective_action_templates()
         discovery_variants = {
             template.uuid: template.get_discovery_variants(self)
-            for template in self.registered_actions
+            for template in effective_templates
         }
         result.set_registered_action_variants([
             variant
-            for template in self.registered_actions
+            for template in effective_templates
             for variant in discovery_variants[template.uuid]
         ])
         if timing:

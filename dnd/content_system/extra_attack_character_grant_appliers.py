@@ -8,8 +8,10 @@ from dnd.blocks.action_economy import (
 )
 from dnd.classes.fighter import (
     ExtraAttack,
-    ExtraAttackFeature,
     create_extra_attack_resource_handler,
+)
+from dnd.classes.permanent_feature_definitions import (
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
 )
 from dnd.content_system.character_build_validation import (
     CharacterGrantScheduleEntry,
@@ -17,14 +19,16 @@ from dnd.content_system.character_build_validation import (
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
+from dnd.content_system.character_grant_applier_runtime import (
+    character_grant_id,
+    grant_receipt,
+    require_grant_ref,
+)
 from dnd.content_system.character_grant_types import CharacterGrantReceipt
-from dnd.core.content.registration import get_content_declaration
 from dnd.core.feature_grants import AttackMultiplicityGrant
 
 
-EXTRA_ATTACK_FEATURE_REF = get_content_declaration(
-    ExtraAttackFeature,
-).ref
+EXTRA_ATTACK_FEATURE_REF = FIGHTER_EXTRA_ATTACK_DECLARATION.ref
 
 _ATTACKS_PER_ACTION_BY_FEATURE_LEVEL = {
     5: 2,
@@ -42,8 +46,7 @@ def apply_extra_attack_grant(
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
     """Install one source rank; the family action/handler is installed once."""
-    if entry.content_ref != EXTRA_ATTACK_FEATURE_REF:
-        raise ValueError("Extra Attack applier received a different content ref")
+    require_grant_ref(entry, EXTRA_ATTACK_FEATURE_REF)
     class_level = entry.provenance.class_level
     if class_level is None:
         raise ValueError("Extra Attack grant requires an exact class level")
@@ -61,7 +64,7 @@ def apply_extra_attack_grant(
             "Extra Attack grant requires an acquisition character level",
         )
 
-    grant_id = uuid5(context.character_id, entry.grant_token)
+    grant_id = character_grant_id(context, entry)
     entity = context.entity
     entity.action_economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
@@ -82,10 +85,9 @@ def apply_extra_attack_grant(
     except Exception:
         entity.action_economy.remove_attack_multiplicity_grant(grant_id)
         raise
-    return CharacterGrantReceipt(
-        grant_id=grant_id,
-        grant_token=entry.grant_token,
-        definition_ref=EXTRA_ATTACK_FEATURE_REF,
+    return grant_receipt(
+        context,
+        entry,
         resource_contribution_ids=(("extra_attacks", grant_id),),
         attack_multiplicity_grant_ids=(grant_id,),
     )

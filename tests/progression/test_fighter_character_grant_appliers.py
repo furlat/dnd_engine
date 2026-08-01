@@ -135,7 +135,6 @@ def _remove(
             runtime_entity_uuid=context.entity.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
 
@@ -241,6 +240,34 @@ def test_action_surge_thresholds_share_one_action_and_sum_uses(
         if isinstance(action, fighter.ActionSurge)
     ]
     assert "action_surge" not in context.entity.action_economy.resources
+
+
+def test_action_surge_installation_rolls_back_resource_when_binding_fails(
+    runtime: ContentSystemRuntime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A structural install either publishes every owned handle or none."""
+    entry = _entry(ACTION_SURGE_REF, class_level=2)
+    context = _context(runtime, entries=(entry,), fighter_level=2)
+
+    def reject_binding(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError("synthetic binding failure")
+
+    monkeypatch.setattr(
+        context.runtime,
+        "bind_granted_behavior",
+        reject_binding,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic binding failure"):
+        _apply(context, entry)
+
+    assert "action_surge" not in context.entity.action_economy.resources
+    assert all(
+        action.name != "Action Surge"
+        for action in context.entity.registered_actions
+    )
 
 
 def test_champion_critical_features_apply_only_to_weapon_attacks(

@@ -209,13 +209,13 @@ export class DndEngineClient {
 
   async toggleEntityHandler(
     entityUuid: string,
-    handlerName: string,
+    handlerUuid: string,
     request: ToggleHandlerRequest,
     signal?: AbortSignal,
   ): Promise<ToggleHandlerResponse> {
     return this.postModel(
       "ToggleHandlerResponse",
-      `/entity/${encodeURIComponent(entityUuid)}/handlers/${encodeURIComponent(handlerName)}/toggle`,
+      `/entity/${encodeURIComponent(entityUuid)}/handlers/${encodeURIComponent(handlerUuid)}/toggle`,
       request,
       signal,
     );

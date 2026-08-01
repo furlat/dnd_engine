@@ -18,6 +18,7 @@ from dnd.blocks.equipment import BodyArmor, Weapon
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import TargetType
+from dnd.core.condition_types import DurationType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
@@ -133,25 +134,34 @@ def test_call_lightning_grants_repeatable_strike_and_cleans_on_replacement() -> 
     assert caster.action_economy.actions.normalized_score == 0
 
     caster.action_economy.reset_all_costs()
-    replacement = JumpSpell(
+    independent_jump = JumpSpell(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=caster.uuid,
         cast_at_level=1,
     ).apply()
 
-    assert replacement is not None
-    assert not replacement.canceled
-    assert caster.get_action_template("Call Lightning Strike") is None
+    assert independent_jump is not None
+    assert not independent_jump.canceled
+    assert isinstance(
+        caster.get_action_template("Call Lightning Strike"),
+        CallLightningStrike,
+    )
     assert has_condition(caster, "Jump")
+    assert has_condition(caster, "Concentrating")
+    jump_effect = caster.active_conditions["Jump"]
+    assert jump_effect.duration.duration_type is DurationType.ROUNDS
+    assert jump_effect.duration.duration == 10
     caster.action_economy.reset_all_costs()
-    orphaned_strike = CallLightningStrike(
+    hp_before_second_strike = get_hp(target)
+    retained_strike = CallLightningStrike(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
         spell_dc=strike_template.spell_dc,
         damage_dice_count=strike_template.damage_dice_count,
     ).apply()
-    assert orphaned_strike is not None
-    assert orphaned_strike.canceled
+    assert retained_strike is not None
+    assert not retained_strike.canceled
+    assert get_hp(target) < hp_before_second_strike
 
 
 def test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle() -> None:
@@ -508,7 +518,10 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
     assert not result.canceled
     assert has_condition(ally, "Jump")
     assert not has_condition(caster, "Jump")
-    assert has_condition(caster, "Concentrating")
+    assert not has_condition(caster, "Concentrating")
+    jump_effect = ally.active_conditions["Jump"]
+    assert jump_effect.duration.duration_type is DurationType.ROUNDS
+    assert jump_effect.duration.duration == 10
     assert ally.jump_distance_multiplier.normalized_score == 3
     tripled_range = jump_template.get_range()
     assert tripled_range is not None
@@ -521,7 +534,7 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
     after_positions = {target.position for target in after_row.valid_targets}
     assert (14, 7) in after_positions
 
-    caster.remove_condition("Concentrating")
+    ally.remove_condition("Jump")
 
     assert not has_condition(ally, "Jump")
     assert ally.jump_distance_multiplier.normalized_score == 1
@@ -1651,8 +1664,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
 
     assert blocked is not None
     assert blocked.canceled
-    assert blocked.status_message is not None
-    assert "line of sight" in blocked.status_message.lower()
+    assert blocked.status_message == f"Position {hidden.position} not visible"
 
     reset_spell_regression_arena(45, 12)
     caster = create_spell_regression_actor(

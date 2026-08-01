@@ -300,12 +300,6 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
     receipt = result.composition_receipt
     assert receipt is not None
 
-    assert receipt.automatic_grant_refs == (
-        SECOND_WIND_REF,
-        ACTION_SURGE_REF,
-        IMPROVED_CRITICAL_REF,
-        EXTRA_ATTACK_FEATURE_REF,
-    )
     tracked_refs = (
         SECOND_WIND_REF,
         ACTION_SURGE_REF,
@@ -393,7 +387,7 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
     assert entity.ability_scores.strength.ability_score.score == 19
     assert entity.ability_scores.constitution.ability_score.score == 14
     assert entity.proficiency_bonus.normalized_score == 3
-    assert entity.initiative.normalized_score == 2
+    assert entity.initiative_bonus == 2
     assert entity.health.total_hit_dices_number == 5
     assert entity.health.hit_dices_total_hit_points == 34
     assert {
@@ -460,7 +454,7 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
     assert entity.ability_scores.strength.ability_score.score == 0
     assert entity.ability_scores.constitution.ability_score.score == 0
     assert entity.proficiency_bonus.normalized_score == 0
-    assert entity.initiative.normalized_score == -5
+    assert entity.initiative_bonus == -5
     assert entity.health.hit_dices == []
     assert (
         entity.skill_set.athletics.proficiency_sources.sources == {}

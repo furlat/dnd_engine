@@ -9,6 +9,9 @@ from pydantic import Field, ValidationError
 
 from devtools.generate_event_contract import import_dnd_modules
 from dnd.content_system.bootstrap import bootstrap_content_system
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
 from dnd.conditions import (
     Blinded,
     Charmed,
@@ -20,6 +23,7 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import BehaviorBinding
+from dnd.core.events import Event, EventPhase, EventType
 from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.entity import Entity, EntityConfig
@@ -27,9 +31,9 @@ from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.conjuration import GuardianWarded, SpiritGuardiansTriggered
-from dnd.spells.transmutation import SpikeGrowthZone
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial_effect_content import GREASE_SURFACE_RECIPE
+from dnd.spatial_effects import GroundEffect, SpatialEffect
+from dnd.spells.conjuration import GreaseZone
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
     build_subjective_world,
@@ -365,37 +369,72 @@ def test_tile_details_share_name_visibility_and_subjective_memory_policy(
         type(subjective_tile).model_validate(mismatched)
 
 
-def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
+def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
     presentation_grid: GridMap,
 ) -> None:
-    """Generic tile records retain the concrete zone mechanic's presentation."""
+    """An indexed ground effect is visible without duplicating its lifetime per tile."""
     source_uuid = uuid4()
+    observer = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Surface observer",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+        content_ref=PLAYER_CHARACTER_BODY_DECLARATION.ref,
+    )
+    observer.senses.visible = {(0, 0): True, (1, 0): True}
+    observer.senses.seen = {(0, 0), (1, 0)}
+
+    surface = materialize_spatial_effect(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        position=(1, 0),
+        faction=None,
+        expected_type=GroundEffect,
+    )
+    zone = GreaseZone(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=surface.uuid,
+        zone_center=(1, 0),
+    )
+    parent = Event(
+        source_entity_uuid=source_uuid,
+        event_type=EventType.CONDITION_APPLICATION,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    result = surface.install_controller(zone, parent_event=parent)
+    assert result is not None
+    assert not result.canceled
+
     tile = presentation_grid.get_tile(1, 0)
     assert tile is not None
-    zone = ZoneControlCondition(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-        name="Authored Zone",
-        description="Exact authored zone rules text.",
-        marker_name="Authored Zone",
-        affected_positions={(1, 0)},
+    assert "Grease" not in tile.active_conditions
+    assert "Grease Zone" not in tile.active_conditions
+    assert presentation_grid.get_spatial_effect_uuids_at((1, 0)) == {
+        surface.uuid,
+    }
+
+    observed = project_observed_tile(
+        presentation_grid,
+        (1, 0),
+        (observer.uuid,),
     )
-    zone_declaration = get_content_declaration(SpikeGrowthZone)
-    zone.behavior_binding = BehaviorBinding(
-        definition_ref=zone_declaration.ref,
-        provided_by_ref=zone_declaration.ref,
-        runtime_owner_uuid=source_uuid,
+    assert observed.conditions == []
+    assert observed.condition_details == []
+    assert observed.is_hazardous
+    assert observed.walking_cost == 2
+    assert len(observed.spatial_effects) == 1
+    assert observed.spatial_effects[0].uuid == str(surface.uuid)
+    assert observed.spatial_effects[0].layer == "ground_surface"
+    assert observed.spatial_effects[0].content_ref == (
+        APIContentRefSnapshot.model_validate(
+            GREASE_SURFACE_RECIPE.ref.model_dump(mode="python"),
+        )
     )
 
-    zone._apply_tile_markers()
-
-    marker = tile.active_conditions["Authored Zone"]
-    detail = project_condition_summary(marker)
-    assert detail.content_ref == APIContentRefSnapshot.model_validate(
-        zone_declaration.ref.model_dump(mode="python"),
-    )
-    assert detail.semantic_key == zone.get_semantic_key()
-    assert detail.description == "Exact authored zone rules text."
+    surface.retire()
+    assert SpatialEffect.get_effect(surface.uuid) is None
+    assert presentation_grid.get_spatial_effect_uuids_at((1, 0)) == set()
+    assert tile.walking_cost.normalized_score == 1
 
 
 @pytest.mark.parametrize(
@@ -403,8 +442,6 @@ def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
     (
         SimpleMarkerCondition,
         ConcentrationActionMarker,
-        SpiritGuardiansTriggered,
-        GuardianWarded,
         _WeaponCoatCondition,
     ),
 )

@@ -14,6 +14,9 @@ from dnd.content_system.character_build_validation import (
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
+from dnd.content_system.character_grant_receipt_cleanup import (
+    remove_character_grant_receipts,
+)
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
     LearnedReactionSpellHandle,
@@ -63,39 +66,6 @@ def _grant_runtime_id(
     grant_token: str,
 ) -> UUID:
     return uuid5(character_id, grant_token)
-
-
-def _remove_origin_innate_spellcasting(
-    context: BuiltinCharacterGrantContext,
-    receipts: list[CharacterGrantReceipt],
-) -> None:
-    """Remove a partially installed origin spell surface in reverse order."""
-    for receipt in reversed(receipts):
-        for action_uuid in reversed(receipt.action_uuids):
-            context.entity.unregister_action_by_uuid(action_uuid)
-        for handle in reversed(receipt.learned_reaction_spell_handles):
-            remove_handler = (
-                context.entity.spellcasting.remove_learned_reaction_spell_source(
-                    spell_ref=handle.spell_ref,
-                    source_id=handle.spellcasting_source_id,
-                    handler_uuid=handle.handler_uuid,
-                )
-            )
-            if remove_handler:
-                handler = context.entity.event_handlers.get(
-                    handle.handler_uuid,
-                )
-                if handler is not None:
-                    context.entity.remove_event_handler(handler)
-        for resource_name, source_id in reversed(
-            receipt.resource_contribution_ids,
-        ):
-            context.entity.action_economy.remove_resource_contribution(
-                resource_name,
-                source_id,
-            )
-        for source_id in reversed(receipt.spellcasting_source_ids):
-            context.entity.spellcasting.remove_source(source_id)
 
 
 def _install_origin_innate_spellcasting(
@@ -173,6 +143,15 @@ def _install_origin_innate_spellcasting(
                     recharge_type=RechargeType.LONG_REST,
                 )
                 resource_handles = ((resource_name, grant_uuid),)
+            receipt_index = len(receipts)
+            receipts.append(
+                CharacterGrantReceipt(
+                    grant_id=grant_uuid,
+                    grant_token=grant.grant_token,
+                    definition_ref=grant.spell_ref,
+                    resource_contribution_ids=resource_handles,
+                ),
+            )
 
             if row.spell_type is not None:
                 spell = row.spell_type(
@@ -202,6 +181,7 @@ def _install_origin_innate_spellcasting(
                     template=True,
                 )
                 if not isinstance(spell, SpellAction):
+                    spell.remove_from_register()
                     raise TypeError("origin spell row constructed another action")
                 try:
                     context.runtime.bind_granted_behavior(
@@ -211,20 +191,17 @@ def _install_origin_innate_spellcasting(
                     )
                     context.entity.register_action(spell)
                 except Exception:
-                    if resource_name is not None:
-                        context.entity.action_economy.remove_resource_contribution(
-                            resource_name,
-                            grant_uuid,
-                        )
+                    context.entity.unregister_action_by_uuid(spell.uuid)
+                    spell.remove_from_register()
                     raise
-                receipts.append(
+                receipts[receipt_index] = (
                     CharacterGrantReceipt(
                         grant_id=grant_uuid,
                         grant_token=grant.grant_token,
                         definition_ref=grant.spell_ref,
                         action_uuids=(spell.uuid,),
                         resource_contribution_ids=resource_handles,
-                    ),
+                    )
                 )
                 continue
 
@@ -257,13 +234,9 @@ def _install_origin_innate_spellcasting(
             except Exception:
                 if handler.uuid in context.entity.event_handlers:
                     context.entity.remove_event_handler(handler)
-                if resource_name is not None:
-                    context.entity.action_economy.remove_resource_contribution(
-                        resource_name,
-                        grant_uuid,
-                    )
+                handler.remove_from_register()
                 raise
-            receipts.append(
+            receipts[receipt_index] = (
                 CharacterGrantReceipt(
                     grant_id=grant_uuid,
                     grant_token=grant.grant_token,
@@ -276,7 +249,7 @@ def _install_origin_innate_spellcasting(
                         ),
                     ),
                     resource_contribution_ids=resource_handles,
-                ),
+                )
             )
 
 
@@ -288,7 +261,7 @@ def install_origin_innate_spellcasting(
     try:
         _install_origin_innate_spellcasting(context, receipts)
     except Exception:
-        _remove_origin_innate_spellcasting(context, receipts)
+        remove_character_grant_receipts(context.entity, receipts)
         raise
     return tuple(receipts)
 

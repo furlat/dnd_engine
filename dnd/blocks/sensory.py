@@ -16,7 +16,8 @@ from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
     Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
-    DeathEvent, EventQueue, SensoryUpdateEvent, SensoryUpdateReason
+    SpatialEffectChangeEvent, DeathEvent, EventQueue, SensoryUpdateEvent,
+    SensoryUpdateReason,
 )
 from dnd.core.base_block import SensesType, SenseMode, LightLevel
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData, HazardDetectedLogData
@@ -140,13 +141,6 @@ class Senses(BaseBlock):
             sm.sense_type == sense_type for sm in self.get_sense_modes()
         )
 
-    def has_sense_in_range(self, sense_type: SensesType, distance_feet: int) -> bool:
-        """Check if a sense type covers a specific distance."""
-        for sm in self.get_sense_modes():
-            if sm.sense_type == sense_type:
-                return sm.range_feet == 0 or distance_feet <= sm.range_feet
-        return False
-
     def get_effective_light_levels(self, observer_uuid: UUID) -> Dict[str, int]:
         """Return subjective light for every cell currently visible to an observer.
 
@@ -213,10 +207,6 @@ class Senses(BaseBlock):
         """Remove exactly one source-owned special sense contribution."""
         return self.sense_mode_sources.pop(source_id, None) is not None
 
-    def add_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
-        """Add a visible entity to the cache."""
-        self.entities[entity_uuid] = position
-
     def get_distance(self, position: Tuple[int, int]) -> int:
         """Return Euclidean tile distance from this senses position."""
         return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
@@ -224,16 +214,6 @@ class Senses(BaseBlock):
     def get_feet_distance(self, position: Tuple[int, int]) -> int:
         """Return Euclidean distance in feet from this senses position."""
         return self.get_distance(position) * 5
-
-    def get_path_to_entity(self, entity_uuid: UUID, max_path_length: Optional[int] = None) -> List[Tuple[int, int]]:
-        """Return a cached path to a visible entity, optionally bounded by length."""
-        if entity_uuid not in self.entities:
-            return []
-        path = self.paths.get(self.entities[entity_uuid], [])
-        if max_path_length is None or len(path) <= max_path_length:
-            return path
-        else:
-            return []
 
     def update_seen(self, visible: Dict[Tuple[int, int], bool]) -> None:
         """Add currently visible cells to the memory set."""
@@ -576,6 +556,7 @@ class SpatialSensesCallback:
         EventType.SPATIAL_OBJECT_CHANGED,
         EventType.SPATIAL_PERCEIVABILITY_CHANGED,
         EventType.SPATIAL_LIGHT_CHANGED,
+        EventType.SPATIAL_EFFECT_CHANGED,
     )
 
     def __init__(
@@ -694,6 +675,14 @@ class SpatialSensesCallback:
 
     def _spatial_event_might_affect_self(self, event: Event) -> bool:
         """Return whether a spatial event can change this observer's senses."""
+        if isinstance(event, SpatialEffectChangeEvent):
+            return (
+                not self.senses._paths_dirty
+                and any(
+                    self._position_touches_known_path_space(position)
+                    for position in event.get_affected_positions()
+                )
+            )
         if not isinstance(event, SpatialChangeEvent):
             return False
 
@@ -816,6 +805,10 @@ class SpatialSensesCallback:
 
     def _handle_spatial_event(self, event: Event) -> Optional[SensoryUpdateReason]:
         """Apply a spatial event or hint to this observer's cache."""
+        if isinstance(event, SpatialEffectChangeEvent):
+            self.senses.clear_visibility_cache()
+            self.senses._paths_dirty = True
+            return SensoryUpdateReason.SPATIAL
         if not isinstance(event, SpatialChangeEvent):
             return None
 
@@ -977,23 +970,6 @@ class SpatialSensesCallback:
             > LightLevel.DARKNESS.value
         )
 
-    def _refilter_entities_at(self, position: Tuple[int, int]) -> None:
-        """Re-check all entities at position. Add/remove from senses.entities.
-
-        Generates ENTITY_SPOTTED combat logs for newly visible hidden enemies
-        (e.g., light change illuminates a hidden entity).
-        """
-        grid = get_map()
-        old_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
-        for uuid in old_at_pos:
-            del self.senses.entities[uuid]
-        for ent_uuid in grid.get_entities_at(position):
-            if ent_uuid != self.owner_uuid:
-                self._try_add_visible_entity(ent_uuid, position)
-
-        new_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
-        self._log_newly_spotted_entities(new_at_pos - old_at_pos)
-
     def _log_newly_spotted_entities(self, entity_uuids: Set[UUID]) -> None:
         """Publish observer-scoped logs for newly perceivable hidden entities.
 
@@ -1055,14 +1031,6 @@ class SpatialSensesCallback:
                 self.senses.entities[entity_uuid] = position
                 return
         self.senses.entities.pop(entity_uuid, None)
-
-    def _update_visibility_at(self, position: Tuple[int, int]) -> None:
-        """Update senses.visible, entities, and objects at one position after light change.
-
-        Positions are confirmed in the geometric FOV. Only effective light is
-        checked here; shadowcast already happened when subscriptions were built.
-        """
-        self._update_visibility_for_light_positions({position})
 
     def _light_positions_requiring_visibility_refresh(
         self,
@@ -1141,15 +1109,6 @@ class SpatialSensesCallback:
             if position in positions
         }
         self._log_newly_spotted_entities(new_entity_uuids - old_entity_uuids)
-
-    def _refilter_objects_at(self, position: Tuple[int, int]) -> None:
-        """Re-check all objects at position. Add/remove from senses.objects."""
-        grid = get_map()
-        to_remove = [uuid for uuid, pos in self.senses.objects.items() if pos == position]
-        for uuid in to_remove:
-            del self.senses.objects[uuid]
-        for obj_uuid in grid.get_objects_at(position):
-            self._try_add_visible_object(obj_uuid, position)
 
     def _try_add_visible_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
         """Add object to senses.objects if in visible area."""
@@ -1359,6 +1318,14 @@ class SpatialSensesSystem:
         """Register or replace one observer callback and index its current facts."""
         self.callbacks_by_observer[callback.owner_uuid] = callback
         self.refresh_observer(callback.owner_uuid)
+
+    def unregister_observer(self, observer_uuid: UUID) -> None:
+        """Remove one observer callback and every reverse-index membership."""
+        self.callbacks_by_observer.pop(observer_uuid, None)
+        footprint = self.footprints_by_observer.pop(observer_uuid, None)
+        if footprint is not None:
+            self._remove_footprint(observer_uuid, footprint)
+        get_map().unsubscribe_entity(observer_uuid)
 
     def refresh_observer(self, observer_uuid: UUID) -> None:
         """Synchronize one observer's reverse indexes with its senses cache."""

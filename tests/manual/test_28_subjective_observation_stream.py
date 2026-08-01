@@ -64,7 +64,7 @@ from dnd.spells.illusion import HypnoticPatternEffect
 from dnd.spells.abjuration import ShieldBuff
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 from tests.engine.support import set_hp
-from dnd.tiles import create_spike_zone
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from server.agent_runtime.observation_journal import (
     _projection_cache,
     _completion_sequence_needs_immediate_projection,
@@ -324,7 +324,7 @@ def test_subjective_health_separates_normal_temporary_and_blocked_healing() -> N
     client, session_id, hero, _monster, _encounter = create_observation_game()
     max_hp = hero.get_max_hp()
     set_hp(hero, max_hp - 6)
-    hero.health.add_temporary_hit_points(4, hero.uuid)
+    hero.grant_temporary_hit_points(4, hero.uuid)
     hero.health.healing_blocked = True
 
     payload = client.get(
@@ -1450,9 +1450,8 @@ def test_visible_lever_charge_and_linked_tile_removals_replay_from_events() -> N
     """Item and tile mutation events keep the local subjective world coherent."""
     client, session_id, hero, _monster, _encounter = create_observation_game()
     grid = get_map()
-    spike_tiles, spike_handler = create_spike_zone({(3, 2), (4, 2)})
-    for tile in spike_tiles:
-        grid.set_tile(*tile.position, tile=tile, fire_event=False)
+    spike_positions = {(3, 2), (4, 2)}
+    spike_effect = materialize_spike_trap_effect(spike_positions)
     lever = materialize_item(
         trap_lever_recipe(charges=1),
         uuid4(),
@@ -1463,8 +1462,7 @@ def test_visible_lever_charge_and_linked_tile_removals_replay_from_events() -> N
         lever.bind_dynamic_use_action(
             PullLeverAction(
                 source_entity_uuid=lever.uuid,
-                trap_handler_uuid=spike_handler.uuid,
-                trap_tile_uuids=[tile.uuid for tile in spike_tiles],
+                trap_effect_uuid=spike_effect.uuid,
                 template=True,
             ),
         ),
@@ -1487,12 +1485,21 @@ def test_visible_lever_charge_and_linked_tile_removals_replay_from_events() -> N
 
     assert event is not None
     assert lever.charges == 0
-    assert state.known_objects[str(lever.uuid)].state["charges"] == 0
-    assert fresh.known_objects[str(lever.uuid)].state["charges"] == 0
-    for tile in spike_tiles:
-        key = f"{tile.position[0]},{tile.position[1]}"
+    replayed_charge_state = state.known_objects[
+        str(lever.uuid)
+    ].state.charge_state
+    fresh_charge_state = fresh.known_objects[
+        str(lever.uuid)
+    ].state.charge_state
+    assert replayed_charge_state is not None
+    assert fresh_charge_state is not None
+    assert replayed_charge_state.charges == 0
+    assert fresh_charge_state.charges == 0
+    for position in spike_positions:
+        key = f"{position[0]},{position[1]}"
         assert state.known_tiles[key].is_hazardous is False
         assert state.known_tiles[key].conditions == []
+        assert state.known_tiles[key].spatial_effects == []
         assert state.known_tiles[key] == fresh.known_tiles[key]
 
 

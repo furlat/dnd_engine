@@ -20,7 +20,14 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AutoHitModifier,
@@ -37,6 +44,7 @@ from dnd.spells.conjuration import Web
 from dnd.spells.evocation import Fireball, FireBolt, register_true_strike
 from dnd.spells.necromancy import FingerOfDeath
 from dnd.spells.transmutation import Telekinesis
+from dnd.spatial_effects import FieldEffect, SpatialEffect
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -145,6 +153,69 @@ def test_true_strike_cantrip_scaling_adds_radiant_die() -> None:
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert hp_before - get_hp(target) == 9
+
+
+def test_true_strike_never_mutates_shared_equipment_damage_state() -> None:
+    """Reactive handlers never observe a temporary radiant equipment rider."""
+    caster, target = _true_strike_scene(caster_level=5)
+    modifier_uuid = _force_attack_outcome(caster, AutoHitStatus.AUTOHIT)
+    equipment = caster.equipment
+    baseline = (
+        tuple(equipment.extra_attack_damage_dices),
+        tuple(equipment.extra_attack_damage_dices_numbers),
+        tuple(equipment.extra_attack_damage_bonus),
+        tuple(equipment.extra_attack_damage_type),
+    )
+    observed = []
+
+    def capture_equipment_state(event: Event, _: UUID) -> Event:
+        observed.append((
+            tuple(equipment.extra_attack_damage_dices),
+            tuple(equipment.extra_attack_damage_dices_numbers),
+            tuple(equipment.extra_attack_damage_bonus),
+            tuple(equipment.extra_attack_damage_type),
+        ))
+        return event
+
+    caster.add_event_handler(
+        EventHandler(
+            name="Observe True Strike equipment state",
+            source_entity_uuid=caster.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EXECUTION,
+                    event_source_entity_uuid=caster.uuid,
+                ),
+            ],
+            event_processor=capture_equipment_state,
+        )
+    )
+
+    available, row = _action_row(caster, "True Strike (Melee)")
+    target_row = next(
+        choice for choice in row.valid_targets
+        if choice.target_uuid == target.uuid
+    )
+    with fixed_dice_faces(10, 2, 3):
+        result = execute_by_index(
+            caster,
+            row.template_name,
+            target_row.index,
+            available=available,
+        )
+    _remove_attack_outcome(caster, modifier_uuid)
+
+    assert isinstance(result, SpellEvent)
+    assert not result.canceled
+    assert observed
+    assert all(snapshot == baseline for snapshot in observed)
+    assert (
+        tuple(equipment.extra_attack_damage_dices),
+        tuple(equipment.extra_attack_damage_dices_numbers),
+        tuple(equipment.extra_attack_damage_bonus),
+        tuple(equipment.extra_attack_damage_type),
+    ) == baseline
 
 
 def test_true_strike_miss_deals_no_damage() -> None:
@@ -368,6 +439,19 @@ def _globe_scene() -> tuple[Entity, Entity, Entity]:
     return globe_caster, inside, outside_caster
 
 
+def _active_globe_zone() -> tuple[FieldEffect, GlobeZone]:
+    """Resolve the one independently owned active Globe controller."""
+    matches = [
+        (effect, condition)
+        for effect in SpatialEffect.active_effects()
+        if isinstance(effect, FieldEffect)
+        for condition in effect.active_conditions.values()
+        if isinstance(condition, GlobeZone)
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
 def test_globe_direction_level_and_concentration_contract() -> None:
     """Old cases 9-12, 14, and 16: direction, level, and cleanup are exact."""
     globe_caster, inside, outside_caster = _globe_scene()
@@ -420,6 +504,11 @@ def test_globe_direction_level_and_concentration_contract() -> None:
 
     globe_caster.remove_condition("Concentrating")
     assert not has_condition(globe_caster, "Globe of Invulnerability Zone")
+    assert not any(
+        isinstance(condition, GlobeZone)
+        for effect in SpatialEffect.active_effects()
+        for condition in effect.active_conditions.values()
+    )
     outside_caster.action_economy.reset_all_costs()
     post_cleanup_hp = get_hp(inside)
     with fixed_dice_faces(10, 4):
@@ -435,7 +524,7 @@ def test_globe_direction_level_and_concentration_contract() -> None:
 
 def test_globe_partially_filters_aoe_and_uses_base_spell_level() -> None:
     """Old cases 13 and 15: only protected targets are removed from an AoE."""
-    globe_caster, inside, outside_caster = _globe_scene()
+    _globe_caster, inside, outside_caster = _globe_scene()
     outside_target = create_spell_regression_actor(
         "Outside Ally",
         (14, 7),
@@ -458,14 +547,13 @@ def test_globe_partially_filters_aoe_and_uses_base_spell_level() -> None:
     assert not result.canceled
     assert get_hp(inside) == inside_hp
     assert get_hp(outside_target) == outside_hp - 44
-    assert has_condition(globe_caster, "Globe of Invulnerability Zone")
+    _active_globe_zone()
 
 
 def test_globe_is_immobile() -> None:
     """Old case 17: the protected geometry remains anchored at cast time."""
     globe_caster, inside, outside_caster = _globe_scene()
-    zone = globe_caster.active_conditions["Globe of Invulnerability Zone"]
-    assert isinstance(zone, GlobeZone)
+    _, zone = _active_globe_zone()
     original_positions = set(zone.affected_positions)
 
     Entity.update_entity_position(globe_caster, (20, 12))
@@ -486,7 +574,7 @@ def test_globe_is_immobile() -> None:
 
 def test_globe_excludes_low_level_zone_effects() -> None:
     """Old case 18: a low-level Web cannot apply inside the protected area."""
-    globe_caster, inside, outside_caster = _globe_scene()
+    _globe_caster, inside, outside_caster = _globe_scene()
     force_save_result(inside, "dexterity", succeeds=False)
     outside_caster.action_economy.reset_all_costs()
 
@@ -500,7 +588,7 @@ def test_globe_excludes_low_level_zone_effects() -> None:
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert not has_condition(inside, "Restrained")
-    assert has_condition(globe_caster, "Globe of Invulnerability Zone")
+    _active_globe_zone()
 
 
 def _banishment_scene(*, save_succeeds: bool) -> tuple[Entity, Entity, Entity]:

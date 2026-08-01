@@ -157,8 +157,9 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
         position=(2, 3),
         faction="heroes",
     )
-    hero.action_economy.add_resource(
+    hero.action_economy.add_resource_contribution(
         "heroic_focus",
+        "fixture.heroic_focus",
         maximum=2,
         recharge_type=RechargeType.LONG_REST,
     )
@@ -168,7 +169,7 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
         position=(7, 3),
         faction="monsters",
     )
-    monster.health.add_temporary_hit_points(3, monster.uuid)
+    monster.grant_temporary_hit_points(3, monster.uuid)
     encounter = _start_encounter(hero=hero, monster=monster, name="Terminal Summary")
     store.bind_directory_game_id(encounter.uuid, hosted_game_id)
     store.capture_active_encounter(encounter)

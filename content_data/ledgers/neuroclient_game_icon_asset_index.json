@@ -1,5 +1,5 @@
 {
-  "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
+  "asset_index_digest": "3b17d6d5715c5bd92bf4a251a98a60707160fe20d2775efc8b23512243b8a8a6",
   "assets": [
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.action-surge.webp",
@@ -135,6 +135,21 @@
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.end-rage.webp",
       "asset_sha256": "f2b9d962f0758f616d5fac6f367882dfd2b8e9bd4dde519f3bd4158bd1b51880",
       "icon_key": "action.end-rage"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.escape-black-tentacles-dexterity.webp",
+      "asset_sha256": "97e6aab0006ee0d8091f383fbc44b613deb1fa6977abdd0ef1cc70ee9ba73589",
+      "icon_key": "action.escape-black-tentacles-dexterity"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.escape-black-tentacles-strength.webp",
+      "asset_sha256": "73e5115e270a92643b8c66ed6b93ef31acb95ec8b804981d0c970592d4d47d5d",
+      "icon_key": "action.escape-black-tentacles-strength"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/action.escape-entangle.webp",
+      "asset_sha256": "a86fdcf8b891eeccbbe9c554d1ff98ca0ad67bfef355bb77d9d965444cd53e9f",
+      "icon_key": "action.escape-entangle"
     },
     {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/action.escape-web.webp",
@@ -1202,6 +1217,11 @@
       "icon_key": "condition.dnd-tile-conditions-zonemarkercondition"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/condition.environment.wet.webp",
+      "asset_sha256": "3c0249c8b2695c12f0b2e16f68fadcd4c43e9b4eaa328a96fe4aa5c865e7e975",
+      "icon_key": "condition.environment.wet"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/condition.generic.webp",
       "asset_sha256": "67d6f0826fb1f010ef7f3f223ca656535c9765e515c99c82c636b979cc062a90",
       "icon_key": "condition.generic"
@@ -1957,6 +1977,16 @@
       "icon_key": "spell.enlarge-reduce"
     },
     {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.entangle.webp",
+      "asset_sha256": "66ba60340e1a2df9b245afac85620ae0df65c23ba5c4d08cbe810650db358ec2",
+      "icon_key": "spell.entangle"
+    },
+    {
+      "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.evards-black-tentacles.webp",
+      "asset_sha256": "39e02b872b661ddca1c774b524587a0b91aa8b85acc4a96da07fef96e04c6eb7",
+      "icon_key": "spell.evards-black-tentacles"
+    },
+    {
       "asset_path": "/game-icons/fantasy-classic-v1/icons/spell.expeditious-retreat.webp",
       "asset_sha256": "5b5228208bdfc4462925bd7e817bf774b3f7f99f9b15d8d43938ceb10be72308",
       "icon_key": "spell.expeditious-retreat"
@@ -2579,9 +2609,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 515,
+    "asset_count": 521,
     "schema_version": 3,
-    "sha256": "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c",
+    "sha256": "04f7ce7a14171d0ffd07dddd4cb5d3dcf0a0cf43f15a3d38ec7d17f77f887913",
     "style_id": "fantasy-classic-v1"
   }
 }

@@ -14,8 +14,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 import dnd.classes.barbarian as barbarian
-import dnd.classes.feats as feats
-import dnd.classes.fighter as fighter
 import dnd.classes.rage as rage
 import dnd.classes.sorcerer as sorcerer
 import dnd.conditions as conditions
@@ -33,7 +31,6 @@ import dnd.spells.evocation as evocation
 import dnd.spells.illusion as illusion
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
-import dnd.tile_conditions as tile_conditions
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.descriptors import (
@@ -66,8 +63,6 @@ from dnd.content_system.action_definitions import (
 )
 from dnd.content_system.reaction_definitions import (
     PARRY_REACTION_DECLARATION,
-    PROTECTION_REACTION_DECLARATION,
-    RETALIATION_REACTION_DECLARATION,
 )
 
 
@@ -92,6 +87,7 @@ def _srd(
     definition_kind: ContentDefinitionKind,
     content_id: str,
     *,
+    visibility: ContentVisibility = ContentVisibility.PUBLIC,
     dependencies: tuple[ContentDependency, ...] = (),
 ) -> ConditionBehaviorIdentitySpec:
     return ConditionBehaviorIdentitySpec(
@@ -99,6 +95,7 @@ def _srd(
         definition_kind=definition_kind,
         pack_id=SRD_5_1_PACK_ID,
         content_id=content_id,
+        visibility=visibility,
         dependencies=dependencies,
     )
 
@@ -123,80 +120,27 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
-    # SRD class and feat behaviors represented by persistent conditions.
-    _srd(barbarian.BrutalCritical, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.brutal_critical"),
-    _srd(barbarian.DangerSense, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.danger_sense"),
-    _srd(barbarian.FastMovement, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.fast_movement"),
-    _srd(barbarian.FeralInstinct, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.feral_instinct"),
-    _srd(barbarian.IndomitableMight, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.indomitable_might"),
-    _srd(barbarian.IntimidatingPresenceFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.intimidating_presence"),
+    # Evented class-feature states remain conditions. Permanent character
+    # structure is declared in permanent_feature_definitions and installed by
+    # reversible grant appliers.
     _srd(barbarian.IntimidatingPresenceImmunity, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.intimidating_presence_immunity"),
-    _srd(barbarian.MindlessRage, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.mindless_rage"),
-    _srd(barbarian.PersistentRage, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.persistent_rage"),
-    _srd(barbarian.PrimalChampion, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.primal_champion"),
-    _srd(barbarian.RecklessAttackFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.reckless_attack"),
     _srd(barbarian.RecklessAttacking, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.reckless_attacking"),
-    _srd(barbarian.RelentlessRage, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.relentless_rage"),
-    _srd(
-        barbarian.Retaliation,
-        ContentDefinitionKind.CLASS_FEATURE,
-        "class_feature.barbarian.retaliation",
-        dependencies=(
-            ContentDependency(
-                relation=ContentDependencyRelation.INSTALLS_HANDLER,
-                target_ref=RETALIATION_REACTION_DECLARATION.ref,
-                phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-                notes=(
-                    "The persistent class feature installs the independently "
-                    "authored Retaliation reaction."
-                ),
-            ),
-        ),
-    ),
-    _srd(feats.LuckyFeature, ContentDefinitionKind.FEAT, "feat.lucky"),
-    _srd(fighter.ActionSurgeFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.action_surge"),
-    _srd(fighter.ExtraAttackFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.extra_attack"),
-    _srd(fighter.FightingStyleArchery, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.archery"),
-    _srd(fighter.FightingStyleDefense, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.defense"),
-    _srd(fighter.FightingStyleDueling, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.dueling"),
-    _srd(
-        fighter.FightingStyleProtection,
-        ContentDefinitionKind.CLASS_FEATURE,
-        "class_feature.fighter.fighting_style.protection",
-        dependencies=(
-            ContentDependency(
-                relation=ContentDependencyRelation.INSTALLS_HANDLER,
-                target_ref=PROTECTION_REACTION_DECLARATION.ref,
-                phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-                notes=(
-                    "The persistent fighting style installs the independently "
-                    "authored Protection reaction."
-                ),
-            ),
-        ),
-    ),
-    _srd(fighter.FightingStyleTwoWeaponFighting, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.two_weapon_fighting"),
-    _srd(fighter.GreatWeaponFighting, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.fighting_style.great_weapon_fighting"),
-    _srd(fighter.ImprovedCritical, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.improved_critical"),
-    _srd(fighter.Indomitable, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.indomitable"),
-    _srd(fighter.SecondWindFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.second_wind"),
-    _srd(fighter.SuperiorCritical, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.superior_critical"),
-    _srd(fighter.Survivor, ContentDefinitionKind.CLASS_FEATURE, "class_feature.fighter.survivor"),
     _srd(rage.Frenzied, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.frenzied"),
-    _srd(rage.FrenzyFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.frenzy"),
-    _srd(rage.RageFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.rage"),
     _srd(rage.Raging, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.raging"),
-    _srd(sorcerer.DraconicResilience, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_resilience"),
     _srd(sorcerer.DraconicPresenceAura, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.aura"),
     _srd(sorcerer.DraconicPresenceImmunity, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.immunity"),
     _srd(sorcerer.DragonWingsActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.dragon_wings.active"),
     _srd(sorcerer.ElementalAffinityResistance, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.elemental_affinity.resistance"),
     _srd(sorcerer.MetamagicActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.metamagic_active"),
-    _srd(sorcerer.SorceryPointsFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.sorcery_points"),
 
     # Core condition wrappers whose mechanics are supplied by SRD spells.
     _srd(conditions.InvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.invisibility"),
     _srd(conditions.GreaterInvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.greater_invisibility"),
+    _original(
+        conditions.Wet,
+        ContentDefinitionKind.CONDITION,
+        "condition.environment.wet",
+    ),
 
     # Original extension and item-owned condition behaviors.
     _original(
@@ -204,7 +148,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
         ContentDefinitionKind.CONDITION,
         "condition.aegis_spark",
     ),
-    _original(aegis_spark.AegisTrainingFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.aegis_training", visibility=ContentVisibility.DEVELOPER),
     _original(field_focus.FieldFocus, ContentDefinitionKind.CONDITION, "condition.field_focus"),
     _original(
         consumables._FireWeaponCoatCondition,
@@ -245,7 +188,10 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(monster_traits.GhoulParalysisEffect, ContentDefinitionKind.TRAIT, "trait.ghoul_paralysis"),
     _srd(monster_traits.KeenHearingAndSightFeature, ContentDefinitionKind.TRAIT, "trait.keen_hearing_and_sight"),
     _srd(monster_traits.KeenHearingAndSmellFeature, ContentDefinitionKind.TRAIT, "trait.keen_hearing_and_smell"),
-    _srd(monster_traits.LeadershipAura, ContentDefinitionKind.TRAIT, "trait.leadership_aura"),
+    # The public rules-facing state is the exact ally membership.  The
+    # SpatialEffect-owned LeadershipAura is an internal controller and does
+    # not create a second authored condition identity.
+    _srd(monster_traits.LeadershipMembership, ContentDefinitionKind.TRAIT, "trait.leadership_aura"),
     _srd(monster_traits.MartialAdvantageFeature, ContentDefinitionKind.TRAIT, "trait.martial_advantage"),
     _srd(monster_traits.PackTacticsFeature, ContentDefinitionKind.TRAIT, "trait.pack_tactics"),
     _srd(
@@ -291,6 +237,30 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(conjuration.CloudkillZone, ContentDefinitionKind.CONDITION, "condition.spell.cloudkill.zone"),
     _srd(conjuration.DarknessZone, ContentDefinitionKind.CONDITION, "condition.spell.darkness.zone"),
     _srd(conjuration.DaylightZone, ContentDefinitionKind.CONDITION, "condition.spell.daylight.zone"),
+    _srd(
+        conjuration.EntangleRestrained,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.entangle.restrained_source",
+        visibility=ContentVisibility.INTERNAL,
+    ),
+    _srd(
+        conjuration.EntangleZone,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.entangle.zone",
+        visibility=ContentVisibility.INTERNAL,
+    ),
+    _srd(
+        conjuration.BlackTentaclesRestrained,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.evards_black_tentacles.restrained_source",
+        visibility=ContentVisibility.INTERNAL,
+    ),
+    _srd(
+        conjuration.BlackTentaclesZone,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.evards_black_tentacles.zone",
+        visibility=ContentVisibility.INTERNAL,
+    ),
     _srd(conjuration.FogCloudZone, ContentDefinitionKind.CONDITION, "condition.spell.fog_cloud.zone"),
     _srd(conjuration.GreaseZone, ContentDefinitionKind.CONDITION, "condition.spell.grease.zone"),
     _srd(conjuration.HeroesFeastBuff, ContentDefinitionKind.CONDITION, "condition.spell.heroes_feast"),
@@ -298,11 +268,27 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(conjuration.InsectPlagueZone, ContentDefinitionKind.CONDITION, "condition.spell.insect_plague.zone"),
     _srd(conjuration.NauseatedCondition, ContentDefinitionKind.CONDITION, "condition.spell.stinking_cloud.nauseated"),
     _srd(conjuration.SleetStormZone, ContentDefinitionKind.CONDITION, "condition.spell.sleet_storm.zone"),
+    _srd(
+        conjuration.SpiritGuardiansSlowSource,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.spirit_guardians.slow_source",
+        visibility=ContentVisibility.INTERNAL,
+    ),
     _srd(conjuration.SpiritGuardiansSlowed, ContentDefinitionKind.CONDITION, "condition.spell.spirit_guardians.slowed"),
     _srd(conjuration.SpiritGuardiansZone, ContentDefinitionKind.CONDITION, "condition.spell.spirit_guardians.zone"),
     _srd(conjuration.StinkingCloudZone, ContentDefinitionKind.CONDITION, "condition.spell.stinking_cloud.zone"),
-    _srd(conjuration.WebRestrained, ContentDefinitionKind.CONDITION, "condition.spell.web.restrained"),
-    _srd(conjuration.WebZone, ContentDefinitionKind.CONDITION, "condition.spell.web.zone"),
+    _srd(
+        conjuration.WebRestrained,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.web.restrained_source",
+        visibility=ContentVisibility.INTERNAL,
+    ),
+    _srd(
+        conjuration.WebZone,
+        ContentDefinitionKind.CONDITION,
+        "condition.spell.web.zone",
+        visibility=ContentVisibility.INTERNAL,
+    ),
     _srd(divination.GuidanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.guidance"),
     _srd(divination.SeeInvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.see_invisibility"),
     _srd(divination.TrueSeeingEffect, ContentDefinitionKind.CONDITION, "condition.spell.true_seeing"),
@@ -350,10 +336,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(transmutation.RegeneratingEffect, ContentDefinitionKind.CONDITION, "condition.spell.regenerate"),
     _srd(transmutation.SlowedEffect, ContentDefinitionKind.CONDITION, "condition.spell.slow"),
     _srd(transmutation.SpikeGrowthZone, ContentDefinitionKind.CONDITION, "condition.spell.spike_growth.zone"),
-
-    # Original map-authored conditions.
-    _original(tile_conditions.SpikeTrapCondition, ContentDefinitionKind.CONDITION, "condition.tile.spike_trap"),
-    _original(tile_conditions.ZoneMarkerCondition, ContentDefinitionKind.CONDITION, "condition.tile.zone_marker"),
 )
 
 
@@ -361,41 +343,19 @@ _GRANTED_ACTION_TYPES_BY_CONDITION: Mapping[
     type[BaseCondition],
     tuple[type[BaseAction], ...],
 ] = MappingProxyType({
-    barbarian.IntimidatingPresenceFeature: (
-        barbarian.IntimidatingPresence,
-        barbarian.ExtendIntimidatingPresence,
-    ),
-    barbarian.RecklessAttackFeature: (barbarian.RecklessAttack,),
-    fighter.ActionSurgeFeature: (fighter.ActionSurge,),
-    fighter.ExtraAttackFeature: (fighter.ExtraAttack,),
-    fighter.SecondWindFeature: (fighter.SecondWind,),
     rage.Frenzied: (rage.FrenziedStrike,),
-    rage.FrenzyFeature: (rage.Frenzy,),
-    rage.RageFeature: (rage.Rage, rage.EndRage),
-    sorcerer.SorceryPointsFeature: (
-        sorcerer.ConvertSPToSlot,
-        sorcerer.ConvertSlotToSP,
-        sorcerer.DistantSpell,
-        sorcerer.QuickenedSpell,
-        sorcerer.TwinnedSpell,
-    ),
-    aegis_spark.AegisTrainingFeature: (aegis_spark.AegisSpark,),
     monster_traits.RampageAvailable: (monster_traits.NaturalAttack,),
+    abjuration.FreedomOfMovementEffect: (
+        abjuration.FreedomOfMovementEscape,
+    ),
     conjuration.WebRestrained: (conjuration.EscapeWebAction,),
+    conjuration.EntangleRestrained: (conjuration.EscapeEntangleAction,),
+    conjuration.BlackTentaclesRestrained: (
+        conjuration.EscapeBlackTentaclesStrengthAction,
+        conjuration.EscapeBlackTentaclesDexterityAction,
+    ),
     transmutation.ExpeditiousRetreatEffect: (transmutation.BonusDash,),
 })
-
-_ROOT_OWNED_CONDITION_TYPES = frozenset({
-    barbarian.IntimidatingPresenceFeature,
-    barbarian.RecklessAttackFeature,
-    fighter.ActionSurgeFeature,
-    fighter.ExtraAttackFeature,
-    fighter.SecondWindFeature,
-    rage.FrenzyFeature,
-    rage.RageFeature,
-    sorcerer.SorceryPointsFeature,
-})
-
 
 def _granted_action_dependencies(
     condition_type: type[BaseCondition],
@@ -500,11 +460,6 @@ def _declare_condition_behavior(
                 tags=(
                     "condition",
                     group,
-                    *(
-                        ("root_owned",)
-                        if spec.condition_type in _ROOT_OWNED_CONDITION_TYPES
-                        else ()
-                    ),
                 ),
                 visibility=spec.visibility,
                 presentation=ContentPresentation(

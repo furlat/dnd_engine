@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import json
 import sys
 import tomllib
 from collections import defaultdict
@@ -27,6 +26,7 @@ from dnd.content_system.import_boundary import import_content_pack_module
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import validate_sha256
 from dnd.core.content.pack_contracts import ContentPackManifest
 from dnd.core.content.provenance import ContentSource
@@ -1744,6 +1744,11 @@ def _content_set_digest(
                     if declaration.item_definition is not None
                     else None
                 ),
+                "spatial_effect_definition": (
+                    declaration.spatial_effect_definition.model_dump(mode="json")
+                    if declaration.spatial_effect_definition is not None
+                    else None
+                ),
                 "definition_payload": (
                     declaration.definition_payload.model_dump(mode="json")
                     if declaration.definition_payload is not None
@@ -1792,11 +1797,4 @@ def _content_set_digest(
             )
         ],
     }
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)

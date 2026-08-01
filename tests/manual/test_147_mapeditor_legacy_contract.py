@@ -10,11 +10,12 @@ from pytest import MonkeyPatch
 
 from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.encounter import Encounter
+from dnd.environmental_effects import SpikeTrapGroundEffect
 from dnd.entity import Entity
 from dnd.items.environment_interactables import PullLeverAction, TrapLever
+from dnd.spatial_effects import SpatialEffect
 from server.event_server import app, sim
 from server.event_stream import event_stream
 from tests.engine.test_encounter_apis import (
@@ -395,7 +396,7 @@ def _assert_floor_location_authority(
 def _assert_loaded_trap_lever_is_live(
     snapshot: dict[str, object],
 ) -> None:
-    """The regenerated lever targets the regenerated trap handler and tiles."""
+    """The regenerated lever targets the regenerated spatial-effect owner."""
     floor_objects = cast(
         list[dict[str, object]],
         snapshot["floor_objects"],
@@ -410,25 +411,36 @@ def _assert_loaded_trap_lever_is_live(
     assert len(lever.use_action_templates) == 1
     action = lever.use_action_templates[0]
     assert isinstance(action, PullLeverAction)
-    assert action.trap_handler_uuid is not None
+    assert action.trap_effect_uuid is not None
 
     tiles = cast(list[dict[str, object]], snapshot["tiles"])
-    spike_positions = {
-        (cast(int, tile["x"]), cast(int, tile["y"]))
-        for tile in tiles
-        if "Spike Trap" in cast(list[str], tile["conditions"])
-    }
-    linked_positions = set()
-    for tile_uuid in action.trap_tile_uuids:
-        tile = BaseBlock.get(tile_uuid)
-        assert tile is not None
-        linked_positions.add(tile.position)
-    assert linked_positions == spike_positions
-    for position in spike_positions:
-        assert any(
-            handler.uuid == action.trap_handler_uuid
-            for handler in EventQueue.get_spatial_handlers_at(position)
+    spike_positions: set[tuple[int, int]] = set()
+    for tile in tiles:
+        effect_rows = cast(
+            list[dict[str, object]],
+            tile["spatial_effects"],
         )
+        for effect_row in effect_rows:
+            content_ref = cast(
+                dict[str, object],
+                effect_row["content_ref"],
+            )
+            if (
+                content_ref["content_id"]
+                == "spatial_effect.environment.spike_trap"
+            ):
+                spike_positions.add((
+                    cast(int, tile["x"]),
+                    cast(int, tile["y"]),
+                ))
+                break
+    effect = SpatialEffect.get_effect(action.trap_effect_uuid)
+    assert isinstance(effect, SpikeTrapGroundEffect)
+    assert effect.affected_positions == spike_positions
+    assert all(
+        get_map().get_spatial_effect_uuids_at(position) == {effect.uuid}
+        for position in spike_positions
+    )
 
 
 def test_mapeditor_save_lifecycle_and_crypt_roundtrip_are_exact(

@@ -34,6 +34,7 @@ from dnd.ai.contracts.observation import (
     ObservationTileFact,
     SubjectiveWorldState,
 )
+from dnd.core.item_types import ItemObservationState
 from ai.subjective.models import AgentState
 
 
@@ -334,7 +335,15 @@ def _world(*, cursor: int = 3, enemy_hp: int = 12) -> SubjectiveWorldState:
                 knowledge_state=KnowledgeState.VISIBLE,
                 observer_uuids=["actor"],
                 position=(3, 3),
-                state={"is_open": None, "material": "oak"},
+                state=ItemObservationState(
+                    blocks_movement=True,
+                    blocks_vision=True,
+                    is_pickable=False,
+                    is_usable=True,
+                    stack_count=1,
+                    is_hazardous=False,
+                    is_open=None,
+                ),
             ),
         },
         known_tiles={

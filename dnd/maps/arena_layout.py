@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import GridMap
+from dnd.core.item_types import ItemBlockingChannel, ItemDirection
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -22,7 +23,7 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.torches import WallTorch
-from dnd.tiles import create_spike_zone
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.core.base_tiles import difficult_terrain_factory
 
 ARENA_WIDTH = 15
@@ -38,9 +39,11 @@ WALL_POSITIONS: Tuple[Tuple[int, int], ...] = tuple(
     if (WALL_COLUMN, y) != DOOR_POSITION
 )
 
-DOOR_DIRECTIONS: Tuple[str, ...] = ("west",)
-WALL_DIRECTIONS: Tuple[str, ...] = DOOR_DIRECTIONS
-STANDARD_BLOCKING_CHANNELS: Tuple[str, ...] = DIRECTIONAL_CHANNELS
+DOOR_DIRECTIONS: Tuple[ItemDirection, ...] = ("west",)
+WALL_DIRECTIONS: Tuple[ItemDirection, ...] = DOOR_DIRECTIONS
+STANDARD_BLOCKING_CHANNELS: Tuple[ItemBlockingChannel, ...] = (
+    DIRECTIONAL_CHANNELS
+)
 
 WATER_POSITIONS: Tuple[Tuple[int, int], ...] = (
     *((2, y) for y in range(4)),
@@ -68,7 +71,7 @@ class StandardArenaObjects:
     wall_torches: Tuple[WallTorch, ...]
     healing_potion_uuids: Tuple[UUID, ...]
     trap_lever: TrapLever
-    spike_handler_uuid: UUID
+    spike_effect_uuid: UUID
 
 
 def create_standard_arena_floor(grid: GridMap) -> None:
@@ -116,14 +119,6 @@ def darken_arena(grid: GridMap) -> None:
         tile.default_light = LightLevel.DARKNESS
 
 
-def build_dark_standard_barrier_fixture(grid: GridMap) -> StandardBarrierObjects:
-    """Create a dark arena with only the standard directional wall and door."""
-    create_standard_arena_floor(grid)
-    barrier = place_standard_directional_barrier(grid)
-    darken_arena(grid)
-    return barrier
-
-
 def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     """Build the standard arena environment without combat entities."""
     create_standard_arena_floor(grid)
@@ -132,9 +127,9 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     for position in WATER_POSITIONS:
         grid.set_tile(position[0], position[1], walkable=False, visible=True, name="Water")
 
-    spike_tiles, spike_handler = create_spike_zone(set(SPIKE_ZONE_POSITIONS))
-    for tile in spike_tiles:
-        grid.set_tile(tile.position[0], tile.position[1], tile=tile, fire_event=False)
+    spike_effect = materialize_spike_trap_effect(
+        set(SPIKE_ZONE_POSITIONS),
+    )
 
     for position in DIFFICULT_TERRAIN_POSITIONS:
         tile = difficult_terrain_factory(position)
@@ -166,8 +161,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
 
     lever_action = PullLeverAction(
         source_entity_uuid=uuid4(),
-        trap_handler_uuid=spike_handler.uuid,
-        trap_tile_uuids=[tile.uuid for tile in spike_tiles],
+        trap_effect_uuid=spike_effect.uuid,
         template=True,
     )
     lever = materialize_item(
@@ -189,5 +183,5 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         wall_torches=wall_torches,
         healing_potion_uuids=tuple(healing_potion_uuids),
         trap_lever=lever,
-        spike_handler_uuid=spike_handler.uuid,
+        spike_effect_uuid=spike_effect.uuid,
     )

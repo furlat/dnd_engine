@@ -90,7 +90,7 @@ from dnd.core.base_actions import (
 from dnd.core.action_execution import movement_continuation_scope
 
 from server.api_models import (
-    APIAvailableActions, APIServerTiming,
+    APIAvailableActions, APIServerTiming, ActionExecutionAuthorization,
     SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
@@ -208,10 +208,10 @@ from server.game_creation_catalog import build_game_creation_catalog
 from server.game_creation_composition import (
     CharacterRulesetMismatchError,
     GameCreationCompositionError,
-    character_ruleset_digest,
     normalize_encounter_recipe,
     required_character_ids,
     required_saved_roster_ids,
+    shared_deployment_ruleset_digest,
 )
 from server.game_creation_preview import (
     GameCreationPreviewError,
@@ -1368,7 +1368,7 @@ def _handler_http_exception(
     status_code: int,
     code: str,
     message: str,
-    handler_name: Optional[str] = None,
+    handler_uuid: Optional[str] = None,
 ) -> HTTPException:
     """Create a structured handler API error.
 
@@ -1377,10 +1377,10 @@ def _handler_http_exception(
         status_code: HTTP status code for the response.
         code: Machine-readable error code.
         message: Human-readable error message.
-        handler_name: Optional handler name supplied by the client.
+        handler_uuid: Optional handler UUID supplied by the client.
 
     Returns:
-        HTTP exception with valid handler names and handler summaries.
+        HTTP exception with exact valid handler summaries.
     """
     handlers = _serialize_entity_handlers(entity)
     return _api_http_exception(
@@ -1389,8 +1389,7 @@ def _handler_http_exception(
         message=message,
         entity_uuid=str(entity.uuid),
         entity_name=entity.name,
-        handler_name=handler_name,
-        valid_handler_names=[handler.name for handler in handlers],
+        handler_uuid=handler_uuid,
         handlers=[handler.model_dump(mode="json") for handler in handlers],
     )
 
@@ -1886,7 +1885,6 @@ def _mapeditor_context() -> dict:
     """
     catalog = build_catalog()
     saved_maps = list_saved_editor_maps().maps
-    current_map = None
     try:
         snapshot = get_editor_snapshot()
         current_map = {
@@ -1895,6 +1893,7 @@ def _mapeditor_context() -> dict:
             "floor_object_count": len(snapshot.floor_objects),
         }
     except Exception:
+        logger.exception("Failed to build current map-editor correction context")
         current_map = None
 
     return {
@@ -1941,20 +1940,11 @@ def _mapeditor_http_exception(
     )
 
 
-def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity:
-    """Validate that a session can perform an action with an entity.
-
-    Args:
-        session_id_str: UUID string for the acting session.
-        entity_uuid_str: UUID string for the entity trying to act.
-
-    Returns:
-        Entity that passed session ownership and turn validation.
-
-    Raises:
-        HTTPException: If either UUID is malformed, the entity is missing, or
-            the session manager rejects the action.
-    """
+def _parse_session_entity_ids(
+    session_id_str: str,
+    entity_uuid_str: str,
+) -> tuple[UUID, UUID]:
+    """Parse one session/entity authority pair with structured diagnostics."""
     try:
         session_id = UUID(session_id_str)
     except ValueError:
@@ -1975,20 +1965,47 @@ def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity
             message="Invalid entity UUID format",
         )
 
-    restore_expired_takeovers()
-    mgr = sim.get_session_manager()
-    _, _ = mgr.validate_action(session_id, entity_uuid)
+    return session_id, entity_uuid
 
+
+def _require_runtime_entity(entity_uuid: UUID) -> Entity:
+    """Resolve an authorized runtime entity through the canonical registry."""
     entity = Entity.get(entity_uuid)
     if not entity:
         raise _entity_lookup_exception(
-            entity_uuid=entity_uuid_str,
+            entity_uuid=str(entity_uuid),
             status_code=404,
             code="entity_not_found",
             message="Entity not found",
         )
-
     return entity
+
+
+def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity:
+    """Validate session ownership plus active-turn command authority."""
+    session_id, entity_uuid = _parse_session_entity_ids(
+        session_id_str,
+        entity_uuid_str,
+    )
+    restore_expired_takeovers()
+    mgr = sim.get_session_manager()
+    _, _ = mgr.validate_action(session_id, entity_uuid)
+    return _require_runtime_entity(entity_uuid)
+
+
+def validate_session_entity_inspection(
+    session_id_str: str,
+    entity_uuid_str: str,
+) -> tuple[Entity, GameSession]:
+    """Authorize a read of one controlled entity without granting a command."""
+    session_id, entity_uuid = _parse_session_entity_ids(
+        session_id_str,
+        entity_uuid_str,
+    )
+    restore_expired_takeovers()
+    manager = sim.get_session_manager()
+    _, game = manager.validate_controlled_entity(session_id, entity_uuid)
+    return _require_runtime_entity(entity_uuid), game
 
 
 def _install_standalone_local_profile(
@@ -3101,9 +3118,9 @@ async def delete_session(session_id: str):
 async def join_game(request: JoinGameRequest):
     """Join the active game with a session.
 
-    Entity assignment priority is explicit UUIDs, then faction, then the demo
-    convention where human players receive Hero and Codex players receive
-    non-Hero entities.
+    Participant sessions claim one explicit entity UUID sequence. Observer
+    sessions claim no entities and provide one explicit subjective observer
+    sequence.
 
     Args:
         request: Join request with session ID and optional entity or faction
@@ -3127,7 +3144,6 @@ async def join_game(request: JoinGameRequest):
             message="Invalid session ID format",
             session_id=request.session_id,
             requested_entity_uuids=requested_entity_uuids,
-            requested_faction=request.faction,
         )
 
     mgr = sim.get_session_manager()
@@ -3140,7 +3156,6 @@ async def join_game(request: JoinGameRequest):
             message="Session not found",
             session_id=request.session_id,
             requested_entity_uuids=requested_entity_uuids,
-            requested_faction=request.faction,
         )
 
     game = sim.game
@@ -3151,21 +3166,15 @@ async def join_game(request: JoinGameRequest):
             message="No active game to join",
             session_id=request.session_id,
             requested_entity_uuids=requested_entity_uuids,
-            requested_faction=request.faction,
         )
 
-    subjective_authority_before = _capture_subjective_session_authority(mgr)
-    if session.session_id not in game.players:
-        game.add_player(session)
-
-    if session.player_type == PlayerType.OBSERVER and (requested_entity_uuids or request.faction):
+    if session.player_type == PlayerType.OBSERVER and requested_entity_uuids:
         raise _session_http_exception(
             status_code=400,
             code="observer_cannot_control_entities",
-            message="Observer sessions cannot claim entities or factions",
+            message="Observer sessions cannot claim controlled entities",
             session_id=request.session_id,
             requested_entity_uuids=requested_entity_uuids,
-            requested_faction=request.faction,
         )
 
     if session.player_type == PlayerType.OBSERVER:
@@ -3223,30 +3232,49 @@ async def join_game(request: JoinGameRequest):
             message="Participant observer knowledge is derived exactly from controlled entities",
             session_id=request.session_id,
         )
+    elif not requested_entity_uuids:
+        raise _session_http_exception(
+            status_code=400,
+            code="controlled_entity_selection_required",
+            message="Participant sessions require explicit controlled entity UUIDs",
+            session_id=request.session_id,
+        )
 
+    try:
+        controlled_entity_uuids = tuple(
+            UUID(value) for value in requested_entity_uuids
+        )
+    except ValueError:
+        raise _session_http_exception(
+            status_code=400,
+            code="invalid_entity_uuid",
+            message="Controlled entity selection contains an invalid UUID",
+            session_id=request.session_id,
+            requested_entity_uuids=requested_entity_uuids,
+        )
+    missing_entities = [
+        str(entity_uuid)
+        for entity_uuid in controlled_entity_uuids
+        if Entity.get(entity_uuid) is None
+    ]
+    if missing_entities:
+        raise _session_http_exception(
+            status_code=400,
+            code="controlled_entity_not_found",
+            message="Controlled entity selection references an unknown entity",
+            session_id=request.session_id,
+            requested_entity_uuids=requested_entity_uuids,
+            missing_entity_uuids=missing_entities,
+        )
+
+    subjective_authority_before = _capture_subjective_session_authority(mgr)
+    if session.session_id not in game.players:
+        game.add_player(session)
     ownership_boundary = prepare_observation_ownership_change(mgr)
     assigned = []
-    if requested_entity_uuids:
-        for uuid_str in requested_entity_uuids:
-            try:
-                entity_uuid = UUID(uuid_str)
-                if game.assign_entity(entity_uuid, session.session_id):
-                    assigned.append(str(entity_uuid))
-            except ValueError:
-                continue
-    elif request.faction:
-        for entity in Entity.get_all_entities():
-            if entity.faction == request.faction:
-                if game.assign_entity(entity.uuid, session.session_id):
-                    assigned.append(str(entity.uuid))
-    else:
-        for entity in Entity.get_all_entities():
-            if session.player_type == PlayerType.HUMAN and entity.name == "Hero":
-                if game.assign_entity(entity.uuid, session.session_id):
-                    assigned.append(str(entity.uuid))
-            elif session.player_type == PlayerType.CODEX and entity.name != "Hero":
-                if game.assign_entity(entity.uuid, session.session_id):
-                    assigned.append(str(entity.uuid))
+    for entity_uuid in controlled_entity_uuids:
+        if game.assign_entity(entity_uuid, session.session_id):
+            assigned.append(str(entity_uuid))
 
     _publish_takeover_ownership_changes(
         ownership_boundary,
@@ -3984,7 +4012,6 @@ def _build_decision_epoch(
         turn_index=sim.encounter.current_turn_index,
         observation_cursor=observation_cursor,
         reason=reason,
-        record_timing=_prefixed_timing_recorder(timing, phase_prefix),
     )
     if build is None:
         return None
@@ -4348,16 +4375,38 @@ def _action_error_detail(
     return detail
 
 
+def _action_execution_authorization(
+    game: GameSession,
+    entity_uuid: UUID,
+) -> ActionExecutionAuthorization:
+    """Return command authority independently from row mechanics."""
+    encounter = game.encounter
+    if encounter is None or encounter.state is not EncounterState.ACTIVE:
+        return ActionExecutionAuthorization.ENCOUNTER_INACTIVE
+    if encounter.turn_state is not TurnState.IN_PROGRESS:
+        return ActionExecutionAuthorization.TURN_NOT_IN_PROGRESS
+    if not game.is_entity_turn(entity_uuid):
+        return ActionExecutionAuthorization.NOT_ACTIVE_TURN
+    return ActionExecutionAuthorization.AUTHORIZED
+
+
 @app.get("/entity/{entity_uuid}/available-actions", response_model=APIAvailableActions)
 async def get_entity_available_actions(entity_uuid: str, session_id: str):
     """Get action affordances for an entity controlled by the session."""
-    entity = validate_session_action(session_id, entity_uuid)
+    entity, game = validate_session_entity_inspection(session_id, entity_uuid)
 
     actions = get_available_actions(entity)
 
     _available_actions_cache[entity_uuid] = actions
 
-    return serialize_available_actions(entity, actions)
+    return serialize_available_actions(
+        entity,
+        actions,
+        execution_authorization=_action_execution_authorization(
+            game,
+            entity.uuid,
+        ),
+    )
 
 
 @app.post("/ai/takeover", response_model=TakeoverClaimResponse)
@@ -5450,33 +5499,39 @@ async def get_entity_handlers(entity_uuid: str, session_id: str) -> APIEntityHan
 
 
 @app.post(
-    "/entity/{entity_uuid}/handlers/{handler_name}/toggle",
+    "/entity/{entity_uuid}/handlers/{handler_uuid}/toggle",
     response_model=ToggleHandlerResponse,
 )
 async def toggle_entity_handler(
     entity_uuid: str,
-    handler_name: str,
+    handler_uuid: str,
     request: ToggleHandlerRequest,
 ) -> ToggleHandlerResponse:
-    """Toggle a handler's enabled state by name.
+    """Toggle a handler's enabled state by exact UUID.
 
     Validates that the session owns the entity and it's their turn.
     """
     entity = validate_session_action(request.session_id, entity_uuid)
+    parsed_handler_uuid = _parse_optional_uuid(handler_uuid, "handler_uuid")
+    if parsed_handler_uuid is None:
+        raise AssertionError("required handler UUID parsed as missing")
 
-    found = entity.set_handler_enabled(handler_name, request.enabled)
+    found = entity.set_handler_enabled_by_uuid(
+        parsed_handler_uuid,
+        request.enabled,
+    )
     if not found:
         raise _handler_http_exception(
             entity=entity,
             status_code=404,
             code="handler_not_found",
-            message=f"Handler '{handler_name}' not found",
-            handler_name=handler_name,
+            message=f"Handler '{handler_uuid}' not found",
+            handler_uuid=handler_uuid,
         )
 
     return ToggleHandlerResponse(
         success=True,
-        handler_name=handler_name,
+        handler_uuid=parsed_handler_uuid,
         enabled=request.enabled,
     )
 
@@ -5784,7 +5839,19 @@ async def _execute_action_by_index_impl(
             timing.add("recompute_available_actions_ms", started)
         started = time.perf_counter()
         _available_actions_cache[request.entity_uuid] = new_available
-        updated_actions = serialize_available_actions(entity, new_available)
+        game = sim.game
+        if game is None:
+            raise RuntimeError(
+                "validated action execution lost its active game session"
+            )
+        updated_actions = serialize_available_actions(
+            entity,
+            new_available,
+            execution_authorization=_action_execution_authorization(
+                game,
+                entity.uuid,
+            ),
+        )
         if timing is not None:
             timing.add("serialize_available_actions_ms", started)
 
@@ -6330,7 +6397,7 @@ def _validate_game_creation_protocol_identity(
             current_content_set_digest=content_digest,
         )
     try:
-        ruleset_digest = character_ruleset_digest(deployments)
+        ruleset_digest = shared_deployment_ruleset_digest(deployments)
     except CharacterRulesetMismatchError as exc:
         raise _api_http_exception(
             status_code=409,
@@ -6397,7 +6464,7 @@ async def compose_game_creation(
         content_digest = (
             SERVER_CONTENT_SYSTEM_RUNTIME.require().content_set_digest
         )
-        ruleset_digest = character_ruleset_digest(deployments)
+        ruleset_digest = shared_deployment_ruleset_digest(deployments)
         preview = await asyncio.to_thread(
             build_game_creation_encounter_visual_preview,
             recipe,

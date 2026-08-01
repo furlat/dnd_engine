@@ -113,6 +113,12 @@ class _NoParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class _UnboundInternalBehavior:
+    """Explicit unbound implementation of the runtime behavior-owner surface."""
+
+    behavior_binding: BehaviorBinding | None = None
+
+
 @behavior_identity(
     definition_kind=ContentDefinitionKind.RULE_PRIMITIVE,
     runtime_behavior_kind=RuntimeBehaviorKind.SYSTEM,
@@ -736,7 +742,7 @@ def test_unbound_internal_behavior_masks_outer_authored_provider_scope() -> None
 
     with runtime_behavior_provider(action):
         assert active_runtime_behavior_binding() == binding
-        with runtime_behavior_provider(object()):
+        with runtime_behavior_provider(_UnboundInternalBehavior()):
             assert active_runtime_behavior_binding() is None
         assert active_runtime_behavior_binding() == binding
     assert active_runtime_behavior_binding() is None

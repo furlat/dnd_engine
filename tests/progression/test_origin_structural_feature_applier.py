@@ -1,6 +1,8 @@
 """Runtime installation and reversal of data-driven origin features."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+import pytest
 
 from dnd.content_system.character_materialization import (
     CharacterCompositionReceipt,
@@ -112,7 +114,6 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
             runtime_entity_uuid=entity.uuid,
             character_id=character_id,
             grants=(receipt,),
-            automatic_grant_refs=(_feature_ref(),),
         ),
     )
 
@@ -135,3 +136,56 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
     })
     assert wisdom_save.advantage is AdvantageStatus.NONE
     wisdom_save.clear_context()
+
+
+def test_origin_structural_feature_failure_rolls_back_every_prior_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entity = Entity.create(source_entity_uuid=uuid4())
+    original_add_capability = Entity.add_origin_capability_source
+
+    def reject_second_capability(
+        target: Entity,
+        capability: OriginCapability,
+        source_id: UUID,
+    ) -> None:
+        if capability is OriginCapability.TRANCE:
+            raise RuntimeError("fixture capability failure")
+        original_add_capability(target, capability, source_id)
+
+    monkeypatch.setattr(
+        Entity,
+        "add_origin_capability_source",
+        reject_second_capability,
+    )
+    definition = OriginStructuralFeatureDefinition(
+        damage_resistances=(DamageType.FIRE,),
+        capabilities=(
+            OriginCapability.ARTIFICERS_LORE,
+            OriginCapability.TRANCE,
+        ),
+        saving_throw_advantages=(
+            OriginSavingThrowAdvantageRule(
+                abilities=(AbilityScoreName.WISDOM,),
+                requires_magical=True,
+            ),
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="fixture capability failure"):
+        install_origin_structural_feature(
+            entity=entity,
+            character_id=uuid4(),
+            grant_token="species:rollback-fixture",
+            definition_ref=_feature_ref(),
+            character_level=1,
+            definition=definition,
+        )
+
+    assert entity.origin_capability_sources == {}
+    assert (
+        entity.health.get_resistance(DamageType.FIRE)
+        is ResistanceStatus.NONE
+    )
+    wisdom_save = entity.saving_throws.get_saving_throw("wisdom").bonus
+    assert wisdom_save.self_contextual.advantage_modifiers == {}

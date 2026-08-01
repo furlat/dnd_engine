@@ -11,9 +11,7 @@ from dnd.blocks.equipment import (
     EquipmentConfig, BodyArmor, Helmet, Shield, Weapon,
 )
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.materialization import CreaturePossessionMode
 from dnd.core.equipment_types import WeaponSlot
@@ -212,25 +210,25 @@ def create_goblin(
     ):
         return entity
 
-    scimitar = materialize_item_from_installed_runtime(
+    scimitar = materialize_item(
         SCIMITAR_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    shortbow = materialize_item_from_installed_runtime(
+    shortbow = materialize_item(
         SHORTBOW_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    leather_armor = materialize_item_from_installed_runtime(
+    leather_armor = materialize_item(
         LEATHER_ARMOR_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=BodyArmor,
     )
-    shield = materialize_item_from_installed_runtime(
+    shield = materialize_item(
         WOODEN_SHIELD_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -344,19 +342,19 @@ def create_skeleton(
     ):
         return entity
 
-    shortsword = materialize_item_from_installed_runtime(
+    shortsword = materialize_item(
         SHORTSWORD_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    shortbow = materialize_item_from_installed_runtime(
+    shortbow = materialize_item(
         SHORTBOW_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    armor_scraps = materialize_item_from_installed_runtime(
+    armor_scraps = materialize_item(
         ARMOR_SCRAPS_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -464,25 +462,25 @@ def create_goblin_archer(
     ):
         return entity
 
-    shortbow = materialize_item_from_installed_runtime(
+    shortbow = materialize_item(
         SHORTBOW_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    scimitar = materialize_item_from_installed_runtime(
+    scimitar = materialize_item(
         SCIMITAR_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    dagger = materialize_item_from_installed_runtime(
+    dagger = materialize_item(
         DAGGER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    leather_armor = materialize_item_from_installed_runtime(
+    leather_armor = materialize_item(
         LEATHER_ARMOR_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -596,7 +594,7 @@ def create_caster(
     ):
         return entity
 
-    dagger = materialize_item_from_installed_runtime(
+    dagger = materialize_item(
         DAGGER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -604,14 +602,14 @@ def create_caster(
     )
     entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
 
-    potion = materialize_item_from_installed_runtime(
+    potion = materialize_item(
         GREATER_INVISIBILITY_POTION_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
     )
     entity.loot_item(potion)
 
-    haste_potion = materialize_item_from_installed_runtime(
+    haste_potion = materialize_item(
         HASTE_POTION_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -745,19 +743,19 @@ def create_skeleton_warrior(
     ):
         return entity
 
-    longsword = materialize_item_from_installed_runtime(
+    longsword = materialize_item(
         LONGSWORD_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    shield = materialize_item_from_installed_runtime(
+    shield = materialize_item(
         WOODEN_SHIELD_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Shield,
     )
-    armor_scraps = materialize_item_from_installed_runtime(
+    armor_scraps = materialize_item(
         ARMOR_SCRAPS_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -768,7 +766,7 @@ def create_skeleton_warrior(
     entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
     entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
-    acid_flask = materialize_item_from_installed_runtime(
+    acid_flask = materialize_item(
         ACID_FLASK_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -869,25 +867,25 @@ def create_skeleton_archer(
     ):
         return entity
 
-    shortbow = materialize_item_from_installed_runtime(
+    shortbow = materialize_item(
         SHORTBOW_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    dagger1 = materialize_item_from_installed_runtime(
+    dagger1 = materialize_item(
         DAGGER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    dagger2 = materialize_item_from_installed_runtime(
+    dagger2 = materialize_item(
         DAGGER_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    armor_scraps = materialize_item_from_installed_runtime(
+    armor_scraps = materialize_item(
         ARMOR_SCRAPS_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -1000,19 +998,19 @@ def create_skeleton_warlock(
     ):
         return entity
 
-    staff = materialize_item_from_installed_runtime(
+    staff = materialize_item(
         ARCANE_STAFF_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=Weapon,
     )
-    armor_scraps = materialize_item_from_installed_runtime(
+    armor_scraps = materialize_item(
         ARMOR_SCRAPS_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
         expected_type=BodyArmor,
     )
-    crown = materialize_item_from_installed_runtime(
+    crown = materialize_item(
         CROWN_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
@@ -1023,7 +1021,7 @@ def create_skeleton_warlock(
     entity.equipment.equip(crown)
     entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
 
-    scroll = materialize_item_from_installed_runtime(
+    scroll = materialize_item(
         INVISIBILITY_SCROLL_RECIPE,
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,

@@ -5,17 +5,38 @@ does not install runtime conditions, mutate entities, or call the legacy
 one-shot class factory.
 """
 
-from dnd.classes import barbarian, feats, fighter, rage
+from dnd.classes.permanent_feature_definitions import (
+    BARBARIAN_BRUTAL_CRITICAL_DECLARATION,
+    BARBARIAN_DANGER_SENSE_DECLARATION,
+    BARBARIAN_FAST_MOVEMENT_DECLARATION,
+    BARBARIAN_FERAL_INSTINCT_DECLARATION,
+    BARBARIAN_FRENZY_DECLARATION,
+    BARBARIAN_INDOMITABLE_MIGHT_DECLARATION,
+    BARBARIAN_INTIMIDATING_PRESENCE_DECLARATION,
+    BARBARIAN_MINDLESS_RAGE_DECLARATION,
+    BARBARIAN_PERSISTENT_RAGE_DECLARATION,
+    BARBARIAN_PRIMAL_CHAMPION_DECLARATION,
+    BARBARIAN_RAGE_DECLARATION,
+    BARBARIAN_RECKLESS_ATTACK_DECLARATION,
+    BARBARIAN_RELENTLESS_RAGE_DECLARATION,
+    BARBARIAN_RETALIATION_DECLARATION,
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
+    LUCKY_FEAT_DECLARATION,
+)
+from dnd.classes.progression_definition_helpers import (
+    ordered_refs,
+    proficiency_subject,
+    progression_dependencies,
+    single_ref_choice,
+    structural_progression_provenance,
+    typed_progression_ref,
+)
 from dnd.classes.structural_feature_definitions import (
     UNARMORED_DEFENSE_DECLARATION,
-)
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.classes.starting_equipment_refs import (
     STARTING_EQUIPMENT_PACKAGE_REFS_BY_CLASS,
 )
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -35,21 +56,12 @@ from dnd.core.content.durable_characters import (
     ClassDefinition,
     ClassLevelDefinition,
     ClassProficiencyPackage,
-    ProficiencySubject,
     ProficiencySubjectKind,
     SubclassDefinition,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.provenance import (
-    ContentFidelity,
-    ContentProvenance,
-    ContentProvenanceRelation,
-    ContentReviewStatus,
-)
 from dnd.core.content.registration import (
     ContentDeclaration,
-    ContentDeclarationMode,
-    compute_definition_contract_hash,
     get_content_declaration,
     typed_definition,
 )
@@ -60,69 +72,44 @@ _PACK_ID = "content.srd_5_1_cc"
 _VERSION = 1
 
 
-def _typed_ref(
-    definition_kind: ContentDefinitionKind,
-    content_id: str,
-    definition_model: type[ClassDefinition] | type[SubclassDefinition],
-) -> ContentRef:
-    return ContentRef(
-        pack_id=_PACK_ID,
-        definition_kind=definition_kind,
-        content_id=content_id,
-        content_version=_VERSION,
-        definition_contract_hash=compute_definition_contract_hash(
-            mode=ContentDeclarationMode.TYPED_DEFINITION,
-            definition_kind=definition_kind,
-            definition_model=definition_model,
-        ),
-    )
-
-
-BARBARIAN_CLASS_REF = _typed_ref(
-    ContentDefinitionKind.CLASS,
-    "class.barbarian",
-    ClassDefinition,
+BARBARIAN_CLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.CLASS,
+    content_id="class.barbarian",
+    definition_model=ClassDefinition,
 )
-BERSERKER_SUBCLASS_REF = _typed_ref(
-    ContentDefinitionKind.SUBCLASS,
-    "subclass.barbarian.berserker",
-    SubclassDefinition,
+BERSERKER_SUBCLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.SUBCLASS,
+    content_id="subclass.barbarian.berserker",
+    definition_model=SubclassDefinition,
 )
 
 
-def _feature_ref(condition_type: type[BaseCondition]) -> ContentRef:
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
-
-
-_RAGE_REF = _feature_ref(rage.RageFeature)
-_RECKLESS_ATTACK_REF = _feature_ref(barbarian.RecklessAttackFeature)
-_DANGER_SENSE_REF = _feature_ref(barbarian.DangerSense)
-_EXTRA_ATTACK_REF = _feature_ref(fighter.ExtraAttackFeature)
-_FAST_MOVEMENT_REF = _feature_ref(barbarian.FastMovement)
-_FERAL_INSTINCT_REF = _feature_ref(barbarian.FeralInstinct)
-_BRUTAL_CRITICAL_REF = _feature_ref(barbarian.BrutalCritical)
-_RELENTLESS_RAGE_REF = _feature_ref(barbarian.RelentlessRage)
-_PERSISTENT_RAGE_REF = _feature_ref(barbarian.PersistentRage)
-_INDOMITABLE_MIGHT_REF = _feature_ref(barbarian.IndomitableMight)
-_PRIMAL_CHAMPION_REF = _feature_ref(barbarian.PrimalChampion)
-_FRENZY_REF = _feature_ref(rage.FrenzyFeature)
-_MINDLESS_RAGE_REF = _feature_ref(barbarian.MindlessRage)
-_INTIMIDATING_PRESENCE_REF = _feature_ref(
-    barbarian.IntimidatingPresenceFeature,
+_RAGE_REF = BARBARIAN_RAGE_DECLARATION.ref
+_RECKLESS_ATTACK_REF = BARBARIAN_RECKLESS_ATTACK_DECLARATION.ref
+_DANGER_SENSE_REF = BARBARIAN_DANGER_SENSE_DECLARATION.ref
+_EXTRA_ATTACK_REF = FIGHTER_EXTRA_ATTACK_DECLARATION.ref
+_FAST_MOVEMENT_REF = BARBARIAN_FAST_MOVEMENT_DECLARATION.ref
+_FERAL_INSTINCT_REF = BARBARIAN_FERAL_INSTINCT_DECLARATION.ref
+_BRUTAL_CRITICAL_REF = BARBARIAN_BRUTAL_CRITICAL_DECLARATION.ref
+_RELENTLESS_RAGE_REF = BARBARIAN_RELENTLESS_RAGE_DECLARATION.ref
+_PERSISTENT_RAGE_REF = BARBARIAN_PERSISTENT_RAGE_DECLARATION.ref
+_INDOMITABLE_MIGHT_REF = BARBARIAN_INDOMITABLE_MIGHT_DECLARATION.ref
+_PRIMAL_CHAMPION_REF = BARBARIAN_PRIMAL_CHAMPION_DECLARATION.ref
+_FRENZY_REF = BARBARIAN_FRENZY_DECLARATION.ref
+_MINDLESS_RAGE_REF = BARBARIAN_MINDLESS_RAGE_DECLARATION.ref
+_INTIMIDATING_PRESENCE_REF = (
+    BARBARIAN_INTIMIDATING_PRESENCE_DECLARATION.ref
 )
-_RETALIATION_REF = _feature_ref(barbarian.Retaliation)
-_LUCKY_FEAT_REF = _feature_ref(feats.LuckyFeature)
-
-
-def _subject(
-    kind: ProficiencySubjectKind,
-    subject_id: str,
-) -> ProficiencySubject:
-    return ProficiencySubject(subject_kind=kind, subject_id=subject_id)
+_RETALIATION_REF = BARBARIAN_RETALIATION_DECLARATION.ref
+_LUCKY_FEAT_REF = LUCKY_FEAT_DECLARATION.ref
 
 
 _BARBARIAN_SKILL_SUBJECTS = tuple(
-    _subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
+    proficiency_subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
     for skill in (
         "animal_handling",
         "athletics",
@@ -135,11 +122,11 @@ _BARBARIAN_SKILL_SUBJECTS = tuple(
 
 _BARBARIAN_FIRST_PROFICIENCIES = ClassProficiencyPackage(
     automatic=(
-        _subject(ProficiencySubjectKind.ARMOR, "armor.light"),
-        _subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
-        _subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.light"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
+        proficiency_subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
     ),
     choices=(
         BuildChoiceRequirement(
@@ -163,66 +150,47 @@ _BARBARIAN_FIRST_PROFICIENCIES = ClassProficiencyPackage(
 
 _BARBARIAN_MULTICLASS_PROFICIENCIES = ClassProficiencyPackage(
     automatic=(
-        _subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
+        proficiency_subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
     ),
 )
 
 
-def _choice(
-    *,
-    choice_id: str,
-    choice_kind: ChoiceRequirementKind,
-    allowed_refs: tuple[ContentRef, ...],
-) -> BuildChoiceRequirement:
-    return BuildChoiceRequirement(
-        choice_id=choice_id,
-        choice_kind=choice_kind,
-        minimum_selections=1,
-        maximum_selections=1,
-        allowed_refs=allowed_refs,
-    )
-
-
 def _asi_or_feat(level: int) -> BuildChoiceRequirement:
-    return _choice(
+    return single_ref_choice(
         choice_id=f"class.barbarian.level_{level}.asi_or_feat",
         choice_kind=ChoiceRequirementKind.ABILITY_SCORE_IMPROVEMENT_OR_FEAT,
         allowed_refs=(_LUCKY_FEAT_REF,),
     )
 
 
-def _ordered_refs(*refs: ContentRef) -> tuple[ContentRef, ...]:
-    return tuple(sorted(refs, key=lambda ref: ref.identity_key))
-
-
 _BARBARIAN_LEVEL_GRANTS: dict[int, tuple[ContentRef, ...]] = {
-    1: _ordered_refs(
+    1: ordered_refs(
         _RAGE_REF,
         UNARMORED_DEFENSE_DECLARATION.ref,
     ),
-    2: _ordered_refs(_RECKLESS_ATTACK_REF, _DANGER_SENSE_REF),
+    2: ordered_refs(_RECKLESS_ATTACK_REF, _DANGER_SENSE_REF),
     3: (_RAGE_REF,),
-    5: _ordered_refs(_EXTRA_ATTACK_REF, _FAST_MOVEMENT_REF),
+    5: ordered_refs(_EXTRA_ATTACK_REF, _FAST_MOVEMENT_REF),
     6: (_RAGE_REF,),
     7: (_FERAL_INSTINCT_REF,),
-    9: _ordered_refs(_RAGE_REF, _BRUTAL_CRITICAL_REF),
+    9: ordered_refs(_RAGE_REF, _BRUTAL_CRITICAL_REF),
     11: (_RELENTLESS_RAGE_REF,),
     12: (_RAGE_REF,),
     13: (_BRUTAL_CRITICAL_REF,),
     15: (_PERSISTENT_RAGE_REF,),
     16: (_RAGE_REF,),
-    17: _ordered_refs(_RAGE_REF, _BRUTAL_CRITICAL_REF),
+    17: ordered_refs(_RAGE_REF, _BRUTAL_CRITICAL_REF),
     18: (_INDOMITABLE_MIGHT_REF,),
-    20: _ordered_refs(_RAGE_REF, _PRIMAL_CHAMPION_REF),
+    20: ordered_refs(_RAGE_REF, _PRIMAL_CHAMPION_REF),
 }
 _BARBARIAN_LEVEL_CHOICES: dict[
     int,
     tuple[BuildChoiceRequirement, ...],
 ] = {
     3: (
-        _choice(
+        single_ref_choice(
             choice_id="class.barbarian.level_3.subclass",
             choice_kind=ChoiceRequirementKind.SUBCLASS,
             allowed_refs=(BERSERKER_SUBCLASS_REF,),
@@ -276,56 +244,35 @@ BERSERKER_SUBCLASS_DEFINITION = SubclassDefinition(
 )
 
 
-def _provenance(source_anchor: str) -> ContentProvenance:
-    return ContentProvenance(
-        primary_source_id="wotc.srd_5_1_cc",
-        source_anchor=source_anchor,
-        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Pure additive structural definition; runtime mechanics are "
-            "installed separately through exact source-owned grant bindings."
-        ),
-    )
-
-
-def _feature_dependencies(
-    refs: tuple[ContentRef, ...],
-) -> tuple[ContentDependency, ...]:
-    unique = {ref.identity_key: ref for ref in refs}
-    return tuple(
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_FEATURE,
-            target_ref=ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-            notes="Offered or granted by this structural progression.",
-        )
-        for _, ref in sorted(unique.items())
-    )
-
-
-_BARBARIAN_FEATURE_DEPENDENCIES = _feature_dependencies((
-    UNARMORED_DEFENSE_DECLARATION.ref,
-    _RAGE_REF,
-    _RECKLESS_ATTACK_REF,
-    _DANGER_SENSE_REF,
-    _EXTRA_ATTACK_REF,
-    _FAST_MOVEMENT_REF,
-    _FERAL_INSTINCT_REF,
-    _BRUTAL_CRITICAL_REF,
-    _RELENTLESS_RAGE_REF,
-    _PERSISTENT_RAGE_REF,
-    _INDOMITABLE_MIGHT_REF,
-    _PRIMAL_CHAMPION_REF,
-    _LUCKY_FEAT_REF,
-))
-_BERSERKER_FEATURE_DEPENDENCIES = _feature_dependencies((
-    _FRENZY_REF,
-    _MINDLESS_RAGE_REF,
-    _INTIMIDATING_PRESENCE_REF,
-    _RETALIATION_REF,
-))
+_BARBARIAN_FEATURE_DEPENDENCIES = progression_dependencies(
+    (
+        UNARMORED_DEFENSE_DECLARATION.ref,
+        _RAGE_REF,
+        _RECKLESS_ATTACK_REF,
+        _DANGER_SENSE_REF,
+        _EXTRA_ATTACK_REF,
+        _FAST_MOVEMENT_REF,
+        _FERAL_INSTINCT_REF,
+        _BRUTAL_CRITICAL_REF,
+        _RELENTLESS_RAGE_REF,
+        _PERSISTENT_RAGE_REF,
+        _INDOMITABLE_MIGHT_REF,
+        _PRIMAL_CHAMPION_REF,
+        _LUCKY_FEAT_REF,
+    ),
+    relation=ContentDependencyRelation.GRANTS_FEATURE,
+    notes="Offered or granted by this structural progression.",
+)
+_BERSERKER_FEATURE_DEPENDENCIES = progression_dependencies(
+    (
+        _FRENZY_REF,
+        _MINDLESS_RAGE_REF,
+        _INTIMIDATING_PRESENCE_REF,
+        _RETALIATION_REF,
+    ),
+    relation=ContentDependencyRelation.GRANTS_FEATURE,
+    notes="Offered or granted by this structural progression.",
+)
 
 
 @typed_definition(
@@ -349,7 +296,7 @@ _BERSERKER_FEATURE_DEPENDENCIES = _feature_dependencies((
         ordering=ContentOrdering(sort_group="classes", sort_order=10),
         related_content_refs=(BERSERKER_SUBCLASS_REF,),
     ),
-    provenance=_provenance(
+    provenance=structural_progression_provenance(
         "SRD 5.1 Barbarian class progression, levels 1–20",
     ),
     definition=BARBARIAN_CLASS_DEFINITION,
@@ -404,7 +351,7 @@ class BarbarianProgressionDefinition:
         ),
         related_content_refs=(BARBARIAN_CLASS_REF,),
     ),
-    provenance=_provenance(
+    provenance=structural_progression_provenance(
         "SRD 5.1 Barbarian: Path of the Berserker, levels 3–14",
     ),
     definition=BERSERKER_SUBCLASS_DEFINITION,

@@ -131,21 +131,17 @@ def _newly_visible_hazard(
     for object_uuid, obj in after.known_objects.items():
         if (
             obj.knowledge_state is not KnowledgeState.VISIBLE
-            or not _object_is_hazardous(obj.state)
+            or obj.state.is_hazardous is not True
         ):
             continue
         previous = before.known_objects.get(object_uuid)
         if (
             previous is None
             or previous.knowledge_state is not KnowledgeState.VISIBLE
-            or not _object_is_hazardous(previous.state)
+            or previous.state.is_hazardous is not True
         ):
             return True
     return False
-
-
-def _object_is_hazardous(state: dict[str, object]) -> bool:
-    return state.get("is_hazardous") is True or state.get("hazardous") is True
 
 
 def _actor_state_changed(

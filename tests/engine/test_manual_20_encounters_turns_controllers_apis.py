@@ -366,8 +366,8 @@ def test_controller_run_turn_executes_actions_and_combat_log_listeners() -> None
     assert encounter.get_combat_log(since=listener_calls[-1][0])[0] is encounter.combat_log[-1]
 
 
-def test_death_checks_mark_dead_combatants_and_end_by_faction_survival() -> None:
-    """Encounter death checks mark dead actors and end when one faction survives."""
+def test_lethal_damage_commits_death_and_ends_by_faction_survival() -> None:
+    """Lethal damage commits death before encounter-end reconciliation."""
     reset_runtime_tutorial_state()
     hero, monster = create_runtime_pair()
     encounter = start_ordered_encounter(
@@ -379,9 +379,10 @@ def test_death_checks_mark_dead_combatants_and_end_by_faction_survival() -> None
     )
 
     set_hp(monster, 0)
+    assert monster.health.life_state is LifeState.DEAD
     death_events = encounter.check_deaths()
 
-    assert death_events
+    assert death_events == []
     assert encounter.combatants[monster.uuid].is_dead
     assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED

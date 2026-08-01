@@ -217,7 +217,6 @@ def _entity(uuid: str, name: str, position: tuple[int, int], tint: int) -> APIEn
         conditions=[],
         condition_details=[],
         life_state=LifeState.ALIVE,
-        is_dead=False,
         faction=None,
         creature_type="humanoid",
         size="Medium",
@@ -590,9 +589,11 @@ def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
             **_cue_base(1, presentation_id="movement"),
             "entity_uuid": "hero",
             "movement_kind": MovementKind.WALK,
+            "movement_sequence_id": "movement-sequence",
             "trajectory": ((0, 0), (1, 0), (2, 0)),
             "path_start_index": 0,
             "path_total_steps": 2,
+            "endpoint_outcome": "committed",
             "perception_commit": "observation_frame",
         }),
         AttackPresentationCue.model_validate({
@@ -1078,9 +1079,11 @@ def test_movement_children_are_pre_segment_reactive_actions() -> None:
         "source_event_cursor": 30,
         "entity_uuid": "hero",
         "movement_kind": MovementKind.WALK,
+        "movement_sequence_id": "movement-sequence",
         "trajectory": ((0, 0), (1, 0), (2, 0)),
         "path_start_index": 4,
         "path_total_steps": 8,
+        "endpoint_outcome": "committed",
         "perception_commit": "observation_frame",
     })
     reaction = AttackPresentationCue.model_validate({
@@ -1350,8 +1353,10 @@ def test_presentation_ids_remain_unique_across_an_observation_page() -> None:
         **_cue_base(1, presentation_id="reused-id"),
         "entity_uuid": "hero",
         "movement_kind": MovementKind.WALK,
+        "movement_sequence_id": "movement-sequence",
         "trajectory": ((0, 0), (1, 0)),
         "path_total_steps": 1,
+        "endpoint_outcome": "committed",
         "perception_commit": "observation_frame",
     })
     second_cue = DoorPresentationCue.model_validate({

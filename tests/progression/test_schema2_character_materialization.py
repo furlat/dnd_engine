@@ -8,19 +8,16 @@ from uuid import UUID, uuid4, uuid5
 
 import pytest
 
-from dnd.extensions.aegis_spark import AegisTrainingFeature
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
-)
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
@@ -64,8 +61,10 @@ from dnd.core.content.provenance import (
 from dnd.core.content.registration import (
     ContentDeclaration,
     ContentDeclarationMode,
+    behavior_content_ref,
     compute_definition_contract_hash,
 )
+from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -76,7 +75,7 @@ from dnd.core.progression import CasterProgression
 from dnd.encounter import Encounter, EncounterState
 from dnd.entity import Entity
 from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.torches import TORCH_RECIPE
+from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.monsters.bestiary import create_goblin
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -145,6 +144,8 @@ def _typed_declaration(
 
 def _runtime_with(
     class_definition: ClassDefinition,
+    *,
+    additional_declarations: tuple[ContentDeclaration, ...] = (),
 ) -> tuple[
     ContentSystemRuntime,
     ContentRef,
@@ -172,7 +173,12 @@ def _runtime_with(
         class_definition,
     )
     declarations = dict(built_in.registry.declarations)
-    for declaration in (species, background, class_declaration):
+    for declaration in (
+        species,
+        background,
+        class_declaration,
+        *additional_declarations,
+    ):
         declarations[declaration.ref.identity_key] = declaration
     registry = FrozenContentRegistry(
         declarations=declarations,
@@ -239,9 +245,11 @@ def _materialize(
     class_definition: ClassDefinition,
     *,
     levels: int,
+    additional_declarations: tuple[ContentDeclaration, ...] = (),
 ):
     runtime, species_ref, background_ref, class_ref = _runtime_with(
         class_definition,
+        additional_declarations=additional_declarations,
     )
     character_id = uuid4()
     definition = _definition(
@@ -313,7 +321,7 @@ def test_schema2_materializer_applies_and_removes_neutral_structure() -> None:
     assert receipt is not None
     assert entity.ability_scores.strength.ability_score.score == 17
     assert entity.ability_scores.constitution.ability_score.score == 14
-    assert entity.initiative.normalized_score == 2
+    assert entity.initiative_bonus == 2
     assert entity.proficiency_bonus.normalized_score == 2
     assert entity.health.total_hit_dices_number == 2
     assert entity.health.get_max_hit_dices_points(2) == 20
@@ -340,7 +348,7 @@ def test_schema2_materializer_applies_and_removes_neutral_structure() -> None:
     assert entity.uuid == runtime_uuid
     assert entity.ability_scores.strength.ability_score.score == 0
     assert entity.ability_scores.constitution.ability_score.score == 0
-    assert entity.initiative.normalized_score == -5
+    assert entity.initiative_bonus == -5
     assert entity.proficiency_bonus.normalized_score == 0
     assert entity.health.total_hit_dices_number == 0
     assert entity.skill_set.athletics.get_score(2) == 0
@@ -410,15 +418,96 @@ def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
             runtime=runtime,
         )
 
-    entity = Entity.get(runtime_entity_uuid)
-    assert entity is not None
-    assert entity.inventory.items == {}
-    assert entity.equipment.get_all_equipped_items() == []
+    assert Entity.get(runtime_entity_uuid) is None
+    assert get_map().get_entity_position(runtime_entity_uuid) is None
+    with pytest.raises(KeyError, match="is not bound"):
+        CREATURE_RUNTIME_BINDINGS.require(runtime_entity_uuid)
     assert not {
         binding.character_item_id
         for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
     }.intersection({torch_item_id, invalid_item_id})
-    assert not get_map()._light_sources
+
+
+def test_failed_lit_torch_startup_discards_light_entity_and_bindings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, species_ref, background_ref, class_ref = _runtime_with(
+        ClassDefinition(
+            hit_die=10,
+            caster_progression=CasterProgression.NON_CASTER,
+            level_definitions=(ClassLevelDefinition(class_level=1),),
+        ),
+    )
+    character_id = uuid4()
+    definition = _definition(
+        character_id=character_id,
+        species_ref=species_ref,
+        background_ref=background_ref,
+        class_ref=class_ref,
+        levels=1,
+    )
+    loadout = CharacterLoadoutRevisionV1.create(
+        character_id=character_id,
+        loadout_revision=1,
+        based_on_definition_revision=1,
+    )
+    torch_item_id = uuid4()
+    holdings = CharacterHoldingsRevision.create(
+        character_id=character_id,
+        holdings_revision=1,
+        items=(
+            CharacterItemV1.create(
+                character_item_id=torch_item_id,
+                recipe=TORCH_RECIPE,
+            ),
+        ),
+    )
+    original_ignite = Torch.ignite
+    created_light_uuids: list[UUID] = []
+
+    def fail_after_ignite(
+        torch: Torch,
+        carrier_entity_uuid: UUID,
+        parent_event: UUID | None = None,
+    ) -> None:
+        original_ignite(torch, carrier_entity_uuid, parent_event)
+        assert torch._light_source_uuid is not None
+        assert torch._light_source_uuid in get_map()._light_sources
+        created_light_uuids.append(torch._light_source_uuid)
+        raise RuntimeError("fixture post-ignite failure")
+
+    monkeypatch.setattr(Torch, "ignite", fail_after_ignite)
+    runtime_entity_uuid = uuid4()
+
+    with pytest.raises(RuntimeError, match="fixture post-ignite failure"):
+        materialize_character(
+            definition=definition,
+            holdings=holdings,
+            loadout=loadout,
+            runtime_entity_uuid=runtime_entity_uuid,
+            display_name="Lit Rollback Hero",
+            faction="heroes",
+            position=(2, 2),
+            deployment_role=CreatureDeploymentRole(
+                role_id="test.schema2.lit_rollback",
+            ),
+            expected_ruleset_digest=_RULESET_DIGEST,
+            runtime=runtime,
+        )
+
+    assert created_light_uuids
+    assert all(
+        light_uuid not in get_map()._light_sources
+        for light_uuid in created_light_uuids
+    )
+    assert Entity.get(runtime_entity_uuid) is None
+    assert get_map().get_entity_position(runtime_entity_uuid) is None
+    with pytest.raises(KeyError, match="is not bound"):
+        CREATURE_RUNTIME_BINDINGS.require(runtime_entity_uuid)
+    assert not any(
+        binding.character_item_id == torch_item_id
+        for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
+    )
 
 
 def test_schema2_player_zero_hp_commits_dead_and_terminal_encounter() -> None:
@@ -635,6 +724,26 @@ def test_extra_attack_resolves_repeated_ranks_and_removes_one_family() -> None:
 
 
 def test_unimplemented_structural_feature_fails_closed() -> None:
+    ref = behavior_content_ref(
+        definition_kind=ContentDefinitionKind.CLASS_FEATURE,
+        runtime_behavior_kind=RuntimeBehaviorKind.CLASS_FEATURE,
+        pack_id="fixture.schema2_materialization",
+        content_id="class_feature.unimplemented",
+        version=1,
+    )
+    declaration = ContentDeclaration(
+        ref=ref,
+        mode=ContentDeclarationMode.BEHAVIOR_IDENTITY,
+        descriptor=ContentDescriptor.from_spec(
+            ref,
+            ContentDescriptorSpec(
+                display_name="Unimplemented Structural Feature",
+                visibility=ContentVisibility.DEVELOPER,
+            ),
+        ),
+        provenance=_FIXTURE_PROVENANCE,
+        runtime_behavior_kind=RuntimeBehaviorKind.CLASS_FEATURE,
+    )
     with pytest.raises(
         RuntimeError,
         match="No structural character applier is installed",
@@ -647,12 +756,11 @@ def test_unimplemented_structural_feature_fails_closed() -> None:
                     ClassLevelDefinition(
                         class_level=1,
                         automatic_grant_refs=(
-                            CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-                                AegisTrainingFeature
-                            ].ref,
+                            ref,
                         ),
                     ),
                 ),
             ),
             levels=1,
+            additional_declarations=(declaration,),
         )

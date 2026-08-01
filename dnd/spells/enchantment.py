@@ -38,14 +38,13 @@ from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
-from dnd.actions import Move, SpellAction, SpellEvent
+from dnd.actions import Move, SpellAction, SpellEvent, validate_line_of_sight
 from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
 from dnd.creature_transforms import (
     apply_turn_spent_transform,
     apply_unconscious_transform,
 )
 from dnd.spells.content_metadata import srd_spell_identity
-from dnd.spells.spell_utils import validate_line_of_sight
 
 
 class CharmPerson(SpellAction):
@@ -135,7 +134,7 @@ class CharmPerson(SpellAction):
                                 status_message=f"Targets must be within 30ft of each other ({e1.name} and {e2.name} are {dist}ft apart)"
                             )
 
-        parent_result = super()._validate(declaration_event)
+        parent_result = super()._validate(los_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -229,8 +228,7 @@ class HoldPersonEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
+        execution_event = declaration_event.with_updates(
             update={"condition": self},
             status_message=f"Applying Paralyzed sub-condition to {target.name}"
         )
@@ -365,31 +363,16 @@ class HoldPerson(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight, range, and humanoid targeting."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
+        if not target_entity:
+            return declaration_event.cancel(status_message="Target entity not found")
 
         if target_entity.creature_type != CreatureType.HUMANOID:
             return declaration_event.cancel(
                 status_message=f"Hold Person only affects humanoids, not {target_entity.creature_type.value}"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and link a failed hold effect to concentration."""
@@ -456,8 +439,7 @@ class HoldMonsterEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
+        execution_event = declaration_event.with_updates(
             update={"condition": self},
             status_message=f"Applying Paralyzed sub-condition to {target.name}"
         )
@@ -595,28 +577,16 @@ class HoldMonster(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight, range, and undead exclusion."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
+        if not target_entity:
+            return declaration_event.cancel(status_message="Target entity not found")
 
         if target_entity.creature_type == CreatureType.UNDEAD:
             return declaration_event.cancel(
                 status_message=f"Hold Monster has no effect on undead"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and link a failed hold effect to concentration."""
@@ -682,25 +652,8 @@ class PowerWordKill(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight and range."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -775,33 +728,10 @@ class TestBless(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight for all targets."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        if not source_entity:
-            return declaration_event.cancel(status_message="Source entity not found")
-
-        all_targets = self.get_all_targets()
-
-        for target_uuid in all_targets:
-            if target_uuid == self.source_entity_uuid:
-                continue
-
-            target_entity = Entity.get(target_uuid)
-            if not target_entity:
-                return declaration_event.cancel(status_message=f"Target entity not found")
-
-            if target_uuid not in source_entity.senses.entities.keys():
-                return declaration_event.cancel(
-                    status_message=f"{target_entity.name} not in line of sight"
-                )
-
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_entity_targets_in_range_and_sight(
+            declaration_event,
+            self.get_all_targets(),
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Complete the current target branch of the test spell."""
@@ -926,7 +856,7 @@ class Sleep(SpellAction):
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0),
+                target=self.end_position if self.end_position is not None else (0, 0),
                 radius_feet=20
             )
 
@@ -1019,27 +949,7 @@ class Sleep(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate the area origin has line of sight and range."""
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position specified")
-
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(
-                status_message=f"Target position {target_pos} not in line of sight"
-            )
-
-        distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_visible_position_in_range(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply Sleep effect to current target (called once per target by convolution)."""
@@ -1178,25 +1088,8 @@ class PowerWordStun(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate line of sight and range."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:

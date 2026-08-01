@@ -46,10 +46,15 @@ class CharacterRulesetMismatchError(GameCreationCompositionError):
     """Encounter characters were authored under incompatible rulesets."""
 
 
-def character_ruleset_digest(
+def shared_deployment_ruleset_digest(
     deployments: Mapping[UUID, CharacterDeploymentSnapshot],
 ) -> str:
-    """Return the single ruleset identity shared by encounter characters."""
+    """Return the already-authored ruleset identity shared by deployments.
+
+    This does not derive or hash character rules.  The dependency-neutral
+    progression layer owns that operation; encounter composition only verifies
+    that the selected durable characters agree on its stored result.
+    """
     ruleset_digests = {
         deployment.expected_ruleset_digest
         for deployment in deployments.values()
@@ -365,10 +370,10 @@ def normalize_encounter_recipe(
 __all__ = [
     "CharacterRulesetMismatchError",
     "GameCreationCompositionError",
-    "character_ruleset_digest",
     "character_source_matches_snapshot",
     "normalize_encounter_recipe",
     "owned_character_source",
     "required_character_ids",
     "required_saved_roster_ids",
+    "shared_deployment_ruleset_digest",
 ]

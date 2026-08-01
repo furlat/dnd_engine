@@ -30,6 +30,10 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import VisualLoadoutSlot
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
 from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.spatial_effect_types import (
+    SpatialEffectChangeOperation,
+    SpatialEffectLayer,
+)
 from server.world_contracts import (
     APIEntitySummary,
     APIEntityVisibility,
@@ -93,6 +97,7 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
         "condition",
         "door",
         "light",
+        "spatial_effect",
         "equipment",
         "encounter",
     ],
@@ -251,16 +256,6 @@ class SubjectiveCombatant(PlayerReplicationModel):
     name: str = Field(min_length=1)
     initiative: int
     life_state: Optional[LifeState] = None
-    is_dead: bool
-
-    @model_validator(mode="after")
-    def validate_life_state_projection(self) -> "SubjectiveCombatant":
-        if (
-            self.life_state is not None
-            and self.is_dead is not (self.life_state is LifeState.DEAD)
-        ):
-            raise ValueError("is_dead must derive from life_state")
-        return self
 
 
 class SubjectiveEncounter(PlayerReplicationModel):
@@ -752,16 +747,35 @@ class MovementKind(str, Enum):
     JUMP = "jump"
 
 
+class MovementEndpointOutcome(str, Enum):
+    """Whether the final coordinate became authoritative entity position."""
+
+    COMMITTED = "committed"
+    NOT_COMMITTED = "not_committed"
+
+
 class MovementPresentationCue(PresentationCueBase):
     kind: Literal["movement"] = "movement"
     entity_uuid: str = Field(min_length=1)
     movement_kind: MovementKind
+    movement_sequence_id: str = Field(
+        min_length=1,
+        description=(
+            "Projection-native identity shared by every segment from one "
+            "movement action inside this replication partition."
+        ),
+    )
     trajectory: Tuple[Position, ...] = Field(
         min_length=2,
-        description="Ordered positions including the segment start and every committed destination.",
+        description=(
+            "Ordered positions including the segment start. Committed cues "
+            "contain committed destinations; a not-committed cue ends at one "
+            "authorized intended destination that did not become world state."
+        ),
     )
     path_start_index: int = Field(default=0, ge=0)
     path_total_steps: int = Field(ge=1)
+    endpoint_outcome: MovementEndpointOutcome
     perception_commit: Literal["observation_frame"] = Field(
         description=(
             "Perception changes commit atomically with this cue's containing "
@@ -774,6 +788,15 @@ class MovementPresentationCue(PresentationCueBase):
         represented_steps = len(self.trajectory) - 1
         if self.path_start_index + represented_steps > self.path_total_steps:
             raise ValueError("movement trajectory exceeds declared path order")
+        if self.endpoint_outcome is MovementEndpointOutcome.NOT_COMMITTED:
+            if represented_steps != 1:
+                raise ValueError(
+                    "not-committed movement must describe exactly one intended edge"
+                )
+            if not self.child_presentation_ids:
+                raise ValueError(
+                    "not-committed movement requires a delivered pre-edge reaction"
+                )
         return self
 
 
@@ -1043,10 +1066,6 @@ class SpellTargetPresentation(PlayerReplicationModel):
     def validate_target(self) -> "SpellTargetPresentation":
         if self.target_uuid is None and self.position is None:
             raise ValueError("spell target requires an entity UUID or a position")
-        if self.effect_presentation_ids and self.target_uuid is None:
-            raise ValueError(
-                "spell applications with entity effects require an explicit target UUID"
-            )
         if len(set(self.effect_presentation_ids)) != len(self.effect_presentation_ids):
             raise ValueError("spell application effect IDs must be unique")
         return self
@@ -1429,6 +1448,50 @@ class LightPresentationCue(PresentationCueBase):
         return self
 
 
+class SpatialEffectPresentationCue(PresentationCueBase):
+    """Observer-safe lifecycle cue for one independently owned world effect."""
+
+    kind: Literal["spatial_effect"] = "spatial_effect"
+    effect_uuid: str = Field(min_length=1)
+    content_ref: ContentRef
+    operation: SpatialEffectChangeOperation
+    layer: SpatialEffectLayer
+    anchor_position: Optional[Position] = None
+    affected_positions: Tuple[Position, ...] = Field(default_factory=tuple)
+    previous_positions: Tuple[Position, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_spatial_effect_lifecycle(self) -> "SpatialEffectPresentationCue":
+        if self.content_ref.definition_kind is not ContentDefinitionKind.SPATIAL_EFFECT:
+            raise ValueError("spatial-effect cue requires a spatial-effect content ref")
+        if self.child_presentation_ids:
+            raise ValueError("spatial-effect lifecycle cues are leaves")
+        if self.affected_positions != tuple(sorted(set(self.affected_positions))):
+            raise ValueError("spatial-effect affected positions must be unique and sorted")
+        if self.previous_positions != tuple(sorted(set(self.previous_positions))):
+            raise ValueError("spatial-effect previous positions must be unique and sorted")
+        disclosed = set(self.affected_positions) | set(self.previous_positions)
+        if not disclosed:
+            raise ValueError("spatial-effect cue requires disclosed geometry")
+        if self.anchor_position is not None and self.anchor_position not in disclosed:
+            raise ValueError("disclosed spatial-effect anchor must belong to its geometry")
+        if (
+            self.operation
+            in {
+                SpatialEffectChangeOperation.CREATED,
+                SpatialEffectChangeOperation.REVEALED,
+            }
+            and not self.affected_positions
+        ):
+            raise ValueError("created or revealed effect requires current geometry")
+        if (
+            self.operation is SpatialEffectChangeOperation.REMOVED
+            and not self.previous_positions
+        ):
+            raise ValueError("removed effect requires former geometry")
+        return self
+
+
 class EquipmentPresentationCue(PresentationCueBase):
     kind: Literal["equipment"] = "equipment"
     entity_uuid: str = Field(min_length=1)
@@ -1489,6 +1552,7 @@ SubjectivePresentationCue: TypeAlias = Annotated[
         ConditionPresentationCue,
         DoorPresentationCue,
         LightPresentationCue,
+        SpatialEffectPresentationCue,
         EquipmentPresentationCue,
         EncounterPresentationCue,
     ],
@@ -1551,6 +1615,16 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
 
         for cue in self.presentation:
             if isinstance(cue, MovementPresentationCue):
+                if cue.endpoint_outcome is MovementEndpointOutcome.NOT_COMMITTED:
+                    if any(
+                        isinstance(patch, EntityUpsertPatch)
+                        and patch.entity.uuid == cue.entity_uuid
+                        and patch.entity.position == cue.trajectory[-1]
+                        for patch in self.patches
+                    ):
+                        raise ValueError(
+                            "not-committed movement cannot project destination occupancy"
+                        )
                 for child_id in cue.child_presentation_ids:
                     child = by_id[child_id]
                     if not isinstance(
@@ -1619,6 +1693,7 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
                             ConditionPresentationCue,
                             DoorPresentationCue,
                             LightPresentationCue,
+                            SpatialEffectPresentationCue,
                             EquipmentPresentationCue,
                         ),
                     ):
@@ -1758,10 +1833,29 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
                             HealPresentationCue,
                             ConditionPresentationCue,
                             ForcedMovementPresentationCue,
+                            SpatialEffectPresentationCue,
                         ),
                     ):
                         raise ValueError(
-                            "spell impact IDs must identify damage, heal, condition, or forced-movement cues"
+                            "spell impact IDs must identify a typed spell effect cue"
+                        )
+                    if isinstance(effect, SpatialEffectPresentationCue):
+                        if (
+                            target.position is None
+                            or target.target_uuid is not None
+                            or target.position
+                            not in {
+                                *effect.affected_positions,
+                                *effect.previous_positions,
+                            }
+                        ):
+                            raise ValueError(
+                                "spatial spell effect must match its position application"
+                            )
+                        continue
+                    if target.target_uuid is None:
+                        raise ValueError(
+                            "non-spatial spell effect requires an explicit target UUID"
                         )
                     effect_target = (
                         effect.entity_uuid
@@ -2064,7 +2158,9 @@ __all__ = [
     "LifeStatePresentationCue",
     "LineAreaGeometry",
     "LightPresentationCue",
+    "SpatialEffectPresentationCue",
     "MovementKind",
+    "MovementEndpointOutcome",
     "MovementPresentationCue",
     "ObserverVisibilityRemovePatch",
     "ObserverVisibilityReplacePatch",

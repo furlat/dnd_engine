@@ -428,7 +428,7 @@ def _derive_objects(world: SubjectiveWorldState) -> ObjectFacts:
     opened: list[str] = []
     for obj in world.known_objects.values():
         known.append(obj.uuid)
-        is_open = _optional_bool(obj.state, "is_open")
+        is_open = obj.state.is_open
         if is_open is False:
             closed.append(obj.uuid)
         elif is_open is True:
@@ -451,10 +451,7 @@ def _derive_topology(world: SubjectiveWorldState) -> TopologyFacts:
         for obj in world.known_objects.values()
         if obj.knowledge_state is KnowledgeState.VISIBLE
         and obj.position is not None
-        and (
-            obj.state.get("blocks_vision") is True
-            or obj.state.get("blocks_vision_field") is True
-        )
+        and obj.state.blocks_vision
     }
     for tile in world.known_tiles.values():
         known.append(tile.key)
@@ -841,9 +838,3 @@ def _mapping_items_identical(
 def _same_object(current: object, previous: object) -> bool:
     """Return identity equality, including the shared None singleton."""
     return current is previous
-
-
-def _optional_bool(values: Mapping[str, object], key: str) -> Optional[bool]:
-    """Return a known boolean without coercing arbitrary object state."""
-    value = values.get(key)
-    return value if type(value) is bool else None

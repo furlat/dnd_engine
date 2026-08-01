@@ -1,6 +1,6 @@
 {
-  "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "a4f2ae22f0df05ac60db40884a3911d3f65a23cdd333f9582d1091d1f177b8ea",
+  "asset_index_digest": "3b17d6d5715c5bd92bf4a251a98a60707160fe20d2775efc8b23512243b8a8a6",
+  "binding_digest": "0672909a4ffb2d60865fbd62a0c878dc796a83396a49a63ad3253f15d87ec447",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -273,7 +273,7 @@
       "content_ref": {
         "content_id": "background.adventurer",
         "content_version": 2,
-        "definition_contract_hash": "16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7",
+        "definition_contract_hash": "b3d17f9bcb7917bc69cc35c29dfdfa91ffcec1c6ff74caabd59f87d070651f1e",
         "definition_kind": "background",
         "pack_id": "content.neurodragon"
       },
@@ -353,6 +353,20 @@
       "icon_key": "item.weapon-coat-of-flame"
     },
     {
+      "asset_sha256": "3c0249c8b2695c12f0b2e16f68fadcd4c43e9b4eaa328a96fe4aa5c865e7e975",
+      "content_ref": {
+        "content_id": "condition.environment.wet",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
+        "definition_kind": "condition",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.neurodragon:condition:condition.environment.wet@1->condition.environment.wet",
+      "icon_key": "condition.environment.wet"
+    },
+    {
       "asset_sha256": "73f237648f30d14dc1ebafc9a3917abe5770d626b0c05687e9be09dbdc1025b0",
       "content_ref": {
         "content_id": "condition.field_focus",
@@ -365,34 +379,6 @@
       "evidence_kind": "backend_condition_class",
       "evidence_token": "dnd.extensions.field_focus.FieldFocus",
       "icon_key": "condition.dnd-extensions-field-focus-fieldfocus"
-    },
-    {
-      "asset_sha256": "611a29c2ea03b360862b6b0b77171f9b4e41bb8e6e9ff3b6bde23037fc65783e",
-      "content_ref": {
-        "content_id": "condition.tile.spike_trap",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "content.neurodragon"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.tile_conditions.SpikeTrapCondition",
-      "icon_key": "condition.dnd-tile-conditions-spiketrapcondition"
-    },
-    {
-      "asset_sha256": "b5a7276fff40132d9d47f00043feb505da682dd7e923a778b82600f5a65ef75a",
-      "content_ref": {
-        "content_id": "condition.tile.zone_marker",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "content.neurodragon"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.tile_conditions.ZoneMarkerCondition",
-      "icon_key": "condition.dnd-tile-conditions-zonemarkercondition"
     },
     {
       "asset_sha256": null,
@@ -1001,7 +987,7 @@
       "content_ref": {
         "content_id": "environment.directional_door",
         "content_version": 1,
-        "definition_contract_hash": "6e16c65b95be90b3a9177a1f2d9223776fcc6d7c1ebac7a3713786fdec083ca8",
+        "definition_contract_hash": "ca6e5810a48131882f188c8e29b6f41fc7321400119772d905b5e65a2b63e720",
         "definition_kind": "environment_object",
         "pack_id": "content.neurodragon"
       },
@@ -1015,7 +1001,7 @@
       "content_ref": {
         "content_id": "environment.directional_wall",
         "content_version": 1,
-        "definition_contract_hash": "77eaa1ae5b4be3228a01b62f68cbff93d8361c4ebb1649562e003b85b81665a7",
+        "definition_contract_hash": "a6e8ac50f728534ddd3fed4c103dc307d700d941cccd7b4e9aacd0839ff181a8",
         "definition_kind": "environment_object",
         "pack_id": "content.neurodragon"
       },
@@ -1883,7 +1869,7 @@
       "content_ref": {
         "content_id": "starting_apparel.common_clothes",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.neurodragon"
       },
@@ -1897,7 +1883,7 @@
       "content_ref": {
         "content_id": "starting_apparel.fine_clothes",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.neurodragon"
       },
@@ -1911,7 +1897,7 @@
       "content_ref": {
         "content_id": "starting_apparel.robes",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.neurodragon"
       },
@@ -1925,7 +1911,7 @@
       "content_ref": {
         "content_id": "starting_apparel.travelers_clothes",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.neurodragon"
       },
@@ -2523,6 +2509,48 @@
       "icon_key": "action.call-lightning-strike"
     },
     {
+      "asset_sha256": "a86fdcf8b891eeccbbe9c554d1ff98ca0ad67bfef355bb77d9d965444cd53e9f",
+      "content_ref": {
+        "content_id": "action.spell.entangle.escape",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.spell.entangle.escape@1->action.escape-entangle",
+      "icon_key": "action.escape-entangle"
+    },
+    {
+      "asset_sha256": "97e6aab0006ee0d8091f383fbc44b613deb1fa6977abdd0ef1cc70ee9ba73589",
+      "content_ref": {
+        "content_id": "action.spell.evards_black_tentacles.escape_dexterity",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.spell.evards_black_tentacles.escape_dexterity@1->action.escape-black-tentacles-dexterity",
+      "icon_key": "action.escape-black-tentacles-dexterity"
+    },
+    {
+      "asset_sha256": "73e5115e270a92643b8c66ed6b93ef31acb95ec8b804981d0c970592d4d47d5d",
+      "content_ref": {
+        "content_id": "action.spell.evards_black_tentacles.escape_strength",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:action:action.spell.evards_black_tentacles.escape_strength@1->action.escape-black-tentacles-strength",
+      "icon_key": "action.escape-black-tentacles-strength"
+    },
+    {
       "asset_sha256": "3e6a1993a961b129b7b05ac13a8a1ad06c77be7f5876d51f5eaea3871ea8275d",
       "content_ref": {
         "content_id": "action.spell.expeditious_retreat.dash",
@@ -2681,7 +2709,7 @@
       "content_ref": {
         "content_id": "background.acolyte",
         "content_version": 2,
-        "definition_contract_hash": "16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7",
+        "definition_contract_hash": "b3d17f9bcb7917bc69cc35c29dfdfa91ffcec1c6ff74caabd59f87d070651f1e",
         "definition_kind": "background",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2695,7 +2723,7 @@
       "content_ref": {
         "content_id": "class.barbarian",
         "content_version": 1,
-        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
+        "definition_contract_hash": "53ae39c80cde83e83b3e2d5dfe1c7f8a96cc05ad7f99a2c3636b2597b265f93a",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2709,7 +2737,7 @@
       "content_ref": {
         "content_id": "class.fighter",
         "content_version": 1,
-        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
+        "definition_contract_hash": "53ae39c80cde83e83b3e2d5dfe1c7f8a96cc05ad7f99a2c3636b2597b265f93a",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2723,7 +2751,7 @@
       "content_ref": {
         "content_id": "class.sorcerer",
         "content_version": 1,
-        "definition_contract_hash": "d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17",
+        "definition_contract_hash": "53ae39c80cde83e83b3e2d5dfe1c7f8a96cc05ad7f99a2c3636b2597b265f93a",
         "definition_kind": "class",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -2737,13 +2765,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.brutal_critical",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.BrutalCritical",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.brutal_critical@1->condition.dnd-classes-barbarian-brutalcritical",
       "icon_key": "condition.dnd-classes-barbarian-brutalcritical"
     },
     {
@@ -2751,13 +2779,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.danger_sense",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.DangerSense",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.danger_sense@1->condition.dnd-classes-barbarian-dangersense",
       "icon_key": "condition.dnd-classes-barbarian-dangersense"
     },
     {
@@ -2765,13 +2793,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.fast_movement",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.FastMovement",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.fast_movement@1->condition.dnd-classes-barbarian-fastmovement",
       "icon_key": "condition.dnd-classes-barbarian-fastmovement"
     },
     {
@@ -2779,13 +2807,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.feral_instinct",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.FeralInstinct",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.feral_instinct@1->condition.dnd-classes-barbarian-feralinstinct",
       "icon_key": "condition.dnd-classes-barbarian-feralinstinct"
     },
     {
@@ -2807,13 +2835,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.frenzy",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.rage.FrenzyFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.frenzy@1->condition.dnd-classes-rage-frenzyfeature",
       "icon_key": "condition.dnd-classes-rage-frenzyfeature"
     },
     {
@@ -2821,13 +2849,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.indomitable_might",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.IndomitableMight",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.indomitable_might@1->condition.dnd-classes-barbarian-indomitablemight",
       "icon_key": "condition.dnd-classes-barbarian-indomitablemight"
     },
     {
@@ -2835,13 +2863,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.intimidating_presence",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.IntimidatingPresenceFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.intimidating_presence@1->condition.dnd-classes-barbarian-intimidatingpresencefeature",
       "icon_key": "condition.dnd-classes-barbarian-intimidatingpresencefeature"
     },
     {
@@ -2863,13 +2891,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.mindless_rage",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.MindlessRage",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.mindless_rage@1->condition.dnd-classes-barbarian-mindlessrage",
       "icon_key": "condition.dnd-classes-barbarian-mindlessrage"
     },
     {
@@ -2877,13 +2905,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.persistent_rage",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.PersistentRage",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.persistent_rage@1->condition.dnd-classes-barbarian-persistentrage",
       "icon_key": "condition.dnd-classes-barbarian-persistentrage"
     },
     {
@@ -2891,13 +2919,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.primal_champion",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.PrimalChampion",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.primal_champion@1->condition.dnd-classes-barbarian-primalchampion",
       "icon_key": "condition.dnd-classes-barbarian-primalchampion"
     },
     {
@@ -2905,13 +2933,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.rage",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.rage.RageFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.rage@1->condition.dnd-classes-rage-ragefeature",
       "icon_key": "condition.dnd-classes-rage-ragefeature"
     },
     {
@@ -2933,13 +2961,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.reckless_attack",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.RecklessAttackFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.reckless_attack@1->condition.dnd-classes-barbarian-recklessattackfeature",
       "icon_key": "condition.dnd-classes-barbarian-recklessattackfeature"
     },
     {
@@ -2961,13 +2989,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.relentless_rage",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.RelentlessRage",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.relentless_rage@1->condition.dnd-classes-barbarian-relentlessrage",
       "icon_key": "condition.dnd-classes-barbarian-relentlessrage"
     },
     {
@@ -2975,13 +3003,13 @@
       "content_ref": {
         "content_id": "class_feature.barbarian.retaliation",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.barbarian.Retaliation",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.barbarian.retaliation@1->condition.dnd-classes-barbarian-retaliation",
       "icon_key": "condition.dnd-classes-barbarian-retaliation"
     },
     {
@@ -3003,13 +3031,13 @@
       "content_ref": {
         "content_id": "class_feature.extra_attack",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.ExtraAttackFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.extra_attack@1->condition.dnd-classes-fighter-extraattackfeature",
       "icon_key": "condition.dnd-classes-fighter-extraattackfeature"
     },
     {
@@ -3017,13 +3045,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.action_surge",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.ActionSurgeFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.action_surge@1->condition.dnd-classes-fighter-actionsurgefeature",
       "icon_key": "condition.dnd-classes-fighter-actionsurgefeature"
     },
     {
@@ -3031,13 +3059,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.archery",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.FightingStyleArchery",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.archery@1->condition.dnd-classes-fighter-fightingstylearchery",
       "icon_key": "condition.dnd-classes-fighter-fightingstylearchery"
     },
     {
@@ -3045,13 +3073,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.defense",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.FightingStyleDefense",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.defense@1->condition.dnd-classes-fighter-fightingstyledefense",
       "icon_key": "condition.dnd-classes-fighter-fightingstyledefense"
     },
     {
@@ -3059,13 +3087,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.dueling",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.FightingStyleDueling",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.dueling@1->condition.dnd-classes-fighter-fightingstyledueling",
       "icon_key": "condition.dnd-classes-fighter-fightingstyledueling"
     },
     {
@@ -3073,13 +3101,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.great_weapon_fighting",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.GreatWeaponFighting",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.great_weapon_fighting@1->condition.dnd-classes-fighter-greatweaponfighting",
       "icon_key": "condition.dnd-classes-fighter-greatweaponfighting"
     },
     {
@@ -3087,13 +3115,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.protection",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.FightingStyleProtection",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.protection@1->condition.dnd-classes-fighter-fightingstyleprotection",
       "icon_key": "condition.dnd-classes-fighter-fightingstyleprotection"
     },
     {
@@ -3101,13 +3129,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.fighting_style.two_weapon_fighting",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.FightingStyleTwoWeaponFighting",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.fighting_style.two_weapon_fighting@1->condition.dnd-classes-fighter-fightingstyletwoweaponfighting",
       "icon_key": "condition.dnd-classes-fighter-fightingstyletwoweaponfighting"
     },
     {
@@ -3115,13 +3143,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.improved_critical",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.ImprovedCritical",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.improved_critical@1->condition.dnd-classes-fighter-improvedcritical",
       "icon_key": "condition.dnd-classes-fighter-improvedcritical"
     },
     {
@@ -3129,13 +3157,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.indomitable",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.Indomitable",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.indomitable@1->condition.dnd-classes-fighter-indomitable",
       "icon_key": "condition.dnd-classes-fighter-indomitable"
     },
     {
@@ -3157,13 +3185,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.second_wind",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.SecondWindFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.second_wind@1->condition.dnd-classes-fighter-secondwindfeature",
       "icon_key": "condition.dnd-classes-fighter-secondwindfeature"
     },
     {
@@ -3171,13 +3199,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.superior_critical",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.SuperiorCritical",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.superior_critical@1->condition.dnd-classes-fighter-superiorcritical",
       "icon_key": "condition.dnd-classes-fighter-superiorcritical"
     },
     {
@@ -3185,13 +3213,13 @@
       "content_ref": {
         "content_id": "class_feature.fighter.survivor",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.fighter.Survivor",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.fighter.survivor@1->condition.dnd-classes-fighter-survivor",
       "icon_key": "condition.dnd-classes-fighter-survivor"
     },
     {
@@ -3381,13 +3409,13 @@
       "content_ref": {
         "content_id": "class_feature.sorcerer.draconic_resilience",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.sorcerer.DraconicResilience",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_resilience@1->condition.dnd-classes-sorcerer-draconicresilience",
       "icon_key": "condition.dnd-classes-sorcerer-draconicresilience"
     },
     {
@@ -3591,13 +3619,13 @@
       "content_ref": {
         "content_id": "class_feature.sorcerer.sorcery_points",
         "content_version": 1,
-        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c",
+        "definition_contract_hash": "da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c",
         "definition_kind": "class_feature",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.sorcerer.SorceryPointsFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:class_feature:class_feature.sorcerer.sorcery_points@1->condition.dnd-classes-sorcerer-sorcerypointsfeature",
       "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
     },
     {
@@ -4679,34 +4707,6 @@
       "icon_key": "condition.dnd-spells-divination-trueseeingeffect"
     },
     {
-      "asset_sha256": "5f23ca0ef0a6ae22b7ad2c8171a8743a35ac8805f179be0dc06d66d59794b01a",
-      "content_ref": {
-        "content_id": "condition.spell.web.restrained",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.spells.conjuration.WebRestrained",
-      "icon_key": "condition.dnd-spells-conjuration-webrestrained"
-    },
-    {
-      "asset_sha256": "f52f7d78e0ea4fb41ff5c2307c18248cbefce100095100e56ced38104a402d00",
-      "content_ref": {
-        "content_id": "condition.spell.web.zone",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.spells.conjuration.WebZone",
-      "icon_key": "condition.dnd-spells-conjuration-webzone"
-    },
-    {
       "asset_sha256": null,
       "content_ref": {
         "content_id": "creature.acolyte",
@@ -5085,20 +5085,6 @@
       "icon_key": null
     },
     {
-      "asset_sha256": "11cb8be0f7ea9ed014f27cb5c94eb4ce376ed75391d63def99656ef5d588385b",
-      "content_ref": {
-        "content_id": "environment.spell_object.guardian_of_faith",
-        "content_version": 1,
-        "definition_contract_hash": "d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4",
-        "definition_kind": "environment_object",
-        "pack_id": "content.srd_5_1_cc"
-      },
-      "decision": "bind",
-      "evidence_kind": "content_dependency",
-      "evidence_token": "creates_object:content.srd_5_1_cc:spell:spell.guardian_of_faith@1->content.srd_5_1_cc:environment_object:environment.spell_object.guardian_of_faith@1",
-      "icon_key": "spell.guardian-of-faith"
-    },
-    {
       "asset_sha256": "f9582cd3cd96c3340c59c4b2f12ba04ee91cbe91342a202bd6470cc6b0a8f5ba",
       "content_ref": {
         "content_id": "environment.spell_object.heroes_feast",
@@ -5117,13 +5103,13 @@
       "content_ref": {
         "content_id": "feat.lucky",
         "content_version": 1,
-        "definition_contract_hash": "73cd514d4386ed22cd1d6fd2641336efceca75056b54dd63e81b96f4395f708d",
+        "definition_contract_hash": "f430994948136c84dcf2ba948942d242ea1a9e654a7b31379713c02346936968",
         "definition_kind": "feat",
         "pack_id": "content.srd_5_1_cc"
       },
       "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.classes.feats.LuckyFeature",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:feat:feat.lucky@1->condition.dnd-classes-feats-luckyfeature",
       "icon_key": "condition.dnd-classes-feats-luckyfeature"
     },
     {
@@ -6041,7 +6027,7 @@
       "content_ref": {
         "content_id": "species.dragonborn",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6055,7 +6041,7 @@
       "content_ref": {
         "content_id": "species.dwarf",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6069,7 +6055,7 @@
       "content_ref": {
         "content_id": "species.elf",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6083,7 +6069,7 @@
       "content_ref": {
         "content_id": "species.gnome",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6097,7 +6083,7 @@
       "content_ref": {
         "content_id": "species.half_elf",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6111,7 +6097,7 @@
       "content_ref": {
         "content_id": "species.half_orc",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6125,7 +6111,7 @@
       "content_ref": {
         "content_id": "species.halfling",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6139,7 +6125,7 @@
       "content_ref": {
         "content_id": "species.human",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6153,7 +6139,7 @@
       "content_ref": {
         "content_id": "species.tiefling",
         "content_version": 2,
-        "definition_contract_hash": "940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a",
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6",
         "definition_kind": "species",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6167,7 +6153,7 @@
       "content_ref": {
         "content_id": "species_variant.dwarf.hill",
         "content_version": 2,
-        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
+        "definition_contract_hash": "374171d50a550098cf2b68d4dfb40c8707e34e7904c3208c533c311ca040c528",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6181,7 +6167,7 @@
       "content_ref": {
         "content_id": "species_variant.elf.high",
         "content_version": 2,
-        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
+        "definition_contract_hash": "374171d50a550098cf2b68d4dfb40c8707e34e7904c3208c533c311ca040c528",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6195,7 +6181,7 @@
       "content_ref": {
         "content_id": "species_variant.gnome.rock",
         "content_version": 2,
-        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
+        "definition_contract_hash": "374171d50a550098cf2b68d4dfb40c8707e34e7904c3208c533c311ca040c528",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6209,7 +6195,7 @@
       "content_ref": {
         "content_id": "species_variant.halfling.lightfoot",
         "content_version": 2,
-        "definition_contract_hash": "0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7",
+        "definition_contract_hash": "374171d50a550098cf2b68d4dfb40c8707e34e7904c3208c533c311ca040c528",
         "definition_kind": "species_variant",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -6693,6 +6679,34 @@
       "evidence_kind": "backend_spell_catalog",
       "evidence_token": "backend_spell_catalog::enlarge_reduce",
       "icon_key": "spell.enlarge-reduce"
+    },
+    {
+      "asset_sha256": "66ba60340e1a2df9b245afac85620ae0df65c23ba5c4d08cbe810650db358ec2",
+      "content_ref": {
+        "content_id": "spell.entangle",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.entangle@1->spell.entangle",
+      "icon_key": "spell.entangle"
+    },
+    {
+      "asset_sha256": "39e02b872b661ddca1c774b524587a0b91aa8b85acc4a96da07fef96e04c6eb7",
+      "content_ref": {
+        "content_id": "spell.evards_black_tentacles",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:content.srd_5_1_cc:spell:spell.evards_black_tentacles@1->spell.evards-black-tentacles",
+      "icon_key": "spell.evards-black-tentacles"
     },
     {
       "asset_sha256": "5b5228208bdfc4462925bd7e817bf774b3f7f99f9b15d8d43938ceb10be72308",
@@ -7791,7 +7805,7 @@
       "content_ref": {
         "content_id": "starting_equipment.barbarian.dual_axes",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7805,7 +7819,7 @@
       "content_ref": {
         "content_id": "starting_equipment.barbarian.greataxe",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7819,7 +7833,7 @@
       "content_ref": {
         "content_id": "starting_equipment.barbarian.sword_shield",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7833,7 +7847,7 @@
       "content_ref": {
         "content_id": "starting_equipment.fighter.archery",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7847,7 +7861,7 @@
       "content_ref": {
         "content_id": "starting_equipment.fighter.dual_wield",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7861,7 +7875,7 @@
       "content_ref": {
         "content_id": "starting_equipment.fighter.greatsword",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7875,7 +7889,7 @@
       "content_ref": {
         "content_id": "starting_equipment.fighter.sword_shield",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7889,7 +7903,7 @@
       "content_ref": {
         "content_id": "starting_equipment.sorcerer.dagger",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7903,7 +7917,7 @@
       "content_ref": {
         "content_id": "starting_equipment.sorcerer.quarterstaff",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7917,7 +7931,7 @@
       "content_ref": {
         "content_id": "starting_holdings.background.acolyte",
         "content_version": 1,
-        "definition_contract_hash": "dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605",
+        "definition_contract_hash": "bc07174e22b9b83defe02ec3087226d6a4399ea767095ab36b78fe66ffee6e90",
         "definition_kind": "starting_equipment_package",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7931,7 +7945,7 @@
       "content_ref": {
         "content_id": "subclass.barbarian.berserker",
         "content_version": 1,
-        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
+        "definition_contract_hash": "cfe10e19c97facb219f6f0b008407ff0ed6e5fa6e83868efa080ede003c0d1a8",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7945,7 +7959,7 @@
       "content_ref": {
         "content_id": "subclass.fighter.champion",
         "content_version": 1,
-        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
+        "definition_contract_hash": "cfe10e19c97facb219f6f0b008407ff0ed6e5fa6e83868efa080ede003c0d1a8",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -7959,7 +7973,7 @@
       "content_ref": {
         "content_id": "subclass.sorcerer.draconic_bloodline",
         "content_version": 1,
-        "definition_contract_hash": "d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d",
+        "definition_contract_hash": "cfe10e19c97facb219f6f0b008407ff0ed6e5fa6e83868efa080ede003c0d1a8",
         "definition_kind": "subclass",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8127,7 +8141,7 @@
       "content_ref": {
         "content_id": "trait.origin.background.acolyte.proficiencies",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8141,7 +8155,7 @@
       "content_ref": {
         "content_id": "trait.origin.background.acolyte.shelter_of_the_faithful",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8295,7 +8309,7 @@
       "content_ref": {
         "content_id": "trait.origin.dwarf.combat_training",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8309,7 +8323,7 @@
       "content_ref": {
         "content_id": "trait.origin.dwarf.dwarven_resilience",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8323,7 +8337,7 @@
       "content_ref": {
         "content_id": "trait.origin.dwarf.physical.medium_25",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8337,7 +8351,7 @@
       "content_ref": {
         "content_id": "trait.origin.dwarf.stonecunning",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8351,7 +8365,7 @@
       "content_ref": {
         "content_id": "trait.origin.elf.fey_ancestry",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8365,7 +8379,7 @@
       "content_ref": {
         "content_id": "trait.origin.elf.keen_senses",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8379,7 +8393,7 @@
       "content_ref": {
         "content_id": "trait.origin.elf.trance",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8393,7 +8407,7 @@
       "content_ref": {
         "content_id": "trait.origin.gnome.cunning",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8407,7 +8421,7 @@
       "content_ref": {
         "content_id": "trait.origin.half_orc.menacing",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8435,7 +8449,7 @@
       "content_ref": {
         "content_id": "trait.origin.half_orc.savage_attacks",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8449,7 +8463,7 @@
       "content_ref": {
         "content_id": "trait.origin.halfling.brave",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8477,7 +8491,7 @@
       "content_ref": {
         "content_id": "trait.origin.halfling.nimbleness",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8491,7 +8505,7 @@
       "content_ref": {
         "content_id": "trait.origin.high_elf.weapon_training",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8505,7 +8519,7 @@
       "content_ref": {
         "content_id": "trait.origin.hill_dwarf.dwarven_toughness",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8519,7 +8533,7 @@
       "content_ref": {
         "content_id": "trait.origin.lightfoot.naturally_stealthy",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8533,7 +8547,7 @@
       "content_ref": {
         "content_id": "trait.origin.rock_gnome.artificers_lore",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8547,7 +8561,7 @@
       "content_ref": {
         "content_id": "trait.origin.rock_gnome.tinker",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8561,7 +8575,7 @@
       "content_ref": {
         "content_id": "trait.origin.shared.darkvision_60",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8575,7 +8589,7 @@
       "content_ref": {
         "content_id": "trait.origin.shared.physical.medium_30",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8589,7 +8603,7 @@
       "content_ref": {
         "content_id": "trait.origin.shared.physical.small_25",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8603,7 +8617,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.dragonborn.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8617,7 +8631,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.dwarf.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8631,7 +8645,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.elf.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8645,7 +8659,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.gnome.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8659,7 +8673,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.half_elf.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8673,7 +8687,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.half_orc.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8687,7 +8701,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.halfling.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8701,7 +8715,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.human.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8715,7 +8729,7 @@
       "content_ref": {
         "content_id": "trait.origin.species.tiefling.languages",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -8729,7 +8743,7 @@
       "content_ref": {
         "content_id": "trait.origin.tiefling.fire_resistance",
         "content_version": 1,
-        "definition_contract_hash": "693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f",
+        "definition_contract_hash": "1e68089329b9e120b6aa16b185de91132e5952a208a87094c292179d3a550b31",
         "definition_kind": "trait",
         "pack_id": "content.srd_5_1_cc"
       },
@@ -13678,9 +13692,9 @@
   ],
   "schema_version": 1,
   "source_manifest": {
-    "asset_count": 515,
+    "asset_count": 521,
     "schema_version": 3,
-    "sha256": "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c",
+    "sha256": "04f7ce7a14171d0ffd07dddd4cb5d3dcf0a0cf43f15a3d38ec7d17f77f887913",
     "style_id": "fantasy-classic-v1"
   }
 }

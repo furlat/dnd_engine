@@ -153,16 +153,11 @@ class SavingThrow(BaseBlock):
             self.remove_proficiency_source(source_id)
 
     def _get_proficiency_converter(self) -> Callable[[int], int]:
-        """
-        Returns a lambda function that converts the proficiency bonus based on proficiency status.
+        """Return the source-owned proficiency conversion function.
 
-        For saving throws, this is a simple binary multiplier:
-        - If proficient: returns lambda x: x (multiplier of 1)
-        - If not proficient: returns lambda x: 0 (multiplier of 0)
-
-        Returns:
-            Callable[[int], int]: A lambda function that applies the appropriate multiplier
-                                 to the proficiency bonus.
+        The converter applies the strongest registered proficiency mode to the
+        supplied character proficiency bonus. With no registered source it
+        returns zero.
         """
         def convert(proficiency_bonus: int) -> int:
             return self.proficiency_sources.apply(proficiency_bonus)

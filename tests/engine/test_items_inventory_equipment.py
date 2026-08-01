@@ -1,9 +1,9 @@
 """Engine semantic tests for items, inventory, and equipment."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from dnd.actions_functional import execute_use_action, setup_standard_actions
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.blocks.equipment import BodyArmor, Shield, Weapon
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -11,7 +11,16 @@ from dnd.core.equipment_types import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventHandler, EventQueue, EventPhase, EventType, Trigger
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventQueue,
+    EventPhase,
+    EventType,
+    SpatialEffectInteractionEvent,
+    Trigger,
+)
+from dnd.core.spatial_effect_types import SpatialEffectInteractionOperation
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
@@ -30,7 +39,7 @@ from dnd.items.environment_interactables import (
     StorageChest,
     DoorObject,
 )
-from dnd.items.torches import TORCH_RECIPE, Torch
+from dnd.items.torches import TORCH_RECIPE, Torch, WallTorch
 from dnd.items.weapons import (
     GREATSWORD_RECIPE,
     SHORTBOW_RECIPE,
@@ -670,6 +679,7 @@ def test_eb_13_007_usable_item_actions_inject_user_and_item_identity() -> None:
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
     )
+    assert isinstance(potion, UsableItem)
     put_in_inventory(entity, potion)
 
     actions = potion.get_use_actions(entity.uuid)
@@ -693,6 +703,7 @@ def test_eb_13_008_consumable_use_actions_consume_charges_and_stacks() -> None:
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
     )
+    assert isinstance(potion, UsableItem)
     potion.stack_count = 2
     put_in_inventory(entity, potion)
     set_hp(entity, 1)
@@ -728,6 +739,7 @@ def test_eb_13_020_generic_use_actions_require_sufficient_charges() -> None:
         entity.uuid,
         origin=ItemRuntimeOrigin.STARTER,
     )
+    assert isinstance(potion, UsableItem)
     potion.charges = 1
     potion.max_charges = 2
     potion.use_action_templates[0].charge_cost = 2
@@ -900,6 +912,28 @@ def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
     assert torch.is_lit
     assert torch._light_source_uuid is not None
     assert origin_tile.resolved_light_level == LightLevel.VERY_BRIGHT
+    flame_events = [
+        candidate
+        for candidate in EventQueue.get_events_by_type(
+            EventType.SPATIAL_EFFECT_INTERACTION
+        )
+        if isinstance(candidate, SpatialEffectInteractionEvent)
+        and candidate.operation is SpatialEffectInteractionOperation.IGNITE
+        and candidate.source_object_uuid == torch.uuid
+    ]
+    assert [candidate.phase for candidate in flame_events] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    parent_ids = {candidate.parent_event for candidate in flame_events}
+    assert len(parent_ids) == 1
+    parent_id = next(iter(parent_ids))
+    assert parent_id is not None
+    flame_parent = EventQueue.get_event_by_uuid(parent_id)
+    assert flame_parent is not None
+    assert flame_parent.lineage_uuid == event.lineage_uuid
 
     dropped = entity.drop_item(torch.uuid, (1, 0))
 
@@ -909,6 +943,67 @@ def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
     assert grid.get_object_position(torch.uuid) == (1, 0)
     assert origin_tile.resolved_light_level == LightLevel.DARKNESS
     assert drop_tile.resolved_light_level == LightLevel.DARKNESS
+
+
+def test_torches_do_not_commit_lit_state_without_a_light_anchor() -> None:
+    """Invalid portable and fixture anchors cannot create partial lit state."""
+    reset_item_state(default_light=LightLevel.DARKNESS)
+    portable = materialize_item(
+        TORCH_RECIPE,
+        uuid4(),
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Torch,
+    )
+    fixture = WallTorch(source_entity_uuid=uuid4())
+
+    portable.ignite(uuid4())
+    fixture.light()
+
+    assert portable.is_lit is False
+    assert portable._light_source_uuid is None
+    assert fixture.is_lit is False
+    assert fixture._light_source_uuid is None
+
+
+def test_item_damage_declaration_veto_prevents_breakage() -> None:
+    """Breakable objects must honor the canonical damage declaration veto."""
+    reset_item_state()
+    source = create_skeleton(name="Source", position=(0, 0))
+    item = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Protected Crate",
+        is_targetable=True,
+        health=BaseItem.create_item_health(uuid4(), hp=8),
+    )
+    hp_before = item.get_hp()
+
+    def veto_damage(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Object damage vetoed")
+
+    item.add_event_handler(
+        EventHandler(
+            source_entity_uuid=item.uuid,
+            name="Protect object from damage",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.DECLARATION,
+                    event_target_entity_uuid=item.uuid,
+                ),
+            ],
+            event_processor=veto_damage,
+        )
+    )
+
+    applied = item.receive_damage(
+        99,
+        DamageType.BLUDGEONING,
+        source.uuid,
+    )
+
+    assert applied == 0
+    assert item.get_hp() == hp_before
+    assert BaseBlock.get(item.uuid) is item
 
 
 if __name__ == "__main__":

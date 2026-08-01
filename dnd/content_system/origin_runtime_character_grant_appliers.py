@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from uuid import uuid5
 
 from dnd.blocks.action_economy import (
     RechargeType,
@@ -14,6 +13,12 @@ from dnd.content_system.character_build_validation import (
 )
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
+)
+from dnd.content_system.character_grant_applier_runtime import (
+    CharacterGrantInstallation,
+    character_grant_id,
+    grant_receipt,
+    require_grant_ref,
 )
 from dnd.content_system.character_grant_types import CharacterGrantReceipt
 from dnd.core.events import EventHandler, EventPhase, EventType, Trigger
@@ -38,8 +43,7 @@ def _apply_halfling_lucky(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    if entry.content_ref != HALFLING_LUCKY_REF:
-        raise ValueError("Halfling Lucky applier received a different ref")
+    require_grant_ref(entry, HALFLING_LUCKY_REF)
     entity = context.entity
     handler = EventHandler(
         name="Halfling Lucky",
@@ -58,21 +62,12 @@ def _apply_halfling_lucky(
         ],
         event_processor=halfling_lucky_processor,
     )
-    try:
-        context.runtime.bind_granted_behavior(
-            handler,
-            provider_ref=HALFLING_LUCKY_REF,
-            runtime_owner_uuid=entity.uuid,
-        )
-        entity.add_event_handler(handler)
-    except Exception:
-        handler.remove_from_register()
-        raise
-    return CharacterGrantReceipt(
-        grant_id=handler.uuid,
-        grant_token=entry.grant_token,
-        definition_ref=HALFLING_LUCKY_REF,
-        handler_uuids=(handler.uuid,),
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_bound_handler(handler)
+    return grant_receipt(
+        context,
+        entry,
+        handler_uuids=installation.handler_uuids,
     )
 
 
@@ -80,15 +75,9 @@ def _apply_half_orc_relentless_endurance(
     context: BuiltinCharacterGrantContext,
     entry: CharacterGrantScheduleEntry,
 ) -> CharacterGrantReceipt:
-    if entry.content_ref != HALF_ORC_RELENTLESS_ENDURANCE_REF:
-        raise ValueError(
-            "Relentless Endurance applier received a different ref",
-        )
+    require_grant_ref(entry, HALF_ORC_RELENTLESS_ENDURANCE_REF)
     entity = context.entity
-    grant_id = uuid5(
-        context.character_id,
-        f"dnd-engine:character-structural-grant:v1:{entry.grant_token}",
-    )
+    grant_id = character_grant_id(context, entry)
     handler = EventHandler(
         name="Relentless Endurance",
         source_entity_uuid=entity.uuid,
@@ -101,43 +90,20 @@ def _apply_half_orc_relentless_endurance(
         ],
         event_processor=half_orc_relentless_endurance_processor,
     )
-    resource_installed = False
-    handler_installed = False
-    try:
-        entity.action_economy.add_resource_contribution(
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
             HALF_ORC_RELENTLESS_ENDURANCE_RESOURCE,
             grant_id,
             maximum=1,
             recharge_type=RechargeType.LONG_REST,
             capacity_policy=ResourceCapacityPolicy.MAXIMUM,
         )
-        resource_installed = True
-        context.runtime.bind_granted_behavior(
-            handler,
-            provider_ref=HALF_ORC_RELENTLESS_ENDURANCE_REF,
-            runtime_owner_uuid=entity.uuid,
-        )
-        entity.add_event_handler(handler)
-        handler_installed = True
-    except Exception:
-        if handler_installed:
-            entity.remove_event_handler(handler)
-        else:
-            handler.remove_from_register()
-        if resource_installed:
-            entity.action_economy.remove_resource_contribution(
-                HALF_ORC_RELENTLESS_ENDURANCE_RESOURCE,
-                grant_id,
-            )
-        raise
-    return CharacterGrantReceipt(
-        grant_id=grant_id,
-        grant_token=entry.grant_token,
-        definition_ref=HALF_ORC_RELENTLESS_ENDURANCE_REF,
-        handler_uuids=(handler.uuid,),
-        resource_contribution_ids=(
-            (HALF_ORC_RELENTLESS_ENDURANCE_RESOURCE, grant_id),
-        ),
+        installation.add_bound_handler(handler)
+    return grant_receipt(
+        context,
+        entry,
+        handler_uuids=installation.handler_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 

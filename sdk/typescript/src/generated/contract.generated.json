@@ -64,6 +64,10 @@
         },
         {
           "kind": "model",
+          "ref": "server.player_replication_contract.SpatialEffectPresentationCue"
+        },
+        {
+          "kind": "model",
           "ref": "server.player_replication_contract.EquipmentPresentationCue"
         },
         {
@@ -153,7 +157,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "da4bd3626e65d728fc9469cdd4a3350eaf914eeac1221af9871f019ba75aac0d",
+  "contract_hash": "74586e961b961435f7a860f64894dbb05cf3ce6420cab29724a3dc819d1802d2",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -263,6 +267,24 @@
         "subjective_revalidation"
       ]
     },
+    "dnd.core.action_outcomes.OutcomeApplicationScope": {
+      "python": "dnd.core.action_outcomes.OutcomeApplicationScope",
+      "typescript": "OutcomeApplicationScope",
+      "values": [
+        "allocated_targets",
+        "each_affected_entity"
+      ]
+    },
+    "dnd.core.action_outcomes.OutcomeResolution": {
+      "python": "dnd.core.action_outcomes.OutcomeResolution",
+      "typescript": "OutcomeResolution",
+      "values": [
+        "automatic",
+        "attack_roll",
+        "saving_throw",
+        "unknown"
+      ]
+    },
     "dnd.core.action_types.ActionPresentationKind": {
       "python": "dnd.core.action_types.ActionPresentationKind",
       "typescript": "ActionPresentationKind",
@@ -300,6 +322,13 @@
         "change_light",
         "grant_sense",
         "conceal_region"
+      ]
+    },
+    "dnd.core.base_actions.ActionSelectionParameterKind": {
+      "python": "dnd.core.base_actions.ActionSelectionParameterKind",
+      "typescript": "ActionSelectionParameterKind",
+      "values": [
+        "level"
       ]
     },
     "dnd.core.base_actions.ActionSetupDuration": {
@@ -369,24 +398,6 @@
         "sphere"
       ]
     },
-    "dnd.core.base_actions.OutcomeApplicationScope": {
-      "python": "dnd.core.base_actions.OutcomeApplicationScope",
-      "typescript": "OutcomeApplicationScope",
-      "values": [
-        "allocated_targets",
-        "each_affected_entity"
-      ]
-    },
-    "dnd.core.base_actions.OutcomeResolution": {
-      "python": "dnd.core.base_actions.OutcomeResolution",
-      "typescript": "OutcomeResolution",
-      "values": [
-        "automatic",
-        "attack_roll",
-        "saving_throw",
-        "unknown"
-      ]
-    },
     "dnd.core.base_actions.TargetEffectDisposition": {
       "python": "dnd.core.base_actions.TargetEffectDisposition",
       "typescript": "TargetEffectDisposition",
@@ -418,11 +429,14 @@
         "movement",
         "action",
         "saving_throw",
+        "death_save",
+        "ability_check",
         "skill_check",
         "condition_applied",
         "condition_removed",
         "damage_taken",
         "heal",
+        "temporary_hit_points",
         "death",
         "turn_start",
         "turn_end",
@@ -432,7 +446,8 @@
         "spell_interruption",
         "entity_spotted",
         "hazard_detected",
-        "roll_modification"
+        "roll_modification",
+        "spatial_effect"
       ]
     },
     "dnd.core.condition_types.ConditionAgencyDenial": {
@@ -441,6 +456,24 @@
       "values": [
         "none",
         "full_turn"
+      ]
+    },
+    "dnd.core.condition_types.ConditionApplicationDisposition": {
+      "python": "dnd.core.condition_types.ConditionApplicationDisposition",
+      "typescript": "ConditionApplicationDisposition",
+      "values": [
+        "applied",
+        "rejected",
+        "retained_stronger",
+        "promoted"
+      ]
+    },
+    "dnd.core.condition_types.ConditionApplicationPolicy": {
+      "python": "dnd.core.condition_types.ConditionApplicationPolicy",
+      "typescript": "ConditionApplicationPolicy",
+      "values": [
+        "replace_existing",
+        "most_potent_active"
       ]
     },
     "dnd.core.condition_types.ConditionCategory": {
@@ -515,6 +548,8 @@
         "applies_condition",
         "installs_handler",
         "creates_zone",
+        "creates_spatial_effect",
+        "transforms_to_spatial_effect",
         "creates_object",
         "creates_item",
         "equips_item",
@@ -622,13 +657,6 @@
         "failed"
       ]
     },
-    "dnd.core.content.effects.ConditionApplicationPolicy": {
-      "python": "dnd.core.content.effects.ConditionApplicationPolicy",
-      "typescript": "ConditionApplicationPolicy",
-      "values": [
-        "replace_existing"
-      ]
-    },
     "dnd.core.content.effects.ConditionAttackOutcome": {
       "python": "dnd.core.content.effects.ConditionAttackOutcome",
       "typescript": "ConditionAttackOutcome",
@@ -678,7 +706,8 @@
         "selected_object",
         "source_item",
         "equipped_item",
-        "world_position"
+        "world_position",
+        "created_spatial_effect"
       ]
     },
     "dnd.core.content.effects.ConditionSaveDCSource": {
@@ -778,6 +807,7 @@
         "background",
         "starting_equipment_package",
         "environment_object",
+        "spatial_effect",
         "rule_primitive"
       ]
     },
@@ -884,8 +914,17 @@
         "condition",
         "item",
         "environment_interaction",
+        "spatial_effect",
         "system",
         "unclassified"
+      ]
+    },
+    "dnd.core.content.spatial_effect_definitions.SpatialEffectLifetimePolicy": {
+      "python": "dnd.core.content.spatial_effect_definitions.SpatialEffectLifetimePolicy",
+      "typescript": "SpatialEffectLifetimePolicy",
+      "values": [
+        "controller_duration",
+        "permanent_until_removed"
       ]
     },
     "dnd.core.creature_types.DamageType": {
@@ -1052,6 +1091,7 @@
         "take_damage",
         "damage_applied",
         "heal",
+        "temporary_hit_points",
         "cast_spell",
         "attack_miss",
         "attack_hit",
@@ -1085,11 +1125,10 @@
         "spatial_perceivability_changed",
         "spatial_light_changed",
         "spatial_object_changed",
+        "spatial_effect_changed",
         "movement_collision",
         "sensory_update",
-        "fire_exposure",
-        "exposed_flame_ignited",
-        "wind_exposure",
+        "spatial_effect_interaction",
         "encounter_start",
         "encounter_end",
         "round_start",
@@ -1225,15 +1264,6 @@
         "direct_state_check"
       ]
     },
-    "dnd.core.modifiers.AdvantageStatus": {
-      "python": "dnd.core.modifiers.AdvantageStatus",
-      "typescript": "AdvantageStatus",
-      "values": [
-        "None",
-        "Advantage",
-        "Disadvantage"
-      ]
-    },
     "dnd.core.modifiers.AutoHitStatus": {
       "python": "dnd.core.modifiers.AutoHitStatus",
       "typescript": "AutoHitStatus",
@@ -1280,6 +1310,15 @@
         "srd_5_1_round_down"
       ]
     },
+    "dnd.core.roll_types.AdvantageStatus": {
+      "python": "dnd.core.roll_types.AdvantageStatus",
+      "typescript": "AdvantageStatus",
+      "values": [
+        "None",
+        "Advantage",
+        "Disadvantage"
+      ]
+    },
     "dnd.core.saving_throw_types.SavingThrowEffectTag": {
       "python": "dnd.core.saving_throw_types.SavingThrowEffectTag",
       "typescript": "SavingThrowEffectTag",
@@ -1299,6 +1338,110 @@
         "Truesight",
         "Devils Sight",
         "See Invisible"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectAnchorKind": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectAnchorKind",
+      "typescript": "SpatialEffectAnchorKind",
+      "values": [
+        "fixed_position",
+        "entity",
+        "world_object",
+        "independent_movable"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectBlockingPolicy": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectBlockingPolicy",
+      "typescript": "SpatialEffectBlockingPolicy",
+      "values": [
+        "none",
+        "anchor",
+        "footprint"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectChangeOperation": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectChangeOperation",
+      "typescript": "SpatialEffectChangeOperation",
+      "values": [
+        "created",
+        "footprint_changed",
+        "revealed",
+        "removed",
+        "transformed"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectInteractionIntensity": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectInteractionIntensity",
+      "typescript": "SpatialEffectInteractionIntensity",
+      "values": [
+        "minor",
+        "moderate",
+        "strong"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectInteractionOperation": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectInteractionOperation",
+      "typescript": "SpatialEffectInteractionOperation",
+      "values": [
+        "ignite",
+        "douse",
+        "freeze",
+        "electrify",
+        "vaporize",
+        "disperse"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectLayer": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectLayer",
+      "typescript": "SpatialEffectLayer",
+      "values": [
+        "ground_surface",
+        "cloud",
+        "field"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectOccupancyPolicy": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectOccupancyPolicy",
+      "typescript": "SpatialEffectOccupancyPolicy",
+      "values": [
+        "exclusive_transforming",
+        "overlapping"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectTransitionAction": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectTransitionAction",
+      "typescript": "SpatialEffectTransitionAction",
+      "values": [
+        "remove_affected",
+        "replace_affected",
+        "remove_affected_and_create_secondary"
+      ]
+    },
+    "dnd.core.spatial_effect_types.SpatialEffectTriggerKind": {
+      "python": "dnd.core.spatial_effect_types.SpatialEffectTriggerKind",
+      "typescript": "SpatialEffectTriggerKind",
+      "values": [
+        "appear",
+        "enter",
+        "effect_enters_occupant",
+        "effect_leaves_occupant",
+        "leave",
+        "turn_start",
+        "turn_end",
+        "movement_interval",
+        "round_tick",
+        "interaction",
+        "removal"
+      ]
+    },
+    "server.api_models.ActionExecutionAuthorization": {
+      "python": "server.api_models.ActionExecutionAuthorization",
+      "typescript": "ActionExecutionAuthorization",
+      "values": [
+        "authorized",
+        "not_active_turn",
+        "turn_not_in_progress",
+        "encounter_inactive"
       ]
     },
     "server.character_directory_contracts.CharacterAppearanceControlKind": {
@@ -1603,6 +1746,14 @@
         "direct_state_check"
       ]
     },
+    "server.player_replication_contract.MovementEndpointOutcome": {
+      "python": "server.player_replication_contract.MovementEndpointOutcome",
+      "typescript": "MovementEndpointOutcome",
+      "values": [
+        "committed",
+        "not_committed"
+      ]
+    },
     "server.player_replication_contract.MovementKind": {
       "python": "server.player_replication_contract.MovementKind",
       "typescript": "MovementKind",
@@ -1843,6 +1994,20 @@
       "model": "dnd.core.base_conditions.ConditionRemovalEvent",
       "typescript": "ConditionRemovalEvent"
     },
+    "dnd.core.events.AbilityCheckD20RollResultEvent": {
+      "event_types": [
+        "check_d20_roll"
+      ],
+      "model": "dnd.core.events.AbilityCheckD20RollResultEvent",
+      "typescript": "AbilityCheckD20RollResultEvent"
+    },
+    "dnd.core.events.AbilityCheckEvent": {
+      "event_types": [
+        "ability_check"
+      ],
+      "model": "dnd.core.events.AbilityCheckEvent",
+      "typescript": "AbilityCheckEvent"
+    },
     "dnd.core.events.AttackD20RollResultEvent": {
       "event_types": [
         "attack_d20_roll"
@@ -1913,6 +2078,7 @@
         "take_damage",
         "damage_applied",
         "heal",
+        "temporary_hit_points",
         "cast_spell",
         "attack_miss",
         "attack_hit",
@@ -1946,11 +2112,10 @@
         "spatial_perceivability_changed",
         "spatial_light_changed",
         "spatial_object_changed",
+        "spatial_effect_changed",
         "movement_collision",
         "sensory_update",
-        "fire_exposure",
-        "exposed_flame_ignited",
-        "wind_exposure",
+        "spatial_effect_interaction",
         "encounter_start",
         "encounter_end",
         "round_start",
@@ -1965,20 +2130,6 @@
       ],
       "model": "dnd.core.events.Event",
       "typescript": "EngineEvent"
-    },
-    "dnd.core.events.ExposedFlameEvent": {
-      "event_types": [
-        "exposed_flame_ignited"
-      ],
-      "model": "dnd.core.events.ExposedFlameEvent",
-      "typescript": "ExposedFlameEvent"
-    },
-    "dnd.core.events.FireExposureEvent": {
-      "event_types": [
-        "fire_exposure"
-      ],
-      "model": "dnd.core.events.FireExposureEvent",
-      "typescript": "FireExposureEvent"
     },
     "dnd.core.events.ForcedMovementEvent": {
       "event_types": [
@@ -2081,10 +2232,26 @@
         "spatial_perceivability_changed",
         "spatial_light_changed",
         "spatial_object_changed",
-        "movement_collision"
+        "spatial_effect_changed",
+        "movement_collision",
+        "spatial_effect_interaction"
       ],
       "model": "dnd.core.events.SpatialChangeEvent",
       "typescript": "SpatialChangeEvent"
+    },
+    "dnd.core.events.SpatialEffectChangeEvent": {
+      "event_types": [
+        "spatial_effect_changed"
+      ],
+      "model": "dnd.core.events.SpatialEffectChangeEvent",
+      "typescript": "SpatialEffectChangeEvent"
+    },
+    "dnd.core.events.SpatialEffectInteractionEvent": {
+      "event_types": [
+        "spatial_effect_interaction"
+      ],
+      "model": "dnd.core.events.SpatialEffectInteractionEvent",
+      "typescript": "SpatialEffectInteractionEvent"
     },
     "dnd.core.events.StepMovementEvent": {
       "event_types": [
@@ -2100,6 +2267,13 @@
       "model": "dnd.core.events.TakeDamageEvent",
       "typescript": "TakeDamageEvent"
     },
+    "dnd.core.events.TemporaryHitPointsEvent": {
+      "event_types": [
+        "temporary_hit_points"
+      ],
+      "model": "dnd.core.events.TemporaryHitPointsEvent",
+      "typescript": "TemporaryHitPointsEvent"
+    },
     "dnd.core.events.TurnEndEvent": {
       "event_types": [
         "turn_end"
@@ -2113,13 +2287,6 @@
       ],
       "model": "dnd.core.events.TurnStartEvent",
       "typescript": "TurnStartEvent"
-    },
-    "dnd.core.events.WindExposureEvent": {
-      "event_types": [
-        "wind_exposure"
-      ],
-      "model": "dnd.core.events.WindExposureEvent",
-      "typescript": "WindExposureEvent"
     },
     "dnd.origins.dragonborn.DragonbornBreathWeaponEvent": {
       "event_types": [
@@ -2136,7 +2303,7 @@
       "typescript": "CounterspellReactionEvent"
     }
   },
-  "event_contract_hash": "9aee4d4913a2121033f6bfbb9afea4efa6d88b8f9bdd3e6b01f8346921805e82",
+  "event_contract_hash": "98708547e749ea40be7b564e212be64a515a5ab30c74130f8fa9b61e50aa01f5",
   "event_contract_version": 1,
   "models": {
     "dnd.actions.AttackEvent": {
@@ -7342,6 +7509,122 @@
       "root_model": false,
       "typescript": "WeaponUnequipEvent"
     },
+    "dnd.core.action_outcomes.ActionOutcomeProfile": {
+      "fields": {
+        "advantage": {
+          "kind": "enum",
+          "ref": "dnd.core.roll_types.AdvantageStatus"
+        },
+        "application_scope": {
+          "kind": "enum",
+          "ref": "dnd.core.action_outcomes.OutcomeApplicationScope"
+        },
+        "applications": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "attack_bonus": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "critical_extra_dice": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "critical_threshold": {
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 1
+        },
+        "damage_rolls": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.action_outcomes.DamageRollProfile"
+          },
+          "kind": "array"
+        },
+        "effect_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "half_damage_on_save": {
+          "kind": "boolean"
+        },
+        "resolution": {
+          "kind": "enum",
+          "ref": "dnd.core.action_outcomes.OutcomeResolution"
+        },
+        "save_ability": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "save_dc": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "scope": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "actor_baseline"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.action_outcomes.ActionOutcomeProfile",
+      "root_model": false,
+      "typescript": "ActionOutcomeProfile"
+    },
+    "dnd.core.action_outcomes.DamageRollProfile": {
+      "fields": {
+        "damage_type": {
+          "kind": "string"
+        },
+        "dice_count": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "die_size": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "flat_bonus": {
+          "kind": "integer"
+        }
+      },
+      "python": "dnd.core.action_outcomes.DamageRollProfile",
+      "root_model": false,
+      "typescript": "DamageRollProfile"
+    },
     "dnd.core.base_actions.ActionEvent": {
       "fields": {
         "aoe_position": {
@@ -7636,100 +7919,20 @@
       "root_model": false,
       "typescript": "ActionEvent"
     },
-    "dnd.core.base_actions.ActionOutcomeProfile": {
+    "dnd.core.base_actions.ActionSelectionParameter": {
       "fields": {
-        "advantage": {
+        "kind": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.base_actions.ActionSelectionParameterKind"
         },
-        "application_scope": {
-          "kind": "enum",
-          "ref": "dnd.core.base_actions.OutcomeApplicationScope"
-        },
-        "applications": {
+        "value": {
           "kind": "integer",
           "minimum": 1
-        },
-        "attack_bonus": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "critical_extra_dice": {
-          "kind": "integer",
-          "minimum": 0
-        },
-        "critical_threshold": {
-          "kind": "integer",
-          "maximum": 20,
-          "minimum": 1
-        },
-        "damage_rolls": {
-          "items": {
-            "kind": "model",
-            "ref": "dnd.core.base_actions.DamageRollProfile"
-          },
-          "kind": "array"
-        },
-        "effect_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "half_damage_on_save": {
-          "kind": "boolean"
-        },
-        "resolution": {
-          "kind": "enum",
-          "ref": "dnd.core.base_actions.OutcomeResolution"
-        },
-        "save_ability": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "save_dc": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "scope": {
-          "items": [
-            {
-              "kind": "literal",
-              "value": "actor_baseline"
-            }
-          ],
-          "kind": "union"
         }
       },
-      "python": "dnd.core.base_actions.ActionOutcomeProfile",
+      "python": "dnd.core.base_actions.ActionSelectionParameter",
       "root_model": false,
-      "typescript": "ActionOutcomeProfile"
+      "typescript": "ActionSelectionParameter"
     },
     "dnd.core.base_actions.ActionSelfSetupProfile": {
       "fields": {
@@ -7824,7 +8027,7 @@
       "fields": {
         "check_advantage": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "check_bonus": {
           "kind": "integer"
@@ -7888,7 +8091,7 @@
         },
         "resolution": {
           "kind": "enum",
-          "ref": "dnd.core.base_actions.OutcomeResolution"
+          "ref": "dnd.core.action_outcomes.OutcomeResolution"
         },
         "save_ability": {
           "items": [
@@ -8148,7 +8351,7 @@
           "items": [
             {
               "kind": "model",
-              "ref": "dnd.core.base_actions.ActionOutcomeProfile"
+              "ref": "dnd.core.action_outcomes.ActionOutcomeProfile"
             },
             {
               "kind": "null"
@@ -8158,6 +8361,18 @@
         },
         "requires_concentration": {
           "kind": "boolean"
+        },
+        "selection_parameter": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.base_actions.ActionSelectionParameter"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "self_setup_profile": {
           "items": [
@@ -8588,27 +8803,6 @@
       "root_model": false,
       "typescript": "BaseCost"
     },
-    "dnd.core.base_actions.DamageRollProfile": {
-      "fields": {
-        "damage_type": {
-          "kind": "string"
-        },
-        "dice_count": {
-          "kind": "integer",
-          "minimum": 0
-        },
-        "die_size": {
-          "kind": "integer",
-          "minimum": 1
-        },
-        "flat_bonus": {
-          "kind": "integer"
-        }
-      },
-      "python": "dnd.core.base_actions.DamageRollProfile",
-      "root_model": false,
-      "typescript": "DamageRollProfile"
-    },
     "dnd.core.base_actions.InformationEffectProfile": {
       "fields": {
         "anchor": {
@@ -8763,6 +8957,10 @@
         "agency_denial": {
           "kind": "enum",
           "ref": "dnd.core.condition_types.ConditionAgencyDenial"
+        },
+        "application_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.condition_types.ConditionApplicationPolicy"
         },
         "application_saving_throw": {
           "items": [
@@ -9050,6 +9248,10 @@
     },
     "dnd.core.base_conditions.ConditionApplicationEvent": {
       "fields": {
+        "application_disposition": {
+          "kind": "enum",
+          "ref": "dnd.core.condition_types.ConditionApplicationDisposition"
+        },
         "canceled": {
           "kind": "boolean"
         },
@@ -9597,6 +9799,62 @@
       "root_model": false,
       "typescript": "OutcomeProtection"
     },
+    "dnd.core.combat_log.AbilityCheckLogData": {
+      "fields": {
+        "ability": {
+          "kind": "string"
+        },
+        "advantage_breakdown": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.combat_log.ModifierBreakdown"
+          },
+          "kind": "array"
+        },
+        "bonus_breakdown": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.combat_log.ModifierBreakdown"
+          },
+          "kind": "array"
+        },
+        "dc": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "entity_name": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "roll": {
+          "kind": "model",
+          "ref": "dnd.core.combat_log.DiceRollDisplay"
+        },
+        "success": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.combat_log.AbilityCheckLogData",
+      "root_model": false,
+      "typescript": "AbilityCheckLogData"
+    },
     "dnd.core.combat_log.ActionLogData": {
       "fields": {
         "action_name": {
@@ -9905,6 +10163,54 @@
       "python": "dnd.core.combat_log.DamageTakenLogData",
       "root_model": false,
       "typescript": "DamageTakenLogData"
+    },
+    "dnd.core.combat_log.DeathSaveLogData": {
+      "fields": {
+        "became_stable": {
+          "kind": "boolean"
+        },
+        "dc": {
+          "kind": "integer"
+        },
+        "died": {
+          "kind": "boolean"
+        },
+        "entity_name": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "failures": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "natural_roll": {
+          "kind": "integer"
+        },
+        "regained_hit_point": {
+          "kind": "boolean"
+        },
+        "roll": {
+          "kind": "integer"
+        },
+        "save_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "death"
+            }
+          ],
+          "kind": "union"
+        },
+        "successes": {
+          "kind": "integer",
+          "minimum": 0
+        }
+      },
+      "python": "dnd.core.combat_log.DeathSaveLogData",
+      "root_model": false,
+      "typescript": "DeathSaveLogData"
     },
     "dnd.core.combat_log.DiceRollDisplay": {
       "fields": {
@@ -10370,6 +10676,15 @@
           "kind": "model",
           "ref": "dnd.core.combat_log.DiceRollDisplay"
         },
+        "save_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "ability"
+            }
+          ],
+          "kind": "union"
+        },
         "source_name": {
           "items": [
             {
@@ -10444,6 +10759,150 @@
       "python": "dnd.core.combat_log.SkillCheckLogData",
       "root_model": false,
       "typescript": "SkillCheckLogData"
+    },
+    "dnd.core.combat_log.SpatialEffectInteractionLogData": {
+      "fields": {
+        "affected_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "intensity": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "minor"
+            },
+            {
+              "kind": "literal",
+              "value": "moderate"
+            },
+            {
+              "kind": "literal",
+              "value": "strong"
+            }
+          ],
+          "kind": "union"
+        },
+        "operation": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "ignite"
+            },
+            {
+              "kind": "literal",
+              "value": "douse"
+            },
+            {
+              "kind": "literal",
+              "value": "freeze"
+            },
+            {
+              "kind": "literal",
+              "value": "electrify"
+            },
+            {
+              "kind": "literal",
+              "value": "vaporize"
+            },
+            {
+              "kind": "literal",
+              "value": "disperse"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_content_identity": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.combat_log.SpatialEffectInteractionLogData",
+      "root_model": false,
+      "typescript": "SpatialEffectInteractionLogData"
+    },
+    "dnd.core.combat_log.SpatialEffectLogData": {
+      "fields": {
+        "affected_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "content_identity": {
+          "kind": "string"
+        },
+        "layer": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "ground_surface"
+            },
+            {
+              "kind": "literal",
+              "value": "cloud"
+            },
+            {
+              "kind": "literal",
+              "value": "field"
+            }
+          ],
+          "kind": "union"
+        },
+        "operation": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "created"
+            },
+            {
+              "kind": "literal",
+              "value": "footprint_changed"
+            },
+            {
+              "kind": "literal",
+              "value": "removed"
+            },
+            {
+              "kind": "literal",
+              "value": "transformed"
+            },
+            {
+              "kind": "literal",
+              "value": "revealed"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.combat_log.SpatialEffectLogData",
+      "root_model": false,
+      "typescript": "SpatialEffectLogData"
     },
     "dnd.core.combat_log.SpellInterruptionLogData": {
       "fields": {
@@ -10584,6 +11043,34 @@
       "python": "dnd.core.combat_log.SpellSaveLogData",
       "root_model": false,
       "typescript": "SpellSaveLogData"
+    },
+    "dnd.core.combat_log.TemporaryHitPointsLogData": {
+      "fields": {
+        "entity_name": {
+          "kind": "string"
+        },
+        "entity_uuid": {
+          "kind": "string"
+        },
+        "previous_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "requested_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "resulting_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "source_description": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.combat_log.TemporaryHitPointsLogData",
+      "root_model": false,
+      "typescript": "TemporaryHitPointsLogData"
     },
     "dnd.core.combat_log.TurnLogData": {
       "fields": {
@@ -12958,7 +13445,7 @@
         },
         "application_policy": {
           "kind": "enum",
-          "ref": "dnd.core.content.effects.ConditionApplicationPolicy"
+          "ref": "dnd.core.condition_types.ConditionApplicationPolicy"
         },
         "removal_triggers": {
           "items": {
@@ -14450,6 +14937,97 @@
       "root_model": false,
       "typescript": "AuthoredBehaviorAttribution"
     },
+    "dnd.core.content.spatial_effect_definitions.SpatialEffectDefinition": {
+      "fields": {
+        "anchor_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectAnchorKind"
+        },
+        "blocking_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectBlockingPolicy"
+        },
+        "first_per_turn_trigger_kinds": {
+          "items": {
+            "kind": "enum",
+            "ref": "dnd.core.spatial_effect_types.SpatialEffectTriggerKind"
+          },
+          "kind": "array"
+        },
+        "layer": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectLayer"
+        },
+        "lifetime_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.content.spatial_effect_definitions.SpatialEffectLifetimePolicy"
+        },
+        "occupancy_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectOccupancyPolicy"
+        },
+        "transitions": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.content.spatial_effect_definitions.SpatialEffectTransitionDefinition"
+          },
+          "kind": "array"
+        },
+        "trigger_kinds": {
+          "items": {
+            "kind": "enum",
+            "ref": "dnd.core.spatial_effect_types.SpatialEffectTriggerKind"
+          },
+          "kind": "array"
+        }
+      },
+      "python": "dnd.core.content.spatial_effect_definitions.SpatialEffectDefinition",
+      "root_model": false,
+      "typescript": "SpatialEffectDefinition"
+    },
+    "dnd.core.content.spatial_effect_definitions.SpatialEffectTransitionDefinition": {
+      "fields": {
+        "action": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectTransitionAction"
+        },
+        "delay_rounds": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "minimum_intensity": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectInteractionIntensity"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectInteractionOperation"
+        },
+        "replacement_recipe": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.recipes.ContentRecipe"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "dnd.core.content.spatial_effect_definitions.SpatialEffectTransitionDefinition",
+      "root_model": false,
+      "typescript": "SpatialEffectTransitionDefinition"
+    },
     "dnd.core.content.starting_equipment.StartingEquipmentPackageDefinition": {
       "fields": {
         "entries": {
@@ -14693,7 +15271,7 @@
       "fields": {
         "advantage_status": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "attack_outcome": {
           "items": [
@@ -14875,6 +15453,558 @@
       "python": "dnd.core.effect_types.EffectOrigin",
       "root_model": false,
       "typescript": "EffectOrigin"
+    },
+    "dnd.core.events.AbilityCheckD20RollResultEvent": {
+      "fields": {
+        "ability_name": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "strength"
+            },
+            {
+              "kind": "literal",
+              "value": "dexterity"
+            },
+            {
+              "kind": "literal",
+              "value": "constitution"
+            },
+            {
+              "kind": "literal",
+              "value": "intelligence"
+            },
+            {
+              "kind": "literal",
+              "value": "wisdom"
+            },
+            {
+              "kind": "literal",
+              "value": "charisma"
+            }
+          ],
+          "kind": "union"
+        },
+        "bonus": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.values.ModifiableValue"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "kind": "record",
+          "values": {
+            "kind": "json"
+          }
+        },
+        "dc": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "final_roll": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.dice.DiceRoll"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "original_roll": {
+          "kind": "model",
+          "ref": "dnd.core.dice.DiceRoll"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "result": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "roll_modifications": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.events.RollModification"
+          },
+          "kind": "array"
+        },
+        "roll_type": {
+          "kind": "enum",
+          "ref": "dnd.core.dice.RollType"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.AbilityCheckD20RollResultEvent",
+      "root_model": false,
+      "typescript": "AbilityCheckD20RollResultEvent"
+    },
+    "dnd.core.events.AbilityCheckEvent": {
+      "fields": {
+        "ability_name": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "strength"
+            },
+            {
+              "kind": "literal",
+              "value": "dexterity"
+            },
+            {
+              "kind": "literal",
+              "value": "constitution"
+            },
+            {
+              "kind": "literal",
+              "value": "intelligence"
+            },
+            {
+              "kind": "literal",
+              "value": "wisdom"
+            },
+            {
+              "kind": "literal",
+              "value": "charisma"
+            }
+          ],
+          "kind": "union"
+        },
+        "bonus": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "model",
+              "ref": "dnd.core.values.ModifiableValue"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "dc": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "model",
+              "ref": "dnd.core.values.ModifiableValue"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "dice": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.dice.Dice"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "dice_roll": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.dice.DiceRoll"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "result": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.AbilityCheckEvent",
+      "root_model": false,
+      "typescript": "AbilityCheckEvent"
     },
     "dnd.core.events.AttackD20RollResultEvent": {
       "fields": {
@@ -17011,414 +18141,6 @@
       "python": "dnd.core.events.Event",
       "root_model": false,
       "typescript": "EngineEvent"
-    },
-    "dnd.core.events.ExposedFlameEvent": {
-      "fields": {
-        "canceled": {
-          "kind": "boolean"
-        },
-        "canceled_from_phase": {
-          "items": [
-            {
-              "kind": "enum",
-              "ref": "dnd.core.events.EventPhase"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "children_lineages": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "context": {
-          "items": [
-            {
-              "kind": "record",
-              "values": {
-                "kind": "json"
-              }
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "event_type": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventType"
-        },
-        "is_first": {
-          "kind": "boolean"
-        },
-        "is_last": {
-          "kind": "boolean"
-        },
-        "item_uuid": {
-          "kind": "string"
-        },
-        "lineage_children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "lineage_uuid": {
-          "kind": "string"
-        },
-        "modified": {
-          "kind": "boolean"
-        },
-        "name": {
-          "kind": "string"
-        },
-        "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "outcome_source_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_event": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_lineage": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "phase": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventPhase"
-        },
-        "position": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "integer"
-            }
-          ],
-          "kind": "tuple"
-        },
-        "source_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "source_entity_uuid": {
-          "kind": "string"
-        },
-        "status_message": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "timestamp": {
-          "kind": "string"
-        },
-        "turn_execution_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "use_register": {
-          "kind": "boolean"
-        },
-        "uuid": {
-          "kind": "string"
-        }
-      },
-      "python": "dnd.core.events.ExposedFlameEvent",
-      "root_model": false,
-      "typescript": "ExposedFlameEvent"
-    },
-    "dnd.core.events.FireExposureEvent": {
-      "fields": {
-        "canceled": {
-          "kind": "boolean"
-        },
-        "canceled_from_phase": {
-          "items": [
-            {
-              "kind": "enum",
-              "ref": "dnd.core.events.EventPhase"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "children_lineages": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "context": {
-          "items": [
-            {
-              "kind": "record",
-              "values": {
-                "kind": "json"
-              }
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "damage_dice": {
-          "kind": "string"
-        },
-        "duration_rounds": {
-          "kind": "integer",
-          "minimum": 1
-        },
-        "event_type": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventType"
-        },
-        "is_first": {
-          "kind": "boolean"
-        },
-        "is_last": {
-          "kind": "boolean"
-        },
-        "lineage_children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "lineage_uuid": {
-          "kind": "string"
-        },
-        "modified": {
-          "kind": "boolean"
-        },
-        "name": {
-          "kind": "string"
-        },
-        "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "outcome_source_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_event": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_lineage": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "phase": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventPhase"
-        },
-        "position": {
-          "items": [
-            {
-              "kind": "integer"
-            },
-            {
-              "kind": "integer"
-            }
-          ],
-          "kind": "tuple"
-        },
-        "source_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "source_entity_uuid": {
-          "kind": "string"
-        },
-        "status_message": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "timestamp": {
-          "kind": "string"
-        },
-        "turn_execution_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "use_register": {
-          "kind": "boolean"
-        },
-        "uuid": {
-          "kind": "string"
-        }
-      },
-      "python": "dnd.core.events.FireExposureEvent",
-      "root_model": false,
-      "typescript": "FireExposureEvent"
     },
     "dnd.core.events.ForcedMovementEvent": {
       "fields": {
@@ -21576,6 +22298,509 @@
       "root_model": false,
       "typescript": "SpatialChangeEvent"
     },
+    "dnd.core.events.SpatialEffectChangeEvent": {
+      "fields": {
+        "affected_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "anchor_position": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "integer"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "layer": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectLayer"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectChangeOperation"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "previous_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "spatial_effect_content_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "spatial_effect_name": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "spatial_effect_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.SpatialEffectChangeEvent",
+      "root_model": false,
+      "typescript": "SpatialEffectChangeEvent"
+    },
+    "dnd.core.events.SpatialEffectInteractionEvent": {
+      "fields": {
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "damage_type": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.creature_types.DamageType"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "duration_rounds": {
+          "items": [
+            {
+              "kind": "integer",
+              "minimum": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "intensity": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectInteractionIntensity"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectInteractionOperation"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "source_content_ref": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.identities.ContentRef"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "source_object_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.SpatialEffectInteractionEvent",
+      "root_model": false,
+      "typescript": "SpatialEffectInteractionEvent"
+    },
     "dnd.core.events.StepMovementEvent": {
       "fields": {
         "canceled": {
@@ -22064,6 +23289,209 @@
       "root_model": false,
       "typescript": "TakeDamageEvent"
     },
+    "dnd.core.events.TemporaryHitPointsEvent": {
+      "fields": {
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "previous_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "requested_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "resulting_amount": {
+          "kind": "integer",
+          "minimum": 0
+        },
+        "source_description": {
+          "kind": "string"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.TemporaryHitPointsEvent",
+      "root_model": false,
+      "typescript": "TemporaryHitPointsEvent"
+    },
     "dnd.core.events.TurnEndEvent": {
       "fields": {
         "actions_used": {
@@ -22485,215 +23913,6 @@
       "root_model": false,
       "typescript": "TurnStartEvent"
     },
-    "dnd.core.events.WindExposureEvent": {
-      "fields": {
-        "canceled": {
-          "kind": "boolean"
-        },
-        "canceled_from_phase": {
-          "items": [
-            {
-              "kind": "enum",
-              "ref": "dnd.core.events.EventPhase"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "children_lineages": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "context": {
-          "items": [
-            {
-              "kind": "record",
-              "values": {
-                "kind": "json"
-              }
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "event_type": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventType"
-        },
-        "is_first": {
-          "kind": "boolean"
-        },
-        "is_last": {
-          "kind": "boolean"
-        },
-        "lineage_children_events": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
-        },
-        "lineage_uuid": {
-          "kind": "string"
-        },
-        "modified": {
-          "kind": "boolean"
-        },
-        "name": {
-          "kind": "string"
-        },
-        "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "outcome_source_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_event": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "parent_lineage": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "phase": {
-          "kind": "enum",
-          "ref": "dnd.core.events.EventPhase"
-        },
-        "positions": {
-          "items": {
-            "items": [
-              {
-                "kind": "integer"
-              },
-              {
-                "kind": "integer"
-              }
-            ],
-            "kind": "tuple"
-          },
-          "kind": "array"
-        },
-        "source_description": {
-          "kind": "string"
-        },
-        "source_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "source_entity_uuid": {
-          "kind": "string"
-        },
-        "status_message": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_name": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "target_entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "timestamp": {
-          "kind": "string"
-        },
-        "turn_execution_id": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "use_register": {
-          "kind": "boolean"
-        },
-        "uuid": {
-          "kind": "string"
-        },
-        "wind_speed_mph": {
-          "kind": "integer",
-          "minimum": 0
-        }
-      },
-      "python": "dnd.core.events.WindExposureEvent",
-      "root_model": false,
-      "typescript": "WindExposureEvent"
-    },
     "dnd.core.item_types.ItemContentRefSnapshot": {
       "fields": {
         "content_id": {
@@ -22965,7 +24184,7 @@
         },
         "value": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         }
       },
       "python": "dnd.core.modifiers.AdvantageModifier",
@@ -24618,7 +25837,7 @@
       "fields": {
         "advantage": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "advantage_modifiers": {
           "kind": "record",
@@ -24841,7 +26060,7 @@
       "fields": {
         "advantage": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "advantage_sum": {
           "kind": "integer"
@@ -24950,7 +26169,7 @@
         },
         "outgoing_advantage": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "outgoing_advantage_sum": {
           "kind": "integer"
@@ -25050,7 +26269,7 @@
       "fields": {
         "advantage": {
           "kind": "enum",
-          "ref": "dnd.core.modifiers.AdvantageStatus"
+          "ref": "dnd.core.roll_types.AdvantageStatus"
         },
         "advantage_modifiers": {
           "kind": "record",
@@ -26258,6 +27477,10 @@
         },
         "entity_uuid": {
           "kind": "string"
+        },
+        "execution_authorization": {
+          "kind": "enum",
+          "ref": "server.api_models.ActionExecutionAuthorization"
         },
         "extra_attacks_remaining": {
           "kind": "integer"
@@ -27638,17 +28861,6 @@
           ],
           "kind": "union"
         },
-        "entity_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
         "entity_uuids": {
           "items": [
             {
@@ -27656,17 +28868,6 @@
                 "kind": "string"
               },
               "kind": "array"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "faction": {
-          "items": [
-            {
-              "kind": "string"
             },
             {
               "kind": "null"
@@ -28133,23 +29334,6 @@
             }
           ],
           "kind": "union"
-        },
-        "trap_handler_uuid": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
-        },
-        "trap_tile_uuids": {
-          "items": {
-            "kind": "string"
-          },
-          "kind": "array"
         }
       },
       "python": "server.api_models.MapEditorObjectRuntimeState",
@@ -29454,7 +30638,7 @@
         "enabled": {
           "kind": "boolean"
         },
-        "handler_name": {
+        "handler_uuid": {
           "kind": "string"
         },
         "success": {
@@ -31646,6 +32830,18 @@
           ],
           "kind": "union"
         },
+        "spatial_effect_definition": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.spatial_effect_definitions.SpatialEffectDefinition"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "tags": {
           "items": {
             "kind": "string"
@@ -31694,7 +32890,7 @@
           "items": [
             {
               "kind": "literal",
-              "value": 6
+              "value": 7
             }
           ],
           "kind": "union"
@@ -32304,6 +33500,18 @@
         "display_name": {
           "kind": "string",
           "min_length": 1
+        },
+        "encounter_recipe": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.content.encounters.EncounterRecipe"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "ended_at": {
           "items": [
@@ -35382,6 +36590,10 @@
           },
           "kind": "array"
         },
+        "endpoint_outcome": {
+          "kind": "enum",
+          "ref": "server.player_replication_contract.MovementEndpointOutcome"
+        },
         "entity_uuid": {
           "kind": "string",
           "min_length": 1
@@ -35398,6 +36610,10 @@
         "movement_kind": {
           "kind": "enum",
           "ref": "server.player_replication_contract.MovementKind"
+        },
+        "movement_sequence_id": {
+          "kind": "string",
+          "min_length": 1
         },
         "parent_presentation_id": {
           "items": [
@@ -35724,6 +36940,138 @@
       "python": "server.player_replication_contract.SourceItemPresentationAttribution",
       "root_model": false,
       "typescript": "SourceItemPresentationAttribution"
+    },
+    "server.player_replication_contract.SpatialEffectPresentationCue": {
+      "fields": {
+        "affected_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "anchor_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "integer"
+                },
+                {
+                  "kind": "integer"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "child_presentation_ids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "content_attributions": {
+          "items": {
+            "items": [
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.UnrootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.RootedBehaviorPresentationAttribution"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SourceItemPresentationAttribution"
+              }
+            ],
+            "kind": "union"
+          },
+          "kind": "array"
+        },
+        "content_ref": {
+          "kind": "model",
+          "ref": "dnd.core.content.identities.ContentRef"
+        },
+        "effect_uuid": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "spatial_effect"
+            }
+          ],
+          "kind": "union"
+        },
+        "layer": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectLayer"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.spatial_effect_types.SpatialEffectChangeOperation"
+        },
+        "parent_presentation_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "presentation_cursor": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "presentation_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "previous_positions": {
+          "items": {
+            "items": [
+              {
+                "kind": "integer"
+              },
+              {
+                "kind": "integer"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
+        "source_event_cursor": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "source_event_uuid": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.player_replication_contract.SpatialEffectPresentationCue",
+      "root_model": false,
+      "typescript": "SpatialEffectPresentationCue"
     },
     "server.player_replication_contract.SpellPresentationCue": {
       "fields": {
@@ -36084,9 +37432,6 @@
       "fields": {
         "initiative": {
           "kind": "integer"
-        },
-        "is_dead": {
-          "kind": "boolean"
         },
         "life_state": {
           "items": [
@@ -36617,6 +37962,10 @@
               {
                 "kind": "model",
                 "ref": "server.player_replication_contract.LightPresentationCue"
+              },
+              {
+                "kind": "model",
+                "ref": "server.player_replication_contract.SpatialEffectPresentationCue"
               },
               {
                 "kind": "model",
@@ -37224,9 +38573,6 @@
         "initiative": {
           "kind": "integer"
         },
-        "is_dead": {
-          "kind": "boolean"
-        },
         "life_state": {
           "items": [
             {
@@ -37358,6 +38704,10 @@
             },
             {
               "kind": "literal",
+              "value": "spatial_effect"
+            },
+            {
+              "kind": "literal",
               "value": "rule_primitive"
             }
           ],
@@ -37484,9 +38834,6 @@
         },
         "hp": {
           "kind": "integer"
-        },
-        "is_dead": {
-          "kind": "boolean"
         },
         "life_state": {
           "kind": "enum",
@@ -37992,6 +39339,130 @@
       "root_model": false,
       "typescript": "APIRecipePresetRefSnapshot"
     },
+    "server.world_contracts.APISpatialEffectPresentation": {
+      "fields": {
+        "audio_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "sprite_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tint_rgb": {
+          "items": [
+            {
+              "kind": "integer",
+              "maximum": 16777215,
+              "minimum": 0
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "vfx_profile": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "visual_variant_key": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.world_contracts.APISpatialEffectPresentation",
+      "root_model": false,
+      "typescript": "APISpatialEffectPresentation"
+    },
+    "server.world_contracts.APISpatialEffectSummary": {
+      "fields": {
+        "anchor_kind": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "fixed_position"
+            },
+            {
+              "kind": "literal",
+              "value": "entity"
+            },
+            {
+              "kind": "literal",
+              "value": "world_object"
+            },
+            {
+              "kind": "literal",
+              "value": "independent_movable"
+            }
+          ],
+          "kind": "union"
+        },
+        "content_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.APIContentRefSnapshot"
+        },
+        "layer": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "ground_surface"
+            },
+            {
+              "kind": "literal",
+              "value": "cloud"
+            },
+            {
+              "kind": "literal",
+              "value": "field"
+            }
+          ],
+          "kind": "union"
+        },
+        "presentation": {
+          "kind": "model",
+          "ref": "server.world_contracts.APISpatialEffectPresentation"
+        },
+        "safe_presentation_ref": {
+          "kind": "model",
+          "ref": "server.world_contracts.SafeContentPresentationRef"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "server.world_contracts.APISpatialEffectSummary",
+      "root_model": false,
+      "typescript": "APISpatialEffectSummary"
+    },
     "server.world_contracts.APITile": {
       "fields": {
         "condition_details": {
@@ -38035,6 +39506,13 @@
         },
         "name": {
           "kind": "string"
+        },
+        "spatial_effects": {
+          "items": {
+            "kind": "model",
+            "ref": "server.world_contracts.APISpatialEffectSummary"
+          },
+          "kind": "array"
         },
         "visible": {
           "kind": "boolean"
@@ -38162,11 +39640,11 @@
       "typescript": "StructuralEdgeAppearance"
     }
   },
-  "objective_replay_contract_hash": "573829447eb650b21a2a68cdbebb7d44e7143f92e48b914d6c9989569d78f052",
+  "objective_replay_contract_hash": "47bab53221c410127ea5566302adf9c9c11a10f1fbdf15695e7e23379011ea51",
   "objective_replay_contract_version": 1,
-  "player_replay_contract_hash": "7ca1784c52a488a74edf8de6bdaa5a4bea86e22b74989686770e66211ba24345",
+  "player_replay_contract_hash": "67d55e0fa03dc9a440a78a3660d60096d245598c2e2a755125849dd328d80624",
   "player_replay_contract_version": 1,
-  "player_replication_contract_hash": "0bdba516d5c20f2c711c0621f63aab363e1dcf6f62246545980e06db2740de91",
+  "player_replication_contract_hash": "669dba48872680685f96c8d2aadef104d842d144e9188856defcc05e982367e6",
   "player_replication_contract_version": 1,
   "roots": [
     "server.api_models.AIProviderCatalogEntry",
@@ -38339,11 +39817,13 @@
     "server.game_gateway_models.StopHostedGameResponse",
     "server.game_summary_store.WorkerReplayCapture",
     "server.game_summary_store.WorkerSummaryEvidence",
+    "dnd.core.combat_log.AbilityCheckLogData",
     "dnd.core.combat_log.ActionLogData",
     "dnd.core.combat_log.AttackLogData",
     "dnd.core.combat_log.CombatLogEntry",
     "dnd.core.combat_log.DamageRollDisplay",
     "dnd.core.combat_log.DamageTakenLogData",
+    "dnd.core.combat_log.DeathSaveLogData",
     "dnd.core.combat_log.DiceRollDisplay",
     "dnd.core.combat_log.EntitySpottedLogData",
     "dnd.core.combat_log.HazardDetectedLogData",
@@ -38355,8 +39835,11 @@
     "dnd.core.combat_log.RollModificationLogFact",
     "dnd.core.combat_log.SavingThrowLogData",
     "dnd.core.combat_log.SkillCheckLogData",
+    "dnd.core.combat_log.SpatialEffectInteractionLogData",
+    "dnd.core.combat_log.SpatialEffectLogData",
     "dnd.core.combat_log.SpellInterruptionLogData",
     "dnd.core.combat_log.SpellSaveLogData",
+    "dnd.core.combat_log.TemporaryHitPointsLogData",
     "dnd.core.combat_log.TurnLogData",
     "server.player_replication_contract.SubjectiveReplicationBootstrap",
     "server.player_replication_contract.SubjectiveFramesResponse",

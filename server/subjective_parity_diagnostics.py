@@ -24,7 +24,7 @@ from server.agent_protocol.objective_diagnostics import (
     SubjectiveParityMismatch,
     SubjectiveRenderParityDiagnosticsResponse,
 )
-from server.canonical_json import canonical_json, canonical_json_bytes
+from server.canonical_json import canonical_json, canonical_json_sha256
 from server.player_replication_contract import (
     PlayerReplicationWatermarks,
     SubjectivePerspective,
@@ -109,8 +109,8 @@ def build_subjective_render_parity_diagnostics(
         appearance["kind"] == "door"
         for appearance in structural_edges.values()
     )
-    expected_digest = sha256(canonical_json_bytes(expected)).hexdigest()
-    actual_digest = sha256(canonical_json_bytes(actual)).hexdigest()
+    expected_digest = canonical_json_sha256(expected)
+    actual_digest = canonical_json_sha256(actual)
     return SubjectiveRenderParityDiagnosticsResponse(
         source_stream_id=source_stream_id,
         generation_id=generation_id,
@@ -438,11 +438,11 @@ def _independent_structural_edges(
         block = BaseBlock.get(object_uuid)
         if not isinstance(block, BaseItem) or not block.is_perceivable_by(observer_uuid):
             continue
-        directions = tuple(
-            direction.value if hasattr(direction, "value") else str(direction)
-            for direction in getattr(block, "blocked_directions", ())
-        )
-        channels = tuple(getattr(block, "blocked_channels", ()))
+        structure = block.get_directional_structure_state()
+        if structure is None:
+            continue
+        directions = structure.blocked_directions
+        channels = structure.blocked_channels
         if not directions or not channels:
             continue
         is_open = block.get_spatial_open_state()

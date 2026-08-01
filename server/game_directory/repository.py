@@ -25,10 +25,12 @@ from dnd.core.content.encounters import (
     EncounterRosterRecipe,
 )
 
-from server.game_directory.canonical import (
-    canonical_digest,
+from server.canonical_json import (
     canonical_json,
+    canonical_json_sha256 as canonical_digest,
     datetime_to_text,
+)
+from server.game_directory.security import (
     hash_capability,
     utc_now,
 )
@@ -510,6 +512,7 @@ def _worker_from_row(row: sqlite3.Row) -> WorkerRecord:
 def _game_from_row(row: sqlite3.Row) -> GameRecord:
     """Build a typed hosted game from one SQLite row."""
 
+    creation_manifest = _load_json_object(row["creation_manifest_json"])
     return GameRecord(
         game_id=row["game_id"],
         engine_game_id=row["engine_game_id"],
@@ -523,7 +526,8 @@ def _game_from_row(row: sqlite3.Row) -> GameRecord:
         scenario_kind=row["scenario_kind"],
         scenario_id=row["scenario_id"],
         display_name=row["display_name"],
-        creation_manifest=_load_json_object(row["creation_manifest_json"]),
+        creation_manifest=creation_manifest,
+        encounter_recipe=_encounter_recipe_from_manifest(creation_manifest),
         creation_manifest_digest=row["creation_manifest_digest"],
         seed=row["seed"],
         ruleset_version=row["ruleset_version"],
@@ -540,6 +544,22 @@ def _game_from_row(row: sqlite3.Row) -> GameRecord:
         current_summary_digest=row["current_summary_digest"],
         row_version=row["row_version"],
     )
+
+
+def _encounter_recipe_from_manifest(
+    creation_manifest: dict[str, JsonValue],
+) -> EncounterRecipe | None:
+    """Recover the exact recipe without decoding history as today's request."""
+    request_payload = creation_manifest.get("request", creation_manifest)
+    if not isinstance(request_payload, dict):
+        return None
+    recipe_payload = request_payload.get("recipe")
+    if not isinstance(recipe_payload, dict):
+        return None
+    try:
+        return EncounterRecipe.model_validate(recipe_payload)
+    except ValidationError:
+        return None
 
 
 def _membership_from_row(row: sqlite3.Row) -> MembershipRecord:
@@ -2606,6 +2626,7 @@ class GameDirectoryRepository:
         self,
         *,
         game_id: UUID | None = None,
+        character_id: UUID | None = None,
         active_only: bool = False,
     ) -> tuple[CharacterDeploymentLeaseRecord, ...]:
         """List durable leases for lifecycle recovery and reconciliation."""
@@ -2615,6 +2636,9 @@ class GameDirectoryRepository:
         if game_id is not None:
             predicates.append("game_id = ?")
             parameters.append(str(game_id))
+        if character_id is not None:
+            predicates.append("character_id = ?")
+            parameters.append(str(character_id))
         if active_only:
             predicates.append("released_at IS NULL")
         where_clause = (
@@ -2844,18 +2868,38 @@ class GameDirectoryRepository:
 
     def list_character_deployments(
         self,
-        character_id: UUID,
+        character_id: UUID | None = None,
+        *,
+        game_id: UUID | None = None,
+        lease_id: UUID | None = None,
     ) -> tuple[PinnedCharacterDeploymentRecord, ...]:
-        """Return only revision-pinned deployment history for one character."""
+        """Return revision-pinned deployments matching exact owner facts."""
+
+        predicates: list[str] = []
+        parameters: list[str] = []
+        if character_id is not None:
+            predicates.append("character_id = ?")
+            parameters.append(str(character_id))
+        if game_id is not None:
+            predicates.append("game_id = ?")
+            parameters.append(str(game_id))
+        if lease_id is not None:
+            predicates.append("lease_id = ?")
+            parameters.append(str(lease_id))
+        where_clause = (
+            f"WHERE {' AND '.join(predicates)}"
+            if predicates
+            else ""
+        )
 
         with self._database.read("list_character_deployments") as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT * FROM character_deployments
-                WHERE character_id = ?
+                {where_clause}
                 ORDER BY deployed_at, deployment_id
                 """,
-                (str(character_id),),
+                tuple(parameters),
             ).fetchall()
         return tuple(
             _pinned_character_deployment_from_row(row)

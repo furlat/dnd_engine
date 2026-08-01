@@ -17,7 +17,8 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.base_block import LightLevel
 from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
 from dnd.core.gridmap import GridMap
-from dnd.core.item_types import EquippedVisualPolicy
+from dnd.core.item_types import EquippedVisualPolicy, ItemDirection
+from dnd.core.life_types import LifeState
 from dnd.encounter import CombatantState, Encounter, EncounterState
 from dnd.entity import Entity
 from dnd.items.environment_interactables import StorageChest
@@ -48,6 +49,7 @@ from server.player_replication_contract import (
     ActiveWeaponSet,
     DoorPresentationCue,
     DoorStatePatch,
+    EntityRemovePatch,
     EntityUpsertPatch,
     FloorObjectProjectionKind,
     PerspectiveKind,
@@ -302,6 +304,130 @@ def test_world_diff_emits_typed_entity_replacement(
     )
 
 
+def test_perceived_corpse_persists_privately_until_authoritative_reobservation(
+    subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
+) -> None:
+    """A witnessed death stays rendered without leaking an unseen revival."""
+    grid, observer, visible, hidden, _, encounter = subjective_scene
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+    living = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+
+    death = visible.receive_instant_death(
+        observer.uuid,
+        source_description="subjective corpse regression",
+    )
+    assert death.canceled is False
+    observer.senses.entities.pop(visible.uuid, None)
+    killed = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+
+    corpse = next(
+        entity for entity in killed.state.entities
+        if entity.uuid == str(visible.uuid)
+    )
+    assert corpse.life_state is LifeState.DEAD
+    assert corpse.position == visible.position
+    assert str(visible.uuid) in killed.visual_loadout_by_entity
+    death_patches = diff_subjective_worlds(living, killed)
+    assert not any(
+        isinstance(patch, EntityRemovePatch)
+        and patch.entity_uuid == str(visible.uuid)
+        for patch in death_patches
+    )
+    assert any(
+        isinstance(patch, EntityUpsertPatch)
+        and patch.entity.uuid == str(visible.uuid)
+        and patch.entity.life_state is LifeState.DEAD
+        for patch in death_patches
+    )
+
+    observer.senses.visible[visible.position] = False
+    remembered = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    remembered_corpse = next(
+        entity for entity in remembered.state.entities
+        if entity.uuid == str(visible.uuid)
+    )
+    assert remembered_corpse == corpse
+
+    assert visible.revive(hit_points=1)
+    revived_but_unseen = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    stale_corpse = next(
+        entity for entity in revived_but_unseen.state.entities
+        if entity.uuid == str(visible.uuid)
+    )
+    assert stale_corpse.life_state is LifeState.DEAD
+    assert revived_but_unseen.state.encounter is not None
+    stale_combatant = next(
+        combatant
+        for combatant in revived_but_unseen.state.encounter.initiative_order
+        if combatant.uuid == str(visible.uuid)
+    )
+    assert stale_combatant.life_state is LifeState.DEAD
+
+    observer.senses.visible[visible.position] = True
+    observer.senses.entities[visible.uuid] = visible.position
+    reobserved = build_subjective_world(
+        perspective=perspective,
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=memory,
+    )
+    revived = next(
+        entity for entity in reobserved.state.entities
+        if entity.uuid == str(visible.uuid)
+    )
+    assert revived.life_state is LifeState.ALIVE
+    assert reobserved.state.encounter is not None
+    live_combatant = next(
+        combatant
+        for combatant in reobserved.state.encounter.initiative_order
+        if combatant.uuid == str(visible.uuid)
+    )
+    assert live_combatant.life_state is LifeState.ALIVE
+
+    observer.senses.visible[visible.position] = False
+    observer.senses.entities.pop(visible.uuid, None)
+    reset_world = build_subjective_world(
+        perspective=perspective.model_copy(
+            update={"perspective_epoch_id": "participant-reset-epoch"},
+        ),
+        grid=grid,
+        entities=[observer, visible, hidden],
+        encounter=encounter,
+        memory=SubjectiveSpatialMemory(
+            perspective_epoch_id="participant-reset-epoch",
+        ),
+    )
+    assert str(visible.uuid) not in {
+        entity.uuid for entity in reset_world.state.entities
+    }
+
+
 def test_hidden_body_weapon_keeps_logical_active_weapon_set(
     subjective_scene: tuple[GridMap, Entity, Entity, Entity, Torch, Encounter],
 ) -> None:
@@ -477,7 +603,7 @@ def test_directional_structure_is_visible_and_remembered_without_senses_object_e
 )
 def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
     wall_position: tuple[int, int],
-    wall_direction: str,
+    wall_direction: ItemDirection,
     projected_direction: str,
 ) -> None:
     """The visible side owns knowledge of the wall edge that stops its sight."""
@@ -539,7 +665,7 @@ def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
 )
 def test_distant_closed_door_projects_only_privacy_safe_edge_identity(
     door_position: tuple[int, int],
-    door_direction: str,
+    door_direction: ItemDirection,
     projected_direction: str,
 ) -> None:
     """Every visible boundary direction distinguishes a door without object facts."""

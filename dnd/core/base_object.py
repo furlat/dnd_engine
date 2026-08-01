@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, Optional, Self
 from uuid import UUID, uuid4
 
 
@@ -53,7 +53,7 @@ class BaseObject(BaseModel):
             self.__class__._registry[self.uuid] = self
 
     @classmethod
-    def get(cls, uuid: UUID) -> Optional['BaseObject']:
+    def get(cls, uuid: UUID) -> Optional[Self]:
         """Retrieve an object from this class registry by UUID.
 
         Args:
@@ -109,25 +109,6 @@ class BaseObject(BaseModel):
         if self.uuid in self.__class__._registry:
             self.__class__._registry.pop(self.uuid)
         self.use_register = False
-
-    @classmethod
-    def remove_objects(cls, uuids: List[UUID], permanent_delete: bool = False) -> None:
-        """Remove multiple objects from this class registry.
-
-        Args:
-            uuids: UUIDs of objects to remove.
-            permanent_delete: If true, remove registry entries and delete the
-                local references held by this method. If false, call
-                `remove_from_register()` on each object.
-        """
-        for uuid in uuids:
-            obj = cls._registry.get(uuid)
-            if obj is not None:
-                if permanent_delete:
-                    cls._registry.pop(uuid)
-                    del obj
-                else:
-                    obj.remove_from_register()
 
     def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str] = None) -> None:
         """Set the source entity identity for this object.

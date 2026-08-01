@@ -37,9 +37,13 @@ from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration
-from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
+from dnd.environmental_effect_runtime import (
+    extend_spike_trap_effect,
+    materialize_spike_trap_effect,
+)
+from dnd.environmental_effects import SpikeTrapGroundEffect
 from dnd.items.environment_content import TRAP_LEVER_DECLARATION
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import (
@@ -50,7 +54,8 @@ from dnd.items.environment_interactables import (
 from dnd.items.torches import WallTorch
 from dnd.maps.arena_layout import build_standard_arena_environment
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.tiles import create_spike_zone
+from dnd.spatial_effect_content import SPIKE_TRAP_EFFECT_DECLARATION
+from dnd.spatial_effects import SpatialEffect
 from server.api_models import (
     MapEditorCatalog,
     MapEditorCatalogEntry,
@@ -76,7 +81,11 @@ from server.api_models import (
 )
 from server.event_stream import event_stream
 from server.session import SessionManager
-from server.world_contracts import APIFloorObject, APITile
+from server.world_contracts import (
+    APIFloorObject,
+    APISpatialEffectSummary,
+    APITile,
+)
 from server.world_projection import project_grid
 
 logger = logging.getLogger(__name__)
@@ -409,6 +418,25 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
                 old.default_light = _light_level(patch.light_level)
             continue
         if tile_type in {"spike_trap", "spike_zone", "spikes"}:
+            old = grid.get_tile(patch.x, patch.y)
+            old_light = (
+                old.default_light
+                if old is not None
+                else LightLevel.BRIGHT_LIGHT
+            )
+            tile = grid.set_tile(
+                patch.x,
+                patch.y,
+                walkable=True,
+                visible=True,
+                name="Floor",
+            )
+            tile.default_light = (
+                _light_level(patch.light_level)
+                if patch.light_level is not None
+                else old_light
+            )
+            _apply_directional_tile_patch(grid, patch)
             spike_positions.add((patch.x, patch.y))
             continue
         old = grid.get_tile(patch.x, patch.y)
@@ -425,12 +453,15 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
         _apply_directional_tile_patch(grid, patch)
 
     if spike_positions:
-        spike_tiles, _handler = create_spike_zone(spike_positions)
-        for tile in spike_tiles:
-            old = grid.get_tile(tile.position[0], tile.position[1])
-            if old is not None:
-                tile.default_light = old.default_light
-            grid.set_tile(tile.position[0], tile.position[1], tile=tile)
+        existing = _active_spike_trap_effects()
+        if len(existing) > 1:
+            raise ValueError("mapeditor supports one linked spike-trap network")
+        if existing:
+            extend_spike_trap_effect(existing[0], spike_positions)
+            spike_effect = existing[0]
+        else:
+            spike_effect = materialize_spike_trap_effect(spike_positions)
+        _bind_unlinked_trap_levers(spike_effect.uuid)
     return get_editor_snapshot()
 
 
@@ -469,7 +500,7 @@ def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject
             uuid4(),
             origin=origin,
         )
-        trap_link = _validate_editor_runtime_state(
+        _validate_editor_runtime_state(
             item,
             request.runtime_state,
         )
@@ -477,7 +508,6 @@ def place_catalog_object(request: MapEditorObjectPlaceRequest) -> APIFloorObject
             item,
             request.position,
             request.runtime_state,
-            trap_link=trap_link,
         )
     except Exception:
         _rollback_editor_materialization(registry_snapshot)
@@ -577,7 +607,7 @@ def _rollback_editor_materialization(
 def _validate_editor_runtime_state(
     item: BaseItem,
     state: MapEditorObjectRuntimeState,
-) -> tuple[UUID, tuple[UUID, ...]] | None:
+) -> None:
     """Validate every mutable fact before the item mutates the active grid."""
     if state.charges is not None:
         if not isinstance(item, UsableItem):
@@ -595,40 +625,10 @@ def _validate_editor_runtime_state(
     if state.is_lit is not None and not isinstance(item, WallTorch):
         raise ValueError("is_lit is only valid for wall torches")
 
-    if state.trap_handler_uuid is None:
-        return None
-    if not isinstance(item, TrapLever):
-        raise ValueError("trap linkage is only valid for trap levers")
-    try:
-        handler_uuid = UUID(state.trap_handler_uuid)
-        tile_uuids = tuple(UUID(value) for value in state.trap_tile_uuids)
-    except ValueError as error:
-        raise ValueError("trap linkage contains an invalid UUID") from error
-    registration = EventQueue.get_spatial_handler_registration(handler_uuid)
-    if registration is None:
-        raise ValueError("trap linkage references an unknown spatial handler")
-    _handler, handler_positions = registration
-    tiles = tuple(BaseBlock.get(tile_uuid) for tile_uuid in tile_uuids)
-    if any(not isinstance(tile, Tile) for tile in tiles):
-        raise ValueError("trap linkage references an unknown trap tile")
-    tile_positions = {
-        tile.position
-        for tile in tiles
-        if isinstance(tile, Tile)
-    }
-    if tile_positions != set(handler_positions):
-        raise ValueError(
-            "trap linkage tiles must exactly match the spatial handler",
-        )
-    return handler_uuid, tile_uuids
-
-
 def _apply_editor_runtime_state(
     item: BaseItem,
     position: Tuple[int, int],
     state: MapEditorObjectRuntimeState,
-    *,
-    trap_link: tuple[UUID, tuple[UUID, ...]] | None,
 ) -> None:
     """Apply the narrow mutable state supported after generic construction."""
     if state.charges is not None:
@@ -658,27 +658,22 @@ def _apply_editor_runtime_state(
         else:
             item.close()
 
-    if trap_link is not None:
-        if not isinstance(item, TrapLever):
-            raise AssertionError("runtime state was not validated")
-        handler_uuid, tile_uuids = trap_link
-        _bind_trap_link(
-            item,
-            handler_uuid,
-            tile_uuids,
-        )
+    if isinstance(item, TrapLever):
+        spike_effects = _active_spike_trap_effects()
+        if len(spike_effects) > 1:
+            raise ValueError("mapeditor supports one linked spike-trap network")
+        if spike_effects:
+            _bind_trap_link(item, spike_effects[0].uuid)
 
 
 def _bind_trap_link(
     item: TrapLever,
-    trap_handler_uuid: UUID,
-    trap_tile_uuids: tuple[UUID, ...],
+    trap_effect_uuid: UUID,
 ) -> None:
-    """Attach the sole runtime-only trap linkage after materialization."""
+    """Attach one exact trap-effect identity after item materialization."""
     action: BaseAction = PullLeverAction(
         source_entity_uuid=uuid4(),
-        trap_handler_uuid=trap_handler_uuid,
-        trap_tile_uuids=list(trap_tile_uuids),
+        trap_effect_uuid=trap_effect_uuid,
         template=True,
     )
     SERVER_CONTENT_SYSTEM_RUNTIME.bind_child(
@@ -687,6 +682,66 @@ def _bind_trap_link(
         runtime_owner_uuid=item.uuid,
     )
     item.use_action_templates.append(action)
+
+
+def _active_spike_trap_effects() -> list[SpikeTrapGroundEffect]:
+    """Return exact active physical spike-trap effects in stable order."""
+    expected_ref = SPIKE_TRAP_EFFECT_DECLARATION.ref
+    return [
+        effect
+        for effect in SpatialEffect.active_effects()
+        if (
+            isinstance(effect, SpikeTrapGroundEffect)
+            and effect.content_ref == expected_ref
+        )
+    ]
+
+
+def _bind_unlinked_trap_levers(trap_effect_uuid: UUID) -> None:
+    """Bind existing editor levers after their sole trap network is authored."""
+    grid = get_map()
+    for object_uuid in sorted(grid.get_all_object_positions(), key=str):
+        item = BaseBlock.get(object_uuid)
+        if not isinstance(item, TrapLever):
+            continue
+        linked_actions = [
+            action
+            for action in item.use_action_templates
+            if isinstance(action, PullLeverAction)
+        ]
+        if linked_actions:
+            if any(
+                action.trap_effect_uuid != trap_effect_uuid
+                for action in linked_actions
+            ):
+                raise ValueError("trap lever is already linked to another effect")
+            continue
+        _bind_trap_link(item, trap_effect_uuid)
+
+
+def _is_spike_trap_effect_summary(
+    effect: APISpatialEffectSummary,
+) -> bool:
+    """Match one exact authored spike-effect snapshot."""
+    expected = SPIKE_TRAP_EFFECT_DECLARATION.ref
+    return (
+        effect.content_ref.pack_id == expected.pack_id
+        and effect.content_ref.definition_kind == expected.definition_kind.value
+        and effect.content_ref.content_id == expected.content_id
+        and effect.content_ref.content_version == expected.content_version
+        and (
+            effect.content_ref.definition_contract_hash
+            == expected.definition_contract_hash
+        )
+    )
+
+
+def _tile_has_spike_trap_effect(tile: APITile) -> bool:
+    """Return whether one projected tile belongs to the spike network."""
+    return any(
+        _is_spike_trap_effect_summary(effect)
+        for effect in tile.spatial_effects
+    )
 
 
 def delete_catalog_object(request: MapEditorObjectDeleteRequest) -> MapEditorMapSnapshot:
@@ -766,10 +821,6 @@ def _preflight_saved_editor_map(
         )
         if declaration.ref == TRAP_LEVER_DECLARATION.ref:
             trap_lever_count += 1
-        if placement.runtime_state.trap_handler_uuid is not None:
-            raise ValueError(
-                "saved map trap linkage is derived from its single trap network",
-            )
         if not validate_runtime_state:
             continue
         registry_snapshot = _capture_editor_materialization_state()
@@ -790,10 +841,17 @@ def _preflight_saved_editor_map(
             "temporary mapeditor saves support at most one trap lever "
             "for their one trap network",
         )
-    has_spike_network = any(
-        tile.is_hazardous or "Spike Trap" in tile.conditions
+    spike_effect_uuids = {
+        effect.uuid
         for tile in document.snapshot.tiles
-    )
+        for effect in tile.spatial_effects
+        if _is_spike_trap_effect_summary(effect)
+    }
+    if len(spike_effect_uuids) > 1:
+        raise ValueError(
+            "temporary mapeditor saves support one spike-trap effect network",
+        )
+    has_spike_network = bool(spike_effect_uuids)
     if trap_lever_count == 1 and not has_spike_network:
         raise ValueError(
             "temporary mapeditor trap lever requires one spike network",
@@ -809,13 +867,11 @@ def _load_editor_snapshot(
     reset_editor_world()
     grid = get_map()
     spike_light: Dict[Tuple[int, int], int] = {}
-    spike_handler_uuid: Optional[UUID] = None
-    spike_tile_uuids: List[UUID] = []
+    spike_effect_uuid: Optional[UUID] = None
     for tile_data in snapshot.tiles:
         position = (tile_data.x, tile_data.y)
-        if tile_data.is_hazardous or "Spike Trap" in tile_data.conditions:
+        if _tile_has_spike_trap_effect(tile_data):
             spike_light[position] = tile_data.light_level
-            continue
         if tile_data.walking_cost > 1 or _normalize_id(tile_data.name) == "difficult_terrain":
             tile = difficult_terrain_factory(position)
             tile.default_light = _light_level(tile_data.light_level)
@@ -834,16 +890,8 @@ def _load_editor_snapshot(
         _restore_directional_tile_state(grid, tile_data)
 
     if spike_light:
-        spike_tiles, spike_handler = create_spike_zone(set(spike_light))
-        spike_handler_uuid = spike_handler.uuid
-        spike_tile_uuids = [tile.uuid for tile in spike_tiles]
-        for tile in spike_tiles:
-            tile.default_light = _light_level(spike_light[tile.position])
-            grid.set_tile(tile.position[0], tile.position[1], tile=tile, fire_event=False)
-            for tile_data in snapshot.tiles:
-                if (tile_data.x, tile_data.y) == tile.position:
-                    _restore_directional_tile_state(grid, tile_data)
-                    break
+        spike_effect = materialize_spike_trap_effect(set(spike_light))
+        spike_effect_uuid = spike_effect.uuid
 
     for placement in object_placements:
         placed = place_catalog_object(
@@ -855,12 +903,14 @@ def _load_editor_snapshot(
             )
         )
         item = BaseBlock.get(UUID(placed.uuid))
-        if isinstance(item, TrapLever) and spike_handler_uuid is not None:
-            _bind_trap_link(
-                item,
-                spike_handler_uuid,
-                tuple(spike_tile_uuids),
-            )
+        if isinstance(item, TrapLever) and spike_effect_uuid is not None:
+            actions = [
+                action
+                for action in item.use_action_templates
+                if isinstance(action, PullLeverAction)
+            ]
+            if not actions:
+                _bind_trap_link(item, spike_effect_uuid)
 
 
 def _restore_directional_tile_state(grid: Any, tile_data: APITile) -> None:

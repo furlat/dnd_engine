@@ -1,4 +1,4 @@
-"""Dependency-neutral item presentation and location contracts."""
+"""Dependency-neutral item presentation, observation, and location contracts."""
 
 from enum import Enum
 from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
@@ -41,6 +41,61 @@ class ItemLocation(str, Enum):
     EQUIPMENT = "equipment"
     MERGED = "merged"
     DESTROYED = "destroyed"
+
+
+ItemDirection = Literal["north", "south", "east", "west"]
+ItemBlockingChannel = Literal["movement", "vision", "light", "propagation"]
+
+
+class ItemDirectionalStructureState(BaseModel):
+    """Cold directional topology contributed by one spatial item."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    blocked_directions: Tuple[ItemDirection, ...]
+    blocked_channels: Tuple[ItemBlockingChannel, ...]
+
+
+class ItemLightSourceState(BaseModel):
+    """Cold visible light-emitter state contributed by one item."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    is_lit: bool
+    very_bright_radius_feet: int = Field(ge=0)
+    bright_radius_feet: int = Field(ge=0)
+    dim_radius_feet: int = Field(ge=0)
+
+
+class ItemChargeState(BaseModel):
+    """Cold finite-use state contributed by one usable item."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    charges: int = Field(ge=-1)
+    max_charges: int = Field(ge=-1)
+
+
+class ItemObservationState(BaseModel):
+    """Closed observer-relative state for one spatial item.
+
+    Common item facts remain required. Orthogonal capabilities are nested
+    rather than encoded as an open bag of concrete-class fields, so one object
+    may truthfully be both usable and structural or usable and luminous.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    blocks_movement: bool
+    blocks_vision: bool
+    is_pickable: bool
+    is_usable: bool
+    stack_count: int = Field(ge=1)
+    is_hazardous: bool
+    is_open: Optional[bool] = None
+    directional_structure: Optional[ItemDirectionalStructureState] = None
+    light_source: Optional[ItemLightSourceState] = None
+    charge_state: Optional[ItemChargeState] = None
 
 
 class ItemContentRefSnapshot(BaseModel):
@@ -120,8 +175,14 @@ class ItemPresentationProvider(Protocol):
 
 __all__ = [
     "EquippedVisualPolicy",
-    "ItemLocation",
+    "ItemBlockingChannel",
+    "ItemChargeState",
     "ItemContentRefSnapshot",
+    "ItemDirection",
+    "ItemDirectionalStructureState",
+    "ItemLightSourceState",
+    "ItemLocation",
+    "ItemObservationState",
     "ItemPresentationKind",
     "ItemPresentationProvider",
     "ItemPresentationState",

@@ -18,13 +18,12 @@ from dnd.core.base_actions import (
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     BaseAction,
-    CostType,
     OutcomeResolution,
     TargetEffectDisposition,
     TargetType,
-    spell_slot_cost_type,
     Cost,
 )
+from dnd.core.action_types import CostType, spell_slot_cost_type
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
@@ -37,7 +36,7 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
-from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, BaseHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     ResistanceModifier,
@@ -52,24 +51,37 @@ from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
 from dnd.blocks.equipment import ArmorEquipEvent
 from dnd.core.equipment_types import UnarmoredAc
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
 
 from dnd.core.dice import AttackOutcome, Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
+from dnd.actions import (
+    AttackEvent,
+    SpellAction,
+    SpellEvent,
+    entity_action_economy_cost_evaluator,
+)
+from dnd.conditions import Exhaustion
 from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.spells.content_metadata import (
     srd_action_identity,
     srd_reaction_identity,
     srd_spell_identity,
 )
-from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.effect_ids import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
     MAGIC_MISSILE_DAMAGE_EFFECT_ID,
 )
+from dnd.spatial_effect_content import (
+    ANTIMAGIC_FIELD_RECIPE,
+    GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
+)
+from dnd.spatial_effects import FieldEffect, SpatialEffect, SpatialEffectController
 
 
 class CounterspellReactionEvent(ActionEvent):
@@ -370,7 +382,7 @@ def register_shield_reaction(entity: Entity) -> None:
     """Register the Shield reaction handler on an entity.
 
     The entity must be a spellcaster with spell slots.
-    The handler can be toggled via entity.set_handler_enabled("Shield", enabled).
+    The handler can be toggled through its exact UUID.
     """
     handler = create_shield_reaction_handler(entity.uuid)
     entity.add_event_handler(handler)
@@ -461,15 +473,15 @@ class MageArmorCondition(BaseCondition):
 
         return outs, handler_uuids, [], [], effect_event
 
-    def _remove(self, _removal_event: Optional[Event] = None) -> None:
+    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
         """Restore the old unarmored AC type on removal."""
 
         if not self.target_entity_uuid:
-            return
+            return super()._remove(removal_event)
 
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity or not isinstance(target_entity, Entity):
-            return
+            return super()._remove(removal_event)
 
         if self._old_unarmored_type:
             try:
@@ -478,6 +490,7 @@ class MageArmorCondition(BaseCondition):
                 target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
         else:
             target_entity.equipment.unarmored_ac_type = UnarmoredAc.NONE
+        return super()._remove(removal_event)
 
 
 @srd_spell_identity(
@@ -520,28 +533,23 @@ class MageArmor(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target is unarmored and in range."""
-
         source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
         if not source_entity:
             return declaration_event.cancel(status_message="Caster not found")
 
+        target_entity = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid
+            else source_entity
+        )
         if target_entity is None:
-            target_entity = source_entity
-            self.target_entity_uuid = source_entity.uuid
-
-        if target_entity.uuid != source_entity.uuid:
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
+            return declaration_event.cancel(status_message="Target not found")
 
         if not target_entity.equipment.is_unarmored():
             return declaration_event.cancel(status_message="Target is wearing armor")
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -649,33 +657,14 @@ class ProtectionFromEnergy(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
-
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
         allowed_types = [DamageType.ACID, DamageType.COLD, DamageType.FIRE, DamageType.LIGHTNING, DamageType.THUNDER]
         if self.chosen_energy_type not in allowed_types:
             return declaration_event.cancel(
                 status_message=f"Invalid energy type: {self.chosen_energy_type.value}. Must be acid, cold, fire, lightning, or thunder."
             )
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -794,27 +783,8 @@ class Stoneskin(SpellAction):
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target and range."""
-
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -848,7 +818,7 @@ class Stoneskin(SpellAction):
         )
 
 
-def _complete_counterspell_reaction(
+def _begin_counterspell_reaction(
     incoming_event: SpellEvent,
     counterspeller: Entity,
     original_caster: Entity,
@@ -858,8 +828,8 @@ def _complete_counterspell_reaction(
     succeeded: bool,
     check_total: Optional[int] = None,
     check_dc: Optional[int] = None,
-) -> CounterspellReactionEvent:
-    """Emit one complete typed reaction event for observation and combat logs."""
+) -> Optional[CounterspellReactionEvent]:
+    """Publish Counterspell through Effect before committing its resources."""
     outcome_code = (
         COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
         if succeeded
@@ -880,11 +850,28 @@ def _complete_counterspell_reaction(
         check_dc=check_dc,
         succeeded=succeeded,
         outcome_code=outcome_code,
+        use_register=False,
     )
-    effect = declaration.phase_to(
+    declaration = EventQueue.publish_declaration(declaration)
+    if declaration.canceled:
+        return None
+    execution = declaration.phase_to(
+        EventPhase.EXECUTION,
+        status_message="Counterspell reaction accepted.",
+    )
+    if execution.canceled:
+        return None
+    effect = execution.phase_to(
         EventPhase.EFFECT,
         status_message="Counterspell reaction resolved.",
     )
+    return None if effect.canceled else effect
+
+
+def _complete_counterspell_reaction(
+    effect: CounterspellReactionEvent,
+) -> CounterspellReactionEvent:
+    """Publish the post-commit terminal Counterspell fact."""
     return effect.phase_to(
         EventPhase.COMPLETION,
         status_message="Counterspell reaction completed.",
@@ -937,9 +924,7 @@ def counterspell_reaction_processor(
 
     auto_slot = entity.get_lowest_spell_slot(max(3, spell_cast_level))
     if auto_slot is not None:
-        entity.action_economy.consume("reactions", 1)
-        entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
-        _complete_counterspell_reaction(
+        reaction = _begin_counterspell_reaction(
             event,
             entity,
             spell_caster,
@@ -947,6 +932,11 @@ def counterspell_reaction_processor(
             automatic=True,
             succeeded=True,
         )
+        if reaction is None:
+            return None
+        entity.action_economy.consume("reactions", 1)
+        entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
+        _complete_counterspell_reaction(reaction)
         return event.cancel(
             status_message="The spell was interrupted.",
             outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
@@ -956,9 +946,6 @@ def counterspell_reaction_processor(
     cheap_slot = entity.get_lowest_spell_slot(3)
     if cheap_slot is None:
         return None
-
-    entity.action_economy.consume("reactions", 1)
-    entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
 
     dc = 10 + spell_cast_level
     ability_name: AbilityName = entity.spellcasting.spellcasting_ability
@@ -983,32 +970,28 @@ def counterspell_reaction_processor(
     ability_mod = entity.ability_scores.get_ability(ability_name).modifier
     d20 = random.randint(1, 20)
     check_total = d20 + ability_mod
-    if check_total >= dc:
-        _complete_counterspell_reaction(
-            event,
-            entity,
-            spell_caster,
-            slot_level=cheap_slot,
-            automatic=False,
-            succeeded=True,
-            check_total=check_total,
-            check_dc=dc,
-        )
-        return event.cancel(
-            status_message="The spell was interrupted.",
-            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
-            outcome_source_entity_uuid=entity.uuid,
-        )
-    _complete_counterspell_reaction(
+    succeeded = check_total >= dc
+    reaction = _begin_counterspell_reaction(
         event,
         entity,
         spell_caster,
         slot_level=cheap_slot,
         automatic=False,
-        succeeded=False,
+        succeeded=succeeded,
         check_total=check_total,
         check_dc=dc,
     )
+    if reaction is None:
+        return None
+    entity.action_economy.consume("reactions", 1)
+    entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
+    _complete_counterspell_reaction(reaction)
+    if succeeded:
+        return event.cancel(
+            status_message="The spell was interrupted.",
+            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+            outcome_source_entity_uuid=entity.uuid,
+        )
     return None
 
 
@@ -1063,7 +1046,7 @@ def register_counterspell_reaction(entity: Entity) -> None:
     entity.add_event_handler(handler)
 
 
-class GlobeZone(BaseCondition):
+class GlobeZone(SpatialEffectController):
     """Maintain Globe of Invulnerability's immobile spell-protection area.
 
     The globe stays at its cast position, blocks spells by base spell level
@@ -1081,6 +1064,7 @@ class GlobeZone(BaseCondition):
     zone_radius_feet: int = Field(default=10, description="Zone radius in feet.")
     affected_positions: set = Field(default_factory=set, description="Grid positions protected by the globe.")
     max_blocked_level: int = Field(default=5, description="Highest base spell level blocked by the globe.")
+    _installed_handler_uuids: List[UUID] = PrivateAttr(default_factory=list)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -1094,17 +1078,46 @@ class GlobeZone(BaseCondition):
         shape.compute_objective(self.zone_center)
         return set(shape.affected_positions)
 
+    def resolve_effect_footprint(self) -> Set[Tuple[int, int]]:
+        """Return protected positions that exist on the active map."""
+        grid = get_map()
+        return {
+            position
+            for position in self._compute_positions()
+            if grid.has_tile(*position)
+        }
+
+    def rollback_failed_install(self) -> None:
+        """Release global blocker registrations after an interrupted install."""
+        self._release_owned_runtime_state()
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release global blocker registrations on removal or rollback."""
+        del parent_event
+        SpellProtectionRegistry.unregister(self.uuid)
+        for handler_uuid in self._installed_handler_uuids:
+            handler = EventHandler.get(handler_uuid)
+            if isinstance(handler, EventHandler):
+                handler.remove()
+        self._installed_handler_uuids.clear()
+
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        self.affected_positions = self._compute_positions()
+        self.affected_positions = self.resolve_effect_footprint()
         handler_uuids = []
 
         blocker = self._create_spell_blocker()
         EventQueue.add_event_handler(blocker)
         handler_uuids.append(blocker.uuid)
+        self._installed_handler_uuids.append(blocker.uuid)
 
         cond_blocker = self._create_condition_blocker()
         EventQueue.add_event_handler(cond_blocker)
         handler_uuids.append(cond_blocker.uuid)
+        self._installed_handler_uuids.append(cond_blocker.uuid)
 
         SpellProtectionRegistry.register(SpellProtection(
             uuid=self.uuid,
@@ -1117,11 +1130,6 @@ class GlobeZone(BaseCondition):
             status_message=f"Globe of Invulnerability active"
         )
         return [], handler_uuids, [], [], effect_event
-
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Unregister from SpellProtectionRegistry before standard cleanup."""
-        SpellProtectionRegistry.unregister(self.uuid)
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
     def _create_spell_blocker(self) -> EventHandler:
         """Cancel low-level spells cast from outside into the protected area."""
@@ -1240,13 +1248,7 @@ class GlobeOfInvulnerability(SpellAction):
     )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1261,16 +1263,23 @@ class GlobeOfInvulnerability(SpellAction):
             status_message=f"{caster.name} casts Globe of Invulnerability (blocks L{max_blocked} and below)"
         )
 
+        field = materialize_spatial_effect(
+            GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
+            caster.uuid,
+            position=caster.senses.position,
+            faction=caster.faction,
+            expected_type=FieldEffect,
+        )
         zone = GlobeZone(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            target_entity_uuid=field.uuid,
             zone_center=caster.senses.position,
             max_blocked_level=max_blocked
         )
-        caster.add_condition(zone, parent_event=effect_event)
+        field.install_controller(zone, parent_event=effect_event)
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(field.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1406,23 +1415,7 @@ class Banishment(SpellAction):
         return 1 + self.get_upcast_bonus()
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_entity_target_in_range_and_sight(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1512,12 +1505,10 @@ def _reduce_exhaustion(
 ) -> Optional[str]:
     """Reduce Exhaustion by one level, removing it at level one."""
     condition = target.active_conditions.get("Exhaustion")
-    if condition is None or ConditionTag.EXHAUSTION not in condition.tags:
+    if not isinstance(condition, Exhaustion):
         return None
 
-    previous_level = getattr(condition, "level", None)
-    if not isinstance(previous_level, int):
-        return None
+    previous_level = condition.level
     if not target.reduce_condition_level("Exhaustion", parent_event=parent_event):
         return None
     if previous_level > 1:
@@ -1540,22 +1531,9 @@ class LesserRestoration(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_entity_target_in_range_and_sight(
+            declaration_event,
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1610,22 +1588,9 @@ class GreaterRestoration(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_entity_target_in_range_and_sight(
+            declaration_event,
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1698,22 +1663,9 @@ class RemoveCurse(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        return self._validate_entity_target_in_range_and_sight(
+            declaration_event,
+        )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1858,26 +1810,8 @@ class ProtectionFromPoison(SpellAction):
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            if target.uuid not in caster.senses.entities:
-                return declaration_event.cancel(status_message="Target not in line of sight")
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -2017,26 +1951,8 @@ class DeathWard(SpellAction):
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            if target.uuid not in caster.senses.entities:
-                return declaration_event.cancel(status_message="Target not in line of sight")
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -2215,16 +2131,13 @@ class FreedomOfMovementEscape(BaseAction):
                 value=-movement_cost,
             )
             entity.action_economy.movement.self_static.add_value_modifier(cost_modifier)
-        return completion_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Applied {movement_cost}ft movement cost for {self.name}",
-        )
+        return completion_event
 
 
 class FreedomOfMovementEffect(BaseCondition):
     """Ignores difficult terrain and blocks key movement-impairing conditions."""
     name: str = Field(default="Freedom of Movement", description="Condition name.")
-    description: str = Field(default="Unaffected by difficult terrain, magical speed reduction, underwater penalties, Grappled, Restrained, magical paralysis, and can spend 5 feet of movement to escape nonmagical restraints", description="Rules-facing condition summary.")
+    description: str = Field(default="Unaffected by difficult terrain, magical speed reduction, underwater penalties, magical Grappled, Restrained, or paralysis, and can spend 5 feet of movement to escape nonmagical restraints", description="Rules-facing condition summary.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category.")
     tags: Set[ConditionTag] = Field(
         default_factory=lambda: {ConditionTag.MAGICAL},
@@ -2239,17 +2152,30 @@ class FreedomOfMovementEffect(BaseCondition):
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        target.ignore_difficult_terrain = True
-        target.ignore_magical_speed_reduction = True
-        target.ignore_underwater_penalties = True
-        target.senses._paths_dirty = True
-
-        target.add_condition_immunity("Grappled", immunity_name="Freedom of Movement")
-        target.add_condition_immunity("Restrained", immunity_name="Freedom of Movement")
-        target.add_condition_immunity(
+        target.add_mobility_protection_source(
+            self.uuid,
+            ignores_difficult_terrain=True,
+            ignores_magical_speed_reduction=True,
+            ignores_underwater_penalties=True,
+        )
+        for condition_name in (
+            "Grappled",
+            "Restrained",
             "Paralyzed",
-            immunity_name="Freedom of Movement",
-            immunity_check=_freedom_of_movement_magical_condition_immunity,
+        ):
+            target.add_condition_immunity_source(
+                condition_name,
+                self.uuid,
+                immunity_check=(
+                    _freedom_of_movement_magical_condition_immunity
+                ),
+            )
+        target.register_condition_action(
+            self,
+            FreedomOfMovementEscape(
+                source_entity_uuid=target.uuid,
+                template=True,
+            ),
         )
 
         effect_event = declaration_event.phase_to(
@@ -2259,17 +2185,19 @@ class FreedomOfMovementEffect(BaseCondition):
         return [], [], [], [], effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up flag and condition immunities on removal."""
+        """Remove only this spell instance's movement-protection sources."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.ignore_difficult_terrain = False
-            target.ignore_magical_speed_reduction = False
-            target.ignore_underwater_penalties = False
-            target.senses._paths_dirty = True
-            target._remove_static_condition_immunity("Grappled", "Freedom of Movement")
-            target._remove_static_condition_immunity("Restrained", "Freedom of Movement")
-            target._remove_contextual_condition_immunity("Paralyzed", "Freedom of Movement")
-            target.unregister_action(FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME)
+            target.remove_mobility_protection_source(self.uuid)
+            for condition_name in (
+                "Grappled",
+                "Restrained",
+                "Paralyzed",
+            ):
+                target.remove_condition_immunity_source(
+                    condition_name,
+                    self.uuid,
+                )
         return super()._remove(event)
 
 
@@ -2309,26 +2237,8 @@ class FreedomOfMovement(SpellAction):
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else caster
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not target:
-            target = caster
-            self.target_entity_uuid = caster.uuid
-
-        if target.uuid != caster.uuid:
-            if target.uuid not in caster.senses.entities:
-                return declaration_event.cancel(status_message="Target not in line of sight")
-            distance = caster.senses.get_feet_distance(target.position)
-            if distance > self.effective_range:
-                return declaration_event.cancel(
-                    status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
-                )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
+        return self._validate_entity_target_or_self_in_range_and_sight(
+            declaration_event,
         )
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
@@ -2348,8 +2258,6 @@ class FreedomOfMovement(SpellAction):
             target_entity_uuid=target.uuid
         )
         target.add_condition(condition, parent_event=effect_event)
-        target.unregister_action(FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME)
-        target.register_action(FreedomOfMovementEscape(source_entity_uuid=target.uuid, template=True))
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2366,8 +2274,7 @@ def _freedom_of_movement_magical_condition_immunity(
     _ = entity, target_entity
     if context is None:
         return False
-    condition = context.get("condition")
-    condition_tags = context.get("condition_tags", getattr(condition, "tags", set()))
+    condition_tags = context.get("condition_tags", set())
     return ConditionTag.MAGICAL in condition_tags
 
 
@@ -3101,7 +3008,7 @@ class AntimagicSuppression(BaseCondition):
         return super()._remove(event)
 
 
-class AntimagicFieldZone(BaseCondition):
+class AntimagicFieldZone(SpatialEffectController):
     """Maintain the caster-following Antimagic Field suppression zone.
 
     The zone blocks spell casts from or into the area, suppresses existing
@@ -3123,6 +3030,7 @@ class AntimagicFieldZone(BaseCondition):
         default_factory=dict,
         description="Suppression marker condition UUIDs keyed by suppressed entity UUID.",
     )
+    _installed_handler_uuids: List[UUID] = PrivateAttr(default_factory=list)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -3136,27 +3044,53 @@ class AntimagicFieldZone(BaseCondition):
         shape.compute_objective(self.zone_center)
         return set(shape.affected_positions)
 
+    def resolve_effect_footprint(self) -> Set[Tuple[int, int]]:
+        """Return suppressed positions that exist on the active map."""
+        grid = get_map()
+        return {
+            position
+            for position in self._compute_positions()
+            if grid.has_tile(*position)
+        }
+
+    def rollback_failed_install(self) -> None:
+        """Release global handlers and suppression leases after failed setup."""
+        self._release_owned_runtime_state()
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release global handlers and suppression leases on every exit."""
+        SpellProtectionRegistry.unregister(self.uuid)
+        for handler_uuid in self._installed_handler_uuids:
+            handler = EventHandler.get(handler_uuid)
+            if isinstance(handler, EventHandler):
+                handler.remove()
+        self._installed_handler_uuids.clear()
+        self._unsuppress_all_entities(parent_event=parent_event)
+
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
-        self.affected_positions = self._compute_positions()
+        self.affected_positions = self.resolve_effect_footprint()
         handler_uuids: List[UUID] = []
 
         blocker = self._create_spell_blocker()
         EventQueue.add_event_handler(blocker)
         handler_uuids.append(blocker.uuid)
-
-        follow = self._create_follow_caster_handler()
-        EventQueue.add_event_handler(follow)
-        handler_uuids.append(follow.uuid)
+        self._installed_handler_uuids.append(blocker.uuid)
 
         entry = self._create_entity_entry_handler()
         EventQueue.add_event_handler(entry)
         handler_uuids.append(entry.uuid)
+        self._installed_handler_uuids.append(entry.uuid)
 
         exit_handler = self._create_entity_exit_handler()
         EventQueue.add_event_handler(exit_handler)
         handler_uuids.append(exit_handler.uuid)
+        self._installed_handler_uuids.append(exit_handler.uuid)
 
         SpellProtectionRegistry.register(SpellProtection(
             uuid=self.uuid,
@@ -3175,20 +3109,6 @@ class AntimagicFieldZone(BaseCondition):
                 self._suppress_entity(entity_uuid, parent_event=effect_event)
 
         return [], handler_uuids, [], [], effect_event
-
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Disable handlers, restore suppressed conditions, then run standard cleanup."""
-        if not self.applied:
-            return False
-
-        for handler_uuid in self.event_handlers_uuids:
-            handler = BaseObject.get(handler_uuid)
-            if isinstance(handler, BaseHandler):
-                handler.enabled = False
-
-        SpellProtectionRegistry.unregister(self.uuid)
-        self._unsuppress_all_entities(parent_event=parent_event)
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
     def _suppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
         """Suppress all top-level magical conditions on an entity."""
@@ -3297,51 +3217,54 @@ class AntimagicFieldZone(BaseCondition):
             event_processor=processor
         )
 
-    def _create_follow_caster_handler(self) -> EventHandler:
-        """Move zone to follow caster, suppress/unsuppress entity deltas."""
+    def relocate_anchor(
+        self,
+        position: Tuple[int, int],
+        *,
+        parent_event: Event,
+    ) -> None:
+        """Recenter suppression and membership when the field anchor moves."""
         caster_uuid = type_cast(UUID, self.source_entity_uuid)
-        zone = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpatialChangeEvent) or event.entity_uuid != caster_uuid:
-                return None
-
-            old_positions = set(zone.affected_positions)
-            zone.zone_center = event.position
-            new_positions = zone._compute_positions()
-            zone.affected_positions = new_positions
-
-            SpellProtectionRegistry.unregister(zone.uuid)
-            SpellProtectionRegistry.register(SpellProtection(
-                uuid=zone.uuid,
-                positions=set(new_positions),
-                max_blocked_level=9,
-            ))
-
-            grid = get_map()
-            left_positions = old_positions - new_positions
-            for pos in left_positions:
-                for entity_uuid in grid.get_entities_at(pos):
-                    if entity_uuid in zone.suppression_markers:
-                            zone._unsuppress_entity(entity_uuid, parent_event=event)
-
-            entered_positions = new_positions - old_positions
-            for pos in entered_positions:
-                for entity_uuid in grid.get_entities_at(pos):
-                    if entity_uuid != caster_uuid:
-                        zone._suppress_entity(entity_uuid, parent_event=event)
-
-            return None
-
-        return EventHandler(
-            name="Antimagic Follow Caster",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_ENTERED,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=processor
+        old_positions = set(self.affected_positions)
+        self.zone_center = position
+        new_positions = self.resolve_effect_footprint()
+        self.affected_positions = new_positions
+        effect = (
+            SpatialEffect.get_effect(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
         )
+        if effect is None:
+            raise RuntimeError("Antimagic Field effect owner is unavailable")
+        effect.set_position(position)
+        effect.synchronize_footprint(
+            new_positions,
+            parent_event=parent_event,
+        )
+
+        SpellProtectionRegistry.unregister(self.uuid)
+        SpellProtectionRegistry.register(SpellProtection(
+            uuid=self.uuid,
+            positions=set(new_positions),
+            max_blocked_level=9,
+        ))
+
+        grid = get_map()
+        for old_position in old_positions - new_positions:
+            for entity_uuid in grid.get_entities_at(old_position):
+                if entity_uuid in self.suppression_markers:
+                    self._unsuppress_entity(
+                        entity_uuid,
+                        parent_event=parent_event,
+                    )
+
+        for new_position in new_positions - old_positions:
+            for entity_uuid in grid.get_entities_at(new_position):
+                if entity_uuid != caster_uuid:
+                    self._suppress_entity(
+                        entity_uuid,
+                        parent_event=parent_event,
+                    )
 
     def _create_entity_entry_handler(self) -> EventHandler:
         """Suppress magical conditions when an entity enters the zone."""
@@ -3411,13 +3334,7 @@ class AntimagicField(SpellAction):
     )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return self._validate_self_cast(declaration_event)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3429,16 +3346,23 @@ class AntimagicField(SpellAction):
             status_message=f"{caster.name} casts Antimagic Field"
         )
 
+        field = materialize_spatial_effect(
+            ANTIMAGIC_FIELD_RECIPE,
+            caster.uuid,
+            position=caster.senses.position,
+            faction=caster.faction,
+            expected_type=FieldEffect,
+        )
         zone = AntimagicFieldZone(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            target_entity_uuid=field.uuid,
             zone_center=caster.senses.position
         )
-        caster.add_condition(zone, parent_event=effect_event)
+        field.install_controller(zone, parent_event=effect_event)
 
         concentration = self.ensure_concentration(effect_event)
         if zone.applied:
-            concentration.add_linked_condition(caster.uuid, zone.uuid)
+            concentration.add_linked_condition(field.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

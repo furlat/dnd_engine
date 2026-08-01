@@ -48,14 +48,38 @@ DEFAULT_GENERATED_BINDINGS_PATH = (
     / "icon_bindings_generated.py"
 )
 EXPECTED_MANIFEST_SHA256 = (
-    "94ba386f278b8da917df6cf896fba4f23d858e0abcb13b20a85a7a0bd8df244c"
+    "04f7ce7a14171d0ffd07dddd4cb5d3dcf0a0cf43f15a3d38ec7d17f77f887913"
 )
-EXPECTED_MANIFEST_ASSET_COUNT = 515
+EXPECTED_MANIFEST_ASSET_COUNT = 521
 EXPECTED_MANIFEST_SCHEMA_VERSION = 3
 EXPECTED_STYLE_ID = "fantasy-classic-v1"
 
 
 _HUMAN_REVIEWED_BINDINGS = {
+    (
+        "content.neurodragon:condition:"
+        "condition.environment.wet@1"
+    ): "condition.environment.wet",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.entangle@1"
+    ): "spell.entangle",
+    (
+        "content.srd_5_1_cc:spell:"
+        "spell.evards_black_tentacles@1"
+    ): "spell.evards-black-tentacles",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.spell.entangle.escape@1"
+    ): "action.escape-entangle",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.spell.evards_black_tentacles.escape_strength@1"
+    ): "action.escape-black-tentacles-strength",
+    (
+        "content.srd_5_1_cc:action:"
+        "action.spell.evards_black_tentacles.escape_dexterity@1"
+    ): "action.escape-black-tentacles-dexterity",
     # Creator apparel packages use the exact icon owned by their principal
     # reviewed body recipe; footwear remains visible in package contents.
     (
@@ -811,10 +835,145 @@ _HUMAN_REVIEWED_BINDINGS.update({
     ): "trait.hellish-resistance",
 })
 
+# These identities kept their reviewed assets when the duplicate persistent-
+# condition installers were retired.  Listing every exact root here is the
+# explicit review barrier that permits the importer to re-authenticate the new
+# CLASS_FEATURE contracts; unrelated stale ContentRefs still fail closed.
+_HUMAN_REVIEWED_BINDINGS.update({
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.brutal_critical@1"
+    ): "condition.dnd-classes-barbarian-brutalcritical",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.danger_sense@1"
+    ): "condition.dnd-classes-barbarian-dangersense",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.fast_movement@1"
+    ): "condition.dnd-classes-barbarian-fastmovement",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.feral_instinct@1"
+    ): "condition.dnd-classes-barbarian-feralinstinct",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.frenzy@1"
+    ): "condition.dnd-classes-rage-frenzyfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.indomitable_might@1"
+    ): "condition.dnd-classes-barbarian-indomitablemight",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.intimidating_presence@1"
+    ): "condition.dnd-classes-barbarian-intimidatingpresencefeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.mindless_rage@1"
+    ): "condition.dnd-classes-barbarian-mindlessrage",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.persistent_rage@1"
+    ): "condition.dnd-classes-barbarian-persistentrage",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.primal_champion@1"
+    ): "condition.dnd-classes-barbarian-primalchampion",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.rage@1"
+    ): "condition.dnd-classes-rage-ragefeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.reckless_attack@1"
+    ): "condition.dnd-classes-barbarian-recklessattackfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.relentless_rage@1"
+    ): "condition.dnd-classes-barbarian-relentlessrage",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.barbarian.retaliation@1"
+    ): "condition.dnd-classes-barbarian-retaliation",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.extra_attack@1"
+    ): "condition.dnd-classes-fighter-extraattackfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.action_surge@1"
+    ): "condition.dnd-classes-fighter-actionsurgefeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.archery@1"
+    ): "condition.dnd-classes-fighter-fightingstylearchery",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.defense@1"
+    ): "condition.dnd-classes-fighter-fightingstyledefense",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.dueling@1"
+    ): "condition.dnd-classes-fighter-fightingstyledueling",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.great_weapon_fighting@1"
+    ): "condition.dnd-classes-fighter-greatweaponfighting",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.protection@1"
+    ): "condition.dnd-classes-fighter-fightingstyleprotection",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.fighting_style.two_weapon_fighting@1"
+    ): "condition.dnd-classes-fighter-fightingstyletwoweaponfighting",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.improved_critical@1"
+    ): "condition.dnd-classes-fighter-improvedcritical",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.indomitable@1"
+    ): "condition.dnd-classes-fighter-indomitable",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.second_wind@1"
+    ): "condition.dnd-classes-fighter-secondwindfeature",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.superior_critical@1"
+    ): "condition.dnd-classes-fighter-superiorcritical",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.fighter.survivor@1"
+    ): "condition.dnd-classes-fighter-survivor",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.draconic_resilience@1"
+    ): "condition.dnd-classes-sorcerer-draconicresilience",
+    (
+        "content.srd_5_1_cc:class_feature:"
+        "class_feature.sorcerer.sorcery_points@1"
+    ): "condition.dnd-classes-sorcerer-sorcerypointsfeature",
+    (
+        "content.srd_5_1_cc:feat:"
+        "feat.lucky@1"
+    ): "condition.dnd-classes-feats-luckyfeature",
+})
+
 
 _RETIRED_PUBLIC_IDENTITIES = frozenset({
     "content.neurodragon:background:background.adventurer@1",
     "content.srd_5_1_cc:background:background.acolyte@1",
+    (
+        "content.srd_5_1_cc:condition:"
+        "condition.spell.web.restrained@1"
+    ),
+    (
+        "content.srd_5_1_cc:condition:"
+        "condition.spell.web.zone@1"
+    ),
     "content.srd_5_1_cc:species:species.dragonborn@1",
     "content.srd_5_1_cc:species:species.dwarf@1",
     "content.srd_5_1_cc:species:species.elf@1",
@@ -1493,10 +1652,10 @@ def _render_generated_bindings(ledger: dict[str, Any]) -> str:
         "",
         "",
         "# exact identity_key#definition_contract_hash ->",
-        "# (definition_contract_hash, disposition, icon_key, asset_sha256)",
+        "# (icon_key, asset_sha256)",
         "BUILT_IN_CONTENT_ICON_BINDINGS: dict[",
         "    str,",
-        "    tuple[str, str, str | None, str | None],",
+        "    tuple[str | None, str | None],",
         "] = {",
     ]
     for row in ledger["definitions"]:
@@ -1508,8 +1667,6 @@ def _render_generated_bindings(ledger: dict[str, Any]) -> str:
         contract_hash = ref["definition_contract_hash"]
         lines.extend([
             f"    {identity + '#' + contract_hash!r}: (",
-            f"        {contract_hash!r},",
-            f"        {row['decision']!r},",
             f"        {row['icon_key']!r},",
             f"        {row['asset_sha256']!r},",
             "    ),",

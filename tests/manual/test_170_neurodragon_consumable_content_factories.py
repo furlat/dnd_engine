@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -66,21 +65,7 @@ _LEGACY_SYMBOLS = frozenset({
 def test_consumable_declarations_are_exact_reviewed_original_content() -> None:
     """All seven roots own stable public metadata and durable possession."""
     declarations = consumable_definitions.NEURODRAGON_CONSUMABLE_DECLARATIONS
-    recipes = (
-        consumable_definitions
-        .NEURODRAGON_CONSUMABLE_RECIPES_BY_LEGACY_ID
-    )
 
-    assert isinstance(recipes, MappingProxyType)
-    assert tuple(recipes) == (
-        "healing_potion",
-        "weapon_coat",
-        "lightning_weapon_coat",
-        "flaming_weapon_spell_coat",
-        "timed_weapon_coat",
-        "potion_of_greater_invisibility",
-        "potion_of_haste",
-    )
     assert tuple(declaration.ref.content_id for declaration in declarations) == (
         "consumable.healing_potion",
         "consumable.weapon_coat.fire",
@@ -123,8 +108,18 @@ def test_consumable_declarations_are_exact_reviewed_original_content() -> None:
             is ItemPersistencePolicy.POSSESSION
         )
 
-    with pytest.raises(TypeError):
-        recipes["weapon_coat"] = recipes["healing_potion"]  # type: ignore[index]
+    recipes = (
+        consumable_definitions.HEALING_POTION_RECIPE,
+        consumable_definitions.FIRE_WEAPON_COAT_RECIPE,
+        consumable_definitions.LIGHTNING_WEAPON_COAT_RECIPE,
+        consumable_definitions.CONCENTRATION_FIRE_WEAPON_COAT_RECIPE,
+        consumable_definitions.TIMED_FIRE_WEAPON_COAT_RECIPE,
+        consumable_definitions.GREATER_INVISIBILITY_POTION_RECIPE,
+        consumable_definitions.HASTE_POTION_RECIPE,
+    )
+    assert tuple(recipe.ref for recipe in recipes) == tuple(
+        declaration.ref for declaration in declarations
+    )
 
 
 def test_consumable_recipe_parameters_are_closed_and_stack_exactly() -> None:

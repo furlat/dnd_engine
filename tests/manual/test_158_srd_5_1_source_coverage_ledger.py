@@ -13,10 +13,11 @@ from dnd.core.content.inventory import (
     SourceImplementationStatus,
 )
 from dnd.core.content.provenance import ContentSource
-from dnd.items.armors import SRD_ARMOR_RECIPES_BY_LEGACY_ID
+from dnd.core.content.recipes import ContentRecipe
+from dnd.items.armors import SRD_ARMOR_DECLARATIONS
 from dnd.items.consumables import HASTE_POTION_REF, HEALING_POTION_REF
 from dnd.items.spell_items import WAND_OF_MAGIC_MISSILES_REF
-from dnd.items.weapons import SRD_WEAPON_RECIPES_BY_CONTENT_ID
+from dnd.items.weapons import SRD_WEAPON_DECLARATIONS
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
@@ -45,6 +46,9 @@ _MEASURING_NODEID = (
     "tests/manual/test_158_srd_5_1_source_coverage_ledger.py"
     "::test_srd_5_1_ledger_is_exhaustive_and_measured"
 )
+_SPELL_SOURCE_NAME_OVERRIDES = {
+    "Evard's Black Tentacles": "Black Tentacles",
+}
 _EXPECTED_COUNTS = {
     SourceCoverageSection.CREATURE_STAT_BLOCKS: 317,
     SourceCoverageSection.WEAPONS: 37,
@@ -106,18 +110,32 @@ _ARMOR_SOURCE_NAMES = {
     "plate": "Plate",
     "shield": "Shield",
 }
+_SRD_WEAPON_RECIPES_BY_SOURCE_ID = {
+    declaration.ref.content_id.rsplit(".", maxsplit=1)[-1]: ContentRecipe.create(
+        ref=declaration.ref,
+        parameters={},
+    )
+    for declaration in SRD_WEAPON_DECLARATIONS
+}
+_SRD_ARMOR_RECIPES_BY_SOURCE_ID = {
+    declaration.ref.content_id.rsplit(".", maxsplit=1)[-1]: ContentRecipe.create(
+        ref=declaration.ref,
+        parameters={},
+    )
+    for declaration in SRD_ARMOR_DECLARATIONS
+}
 _MIGRATED_SOURCE_REFS = {
     **{
         (SourceCoverageSection.WEAPONS, _WEAPON_SOURCE_NAMES[legacy_id]):
             recipe.ref
-        for legacy_id, recipe in SRD_WEAPON_RECIPES_BY_CONTENT_ID.items()
+        for legacy_id, recipe in _SRD_WEAPON_RECIPES_BY_SOURCE_ID.items()
     },
     **{
         (
             SourceCoverageSection.ARMOR_AND_SHIELDS,
             _ARMOR_SOURCE_NAMES[legacy_id],
         ): recipe.ref
-        for legacy_id, recipe in SRD_ARMOR_RECIPES_BY_LEGACY_ID.items()
+        for legacy_id, recipe in _SRD_ARMOR_RECIPES_BY_SOURCE_ID.items()
     },
     **{
         (
@@ -155,7 +173,7 @@ _MIGRATED_SOURCE_REFS = {
     **{
         (
             SourceCoverageSection.SPELLS,
-            spell_name,
+            _SPELL_SOURCE_NAME_OVERRIDES.get(spell_name, spell_name),
         ): declaration.ref
         for spell_name, declaration
         in SPELL_CONTENT_DECLARATIONS_BY_NAME.items()
@@ -268,10 +286,21 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
         for row in ledger.rows
         if row.section == SourceCoverageSection.SPELLS
     }
-    assert set(ALL_SPELLS) - official_spell_names == {"Necrotic Bless"}
-    for spell_name in set(ALL_SPELLS) & official_spell_names:
+    assert {
+        spell_name
+        for spell_name in ALL_SPELLS
+        if _SPELL_SOURCE_NAME_OVERRIDES.get(spell_name, spell_name)
+        not in official_spell_names
+    } == {"Necrotic Bless"}
+    for spell_name in ALL_SPELLS:
+        source_name = _SPELL_SOURCE_NAME_OVERRIDES.get(
+            spell_name,
+            spell_name,
+        )
+        if source_name not in official_spell_names:
+            continue
         row = rows_by_section_and_name[
-            (SourceCoverageSection.SPELLS, spell_name)
+            (SourceCoverageSection.SPELLS, source_name)
         ]
         assert row.implementation_status == SourceImplementationStatus.PLAYABLE
         assert row.legacy_locators
@@ -300,7 +329,7 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
     for legacy_id, source_name in _WEAPON_SOURCE_NAMES.items():
         row = tracked_weapon_rows[source_name]
         assert row.content_ref == (
-            SRD_WEAPON_RECIPES_BY_CONTENT_ID[legacy_id].ref
+            _SRD_WEAPON_RECIPES_BY_SOURCE_ID[legacy_id].ref
         )
         assert row.legacy_locators == (
             f"dnd/items/weapons.py:_build_{legacy_id}",
@@ -314,7 +343,7 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
     assert set(tracked_armor_rows) == set(_ARMOR_SOURCE_NAMES.values())
     for legacy_id, source_name in _ARMOR_SOURCE_NAMES.items():
         assert tracked_armor_rows[source_name].content_ref == (
-            SRD_ARMOR_RECIPES_BY_LEGACY_ID[legacy_id].ref
+            _SRD_ARMOR_RECIPES_BY_SOURCE_ID[legacy_id].ref
         )
 
     assert Counter(
@@ -353,8 +382,8 @@ def test_srd_5_1_ledger_tracks_every_current_legacy_root_honestly() -> None:
         for row in ledger.rows
         if row.section == SourceCoverageSection.SPELLS
     ) == {
-        SourceImplementationStatus.PLAYABLE: 110,
-        SourceImplementationStatus.MISSING: 209,
+        SourceImplementationStatus.PLAYABLE: 112,
+        SourceImplementationStatus.MISSING: 207,
     }
 
     learned_reaction_rows = {

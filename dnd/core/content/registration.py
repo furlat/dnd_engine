@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
 import inspect
-import json
 from collections.abc import Callable
 from enum import Enum
 from types import ModuleType
@@ -13,6 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
 from pydantic_core import PydanticUndefined
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.dependencies import ContentDependency
 from dnd.core.content.descriptors import (
     ContentDescriptor,
@@ -27,6 +26,7 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.item_definitions import ItemDefinition
 from dnd.core.content.provenance import ContentProvenance
 from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.spatial_effect_definitions import SpatialEffectDefinition
 
 
 _DECLARATION_ATTRIBUTE = "__dnd_content_declaration__"
@@ -114,14 +114,7 @@ def compute_definition_contract_hash(
     }
     if definition_schema is not None:
         payload["definition_schema"] = definition_schema
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)
 
 
 class ContentConstruction(BaseModel):
@@ -196,6 +189,7 @@ class ContentDeclaration(BaseModel):
     provenance: ContentProvenance
     runtime_behavior_kind: RuntimeBehaviorKind | None = None
     item_definition: ItemDefinition | None = None
+    spatial_effect_definition: SpatialEffectDefinition | None = None
     definition_payload: SerializeAsAny[BaseModel] | None = None
     dependencies: tuple[ContentDependency, ...] = ()
     condition_effect_coverage: ConditionEffectCoverage = (
@@ -213,6 +207,9 @@ class ContentDeclaration(BaseModel):
             ContentDefinitionKind.ITEM,
             ContentDefinitionKind.ENVIRONMENT_OBJECT,
         }
+        spatial_effect_owned_kind = (
+            self.ref.definition_kind is ContentDefinitionKind.SPATIAL_EFFECT
+        )
         if self.mode == ContentDeclarationMode.FACTORY:
             if self.construction is None:
                 raise ValueError(
@@ -234,6 +231,22 @@ class ContentDeclaration(BaseModel):
                     "item_definition is reserved for item and "
                     "environment_object declarations",
                 )
+            if (
+                spatial_effect_owned_kind
+                and self.spatial_effect_definition is None
+            ):
+                raise ValueError(
+                    "spatial_effect declarations require "
+                    "spatial_effect_definition",
+                )
+            if (
+                not spatial_effect_owned_kind
+                and self.spatial_effect_definition is not None
+            ):
+                raise ValueError(
+                    "spatial_effect_definition is reserved for spatial_effect "
+                    "declarations",
+                )
             if self.definition_payload is not None:
                 raise ValueError(
                     "factory declaration cannot own typed definition",
@@ -250,6 +263,11 @@ class ContentDeclaration(BaseModel):
             if self.item_definition is not None:
                 raise ValueError(
                     "behavior_identity declaration cannot own item_definition",
+                )
+            if self.spatial_effect_definition is not None:
+                raise ValueError(
+                    "behavior_identity declaration cannot own "
+                    "spatial_effect_definition",
                 )
             if self.runtime_behavior_kind is None:
                 raise ValueError(
@@ -278,6 +296,7 @@ class ContentDeclaration(BaseModel):
             if (
                 self.construction is not None
                 or self.item_definition is not None
+                or self.spatial_effect_definition is not None
                 or self.runtime_behavior_kind is not None
             ):
                 raise ValueError(
@@ -340,6 +359,7 @@ def content_factory(
     provenance: ContentProvenance,
     runtime_behavior_kind: RuntimeBehaviorKind | None = None,
     item_definition: ItemDefinition | None = None,
+    spatial_effect_definition: SpatialEffectDefinition | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
     condition_effect_profile: AuthoredConditionEffectProfile | None = None,
     condition_lifecycle: AuthoredConditionLifecycle | None = None,
@@ -371,6 +391,7 @@ def content_factory(
             provenance=provenance,
             runtime_behavior_kind=runtime_behavior_kind,
             item_definition=item_definition,
+            spatial_effect_definition=spatial_effect_definition,
             dependencies=dependencies,
             condition_effect_coverage=(
                 ConditionEffectCoverage.PROFILED
@@ -503,6 +524,9 @@ def behavior_identity(
 
             resolved_condition_lifecycle = (
                 AuthoredConditionLifecycle.model_validate({
+                    "application_policy": field_default(
+                        "application_policy",
+                    ),
                     "tags": field_default("tags"),
                     "removal_triggers": field_default("removal_triggers"),
                     "agency_denial": field_default("agency_denial"),
@@ -587,6 +611,32 @@ def environment_object_factory(
     )
 
 
+def spatial_effect_factory(
+    *,
+    pack_id: str,
+    content_id: str,
+    version: int,
+    parameters: type[BaseModel],
+    descriptor: ContentDescriptorSpec,
+    provenance: ContentProvenance,
+    spatial_effect_definition: SpatialEffectDefinition,
+    dependencies: tuple[ContentDependency, ...] = (),
+) -> Callable[[_Factory], _Factory]:
+    """Declare one persistent ground, cloud, or field reconstruction factory."""
+    return content_factory(
+        definition_kind=ContentDefinitionKind.SPATIAL_EFFECT,
+        pack_id=pack_id,
+        content_id=content_id,
+        version=version,
+        parameters=parameters,
+        descriptor=descriptor,
+        provenance=provenance,
+        runtime_behavior_kind=RuntimeBehaviorKind.SPATIAL_EFFECT,
+        spatial_effect_definition=spatial_effect_definition,
+        dependencies=dependencies,
+    )
+
+
 def creature_factory(
     *,
     pack_id: str,
@@ -645,6 +695,9 @@ def replace_content_declaration_at_cold_startup(
         or existing.runtime_behavior_kind
         != declaration.runtime_behavior_kind
         or existing.construction != declaration.construction
+        or existing.item_definition != declaration.item_definition
+        or existing.spatial_effect_definition
+        != declaration.spatial_effect_definition
         or existing.definition_payload != declaration.definition_payload
     ):
         raise ValueError(

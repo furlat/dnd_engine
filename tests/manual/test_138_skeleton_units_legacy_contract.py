@@ -425,7 +425,7 @@ def test_acid_flask_affects_every_creature_in_its_area() -> None:
     )
     second = create_skeleton(
         name="Second Target",
-        position=(5, 6),
+        position=(5, 4),
         faction="heroes",
     )
     Entity.update_all_entities_senses(max_distance=100)

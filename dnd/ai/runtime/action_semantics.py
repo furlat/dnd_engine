@@ -54,7 +54,12 @@ from dnd.ai.contracts.semantics import (
     WorldEffectShape,
     unknown_action_semantics,
 )
-from dnd.core.base_actions import ActionCategory, AvailableActionInfo, TargetType
+from dnd.core.base_actions import (
+    ActionCategory,
+    ActionSelectionParameterKind,
+    AvailableActionInfo,
+    TargetType,
+)
 
 
 SemanticBuilder = Callable[[], ActionSemantics]
@@ -69,6 +74,14 @@ class _SemanticCost:
     amount: int
     resource_name: Optional[str]
     resource_cost: int
+
+
+@dataclass(frozen=True)
+class _SemanticSelectionParameter:
+    """Hashable exact action-variant selector metadata."""
+
+    kind: str
+    value: int
 
 
 @dataclass(frozen=True)
@@ -186,6 +199,7 @@ class _SemanticInput:
     target_effect: Optional[_SemanticTargetEffect]
     world_effect: Optional[_SemanticWorldEffect]
     costs: tuple[_SemanticCost, ...]
+    selection_parameter: Optional[_SemanticSelectionParameter]
 
 
 HEALING_ACTION_KEYS = frozenset({
@@ -577,14 +591,12 @@ def _pick_up_semantics() -> ActionSemantics:
 
 def _convert_slot_to_sorcery_semantics(data: _SemanticInput) -> ActionSemantics:
     """Return Font of Magic semantics for consuming a slot to restore points."""
-    slot_level = next(
-        (
-            int(cost.cost_type.removeprefix("spell_slot_"))
-            for cost in data.costs
-            if cost.cost_type.startswith("spell_slot_")
-            and cost.cost_type.removeprefix("spell_slot_").isdigit()
-        ),
-        0,
+    slot_level = (
+        data.selection_parameter.value
+        if data.selection_parameter is not None
+        and data.selection_parameter.kind
+        == ActionSelectionParameterKind.LEVEL.value
+        else 0
     )
     return ActionSemantics(
         semantic_id="resource.convert.slot_to_sorcery_points",
@@ -604,16 +616,13 @@ def _convert_slot_to_sorcery_semantics(data: _SemanticInput) -> ActionSemantics:
 
 def _convert_sorcery_to_slot_semantics(data: _SemanticInput) -> ActionSemantics:
     """Return Font of Magic semantics for consuming points to restore a slot."""
-    sorcery_cost = next(
-        (
-            cost.resource_cost
-            for cost in data.costs
-            if cost.resource_name == "sorcery_points"
-        ),
-        0,
+    slot_level = (
+        data.selection_parameter.value
+        if data.selection_parameter is not None
+        and data.selection_parameter.kind
+        == ActionSelectionParameterKind.LEVEL.value
+        else 0
     )
-    slot_level_by_cost = {2: 1, 3: 2, 5: 3, 6: 4, 7: 5}
-    slot_level = slot_level_by_cost.get(sorcery_cost, 0)
     return ActionSemantics(
         semantic_id="resource.convert.sorcery_points_to_slot",
         tags=frozenset({ActionTag.RESOURCE_ACQUIRE, ActionTag.RESOURCE_SPEND}),
@@ -1748,6 +1757,14 @@ def _semantic_input(row: AvailableActionInfo) -> _SemanticInput:
             else None
         ),
         costs=costs,
+        selection_parameter=(
+            _SemanticSelectionParameter(
+                kind=row.selection_parameter.kind.value,
+                value=row.selection_parameter.value,
+            )
+            if row.selection_parameter is not None
+            else None
+        ),
     )
 
 

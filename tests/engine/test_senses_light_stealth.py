@@ -8,6 +8,9 @@ from pydantic import Field
 from dnd.actions import Move
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system
+from dnd.content_system.spatial_effect_materialization import (
+    materialize_spatial_effect,
+)
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
 from dnd.controller import PassController
 from dnd.core.base_actions import ActionEvent
@@ -37,11 +40,13 @@ from dnd.spells.divination import SeeInvisibilityEffect
 from dnd.spells.enchantment import Bane, Bless
 from dnd.spells.evocation import Fireball, MagicMissile
 from dnd.spells.necromancy import NecroticBless
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial_effect_content import DARKNESS_FIELD_RECIPE
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial_effects import FieldEffect
 from tests.engine.support import reset_combat_state
 
 
-class MagicalDarknessCellZone(ZoneControlCondition):
+class MagicalDarknessCellZone(AreaSpatialEffectController):
     """Single-cell magical darkness zone for senses reactivity tests."""
 
     name: str = "Magical Darkness Cell"
@@ -352,6 +357,27 @@ def test_eb_12_009_sense_mode_changes_emit_replacement_payloads() -> None:
     assert changed[-1].model_dump(mode="json")["sense_modes"] == []
 
 
+def test_temporary_sense_removal_preserves_an_innate_sense_of_the_same_type() -> None:
+    """Removing a spell-owned sense must not erase an innate creature sense."""
+    reset_senses_state(width=6, height=1)
+    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    innate = SenseMode(
+        sense_type=SensesType.SEE_INVISIBLE,
+        range_feet=30,
+    )
+    observer.senses.sense_modes.append(innate)
+
+    effect = SeeInvisibilityEffect(
+        source_entity_uuid=observer.uuid,
+        target_entity_uuid=observer.uuid,
+    )
+    observer.add_condition(effect)
+    observer.remove_condition(effect.name)
+
+    assert observer.senses.sense_modes == [innate]
+    assert observer.senses.get_sense_modes() == [innate]
+
+
 def test_eb_12_010_very_bright_light_reveals_hidden_entities() -> None:
     """EB-12-010: hidden is removed when the entity's tile becomes very bright."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
@@ -387,12 +413,26 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     assert target.uuid in observer.senses.entities
     assert (3, 0) in observer.senses.visible
 
+    parent_event = EventQueue.publish_lifecycle(Event(
+        source_entity_uuid=observer.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    ))
+    assert parent_event is not None
+    darkness = materialize_spatial_effect(
+        DARKNESS_FIELD_RECIPE,
+        observer.uuid,
+        position=(2, 0),
+        faction=observer.faction,
+        expected_type=FieldEffect,
+    )
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
-        target_entity_uuid=observer.uuid,
+        target_entity_uuid=darkness.uuid,
         zone_center=(2, 0),
     )
-    observer.add_condition(zone)
+    darkness.install_controller(zone, parent_event=parent_event)
 
     darkness_tile = get_map().get_tile(2, 0)
     assert darkness_tile is not None
@@ -406,7 +446,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     ]
     assert add_updates
 
-    observer.remove_condition(zone.name)
+    darkness.retire(parent_event=parent_event)
 
     restored_tile = get_map().get_tile(2, 0)
     assert restored_tile is not None

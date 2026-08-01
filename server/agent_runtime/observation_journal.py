@@ -1560,6 +1560,19 @@ def _event_state_patches(
             started,
         )
 
+    if event.event_type is EventType.SPATIAL_EFFECT_CHANGED:
+        tile_facts = [
+            _visible_tile_fact_cached(
+                affected_position,
+                observers_that_see_position(affected_position, observers),
+                projection_context,
+            )
+            for affected_position in sorted(event.get_affected_positions())
+            if _position_visible_to_session(affected_position, observers)
+        ]
+        if tile_facts:
+            patches.append(_tiles_patch(tile_facts, event.event_type.value))
+
     return patches
 
 

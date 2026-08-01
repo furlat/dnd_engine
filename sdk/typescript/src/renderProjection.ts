@@ -106,7 +106,6 @@ export interface RenderCombatant {
   readonly name: string;
   readonly initiative: number;
   readonly life_state: APICombatant["life_state"];
-  readonly is_dead: boolean;
 }
 
 export interface RenderEncounter {
@@ -531,7 +530,6 @@ function projectCombatant(
     name: combatant.name,
     initiative: combatant.initiative,
     life_state: combatant.life_state,
-    is_dead: combatant.is_dead,
   };
 }
 

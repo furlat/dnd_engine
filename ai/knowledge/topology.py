@@ -68,10 +68,7 @@ class KnownLineOfSightWorkspace:
                 for obj in world.known_objects.values()
                 if obj.knowledge_state is KnowledgeState.VISIBLE
                 and obj.position is not None
-                and (
-                    obj.state.get("blocks_vision") is True
-                    or obj.state.get("blocks_vision_field") is True
-                )
+                and obj.state.blocks_vision
             )
         )
         return cls(

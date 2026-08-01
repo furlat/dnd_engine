@@ -62,6 +62,7 @@ test("controlled affordance reads carry the session in an encoded query", async 
     const payload = url.includes("/available-actions?")
       ? {
         entity_uuid: "entity/a",
+        execution_authorization: "not_active_turn",
         entity_actions: [],
         position_actions: [],
         self_actions: [availableAction()],
@@ -92,6 +93,7 @@ test("controlled affordance reads carry the session in an encoded query", async 
     actions.self_actions[0]?.behavior_attribution.definition_ref.content_id,
     "action.dash",
   );
+  assert.equal(actions.execution_authorization, "not_active_turn");
   assert.equal(
     actions.handler_details[0]?.behavior_attribution.definition_ref.content_id,
     "reaction.lucky",
@@ -113,6 +115,7 @@ test("affordance decoders reject rows without exact behavior attribution", async
   const client = new DndEngineClient("/api", {
     fetchImplementation: async () => new Response(JSON.stringify({
       entity_uuid: "entity-a",
+      execution_authorization: "authorized",
       entity_actions: [unattributedAction],
       position_actions: [],
       self_actions: [],
@@ -556,6 +559,7 @@ function availableAction() {
     semantic_key: "dash",
     behavior_attribution: behaviorAttribution("action", "action.dash"),
     configured_action_ref: null,
+    selection_parameter: null,
     target_type: "self",
     availability_status: "source_unaffordable",
     valid_targets: [],

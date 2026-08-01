@@ -137,7 +137,7 @@ from server.game_directory.contracts import (
     SavedEncounterRosterReplace,
     SpellPreparationPolicy,
 )
-from server.game_directory.canonical import canonical_digest
+from server.canonical_json import canonical_json_sha256 as canonical_digest
 from server.game_directory.errors import (
     CapabilityError,
     ConflictError,

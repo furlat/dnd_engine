@@ -653,7 +653,7 @@ def self_setup_candidates(context: PolicyContext) -> tuple[PolicyProposal, ...]:
             or semantics is None
             or setup is None
             or setup.duration is not SelfSetupDuration.UNTIL_REMOVED
-            or _self_setup_effect_may_already_be_active(context, semantics)
+            or self_setup_effect_may_already_be_active(context, semantics)
             or not row.can_afford
             or row.cost.affordability == "unaffordable"
             or not context.execution_constraints.allows(row)
@@ -3614,7 +3614,7 @@ def _control_effect_is_observed(
     return condition_names.issubset(observed)
 
 
-def _self_setup_effect_may_already_be_active(
+def self_setup_effect_may_already_be_active(
     context: PolicyContext,
     semantics: ActionSemantics,
 ) -> bool:
@@ -4664,19 +4664,6 @@ def _nearest_controlled_ally_distance(
         if entity is not None and entity.position is not None and entity.is_dead is not True
     ]
     return min(distances) if distances else None
-
-
-def _spacing_reference_key(
-    origin: tuple[int, int],
-    entity: ObservationEntityFact,
-) -> tuple[int, str]:
-    """Return deterministic nearest-reference ordering for a known contact."""
-    return (
-        grid_distance_cells(origin, entity.position)
-        if entity.position is not None
-        else 2**31 - 1,
-        entity_fact_replay_token(entity),
-    )
 
 
 def _component(name: str, raw: float, weight: float, reason: str) -> UtilityComponent:

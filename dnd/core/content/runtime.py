@@ -27,6 +27,7 @@ class RuntimeBehaviorKind(str, Enum):
     CONDITION = "condition"
     ITEM = "item"
     ENVIRONMENT_INTERACTION = "environment_interaction"
+    SPATIAL_EFFECT = "spatial_effect"
     SYSTEM = "system"
     UNCLASSIFIED = "unclassified"
 
@@ -61,6 +62,30 @@ class BehaviorBinding(BaseModel):
             "block that owns this behavior instance."
         ),
     )
+
+
+class RuntimeBehaviorOwner(Protocol):
+    """Owned runtime surface shared by actions, conditions, and handlers."""
+
+    behavior_binding: BehaviorBinding | None
+
+
+class RuntimeHandlerOwner(RuntimeBehaviorOwner, Protocol):
+    """Runtime behavior that additionally declares its exact owner UUID."""
+
+    source_entity_uuid: UUID
+
+
+class RuntimeItemBehaviorProvider(Protocol):
+    """Minimal item surface permitted to own granted runtime behavior."""
+
+    uuid: UUID
+    content_ref: ContentRef | None
+
+
+RuntimeBehaviorProvider = (
+    RuntimeBehaviorOwner | RuntimeItemBehaviorProvider
+)
 
 
 class AuthoredBehaviorAttribution(BaseModel):
@@ -106,7 +131,7 @@ class RuntimeBehaviorBindingGateway(Protocol):
 
     def bind_independent(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
@@ -115,9 +140,9 @@ class RuntimeBehaviorBindingGateway(Protocol):
 
     def bind_child(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one runtime child through an exact active provider."""
@@ -125,7 +150,7 @@ class RuntimeBehaviorBindingGateway(Protocol):
 
     def bind_root_owned(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
         origin_root_ref: ContentRef,
         runtime_owner_uuid: UUID,
@@ -137,7 +162,7 @@ class RuntimeBehaviorBindingGateway(Protocol):
 _DECLARATION_ATTRIBUTE = "__dnd_content_declaration__"
 _runtime_behavior_binding_gateway: RuntimeBehaviorBindingGateway | None = None
 _runtime_behavior_binding_content_set_digest: str | None = None
-_active_behavior_provider: ContextVar[object | None] = ContextVar(
+_active_behavior_provider: ContextVar[RuntimeBehaviorOwner | None] = ContextVar(
     "dnd_active_behavior_provider",
     default=None,
 )
@@ -176,7 +201,9 @@ def install_runtime_behavior_binding_gateway(
     )
 
 
-def has_direct_behavior_declaration(behavior: object) -> bool:
+def has_direct_behavior_declaration(
+    behavior: RuntimeBehaviorOwner,
+) -> bool:
     """Return whether the runtime class owns an exact declaration."""
     namespace = getattr(type(behavior), "__dict__", None)
     return (
@@ -206,7 +233,7 @@ def _current_behavior_binding_gateway(
 
 
 def bind_runtime_behavior(
-    behavior: object,
+    behavior: RuntimeBehaviorOwner,
     *,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding | None:
@@ -216,7 +243,7 @@ def bind_runtime_behavior(
     gateway. Undecorated legacy/custom behaviors remain visibly unbound rather
     than acquiring a Python-path identity disguised as authored content.
     """
-    existing = getattr(behavior, "behavior_binding", None)
+    existing = behavior.behavior_binding
     if isinstance(existing, BehaviorBinding):
         if existing.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
@@ -237,13 +264,13 @@ def bind_runtime_behavior(
 
 
 def bind_runtime_root_owned_behavior(
-    behavior: object,
+    behavior: RuntimeBehaviorOwner,
     *,
     origin_root_ref: ContentRef | None,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding | None:
     """Bind explicit root-owned behavior, otherwise preserve independence."""
-    existing = getattr(behavior, "behavior_binding", None)
+    existing = behavior.behavior_binding
     if isinstance(existing, BehaviorBinding):
         if existing.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
@@ -274,9 +301,9 @@ def bind_runtime_root_owned_behavior(
 
 
 def bind_runtime_behavior_child(
-    behavior: object,
+    behavior: RuntimeBehaviorOwner,
     *,
-    provider: object,
+    provider: RuntimeBehaviorProvider,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding:
     """Explicitly bind one declared child through an authenticated provider.
@@ -300,7 +327,7 @@ def bind_runtime_behavior_child(
 
 @contextmanager
 def runtime_behavior_provider(
-    behavior: object,
+    behavior: RuntimeBehaviorOwner,
 ) -> Iterator[None]:
     """Expose one behavior while it creates children, masking unbound scopes.
 
@@ -308,7 +335,7 @@ def runtime_behavior_provider(
     It must not let an outer action, condition, or handler become the implicit
     provider of private children created inside that behavior.
     """
-    binding = getattr(behavior, "behavior_binding", None)
+    binding = behavior.behavior_binding
     provider = behavior if isinstance(binding, BehaviorBinding) else None
     token = _active_behavior_provider.set(provider)
     try:
@@ -325,12 +352,12 @@ def active_runtime_behavior_binding() -> BehaviorBinding | None:
     transport boundary.
     """
     provider = _active_behavior_provider.get()
-    binding = getattr(provider, "behavior_binding", None)
+    binding = None if provider is None else provider.behavior_binding
     return binding if isinstance(binding, BehaviorBinding) else None
 
 
 def bind_runtime_action_before_admission(
-    action: object,
+    action: RuntimeBehaviorOwner,
     *,
     runtime_owner_uuid: UUID,
     origin_root_ref: ContentRef | None = None,
@@ -341,7 +368,7 @@ def bind_runtime_action_before_admission(
     provider retains its own exact definition and names that provider as the
     grant source. Ordinary entity-composition actions bind independently.
     """
-    existing = getattr(action, "behavior_binding", None)
+    existing = action.behavior_binding
     if isinstance(existing, BehaviorBinding):
         if existing.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
@@ -357,7 +384,7 @@ def bind_runtime_action_before_admission(
             runtime_owner_uuid=runtime_owner_uuid,
         )
 
-    provider_binding = getattr(provider, "behavior_binding", None)
+    provider_binding = provider.behavior_binding
     if not isinstance(provider_binding, BehaviorBinding):
         raise RuntimeError("Active runtime action provider is not bound")
     gateway = _current_behavior_binding_gateway()
@@ -373,13 +400,11 @@ def bind_runtime_action_before_admission(
 
 
 def bind_runtime_handler_before_admission(
-    handler: object,
+    handler: RuntimeHandlerOwner,
 ) -> BehaviorBinding | None:
     """Bind a declared or provider-owned handler before any runtime index sees it."""
-    owner_uuid = getattr(handler, "source_entity_uuid", None)
-    if not isinstance(owner_uuid, UUID):
-        raise TypeError("Runtime handler requires a UUID owner")
-    existing = getattr(handler, "behavior_binding", None)
+    owner_uuid = handler.source_entity_uuid
+    existing = handler.behavior_binding
     if isinstance(existing, BehaviorBinding):
         if existing.runtime_owner_uuid != owner_uuid:
             raise ValueError(
@@ -394,7 +419,7 @@ def bind_runtime_handler_before_admission(
             runtime_owner_uuid=owner_uuid,
         )
 
-    provider_binding = getattr(provider, "behavior_binding", None)
+    provider_binding = provider.behavior_binding
     if not isinstance(provider_binding, BehaviorBinding):
         raise RuntimeError("Active runtime behavior provider is not bound")
     gateway = _current_behavior_binding_gateway()

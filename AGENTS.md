@@ -102,7 +102,9 @@ BaseObject, BaseBlock (base classes)
 
 **Dependency-neutral leaves** may be imported across engine and server layers:
 `dnd/core/condition_types.py`, `equipment_types.py`, `life_types.py`, and
-`effect_types.py`. The same rule applies to the character-progression leaves
+`effect_types.py`. Roll state and stochastic action facts likewise live only in
+`dnd/core/roll_types.py` and `dnd/core/action_outcomes.py`. The same rule
+applies to the character-progression leaves
 `dnd/core/proficiency_types.py`, `dnd/core/progression.py`, and
 `dnd/core/feature_grants.py`: they contain enums, immutable grants, or pure
 calculations, never Entity, concrete conditions, runtime services, or policy.

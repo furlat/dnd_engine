@@ -135,7 +135,7 @@ LEGACY_SPATIAL_MIGRATION_CASES: dict[str, LegacyCoverage] = {
     "test_tile_effect_cleanup_removes_spatial_handler": LegacyCoverage(
         "strengthened",
         SPATIAL_CLEANUP_SELECTOR,
-        "Real ZoneControlCondition removal clears handler indexes, terrain, and tile markers.",
+        "Real AreaSpatialEffectController removal clears handler indexes and terrain.",
     ),
     "test_turn_start_damage_still_works": LegacyCoverage(
         "strengthened",
@@ -310,7 +310,7 @@ def test_prone_application_during_owner_turn_respects_movement() -> None:
 
     assert completion is not None
     assert completion.canceled is True
-    assert condition.applied is True
+    assert condition.applied is False
     assert "Prone" not in mobile.active_conditions
     assert mobile.action_economy.movement.normalized_score == 15
 

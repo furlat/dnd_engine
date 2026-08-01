@@ -8,12 +8,10 @@ from dnd.blocks.base_item import UsableItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.entity import Entity, EntityConfig
-from dnd.extensions.aegis_spark import AegisTrainingFeature
+from dnd.extensions.aegis_spark import AegisSpark
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
     FIELD_KIT_RECIPE,
@@ -63,11 +61,11 @@ def create_aegis_scene() -> tuple[Entity, Entity, Entity]:
     caster = create_spell_feature_actor("Aegis Warden", (1, 1), "heroes")
     ally = create_spell_feature_actor("Shield Ally", (3, 1), "heroes")
     enemy = create_spell_feature_actor("Training Dummy", (5, 1), "monsters")
-    caster.add_condition(
-        AegisTrainingFeature(
+    caster.register_action(
+        AegisSpark(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
             caster_level=5,
+            template=True,
         ),
     )
     Entity.update_all_entities_senses(max_distance=30)
@@ -84,7 +82,7 @@ def create_field_medic(
         DeployFieldFocus(source_entity_uuid=medic.uuid, template=True),
     )
     medic.loot_item(
-        materialize_item_from_installed_runtime(
+        materialize_item(
             FIELD_KIT_RECIPE,
             medic.uuid,
             origin=ItemRuntimeOrigin.STARTER,
@@ -97,7 +95,7 @@ def create_field_medic(
 def create_field_training_scene() -> tuple[Entity, Entity, UsableItem]:
     medic = create_field_medic()
     ally = create_goblin(name="Field Ally", position=(2, 1), faction="heroes")
-    floor_kit = materialize_item_from_installed_runtime(
+    floor_kit = materialize_item(
         FIELD_KIT_RECIPE,
         medic.uuid,
         origin=ItemRuntimeOrigin.LOOT,

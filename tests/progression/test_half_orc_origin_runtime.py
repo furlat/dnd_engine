@@ -193,9 +193,6 @@ def test_relentless_endurance_receipt_removes_handler_and_resource() -> None:
             runtime_entity_uuid=half_orc.uuid,
             character_id=context.character_id,
             grants=(receipt,),
-            automatic_grant_refs=(
-                HALF_ORC_RELENTLESS_ENDURANCE_REF,
-            ),
         ),
     )
 

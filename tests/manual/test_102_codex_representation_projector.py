@@ -60,6 +60,7 @@ from dnd.ai.contracts.control import (
     DecisionEpoch,
     DecisionEpochReason,
 )
+from dnd.core.item_types import ItemObservationState
 from ai.subjective.models import AgentState
 
 
@@ -663,7 +664,15 @@ def _world(
                 knowledge_state=KnowledgeState.VISIBLE,
                 observer_uuids=["actor"],
                 position=(3, 2),
-                state={"is_open": False, "locked": False},
+                state=ItemObservationState(
+                    blocks_movement=True,
+                    blocks_vision=True,
+                    is_pickable=False,
+                    is_usable=True,
+                    stack_count=1,
+                    is_hazardous=False,
+                    is_open=False,
+                ),
             ),
         },
         known_tiles={

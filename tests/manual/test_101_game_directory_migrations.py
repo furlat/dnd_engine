@@ -10,7 +10,10 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from server.game_directory.canonical import canonical_digest, canonical_json
+from server.canonical_json import (
+    canonical_json,
+    canonical_json_sha256 as canonical_digest,
+)
 from server.game_directory.contracts import PrincipalCreate, PrincipalKind
 from server.game_directory.errors import MigrationError
 from server.game_directory.migrations import (

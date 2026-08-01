@@ -23,11 +23,14 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
+from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
 from dnd.core.values import BaseValue
 from dnd.actions import Jump, Move, Shove
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial_effect_content import GREASE_SURFACE_RECIPE
+from dnd.spatial_effects import GroundEffect
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
 from tests.engine.support import reset_combat_state
 
 
@@ -58,19 +61,17 @@ class PerceptionBoost(BaseCondition):
         return [(skill.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
 
-class EntryCleanupZone(ZoneControlCondition):
-    """Test zone with terrain, markers, and one position-indexed entry handler."""
+class EntryCleanupZone(AreaSpatialEffectController):
+    """Test region with terrain and one position-indexed entry handler."""
 
     name: str = "Entry Cleanup Zone"
     zone_shape: str = "sphere"
     zone_radius_feet: int = 5
     adds_difficult_terrain: bool = True
-    marker_name: str = "Entry Cleanup Marker"
-    marker_hazard_filter: HazardFilter = HazardFilter.ALL
-
-    def _has_entry_effect(self) -> bool:
-        """Return True so the zone registers a spatial entry handler."""
-        return True
+    hazard_filter: HazardFilter = HazardFilter.ALL
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.ENTER,
+    })
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create a no-op spatial entry handler for cleanup assertions."""
@@ -80,6 +81,36 @@ class EntryCleanupZone(ZoneControlCondition):
             trigger_conditions=[],
             event_processor=lambda event, _source_uuid: event,
         )
+
+
+def install_entry_cleanup_effect(
+    caster: Entity,
+    *,
+    center: tuple[int, int],
+) -> tuple[GroundEffect, EntryCleanupZone]:
+    """Install the cleanup fixture through the production spatial owner."""
+    zone = EntryCleanupZone(
+        source_entity_uuid=caster.uuid,
+        zone_center=center,
+    )
+    effect = GroundEffect(
+        name="Entry Cleanup Effect",
+        source_entity_uuid=caster.uuid,
+        content_ref=GREASE_SURFACE_RECIPE.ref,
+        position=center,
+        trigger_kinds=zone.trigger_kinds,
+        first_per_turn_trigger_kinds=zone.first_per_turn_trigger_kinds,
+    )
+    parent = Event(
+        source_entity_uuid=caster.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    result = effect.install_controller(zone, parent_event=parent)
+    assert result is not None
+    assert not result.canceled
+    return effect, zone
 
 
 def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) -> None:
@@ -604,7 +635,7 @@ def test_eb_11_018_zone_control_cone_and_line_use_directional_geometry() -> None
     direct_line = Line(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30, width_feet=5)
     direct_line.compute_objective(caster_pos=(2, 2))
 
-    generic_cone_zone = ZoneControlCondition(
+    generic_cone_zone = AreaSpatialEffectController(
         source_entity_uuid=source_uuid,
         target_entity_uuid=source_uuid,
         zone_shape="cone",
@@ -612,7 +643,7 @@ def test_eb_11_018_zone_control_cone_and_line_use_directional_geometry() -> None
         zone_radius_feet=30,
         zone_direction=(1, 0),
     )
-    generic_line_zone = ZoneControlCondition(
+    generic_line_zone = AreaSpatialEffectController(
         source_entity_uuid=source_uuid,
         target_entity_uuid=source_uuid,
         zone_shape="line",
@@ -670,18 +701,12 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     assert target.uuid in objective.affected_entity_uuids
 
 
-def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() -> None:
-    """EB-11-020: removing a ZoneControlCondition clears spatial, terrain, and marker state."""
+def test_eb_11_020_region_retirement_cleans_spatial_handlers_and_terrain() -> None:
+    """EB-11-020: retiring a spatial effect clears its handlers and terrain."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
     caster = create_skeleton(name="Zone Caster", position=(0, 1), faction="heroes")
-    zone = EntryCleanupZone(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=caster.uuid,
-        zone_center=(2, 1),
-    )
-
-    caster.add_condition(zone)
+    effect, zone = install_entry_cleanup_effect(caster, center=(2, 1))
 
     affected_positions = set(zone.affected_positions)
     center_tile = grid.get_tile(2, 1)
@@ -693,32 +718,66 @@ def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() ->
     for pos in affected_positions:
         tile = grid.get_tile(*pos)
         assert tile is not None
-        assert "Entry Cleanup Marker" in tile.active_conditions
         assert EventQueue.get_spatial_handlers_at(pos)
 
-    assert zone.move_zone((4, 1))
+    assert zone.move_zone(
+        (4, 1),
+        parent_event=Event(
+            source_entity_uuid=caster.uuid,
+            event_type=EventType.BASE_ACTION,
+            phase=EventPhase.COMPLETION,
+            use_register=False,
+        ),
+    )
     moved_positions = set(zone.affected_positions)
     moved_center = grid.get_tile(4, 1)
     assert moved_center is not None
     assert zone.zone_center == (4, 1)
     assert moved_positions != affected_positions
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
-    assert "Entry Cleanup Marker" not in center_tile.active_conditions
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 2
-    assert "Entry Cleanup Marker" in moved_center.active_conditions
     assert EventQueue.get_spatial_handlers_at((4, 1))
 
-    caster.remove_condition(zone.name)
+    effect.retire()
 
-    assert zone.name not in caster.active_conditions
+    assert zone.name not in effect.active_conditions
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
     for pos in affected_positions | moved_positions:
         tile = grid.get_tile(*pos)
         assert tile is not None
-        assert "Entry Cleanup Marker" not in tile.active_conditions
         assert EventQueue.get_spatial_handlers_at(pos) == []
+
+
+def test_zone_terrain_changes_publish_one_complete_spatial_lifecycle() -> None:
+    """Zone-owned terrain notifications use the canonical spatial lifecycle."""
+    reset_grid_state(width=6, height=3)
+    caster = create_skeleton(
+        name="Zone Caster",
+        position=(0, 1),
+        faction="heroes",
+    )
+    cursor = EventQueue.event_cursor()
+
+    install_entry_cleanup_effect(caster, center=(2, 1))
+
+    by_lineage: dict[UUID, list[EventPhase]] = {}
+    for _, event in EventQueue.iter_events_since(cursor):
+        if event.event_type is not EventType.SPATIAL_TILE_CHANGED:
+            continue
+        by_lineage.setdefault(event.lineage_uuid, []).append(event.phase)
+    assert by_lineage
+    assert all(
+        phases
+        == [
+            EventPhase.DECLARATION,
+            EventPhase.EXECUTION,
+            EventPhase.EFFECT,
+            EventPhase.COMPLETION,
+        ]
+        for phases in by_lineage.values()
+    )
 
 
 def test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag() -> None:
@@ -794,34 +853,3 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     assert lifecycle_item.owner_uuid is None
     assert lifecycle_item.stored_in_uuid is None
     assert BaseBlock.get(lifecycle_item.uuid) is None
-
-
-if __name__ == "__main__":
-    tests = [
-        test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup,
-        test_eb_11_002_tile_movement_modes_define_walkability,
-        test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrain,
-        test_eb_11_012_diagonal_cost_return_and_exact_max_distance_match,
-        test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route,
-        test_eb_11_013_negative_coordinate_tiles_are_reachable,
-        test_eb_11_004_move_action_converts_tile_cost_units_to_feet,
-        test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically,
-        test_eb_11_015_dead_entities_become_non_blocking_for_paths,
-        test_eb_11_006_directional_borders_block_transitions_and_emit_metadata,
-        test_eb_11_007_directional_channels_are_independent,
-        test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change,
-        test_eb_11_017_forced_movement_and_jump_respect_directional_blockers,
-        test_eb_11_008_hazards_can_be_excluded_from_safe_paths,
-        test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths,
-        test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed,
-        test_eb_11_018_zone_control_cone_and_line_use_directional_geometry,
-        test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint,
-        test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers,
-        test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag,
-        test_eb_11_011_replacing_object_position_removes_old_grid_membership,
-        test_eb_11_016_raw_object_removal_clears_item_floor_location_state,
-    ]
-
-    for test in tests:
-        test()
-        print(f"{test.__name__}: PASS")

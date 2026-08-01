@@ -33,6 +33,7 @@ class ContentDefinitionKind(str, Enum):
     BACKGROUND = "background"
     STARTING_EQUIPMENT_PACKAGE = "starting_equipment_package"
     ENVIRONMENT_OBJECT = "environment_object"
+    SPATIAL_EFFECT = "spatial_effect"
     RULE_PRIMITIVE = "rule_primitive"
 
 
